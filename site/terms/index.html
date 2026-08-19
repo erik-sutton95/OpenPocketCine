@@ -4,31 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>OpenPocketCine Terms of Use</title>
-  <meta name="description" content="OpenPocketCine is free software under Apache 2.0. Unofficial field monitor for DJI Osmo Pocket cameras.">
-  <meta name="theme-color" content="#0A0908">
+  <meta name="description" content="Plain-language terms for OpenPocketCine: free and open source under Apache-2.0, no accounts, no fees, provided as is.">
+  <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
   <link rel="canonical" href="https://openpocketcine.app/terms/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OpenPocketCine Terms of Use">
+  <meta property="og:description" content="Free and open source under Apache-2.0. No accounts, no fees, no subscriptions.">
+  <meta property="og:url" content="https://openpocketcine.app/terms/">
   <link rel="icon" href="../assets/icon.png">
+  <link rel="apple-touch-icon" href="../assets/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Sora:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/app.css">
   <style>
     .legal-hero { padding: clamp(88px, 12vw, 140px) 0 clamp(28px, 4vw, 44px); }
     .legal-hero h1 { font-size: clamp(34px, 5vw, 56px); margin: 10px 0 18px; }
+    .legal-hero .legal-article { padding-bottom: 0; }
     .legal-updated { font: 500 13px/1.4 var(--mono); color: var(--faint); letter-spacing: .04em; }
     .legal-article { max-width: 720px; padding-bottom: clamp(64px, 9vw, 110px); }
     .legal-article h2 { font-size: clamp(21px, 2.6vw, 27px); margin: clamp(36px, 5vw, 52px) 0 14px; }
     .legal-article p, .legal-article li { color: var(--muted); font-size: 15.5px; line-height: 1.65; }
     .legal-article p + p { margin-top: 12px; }
     .legal-article strong { color: var(--ink); }
+    .legal-article ul { list-style: disc; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .legal-article li::marker { color: var(--accent); }
     .legal-article a { color: var(--accent); }
+    .legal-article a:hover { text-decoration: underline; }
   </style>
 </head>
 <body class="support-page">
   <a class="skip-link" href="#legal-content">Skip to content</a>
-  <div class="bg-glow" aria-hidden="true"></div>
+
+
   <header class="support-nav">
     <div class="container support-nav__inner">
       <a href="/" class="nav__brand" aria-label="OpenPocketCine home">
@@ -39,42 +49,82 @@
         <a href="/">Home</a>
         <a href="/support/">Support</a>
         <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn--primary" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>GitHub</a>
       </nav>
     </div>
   </header>
+
   <main id="legal-content">
     <section class="legal-hero">
       <div class="container legal-article">
-        <span class="section-label"><span class="rec-dot"></span> Terms of Use</span>
-        <h1>Free software. Record from the body.</h1>
-        <p class="legal-updated">Last updated: August 19, 2026</p>
+        <span class="kicker">Terms of use</span>
+        <h1>Short, because there's not much to agree to.</h1>
+        <p class="legal-updated">Last updated: August 18, 2026</p>
       </div>
     </section>
+
     <div class="container legal-article">
+      <h2>Acceptance</h2>
       <p>
-        OpenPocketCine is free software under the
-        <a href="https://github.com/erik-sutton95/OpenPocketCine/blob/main/LICENSE">Apache License 2.0</a>.
-        You may use, modify, and share it under that license.
+        By using the OpenPocketCine app or this website, you agree to these terms. If you don't
+        agree, don't use them.
       </p>
-      <h2>Unofficial field monitor</h2>
+
+      <h2>License and source</h2>
       <p>
-        This is an unofficial field monitor. It is not affiliated with, endorsed by, or supported by DJI.
-        "DJI", "Osmo", "Osmo Pocket", and "Mimo" are trademarks of SZ DJI Technology Co., Ltd., used only
-        to identify the cameras the app can talk to.
+        OpenPocketCine is free and open source, licensed under the
+        <a href="https://github.com/erik-sutton95/OpenPocketCine/blob/main/LICENSE" target="_blank" rel="noopener">Apache
+        License 2.0</a>. The full source code is public. There are no accounts, no fees, and no
+        subscriptions.
       </p>
-      <h2>Camera control</h2>
       <p>
-        Reverse-engineered protocol behavior can be incomplete or wrong.
-        <strong>Do not rely on this app as the only way to start or stop a take</strong> — record from
-        the camera body until those commands are proven.
+        If you install the app from the App Store, that binary is additionally subject to Apple's
+        standard
+        <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Licensed
+        Application End User License Agreement</a>.
       </p>
-      <h2>No warranty</h2>
+
+      <h2>Unofficial monitor</h2>
       <p>
-        The software is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
-        Lost footage, missed takes, and camera misconfiguration are your responsibility.
+        This is an unofficial field monitor. It is not affiliated with, endorsed by, or supported
+        by DJI. Reverse-engineered protocol behavior can be incomplete or wrong.
+        <strong>Always verify critical settings &mdash; recording state, exposure, and media
+        &mdash; on the camera itself.</strong> Record from the camera body until remote roll is
+        proven. Use on productions is at your own risk.
       </p>
-      <p>By using the app you agree to follow the project's Code of Conduct when participating in the community.</p>
+
+      <h2>No warranty and limitation of liability</h2>
+      <p>
+        OpenPocketCine is provided <strong>&ldquo;AS IS&rdquo;</strong>, without warranties or
+        conditions of any kind, as set out in the warranty disclaimer and limitation of liability
+        of the Apache License 2.0. To the maximum extent permitted by law, the project and its
+        contributors are not liable for any damages arising from use of the app, including lost
+        footage, missed takes, or equipment issues.
+      </p>
+
+      <h2>Trademarks and affiliation</h2>
+      <p>
+        DJI, Osmo, Osmo Pocket, Mimo, Apple, and other names used in the app or on this site
+        belong to their respective owners and are used for identification only. OpenPocketCine is
+        an independent open-source project, not affiliated with or endorsed by any of them. No
+        DJI SDK is included or required.
+      </p>
+
+      <h2>Changes and contact</h2>
+      <p>
+        Changes to these terms are published on this page and in the project's public repository.
+        Questions: open an issue at
+        <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">github.com/erik-sutton95/OpenPocketCine</a>.
+      </p>
     </div>
   </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand"><img src="../assets/icon.png" alt="" width="24" height="24"><span>OpenPocketCine</span></div>
+      <p class="footer__meta"><a href="/">Home</a> · <a href="/support/">Support</a> · <a href="/privacy/">Privacy</a> · <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">Source</a></p>
+      <p class="footer__disclaimer">OpenPocketCine is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.</p>
+    </div>
+  </footer>
 </body>
 </html>

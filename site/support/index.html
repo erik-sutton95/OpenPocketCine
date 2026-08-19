@@ -3,21 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>OpenPocketCine Support — Connect and monitor</title>
-  <meta name="description" content="Connect an Osmo Pocket over Bluetooth and Wi-Fi, watch live view, and report bugs for OpenPocketCine.">
-  <meta name="theme-color" content="#0A0908">
+  <title>OpenPocketCine Support — Connect, monitor, and judge the image</title>
+  <meta name="description" content="Learn how to pair an Osmo Pocket 4, watch HEVC live view, and use scopes, LUTs, and view assists in OpenPocketCine.">
+  <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
   <link rel="canonical" href="https://openpocketcine.app/support/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OpenPocketCine Support">
+  <meta property="og:description" content="Connection guides, monitoring tools, and troubleshooting for OpenPocketCine.">
+  <meta property="og:url" content="https://openpocketcine.app/support/">
+  <meta property="og:image" content="https://openpocketcine.app/assets/screens/hero-monitor.webp">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../assets/icon.png">
+  <link rel="apple-touch-icon" href="../assets/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Sora:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/app.css">
 </head>
 <body class="support-page">
   <a class="skip-link" href="#support-content">Skip to support content</a>
-  <div class="bg-glow" aria-hidden="true"></div>
+
   <header class="support-nav">
     <div class="container support-nav__inner">
       <a href="/" class="nav__brand" aria-label="OpenPocketCine home">
@@ -27,47 +34,141 @@
       <nav class="support-nav__links" aria-label="Support navigation">
         <a href="/">Home</a>
         <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn--primary" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>GitHub</a>
       </nav>
     </div>
   </header>
+
   <main id="support-content">
     <section class="support-hero">
       <div class="container support-hero__inner">
-        <span class="section-label"><span class="rec-dot"></span> Support</span>
-        <h1>Connect the camera.<br><span class="gold">Watch the feed.</span></h1>
-        <p class="lead">
-          OpenPocketCine pairs over Bluetooth, joins the camera's Wi-Fi, and shows a live HEVC or AVC
-          monitor. iOS needs a physical iPhone — the Simulator has no BLE or camera SoftAP.
-        </p>
+        <span class="kicker">Support center</span>
+        <h1>Get the shot.<br><span class="sky">We’ll help with the rest.</span></h1>
+        <p class="lead">Pair your Osmo Pocket, watch the HEVC feed, and set up the monitor. Connection, scopes, and common issues are below.</p>
       </div>
     </section>
-    <section class="support-section" id="connect">
+
+    <section class="support-section support-section--compact" aria-labelledby="browse-title">
       <div class="container">
-        <span class="section-label">01</span>
-        <h2>Connect a camera</h2>
-        <ol class="support-steps">
-          <li>Power on the Osmo Pocket and keep DJI Mimo closed so it does not steal the link.</li>
-          <li>In OpenPocketCine, scan for the camera over Bluetooth and approve pairing on the camera screen.</li>
-          <li>Allow Local Network and Bluetooth when iOS asks. The app then joins the camera Wi-Fi.</li>
-          <li>Wait for the connection phase to reach Connected. Battery and storage readouts mean the datalink is up.</li>
-        </ol>
-        <p class="support-notice"><strong>Never paste camera Wi-Fi passwords into GitHub issues.</strong></p>
+        <div class="support-heading">
+          <span class="section-label">Browse by task</span>
+          <h2 id="browse-title">Find what you need.</h2>
+        </div>
+        <nav class="support-grid" aria-label="Support topics">
+          <a class="support-card" href="#connect"><span>01</span><h3>Connect a camera</h3><p>Pair over Bluetooth and join the Pocket’s Wi-Fi.</p></a>
+          <a class="support-card" href="#monitor"><span>02</span><h3>Monitor the feed</h3><p>Start live view, read status, and keep the screen awake.</p></a>
+          <a class="support-card" href="#assists"><span>03</span><h3>Scopes &amp; assists</h3><p>Configure LUTs, exposure tools, focus aids, and guides.</p></a>
+          <a class="support-card" href="#troubleshooting"><span>04</span><h3>Troubleshooting</h3><p>Work through pairing, Wi-Fi, and stream issues.</p></a>
+        </nav>
       </div>
     </section>
-    <section class="support-section" id="bugs">
-      <div class="container">
-        <span class="section-label">02</span>
-        <h2>Report a problem</h2>
-        <p>
-          Bugs only: open a
-          <a href="https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml">GitHub bug report</a>.
-          Feature ideas go to
-          <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests">Discussions</a>.
-          Security issues go to
-          <a href="https://github.com/erik-sutton95/OpenPocketCine/security/advisories/new">private advisories</a>.
-        </p>
+
+    <section class="support-section" id="connect" aria-labelledby="connect-title">
+      <div class="container support-article">
+        <div class="support-heading"><span class="section-label">01 · Connection</span><h2 id="connect-title">Connect your Osmo Pocket.</h2><p class="lead">On first launch, OpenPocketCine walks through Bluetooth pairing, the camera Wi-Fi join, and the datalink handshake.</p></div>
+        <div class="support-columns">
+          <div>
+            <h3>First pair</h3>
+            <ol class="support-steps">
+              <li><strong>Scan</strong><span>Power on the Pocket and tap Scan. Allow Bluetooth when iOS asks.</span></li>
+              <li><strong>Approve on the camera</strong><span>Accept the pairing prompt on the Pocket screen if it appears.</span></li>
+              <li><strong>Join camera Wi-Fi</strong><span>iOS will offer the camera’s SoftAP. Join it. Allow Local Network when asked.</span></li>
+              <li><strong>Live view</strong><span>The datalink comes up and HEVC live view starts. The camera is then saved for next time.</span></li>
+            </ol>
+          </div>
+          <div class="support-callout glass">
+            <h3>Returning to set</h3>
+            <p>Saved cameras appear on the home screen. Tap one to reconnect, or use <strong>Pair new camera</strong>. You can rename or remove a saved camera.</p>
+            <p>The Wi-Fi password is stored in the iOS Keychain on this phone only.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="support-section" id="monitor" aria-labelledby="monitor-title">
+      <div class="container support-article">
+        <div class="support-heading"><span class="section-label">02 · Live monitor</span><h2 id="monitor-title">See the feed. Judge the image.</h2><p class="lead">After connection, OpenPocketCine opens the monitor when the first readable HEVC frame arrives.</p></div>
+        <div class="support-columns">
+          <div>
+            <h3>What you see</h3>
+            <ul class="support-list">
+              <li>REC / STBY, timecode, format, color mode, storage, and FPS with link bars.</li>
+              <li>ISO, shutter, white balance, focus, mode, and audio as live readouts.</li>
+              <li>Phone and camera battery on the leading rail.</li>
+              <li>DISP cycles chrome. Lock prevents accidental taps.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>What stays on the body</h3>
+            <ul class="support-list">
+              <li>Start and stop recording from the camera until remote roll is proven.</li>
+              <li>Do not treat the on-screen REC button as armed until a release says it is.</li>
+              <li>Keep Screen Awake lives in Settings.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="support-section" id="assists" aria-labelledby="assists-title">
+      <div class="container support-article">
+        <div class="support-heading"><span class="section-label">03 · View assists</span><h2 id="assists-title">Build the monitor you need.</h2><p class="lead">Tap an assist to toggle it. Long-press a tool to open its configuration. These run on the phone GPU — they do not change the file on the camera.</p></div>
+        <div class="support-feature-list support-feature-list--three">
+          <article><h3>Exposure &amp; color</h3><p>Waveform, RGB parade, histogram, vectorscope, false color, zebras, and Traffic Lights.</p></article>
+          <article><h3>Focus</h3><p>Focus peaking with adjustable sensitivity and color.</p></article>
+          <article><h3>Framing</h3><p>Aspect guides, grids, and a crosshair. Pocket has no anamorphic de-squeeze.</p></article>
+          <article><h3>LUT preview</h3><p>Built-in D-Log / D-Log 2 Rec.709 looks, plus imported <code>.cube</code> files.</p></article>
+          <article><h3>Mirror</h3><p>Flip the monitor image when the phone is on a cage facing you.</p></article>
+          <article><h3>Audio meters</h3><p>Local meters drawn from the camera’s live audio status.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="support-section" id="settings" aria-labelledby="settings-title">
+      <div class="container support-article">
+        <div class="support-heading"><span class="section-label">Settings</span><h2 id="settings-title">Tune OpenPocketCine for the operator.</h2></div>
+        <div class="support-feature-list support-feature-list--three">
+          <article><h3>Link</h3><p>Check connection phase, disconnect, or return to saved cameras.</p></article>
+          <article><h3>View Assist</h3><p>Configure tools and arrange the assist toolbar for the current job.</p></article>
+          <article><h3>Display</h3><p>Keep the screen awake. Cycle DISP for a cleaner image.</p></article>
+          <article><h3>System</h3><p>App version, licenses, NOTICE, privacy, and terms.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="support-section" id="troubleshooting" aria-labelledby="troubleshooting-title">
+      <div class="container support-article">
+        <div class="support-heading"><span class="section-label">04 · Troubleshooting</span><h2 id="troubleshooting-title">Start with the signal closest to the problem.</h2></div>
+        <div class="support-faq">
+          <details><summary>The camera does not appear</summary><div><p>Power the Pocket on, stay close, and allow Bluetooth. If you previously paired with Mimo or another install, remove the old pairing on the camera and try again.</p></div></details>
+          <details><summary>Wi-Fi join never finishes</summary><div><p>Approve the iOS Join prompt for the camera’s SoftAP. If iOS stays on cellular, forget the network and retry. Local Network permission is required for the datalink.</p></div></details>
+          <details><summary>Live view stalls or never starts</summary><div><p>Move closer to the camera, confirm you are on the camera Wi-Fi, and reconnect. The monitor needs a first HEVC frame before chrome is useful.</p></div></details>
+          <details><summary>A setting will not change</summary><div><p>ISO, shutter, white balance, and record start/stop writes are not wired. Change those on the camera body and use OpenPocketCine to judge the image.</p></div></details>
+          <details><summary>Android</summary><div><p>Android is in progress. iPhone and iPad are the supported platforms today.</p></div></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="support-section support-contact" aria-labelledby="contact-title">
+      <div class="container support-contact__inner glass">
+        <span class="kicker">Still stuck?</span>
+        <h2 id="contact-title">Bring it to the open.</h2>
+        <p class="lead">Report a reproducible problem on GitHub. Ideas stay in GitHub Discussions.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml" target="_blank" rel="noopener">Report a bug<span class="btn__arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas-feature-requests" target="_blank" rel="noopener">Request a feature<span class="btn__arrow" aria-hidden="true">→</span></a>
+        </div>
+        <p class="support-contact__hint">Never post passwords, pairing codes, private media, or security vulnerabilities. Security issues go through GitHub Security Advisories.</p>
       </div>
     </section>
   </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand"><img src="../assets/icon.png" alt="" width="24" height="24"><span>OpenPocketCine</span></div>
+      <p class="footer__meta"><a href="/">Home</a> · <a href="/privacy/">Privacy</a> · <a href="/terms/">Terms</a> · <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">Source</a></p>
+      <p class="footer__disclaimer">OpenPocketCine is an independent application, not affiliated with or endorsed by SZ DJI Technology Co., Ltd. “DJI”, “Osmo”, and “Osmo Pocket” are trademarks of SZ DJI Technology Co., Ltd., used for identification only.</p>
+    </div>
+  </footer>
 </body>
 </html>

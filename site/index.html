@@ -3,33 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>OpenPocketCine: Open-source field monitor for DJI Osmo Pocket</title>
-  <meta name="description" content="OpenPocketCine is a free, open-source field-monitor app for DJI Osmo Pocket cameras. Live view, scopes, and assists over the camera's own Wi-Fi.">
-  <meta name="theme-color" content="#0A0908">
+
+  <title>OpenPocketCine: Open-source field monitor for DJI Osmo</title>
+  <meta name="description" content="OpenPocketCine is a free, open-source field-monitor app for DJI Osmo. Tested on Pocket 4P. Pocket 4 and 3 are untested; Action 6 and Nano are planned.">
+  <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+
   <link rel="canonical" href="https://openpocketcine.app/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="OpenPocketCine: Open-source field monitor for DJI Osmo Pocket">
-  <meta property="og:description" content="Free, open-source field-monitor app for DJI Osmo Pocket. Live view, scopes, and assists.">
+  <meta property="og:title" content="OpenPocketCine: Open-source field monitor for DJI Osmo">
+  <meta property="og:description" content="Free, community-driven field monitor for DJI Osmo. Tested on Pocket 4P; Pocket 4 and 3 untested; the rest planned.">
+  <meta property="og:image" content="assets/screens/hero-monitor.webp">
   <meta property="og:url" content="https://openpocketcine.app/">
-  <meta property="og:image" content="https://openpocketcine.app/assets/screens/hero-monitor.webp">
   <meta name="twitter:card" content="summary_large_image">
+
   <link rel="icon" href="assets/icon.png">
   <link rel="apple-touch-icon" href="assets/icon.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+
   <link rel="preload" as="image" href="assets/screens/hero-monitor.webp">
   <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
-  <a class="skip-link" href="#top">Skip to content</a>
-  <div class="bg-glow" aria-hidden="true"></div>
-  <div class="grain" aria-hidden="true"></div>
-  <div class="spotlight" aria-hidden="true"></div>
 
-  <header class="nav" id="nav">
+  <header class="nav nav--dark" id="nav">
     <div class="container nav__inner">
       <a href="#top" class="nav__brand">
         <img src="assets/icon.png" alt="OpenPocketCine" width="28" height="28">
@@ -37,162 +38,218 @@
       </a>
       <nav class="nav__links" aria-label="Primary">
         <a href="#scopes">Scopes</a>
-        <a href="#assists">Assists</a>
-        <a href="#commander">Control</a>
-        <a href="#open-source">Open Source</a>
+        <a href="#controls">Controls</a>
+        <a href="#tracking">Tracking</a>
+        <a href="#vertical">Assists</a>
         <a href="/support/">Support</a>
+        <a href="#open-source">Open Source</a>
       </nav>
       <div class="nav__cta">
         <a class="nav__github" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener" aria-label="OpenPocketCine on GitHub">★ GitHub</a>
-        <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine"><span class="btn__rec" aria-hidden="true"></span>Get the source</a>
+        <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>GitHub</a>
       </div>
     </div>
   </header>
 
   <main id="top">
-    <section class="hero" id="hero">
+    <section class="hero band band--dark" id="hero" data-band="dark">
       <div class="hero__inner container">
-        <span class="section-label" data-intro><span class="rec-dot"></span> Field Monitor · Open Source</span>
-        <h1 data-intro>The open field<br>monitor for <span class="gold">Osmo&nbsp;Pocket.</span></h1>
-        <p class="lead" data-intro>
-          Pair over Bluetooth, join the camera's Wi-Fi, and watch a live HEVC (or AVC) feed
-          with professional scopes and assists. Free, Apache-2.0, no vendor SDK.
-        </p>
+        <span class="kicker" data-intro>Field monitor · Open source</span>
+        <h1 data-intro>The open field<br>monitor for <span class="sky">Osmo.</span></h1>
+        <p class="lead" data-intro>Tested on Pocket&nbsp;4P. Pocket&nbsp;4 and Pocket&nbsp;3 are untested. Action&nbsp;6, Nano, and the rest are planned.</p>
         <div class="hero__cta" data-intro>
-          <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine"><span class="btn__rec" aria-hidden="true"></span>Get the source</a>
-          <a class="btn btn--ghost btn--magnetic" href="/support/">How to connect<span class="btn__arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>★ Star on GitHub</a>
+          <span class="btn btn--disabled" aria-disabled="true">
+            TestFlight <span class="btn__status">Coming soon</span>
+          </span>
+          <span class="btn btn--disabled" data-coming-soon="android" aria-disabled="true">
+            Android <span class="btn__status">Coming soon</span>
+          </span>
         </div>
-
-        <div class="hero__mock" data-intro>
+      </div>
+      <div class="hero__stage" data-intro>
+        <div class="hero__mock">
           <img src="assets/screens/hero-monitor.webp"
-            alt="OpenPocketCine live monitor recording on a landscape iPhone"
-            width="1600" height="638" decoding="async">
+            alt="OpenPocketCine recording on iPhone: red tally, D-Log 2, live readouts, and a Stockholm street feed"
+            width="1800" height="640" fetchpriority="high" decoding="async">
         </div>
       </div>
     </section>
 
-    <div class="ticker" aria-hidden="true">
+    <div class="spec-bar ticker" aria-hidden="true" data-band="dark">
       <div class="ticker__track">
         <span class="ticker__group">
-          <span>Osmo Pocket 4</span><i></i><span>4 Pro</span><i></i><span>Osmo Nano</span><i></i>
-          <span>HEVC</span><i></i><span>AVC</span><i></i><span>D-Log2</span><i></i>
-          <span>Waveform</span><i></i><span>RGB Parade</span><i></i><span>Histogram</span><i></i>
-          <span>Vectorscope</span><i></i><span>False Color</span><i></i><span>Focus Peaking</span><i></i>
-          <span>Zebras</span><i></i><span>Traffic Lights</span><i></i><span>Camera to Cloud</span><i></i>
+          <span>Osmo Pocket 4P</span><i></i><span>Pocket 4</span><i></i><span>Pocket 3</span><i></i>
+          <span>Action 6</span><i></i><span>Osmo Nano</span><i></i><span>D-Log 2</span><i></i><span>HEVC</span><i></i><span>Waveform</span><i></i>
+          <span>RGB Parade</span><i></i><span>Histogram</span><i></i><span>Vectorscope</span><i></i>
+          <span>False Color</span><i></i><span>Focus Peaking</span><i></i><span>Zebras</span><i></i>
+          <span>Traffic Lights</span><i></i><span>Frame Markers</span><i></i><span>LUT</span><i></i>
+          <span>Face tracking</span><i></i><span>BLE + Wi-Fi</span><i></i>
         </span>
         <span class="ticker__group">
-          <span>Osmo Pocket 4</span><i></i><span>4 Pro</span><i></i><span>Osmo Nano</span><i></i>
-          <span>HEVC</span><i></i><span>AVC</span><i></i><span>D-Log2</span><i></i>
-          <span>Waveform</span><i></i><span>RGB Parade</span><i></i><span>Histogram</span><i></i>
-          <span>Vectorscope</span><i></i><span>False Color</span><i></i><span>Focus Peaking</span><i></i>
-          <span>Zebras</span><i></i><span>Traffic Lights</span><i></i><span>Camera to Cloud</span><i></i>
+          <span>Osmo Pocket 4P</span><i></i><span>Pocket 4</span><i></i><span>Pocket 3</span><i></i>
+          <span>Action 6</span><i></i><span>Osmo Nano</span><i></i><span>D-Log 2</span><i></i><span>HEVC</span><i></i><span>Waveform</span><i></i>
+          <span>RGB Parade</span><i></i><span>Histogram</span><i></i><span>Vectorscope</span><i></i>
+          <span>False Color</span><i></i><span>Focus Peaking</span><i></i><span>Zebras</span><i></i>
+          <span>Traffic Lights</span><i></i><span>Frame Markers</span><i></i><span>LUT</span><i></i>
+          <span>Face tracking</span><i></i><span>BLE + Wi-Fi</span><i></i>
         </span>
       </div>
     </div>
 
-    <section class="statement" aria-label="OpenPocketCine in one sentence">
-      <p class="statement__text" id="statement">
-        <span class="w">Every</span> <span class="w">scope.</span>
-        <span class="w">Every</span> <span class="w">assist.</span>
-        <span class="w">Camera</span> <span class="w">control.</span>
-        <span class="w w--gold">Free,</span> <span class="w w--gold">and</span>
-        <span class="w w--gold">open</span> <span class="w w--gold">source.</span>
-      </p>
-    </section>
-
-    <section class="section phone-showcase" id="scopes">
-      <div class="container phone-showcase__inner">
-        <div class="phone-showcase__copy">
-          <span class="section-label"><span class="rec-dot"></span> Scopes</span>
-          <h2>Read the image like a colorist.</h2>
-          <p class="lead">Waveform, RGB parade, histogram, and vectorscope run live
-            beside the image you are judging, with Traffic Lights on the feed.</p>
+    <section class="section feat-section band band--light" id="scopes" data-band="light">
+      <div class="container container--wide feat-row">
+        <div class="feat-row__copy">
+          <span class="kicker">Scopes and assists</span>
+          <h2>Industry-grade scopes.<br>Never on Osmo before.</h2>
+          <p class="lead">Waveform, vectorscope, histogram, RGB parade, false color, zebras, focus peaking, Traffic Lights, frame guides, and your own <span class="mono">.cube</span>&nbsp;LUTs. Drawn from the HEVC stream.</p>
         </div>
-        <figure class="phone-showcase__visual phone-showcase__visual--wide">
+        <div class="feat-row__visual">
           <img src="assets/screens/scopes.webp"
-            alt="OpenPocketCine waveform and Traffic Lights over a live view"
-            width="1600" height="841" loading="lazy" decoding="async">
-        </figure>
+            alt="OpenPocketCine on iPhone with RGB waveform and Traffic Lights over a live D-Log 2 feed"
+            width="1800" height="886" loading="lazy" decoding="async">
+        </div>
       </div>
     </section>
 
-    <section class="section phone-showcase" id="assists">
-      <div class="container phone-showcase__inner">
-        <div class="phone-showcase__copy">
-          <span class="section-label"><span class="rec-dot"></span> View Assist</span>
-          <h2>Catch it before the take.</h2>
-          <p class="lead">False color, zebras, Traffic Lights, peaking, grids, and
-            crosshairs sit on a rail next to the image — including in portrait.</p>
+    <section class="section feat-section band band--light" id="controls" data-band="light">
+      <div class="container container--wide feat-row">
+        <div class="feat-row__copy">
+          <span class="kicker">Camera controls</span>
+          <h2>Zoom, D-Log, and status on the phone.</h2>
+          <p class="lead">D-Log switches when you zoom. ISO, shutter, white balance, and mode are on screen. Bluetooth plus the camera&rsquo;s Wi-Fi. Record on the body until remote roll is proven.</p>
         </div>
-        <figure class="phone-showcase__visual">
-          <img src="assets/screens/portrait-assists.webp"
-            alt="OpenPocketCine portrait assist rail with zebras and framing tools"
-            width="837" height="1600" loading="lazy" decoding="async">
-        </figure>
-      </div>
-    </section>
-
-    <section class="section phone-showcase" id="commander">
-      <div class="container phone-showcase__inner">
-        <div class="phone-showcase__copy">
-          <span class="section-label"><span class="rec-dot"></span> Camera Control</span>
-          <h2>Full camera control. Keep moving.</h2>
-          <p class="lead">ISO, EV, zoom, gimbal, and record from the phone — plus Pocket 4 Pro
-            fixes such as zoom in D-Log2. OpenPocketCine switches automatically so you stay on
-            the shot.</p>
-        </div>
-        <figure class="phone-showcase__visual phone-showcase__visual--wide">
+        <div class="feat-row__visual">
           <img src="assets/screens/camera-controls.webp"
-            alt="OpenPocketCine camera controls and zoom while recording"
-            width="1600" height="1057" loading="lazy" decoding="async">
-        </figure>
+            alt="OpenPocketCine with 3x zoom, D-Log, waveform, and Traffic Lights on a city feed"
+            width="1800" height="1176" loading="lazy" decoding="async">
+        </div>
       </div>
     </section>
 
-    <section class="section section--spot spot" id="open-source">
+    <section class="section feat-section band band--light" id="tracking" data-band="light">
+      <div class="container container--wide feat-row">
+        <div class="feat-row__copy">
+          <span class="kicker">Face tracking</span>
+          <h2>Custom face tracking for a fast gimbal lock.</h2>
+          <p class="lead">Faces are boxed on the live feed. Tap one to lock the Osmo subject tracker.</p>
+        </div>
+        <div class="feat-row__visual">
+          <img src="assets/screens/face-tracking.webp"
+            alt="OpenPocketCine on iPhone with a face-tracking box locked on a subject in the live feed"
+            width="1800" height="887" loading="lazy" decoding="async">
+        </div>
+      </div>
+    </section>
+
+    <section class="section feat-section band band--light" id="vertical" data-band="light">
+      <div class="container container--wide feat-row">
+        <div class="feat-row__copy">
+          <span class="kicker">View assists</span>
+          <h2>The same tools in portrait.</h2>
+          <p class="lead">Zebras, peaking, false color, waveform, Traffic Lights, guides, and grid stay available when the phone is vertical.</p>
+        </div>
+        <div class="feat-row__visual">
+          <img class="is-portrait" src="assets/screens/vertical.webp"
+            alt="OpenPocketCine in portrait with the full view-assist rail, zebras, and camera readouts"
+            width="720" height="1485" loading="lazy" decoding="async">
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--spot spot band band--dark" id="open-source" data-band="dark">
       <div class="spot__glow" aria-hidden="true"></div>
       <div class="container spot-oss__inner">
-        <span class="section-label"><span class="rec-dot"></span> Identity Core</span>
-        <h2>No subscriptions, no telemetry.</h2>
-        <p class="lead">
-          OpenPocketCine is Apache-2.0 licensed and built in public with the latest frontier
-          models — Grok, Codex, and Claude. Inspect the protocol core, improve the monitor,
-          and keep the tool you rely on.
-        </p>
-        <p>
-          This project is not affiliated with DJI. Verify record start/stop on the camera body
-          until you trust the link.
-        </p>
+        <span class="kicker">Open source</span>
+        <h2>100% free. Open source. Yours.</h2>
+        <p class="lead">No subscriptions, no paywalls, no telemetry. OpenPocketCine is Apache-2.0 licensed and built in the open by a community of filmmakers and developers.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>★ Star on GitHub</a>
+          <a class="btn btn--ghost btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">Contribute<span class="btn__arrow" aria-hidden="true">→</span></a>
+        </div>
       </div>
     </section>
 
-    <section class="section" id="credits">
+    <section class="section band band--light" id="platforms" data-band="light">
       <div class="container">
-        <span class="section-label">Credits</span>
-        <h2>Osmosis</h2>
-        <p class="lead">
-          I learned the BLE pairing and camera Wi-Fi connection path with the help of
-          <a href="https://github.com/KonradIT/osmosis">Osmosis</a> by Konrad Iturbe — a generous
-          open Android client for Osmo cameras. I'm grateful. OpenPocketCine is its own
-          implementation; Osmosis was inspiration for that connection story, not a source I copied.
-        </p>
-        <p>
-          Please go look at <a href="https://github.com/KonradIT/osmosis">Osmosis</a> too. If you
-          care about talking to Osmo cameras, Konrad's work is worth your time.
-        </p>
+        <div class="lineup__intro">
+          <span class="kicker">Cameras</span>
+          <h2>What works today.</h2>
+          <p class="lead">Pocket&nbsp;4P is tested. Pocket&nbsp;4 and Pocket&nbsp;3 are untested. Action&nbsp;6, Nano, and the rest are planned.</p>
+        </div>
+        <div class="lineup">
+          <article class="lineup__card lineup__card--live">
+            <img src="assets/screens/osmo-pocket-4p.webp" alt="Osmo Pocket 4P" width="276" height="715" loading="lazy">
+            <h3>Osmo Pocket 4P</h3>
+            <p>Dual-lens pocket gimbal. The only camera tested so far.</p>
+            <span class="badge">Working</span>
+          </article>
+          <article class="lineup__card">
+            <img src="assets/screens/osmo-pocket-4-catalog.webp" alt="Osmo Pocket 4" width="421" height="1062" loading="lazy">
+            <h3>Osmo Pocket 4</h3>
+            <p>Same family, not yet run through OpenPocketCine.</p>
+            <span class="badge badge--untested">Untested</span>
+          </article>
+          <article class="lineup__card">
+            <img src="assets/screens/osmo-pocket-3.webp" alt="Osmo Pocket 3" width="209" height="603" loading="lazy">
+            <h3>Osmo Pocket 3</h3>
+            <p>Previous-gen Pocket. Not tested on this app.</p>
+            <span class="badge badge--untested">Untested</span>
+          </article>
+          <article class="lineup__card">
+            <img src="assets/screens/osmo-action-6.webp" alt="Osmo Action 6" width="565" height="383" loading="lazy">
+            <h3>Osmo Action 6</h3>
+            <p>Action series support is still on the roadmap.</p>
+            <span class="badge badge--soon">Planned</span>
+          </article>
+          <article class="lineup__card">
+            <img src="assets/screens/osmo-nano.webp" alt="Osmo Nano" width="470" height="545" loading="lazy">
+            <h3>Osmo Nano</h3>
+            <p>Wearable Nano. Planned with the rest of the series.</p>
+            <span class="badge badge--soon">Planned</span>
+          </article>
+        </div>
+        <div class="lineup__meta">
+          <p>iPhone and iPad today. Android soon.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band band--dark" id="download" data-band="dark">
+      <div class="container cta-final">
+        <h2>Source is on GitHub.</h2>
+        <p class="lead">Issues and pull requests are welcome. TestFlight and Android are not out yet.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary btn--magnetic" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>★ Star on GitHub</a>
+          <span class="btn btn--disabled" aria-disabled="true">
+            TestFlight <span class="btn__status">Coming soon</span>
+          </span>
+          <span class="btn btn--disabled" data-coming-soon="android" aria-disabled="true">
+            Android <span class="btn__status">Coming soon</span>
+          </span>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="footer">
+  <footer class="footer band band--dark" data-band="dark">
     <div class="container footer__inner">
-      <p>© 2026 OpenPocketCine. Apache-2.0.</p>
-      <nav aria-label="Footer">
-        <a href="/privacy/">Privacy</a>
-        <a href="/terms/">Terms</a>
-        <a href="/support/">Support</a>
-        <a href="https://github.com/erik-sutton95/OpenPocketCine">GitHub</a>
-      </nav>
+      <div class="footer__brand">
+        <img src="assets/icon.png" alt="OpenPocketCine" width="24" height="24">
+        <span>OpenPocketCine</span>
+      </div>
+      <p class="footer__meta">
+        <a href="/support/">Support</a> ·
+        <a href="/privacy/">Privacy</a> ·
+        <a href="/terms/">Terms</a> ·
+        Free &amp; open source · Apache-2.0
+      </p>
+      <p class="footer__disclaimer">
+        Not affiliated with or endorsed by SZ DJI Technology Co., Ltd.
+        &ldquo;DJI&rdquo;, &ldquo;Osmo&rdquo;, &ldquo;Osmo Pocket&rdquo;, &ldquo;Osmo Action&rdquo;,
+        and &ldquo;Osmo Nano&rdquo; are trademarks of SZ DJI Technology Co., Ltd.,
+        used for identification only. No DJI SDK is used.
+      </p>
     </div>
   </footer>
 

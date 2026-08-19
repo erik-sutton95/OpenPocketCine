@@ -1,4 +1,4 @@
-/* OpenZCine landing - scroll choreography, cursor light-check, button physics.
+/* OpenPocketCine landing - scroll choreography, cursor light-check, button physics.
   Depends on GSAP + ScrollTrigger (loaded via CDN in index.html).
   Everything degrades: no GSAP or prefers-reduced-motion means static content. */
 
@@ -32,16 +32,27 @@
     });
   }
 
-  // ---- Nav: dissolve the glass frame in once the page is scrolled ----
+  // ---- Nav: solid bar after scroll, tinted to the band under it ----
   function initNavMorph() {
     const nav = document.getElementById("nav");
     if (!nav) return;
-    const threshold = 24;
-    const onScroll = () => {
-      nav.classList.toggle("scrolled", window.scrollY > threshold);
+    const bands = Array.from(document.querySelectorAll("[data-band]"));
+    const apply = () => {
+      nav.classList.toggle("scrolled", window.scrollY > 16);
+      let theme = "dark";
+      const y = 56;
+      for (const band of bands) {
+        const r = band.getBoundingClientRect();
+        if (r.top <= y && r.bottom > y) {
+          theme = band.dataset.band || "dark";
+          break;
+        }
+      }
+      nav.classList.toggle("nav--light", theme === "light");
+      nav.classList.toggle("nav--dark", theme !== "light");
     };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    apply();
+    window.addEventListener("scroll", apply, { passive: true });
   }
 
   // ---- Cursor light-check: gold spot + glass-card sheen follow the pointer ----
@@ -144,24 +155,6 @@
         img.style.setProperty("--ry", "0deg");
       });
     }
-  }
-
-  // ---- Statement: words expose one by one as the line scrolls through ----
-  function initStatement() {
-    const words = document.querySelectorAll("#statement .w");
-    if (!words.length || !hasGsap || reduceMotion || nativeMobileScroll) return; // static = fully visible
-    gsap.set(words, { opacity: 0.13 });
-    gsap.to(words, {
-      opacity: 1,
-      stagger: 0.06,
-      ease: "none",
-      scrollTrigger: {
-        trigger: ".statement",
-        start: "top 72%",
-        end: "bottom 55%",
-        scrub: 0.6,
-      },
-    });
   }
 
   // ---- Journey: pinned stage where the three view-assist renders trade places ----
@@ -284,7 +277,6 @@
     initSpotlight();
     initMagnetic();
     initHero();
-    initStatement();
     initJourney();
     initRows();
   }

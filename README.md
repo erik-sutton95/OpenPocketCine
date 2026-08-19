@@ -53,7 +53,7 @@ missing. Histogram, zebras, and a LUT stay on the feed while you record.
 
 <p align="center">
   <a href="https://openpocketcine.app/">
-    <img alt="Live monitor with custom face tracking for gimbal lock-on" src="site/assets/screens/face-lock.webp" width="820">
+    <img alt="Live monitor with custom face tracking for gimbal lock-on" src="site/assets/screens/face-tracking.webp" width="820">
   </a>
 </p>
 
@@ -70,8 +70,8 @@ vectorscope run live beside the image you are judging, with Traffic Lights on th
 grids, and crosshairs sit on a rail next to the image — including in portrait.
 
 <p align="center">
-  <a href="https://openpocketcine.app/#assists">
-    <img alt="Portrait assist rail with zebras and framing tools" src="site/assets/screens/portrait-assists.webp" width="360">
+  <a href="https://openpocketcine.app/#vertical">
+    <img alt="Portrait assist rail with zebras and framing tools" src="site/assets/screens/vertical.webp" width="360">
   </a>
 </p>
 
@@ -80,7 +80,7 @@ gotchas — zoom while you're in D-Log2 is one of them. OpenPocketCine handles t
 switch automatically so you keep moving.
 
 <p align="center">
-  <a href="https://openpocketcine.app/#commander">
+  <a href="https://openpocketcine.app/#controls">
     <img alt="Camera controls and zoom while recording" src="site/assets/screens/camera-controls.webp" width="820">
   </a>
 </p>

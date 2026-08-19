@@ -4,19 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>OpenPocketCine Privacy Policy</title>
-  <meta name="description" content="OpenPocketCine collects no personal data and operates no servers. Live view stays on the camera's Wi-Fi.">
-  <meta name="theme-color" content="#0A0908">
+  <meta name="description" content="OpenPocketCine collects no personal data and operates no servers. Camera control and live view stay on your local network.">
+  <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
   <link rel="canonical" href="https://openpocketcine.app/privacy/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OpenPocketCine Privacy Policy">
+  <meta property="og:description" content="No telemetry or automatic uploads. Live view stays on the local link.">
+  <meta property="og:url" content="https://openpocketcine.app/privacy/">
   <link rel="icon" href="../assets/icon.png">
+  <link rel="apple-touch-icon" href="../assets/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Sora:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/app.css">
   <style>
     .legal-hero { padding: clamp(88px, 12vw, 140px) 0 clamp(28px, 4vw, 44px); }
     .legal-hero h1 { font-size: clamp(34px, 5vw, 56px); margin: 10px 0 18px; }
+    .legal-hero .legal-article { padding-bottom: 0; }
     .legal-updated { font: 500 13px/1.4 var(--mono); color: var(--faint); letter-spacing: .04em; }
     .legal-article { max-width: 720px; padding-bottom: clamp(64px, 9vw, 110px); }
     .legal-article h2 { font-size: clamp(21px, 2.6vw, 27px); margin: clamp(36px, 5vw, 52px) 0 14px; }
@@ -26,11 +32,13 @@
     .legal-article ul { list-style: disc; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
     .legal-article li::marker { color: var(--accent); }
     .legal-article a { color: var(--accent); }
+    .legal-article a:hover { text-decoration: underline; }
   </style>
 </head>
 <body class="support-page">
   <a class="skip-link" href="#legal-content">Skip to content</a>
-  <div class="bg-glow" aria-hidden="true"></div>
+
+
   <header class="support-nav">
     <div class="container support-nav__inner">
       <a href="/" class="nav__brand" aria-label="OpenPocketCine home">
@@ -41,40 +49,88 @@
         <a href="/">Home</a>
         <a href="/support/">Support</a>
         <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn--primary" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>GitHub</a>
       </nav>
     </div>
   </header>
+
   <main id="legal-content">
     <section class="legal-hero">
       <div class="container legal-article">
-        <span class="section-label"><span class="rec-dot"></span> Privacy Policy</span>
+        <span class="kicker">Privacy policy</span>
         <h1>Your footage is nobody's business.</h1>
-        <p class="legal-updated">Last updated: August 19, 2026</p>
+        <p class="legal-updated">Last updated: August 18, 2026</p>
       </div>
     </section>
+
     <div class="container legal-article">
       <p>
-        OpenPocketCine talks to your Osmo Pocket over Bluetooth and the camera's own Wi-Fi.
-        <strong>It does not create an account, and it does not send analytics, crash reports, or
-        camera footage to us.</strong>
+        OpenPocketCine is an open-source field monitor for DJI Osmo Pocket cameras.
+        <strong>The app has no account, telemetry, or automatic data upload.</strong>
+        This page is the canonical privacy text.
       </p>
-      <h2>What stays on this phone</h2>
+
+      <h2>What the app does with data</h2>
       <ul>
-        <li>Saved camera names and last SSID. The camera Wi-Fi password is stored in the iOS Keychain on this phone only.</li>
-        <li>Operator preferences such as Keep Screen Awake and the last LUT look.</li>
-        <li>Imported <code>.cube</code> files you choose to open.</li>
+        <li>
+          <strong>Live view and camera status</strong> happen entirely over Bluetooth and the
+          camera's own Wi-Fi between your device and your camera. Video frames and telemetry
+          never leave that local link.
+        </li>
+        <li>
+          <strong>Saved camera names and last SSID</strong> are stored only in app-local storage
+          on your device. The camera Wi-Fi password is stored in the iOS Keychain on this phone
+          only.
+        </li>
+        <li>
+          <strong>Operator preferences</strong> such as Keep Screen Awake and the last LUT look
+          stay on the device, along with any <span class="mono">.cube</span> files you import.
+        </li>
       </ul>
+
       <h2>What never leaves the phone</h2>
       <p>
-        Live HEVC/AVC, DUML telemetry, and pairing traffic stay on the local link. We do not operate a cloud.
+        Live HEVC, DUML telemetry, and pairing traffic stay on the local link. We do not operate
+        a cloud. We do not sell data. We do not run analytics, advertising, or crash-reporting
+        SDKs.
       </p>
+
       <h2>Third parties</h2>
+      <ul>
+        <li>
+          <strong>Apple (or Google).</strong> Permission prompts and OS diagnostics are processed
+          under their own policies. If you later install a TestFlight or Play beta, Apple or
+          Google may provide crash reports to the developer under their terms.
+        </li>
+        <li>
+          <strong>GitHub.</strong> If you open an issue or discussion, that is public and governed
+          by GitHub's policies.
+        </li>
+      </ul>
+
+      <h2>What the app does not do</h2>
+      <ul>
+        <li>No analytics, telemetry, or crash-reporting SDKs.</li>
+        <li>No advertising or tracking of any kind.</li>
+        <li>No account with us &mdash; the app has no sign-up.</li>
+        <li>No sale of personal data.</li>
+      </ul>
+
+      <h2>Changes and contact</h2>
       <p>
-        Apple (or Google) may process permission prompts and OS diagnostics under their own policies.
-        Source is at <a href="https://github.com/erik-sutton95/OpenPocketCine">github.com/erik-sutton95/OpenPocketCine</a>.
+        Changes to this policy are published on this page and in the project's public repository.
+        Questions: open an issue at
+        <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">github.com/erik-sutton95/OpenPocketCine</a>.
       </p>
-      <p>This is not legal advice. This page is the canonical website policy.</p>
     </div>
   </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand"><img src="../assets/icon.png" alt="" width="24" height="24"><span>OpenPocketCine</span></div>
+      <p class="footer__meta"><a href="/">Home</a> · <a href="/support/">Support</a> · <a href="/terms/">Terms</a> · <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">Source</a></p>
+      <p class="footer__disclaimer">OpenPocketCine is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.</p>
+    </div>
+  </footer>
 </body>
 </html>

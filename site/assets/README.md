@@ -1,15 +1,15 @@
-# Public-site assets
+# Landing-page assets
 
-Only deploy-ready files belong here. Raw captures, PSD sources, and personal
-footage stay in gitignored `.local/`. App LUTs live under
-`ios/OpenPocketCine/Resources/`, not this tree.
+Deploy-ready assets only. Raw plates, phone frames, and compositor scratch
+belong under `/tmp` or a gitignored `.local/marketing/` tree — not in `site/`.
 
-`screens/*.webp` are reviewed field-usage mockups for the README and landing
-page. Keep transparency so the phones float on the dark landing page:
+- `icon.png` is the OpenPocketCine mark, Sky Blue on DJI Black.
+- `screens/*.webp` are the landing-page mockups and Osmo product stills loaded by `site/index.html`.
 
-```bash
-cwebp -q 82 -alpha_q 90 -resize 1600 0 input.png -o site/assets/screens/name.webp
+Regenerate a WebP after editing a local PNG with:
+
+```sh
+cwebp -q 82 -alpha_q 90 -resize 1600 0 source.png -o site/assets/screens/output.webp
 ```
 
-For a portrait source, resize the long edge to 1600 (`-resize 0 1600`).
-Names must be lowercase kebab-case. Each file must stay ≤ 1 MiB.
+WebP names must be lowercase kebab-case. Stay under 1 MiB per file (`scripts/check-site.sh`).
