@@ -350,4 +350,23 @@ import Testing
                 "rebind-limit fail is this open() attempt — operator stays on live")
     }
 
+    @Test func handshakeOpenRetryGivesUpAtLimit() {
+        #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 0))
+        #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 5))
+        #expect(CameraSoftAP.shouldGiveUpOpenRetry(attempts: 6))
+    }
+
+    @Test func savedCamerasPersistHotspot() {
+        #expect(CameraSoftAP.shouldPersistHotspot(isSavedCamera: true))
+        #expect(!CameraSoftAP.shouldPersistHotspot(isSavedCamera: false))
+    }
+
+    /// Poll so an early ACK does not wait out the full send interval.
+    @Test func handshakePollIsFinerThanSendInterval() {
+        #expect(CameraSoftAP.handshakePollMilliseconds > 0)
+        #expect(
+            CameraSoftAP.handshakePollMilliseconds
+                < CameraSoftAP.handshakeSendIntervalMilliseconds)
+    }
+
 }

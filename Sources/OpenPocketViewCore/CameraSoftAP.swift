@@ -338,9 +338,21 @@ extension CameraSoftAP {
     /// 9004 is listening — settle, then send, then rebind without tearing Wi-Fi.
     public static let handshakeSendsPerBind = 20
     public static let handshakeSendIntervalMilliseconds = 350
+    /// Driver must poll this often and break when the handshake ACK flag is set.
+    /// handshakeSendIntervalMilliseconds remains the max wait per send.
+    public static let handshakePollMilliseconds = 20
     public static let handshakeSettleMilliseconds = 400
     public static let handshakeRebindLimit = 3
     public static let handshakeRetryPauseMilliseconds = 500
+    /// openDatalinkKeepingLive must stop after this many failed open attempts.
+    public static let handshakeOpenRetryLimit = 6
+    public static func shouldGiveUpOpenRetry(attempts: Int) -> Bool {
+        attempts >= handshakeOpenRetryLimit
+    }
+    /// Saved cameras keep NEHotspotConfiguration across background.
+    public static func shouldPersistHotspot(isSavedCamera: Bool) -> Bool {
+        isSavedCamera
+    }
 
     public enum HandshakeTimeoutStep: String, Equatable, Sendable {
         case rebindUDP
