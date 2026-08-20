@@ -1055,7 +1055,7 @@ public enum GimbalStick {
     }
 
     /// `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0).
-    /// ActiveTrack reframes around the subject, so pan is opposite the free stick.
+    /// Tracking uses the same pan as the free stick (`invertPan` stays false).
     public static func encode(
         x: Double, y: Double, invertPan: Bool = false,
         sensitivity: Int = defaultSensitivity

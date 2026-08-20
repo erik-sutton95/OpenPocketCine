@@ -43,6 +43,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Stick pan while a subject is tracked matches the free gimbal (left is left).
 - A live-view enable that produces no video packets rebuilds UDP after 2 s
   instead of holding an 8 s IDR window (the 15 s black well after leaving a
   clip).

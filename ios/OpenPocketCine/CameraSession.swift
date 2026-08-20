@@ -1754,7 +1754,7 @@ final class CameraSession {
         guard !isLocked else { return }
         guard datalink != nil else { return }
         let axes = GimbalStick.encode(
-            x: x, y: y, invertPan: isTracking, sensitivity: sensitivity)
+            x: x, y: y, invertPan: false, sensitivity: sensitivity)
         pendingGimbalAxes = axes
         lastGimbalStickAt = Date()
         if !gimbalStickHeld {
