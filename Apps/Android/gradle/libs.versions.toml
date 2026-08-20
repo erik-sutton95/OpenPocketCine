@@ -4,7 +4,7 @@ kotlin = "2.4.10"
 coroutines = "1.11.0"
 composeBom = "2026.06.01"
 activityCompose = "1.13.0"
-androidxCore = "1.18.0"
+androidxCore = "1.19.0"
 coreSplashscreen = "1.2.0"
 json = "20231013"
 
