@@ -200,6 +200,13 @@ Contributions are welcome!
 
 Please also read our [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). For security issues, see [`SECURITY.md`](SECURITY.md).
 
+## Support
+
+I truly appreciate everyone who uses this project, files an issue, or sends a
+patch. Optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton) contributions
+help keep the lights on. If you would rather give to a charity — especially one
+that helps animals — that is just as welcome.
+
 ## License
 
 [Apache 2.0](LICENSE). Third-party licenses are listed in

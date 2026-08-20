@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format is based on
   zebra, false color, waveform, histogram, guides).
 - Android Jetpack Compose shell in `Apps/Android/` consuming the same Swift core over JNI.
 - Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
+- README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
+  contributions, with a nod to animal charities.
 
 ### Changed
 
