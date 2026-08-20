@@ -223,37 +223,56 @@
     });
   }
 
-  // ---- Feature rows: copy staggers in, renders parallax against the scroll ----
+  // ---- Feature rows: copy staggers in, device settles with a slight organic tilt ----
   function initRows() {
     if (!hasGsap || reduceMotion) return;
     document.querySelectorAll(".feat-section").forEach((sec) => {
       const copy = sec.querySelectorAll(".feat-row__copy > *");
-      const visual = sec.querySelector(".feat-row__visual img");
+      const visual = sec.querySelector(".feat-row__visual");
       const fromLeft = !sec.querySelector(".feat-row--reverse");
+      const portrait = sec.querySelector("img.is-portrait");
+      const restRot = portrait ? (fromLeft ? 2.2 : -2.2) : 0;
       if (copy.length) {
         gsap.from(copy, {
           opacity: 0,
-          y: 26,
-          duration: 0.7,
-          ease: "power3.out",
-          stagger: 0.1,
-          scrollTrigger: { trigger: sec, start: "top 74%" },
+          y: 22,
+          duration: 0.8,
+          ease: "expo.out",
+          stagger: 0.08,
+          scrollTrigger: { trigger: sec, start: "top 78%" },
         });
       }
       if (visual) {
-        gsap.from(visual, {
-          opacity: 0,
-          x: fromLeft ? 60 : -60,
-          rotation: fromLeft ? 1.5 : -1.5,
-          duration: 0.9,
-          ease: "power3.out",
-          scrollTrigger: { trigger: sec, start: "top 70%" },
-        });
+        gsap.fromTo(
+          visual,
+          {
+            opacity: 0,
+            x: fromLeft ? 48 : -48,
+            y: 28,
+            rotate: restRot + (fromLeft ? 5 : -5),
+            scale: 0.92,
+          },
+          {
+            opacity: 1,
+            x: 0,
+            y: 0,
+            rotate: restRot,
+            scale: 1,
+            duration: 1.05,
+            ease: "expo.out",
+            scrollTrigger: { trigger: sec, start: "top 80%" },
+          }
+        );
         if (!nativeMobileScroll) {
           gsap.to(visual, {
-            y: -34,
+            yPercent: -5,
             ease: "none",
-            scrollTrigger: { trigger: sec, start: "top bottom", end: "bottom top", scrub: true },
+            scrollTrigger: {
+              trigger: sec,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: true,
+            },
           });
         }
       }
