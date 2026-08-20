@@ -125,6 +125,22 @@ final class AssistBarChromeTests: XCTestCase {
         )
     }
 
+    func testLUTLandscapeWellKeepsPinnedSplitComparisonOnScreen() {
+        // Header + pad + 50/50 stay outside the catalog scroll. The landscape
+        // well must still have room for the catalog above that pinned chrome.
+        let well = AssistLongPressChrome.panelBox(
+            viewport: CGSize(width: 874, height: 402),
+            anchor: CGRect(x: 80, y: 330, width: 48, height: 58),
+            panel: CGSize(width: LUTAssist.longPressPanelWidth, height: 400),
+            toolbar: CGRect(x: 16, y: 330, width: 276, height: 58),
+            safeArea: EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 0),
+            ceilingY: 60 + 8
+        )
+        let pinnedChrome: CGFloat = 16 + 32 + 14 + 40 + 16
+        XCTAssertGreaterThan(well.maxHeight - pinnedChrome, 100)
+        XCTAssertLessThanOrEqual(well.y + well.maxHeight, 330 - 10 + 0.05)
+    }
+
     func testTallLUTPopupStartsBelowTopDeck() {
         let ceiling: CGFloat = 60 + 8
         let box = AssistLongPressChrome.panelBox(

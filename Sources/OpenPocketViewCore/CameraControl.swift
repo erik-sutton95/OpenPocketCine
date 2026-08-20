@@ -652,8 +652,8 @@ public struct WhiteBalance: Equatable, Sendable {
 
 /// `0x02/0x8E` pid `0x0020`. Stereo `02`, Mono `01`, Spatial `03`.
 public enum AudioChannel: UInt8, CaseIterable, Sendable {
-    case mono = 0x01
     case stereo = 0x02
+    case mono = 0x01
     case spatial = 0x03
 
     public var label: String {
@@ -747,8 +747,18 @@ public enum AudioDspBlob {
         return out
     }
 
+    /// Captured directional bytes already have the wind-on bit. Keep that
+    /// stop when turning wind on so the Directional tab stays honest.
     public static func patchWind(_ blob: [UInt8], _ value: WindNoiseReduction) -> [UInt8] {
-        patch(blob, byte2: value.rawValue)
+        switch value {
+        case .off:
+            return patch(blob, byte2: WindNoiseReduction.off.rawValue)
+        case .on:
+            if let dir = directional(from: blob.count > 2 ? blob[2] : 0) {
+                return patch(blob, byte2: dir.rawValue)
+            }
+            return patch(blob, byte2: WindNoiseReduction.on.rawValue)
+        }
     }
 
     public static func patchDirectional(_ blob: [UInt8], _ value: DirectionalAudio) -> [UInt8] {
@@ -758,6 +768,31 @@ public enum AudioDspBlob {
     public static func at2(_ blob: [UInt8]) -> AudioDspAt2? {
         guard blob.count > 2 else { return nil }
         return AudioDspAt2(raw: blob[2])
+    }
+
+    /// Wind off is only `18`. Every captured directional byte includes wind-on.
+    public static func wind(from raw: UInt8) -> WindNoiseReduction? {
+        switch raw {
+        case WindNoiseReduction.off.rawValue:
+            return .off
+        case WindNoiseReduction.on.rawValue,
+            DirectionalAudio.all.rawValue,
+            DirectionalAudio.front.rawValue,
+            DirectionalAudio.frontAndBack.rawValue:
+            return .on
+        default:
+            return nil
+        }
+    }
+
+    public static func directional(from raw: UInt8) -> DirectionalAudio? {
+        DirectionalAudio(rawValue: raw)
+    }
+
+    public static func applyByte2(_ raw: UInt8, to status: inout CameraStatus) {
+        status.audioDspAt2 = AudioDspAt2(raw: raw)
+        if let wind = wind(from: raw) { status.windNR = wind }
+        if let dir = directional(from: raw) { status.directionalAudio = dir }
     }
 }
 

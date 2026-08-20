@@ -162,28 +162,40 @@ final class LUTAssistTests: XCTestCase {
     }
 
     func testOfficialCubesParseAsSize33() throws {
-        var sawAny = false
         for lut in OfficialPocketLUT.allCases {
             let url = officialCubeURL(lut.fileName)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            sawAny = true
             let text = try String(contentsOf: url, encoding: .utf8)
             let cube = try CubeLUT.parse(text)
             XCTAssertEqual(cube.size, 33, lut.fileName)
             XCTAssertEqual(cube.rgb.count, 33 * 33 * 33 * 3, lut.fileName)
         }
         for lut in OfficialDJILUT.allCases {
+            XCTAssertNotNil(
+                Bundle.main.url(forResource: lut.resourceName, withExtension: "cube"),
+                "\(lut.fileName) must ship in the app bundle")
             let url = officialCubeURL(lut.fileName)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            sawAny = true
             let text = try String(contentsOf: url, encoding: .utf8)
             let cube = try CubeLUT.parse(text)
             XCTAssertEqual(cube.size, 33, lut.fileName)
             XCTAssertEqual(cube.rgb.count, 33 * 33 * 33 * 3, lut.fileName)
+            XCTAssertNotNil(BundledOfficialDJILUT.cube(lut), lut.fileName)
         }
-        if !sawAny {
-            throw XCTSkip("official LUT cubes are local-only")
+    }
+
+    func testArmedDJIAutoDLog2BindsOfficialCube() {
+        let assist = LiveAssistState()
+        assist.selectLUT(.djiAuto)
+        assist.syncLUT(to: .dLog2, family: .pocket, cameraName: "Osmo Pocket 4 Pro")
+        XCTAssertEqual(assist.lutSelection, .djiAuto)
+        XCTAssertEqual(assist.resolvedSource(), .dji(.pocketDLog2))
+        XCTAssertEqual(assist.lutStatusLabel, "DJI Auto · D-Log2 → Rec.709")
+        guard BundledOfficialDJILUT.cube(.pocketDLog2) != nil else {
+            XCTFail("official DJI D-Log2 cube must load from the app bundle")
+            return
         }
+        XCTAssertEqual(assist.effects.lutDimension, 33)
+        XCTAssertFalse(assist.effects.lutRGBA.isEmpty)
+        XCTAssertTrue(assist.effects.needsGPUFeed)
     }
 
     func testOfficialDLog2CubeMovesMidGrey() throws {
@@ -197,7 +209,7 @@ final class LUTAssistTests: XCTestCase {
         XCTAssertLessThan(black.red, 0.04, "log black must become a real Rec.709 black")
     }
 
-    func testArmedAutoDLog2BindsOfficialCube() throws {
+    func testArmedAutoDLog2BindsOfficialCube() {
         let assist = LiveAssistState()
         XCTAssertTrue(assist.lutEnabled)
         assist.syncLUT(to: .dLog2)
@@ -205,7 +217,8 @@ final class LUTAssistTests: XCTestCase {
         XCTAssertEqual(assist.resolvedSource(), .official(.dLog2ToRec709))
         XCTAssertEqual(assist.lutStatusLabel, "Auto · D-Log2 → Rec.709")
         guard BundledPocketLUT.cube(.dLog2ToRec709) != nil else {
-            throw XCTSkip("official D-Log2 cube is local-only")
+            XCTFail("official D-Log2 cube must load from the app bundle")
+            return
         }
         XCTAssertEqual(assist.effects.lutDimension, 33)
         XCTAssertFalse(assist.effects.lutRGBA.isEmpty)
@@ -273,11 +286,7 @@ final class LUTAssistTests: XCTestCase {
     }
 
     private func officialCube(_ lut: OfficialPocketLUT) throws -> CubeLUT {
-        let url = officialCubeURL(lut.fileName)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw XCTSkip("official LUT \(lut.fileName) is local-only")
-        }
-        return try CubeLUT.parse(String(contentsOf: url, encoding: .utf8))
+        try CubeLUT.parse(String(contentsOf: officialCubeURL(lut.fileName), encoding: .utf8))
     }
 
     private func officialCubeURL(_ fileName: String) -> URL {

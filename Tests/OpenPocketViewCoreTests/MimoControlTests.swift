@@ -282,9 +282,12 @@ import Testing
         #expect(AudioDspBlob.blob(fromGetReply: reply) == blob)
 
         let windOn = AudioDspBlob.patchWind(blob, .on)
-        #expect(windOn[2] == 0x1A)
+        #expect(windOn[2] == 0xDA)
         #expect(windOn[0] == 0xC0)   // do not rewrite @0
         #expect(Array(windOn[3...]) == Array(blob[3...]))
+        var windBlob = blob
+        windBlob[2] = 0x18
+        #expect(AudioDspBlob.patchWind(windBlob, .on)[2] == 0x1A)
 
         let front = AudioDspBlob.patchDirectional(blob, .front)
         #expect(front[2] == 0x3A)
@@ -302,6 +305,19 @@ import Testing
             to: &s))
         #expect(s.audioDspBlob == blob)
         #expect(s.audioDspAt2 == .directional(.all))
+        #expect(s.windNR == .on)
+        #expect(s.directionalAudio == .all)
+
+        var windOnly = CameraStatus()
+        #expect(CameraStatusDecoder.apply(
+            .init(
+                sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0xA0,
+                payload: [0x00] + windBlob),
+            to: &windOnly))
+        #expect(windOnly.windNR == .off)
+        #expect(windOnly.directionalAudio == nil)
+        #expect(AudioDspBlob.wind(from: 0x3A) == .on)
+        #expect(AudioDspBlob.directional(from: 0x1A) == nil)
     }
 
     @Test func videoFormatPackAndParse() {

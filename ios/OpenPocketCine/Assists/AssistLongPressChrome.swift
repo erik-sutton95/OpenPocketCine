@@ -69,6 +69,17 @@ enum AssistLongPressChrome {
             EmptyView()
         }
     }
+
+    /// Controls that must stay on screen when a tall menu scrolls.
+    /// LUT's 50/50 lives here so landscape never hides it under the catalog.
+    @MainActor
+    @ViewBuilder
+    static func footer(for tool: LiveAssistTool, assist: LiveAssistState) -> some View {
+        switch tool {
+        case .lut: LUTAssist.longPressFooter(assist: assist)
+        default: EmptyView()
+        }
+    }
 }
 
 /// Icon frames in `LiveCanvasSpace`, used to park the popup above/below the chip.
@@ -92,7 +103,8 @@ struct AssistIconFrameKey: PreferenceKey {
 }
 
 /// OpenZCine `AssistPanel` shell: 16pt pad, 15pt bold uppercase header, liquid glass.
-struct AssistLongPressPanel<Content: View>: View {
+/// Header and `footer` stay pinned; only `content` scrolls when the well is short.
+struct AssistLongPressPanel<Content: View, Footer: View>: View {
     let tool: LiveAssistTool
     var onClose: () -> Void
     /// Well width from `AssistOptionsPopupAnchor`. Applied before hug/glass so a
@@ -102,7 +114,10 @@ struct AssistLongPressPanel<Content: View>: View {
     /// scrolls only when `shouldScroll` is set by the overlay after measuring.
     var maxHeight: CGFloat? = nil
     var shouldScroll: Bool = false
+    /// When false, `footer` is not laid out so EmptyView cannot add VStack spacing.
+    var showsFooter: Bool = false
     @ViewBuilder var content: Content
+    @ViewBuilder var footer: Footer
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -131,6 +146,9 @@ struct AssistLongPressPanel<Content: View>: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) { content }
             }
+            if showsFooter {
+                footer
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,6 +158,28 @@ struct AssistLongPressPanel<Content: View>: View {
         .liveChromeGlass(in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {})
+    }
+}
+
+extension AssistLongPressPanel where Footer == EmptyView {
+    init(
+        tool: LiveAssistTool,
+        onClose: @escaping () -> Void,
+        width: CGFloat? = nil,
+        maxHeight: CGFloat? = nil,
+        shouldScroll: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            tool: tool,
+            onClose: onClose,
+            width: width,
+            maxHeight: maxHeight,
+            shouldScroll: shouldScroll,
+            showsFooter: false,
+            content: content,
+            footer: { EmptyView() }
+        )
     }
 }
 
@@ -185,9 +225,12 @@ struct AssistLongPressOverlay: View {
             AssistLongPressPanel(
                 tool: tool, onClose: onDismiss, width: place.width,
                 maxHeight: place.maxHeight,
-                shouldScroll: shouldScroll
+                shouldScroll: shouldScroll,
+                showsFooter: tool == .lut
             ) {
                 AssistLongPressChrome.menu(for: tool, assist: assist)
+            } footer: {
+                AssistLongPressChrome.footer(for: tool, assist: assist)
             }
             .id(tool)
             .frame(width: place.width, alignment: .leading)
@@ -213,9 +256,11 @@ struct AssistLongPressOverlay: View {
     private var unconstrainedSizeReader: some View {
         AssistLongPressPanel(
             tool: tool, onClose: {}, width: AssistLongPressChrome.preferredWidth(for: tool),
-            maxHeight: nil, shouldScroll: false
+            maxHeight: nil, shouldScroll: false, showsFooter: tool == .lut
         ) {
             AssistLongPressChrome.menu(for: tool, assist: assist)
+        } footer: {
+            AssistLongPressChrome.footer(for: tool, assist: assist)
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(

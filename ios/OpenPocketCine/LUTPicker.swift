@@ -2,7 +2,8 @@ import OpenPocketViewCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Built-in / DJI / Custom, then 50/50.
+/// Built-in / DJI / Custom. 50/50 is pinned on the long-press footer so
+/// landscape never hides it under the catalog; the sheet keeps it inline.
 /// `embedded` is the assist-tray form; the sheet wraps the same body.
 struct LUTPicker: View {
     private enum Category: String, CaseIterable {
@@ -67,7 +68,11 @@ struct LUTPicker: View {
             tabContent
                 .frame(maxWidth: .infinity)
                 .frame(height: contentHeight)
-            splitComparisonControls
+            // Embedded long-press parks 50/50 on the panel footer so it
+            // stays on screen when the catalog scrolls.
+            if !embedded {
+                LUTSplitComparisonBar(assist: assist)
+            }
             if let importError {
                 Text(importError)
                     .font(LiveType.ui(size: 12, weight: .regular, design: .rounded))
@@ -120,51 +125,6 @@ struct LUTPicker: View {
             allowedContentTypes: [UTType(filenameExtension: "cube") ?? .data]
         ) { result in
             handleImport(result)
-        }
-    }
-
-    /// OpenZCine 50/50: off-by-default toggle; orientation chips only while armed.
-    /// Labels are `Left / Right` and `Top / Bottom`, not Vertical/Horizontal.
-    @ViewBuilder private var splitComparisonControls: some View {
-        HStack(spacing: 10) {
-            Button {
-                assist.splitComparison.toggle()
-                if assist.splitComparison {
-                    if !assist.lutArmed { assist.armLastLUT() }
-                }
-                assist.persist()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(
-                        systemName: assist.splitComparison
-                            ? "checkmark.circle.fill" : "circle"
-                    )
-                    .foregroundStyle(
-                        assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
-                    Text("50/50")
-                        .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LiveDesign.text)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(
-                    assist.splitComparison
-                        ? LiveDesign.accentDim : LiveDesign.glassBright,
-                    in: Capsule())
-            }
-            .buttonStyle(.zcTapTarget)
-            if assist.splitComparison {
-                LUTSegmentedButtons(
-                    items: LUTSplitOrientation.allCases.map(\.rawValue),
-                    selected: LUTSplitOrientation.current(vertical: assist.splitVertical).rawValue
-                ) { raw in
-                    guard let next = LUTSplitOrientation(rawValue: raw) else { return }
-                    assist.splitVertical = next.isVertical
-                    assist.persist()
-                }
-            } else {
-                Spacer(minLength: 0)
-            }
         }
     }
 
@@ -339,6 +299,58 @@ struct LUTPicker: View {
     private func clear(_ fileName: String) {
         pendingDeletion = nil
         assist.clearCustomFile(fileName)
+    }
+}
+
+/// OpenZCine 50/50: off-by-default toggle; orientation chips only while armed.
+/// Labels are `Left / Right` and `Top / Bottom`, not Vertical/Horizontal.
+///
+/// The long-press panel renders this as a pinned footer so opening LUT never
+/// hides the control under a catalog scroll.
+struct LUTSplitComparisonBar: View {
+    @Bindable var assist: LiveAssistState
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                assist.splitComparison.toggle()
+                if assist.splitComparison {
+                    if !assist.lutArmed { assist.armLastLUT() }
+                }
+                assist.persist()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(
+                        systemName: assist.splitComparison
+                            ? "checkmark.circle.fill" : "circle"
+                    )
+                    .foregroundStyle(
+                        assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
+                    Text("50/50")
+                        .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LiveDesign.text)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    assist.splitComparison
+                        ? LiveDesign.accentDim : LiveDesign.glassBright,
+                    in: Capsule())
+            }
+            .buttonStyle(.zcTapTarget)
+            if assist.splitComparison {
+                LUTSegmentedButtons(
+                    items: LUTSplitOrientation.allCases.map(\.rawValue),
+                    selected: LUTSplitOrientation.current(vertical: assist.splitVertical).rawValue
+                ) { raw in
+                    guard let next = LUTSplitOrientation(rawValue: raw) else { return }
+                    assist.splitVertical = next.isVertical
+                    assist.persist()
+                }
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
     }
 }
 
