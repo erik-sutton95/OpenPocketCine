@@ -74,6 +74,7 @@ final class CaptureListTests: XCTestCase {
 
     func testFacePriorityCopy() {
         XCTAssertEqual(CaptureLists.facePriorityTitle, "Face Priority")
+        XCTAssertEqual(CaptureLists.facePriorityBadgeSymbol, "face.smiling.fill")
         XCTAssertFalse(CaptureLists.facePriorityHelp.isEmpty)
     }
 
