@@ -315,7 +315,11 @@ final class FirstConnectTests: XCTestCase {
     }
 
     func testPersistedAssistDoesNotStartVTBeforeFirstPicture() {
+        // Format may start VT for persisted assist; must not GOP-reset
+        // (onHandoffNeedsIDR) on parameter sets alone.
         let decoder = HevcDecoder()
+        var idrRequests = 0
+        decoder.onHandoffNeedsIDR = { idrRequests += 1 }
         var zebra = LiveImageEffects()
         zebra.zebra = true
         decoder.effects = zebra
@@ -323,9 +327,7 @@ final class FirstConnectTests: XCTestCase {
             accessUnit: Self.startCodes + Self.vps + Self.startCodes + Self.sps
                 + Self.startCodes + Self.pps)
         XCTAssertTrue(decoder.hasFormat)
-        XCTAssertFalse(
-            decoder.videoToolboxActive,
-            "first GOP must stay on the display layer or first connect stays LINK")
+        XCTAssertEqual(idrRequests, 0, "parameter sets must not send 0x09/0xa8")
     }
 
     func testFirstPresentDoesNotCutGOPForPersistedAssist() async {
@@ -345,10 +347,10 @@ final class FirstConnectTests: XCTestCase {
         }
         XCTAssertNotNil(decoder.lastPresentedAt)
         XCTAssertEqual(idrRequests, 0, "first present must not send 0x09/0xa8")
-        XCTAssertFalse(decoder.videoToolboxActive)
         decoder.unlockHardwareDecoder()
-        XCTAssertEqual(idrRequests, 1)
-        XCTAssertTrue(decoder.videoToolboxActive)
+        XCTAssertEqual(
+            idrRequests, 0,
+            "unlock after a picture must not extra-IDR if VT already started")
     }
 
     func testAssistToggleKeepsVTAndRequestsIDROnlyOnFirstStart() async {

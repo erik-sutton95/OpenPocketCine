@@ -128,8 +128,8 @@ final class HevcDecoder {
     /// and starved `handleDecodedFrame` on device after `5234802`.
     /// Sticky after the first assist: tearing VT to hand HEVC back is a GOP reset.
     private var sessionOwnsVT = false
-    /// First GOP stays on the display layer. Persisted ZEBRA/LUT/AF-C used to
-    /// open VT mid-GOP (no IDR) and leave first connect black (`LINK`).
+    /// Format + `effects.needsSample` (or `unlockHardwareDecoder`) starts VT.
+    /// Waiting for a presented picture GOP-reset persisted LUT ~5 s later.
     private var hardwareDecoderUnlocked = false
     private var wantsFeedUpscale: Bool { feedUpscaler != .off }
     /// Fast/Quality enlarge a *baked* GPU frame (LUT / de-squeeze). They must
@@ -498,9 +498,9 @@ final class HevcDecoder {
     }
 
     private func applyEffectsChange() {
-        // Operator toggled LUT / WAVE after a picture exists — start VT now.
-        // Persisted zebra on first GOP must wait for `unlockHardwareDecoder`.
-        if lastPresentedAt != nil, effects.needsSample {
+        // Parameter sets + assist: start VT now. Gating on lastPresentedAt
+        // delayed persisted LUT until the 5 s unlock, then sent 0x09/0xa8.
+        if hasFormat, effects.needsSample {
             hardwareDecoderUnlocked = true
         }
         if effects.needsSample { sessionOwnsVT = true }
@@ -717,7 +717,15 @@ final class HevcDecoder {
                 width: Int(next.width), height: Int(next.height))
         }
         if changing { handleEncoderFormatChange() }
-        if shouldStartVT { rebuildVT(force: changing) }
+        // Persisted LUT/scopes: start VT on this parameter-set AU. `onHandoffNeedsIDR`
+        // still requires a picture, so the first GOP is not cut.
+        if effects.needsSample {
+            hardwareDecoderUnlocked = true
+        }
+        if shouldStartVT {
+            rebuildVT(force: changing)
+            lastNeedsSample = true
+        }
     }
 
     /// Screen flip / vertical mode restarts the camera encoder. The old VT
