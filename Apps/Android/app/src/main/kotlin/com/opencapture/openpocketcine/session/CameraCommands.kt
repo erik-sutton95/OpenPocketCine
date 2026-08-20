@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine.session
 
 /**
- * Documented Pocket 4 Mimo payloads only (`docs/mimo-settings-capture.md`,
- * `docs/protocol-notes.md`). No invented `0xE1` values. No 1 Hz `0x09/0xa8`.
+ * Documented Pocket 4 payloads only (`docs/protocol-notes.md`).
+ * No invented `0xE1` values. No 1 Hz `0x09/0xa8`.
  */
 object CameraCommands {
     const val SET = 0x02

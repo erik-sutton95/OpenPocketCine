@@ -59,7 +59,7 @@
       <div class="container legal-article">
         <span class="kicker">Privacy policy</span>
         <h1>Your footage is nobody's business.</h1>
-        <p class="legal-updated">Last updated: August 18, 2026</p>
+        <p class="legal-updated">Last updated: August 20, 2026</p>
       </div>
     </section>
 
@@ -99,12 +99,33 @@
       <ul>
         <li>
           <strong>Apple (or Google).</strong> Permission prompts and OS diagnostics are processed
-          under their own policies. If you later install a TestFlight or Play beta, Apple or
-          Google may provide crash reports to the developer under their terms.
+          under their own policies. If you install a TestFlight or Play beta, Apple or Google may
+          provide crash reports to the developer under their terms. OpenPocketCine adds no
+          crash-reporting SDK.
+        </li>
+        <li>
+          <strong>Frame.io (optional).</strong> If this build is configured and you sign in, the
+          app talks directly to Adobe IMS and Frame.io to upload clips you pick. The token stays
+          in the on-device Keychain. Uploads go device → Frame.io, never through us.
+          Adobe's <a href="https://www.adobe.com/privacy/policy.html">privacy policy</a> applies.
+        </li>
+        <li>
+          <strong>Photos and system share.</strong> Saving a clip or using the share sheet is
+          something you start. Apple or the app you pick then handles that file.
+        </li>
+        <li>
+          <strong>On-device face boxes.</strong> AF-C face boxes are computed on the phone with
+          Apple Vision from the live preview. Face geometry is not uploaded.
+        </li>
+        <li>
+          <strong>Android location permission.</strong> Android may ask for location so the app
+          can join the camera's Wi-Fi / scan BLE. OpenPocketCine does not use that permission for
+          maps, ads, or a location history. Camera Wi-Fi passwords stay in platform-secure storage
+          on that phone.
         </li>
         <li>
           <strong>GitHub.</strong> If you open an issue or discussion, that is public and governed
-          by GitHub's policies.
+          by GitHub's policies. Never post camera Wi-Fi passwords, captures, or private media.
         </li>
       </ul>
 
@@ -119,8 +140,10 @@
       <h2>Changes and contact</h2>
       <p>
         Changes to this policy are published on this page and in the project's public repository.
-        Questions: open an issue at
-        <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">github.com/erik-sutton95/OpenPocketCine</a>.
+        Bugs:
+        <a href="https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml" target="_blank" rel="noopener">GitHub Issues</a>.
+        Questions:
+        <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a" target="_blank" rel="noopener">GitHub Discussions</a>.
       </p>
     </div>
   </main>

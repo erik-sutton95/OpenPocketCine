@@ -1,13 +1,15 @@
 New and changed
 
-- First TestFlight of OpenPocketCine. Pair over Bluetooth, join the camera's own Wi-Fi, and watch a live view with waveform, Traffic Lights, and other assists. Install this build even if an older OpenPocketCine is already on the phone — it is a new app listing.
+- Settings now opens Support in GitHub Q&A, Report a problem on the bug form, and Feature request in Ideas.
+- In-app privacy copy names optional Frame.io, the share sheet, and on-device face boxes, and points at openpocketcine.app/privacy.
 
 Fixes
 
-- Nothing to call out yet — this is the first TestFlight build. If pairing, live view, or record misbehaves, that is the report we need.
+- Feature request and Q&A buttons in Settings pointed at GitHub URLs that did not match the live Discussions categories.
 
 What to test
 
+- From Operator Setup, tap Support, Report a problem, and Feature request and confirm the GitHub pages that open.
+- Open Privacy and skim the Frame.io / share / face-box language.
 - Pair an Osmo Pocket 4 or 4 Pro, join its Wi-Fi, and confirm live view fills the monitor.
 - Start and stop a take from the phone, then confirm it on the camera body.
-- Open the assist rail in portrait and turn on zebras or the waveform.

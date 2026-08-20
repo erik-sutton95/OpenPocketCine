@@ -1,6 +1,6 @@
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 /// DISP 1 Live / DISP 2 Clean. Command (DISP 3) is not in this build.
 enum PocketDispMode: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
@@ -185,13 +185,12 @@ enum AppPanel: String, Identifiable {
 enum OpenPocketCineLinks {
     static let source = URL(string: "https://github.com/erik-sutton95/OpenPocketCine")
     static let support = URL(
-        string: "https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/q-and-a")
+        string: "https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/q-a")
     static let reportProblem = URL(
-        string: "https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml")
-    static let featureRequest = URL(
-        string:
-            "https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas-feature-requests"
+        string: "https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml"
     )
+    static let featureRequest = URL(
+        string: "https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas")
 }
 
 /// Live chrome and home both present this. `onClose` lets a cover dismiss without `homePanel`.
@@ -450,7 +449,10 @@ struct SettingsSegmented: View {
                     onSelect(option)
                 } label: {
                     Text(option)
-                        .font(LiveType.ui(size: stacked ? 12 : 11, weight: active ? .semibold : .medium))
+                        .font(
+                            LiveType.ui(
+                                size: stacked ? 12 : 11, weight: active ? .semibold : .medium)
+                        )
                         .foregroundStyle(active ? LiveDesign.text : LiveDesign.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(compact ? 0.85 : 1)
@@ -827,7 +829,8 @@ struct SettingsLiveTile: View {
     }
 
     private var detail: String {
-        let name = model.session.connectedCamera?.name
+        let name =
+            model.session.connectedCamera?.name
             ?? model.savedCameras.first?.displayName
             ?? "Pocket"
         let transport = isLinked ? "BLE + Wi-Fi" : "—"
@@ -884,8 +887,9 @@ struct SettingsLiveTile: View {
     private func commitFPS(_ incoming: String) {
         let compact = incoming.hasSuffix(".00") ? String(incoming.dropLast(3)) : incoming
         let now = CFAbsoluteTimeGetCurrent()
-        if lastFPSCommit == 0 || now - lastFPSCommit >= 0.5 || compact != displayedFPS
-            && (Double(compact) == nil || Double(displayedFPS) == nil)
+        if lastFPSCommit == 0 || now - lastFPSCommit >= 0.5
+            || compact != displayedFPS
+                && (Double(compact) == nil || Double(displayedFPS) == nil)
         {
             displayedFPS = compact.isEmpty ? "—" : compact
             lastFPSCommit = now
@@ -1015,7 +1019,10 @@ struct AppPanelChrome<Content: View>: View {
                     .foregroundStyle(StartupColors.darkText)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(StartupColors.accent, in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius))
+                    .background(
+                        StartupColors.accent,
+                        in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
+                    )
                     .buttonStyle(.zcTapTarget)
             }
             .padding(.horizontal, 20)

@@ -1,7 +1,7 @@
 # Roadmap
 
 Direction, not dates. Feature ideas belong in
-[GitHub Discussions](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests).
+[GitHub Discussions](https://github.com/erik-sutton95/OpenPocketCine/discussions/29).
 Issues are for bugs only.
 
 ## Now

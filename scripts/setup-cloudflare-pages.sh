@@ -25,7 +25,7 @@ TOTAL_STAGES=0
 _STAGE_INDEX=0
 ENV_FILE="${ENV_FILE:-.env}"
 WRITTEN_ENV=()    # KEYs written to ENV_FILE this run
-WRITTEN_SECRET=() # secret NAMEs set this run
+WRITTEN_SECRET=() # secret names set this run
 SKIPPED=()        # things we couldn't do (e.g. gh missing)
 
 # _clear — wipe the terminal so only the current step is on screen. No-op when

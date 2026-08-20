@@ -1,9 +1,13 @@
 # Protocol notes
 
-I learned the BLE pairing and camera Wi-Fi connection path with the help of
-[Osmosis](https://github.com/KonradIT/osmosis) by Konrad Iturbe, and I'm grateful.
-Live view, monitoring, and the rest of this monitor were worked out on hardware.
-This is OpenPocketCine's condensed reference — not an Osmosis port.
+OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
+this repo. I learned the BLE pairing and camera Wi-Fi connection path with the help
+of [Osmosis](https://github.com/KonradIT/osmosis) by Konrad Iturbe, and I'm grateful.
+Live view, monitoring, and the rest of this monitor were confirmed on hardware we
+own. This is OpenPocketCine's condensed reference — not an Osmosis port.
+
+Packet captures stay in gitignored `captures/` and are never committed. Do not open
+issues with pcaps or SoftAP passwords.
 
 Implementation lives in `Sources/OpenPocketViewCore/`.
 
@@ -93,26 +97,25 @@ routing header; our pcap tool sidesteps that by scanning for CRC-valid frames.
 
 ## Live view (reverse-engineered 2026-08-13, Nano 2026-08-18)
 
-Cracked from an iPhone-side capture (`docs/capture-guide.md` → `tools/extract_liveview.py`),
-which decoded to real 720p frames. Osmosis never did this — it's a media *offload* client.
+Confirmed on hardware we own. Offline unpacking of a gitignored capture uses
+`tools/extract_liveview.py`. Osmosis never did this — it's a media *offload* client.
 
 - **Codec / format (Pocket):** HEVC / H.265 (Main), **1280×720, ~25 fps, ~4 Mbps**, plaintext.
 - **Codec / format (Nano):** AVC / H.264 High `avc1.64001f`, **1280×720, ~25 fps**, plaintext.
   Same DJI `00 00 01 ff` marker and fragment layout; SPS `67 64 00 1f …` / PPS `68 ee 06 f2 c0`.
-  Capture: `/tmp/mimo-nano-live-20260818.pcap` (Mimo, 2026-08-18).
+  Confirmed against a Nano live-view take (2026-08-18).
 - **Transport:** the DUML datalink itself — **UDP port 9004**, carried as datalink
   **pktType `0x02`** packets. The video is *not* on a separate port or protocol.
 - **Enable command:** DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
-  Pocket `rcv=0x08`. **Nano `rcv=0x41`** (Mimo 2026-08-18). Our stuck session
-  (`/tmp/opc-nano-stuck`) sent Pocket `0x08` and Nano ACKed **`E0`** with **zero**
-  pktType-`0x02`. Mimo first got `E0`/`D6` while still in playback, then `00`
-  after exit. Nano also pairs enable with **`0x02/0x09`** `00…03` (stop `00…04`),
-  ACK `00`, `rcv=0x01`. Do not send `0x02/0x0c` to start live view.
-  (App → camera). This **is** the IDR request — there is no separate PLI opcode. Each send is
-  followed by VPS/SPS/PPS + IDR in ~25–167 ms. There is **no periodic GOP**; a 30 s stretch of
-  25 fps P-frames is normal until the next enable. Send once to start (and at most once after a
-  stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and
-  the keyframe never lands (that was the black-screen bug). See `OVERNIGHT.md`.
+  Pocket `rcv=0x08`. **Nano `rcv=0x41`** (Mimo 2026-08-18). Sending Pocket `0x08` to
+  Nano ACKs **`E0`** with **zero** pktType-`0x02`. Mimo first got `E0`/`D6` while
+  still in playback, then `00` after exit. Nano also pairs enable with **`0x02/0x09`**
+  `00…03` (stop `00…04`), ACK `00`, `rcv=0x01`. Do not send `0x02/0x0c` to start live
+  view. (App → camera). This **is** the IDR request — there is no separate PLI opcode.
+  Each send is followed by VPS/SPS/PPS + IDR in ~25–167 ms. There is **no periodic GOP**;
+  a 30 s stretch of 25 fps P-frames is normal until the next enable. Send once to start
+  (and at most once after a stall, with a multi-second cooldown). Re-sending every second
+  resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug).
   After a healthy take the feed can still **freeze or go black at ~3–5 min** — cumulative
   packet counts do not detect that. Staged recover is `docs/feed-watchdog.md`.
 - **Per packet:** `[8B transport hdr][12B fragment hdr][HEVC bytes]`. Fragment header:

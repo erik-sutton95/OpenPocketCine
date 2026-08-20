@@ -28,6 +28,15 @@ is_forbidden_path() {
     graphify-out|graphify-out/*|.build|.build/*|build|build/*)
       return 0
       ;;
+    Apps/Android/*/build|Apps/Android/*/build/*|Apps/Android/.gradle|Apps/Android/.gradle/*)
+      return 0
+      ;;
+    __pycache__|*/__pycache__/*|*.pyc)
+      return 0
+      ;;
+    "OpenPocketCine Icon.png")
+      return 0
+      ;;
     .planning|.planning/*|STATUS.md|OVERNIGHT.md)
       return 0
       ;;

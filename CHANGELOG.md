@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Point bug reports, feature ideas, and questions at GitHub Issues and Discussions
+  with working category slugs (`ideas`, `q-a`).
+- Rewrite public protocol and capture docs so intercept cookbooks stay out of the
+  tracked tree.
+
 ### Added
 
 - Shared Swift protocol core for DJI Osmo Pocket: DUML framing, BLE discovery, SoftAP join, and

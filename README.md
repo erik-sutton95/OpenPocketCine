@@ -20,7 +20,7 @@
   &nbsp;·&nbsp;
   <a href="https://openpocketcine.app/">Visit openpocketcine.app</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions">Explore the roadmap</a>
+  <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/29">Explore the roadmap</a>
 </p>
 
 ## Made for the shot
@@ -104,7 +104,7 @@ real-world testing.
 
 The roadmap lives in [GitHub Discussions](https://github.com/erik-sutton95/OpenPocketCine/discussions),
 where proposed features can have their own thread. Browse the
-[Ideas category](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests)
+[Ideas category](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas)
 to vote, add production context, or propose what OpenPocketCine should tackle next. Roadmap
 discussions describe direction, not promised dates or release commitments. Engineering-phase detail
 lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -195,7 +195,7 @@ Contributions are welcome!
 
 - See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development workflow, code standards, and how to report bugs vs. request features.
 - Bugs: [GitHub's bug-report form](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml). Never put camera Wi-Fi passwords or captures in an issue.
-- We use **GitHub Discussions** (Ideas category) for feature requests.
+- We use **GitHub Discussions** ([Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas) for features, [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/q-a) for questions).
 - Standardized labels help triage work — see [`.github/labels.yml`](.github/labels.yml).
 
 Please also read our [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). For security issues, see [`SECURITY.md`](SECURITY.md).
@@ -206,5 +206,6 @@ Please also read our [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). For security is
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). The app's privacy policy lives at
 [openpocketcine.app/privacy](https://openpocketcine.app/privacy/).
 
-"DJI", "Osmo", "Osmo Pocket", and "Mimo" are trademarks of SZ DJI Technology Co., Ltd., used here
-for identification only.
+This project is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.
+"DJI", "Osmo", "Osmo Pocket", "Osmo Action", "Osmo Nano", and "Mimo" are trademarks of
+SZ DJI Technology Co., Ltd., used here for identification only. No DJI SDK is used.

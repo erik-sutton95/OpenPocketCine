@@ -6,6 +6,8 @@ body:
         Thanks for taking the time to share an idea! This template helps us understand
         and evaluate your suggestion. The more detail you provide, the easier it is
         for us to respond thoughtfully.
+
+        Issues are only for bugs. Feature requests belong here in Discussions.
   - type: textarea
     id: problem
     attributes:
@@ -36,6 +38,7 @@ body:
         - Live view
         - Camera control
         - Monitoring / metadata
+        - Media library
         - Connection / pairing
         - Android app
         - Other

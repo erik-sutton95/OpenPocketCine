@@ -27,7 +27,6 @@
     ".worktrees/**",
     "docs/design/**",
     "docs/protocol-notes.md",
-    "docs/mimo-settings-capture.md",
     "docs/capture-guide.md",
     "ios/**",
     "android/**",

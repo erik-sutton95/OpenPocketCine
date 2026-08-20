@@ -177,6 +177,9 @@ private enum class LegalKind(val title: String, val body: String) {
         What never leaves the phone
         • Live HEVC, DUML telemetry, and pairing traffic stay on the local link.
 
+        Android may ask for location so the app can join the camera Wi-Fi or scan BLE. OpenPocketCine does not use that permission for maps, ads, or a location history.
+
+        The canonical privacy policy is https://openpocketcine.app/privacy/
         The source is at github.com/erik-sutton95/OpenPocketCine.
         """.trimIndent(),
     ),

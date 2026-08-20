@@ -20,11 +20,15 @@ struct LegalDocumentView: View {
                             .kerning(0.8)
                             .foregroundStyle(LiveDesign.accent)
                             .textCase(.uppercase)
-                            .padding(.leading, OperatorPanelMetrics.closeButtonClearance(safeArea: insets))
+                            .padding(
+                                .leading,
+                                OperatorPanelMetrics.closeButtonClearance(safeArea: insets))
                         Text(kind.title)
                             .font(LiveType.ui(size: 24, weight: .semibold))
                             .foregroundStyle(LiveDesign.text)
-                            .padding(.leading, OperatorPanelMetrics.closeButtonClearance(safeArea: insets))
+                            .padding(
+                                .leading,
+                                OperatorPanelMetrics.closeButtonClearance(safeArea: insets))
                     }
 
                     ScrollView {
@@ -95,7 +99,10 @@ struct LegalDocumentView: View {
                 • Live HEVC, DUML telemetry, and pairing traffic stay on the local link. We do not operate a cloud.
 
                 Third parties
-                • Apple (or Google) may process permission prompts and OS diagnostics under their own policies.
+                • Apple (or Google) may process permission prompts and OS diagnostics under their own policies. TestFlight or Play betas may send crash reports to the developer under Apple or Google terms.
+                • Frame.io is optional. If this build is configured and you sign in, clips you pick upload device → Adobe. The token stays in the on-device Keychain.
+                • Saving a clip or using the share sheet is something you start. Apple or the app you pick then handles that file.
+                • AF-C face boxes are computed on this phone from the live preview. Face geometry is not uploaded.
                 • The source is at github.com/erik-sutton95/OpenPocketCine.
 
                 This is not legal advice. The canonical website policy is https://openpocketcine.app/privacy/

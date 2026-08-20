@@ -143,7 +143,7 @@
           <details><summary>The camera does not appear</summary><div><p>Power the Pocket on, stay close, and allow Bluetooth. If you previously paired with Mimo or another install, remove the old pairing on the camera and try again.</p></div></details>
           <details><summary>Wi-Fi join never finishes</summary><div><p>Approve the iOS Join prompt for the camera’s SoftAP. If iOS stays on cellular, forget the network and retry. Local Network permission is required for the datalink.</p></div></details>
           <details><summary>Live view stalls or never starts</summary><div><p>Move closer to the camera, confirm you are on the camera Wi-Fi, and reconnect. The monitor needs a first HEVC frame before chrome is useful.</p></div></details>
-          <details><summary>A setting will not change</summary><div><p>ISO, shutter, white balance, and record start/stop writes are not wired. Change those on the camera body and use OpenPocketCine to judge the image.</p></div></details>
+          <details><summary>A setting will not change</summary><div><p>Some writes are still reverse-engineered and can ACK, lag, or no-op. Confirm record, exposure, and media on the Pocket body. Do not treat the on-screen REC control as armed until you trust that build.</p></div></details>
           <details><summary>Android</summary><div><p>Android is in progress. iPhone and iPad are the supported platforms today.</p></div></details>
         </div>
       </div>
@@ -156,7 +156,7 @@
         <p class="lead">Report a reproducible problem on GitHub. Ideas stay in GitHub Discussions.</p>
         <div class="hero__cta">
           <a class="btn btn--primary" href="https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml" target="_blank" rel="noopener">Report a bug<span class="btn__arrow" aria-hidden="true">→</span></a>
-          <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas-feature-requests" target="_blank" rel="noopener">Request a feature<span class="btn__arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas" target="_blank" rel="noopener">Request a feature<span class="btn__arrow" aria-hidden="true">→</span></a>
         </div>
         <p class="support-contact__hint">Never post passwords, pairing codes, private media, or security vulnerabilities. Security issues go through GitHub Security Advisories.</p>
       </div>

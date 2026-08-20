@@ -5,6 +5,8 @@ body:
       value: |
         Ask away! Before posting, please check existing Q&A discussions to see if
         your question has already been answered.
+
+        Found a bug? Open a GitHub Issue instead of a discussion.
   - type: textarea
     id: question
     attributes:
@@ -21,6 +23,7 @@ body:
         - Live view
         - Camera control
         - Monitoring / metadata
+        - Media library
         - Connection / pairing
         - Android app
         - Build / development

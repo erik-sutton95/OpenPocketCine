@@ -118,7 +118,7 @@
 
 - name: area:ios
   color: 1d76db
-  description: iOS SwiftUI shell (ios/OpenPocketView)
+  description: iOS SwiftUI shell (ios/OpenPocketCine)
 
 - name: area:live-view
   color: 1d76db
@@ -186,7 +186,7 @@
 #
 # gh label create "area:core" --color "1d76db" --description "Shared Swift core (Sources/OpenPocketViewCore)"
 # gh label create "area:protocol" --color "1d76db" --description "DUML protocol, BLE, Wi-Fi, datalink"
-# gh label create "area:ios" --color "1d76db" --description "iOS SwiftUI shell (ios/OpenPocketView)"
+# gh label create "area:ios" --color "1d76db" --description "iOS SwiftUI shell (ios/OpenPocketCine)"
 # gh label create "area:live-view" --color "1d76db" --description "Live view streaming, rendering, and related pipeline"
 # gh label create "area:monitoring" --color "1d76db" --description "Monitoring assists (false color, scopes, zebra, guides, etc.)"
 # gh label create "area:control" --color "1d76db" --description "Camera control (record, mode, and related commands)"

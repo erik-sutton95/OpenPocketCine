@@ -5,6 +5,14 @@ contact_links:
     url: https://github.com/erik-sutton95/OpenPocketCine/security/advisories/new
     about: Please report security issues privately, not as public issues.
 
-  - name: Feature ideas, questions & discussion
-    url: https://github.com/erik-sutton95/OpenPocketCine/discussions
-    about: Use GitHub Discussions for all feature requests, ideas, questions, and open discussion. Issues are only for bugs.
+  - name: Feature idea
+    url: https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas
+    about: Propose a feature or enhancement. Issues are only for bugs.
+
+  - name: Question
+    url: https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a
+    about: Setup, usage, and development questions.
+
+  - name: Show your rig
+    url: https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=show-and-tell
+    about: Share a Pocket rig, workflow, or something you built.

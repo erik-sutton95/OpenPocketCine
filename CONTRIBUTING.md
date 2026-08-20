@@ -65,7 +65,13 @@ Frame.io upload is **disabled unless you configure it**. Copy
 - **Bugs only** — Open [GitHub's bug-report form](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml).
   New bugs are automatically labeled `needs-triage`; issues are strictly for bugs. Never put
   sensitive information (camera Wi-Fi passwords, captures, credentials) in an issue.
-- **Feature ideas, enhancements & discussions** — Use **GitHub Discussions** (the "Discussions" tab). Start a new discussion in the **Ideas** category. A GitHub account is required, which keeps feature conversations attributable and Issues focused on actionable bugs.
+- **Feature ideas, enhancements & discussions** — Use **GitHub Discussions**. Start a new
+  discussion in the
+  [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas)
+  category. Questions go in
+  [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a).
+  A GitHub account is required, which keeps conversations attributable and Issues focused on
+  actionable bugs.
 - **Security vulnerabilities** — Follow [`SECURITY.md`](SECURITY.md). Do **not** open a public issue.
 
 ## Labels & triage

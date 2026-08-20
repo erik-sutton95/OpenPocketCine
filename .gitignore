@@ -52,6 +52,8 @@ Osmo LUTS/
 # Raw design-source files are kept under .local/ and never shipped.
 *.psd
 *.psb
+# Working app-icon source at the repo root. Runtime copies live in Assets.xcassets.
+/OpenPocketCine Icon.png
 
 # ── Supported agent tooling scratch space ─────────────────────────────────────
 .local/
