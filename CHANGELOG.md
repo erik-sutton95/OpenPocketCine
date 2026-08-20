@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Replace the app mark across iOS, Android, and the landing page with the
+  production-monitor icon.
 - First picture and persisted LUT start together: VideoToolbox opens at the
   first parameter sets instead of waiting and GOP-resetting for a look.
 - Handshake returns as soon as the camera ACKs, and open retries cap instead of
