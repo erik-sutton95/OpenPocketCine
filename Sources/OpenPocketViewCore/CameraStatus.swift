@@ -89,6 +89,10 @@ public struct CameraStatus: Equatable, Sendable {
     public var audioDspBlob: [UInt8]?
     /// Interpreted audio-DSP blob `@2`.
     public var audioDspAt2: AudioDspAt2?
+    /// Wind NR from DSP `@2`. Survives a directional byte (those include wind-on).
+    public var windNR: WindNoiseReduction?
+    /// Directional audio from DSP `@2`. Kept when `@2` is a wind-only byte.
+    public var directionalAudio: DirectionalAudio?
     /// Live VU / peak from subscribe `cam_audio_status_v2`. Camera-held; no local decay.
     public var audioMeters: AudioMeterLevels = .silent
     /// Last raw `cam_audio_status_v2` value (diagnostics / verify-on-HW).
@@ -219,7 +223,11 @@ public enum CameraStatusDecoder {
         case (0x02, 0xA0):
             if let blob = AudioDspBlob.blob(fromGetReply: p) {
                 status.audioDspBlob = blob
-                status.audioDspAt2 = AudioDspBlob.at2(blob)
+                if blob.count > 2 {
+                    AudioDspBlob.applyByte2(blob[2], to: &status)
+                } else {
+                    status.audioDspAt2 = AudioDspBlob.at2(blob)
+                }
                 return true
             }
             return false

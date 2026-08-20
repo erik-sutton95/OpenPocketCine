@@ -134,6 +134,14 @@ final class CaptureListTests: XCTestCase {
         ])
     }
 
+    func testShutterAngleLadderIsCalculatedNotCaptured() {
+        XCTAssertEqual(ShutterAngle.labels.first, "5.6°")
+        XCTAssertEqual(ShutterAngle.labels.last, "360°")
+        XCTAssertEqual(ShutterAngle.denom(degrees: 180, fps: 24), 48)
+        XCTAssertEqual(ShutterAngle.denom(degrees: 180, fps: 24, available: [25, 50, 100]), 50)
+        XCTAssertEqual(ShutterAngle.nearestLabel(denom: 48, fps: 24), "180°")
+    }
+
     func testEmptyCapListShowsOnlyCurrent() {
         var status = CameraStatus()
         status.shutterDenom = 80

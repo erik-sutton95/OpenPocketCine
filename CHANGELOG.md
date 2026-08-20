@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Calculated shutter angle (5.6°–360°) on the SHUTTER sheet. The camera still
+  takes 1/N; we convert from the live frame rate.
+- Shared Swift protocol core for DJI Osmo Pocket: DUML framing, BLE discovery, SoftAP join, and
+  HEVC/AVC live-view depacketizing.
+- iOS SwiftUI shell with saved cameras, live monitor chrome, and GPU assists (LUT import, peaking,
+  zebra, false color, waveform, histogram, guides).
+- Android Jetpack Compose shell in `Apps/Android/` consuming the same Swift core over JNI.
+- Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
+
 ### Changed
 
 - Replace the app mark across iOS, Android, and the landing page with the
@@ -15,11 +26,9 @@ All notable changes to this project are documented here. The format is based on
 - Rewrite public protocol and capture docs so intercept cookbooks stay out of the
   tracked tree.
 
-### Added
+### Fixed
 
-- Shared Swift protocol core for DJI Osmo Pocket: DUML framing, BLE discovery, SoftAP join, and
-  HEVC/AVC live-view depacketizing.
-- iOS SwiftUI shell with saved cameras, live monitor chrome, and GPU assists (LUT import, peaking,
-  zebra, false color, waveform, histogram, guides).
-- Android Jetpack Compose shell in `Apps/Android/` consuming the same Swift core over JNI.
-- Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
+- LUT 50/50 stays pinned when the catalog scrolls, so landscape no longer hides
+  it.
+- AUDIO Channel, Wind, Dir, and Vocal stay on the value you pick instead of
+  bouncing back to the previous DSP snapshot.

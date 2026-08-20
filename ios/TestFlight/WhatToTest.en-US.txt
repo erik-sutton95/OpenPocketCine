@@ -1,15 +1,17 @@
 New and changed
 
-- The Home Screen icon and launch mark are now a production monitor: REC, waveform, and a center cross on black.
+- The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
+- Opening LUT keeps 50/50 on screen instead of scrolling it under the catalog.
+- AUDIO Channel, Wind, Dir, and Vocal now stay on the value you pick.
 
 Fixes
 
-- Nothing to call out yet — this build is an icon refresh.
+- Wind and directional rows could bounce back after a tap because the previous DSP byte was still on screen.
+- LUT 50/50 could sit off-screen in landscape.
 
 What to test
 
-- After install, confirm the Home Screen icon is the production-monitor mark, not the previous tile.
-- Open the app and confirm the same mark on the launch splash.
-- Pair an Osmo Pocket 4 or 4 Pro, join its Wi-Fi, and confirm live view fills the monitor.
-- Start and stop a take from the phone, then confirm it on the camera body.
-
+- In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.
+- Change frame rate with Angle armed and confirm the angle holds.
+- Long-press LUT in landscape and confirm 50/50 is visible without scrolling.
+- Open AUDIO, walk Channel / Wind / Dir / Vocal, and confirm each row stays selected.

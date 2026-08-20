@@ -167,6 +167,10 @@ struct CapturePickerPanel: View {
             guard sheet == .shutter, !isEvSheet else { return }
             reseatShutter()
         }
+        .onChange(of: model.session.status.fps) { _, _ in
+            guard sheet == .shutter, !isEvSheet else { return }
+            reseatShutter()
+        }
         .onChange(of: model.session.status.availableIsoIndices) { _, _ in
             guard sheet == .iso else { return }
             reseatIso()
@@ -174,6 +178,9 @@ struct CapturePickerPanel: View {
         .onChange(of: model.session.status.expoMode) { _, _ in
             guard sheet == .shutter else { return }
             drumSendTask?.cancel()
+            if model.session.status.expoMode != .auto {
+                selectedMode = OperatorPrefs.shutterUsesAngle ? 1 : 0
+            }
             reseatShutterOrEv()
         }
         .onChange(of: model.session.status.colorMode) { _, _ in
@@ -227,6 +234,9 @@ struct CapturePickerPanel: View {
             if isEvSheet {
                 CaptureDrumWheel(options: evLabels, selection: $drumSelection)
                     .id(evLabels)
+            } else if isAngleSheet {
+                CaptureDrumWheel(options: shutterAngleLabels, selection: $drumSelection)
+                    .id(shutterAngleLabels)
             } else {
                 CaptureDrumWheel(options: shutterLabels, selection: $drumSelection)
                     .id(shutterLabels)
@@ -350,13 +360,19 @@ struct CapturePickerPanel: View {
                 }
             }
         case 1:
-            checkedRows(WindNoiseReduction.allCases.map(\.label), selected: windLabel) { label in
+            checkedRows(
+                WindNoiseReduction.allCases.map(\.label),
+                selected: model.session.status.windNR?.label
+            ) { label in
                 if let value = WindNoiseReduction.allCases.first(where: { $0.label == label }) {
                     model.session.setWindNR(value)
                 }
             }
         case 2:
-            checkedRows(DirectionalAudio.allCases.map(\.label), selected: directionalLabel) { label in
+            checkedRows(
+                DirectionalAudio.allCases.map(\.label),
+                selected: model.session.status.directionalAudio?.label
+            ) { label in
                 if let value = DirectionalAudio.allCases.first(where: { $0.label == label }) {
                     model.session.setDirectionalAudio(value)
                 }
@@ -479,12 +495,14 @@ struct CapturePickerPanel: View {
 
     private var headerSubtitle: String {
         if isEvSheet { return "Compensation" }
+        if sheet == .shutter { return isAngleSheet ? "Angle" : "Speed" }
         return sheet.subtitle
     }
 
     private var modeTabs: [String] {
         switch sheet {
         case .iso where offersIsoAuto: ["Auto", "Manual"]
+        case .shutter where !isEvSheet: ["Speed", "Angle"]
         case .wb: ["Mode", "Kelvin", "Tint"]
         case .audio: ["Channel", "Wind", "Dir", "Vocal"]
         case .resolution: VideoResolution.allCases.map(\.tabTitle)
@@ -504,6 +522,10 @@ struct CapturePickerPanel: View {
         sheet == .shutter && model.session.status.expoMode == .auto
     }
 
+    private var isAngleSheet: Bool {
+        sheet == .shutter && !isEvSheet && selectedMode == 1
+    }
+
     private var isoIndices: [IsoIndex] {
         CaptureLists.isoIndices(from: model.session.status)
     }
@@ -514,6 +536,10 @@ struct CapturePickerPanel: View {
 
     private var shutterLabels: [String] {
         CaptureLists.shutterLabels(from: model.session.status)
+    }
+
+    private var shutterAngleLabels: [String] {
+        ShutterAngle.labels
     }
 
     private var isoDrumLabels: [String] {
@@ -553,16 +579,6 @@ struct CapturePickerPanel: View {
         return t > 0 ? "+\(t)" : "\(t)"
     }
 
-    private var windLabel: String? {
-        if case .wind(let w) = model.session.status.audioDspAt2 { return w.label }
-        return nil
-    }
-
-    private var directionalLabel: String? {
-        if case .directional(let d) = model.session.status.audioDspAt2 { return d.label }
-        return nil
-    }
-
     private func seed() {
         switch sheet {
         case .iso:
@@ -573,6 +589,9 @@ struct CapturePickerPanel: View {
                 reseatIso()
             }
         case .shutter:
+            if !isEvSheet {
+                selectedMode = OperatorPrefs.shutterUsesAngle ? 1 : 0
+            }
             reseatShutterOrEv()
         case .wb:
             let mode = model.session.status.whiteBalance?.mode
@@ -615,6 +634,9 @@ struct CapturePickerPanel: View {
                     model.session.setISO(idx)
                 }
             }
+        case .shutter:
+            OperatorPrefs.shutterUsesAngle = index == 1
+            reseatShutter()
         case .wb:
             if index == 0, model.session.status.whiteBalance?.mode != .auto {
                 // Mode tab only; write happens on row tap.
@@ -647,6 +669,16 @@ struct CapturePickerPanel: View {
             if isEvSheet {
                 guard let ev = EvComp(label: value) else { return }
                 enqueueDrumSend { model.session.setEv(ev) }
+                return
+            }
+            if isAngleSheet {
+                guard let degrees = ShutterAngle.parse(value) else { return }
+                OperatorPrefs.shutterAngleDegrees = degrees
+                let denom = ShutterAngle.denom(
+                    degrees: degrees,
+                    fps: model.session.status.fps,
+                    available: shutterDenoms)
+                enqueueDrumSend { model.session.setShutterDenom(denom) }
                 return
             }
             guard let denom = CamCapShutter.denom(from: value),
@@ -748,12 +780,39 @@ struct CapturePickerPanel: View {
     }
 
     private func reseatShutter() {
+        if isAngleSheet {
+            reseatShutterAngle()
+            return
+        }
         let labels = shutterLabels
         let live = model.session.status.shutterDenom > 0
             ? CamCapShutter.label(model.session.status.shutterDenom) : labels.first ?? ""
         let next = labels.contains(live) ? live : nearestShutter(live)
         lastApplied = next
         drumSelection = next
+    }
+
+    private func reseatShutterAngle() {
+        let fps = model.session.status.fps
+        let liveDenom = model.session.status.shutterDenom
+        let preferred = ShutterAngle.label(OperatorPrefs.shutterAngleDegrees)
+        if liveDenom > 0 {
+            let mapped = ShutterAngle.denom(
+                degrees: OperatorPrefs.shutterAngleDegrees, fps: fps, available: shutterDenoms)
+            if mapped == liveDenom, shutterAngleLabels.contains(preferred) {
+                lastApplied = preferred
+                drumSelection = preferred
+                return
+            }
+            let next = ShutterAngle.nearestLabel(denom: liveDenom, fps: fps)
+            OperatorPrefs.shutterAngleDegrees =
+                ShutterAngle.parse(next) ?? ShutterAngle.defaultDegrees
+            lastApplied = next
+            drumSelection = next
+            return
+        }
+        lastApplied = preferred
+        drumSelection = preferred
     }
 
     private func nearestShutter(_ label: String) -> String {
@@ -913,7 +972,7 @@ extension CaptureSheet {
     var subtitle: String {
         switch self {
         case .iso: "Sensitivity"
-        case .shutter: "Speed"
+        case .shutter: "Angle / speed"
         case .wb: "Kelvin / auto / tint"
         case .focus: "AF-S / AF-C"
         case .exposure: "Exposure"

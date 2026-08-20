@@ -58,6 +58,21 @@ struct LiveChromeThrottleTests {
         #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
     }
 
+    @Test func audioOperatorFieldsAreImmediate() {
+        var next = CameraStatus()
+        next.audioChannel = .stereo
+        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
+        next = CameraStatus()
+        next.vocalBoost = .on
+        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
+        next = CameraStatus()
+        next.windNR = .on
+        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
+        next = CameraStatus()
+        next.directionalAudio = .front
+        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
+    }
+
     @Test func shutterCapListIsImmediate() {
         var next = CameraStatus()
         next.availableShutterDenoms = [50, 60, 100]

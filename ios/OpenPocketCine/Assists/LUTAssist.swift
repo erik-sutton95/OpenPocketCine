@@ -19,6 +19,12 @@ enum LUTAssist {
     static func longPressMenu(_ assist: LiveAssistState) -> some View {
         LUTPicker(assist: assist, embedded: true)
     }
+
+    /// Pinned under the catalog so landscape never scrolls 50/50 off-screen.
+    @ViewBuilder
+    static func longPressFooter(assist: LiveAssistState) -> some View {
+        LUTSplitComparisonBar(assist: assist)
+    }
 }
 
 /// Official Pocket 4P Rec.709 cubes from the app bundle. Parsed once.

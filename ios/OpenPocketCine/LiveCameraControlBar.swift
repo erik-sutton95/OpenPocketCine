@@ -31,7 +31,9 @@ struct LiveCameraControlBar: View {
             if model.session.status.expoMode == .auto {
                 tile(.shutter, label: "EV", value: evValue, widest: "+3.0")
             } else {
-                tile(.shutter, label: "SHUTTER", value: shutterValue, widest: "1/16000")
+                tile(
+                    .shutter, label: "SHUTTER", value: shutterValue,
+                    widest: OperatorPrefs.shutterUsesAngle ? "346°" : "1/16000")
             }
             tile(.exposure, label: "MODE", value: expoValue, widest: "Manual")
             tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
@@ -104,6 +106,9 @@ struct LiveCameraControlBar: View {
     }
 
     private var shutterValue: String {
+        if OperatorPrefs.shutterUsesAngle {
+            return ShutterAngle.label(OperatorPrefs.shutterAngleDegrees)
+        }
         let d = model.session.status.shutterDenom
         return d > 0 ? "1/\(d)" : "—"
     }

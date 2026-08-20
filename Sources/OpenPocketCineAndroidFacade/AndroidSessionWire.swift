@@ -192,9 +192,13 @@ public enum AndroidSessionWire {
         }
         if let hex = str("audioDspBlob"), let bytes = hexBytes(hex), bytes.count == AudioDspBlob.size {
             status.audioDspBlob = bytes
-            status.audioDspAt2 = AudioDspBlob.at2(bytes)
+            if bytes.count > 2 {
+                AudioDspBlob.applyByte2(bytes[2], to: &status)
+            } else {
+                status.audioDspAt2 = AudioDspBlob.at2(bytes)
+            }
         } else if let at2 = optionalUInt8(int("audioDspAt2", default: -1)) {
-            status.audioDspAt2 = AudioDspAt2(raw: at2)
+            AudioDspBlob.applyByte2(at2, to: &status)
         }
         let zoomRaw = int("zoomFactorRaw", default: 0)
         if zoomRaw > 0 { status.zoomFactorRaw = UInt32(clamping: zoomRaw) }

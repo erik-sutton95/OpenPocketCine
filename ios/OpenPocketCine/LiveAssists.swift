@@ -630,6 +630,8 @@ enum OperatorPrefs {
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
+    private static let shutterUsesAngleKey = "OpenPocketCine.ShutterUsesAngle"
+    private static let shutterAngleKey = "OpenPocketCine.ShutterAngleDegrees"
 
     static var keepScreenAwake: Bool {
         get {
@@ -677,6 +679,21 @@ enum OperatorPrefs {
     static var dispClean: PocketDispChrome {
         get { loadChrome(key: dispCleanKey) ?? .cleanDefaults }
         set { saveChrome(newValue, key: dispCleanKey) }
+    }
+
+    static var shutterUsesAngle: Bool {
+        get { UserDefaults.standard.bool(forKey: shutterUsesAngleKey) }
+        set { UserDefaults.standard.set(newValue, forKey: shutterUsesAngleKey) }
+    }
+
+    static var shutterAngleDegrees: Double {
+        get {
+            let stored = UserDefaults.standard.double(forKey: shutterAngleKey)
+            return stored > 0 ? ShutterAngle.nearestDegrees(stored) : ShutterAngle.defaultDegrees
+        }
+        set {
+            UserDefaults.standard.set(ShutterAngle.nearestDegrees(newValue), forKey: shutterAngleKey)
+        }
     }
 
     static var portraitFeedAspect: PortraitFeedAspect {

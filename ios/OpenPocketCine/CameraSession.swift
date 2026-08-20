@@ -265,6 +265,7 @@ final class CameraSession {
     /// After a local ISO / shutter / expo SET, ignore subscribe snapshots that have not caught up.
     @ObservationIgnored private var expoPin: ExpoPin?
     @ObservationIgnored private var expoGeneration: UInt64 = 0
+    @ObservationIgnored private var audioPin: AudioPin?
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
     @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
@@ -435,6 +436,7 @@ final class CameraSession {
         zoomPinchSlew = nil
         expoPin = nil
         expoGeneration = 0
+        audioPin = nil
         formatPin = nil
         colorPin = nil
         controlBusy = false
@@ -1163,6 +1165,14 @@ final class CameraSession {
         hopNativeISO(from: from, to: .dLog2)
     }
 
+    private struct AudioPin {
+        var channel: AudioChannel?
+        var vocal: VocalBoost?
+        var wind: WindNoiseReduction?
+        var directional: DirectionalAudio?
+        var deadline: Date
+    }
+
     private struct ExpoPin {
         var generation: UInt64
         var iso: Int?
@@ -1218,6 +1228,74 @@ final class CameraSession {
                 return CamFov.matches(live, factor)
             }
         }
+    }
+
+    private func pinAudio(
+        channel: AudioChannel? = nil,
+        vocal: VocalBoost? = nil,
+        wind: WindNoiseReduction? = nil,
+        directional: DirectionalAudio? = nil
+    ) {
+        var pin = audioPin ?? AudioPin(deadline: Date().addingTimeInterval(2))
+        pin.deadline = Date().addingTimeInterval(2)
+        if let channel { pin.channel = channel }
+        if let vocal { pin.vocal = vocal }
+        if let wind { pin.wind = wind }
+        if let directional { pin.directional = directional }
+        audioPin = pin
+    }
+
+    private func audioPinIsEmpty(_ pin: AudioPin) -> Bool {
+        pin.channel == nil && pin.vocal == nil && pin.wind == nil && pin.directional == nil
+    }
+
+    private func clearAudioPin(
+        channel: Bool = false, vocal: Bool = false, wind: Bool = false, directional: Bool = false
+    ) {
+        guard var pin = audioPin else { return }
+        if channel { pin.channel = nil }
+        if vocal { pin.vocal = nil }
+        if wind { pin.wind = nil }
+        if directional { pin.directional = nil }
+        audioPin = audioPinIsEmpty(pin) ? nil : pin
+    }
+
+    /// Drop GET / subscribe snapshots that still show the pre-SET audio row.
+    private func absorbStaleAudio(_ incoming: inout CameraStatus) {
+        guard var pin = audioPin else { return }
+        if Date() >= pin.deadline {
+            audioPin = nil
+            return
+        }
+        if let expect = pin.channel {
+            if incoming.audioChannel == expect {
+                pin.channel = nil
+            } else if incoming.audioChannel != nil {
+                incoming.audioChannel = status.audioChannel
+            }
+        }
+        if let expect = pin.vocal {
+            if incoming.vocalBoost == expect {
+                pin.vocal = nil
+            } else if incoming.vocalBoost != nil {
+                incoming.vocalBoost = status.vocalBoost
+            }
+        }
+        if let expect = pin.wind {
+            if incoming.windNR == expect {
+                pin.wind = nil
+            } else if incoming.windNR != nil {
+                incoming.windNR = status.windNR
+            }
+        }
+        if let expect = pin.directional {
+            if incoming.directionalAudio == expect {
+                pin.directional = nil
+            } else if incoming.directionalAudio != nil {
+                incoming.directionalAudio = status.directionalAudio
+            }
+        }
+        audioPin = audioPinIsEmpty(pin) ? nil : pin
     }
 
     private func pinExpo(
@@ -1441,37 +1519,56 @@ final class CameraSession {
     }
 
     func setAudioChannel(_ channel: AudioChannel) {
+        pinAudio(channel: channel)
         let previous = status.audioChannel
         status.audioChannel = channel
-        fireCamera(
-            Commands.setAudioChannel(channel), name: "Audio \(channel.label)",
-            onFail: { [weak self] in self?.status.audioChannel = previous },
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line(
-                    "audio: channel \(channel.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
-            })
+        enqueueAudio {
+            let ok = await self.requestCamera(
+                Commands.setAudioChannel(channel), name: "Audio \(channel.label)")
+            if !ok {
+                if self.status.audioChannel == channel { self.status.audioChannel = previous }
+                self.clearAudioPin(channel: true)
+            }
+            ControlLiveLog.line(
+                "audio: channel \(channel.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
+        }
     }
 
     func setVocalBoost(_ boost: VocalBoost) {
+        pinAudio(vocal: boost)
         let previous = status.vocalBoost
         status.vocalBoost = boost
-        fireCamera(
-            Commands.setVocalBoost(boost), name: "Vocal \(boost.label)",
-            onFail: { [weak self] in self?.status.vocalBoost = previous },
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line(
-                    "audio: vocal \(boost.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
-            })
+        enqueueAudio {
+            let ok = await self.requestCamera(
+                Commands.setVocalBoost(boost), name: "Vocal \(boost.label)")
+            if !ok {
+                if self.status.vocalBoost == boost { self.status.vocalBoost = previous }
+                self.clearAudioPin(vocal: true)
+            }
+            ControlLiveLog.line(
+                "audio: vocal \(boost.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
+        }
     }
 
     /// GET `0xA0` blob, patch `@2`, SET `0x9F`. Never invent the blob. The GET is
     /// a true round trip, so audio patches ride their own chain — never the SET path.
     func setWindNR(_ value: WindNoiseReduction) {
-        enqueueAudio { await self.patchAudioDsp(name: "Wind \(value.label)") { AudioDspBlob.patchWind($0, value) } }
+        pinAudio(wind: value)
+        status.windNR = value
+        enqueueAudio {
+            await self.patchAudioDsp(name: "Wind \(value.label)") { AudioDspBlob.patchWind($0, value) }
+        }
     }
 
     func setDirectionalAudio(_ value: DirectionalAudio) {
-        enqueueAudio { await self.patchAudioDsp(name: "Dir \(value.label)") { AudioDspBlob.patchDirectional($0, value) } }
+        pinAudio(directional: value)
+        status.directionalAudio = value
+        status.windNR = .on
+        enqueueAudio {
+            await self.patchAudioDsp(name: "Dir \(value.label)") {
+                AudioDspBlob.patchDirectional($0, value)
+            }
+        }
     }
 
     func refreshFocusTrack() async {
@@ -1527,17 +1624,23 @@ final class CameraSession {
         let next = patch(blob)
         let previousBlob = status.audioDspBlob
         let previousAt2 = status.audioDspAt2
+        let previousWind = status.windNR
+        let previousDir = status.directionalAudio
         status.audioDspBlob = next
-        status.audioDspAt2 = AudioDspBlob.at2(next)
-        fireCamera(
-            Commands.audioDspSet(next), name: name,
-            onFail: { [weak self] in
-                self?.status.audioDspBlob = previousBlob
-                self?.status.audioDspAt2 = previousAt2
-            },
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line("audio: \(name) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
-            })
+        if next.count > 2 {
+            AudioDspBlob.applyByte2(next[2], to: &status)
+        } else {
+            status.audioDspAt2 = AudioDspBlob.at2(next)
+        }
+        let ok = await requestCamera(Commands.audioDspSet(next), name: name)
+        if !ok {
+            status.audioDspBlob = previousBlob
+            status.audioDspAt2 = previousAt2
+            status.windNR = previousWind
+            status.directionalAudio = previousDir
+            clearAudioPin(wind: true, directional: true)
+        }
+        ControlLiveLog.line("audio: \(name) ack=\(ok ? "ok" : (controlNote ?? "failed"))")
     }
 
     /// `0x02/0x18` via `Commands.setVideoFormat(resolution:frameRate:)`.
@@ -1561,6 +1664,16 @@ final class CameraSession {
                 self.status.fps = previousFps
                 self.formatPin = nil
             })
+        // Angle mode is ours: keep the chosen degrees and rewrite 1/N for the new fps.
+        if OperatorPrefs.shutterUsesAngle, previousFps != status.fps, status.expoMode != .auto {
+            let denom = ShutterAngle.denom(
+                degrees: OperatorPrefs.shutterAngleDegrees,
+                fps: status.fps,
+                available: status.availableShutterDenoms)
+            if denom != status.shutterDenom {
+                setShutterDenom(denom)
+            }
+        }
     }
 
     var bodyFamily: CameraBodyFamily {
@@ -2299,7 +2412,10 @@ final class CameraSession {
         _ reply: Duml.Frame, name: String, opcode: String, expect: ControlExpect?,
         late: Bool = false, announce: Bool = true
     ) -> Bool {
-        _ = CameraStatusDecoder.apply(reply, to: &status)
+        var next = status
+        _ = CameraStatusDecoder.apply(reply, to: &next)
+        absorbStaleAudio(&next)
+        status = next
         let parsed = CameraReply.parse(reply.payload)
         ControlLiveLog.line(
             "control: got \(name) \(opcode) seq=\(reply.seq) flags=0x\(String(reply.flags, radix: 16)) payload=\(Duml.hex(reply.payload)) success=\(parsed.isSuccess)\(late ? " late-hold" : "")"
@@ -3165,6 +3281,7 @@ final class CameraSession {
         var s = status
         guard CameraStatusDecoder.apply(frame, to: &s) else { return }
         absorbStaleExpo(&s)
+        absorbStaleAudio(&s)
         absorbStaleFormat(&s)
         absorbStaleColor(&s)
         absorbCameraFocus(s)
