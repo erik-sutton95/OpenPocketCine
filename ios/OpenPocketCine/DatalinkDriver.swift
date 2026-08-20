@@ -154,6 +154,7 @@ final class DatalinkDriver {
             let sends = CameraSoftAP.handshakeSendsPerBind
             for send in 1...sends {
                 try Task.checkCancellation()
+                if handshakeAcked { break }
                 if !CameraSoftAP.canSendHandshake(
                     receiveArmed: receiveArmed, connectionReady: isConnectionReady
                 ) {
@@ -165,7 +166,7 @@ final class DatalinkDriver {
                 write(pkt)
                 udpSeq = udpSeq &+ 8
                 log.info("datalink: handshake send \(send)/\(sends)")
-                try? await Task.sleep(for: .milliseconds(CameraSoftAP.handshakeSendIntervalMilliseconds))
+                try await waitForHandshakeAck()
                 if handshakeAcked { break }
             }
             if handshakeAcked {
@@ -195,6 +196,20 @@ final class DatalinkDriver {
                 log.info("datalink: handshake never acked inbound=\(inbound, privacy: .public)")
                 throw DatalinkError.noHandshake
             }
+        }
+    }
+
+    /// pktType 0x00 can land in tens of ms; 350 ms is only the cap per send.
+    private func waitForHandshakeAck() async throws {
+        let poll = CameraSoftAP.handshakePollMilliseconds
+        let cap = CameraSoftAP.handshakeSendIntervalMilliseconds
+        var waited = 0
+        while waited < cap {
+            if handshakeAcked { return }
+            try Task.checkCancellation()
+            let slice = min(poll, cap - waited)
+            try await Task.sleep(for: .milliseconds(slice))
+            waited += slice
         }
     }
 
