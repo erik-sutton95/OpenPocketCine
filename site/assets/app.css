@@ -607,12 +607,29 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   color: rgba(244, 246, 248, 0.88);
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
-@media (max-width: 700px) {
-  .media-bleed { min-height: 100svh; }
-  .media-bleed__photo { object-position: 50% 32%; }
-  .media-bleed__copy {
-    padding-bottom: clamp(64px, 12vh, 120px);
+@media (max-width: 860px) {
+  .media-bleed {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    place-items: unset;
   }
+  .media-bleed__photo {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    object-position: 50% 42%;
+  }
+  .media-bleed__veil { display: none; }
+  .media-bleed__copy {
+    padding: 28px 20px 36px;
+    max-width: none;
+  }
+  .media-bleed__copy h2,
+  .media-bleed__copy .lead { text-shadow: none; }
 }
 
 .journey {
