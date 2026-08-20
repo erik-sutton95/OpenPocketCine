@@ -1,15 +1,17 @@
 New and changed
 
-- Settings now opens Support in GitHub Q&A, Report a problem on the bug form, and Feature request in Ideas.
-- In-app privacy copy names optional Frame.io, the share sheet, and on-device face boxes, and points at openpocketcine.app/privacy.
+- Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
+- A look that was already on should grade the first picture instead of popping in seconds later.
 
 Fixes
 
-- Feature request and Q&A buttons in Settings pointed at GitHub URLs that did not match the live Discussions categories.
+- The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
+- If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
+- A Bluetooth or camera-Wi-Fi drop now leaves the live screen instead of pretending the feed is still up.
 
 What to test
 
-- From Operator Setup, tap Support, Report a problem, and Feature request and confirm the GitHub pages that open.
-- Open Privacy and skim the Frame.io / share / face-box language.
-- Pair an Osmo Pocket 4 or 4 Pro, join its Wi-Fi, and confirm live view fills the monitor.
-- Start and stop a take from the phone, then confirm it on the camera body.
+- Pair a saved Pocket 4 or 4 Pro. Confirm the picture and LUT appear together, then gimbal still works.
+- Background the app, return, and confirm the feed comes back without a full re-pair.
+- Toggle LUT off and on after the feed is rolling — it should not go black.
+- Walk out of range or power-cycle the camera; the last frame should hold, then reconnect.
