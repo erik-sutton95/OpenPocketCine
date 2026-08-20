@@ -73,8 +73,9 @@ final class CaptureListTests: XCTestCase {
     }
 
     func testNativeIsoHopCopy() {
-        XCTAssertEqual(CaptureLists.nativeIsoHopTitle, "Native ISO")
-        XCTAssertEqual(CaptureLists.nativeIsoHopDetail, "400 ↔ 1600 when switching D-Log")
+        XCTAssertEqual(CaptureLists.nativeIsoHopTitle, "Auto Native ISO")
+        XCTAssertFalse(CaptureLists.nativeIsoHopHelp.isEmpty)
+        XCTAssertFalse(CaptureLists.nativeIsoHopHelp.contains("400 ↔ 1600"))
     }
 
     func testDLog2HasNoIsoAuto() {

@@ -418,25 +418,25 @@ struct CapturePickerPanel: View {
     }
 
     private var nativeIsoHopToggle: some View {
-        Toggle(isOn: Binding(
-            get: { model.nativeISOHopEnabled },
-            set: { model.nativeISOHopEnabled = $0 }
-        )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(CaptureLists.nativeIsoHopTitle)
-                    .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                    .kerning(0.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(LiveDesign.text)
-                Text(CaptureLists.nativeIsoHopDetail)
-                    .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(LiveDesign.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HStack(alignment: .center, spacing: 8) {
+            Text(CaptureLists.nativeIsoHopTitle)
+                .font(LiveType.ui(size: 13, weight: .bold, design: .default))
+                .kerning(0.4)
+                .textCase(.uppercase)
+                .foregroundStyle(LiveDesign.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            HelpBadge(text: CaptureLists.nativeIsoHopHelp)
+            Spacer(minLength: 8)
+            Toggle("", isOn: Binding(
+                get: { model.nativeISOHopEnabled },
+                set: { model.nativeISOHopEnabled = $0 }
+            ))
+            .labelsHidden()
+            .tint(LiveDesign.accent)
+            .accessibilityLabel(CaptureLists.nativeIsoHopTitle)
+            .accessibilityHint(CaptureLists.nativeIsoHopHelp)
         }
-        .tint(LiveDesign.accent)
-        .accessibilityLabel(CaptureLists.nativeIsoHopTitle)
-        .accessibilityHint(CaptureLists.nativeIsoHopDetail)
     }
 
     private var modeBar: some View {
@@ -912,8 +912,9 @@ enum CaptureLists {
         CamCapIso.markedLabels(transfer: status.monitorTransfer)
     }
 
-    static let nativeIsoHopTitle = "Native ISO"
-    static let nativeIsoHopDetail = "400 ↔ 1600 when switching D-Log"
+    static let nativeIsoHopTitle = "Auto Native ISO"
+    static let nativeIsoHopHelp =
+        "On: switching D-Log ↔ D-Log2 hops ISO to that curve's starred native if you were still on native. Off: keep the ISO you set."
 
     static let kelvinValues = Array(stride(from: 2_000, through: 10_000, by: 100))
     static let kelvinLabels = kelvinValues.map { "\($0)K" }
