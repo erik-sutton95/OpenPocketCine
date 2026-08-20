@@ -244,28 +244,42 @@
         });
       }
       if (visual) {
-        gsap.fromTo(
-          visual,
-          {
+        const shots = visual.querySelectorAll("img");
+        const targets = shots.length ? shots : [visual];
+        // Don't transform the visual wrapper — iOS clips filter:drop-shadow
+        // on a child when the parent has a transform.
+        if (nativeMobileScroll) {
+          gsap.from(targets, {
             opacity: 0,
-            x: stacked ? 0 : fromLeft ? 48 : -48,
-            y: stacked ? 32 : 28,
-            rotate: stacked ? 0 : restRot + (fromLeft ? 5 : -5),
-            scale: stacked ? 0.96 : 0.92,
-          },
-          {
-            opacity: 1,
-            x: 0,
-            y: 0,
-            rotate: restRot,
-            scale: 1,
-            duration: 1.05,
-            ease: "expo.out",
-            scrollTrigger: { trigger: sec, start: "top 80%" },
-          }
-        );
-        if (!nativeMobileScroll) {
-          gsap.to(visual, {
+            y: 18,
+            duration: 0.7,
+            ease: "power3.out",
+            stagger: 0.06,
+            scrollTrigger: { trigger: sec, start: "top 82%" },
+          });
+        } else {
+          gsap.fromTo(
+            targets,
+            {
+              opacity: 0,
+              x: stacked ? 0 : fromLeft ? 48 : -48,
+              y: stacked ? 32 : 28,
+              rotate: stacked ? 0 : restRot + (fromLeft ? 5 : -5),
+              scale: stacked ? 0.96 : 0.92,
+            },
+            {
+              opacity: 1,
+              x: 0,
+              y: 0,
+              rotate: restRot,
+              scale: 1,
+              duration: 1.05,
+              ease: "expo.out",
+              stagger: 0.08,
+              scrollTrigger: { trigger: sec, start: "top 80%" },
+            }
+          );
+          gsap.to(targets, {
             yPercent: -5,
             ease: "none",
             scrollTrigger: {

@@ -448,7 +448,9 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   align-items: center;
   gap: clamp(28px, 5vw, 72px);
   text-align: left;
+  overflow: visible;
 }
+.feat-section { overflow: visible; }
 .feat-row--reverse {
   grid-template-columns: minmax(260px, 1.1fr) minmax(240px, 0.9fr);
 }
@@ -478,11 +480,10 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 0;
-  padding: 0;
+  min-height: auto;
+  padding: 12px 20px 52px;
   overflow: visible;
   transform-origin: center center;
-  will-change: transform;
 }
 .feat-row__visual img {
   display: block;
@@ -499,7 +500,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 }
 .band--dark .feat-row__visual img { filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.5)); }
 .feat-row__visual--pair {
-  padding: 4px 0 8px;
+  padding: 12px 8px 52px;
 }
 .feat-row--stack .feat-pair {
   width: min(1180px, 100%);
@@ -537,11 +538,18 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   .feat-row--reverse.feat-row--portrait {
     grid-template-columns: 1fr;
     text-align: center;
-    gap: clamp(22px, 4vw, 36px);
+    gap: clamp(16px, 3vw, 28px);
   }
   .feat-row--reverse .feat-row__copy,
   .feat-row--reverse .feat-row__visual { order: unset; }
   .feat-row__copy .lead { margin-inline: auto; }
+  .feat-row__visual {
+    padding: 8px 12px 48px;
+  }
+  .feat-row__visual img,
+  .feat-row__visual--pair img {
+    filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.22));
+  }
   .feat-row__visual img.is-portrait {
     max-width: min(320px, 68vw);
     max-height: min(68vh, 560px);
