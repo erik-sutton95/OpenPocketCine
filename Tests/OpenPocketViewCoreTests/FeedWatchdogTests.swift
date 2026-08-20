@@ -51,6 +51,7 @@ import Testing
         var snap = Self.snap(
             now: 10, frameAge: 4.2, videoAge: 4.2, statusAge: 0.3, bleAge: 0.2)
         snap.secondsSinceLastEnable = 20
+        snap.secondsSinceFocusTrackSet = 1.0
         #expect(
             dog.tick(snap) == .none,
             "AF-C pulse hunt pauses HEVC; status still on 9004 is not a dead socket")
@@ -59,6 +60,23 @@ import Testing
         #expect(FeedWatchdog.controlReceiveAlive(snap))
         #expect(FeedWatchdog.socketAlive(snap))
         #expect(!FeedWatchdog.udpReceiveAlive(snap))
+    }
+
+    @Test func encoderPauseWithFreshStatusResendsEnable() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 4.2, videoAge: 4.2, statusAge: 0.3, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "young status + stale HEVC past GOP/AF-C grace is an encoder pause")
+        #expect(dog.stage == .resendEnable)
+
+        snap.now = 11
+        #expect(
+            dog.tick(snap) == .none,
+            "escalateAfter (5s) between enables — do not 1 Hz loop")
+        #expect(dog.stage == .resendEnable)
     }
 
     @Test func gopResetSilenceDoesNotRebuildUDP() {

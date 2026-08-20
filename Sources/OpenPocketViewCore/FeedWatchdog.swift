@@ -11,6 +11,10 @@ import Foundation
 /// Do not climb enable → VT → reopen → fullRejoin. Do not tear VT because
 /// the socket paused. SoftAP bind stays.
 ///
+/// Encoder pause: DUML status still landing, HEVC silent, past GOP/AF-C
+/// grace. One `0x09/0xa8`, never a UDP rebuild. `escalateAfter` between
+/// enables — do not 1 Hz loop.
+///
 /// Mid-session recover must not paint black: keep the last frame until a
 /// new decoded picture is in hand, and do not enqueue empty samples.
 public struct FeedWatchdog: Equatable, Sendable {
@@ -132,7 +136,8 @@ public struct FeedWatchdog: Equatable, Sendable {
     }
 
     /// Status frames ride the same UDP 9004 socket as HEVC. Fresh status with
-    /// silent video is an encoder pause (AF-C hunt / GOP cut), not a dead bind.
+    /// silent video is an encoder pause, not a dead bind — resend enable after
+    /// GOP / AF-C grace instead of tearing UDP.
     public static func controlReceiveAlive(_ snap: Snapshot) -> Bool {
         guard let status = snap.lastStatusAge else { return false }
         return status < stallThreshold
@@ -231,12 +236,6 @@ public struct FeedWatchdog: Equatable, Sendable {
             resetIdle()
             return .none
         }
-        // Mid-session encoder pause (AF-C hunt): status still on 9004.
-        // First picture (`hadVideo == false`) must still resend enable.
-        if snap.hadVideo, Self.controlReceiveAlive(snap) {
-            resetIdle()
-            return .none
-        }
 
         if Self.shouldHoldForGOPReset(secondsSinceLastEnable: snap.secondsSinceLastEnable) {
             return .none
@@ -264,6 +263,15 @@ public struct FeedWatchdog: Equatable, Sendable {
             case .cooldown:
                 return .none
             }
+        }
+
+        // Encoder pause: status still on 9004, HEVC silent. One enable,
+        // never reopen UDP. escalateAfter (5 s) between 0x09/0xa8.
+        if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
+            if stage == .idle || snap.now - lastActionAt >= Self.escalateAfter {
+                return fire(.resendLiveViewEnable, at: snap.now)
+            }
+            return .none
         }
 
         if Self.shouldHoldRebuildAfterRecentUDP(

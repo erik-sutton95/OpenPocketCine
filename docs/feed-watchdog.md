@@ -28,7 +28,7 @@ Previous recover (`recoverLiveViewIfNeeded`) only re-enabled when **cumulative**
 
 UDP receive age is the stall signal — not a black or frozen canvas. Packets or AUs still arriving means the socket is alive; LUT / PEAK / WAVE toggles must not send `0x09/0xa8` once VT already owns the session.
 
-A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut). Log:
+A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut) and **4 s after an AF-C SET**. Log:
 
 `feed: stall lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=0`
 
@@ -36,7 +36,9 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 `feed: black lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=1`
 
-Then rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C grace, that is an encoder pause — one `0x09/0xa8` (`resendLiveViewEnable`), not a UDP rebuild. Wait `escalateAfter` (5 s) between enables; do not 1 Hz loop.
+
+If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket.
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 
@@ -57,4 +59,4 @@ State machine: `Sources/OpenPocketViewCore/FeedWatchdog.swift` (tested). Session
 
 Watch Console for `feed: stall` vs `feed: black`. After a stall you should see one UDP rebuild (VT kept), then picture without leaving Live. `recoverBlack=1` means the last frame was already gone. A LUT toggle after the first assist must **not** log another `0x09/0xa8`.
 
-If `lastStatus` stays young while `lastVideo` ages, the camera stopped HEVC (enable should fix it). If both age and `flow=dead`, it is the UDP path. If `lastVideo` stays young and the picture is still frozen, it is VT / display. If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.
+If `lastStatus` stays young while `lastVideo` ages, past GOP / AF-C grace, send one `0x09/0xa8` — do not rebuild UDP. If both age and `flow=dead`, it is the UDP path. If `lastVideo` stays young and the picture is still frozen, it is VT / display. If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.
