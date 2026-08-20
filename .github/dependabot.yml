@@ -6,4 +6,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
-  # Add production native ecosystems here once Swift/iOS/Android package manifests settle.
+  - package-ecosystem: gradle
+    directory: "/Apps/Android"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build

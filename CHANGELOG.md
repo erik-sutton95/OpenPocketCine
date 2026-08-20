@@ -29,6 +29,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Public-launch GitHub settings: CI re-enabled with **CI gate** required on
+  `main`, force-push off, Actions SHA pinning, and a `scripts/go-public.sh`
+  walkthrough for the remaining visibility flip.
 - Traffic Lights crush/clip compensation defaults to 0 stops (was ¼).
 - Replace the app mark across iOS, Android, and the landing page with the
   production-monitor icon.

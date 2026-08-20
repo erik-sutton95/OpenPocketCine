@@ -6,8 +6,13 @@ on:
       - main
       - "feature/**"
       - "feat/**"
+      - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "ci/**"
       - "codex/**"
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -124,11 +129,11 @@ jobs:
   native:
     name: Native Swift/iOS
     needs: changes
-    # Skip the slow macOS build for docs-only changes; Meta checks still lint the docs.
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    # Hosted macOS: free and unlimited on public repositories, and a fresh VM per job. Never move
-    # this job to a self-hosted runner — it runs `just native-check` from the pull request, so a
-    # fork PR would execute attacker-controlled code on a persistent machine.
+    if: ${{ needs.changes.outputs.code == 'true' && !github.event.repository.private }}
+    # Hosted macOS is free on public repositories. Skip while the repo is private so this
+    # job does not burn paid minutes. Never move it to a self-hosted runner — it runs
+    # `just native-check` from the pull request, so a fork PR would execute attacker-controlled
+    # code on a persistent machine.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,7 +150,7 @@ jobs:
   android:
     name: Android
     needs: changes
-    if: ${{ needs.changes.outputs.android == 'true' }}
+    if: ${{ needs.changes.outputs.android == 'true' && !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -176,9 +181,10 @@ jobs:
 
   gate:
     name: CI gate
-    # The single required status check. `native` and `android` are conditional, and a required
-    # check that never reports leaves a pull request blocked forever — so this job always runs and
-    # collapses every other job's result into one verdict.
+    # The single required status check on `main` (name must stay "CI gate"). `native` and
+    # `android` are conditional, and a required check that never reports leaves a pull request
+    # blocked forever — so this job always runs and collapses every other job's result into
+    # one verdict. Skipped native/android while the repository is still private is success.
     if: always()
     needs: [meta, secrets, changes, native, android]
     runs-on: ubuntu-latest
