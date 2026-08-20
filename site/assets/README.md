@@ -3,7 +3,7 @@
 Deploy-ready assets only. Raw plates, phone frames, and compositor scratch
 belong under `/tmp` or a gitignored `.local/marketing/` tree — not in `site/`.
 
-- `icon.png` is the OpenPocketCine mark, Sky Blue on DJI Black.
+- `icon.png` is the OpenPocketCine mark: a production monitor on DJI Black.
 - `screens/*.webp` are the landing-page mockups and Osmo product stills loaded by `site/index.html`.
 
 Regenerate a WebP after editing a local PNG with:

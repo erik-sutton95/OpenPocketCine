@@ -1,15 +1,15 @@
 New and changed
 
-- Settings now opens Support in GitHub Q&A, Report a problem on the bug form, and Feature request in Ideas.
-- In-app privacy copy names optional Frame.io, the share sheet, and on-device face boxes, and points at openpocketcine.app/privacy.
+- The Home Screen icon and launch mark are now a production monitor: REC, waveform, and a center cross on black.
 
 Fixes
 
-- Feature request and Q&A buttons in Settings pointed at GitHub URLs that did not match the live Discussions categories.
+- Nothing to call out yet — this build is an icon refresh.
 
 What to test
 
-- From Operator Setup, tap Support, Report a problem, and Feature request and confirm the GitHub pages that open.
-- Open Privacy and skim the Frame.io / share / face-box language.
+- After install, confirm the Home Screen icon is the production-monitor mark, not the previous tile.
+- Open the app and confirm the same mark on the launch splash.
 - Pair an Osmo Pocket 4 or 4 Pro, join its Wi-Fi, and confirm live view fills the monitor.
 - Start and stop a take from the phone, then confirm it on the camera body.
+

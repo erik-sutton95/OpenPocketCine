@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Replace the app mark across iOS, Android, and the landing page with the
+  production-monitor icon.
 - Point bug reports, feature ideas, and questions at GitHub Issues and Discussions
   with working category slugs (`ideas`, `q-a`).
 - Rewrite public protocol and capture docs so intercept cookbooks stay out of the
