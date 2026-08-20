@@ -176,8 +176,7 @@ final class CameraSession {
         return SceneFacePolicy.dimmed(faces: sceneFaces, hiding: hiding, occluder: occluder)
     }
     /// Keep Vision running in AF-C even after ActiveTrack locks, so extras stay visible.
-    /// Armed only after the first picture has been up a few seconds — flipping VT
-    /// on the first frame cuts a new GOP and drops the connect.
+    /// Armed after a fresh presented picture; VT already starts at format.
     var wantsFaceAF: Bool {
         status.focusMode == .continuous && faceAFArmed
     }
@@ -534,6 +533,7 @@ final class CameraSession {
     // ---- the flow --------------------------------------------------------------------------------
 
     private func run(_ camera: FoundCamera) async throws {
+        var timeline = ConnectTimeline(now: ProcessInfo.processInfo.systemUptime)
         connectedCamera = camera
         rawAccessUnits = 0; rawFramesEnqueued = 0
         lastIdrRequest = Date.distantPast
@@ -556,6 +556,7 @@ final class CameraSession {
         decoder.beginIDRHold()
         phase = .connectingGatt
         try await ble.connect(camera)
+        timeline.mark("gatt", now: ProcessInfo.processInfo.systemUptime)
         try Task.checkCancellation()
         startFrameRouter()
 
@@ -573,16 +574,22 @@ final class CameraSession {
         } catch Fail.timeout {
             throw Fail.pairingTimeout
         }
+        timeline.mark("pair", now: ProcessInfo.processInfo.systemUptime)
 
         // After pairing the camera is still dismissing Approve / bringing the AP up.
         // Mimo waits ~100 ms then 0x53/0x10, then ~800 ms more before GetSSID.
         // Asking immediately races the 0x46 ACK and comes back empty or silent.
         // Keepalive must start now — an idle paired link dies in ~5–6 s, and the
         // old 8 s one-shot wait died as "stopped responding" for the same reason
-        // pairing used to.
+        // pairing used to. Warm path (SoftAP still up + cached creds) skips the
+        // settle sleeps; 0x53/0x10 still goes out.
         startKeepalive(ssid: nil)
         phase = .readingWifiCreds
-        try await Task.sleep(for: .milliseconds(200))
+        let skipAPSettle =
+            WiFiJoiner.isCameraPathReady() && resolvedWifiCreds(for: camera).skipBle
+        if !skipAPSettle {
+            try await Task.sleep(for: .milliseconds(200))
+        }
         log.info("creds: sending 0x53/0x10 (wake AP)")
         ble.send(Commands.session5310())
         do {
@@ -592,11 +599,16 @@ final class CameraSession {
         } catch Fail.disconnected {
             throw Fail.disconnectedDuring("0x53/0x10")
         }
-        try await Task.sleep(for: .milliseconds(600))
+        if !skipAPSettle {
+            try await Task.sleep(for: .milliseconds(600))
+        }
         try Task.checkCancellation()
         let (ssid, pass) = try await wifiCredsAfterPairing(camera)
         try assertSSIDBelongs(to: camera, ssid: ssid)
         log.info("creds: SSID \(ssid, privacy: .public) (\(pass.count) char password) body=\(camera.model.name, privacy: .public)")
+        let persistHotspot = CameraSoftAP.shouldPersistHotspot(
+            isSavedCamera: SavedCameraStore.load().contains { $0.id == camera.id }
+                || cachedWifiCameraId == camera.id)
         persistWifiCreds(camera: camera, ssid: ssid, password: pass)
 
         phase = .joiningWifi
@@ -608,8 +620,9 @@ final class CameraSession {
         )
         try await WiFiJoiner.joinCameraAP(
             ssid: ssid, passphrase: pass, wpa3: camera.model.wpa3,
-            knownOtherSSIDs: otherSSIDs)
+            knownOtherSSIDs: otherSSIDs, persist: persistHotspot)
         joinedSSID = ssid
+        timeline.mark("path", now: ProcessInfo.processInfo.systemUptime)
 
         phase = .openingDatalink
         let dl = DatalinkDriver(port: UInt16(camera.model.datalinkPort),
@@ -625,6 +638,11 @@ final class CameraSession {
         // Handshake first (yesterday's working order). Mounting LiveView
         // before `open()` starved the UDP reader / ACK latch.
         try await openDatalinkKeepingLive(dl)
+        timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
+        if liveViewEnableSent {
+            timeline.mark("enable", now: ProcessInfo.processInfo.systemUptime)
+        }
+        log.info("\(timeline.line(), privacy: .public)")
         startKeepalive(ssid: ssid)
     }
 
@@ -655,6 +673,10 @@ final class CameraSession {
                     throw error
                 }
                 attempt += 1
+                if CameraSoftAP.shouldGiveUpOpenRetry(attempts: attempt) {
+                    log.info("session: handshake give-up after \(attempt) opens")
+                    throw error
+                }
                 log.info("session: handshake miss #\(attempt) — SoftAP up, retry (no kick)")
                 try? await Task.sleep(for: .milliseconds(CameraSoftAP.handshakeRetryPauseMilliseconds))
             }
@@ -2738,10 +2760,10 @@ final class CameraSession {
     private func armFaceAFAfterFirstPicture() {
         guard !faceAFArmed, faceAFArmTask == nil else { return }
         faceAFArmTask = Task { @MainActor in
-            // First GOP must finish on the display layer. Unlocking VT on a
-            // frozen first IDR cuts a new GOP and leaves LINK until Disconnect.
+            // VT already starts at format. Poll for a rolling picture, then
+            // unlock (no-op if already) and arm Face AF.
             while !Task.isCancelled, !self.faceAFArmed {
-                try? await Task.sleep(for: .seconds(CameraSoftAP.rebuildCooldown))
+                try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled else { return }
                 let age = self.decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
                 guard CameraSoftAP.isPresentedPictureFresh(secondsSinceLastPresented: age)
@@ -3061,6 +3083,15 @@ final class CameraSession {
 
     private func attemptRecoveryConnect() async -> Bool {
         guard let id = recoveryCameraID else { return false }
+        if WiFiJoiner.isCameraPathReady(), connectedCamera != nil {
+            await rejoinDatalinkKeepingLive()
+            if Task.isCancelled { return false }
+            if case .live = phase, datalink != nil {
+                log.info("session: warm rehandshake (SoftAP up)")
+                keepBleScanInterest(for: id)
+                return true
+            }
+        }
         isReconnecting = true
         phase = .scanning
         let foundCamera = await waitForRecoveryAdvertisement(
@@ -3078,6 +3109,20 @@ final class CameraSession {
         log.info("session: recovery attempt stalled past \(Self.recoveryAttemptDeadline)")
         abortInFlightRun(preserveDecoder: true)
         return false
+    }
+
+    /// Keep CoreBluetooth scanning for the live body after GATT drops.
+    /// Does not abort SoftAP or UDP — `startScan(reconnect:)` would.
+    private func keepBleScanInterest(for id: UUID) {
+        scanTask?.cancel()
+        scanTask = Task { [weak self] in
+            guard let self else { return }
+            await self.ble.waitUntilPoweredOn()
+            for await camera in self.ble.scan() {
+                if Task.isCancelled { return }
+                if camera.id != id { continue }
+            }
+        }
     }
 
     private func waitForRecoveryAdvertisement(id: UUID, timeout: Duration) async -> FoundCamera? {
@@ -3139,6 +3184,8 @@ final class CameraSession {
             return
         } catch {
             log.info("feed: full rejoin failed (\(error.localizedDescription, privacy: .public))")
+            datalink?.close()
+            datalink = nil
         }
     }
 
