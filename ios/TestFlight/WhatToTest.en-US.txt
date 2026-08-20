@@ -2,14 +2,22 @@ New and changed
 
 - In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray, one third-stop every couple of seconds.
 - The EV tile keeps the number and puts a small face mark on the EV label.
+- Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
+- A look that was already on should grade the first picture instead of popping in seconds later.
+- ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
+- The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
 
 Fixes
 
-- Nothing to call out yet — this build adds Face Priority on Auto EV.
+- Turn Face Priority off and EV returns to the value from before it was on, or 0.0.
+- After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
+- The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
+- If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
 
 What to test
 
-- Set MODE to Auto, open EV, turn Face Priority on, and confirm the drum is gray and the EV tile shows a face mark.
-- Put a face in frame (then two). EV should move without touching the drum; two faces should sit between the two skin tones.
-- Cover every face — EV should hold, not snap to 0.0.
-- Turn Face Priority off — EV should return to the value from before it was on (or 0.0).
+- Set MODE to Auto, open EV, turn Face Priority on, and confirm the EV number is readable and the face mark sits on the EV label.
+- Put a face in frame, then turn Face Priority off — EV should return to the value from before it was on (or 0.0).
+- Open a clip, leave it, and confirm live view returns in a couple of seconds — not a long black well.
+- On ISO, turn Auto Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.
+- In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.

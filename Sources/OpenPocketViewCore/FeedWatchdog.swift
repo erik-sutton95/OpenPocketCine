@@ -159,12 +159,34 @@ public struct FeedWatchdog: Equatable, Sendable {
         videoPackets > 0 || lastVideoPacketAge != nil
     }
 
+    /// HEVC landed after this `0x09/0xa8` — the IDR gap, not a still-paused encoder.
+    public static func enableRestartedVideo(
+        secondsSinceLastEnable: TimeInterval?,
+        lastVideoPacketAge: TimeInterval?
+    ) -> Bool {
+        guard let since = secondsSinceLastEnable, let video = lastVideoPacketAge else {
+            return false
+        }
+        return video + 0.05 < since
+    }
+
     /// `0x09/0xa8` cuts the encoder GOP. Warm cameras answer in 25–167 ms;
     /// a fresh-boot / mid-session enable can stay silent for a few seconds.
     /// Tearing UDP in that gap is the LUT-toggle / first-picture black feed.
-    public static func shouldHoldForGOPReset(secondsSinceLastEnable: TimeInterval?) -> Bool {
-        guard let since = secondsSinceLastEnable else { return false }
-        return since < CameraSoftAP.firstPictureIDRGrace
+    ///
+    /// If HEVC has been silent *longer* than this enable, the enable did not
+    /// restart the encoder — do not sit in the 8s IDR window.
+    public static func shouldHoldForGOPReset(
+        secondsSinceLastEnable: TimeInterval?,
+        lastVideoPacketAge: TimeInterval? = nil
+    ) -> Bool {
+        guard let since = secondsSinceLastEnable, since < CameraSoftAP.firstPictureIDRGrace else {
+            return false
+        }
+        if let video = lastVideoPacketAge, video > since + stallThreshold {
+            return false
+        }
+        return true
     }
 
     /// Only the first time a hardware decoder that cannot join mid-GOP starts.
@@ -206,8 +228,17 @@ public struct FeedWatchdog: Equatable, Sendable {
         pathReady: Bool,
         lastBleNotifyAge: TimeInterval?,
         hadVideo: Bool = true,
-        holdEnableCount: Int = 1
+        holdEnableCount: Int = 1,
+        lastVideoPacketAge: TimeInterval? = nil
     ) -> Bool {
+        if hadVideo,
+            let video = lastVideoPacketAge,
+            video > secondsSinceLastEnable + stallThreshold
+        {
+            // Last enable produced no HEVC. Another 0x09/0xa8 blacks the well;
+            // the watchdog should reopen UDP instead.
+            return false
+        }
         if !hadVideo {
             return secondsSinceLastEnable >= stallThreshold
         }
@@ -237,7 +268,10 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if Self.shouldHoldForGOPReset(secondsSinceLastEnable: snap.secondsSinceLastEnable) {
+        if Self.shouldHoldForGOPReset(
+            secondsSinceLastEnable: snap.secondsSinceLastEnable,
+            lastVideoPacketAge: snap.lastVideoPacketAge
+        ) {
             return .none
         }
 
@@ -265,9 +299,18 @@ public struct FeedWatchdog: Equatable, Sendable {
             }
         }
 
-        // Encoder pause: status still on 9004, HEVC silent. One enable,
-        // never reopen UDP. escalateAfter (5 s) between 0x09/0xa8.
+        // Encoder pause: status still on 9004, HEVC silent. One enable.
+        // If that enable produced no video packets, the encoder is still
+        // paused — reopen UDP instead of sitting in GOP-reset grace.
         if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
+            if stage == .resendEnable,
+                !Self.enableRestartedVideo(
+                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
+                    lastVideoPacketAge: snap.lastVideoPacketAge),
+                snap.now - lastActionAt >= Self.stallThreshold
+            {
+                return fire(.reopenDatalink, at: snap.now)
+            }
             if stage == .idle || snap.now - lastActionAt >= Self.escalateAfter {
                 return fire(.resendLiveViewEnable, at: snap.now)
             }
@@ -288,7 +331,9 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
 
         if stage == .cooldown {
-            if Self.shouldHoldBind(pathReady: snap.pathReady, lastBleNotifyAge: snap.lastBleNotifyAge) {
+            if Self.shouldHoldBind(
+                pathReady: snap.pathReady, lastBleNotifyAge: snap.lastBleNotifyAge)
+            {
                 return .none
             }
             if snap.now - lastActionAt >= Self.cooldownDuration {
@@ -324,7 +369,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
         let flow = snap.flowHealthy ? "ready" : "dead"
         let prefix = snap.displayedImageRemoved ? "feed: black" : "feed: stall"
-        return "\(prefix) lastFrame=\(age(snap.lastDecodedFrameAge))s lastVideo=\(age(snap.lastVideoPacketAge))s lastAU=\(age(snap.lastAccessUnitAge))s lastStatus=\(age(snap.lastStatusAge))s lastBle=\(age(snap.lastBleNotifyAge))s flow=\(flow) tcp=\(snap.tcpPokeReady ? 1 : 0) path=\(snap.pathReady ? 1 : 0) format=\(snap.hasFormat ? 1 : 0) stage=\(stage.rawValue) recoverBlack=\(snap.displayedImageRemoved ? 1 : 0)"
+        return
+            "\(prefix) lastFrame=\(age(snap.lastDecodedFrameAge))s lastVideo=\(age(snap.lastVideoPacketAge))s lastAU=\(age(snap.lastAccessUnitAge))s lastStatus=\(age(snap.lastStatusAge))s lastBle=\(age(snap.lastBleNotifyAge))s flow=\(flow) tcp=\(snap.tcpPokeReady ? 1 : 0) path=\(snap.pathReady ? 1 : 0) format=\(snap.hasFormat ? 1 : 0) stage=\(stage.rawValue) recoverBlack=\(snap.displayedImageRemoved ? 1 : 0)"
     }
 
     /// Wipe the display layer only when the next decoded picture is in hand.
