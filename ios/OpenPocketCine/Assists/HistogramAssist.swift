@@ -152,14 +152,14 @@ enum HistogramAssist {
 
         static let `default` = Options(
             trafficLights: true,
-            crushClipCompensation: .quarter,
+            crushClipCompensation: .zero,
             scale: defaultScale,
             storedCenter: nil,
             storedCenterPortrait: nil)
 
         init(
             trafficLights: Bool = true,
-            crushClipCompensation: CrushClipCompensation = .quarter,
+            crushClipCompensation: CrushClipCompensation = .zero,
             scale: Double = defaultScale,
             storedCenter: StoredCenter? = nil,
             storedCenterPortrait: StoredCenter? = nil
@@ -180,7 +180,7 @@ enum HistogramAssist {
             trafficLights = try c.decodeIfPresent(Bool.self, forKey: .trafficLights) ?? true
             crushClipCompensation =
                 try c.decodeIfPresent(CrushClipCompensation.self, forKey: .crushClipCompensation)
-                ?? .quarter
+                ?? .zero
             scale = Self.clampedScale(
                 try c.decodeIfPresent(Double.self, forKey: .scale) ?? defaultScale)
             storedCenter = try c.decodeIfPresent(StoredCenter.self, forKey: .storedCenter)

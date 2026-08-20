@@ -13,7 +13,7 @@ final class HistogramAssistTests: XCTestCase {
         XCTAssertEqual(HistogramAssist.defaultScale, 1.0)
         XCTAssertEqual(HistogramAssist.holdDuration, 0.3)
         XCTAssertEqual(HistogramAssist.Options.default.trafficLights, true)
-        XCTAssertEqual(HistogramAssist.Options.default.crushClipCompensation, .quarter)
+        XCTAssertEqual(HistogramAssist.Options.default.crushClipCompensation, .zero)
         XCTAssertEqual(HistogramAssist.Options.default.scale, 1.0)
         XCTAssertNil(HistogramAssist.Options.default.storedCenter)
     }
@@ -240,7 +240,7 @@ final class HistogramAssistTests: XCTestCase {
             HistogramAssist.Options.self, from: Data(#"{"scale":0.7,"trafficLights":false}"#.utf8))
         XCTAssertEqual(scaled.scale, 0.7, accuracy: 1e-12)
         XCTAssertFalse(scaled.trafficLights)
-        XCTAssertEqual(scaled.crushClipCompensation, .quarter)
+        XCTAssertEqual(scaled.crushClipCompensation, .zero)
     }
 
     func testCompensationThresholdDrivesTrafficLights() {

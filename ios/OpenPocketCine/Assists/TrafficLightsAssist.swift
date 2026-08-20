@@ -15,7 +15,7 @@ enum TrafficLightsAssist {
     static let baseSize = CGSize(width: 74, height: 168)
     static let scaleRange: ClosedRange<Double> = 0.6...1.6
     static let defaultScale = 1.0
-    static let defaultCompensation = CrushClipCompensation.quarter
+    static let defaultCompensation = CrushClipCompensation.zero
     static let longPressPanelWidth: CGFloat = 400
     static let compensationTitle = "Crush/Clip Compensation"
     static let compensationHelp =

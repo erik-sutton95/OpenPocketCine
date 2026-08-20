@@ -354,21 +354,24 @@ struct LiveColorScienceTests {
     }
 
     @Test func clipLampsHoldThroughThresholdChatter() {
+        let quarter = 0.025
         var bins = [Int](repeating: 0, count: 256)
         bins[128] = 970
         bins[247] = 30
         let on = ScopeTrafficLights.reading(
-            red: bins, green: bins, blue: bins, transfer: .dlog2)
+            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: quarter)
         #expect(on.anyClip)
         bins[247] = 20
         bins[128] = 980
         let held = ScopeTrafficLights.reading(
-            red: bins, green: bins, blue: bins, transfer: .dlog2, previous: on)
+            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: quarter,
+            previous: on)
         #expect(held.anyClip, "2.0% after 3.0% must stay lit (half of 2.5%)")
         bins[247] = 10
         bins[128] = 990
         let off = ScopeTrafficLights.reading(
-            red: bins, green: bins, blue: bins, transfer: .dlog2, previous: held)
+            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: quarter,
+            previous: held)
         #expect(!off.anyClip, "1.0% drops the latch")
     }
 
@@ -383,15 +386,19 @@ struct LiveColorScienceTests {
     }
 
     @Test func thresholdLadderIsStopsOverTen() {
-        // 2.6% clipped fires the default 0.25-stop (2.5%) threshold; 2.4% does not.
+        #expect(ScopeTrafficLights.defaultThreshold == 0)
+        // 2.6% clipped fires a 0.25-stop (2.5%) threshold; 2.4% does not.
+        let quarter = 0.025
         var bins = [Int](repeating: 0, count: 256)
         bins[128] = 974
         bins[255] = 26
-        var reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: .dlog2)
+        var reading = ScopeTrafficLights.reading(
+            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: quarter)
         #expect(reading.anyClip)
         bins[255] = 24
         bins[128] = 976
-        reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: .dlog2)
+        reading = ScopeTrafficLights.reading(
+            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: quarter)
         #expect(!reading.anyClip)
         // One-stop compensation (10%): 9% does not fire.
         bins[255] = 90

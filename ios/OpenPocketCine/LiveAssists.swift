@@ -245,7 +245,7 @@ final class LiveAssistState {
     /// Icon (or toolbar) frame in `LiveCanvasSpace` for the long-press options popup.
     var longPressAnchor: CGRect = .zero
     /// OpenZCine `scopes.crushClipCompensation` — shared by HISTO edge lights and LIGHTS.
-    var crushClipCompensation = TrafficLightsAssist.CrushClipCompensation.quarter
+    var crushClipCompensation = TrafficLightsAssist.defaultCompensation
     var trafficLightsScale = TrafficLightsAssist.defaultScale
     var trafficLightsPosition: TrafficLightsAssist.StoredCenter?
     /// First-launch default is on — Auto applies the matching official cube.

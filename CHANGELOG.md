@@ -29,6 +29,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Traffic Lights crush/clip compensation defaults to 0 stops (was ¼).
 - Replace the app mark across iOS, Android, and the landing page with the
   production-monitor icon.
 - First picture and persisted LUT start together: VideoToolbox opens at the

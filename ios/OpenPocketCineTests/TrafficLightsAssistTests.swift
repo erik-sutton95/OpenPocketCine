@@ -27,7 +27,7 @@ final class TrafficLightsAssistTests: XCTestCase {
             TrafficLightsAssist.CrushClipCompensation.one.pixelFractionThreshold, 0.10,
             accuracy: 1e-12)
         XCTAssertEqual(TrafficLightsAssist.CrushClipCompensation.quarter.rawValue, 2)
-        XCTAssertEqual(TrafficLightsAssist.defaultCompensation, .quarter)
+        XCTAssertEqual(TrafficLightsAssist.defaultCompensation, .zero)
         XCTAssertEqual(TrafficLightsAssist.longPressPanelWidth, 400)
         XCTAssertEqual(TrafficLightsAssist.compensationTitle, "Crush/Clip Compensation")
         XCTAssertEqual(

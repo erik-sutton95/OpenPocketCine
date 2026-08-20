@@ -520,8 +520,8 @@ public struct ScopeTrafficLightsReading: Equatable, Sendable {
 }
 
 public enum ScopeTrafficLights {
-    /// Default pixel-fraction threshold = 0.25 stop compensation (stops / 10).
-    public static let defaultThreshold = 0.025
+    /// Default pixel-fraction threshold = 0 stop compensation (stops / 10).
+    public static let defaultThreshold = 0.0
     /// Stay lit until energy falls to half the fire threshold (stops blink).
     public static let holdRatio = 0.5
 
