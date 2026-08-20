@@ -229,9 +229,10 @@
     document.querySelectorAll(".feat-section").forEach((sec) => {
       const copy = sec.querySelectorAll(".feat-row__copy > *");
       const visual = sec.querySelector(".feat-row__visual");
+      const stacked = sec.querySelector(".feat-row--stack");
       const fromLeft = !sec.querySelector(".feat-row--reverse");
       const portrait = sec.querySelector("img.is-portrait");
-      const restRot = portrait ? (fromLeft ? 2.2 : -2.2) : 0;
+      const restRot = stacked ? 0 : portrait ? (fromLeft ? 2.2 : -2.2) : 0;
       if (copy.length) {
         gsap.from(copy, {
           opacity: 0,
@@ -247,10 +248,10 @@
           visual,
           {
             opacity: 0,
-            x: fromLeft ? 48 : -48,
-            y: 28,
-            rotate: restRot + (fromLeft ? 5 : -5),
-            scale: 0.92,
+            x: stacked ? 0 : fromLeft ? 48 : -48,
+            y: stacked ? 32 : 28,
+            rotate: stacked ? 0 : restRot + (fromLeft ? 5 : -5),
+            scale: stacked ? 0.96 : 0.92,
           },
           {
             opacity: 1,

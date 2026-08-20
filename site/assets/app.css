@@ -460,6 +460,16 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 .feat-row--reverse.feat-row--portrait {
   grid-template-columns: minmax(220px, 1.05fr) minmax(240px, 0.95fr);
 }
+.feat-row--stack {
+  grid-template-columns: 1fr;
+  text-align: center;
+  gap: clamp(22px, 3.5vw, 40px);
+}
+.feat-row--stack .feat-row__copy {
+  max-width: 38rem;
+  margin-inline: auto;
+}
+.feat-row--stack .feat-row__copy .lead { margin-inline: auto; }
 .feat-row__copy { max-width: 34rem; }
 .feat-row__copy h2 { margin: 4px 0 16px; text-wrap: balance; }
 .feat-row__copy .lead { margin-inline: 0; max-width: 42ch; }
@@ -489,7 +499,10 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 }
 .band--dark .feat-row__visual img { filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.5)); }
 .feat-row__visual--pair {
-  padding: 0;
+  padding: 4px 0 8px;
+}
+.feat-row--stack .feat-pair {
+  width: min(1180px, 100%);
 }
 .feat-row__visual--pair img {
   max-width: none;
