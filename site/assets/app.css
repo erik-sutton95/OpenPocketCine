@@ -507,7 +507,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   isolation: isolate;
   min-height: max(640px, min(100svh, 980px));
   display: grid;
-  place-items: start center;
+  place-items: end center;
   overflow: clip;
   color: #F4F6F8;
   background: #0B0B0B;
@@ -520,7 +520,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   height: 100%;
   max-width: none;
   object-fit: cover;
-  object-position: 50% 58%;
+  object-position: 50% 38%;
 }
 .media-bleed__veil {
   position: absolute;
@@ -530,10 +530,10 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   background:
     linear-gradient(
       180deg,
-      rgba(11, 11, 11, 0.82) 0%,
-      rgba(11, 11, 11, 0.52) 26%,
-      rgba(11, 11, 11, 0.12) 52%,
-      rgba(11, 11, 11, 0.28) 100%
+      rgba(11, 11, 11, 0.12) 0%,
+      rgba(11, 11, 11, 0.08) 42%,
+      rgba(11, 11, 11, 0.48) 72%,
+      rgba(11, 11, 11, 0.82) 100%
     );
 }
 .media-bleed__copy {
@@ -542,9 +542,9 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   text-align: center;
   max-width: 38rem;
   padding:
-    calc(var(--nav-h) + clamp(28px, 6vh, 72px))
+    0
     clamp(20px, 5vw, 48px)
-    clamp(42vh, 50vh, 560px);
+    clamp(28px, 5vh, 56px);
 }
 .media-bleed__copy h2 {
   margin: 4px 0 16px;
@@ -560,8 +560,9 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 }
 @media (max-width: 700px) {
   .media-bleed { min-height: 100svh; }
+  .media-bleed__photo { object-position: 50% 32%; }
   .media-bleed__copy {
-    padding-bottom: 48vh;
+    padding-bottom: clamp(24px, 4vh, 40px);
   }
 }
 
