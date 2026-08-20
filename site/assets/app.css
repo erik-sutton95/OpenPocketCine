@@ -475,7 +475,10 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 .feat-row__visual--pair {
   padding: 4px clamp(16px, 3vw, 36px) 56px;
 }
-.feat-row__visual--pair img { filter: none; max-width: none; }
+.feat-row__visual--pair img {
+  max-width: none;
+  filter: drop-shadow(0 28px 48px rgba(0, 0, 0, 0.22));
+}
 .feat-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
