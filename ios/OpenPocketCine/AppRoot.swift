@@ -55,6 +55,9 @@ final class AppModel {
     var portraitFeedAspect: PortraitFeedAspect = OperatorPrefs.portraitFeedAspect {
         didSet { OperatorPrefs.portraitFeedAspect = portraitFeedAspect }
     }
+    var nativeISOHopEnabled: Bool = OperatorPrefs.nativeISOHopEnabled {
+        didSet { OperatorPrefs.nativeISOHopEnabled = nativeISOHopEnabled }
+    }
     var portraitRailExpanded = false
     var frameioConnecting = false
     var frameioUser: FrameioUser?

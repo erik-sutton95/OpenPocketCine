@@ -1129,7 +1129,8 @@ final class CameraSession {
     /// D-Log native 400 ↔ D-Log2 native 1600 when the operator is still on base.
     private func hopNativeISO(from: ColorMode?, to: ColorMode) {
         guard let next = CamCapIso.nativeISOHop(
-            from: from, to: to, current: status.isoIndex)
+            from: from, to: to, current: status.isoIndex,
+            hopEnabled: OperatorPrefs.nativeISOHopEnabled)
         else { return }
         ControlLiveLog.line(
             "iso: native hop \(from?.label ?? "?") → \(to.label) \(status.isoIndex?.label ?? "?") → \(next.label)"

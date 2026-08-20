@@ -72,6 +72,11 @@ final class CaptureListTests: XCTestCase {
             "zoom tele hop guess must not flip the star while status is still D-Log2")
     }
 
+    func testNativeIsoHopCopy() {
+        XCTAssertEqual(CaptureLists.nativeIsoHopTitle, "Native ISO")
+        XCTAssertEqual(CaptureLists.nativeIsoHopDetail, "400 ↔ 1600 when switching D-Log")
+    }
+
     func testDLog2HasNoIsoAuto() {
         var status = CameraStatus()
         status.colorMode = .dLog2

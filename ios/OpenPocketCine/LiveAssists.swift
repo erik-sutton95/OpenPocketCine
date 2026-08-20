@@ -630,6 +630,7 @@ enum OperatorPrefs {
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
+    private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
 
     static var keepScreenAwake: Bool {
         get {
@@ -685,6 +686,15 @@ enum OperatorPrefs {
                 ?? .fit16x9
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: portraitFeedAspectKey) }
+    }
+
+    /// D-Log 400 ↔ D-Log2 1600 when the operator is still on native ISO.
+    static var nativeISOHopEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: nativeISOHopKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: nativeISOHopKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
     }
 
     static var playbackVisibleAssistTools: Set<LiveAssistTool> {

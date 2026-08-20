@@ -126,6 +126,15 @@ import Testing
             CamCapIso.nativeISOHop(from: .dLog2, to: .dLog2, current: .iso1600) == nil)
         #expect(
             CamCapIso.nativeISOHop(from: nil, to: .dLog, current: .iso1600) == nil)
+        #expect(
+            CamCapIso.nativeISOHop(
+                from: .dLog2, to: .dLog, current: .iso1600, hopEnabled: false) == nil)
+        #expect(
+            CamCapIso.nativeISOHop(
+                from: .dLog, to: .dLog2, current: .iso400, hopEnabled: false) == nil)
+        #expect(
+            CamCapIso.nativeISOHop(
+                from: .dLog2, to: .dLog, current: .iso1600, hopEnabled: true) == .iso400)
     }
 
     @Test func isoStarDoesNotReplaceCamcapList() {

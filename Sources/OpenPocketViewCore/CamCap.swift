@@ -166,9 +166,12 @@ public enum CamCapIso {
 
     /// If the operator is still on `from`'s native ISO, hop to `to`'s native.
     /// Off-base or Auto stays put. Rec.709 / HDR have no native — no hop.
+    /// `hopEnabled` is the ISO-sheet Native ISO toggle (default on).
     public static func nativeISOHop(
-        from: ColorMode?, to: ColorMode, current: IsoIndex?
+        from: ColorMode?, to: ColorMode, current: IsoIndex?,
+        hopEnabled: Bool = true
     ) -> IsoIndex? {
+        guard hopEnabled else { return nil }
         guard let from, from != to else { return nil }
         guard let fromBase = baseISO(colorMode: from),
             let toBase = baseISO(colorMode: to)

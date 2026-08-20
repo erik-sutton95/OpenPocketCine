@@ -63,6 +63,8 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.haptics,
             SettingsHelpCopy.joystickSensitivity,
             SettingsHelpCopy.keepScreenAwake,
+            CaptureLists.nativeIsoHopTitle,
+            CaptureLists.nativeIsoHopDetail,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.supportHelp,
             SettingsHelpCopy.reportHelp,

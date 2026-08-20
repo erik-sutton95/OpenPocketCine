@@ -2,6 +2,7 @@ New and changed
 
 - Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
 - A look that was already on should grade the first picture instead of popping in seconds later.
+- ISO has a Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
 
 Fixes
 
@@ -15,3 +16,4 @@ What to test
 - Background the app, return, and confirm the feed comes back without a full re-pair.
 - Toggle LUT off and on after the feed is rolling — it should not go black.
 - Walk out of range or power-cycle the camera; the last frame should hold, then reconnect.
+- On ISO, turn Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.
