@@ -2,7 +2,7 @@
 agp = "9.2.1"
 kotlin = "2.4.10"
 coroutines = "1.11.0"
-composeBom = "2026.06.01"
+composeBom = "2026.08.00"
 activityCompose = "1.13.0"
 androidxCore = "1.18.0"
 coreSplashscreen = "1.2.0"
