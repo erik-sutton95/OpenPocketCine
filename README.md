@@ -16,7 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://openpocketcine.app/"><strong>Visit openpocketcine.app</strong></a>
+  <a href="https://testflight.apple.com/join/1tmt3aEB"><strong>Join the TestFlight</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://openpocketcine.app/">Visit openpocketcine.app</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions">Explore the roadmap</a>
 </p>
@@ -179,7 +181,7 @@ cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 
 The Simulator has no Bluetooth or camera Wi-Fi. Pairing and live view need a physical iPhone.
 
-TestFlight archives come from Xcode Cloud. One-time App Store Connect setup:
+iOS beta: [TestFlight](https://testflight.apple.com/join/1tmt3aEB). Archives come from Xcode Cloud. One-time App Store Connect setup:
 
 ```bash
 ./scripts/setup-xcode-cloud.sh

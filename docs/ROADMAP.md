@@ -10,11 +10,11 @@ Issues are for bugs only.
 - HEVC (Pocket) / AVC (Nano) live view
 - Saved cameras, monitor chrome, GPU assists, media library
 - Android Compose shell consuming the Swift core
+- Public TestFlight ([join link](https://testflight.apple.com/join/1tmt3aEB))
 
 ## Next
 
 - Camera control writes (record, ISO, white balance, tap-to-focus) proven on hardware
-- Public TestFlight via Xcode Cloud (first archive + App Review)
 - Landing-page screenshots (reviewed, faces blurred)
 - Play internal testing when Android is operator-ready
 

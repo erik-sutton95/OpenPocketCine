@@ -3,6 +3,8 @@
 Xcode Cloud is the TestFlight path: Apple-managed signing, a build counter, and a native
 upload after archive. There is no GitHub Actions TestFlight workflow.
 
+Public join link: <https://testflight.apple.com/join/1tmt3aEB>
+
 ## What the cloud workflow does
 
 | Step | Where it lives |
