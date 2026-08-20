@@ -1,7 +1,7 @@
 New and changed
 
-- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray.
-- The EV tile shows a small face mark while Face Priority is on.
+- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray, one third-stop every couple of seconds.
+- The EV tile keeps the number and puts a small face mark on the EV label.
 
 Fixes
 

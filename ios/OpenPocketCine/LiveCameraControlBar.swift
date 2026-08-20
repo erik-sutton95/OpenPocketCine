@@ -166,9 +166,15 @@ struct CaptureBarReadout: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            Text(label)
-                .font(LiveType.ui(size: 9, weight: .semibold, design: .default))
-                .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.muted)
+            HStack(spacing: 3) {
+                Text(label)
+                if let badgeIcon {
+                    Image(systemName: badgeIcon)
+                        .font(.system(size: 8, weight: .bold))
+                }
+            }
+            .font(LiveType.ui(size: 9, weight: .semibold, design: .default))
+            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.muted)
             Text(widest)
                 .font(.system(size: 17, weight: .medium, design: .default))
                 .hidden()
@@ -178,17 +184,11 @@ struct CaptureBarReadout: View {
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
                     } else {
-                        HStack(spacing: 3) {
-                            Text(value)
-                                .font(.system(size: 17, weight: .medium, design: .default))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                            if let badgeIcon {
-                                Image(systemName: badgeIcon)
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                        }
-                        .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
+                        Text(value)
+                            .font(.system(size: 17, weight: .medium, design: .default))
+                            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                 }
         }

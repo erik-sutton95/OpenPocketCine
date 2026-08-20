@@ -10,8 +10,12 @@ public enum FacePriorityExposure: Sendable {
     public static let minSamples = 8
     /// Walk the tap at the same stride WAVE uses.
     public static let sampleStride = 2
-    /// Less than one third-stop: hold.
-    public static let deadbandStops = 1.0 / 3.0
+    /// Hold inside two thirds of a stop so skin noise does not hunt EV.
+    public static let deadbandStops = 2.0 / 3.0
+    /// One third-stop per write. Camera EV has not settled if we jump the whole error.
+    public static let maxStepThirds = 1
+    /// Wait for the body to land the last SET before metering again.
+    public static let minInterval: TimeInterval = 2.0
 
     /// Median encoded luma (0…1) of pixels inside `boxes`. Nil if nothing usable.
     public static func medianEncoded(
@@ -66,8 +70,9 @@ public enum FacePriorityExposure: Sendable {
         let stops = LiveColorScience.stops(encoded: encoded, transfer: transfer)
         guard stops.isFinite else { return nil }
         if abs(stops) < deadbandStops { return nil }
-        let deltaThirds = Int((-stops * 3).rounded())
+        var deltaThirds = Int((-stops * 3).rounded())
         if deltaThirds == 0 { return nil }
+        deltaThirds = min(max(deltaThirds, -maxStepThirds), maxStepThirds)
         let next = EvComp(thirds: current.thirds + deltaThirds)
         return next == current ? nil : next
     }

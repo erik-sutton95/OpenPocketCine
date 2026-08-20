@@ -22,6 +22,23 @@ import Testing
         #expect((next?.thirds ?? 0) < 0)
     }
 
+    @Test func largeErrorMovesOneThird() {
+        let transfer = MonitorTransfer.rec709
+        let dark = transfer.encodeLinear(0.18 / 4)
+        let next = FacePriorityExposure.nextEV(
+            current: .zero, encoded: dark, transfer: transfer)
+        #expect(next == EvComp(thirds: 1))
+    }
+
+    @Test func twoThirdsDeadbandHolds() {
+        let transfer = MonitorTransfer.rec709
+        let near = transfer.encodeLinear(0.18 * pow(2.0, -0.5))
+        #expect(
+            FacePriorityExposure.nextEV(
+                current: .zero, encoded: near, transfer: transfer)
+                == nil)
+    }
+
     @Test func alreadyOnGrayIsDeadband() {
         let transfer = MonitorTransfer.dlog2
         #expect(

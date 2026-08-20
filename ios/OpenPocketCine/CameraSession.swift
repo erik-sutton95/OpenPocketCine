@@ -2139,15 +2139,12 @@ final class CameraSession {
         applyPrimaryFace(hits: heads, now: now, sceneMoving: moving)
     }
 
-    private static let facePriorityInterval: TimeInterval = 0.5
-
     private func tickFacePriority(from buffer: CVPixelBuffer) {
         guard wantsFacePriorityMeter, !isBrowsingMedia, !status.inPlayback else { return }
         guard case .live = phase else { return }
         let now = Date()
-        guard now.timeIntervalSince(lastFacePriorityEVAt) >= Self.facePriorityInterval else {
-            return
-        }
+        guard now.timeIntervalSince(lastFacePriorityEVAt) >= FacePriorityExposure.minInterval
+        else { return }
         let boxes: [TrackingBox]
         if !sceneFaces.isEmpty {
             boxes = sceneFaces
@@ -2158,6 +2155,7 @@ final class CameraSession {
         }
         guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
         else { return }
+        lastFacePriorityEVAt = now
         let transfer = MonitorTransfer.resolved(
             status.monitorTransfer, colorMode: status.colorMode)
         guard let encoded = FacePriorityExposure.medianEncoded(
@@ -2168,7 +2166,6 @@ final class CameraSession {
         guard let next = FacePriorityExposure.nextEV(
             current: current, encoded: encoded, transfer: transfer)
         else { return }
-        lastFacePriorityEVAt = now
         setEv(next)
         ControlLiveLog.line("ev: face-priority \(current.label) → \(next.label)")
     }
