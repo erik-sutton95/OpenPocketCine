@@ -109,10 +109,10 @@ final class FirstConnectTests: XCTestCase {
             "AF-C grace is 4 s")
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
-                videoPackets: 370, enableSends: 2, secondsSinceLastEnable: 8,
-                secondsSinceLastVideo: 8, secondsSinceLastStatus: 0.3),
-            .wait,
-            "AF-C hunt pauses HEVC; status still on 9004 is not a dead receive")
+                videoPackets: 182, enableSends: 1, secondsSinceLastEnable: 10,
+                secondsSinceLastVideo: 10, secondsSinceLastStatus: 0.0),
+            .rebuildUDP,
+            "first-picture P-frame burst then silence must rebuild even if status is alive")
         XCTAssertFalse(
             LiveFeedWarmup.isWarming(
                 hasPresentedPicture: true, measuredFPS: 25,

@@ -9,6 +9,7 @@ New and changed
 
 Fixes
 
+- First connect no longer sits on Waiting for live-view when a few video packets arrive and then freeze.
 - While a subject is tracked, stick left/right matches the free gimbal instead of reversing.
 - Turn Face Priority off and EV returns to the value from before it was on, or 0.0.
 - After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.

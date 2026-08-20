@@ -219,7 +219,7 @@ extension CameraSoftAP {
         secondsSinceLastEnable: TimeInterval,
         secondsSinceLastVideo: TimeInterval? = nil,
         secondsSinceLastRebuild: TimeInterval? = nil,
-        secondsSinceLastStatus: TimeInterval? = nil
+        secondsSinceLastStatus _: TimeInterval? = nil
     ) -> FirstPictureStep {
         // Handshake succeeded but 0x09/0xa8 never left (pathReady flickered).
         // Waiting here is the black LINK canvas until the operator reconnects.
@@ -253,11 +253,9 @@ extension CameraSoftAP {
             if enableSends == 1 { return .resendEnable }
             return .wait
         }
-        // HEVC paused but status still on UDP 9004 — AF-C hunt / encoder
-        // hitch, not a dead receive. Tearing the bind here is the hang.
-        if let status = secondsSinceLastStatus, status < FeedWatchdog.stallThreshold {
-            return .wait
-        }
+        // Live status with frozen HEVC is the watchdog's encoder-pause path
+        // after a rolling picture. First-picture has no GOP yet — 182 P-frames
+        // then silence (nals 1/35/40, format=0) sat on Waiting for live-view.
         if let since = secondsSinceLastRebuild, since < rebuildCooldown { return .wait }
         if enableSends >= 4 { return .rejoin }
         // One UDP rebuild already tried and the burst is still frozen → full rejoin

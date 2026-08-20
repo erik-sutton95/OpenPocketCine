@@ -126,9 +126,9 @@ import Testing
             secondsSinceLastVideo: 8) == .rebuildUDP,
             "past IDR grace and still silent — then rebuild")
         #expect(CameraSoftAP.firstPictureStep(
-            videoPackets: 370, enableSends: 2, secondsSinceLastEnable: 8,
-            secondsSinceLastVideo: 8, secondsSinceLastStatus: 0.3) == .wait,
-            "AF-C hunt pauses HEVC; status still on 9004 is not a dead receive")
+            videoPackets: 182, enableSends: 1, secondsSinceLastEnable: 10,
+            secondsSinceLastVideo: 10, secondsSinceLastStatus: 0.0) == .rebuildUDP,
+            "182 P-frames then silence with live status is a dead GOP, not AF-C hunt")
     }
 
     @Test func foregroundRecoverSkipsFreshPictureAndEscalatesWhenFrozen() {
