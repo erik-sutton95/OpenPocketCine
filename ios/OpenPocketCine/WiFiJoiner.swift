@@ -36,7 +36,8 @@ enum WiFiJoiner {
         ssid: String,
         passphrase: String,
         wpa3: Bool,
-        knownOtherSSIDs: [String]
+        knownOtherSSIDs: [String],
+        persist: Bool = false
     ) async throws {
         var kick = Set(knownOtherSSIDs.filter { !$0.isEmpty && $0 != ssid })
         leave(ssids: Array(kick))
@@ -58,7 +59,7 @@ enum WiFiJoiner {
             leave(ssids: Array(kick))
             await leaveOtherOsmoSoftAPs(except: ssid)
             try? await Task.sleep(for: .milliseconds(250))
-            try await join(ssid: ssid, passphrase: passphrase, wpa3: wpa3)
+            try await join(ssid: ssid, passphrase: passphrase, wpa3: wpa3, persist: persist)
             try await waitUntilCameraPathReady()
             let now = await currentSSID()
             if CameraSoftAPSwitch.isOnTarget(currentSSID: now, target: ssid) {
@@ -88,9 +89,16 @@ enum WiFiJoiner {
 #endif
     }
 
-    static func join(ssid: String, passphrase: String, wpa3: Bool) async throws {
+    static func join(
+        ssid: String,
+        passphrase: String,
+        wpa3: Bool,
+        persist: Bool = false
+    ) async throws {
         let config = NEHotspotConfiguration(ssid: ssid, passphrase: passphrase, isWEP: false)
-        config.joinOnce = true          // don't persist the camera network across launches
+        // Join-once drops the hotspot when the app leaves the foreground; saved
+        // cameras need the config to survive Control Center / background.
+        config.joinOnce = !persist
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             NEHotspotConfigurationManager.shared.apply(config) { error in
                 if let error = error as NSError? {
