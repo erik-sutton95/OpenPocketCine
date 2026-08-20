@@ -49,7 +49,10 @@ public enum LinkDiagnoser {
         {
             return .presentStalled
         }
-        if FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: secondsSinceLastEnable) {
+        if FeedWatchdog.shouldHoldForGOPReset(
+            secondsSinceLastEnable: secondsSinceLastEnable,
+            lastVideoPacketAge: videoAge
+        ) {
             return .none
         }
         if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: secondsSinceFocusTrackSet) {

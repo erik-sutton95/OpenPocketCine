@@ -9,6 +9,7 @@ New and changed
 
 Fixes
 
+- After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
 - The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
 - If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
 - A Bluetooth or camera-Wi-Fi drop now leaves the live screen instead of pretending the feed is still up.
@@ -17,7 +18,7 @@ Fixes
 What to test
 
 - Pair a saved Pocket 4 or 4 Pro. Confirm the picture and LUT appear together, then gimbal still works.
+- Open a clip, leave it, and confirm live view returns in a couple of seconds — not a long black well.
 - Background the app, return, and confirm the feed comes back without a full re-pair.
 - On ISO, turn Auto Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.
 - In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.
-- Long-press LUT in landscape and confirm 50/50 is visible without scrolling.

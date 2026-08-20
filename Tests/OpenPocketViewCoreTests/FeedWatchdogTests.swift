@@ -79,6 +79,40 @@ import Testing
         #expect(dog.stage == .resendEnable)
     }
 
+    @Test func enableThatProducesNoHEVCRebuildsUDP() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 2.8, videoAge: 2.8, statusAge: 0.0, bleAge: 232)
+        snap.secondsSinceLastEnable = 20
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        #expect(dog.stage == .resendEnable)
+
+        // Same stall as the field log: enable #7, videoPkts frozen, status still young.
+        snap.now = 12.1
+        snap.lastDecodedFrameAge = 4.9
+        snap.lastVideoPacketAge = 4.9
+        snap.lastAccessUnitAge = 4.9
+        snap.lastStatusAge = 0.0
+        snap.secondsSinceLastEnable = 2.1
+        #expect(
+            !FeedWatchdog.shouldHoldForGOPReset(
+                secondsSinceLastEnable: 2.1, lastVideoPacketAge: 4.9))
+        #expect(
+            dog.tick(snap) == .reopenDatalink,
+            "enable produced no HEVC — reopen UDP instead of 8s IDR hold")
+        #expect(dog.stage == .reopenDatalink)
+        #expect(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 2.1,
+                secondsSinceLastRebuild: nil,
+                pathReady: true,
+                lastBleNotifyAge: 232,
+                hadVideo: true,
+                holdEnableCount: 1,
+                lastVideoPacketAge: 4.9),
+            "do not spam 0x09/0xa8 while videoPkts are frozen")
+    }
+
     @Test func gopResetSilenceDoesNotRebuildUDP() {
         var dog = FeedWatchdog()
         var snap = Self.snap(now: 10, frameAge: 3.0, videoAge: 3.0, bleAge: 0.2)
@@ -89,6 +123,14 @@ import Testing
         #expect(FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: 7.9))
         #expect(!FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: 8.0))
         #expect(!FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: nil))
+        #expect(
+            FeedWatchdog.shouldHoldForGOPReset(
+                secondsSinceLastEnable: 2.5, lastVideoPacketAge: 0.4),
+            "HEVC after enable is the IDR gap")
+        #expect(
+            !FeedWatchdog.shouldHoldForGOPReset(
+                secondsSinceLastEnable: 1.0, lastVideoPacketAge: 3.8),
+            "video died before this enable — not an IDR gap")
 
         snap.secondsSinceLastEnable = 8.1
         snap.lastStatusAge = 8.1

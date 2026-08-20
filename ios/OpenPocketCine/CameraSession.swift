@@ -2616,7 +2616,8 @@ final class CameraSession {
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild
         ) else { return }
         if FeedWatchdog.shouldHoldForGOPReset(
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest)
+            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
         ) {
             log.info("control: SET timeouts during GOP-reset grace — leave UDP")
             return
@@ -2644,7 +2645,8 @@ final class CameraSession {
     private var shouldStartUDPRebuild: Bool {
         let now = Date()
         if FeedWatchdog.shouldHoldForGOPReset(
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest)
+            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
         ) {
             return false
         }
@@ -2668,6 +2670,7 @@ final class CameraSession {
     /// A frozen first GOP still has `lastPresentedAt` — that must not skip recover.
     private func recoverLiveViewIfNeeded() {
         guard !isBrowsingMedia, !holdsMonitor else { return }
+        if needsForegroundRecover { return }
         guard WiFiJoiner.isCameraPathReady() else { return }
         if MediaLiveResume.strayPlaybackAction(
             browsing: isBrowsingMedia, inPlayback: status.inPlayback) != nil
@@ -2696,16 +2699,18 @@ final class CameraSession {
         // at 5s if this hold has only fired once; then the 60s backoff.
         if decoder.awaitingIDR {
             let bleAge = lastBleNotifyAt.map { Date().timeIntervalSince($0) }
+            let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
             let hadVideo = FeedWatchdog.hadVideo(
                 videoPackets: datalink?.videoPackets ?? 0,
-                lastVideoPacketAge: datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) })
+                lastVideoPacketAge: videoAge)
             if FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: Date().timeIntervalSince(lastIdrRequest),
                 secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
                 pathReady: true,
                 lastBleNotifyAge: bleAge,
                 hadVideo: hadVideo,
-                holdEnableCount: idrHoldEnableCount
+                holdEnableCount: idrHoldEnableCount,
+                lastVideoPacketAge: videoAge
             ) {
                 log.info("live: still holding for IDR — re-request enable")
                 sendRecoverEnable(force: true, reason: "still holding for IDR")
@@ -2759,6 +2764,7 @@ final class CameraSession {
     }
 
     private func applyFeedWatchdog() {
+        if needsForegroundRecover { return }
         let now = Date()
         let live: Bool
         if case .live = phase { live = true } else { live = false }
@@ -2790,7 +2796,9 @@ final class CameraSession {
         switch action {
         case .none:
             if !FeedWatchdog.udpReceiveAlive(snap),
-               FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: snap.secondsSinceLastEnable)
+                FeedWatchdog.shouldHoldForGOPReset(
+                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
+                    lastVideoPacketAge: snap.lastVideoPacketAge)
             {
                 log.info(
                     "feed: hold UDP rebuild — GOP-reset grace lastEnable=\(snap.secondsSinceLastEnable ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s")

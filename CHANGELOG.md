@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- A live-view enable that produces no video packets rebuilds UDP after 2 s
+  instead of holding an 8 s IDR window (the 15 s black well after leaving a
+  clip).
 - LUT 50/50 stays pinned when the catalog scrolls, so landscape no longer hides
   it.
 - AUDIO Channel, Wind, Dir, and Vocal stay on the value you pick instead of
