@@ -1,6 +1,6 @@
 New and changed
 
-- First TestFlight of OpenPocketCine. Pair over Bluetooth, join the camera's own Wi-Fi, and watch a live view with waveform, Traffic Lights, and other assists.
+- First TestFlight of OpenPocketCine. Pair over Bluetooth, join the camera's own Wi-Fi, and watch a live view with waveform, Traffic Lights, and other assists. Install this build even if an older OpenPocketCine is already on the phone — it is a new app listing.
 
 Fixes
 
