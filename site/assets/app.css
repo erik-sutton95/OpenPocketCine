@@ -547,7 +547,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   padding:
     0
     clamp(20px, 5vw, 48px)
-    clamp(28px, 5vh, 56px);
+    clamp(88px, 14vh, 168px);
 }
 .media-bleed__copy h2 {
   margin: 4px 0 16px;
@@ -565,7 +565,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   .media-bleed { min-height: 100svh; }
   .media-bleed__photo { object-position: 50% 32%; }
   .media-bleed__copy {
-    padding-bottom: clamp(24px, 4vh, 40px);
+    padding-bottom: clamp(64px, 12vh, 120px);
   }
 }
 
