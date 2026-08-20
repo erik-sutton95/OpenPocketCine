@@ -96,6 +96,35 @@ import Testing
         #expect(abs(both! - 0.5) < 0.15)
     }
 
+    @Test func intervalIsFastWhileAcquiring() {
+        let start = Date()
+        #expect(
+            FacePriorityExposure.interval(sinceAcquire: start, now: start)
+                == FacePriorityExposure.acquireInterval)
+        #expect(
+            FacePriorityExposure.interval(
+                sinceAcquire: start, now: start.addingTimeInterval(2.4))
+                == FacePriorityExposure.acquireInterval)
+    }
+
+    @Test func intervalSettlesAfterAcquireWindow() {
+        let start = Date()
+        #expect(
+            FacePriorityExposure.interval(
+                sinceAcquire: start, now: start.addingTimeInterval(2.5))
+                == FacePriorityExposure.settleInterval)
+        #expect(
+            FacePriorityExposure.interval(
+                sinceAcquire: start, now: start.addingTimeInterval(10))
+                == FacePriorityExposure.settleInterval)
+    }
+
+    @Test func intervalIsFastBeforeAcquireStarts() {
+        #expect(
+            FacePriorityExposure.interval(sinceAcquire: nil, now: Date())
+                == FacePriorityExposure.acquireInterval)
+    }
+
     @Test func clampsToEvRange() {
         let transfer = MonitorTransfer.rec709
         let black = transfer.encodeLinear(0.18 / 64)

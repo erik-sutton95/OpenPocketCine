@@ -9,9 +9,9 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - **Face Priority** on the Auto EV sheet. On: the drum is grayed, EV follows
-  faces to middle gray (median of several, one third-stop every 2 s), and a
-  face mark sits on the EV label. Off restores the EV from before the toggle,
-  or 0.0.
+  faces to middle gray (median of several; fast third-stops for 2.5 s after a
+  face appears, then one third-stop every 1 s), and a face mark sits on the EV
+  label. Off restores the EV from before the toggle, or 0.0.
 - Calculated shutter angle (5.6°–360°) on the SHUTTER sheet. The camera still
   takes 1/N; we convert from the live frame rate.
 - ISO sheet **Auto Native ISO** toggle (default on). Off keeps ISO when switching

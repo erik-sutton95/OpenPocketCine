@@ -14,8 +14,21 @@ public enum FacePriorityExposure: Sendable {
     public static let deadbandStops = 2.0 / 3.0
     /// One third-stop per write. Camera EV has not settled if we jump the whole error.
     public static let maxStepThirds = 1
-    /// Wait for the body to land the last SET before metering again.
-    public static let minInterval: TimeInterval = 2.0
+    /// Fast third-stop writes while a face is still acquiring.
+    public static let acquireDuration: TimeInterval = 2.5
+    /// Spacing during `acquireDuration` after a face first appears.
+    public static let acquireInterval: TimeInterval = 0.4
+    /// Spacing after acquire so EV does not hunt once the face is in.
+    public static let settleInterval: TimeInterval = 1.0
+
+    /// EV write spacing. Fast for the first 2.5 s a face is in frame, then 1 s.
+    public static func interval(sinceAcquire: Date?, now: Date) -> TimeInterval {
+        guard let sinceAcquire else { return acquireInterval }
+        if now.timeIntervalSince(sinceAcquire) < acquireDuration {
+            return acquireInterval
+        }
+        return settleInterval
+    }
 
     /// Median encoded luma (0…1) of pixels inside `boxes`. Nil if nothing usable.
     public static func medianEncoded(

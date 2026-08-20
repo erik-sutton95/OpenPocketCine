@@ -1011,7 +1011,7 @@ enum CaptureLists {
 
     static let facePriorityTitle = "Face Priority"
     static let facePriorityHelp =
-        "On: EV follows faces to middle gray. Several faces use the median. Off: put EV back to what it was, or 0.0."
+        "On: EV follows faces to middle gray. Several faces use the median. First couple of seconds after a face appears are faster, then about 1 s. Off: put EV back to what it was, or 0.0."
 
     static let nativeIsoHopTitle = "Auto Native ISO"
     static let nativeIsoHopHelp =

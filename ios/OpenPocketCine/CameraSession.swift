@@ -216,6 +216,7 @@ final class CameraSession {
     @ObservationIgnored private var faceTracks: [FaceTrack] = []
     @ObservationIgnored private let faceDetector = LiveFaceDetector()
     @ObservationIgnored private var lastFacePriorityEVAt = Date.distantPast
+    @ObservationIgnored private var facePriorityAcquireAt: Date?
     @ObservationIgnored private var evBeforeFacePriority: EvComp?
     /// Last 1× / 3× / 6× / 12× stop from the cycle button.
     var zoomStop: Double = 1
@@ -465,6 +466,8 @@ final class CameraSession {
         faceBox = nil
         faceTracks = []
         sceneFaces = []
+        lastFacePriorityEVAt = .distantPast
+        facePriorityAcquireAt = nil
         isLocked = false
         stopGimbalStickPump()
         pendingGimbalAxes = nil
@@ -923,6 +926,7 @@ final class CameraSession {
         let restore = FacePriorityExposure.restoreEV(saved: evBeforeFacePriority)
         evBeforeFacePriority = nil
         lastFacePriorityEVAt = .distantPast
+        facePriorityAcquireAt = nil
         guard status.expoMode == .auto, status.evComp != restore else { return }
         setEv(restore)
         ControlLiveLog.line("ev: face-priority off → \(restore.label)")
@@ -2158,16 +2162,21 @@ final class CameraSession {
         guard wantsFacePriorityMeter, !isBrowsingMedia, !status.inPlayback else { return }
         guard case .live = phase else { return }
         let now = Date()
-        guard now.timeIntervalSince(lastFacePriorityEVAt) >= FacePriorityExposure.minInterval
-        else { return }
         let boxes: [TrackingBox]
         if !sceneFaces.isEmpty {
             boxes = sceneFaces
         } else if let faceBox {
             boxes = [faceBox]
         } else {
+            facePriorityAcquireAt = nil
             return
         }
+        if facePriorityAcquireAt == nil {
+            facePriorityAcquireAt = now
+        }
+        let spacing = FacePriorityExposure.interval(
+            sinceAcquire: facePriorityAcquireAt, now: now)
+        guard now.timeIntervalSince(lastFacePriorityEVAt) >= spacing else { return }
         guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
         else { return }
         lastFacePriorityEVAt = now
@@ -2215,6 +2224,7 @@ final class CameraSession {
         lastFaceHitAt = nil
         faceTracks = []
         sceneFaces = []
+        facePriorityAcquireAt = nil
     }
 
     private struct FaceTrack {
