@@ -87,6 +87,34 @@ switch automatically so you keep moving.
   </a>
 </p>
 
+**Media library.** Browse clips and stills on the camera. Star the keepers and
+delete bad takes before you pack up.
+
+<p align="center">
+  <a href="https://openpocketcine.app/#media">
+    <img alt="Media library showing clips and photos on iPhone" src="site/assets/screens/media-library.webp" width="820">
+  </a>
+</p>
+
+**Playback.** The same scopes and assists as live view. Export with an optional
+baked LUT, conform slow motion, share natively, or send Camera to Cloud —
+including [Frame.io](https://www.frame.io/).
+
+<p>
+  <a href="https://www.frame.io/">
+    <img alt="Frame.io" src="site/assets/frameio.png" height="22">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://openpocketcine.app/#playback">
+    <img alt="Clip playback with timeline and share controls" src="site/assets/screens/media-playback.webp" width="400">
+  </a>
+  <a href="https://openpocketcine.app/#playback">
+    <img alt="Clip playback with the full monitoring assist rail" src="site/assets/screens/media-playback-assists.webp" width="400">
+  </a>
+</p>
+
 ## Available today
 
 - Resilient Bluetooth pairing, camera Wi-Fi join, saved-camera profiles, and reconnect

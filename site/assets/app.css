@@ -472,6 +472,35 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   max-height: min(82vh, 820px);
 }
 .band--dark .feat-row__visual img { filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)); }
+.feat-row__visual--pair {
+  padding: 4px clamp(16px, 3vw, 36px) 56px;
+}
+.feat-row__visual--pair img { filter: none; max-width: none; }
+.feat-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(2px, 0.6vw, 8px);
+  align-items: center;
+  width: min(1180px, 100%);
+}
+.feat-pair img {
+  width: 100%;
+  height: auto;
+}
+.brand-frameio {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 18px;
+  line-height: 0;
+}
+.brand-frameio img {
+  height: 28px;
+  width: auto;
+  filter: none;
+}
+@media (max-width: 640px) {
+  .feat-pair { grid-template-columns: 1fr; gap: 4px; }
+}
 
 .journey {
   position: relative;

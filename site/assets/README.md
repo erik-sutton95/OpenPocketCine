@@ -5,6 +5,8 @@ belong under `/tmp` or a gitignored `.local/marketing/` tree — not in `site/`.
 
 - `icon.png` is the OpenPocketCine mark: a production monitor on DJI Black.
 - `screens/*.webp` are the landing-page mockups and Osmo product stills loaded by `site/index.html`.
+- `frameio.png` is an identification lockup for Camera-to-Cloud copy. Frame.io is
+  an Adobe trademark; not a partnership mark.
 
 Regenerate a WebP after editing a local PNG with:
 

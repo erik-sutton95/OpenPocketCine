@@ -24,6 +24,8 @@ All notable changes to this project are documented here. The format is based on
 - Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
 - README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
   contributions, with a nod to animal charities.
+- Landing-page and README media-library and playback mockups, with a Frame.io
+  identification mark on Camera-to-Cloud delivery.
 
 ### Changed
 
