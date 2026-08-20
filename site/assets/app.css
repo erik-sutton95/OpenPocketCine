@@ -502,6 +502,69 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   .feat-pair { grid-template-columns: 1fr; gap: 4px; }
 }
 
+.media-bleed {
+  position: relative;
+  isolation: isolate;
+  min-height: max(640px, min(100svh, 980px));
+  display: grid;
+  place-items: start center;
+  overflow: clip;
+  color: #F4F6F8;
+  background: #0B0B0B;
+}
+.media-bleed__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: 50% 58%;
+}
+.media-bleed__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(11, 11, 11, 0.82) 0%,
+      rgba(11, 11, 11, 0.52) 26%,
+      rgba(11, 11, 11, 0.12) 52%,
+      rgba(11, 11, 11, 0.28) 100%
+    );
+}
+.media-bleed__copy {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 38rem;
+  padding:
+    calc(var(--nav-h) + clamp(28px, 6vh, 72px))
+    clamp(20px, 5vw, 48px)
+    clamp(42vh, 50vh, 560px);
+}
+.media-bleed__copy h2 {
+  margin: 4px 0 16px;
+  color: #F4F6F8;
+  text-wrap: balance;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.media-bleed__copy .lead {
+  margin-inline: auto;
+  max-width: 42ch;
+  color: rgba(244, 246, 248, 0.88);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 700px) {
+  .media-bleed { min-height: 100svh; }
+  .media-bleed__copy {
+    padding-bottom: 48vh;
+  }
+}
+
 .journey {
   position: relative;
   height: 420vh;
