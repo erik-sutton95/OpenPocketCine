@@ -188,19 +188,19 @@ TOTAL_STAGES=7
 
 banner "Xcode Cloud → TestFlight"
 
-say "This walkthrough uses team 4V4EGQ6LZA and bundle ID com.openpocketview.app."
+say "This walkthrough uses team 4V4EGQ6LZA and bundle ID com.opencapture.openpocketcine."
 say "Signing stays Automatic; Xcode Cloud manages certificates and profiles."
 note "Repo hooks already generate the Xcode project and attach What to Test notes."
 pause "Ready to start?"
 
 # ── 1. App record ────────────────────────────────────────────────────────
 stage "App Store Connect — app record"
-say "Reuse the existing OpenPocketCine / OpenPocketView app if this bundle ID already has one."
+say "Reuse the existing OpenPocketCine app (SKU 002) for com.opencapture.openpocketcine."
 say "Do not create a second app for the same bundle ID."
 open_url "https://appstoreconnect.apple.com/apps"
-step "Find an iOS app whose bundle ID is com.openpocketview.app."
+step "Find the iOS app whose bundle ID is com.opencapture.openpocketcine."
 step "If none exists: My Apps → (+) → New App → iOS."
-step "Name: OpenPocketCine. Primary language: English. Bundle ID: com.openpocketview.app."
+step "Name: OpenPocketCine. Primary language: English. Bundle ID: com.opencapture.openpocketcine."
 step "SKU: openpocketcine (or any unique SKU). User Access: Full Access."
 pause "App record is open?"
 

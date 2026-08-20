@@ -370,7 +370,7 @@ final class LiveAssistEngine: @unchecked Sendable {
     }
 
     private let queue = DispatchQueue(label: "opv.live-assist", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "scope-tap")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "scope-tap")
     private var pendingBuffer: CVPixelBuffer?
     private var pendingEffects = LiveImageEffects()
     private var pendingTransfer = MonitorTransfer.rec709

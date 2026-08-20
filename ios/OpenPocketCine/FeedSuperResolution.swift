@@ -61,7 +61,7 @@ final class FeedSuperResolutionScaler {
 
     let quality: Quality
     private let device: MTLDevice
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "feed-upscale")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "feed-upscale")
     private var textureCache: CVMetalTextureCache?
     private var processor: VTFrameProcessor?
     private var key: Key?

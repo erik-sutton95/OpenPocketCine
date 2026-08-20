@@ -27,7 +27,7 @@ enum WiFiJoiner {
         }
     }
 
-    private static let log = Logger(subsystem: "com.openpocketview.app", category: "wifi")
+    private static let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "wifi")
 
     /// Leave the other Osmo SoftAP and join `ssid`. Pocket and Nano share
     /// `192.168.2.1`, so a leftover camera DHCP address is not a stop — apply

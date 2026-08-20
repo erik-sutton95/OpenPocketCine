@@ -57,7 +57,7 @@ final class BleLink: NSObject {
 
     private var writeQueue: [Data] = []
     private var writing = false
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "ble")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "ble")
 
     /// iOS `connect` has no public deadline and will sit on the next advertisement for ~30 s.
     /// A working GATT + notify + arm-pairing handshake finishes in 1–3 s; 10 s is fail-fast.

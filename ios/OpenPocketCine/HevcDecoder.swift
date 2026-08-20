@@ -106,7 +106,7 @@ final class HevcDecoder {
     private var displayReadyCont: CheckedContinuation<Bool, Never>?
     private var frameIndex: Int64 = 0
     private let assistEngine = LiveAssistEngine()
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "hevc")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "hevc")
     private let loggedLiveVT = OSAllocatedUnfairLock(initialState: false)
     /// Simulator (and any pixel-buffer-only source) paints identity on `CIFeedView`.
     private var prefersPixelBufferDisplay = false
@@ -987,7 +987,7 @@ final class HevcDecoder {
         let baseNil = CVPixelBufferGetBaseAddress(buffer) == nil
         let ioSurface = LiveFrameTap.isIOSurfaceBacked(buffer)
         CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
-        Logger(subsystem: "com.openpocketview.app", category: "hevc").info(
+        Logger(subsystem: "com.opencapture.openpocketcine", category: "hevc").info(
             "live VT \(LiveFrameTap.fourCC(buffer), privacy: .public) \(CVPixelBufferGetWidth(buffer))x\(CVPixelBufferGetHeight(buffer)) planes=\(CVPixelBufferGetPlaneCount(buffer)) baseNil=\(baseNil) ioSurface=\(ioSurface)"
         )
     }
@@ -1009,7 +1009,7 @@ final class SimulatorLiveFeed: @unchecked Sendable {
     }
 
     private let queue = DispatchQueue(label: "opv.sim-live", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "sim-live")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "sim-live")
     private var reader: AVAssetReader?
     private var output: AVAssetReaderTrackOutput?
     private var timer: DispatchSourceTimer?

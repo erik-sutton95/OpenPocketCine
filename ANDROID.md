@@ -23,7 +23,7 @@ iOS links the core via Swift Package Manager. Android does **not** consume that 
 | `core-api` | Kotlin `CameraSession` wrapping the facade. |
 | Compose shell | Splash + saved cameras + OSMO connection wizard using the **same** `StartupColors` / `BrandColors` floats as iOS. |
 | Saved cameras | `SharedPreferences` file `openpocketcine.saved-cameras`, key `records-json`. Wi-Fi passwords stay out of prefs (re-read over BLE, same as iOS this pass). |
-| applicationId | Prefer `com.opencapture.openpocketcine` (OpenZCine pattern). iOS **kept** `com.openpocketview.app` this pass so the existing device install and Hotspot Configuration App ID don’t break. |
+| applicationId | `com.opencapture.openpocketcine` on iOS and Android (OpenZCine’s `com.opencapture.openzcine` pattern). |
 
 ## Do not copy from OpenZCine Android
 

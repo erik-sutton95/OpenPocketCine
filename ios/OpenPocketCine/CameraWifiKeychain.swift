@@ -10,7 +10,7 @@ enum CameraWifiKeychain {
         var password: String
     }
 
-    private static let service = "com.openpocketview.app.wifi"
+    private static let service = "com.opencapture.openpocketcine.wifi"
 
     static func save(cameraId: UUID, advertisedName: String, ssid: String, password: String) {
         let creds = Creds(ssid: ssid, password: password)

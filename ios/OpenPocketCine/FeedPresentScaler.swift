@@ -11,7 +11,7 @@ final class FeedPresentScaler {
     private let device: MTLDevice
     private let bilinear: MPSImageBilinearScale
     private let lanczos: MPSImageLanczosScale
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "feed-upscale")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "feed-upscale")
 
     #if canImport(MetalFX)
         private struct SpatialScalerKey: Equatable {

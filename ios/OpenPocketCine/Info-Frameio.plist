@@ -40,7 +40,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.openpocketview.frameio-oauth</string>
+			<string>com.opencapture.openpocketcine.frameio-oauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>$(FRAMEIO_URL_SCHEME)</string>

@@ -40,7 +40,7 @@ Then rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One e
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 
-Watch Console (`com.openpocketview.app`) and `Documents/control-live.log` for:
+Watch Console (`com.opencapture.openpocketcine`) and `Documents/control-live.log` for:
 
 - `feed: start VT for assist — one 0x09/0xa8` (first look/scope only)
 - `feed: assist off — keep VT, no 0x09/0xa8`

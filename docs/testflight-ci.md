@@ -23,8 +23,8 @@ One-time App Store Connect / Xcode setup is the wizard:
 ./scripts/setup-xcode-cloud.sh
 ```
 
-That walkthrough creates (or reuses) the app record for `com.openpocketview.app`, connects this
-GitHub repo, and defines the `main` Archive workflow.
+That walkthrough reuses the App Store Connect record for `com.opencapture.openpocketcine`,
+connects this GitHub repo, and defines the `main` Archive workflow.
 
 ## After the workflow exists
 

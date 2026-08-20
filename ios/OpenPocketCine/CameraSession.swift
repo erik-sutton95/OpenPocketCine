@@ -92,7 +92,7 @@ final class CameraSession {
     @ObservationIgnored private var waiters: [UInt16: FrameWaiter] = [:]
     /// Handshake replies can land in the same notification before the next waiter is registered.
     @ObservationIgnored private var pairingHold: [UInt16: Duml.Frame] = [:]
-    @ObservationIgnored private let log = Logger(subsystem: "com.openpocketview.app", category: "session")
+    @ObservationIgnored private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "session")
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var connectGeneration = 0

@@ -62,7 +62,7 @@ final class DatalinkDriver {
     nonisolated private let wire = OSAllocatedUnfairLock(initialState: WireState())
     private var lastStatusDate: Date?
     private var receiveErrors = 0
-    private let log = Logger(subsystem: "com.openpocketview.app", category: "datalink")
+    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "datalink")
 
     private struct WireState {
         var sessionId: UInt16 = 0

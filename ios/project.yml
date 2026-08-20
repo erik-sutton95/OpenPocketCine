@@ -1,6 +1,6 @@
 name: OpenPocketCine
 options:
-  bundleIdPrefix: com.openpocketview
+  bundleIdPrefix: com.opencapture
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -24,16 +24,15 @@ targets:
         # keep the prototype moving; the core package stays Swift 6 strict-concurrency and fully tested.
         # ponytail: tighten to Swift 6 once the I/O layer is validated on hardware.
         SWIFT_VERSION: "5.0"
-        # Keep the existing App ID so the on-device install and Hotspot Configuration entitlement
-        # still work. OpenZCine’s pattern is com.opencapture.openzcine; Android can take
-        # com.opencapture.openpocketcine. Display name is OpenPocketCine.
-        PRODUCT_BUNDLE_IDENTIFIER: com.openpocketview.app
+        # Same App ID as Android and the App Store Connect record. Enable Hotspot
+        # Configuration on this identifier in the Developer portal.
+        PRODUCT_BUNDLE_IDENTIFIER: com.opencapture.openpocketcine
         PRODUCT_NAME: OpenPocketCine
         TARGETED_DEVICE_FAMILY: "1,2"
         # Do not put XML comments in the entitlements plist. ProcessProductPackaging
         # rewrites it in place (strips comments, retabs) and the build then fails with
         # "Entitlements file was modified during the build".
-        CODE_SIGN_ENTITLEMENTS: OpenPocketCine/OpenPocketView.entitlements
+        CODE_SIGN_ENTITLEMENTS: OpenPocketCine/OpenPocketCine.entitlements
         GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) CI_SILENCE_GL_DEPRECATION=1"
         OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -DCI_SILENCE_GL_DEPRECATION"
         # Same team as OpenZCine — it already has the Hotspot Configuration capability.
@@ -81,7 +80,7 @@ targets:
       base:
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.openpocketview.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.opencapture.openpocketcine.tests
         DEVELOPMENT_TEAM: "4V4EGQ6LZA"
         CODE_SIGN_STYLE: Automatic
         BUNDLE_LOADER: $(TEST_HOST)
