@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -62,6 +63,8 @@ class BleLink(context: Context) {
     private var connectTimeout: Runnable? = null
     private val writeQueue = ArrayDeque<ByteArray>()
     private var writing = false
+    private val connectSettled = AtomicBoolean(false)
+    var onLinkLost: (() -> Unit)? = null
 
     private val scanCallback =
         object : ScanCallback() {
@@ -104,6 +107,7 @@ class BleLink(context: Context) {
         fff5NotifySettled = false
         fff4 = null
         fff5 = null
+        connectSettled.set(false)
         suspendCancellableCoroutine { cont ->
             handler.post {
                 connectContinuation?.resumeWithException(IllegalStateException("replaced"))
@@ -135,6 +139,7 @@ class BleLink(context: Context) {
 
     @SuppressLint("MissingPermission")
     fun disconnect() {
+        connectSettled.set(false)
         handler.post {
             finishConnect(IllegalStateException("camera disappeared"))
             writeQueue.clear()
@@ -188,7 +193,19 @@ class BleLink(context: Context) {
         connectTimeout = null
         val cont = connectContinuation ?: return
         connectContinuation = null
-        if (error != null) cont.resumeWithException(error) else cont.resume(Unit)
+        if (error != null) {
+            connectSettled.set(false)
+            cont.resumeWithException(error)
+        } else {
+            connectSettled.set(true)
+            cont.resume(Unit)
+        }
+    }
+
+    private fun notifyLinkLostIfSettled() {
+        if (!connectSettled.getAndSet(false)) return
+        val cb = onLinkLost
+        main.post { cb?.invoke() }
     }
 
     private fun classify(result: ScanResult): FoundCamera? {
@@ -235,6 +252,7 @@ class BleLink(context: Context) {
                     gatt.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     finishConnect(IllegalStateException("the camera disconnected"))
+                    notifyLinkLostIfSettled()
                 }
             }
 

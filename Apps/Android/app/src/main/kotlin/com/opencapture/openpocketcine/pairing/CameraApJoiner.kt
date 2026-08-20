@@ -31,6 +31,7 @@ class CameraApJoiner(context: Context) {
     private var callback: ConnectivityManager.NetworkCallback? = null
     private var joinContinuation: CancellableContinuation<Boolean>? = null
     private var boundNetwork: Network? = null
+    var onPathLost: (() -> Unit)? = null
 
     suspend fun join(
         ssid: String,
@@ -120,12 +121,17 @@ class CameraApJoiner(context: Context) {
                     }
 
                     override fun onLost(network: Network) {
-                        synchronized(lock) {
-                            if (callback === this && boundNetwork == network) {
-                                boundNetwork = null
-                                connectivity.bindProcessToNetwork(null)
+                        val notify =
+                            synchronized(lock) {
+                                if (callback !== this || boundNetwork != network) {
+                                    false
+                                } else {
+                                    boundNetwork = null
+                                    connectivity.bindProcessToNetwork(null)
+                                    true
+                                }
                             }
-                        }
+                        if (notify) onPathLost?.invoke()
                     }
                 }
             synchronized(lock) {

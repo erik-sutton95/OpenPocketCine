@@ -83,6 +83,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
 
+    init {
+        ble.onLinkLost = { failLink("the camera disconnected") }
+        joiner.onPathLost = { failLink("the camera Wi-Fi disconnected") }
+    }
+
     override fun startScan() {
         startScan(reconnect = null)
     }
@@ -106,10 +111,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun reconnect(id: String) {
-        when (_phase.value) {
-            ConnectionPhase.IDLE, ConnectionPhase.SCANNING, ConnectionPhase.FAILED -> Unit
-            else -> return
-        }
+        if (!phaseAllowsReconnect(_phase.value)) return
+        if (_phase.value == ConnectionPhase.LIVE) leaveLiveForReconnect()
         found.value.firstOrNull { it.id == id }?.let {
             connect(it)
             return
@@ -120,6 +123,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun connect(camera: FoundCamera) {
         when (_phase.value) {
             ConnectionPhase.IDLE, ConnectionPhase.SCANNING, ConnectionPhase.FAILED -> Unit
+            ConnectionPhase.LIVE -> leaveLiveForReconnect()
             else -> return
         }
         reconnectTarget = null
@@ -130,6 +134,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     run(camera)
                 } catch (e: Exception) {
                     if (_phase.value == ConnectionPhase.IDLE) return@launch
+                    if (_phase.value == ConnectionPhase.FAILED) return@launch
                     _failure.value = e.message ?: e.toString()
                     _phase.value = ConnectionPhase.FAILED
                 }
@@ -317,22 +322,61 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             else String.format("%.1fs", (System.currentTimeMillis() - keyframe) / 1000.0)
     }
 
+    /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
     private fun recoverLiveViewIfNeeded() {
         val packets = datalink?.videoPackets ?: 0
         val now = SystemClock.elapsedRealtime()
-        if (packets == 0) {
-            datalink?.startLiveView()
-            lastIdrRequest = now
+        if (packets > 0 && streamStartedAt == null) streamStartedAt = now
+        if (!LiveViewEnablePolicy.shouldResendEnable(
+                videoPackets = packets,
+                nowElapsedRealtime = now,
+                lastIdrRequest = lastIdrRequest,
+                hasFormat = decoder.hasFormat,
+                decoderErrors = decoderErrors,
+                streamStartedAt = streamStartedAt,
+            )
+        ) {
             return
         }
-        if (streamStartedAt == null) streamStartedAt = now
-        val stalled =
-            (decoderErrors > 0 && !decoder.hasFormat) ||
-                (packets > 0 && !decoder.hasFormat && now - (streamStartedAt ?: 0) > 2_000)
-        if (!stalled) return
-        if (now - lastIdrRequest < 5_000) return
         lastIdrRequest = now
         datalink?.startLiveView()
+    }
+
+    private fun failLink(reason: String) {
+        when (_phase.value) {
+            ConnectionPhase.IDLE, ConnectionPhase.SCANNING -> return
+            else -> Unit
+        }
+        Log.i(TAG, "link lost: $reason")
+        _failure.value = reason
+        _phase.value = ConnectionPhase.FAILED
+        connectJob?.cancel()
+        stopLivePipeline()
+        ble.disconnect()
+    }
+
+    private fun leaveLiveForReconnect() {
+        stopLivePipeline()
+        ble.disconnect()
+        _failure.value = null
+        _phase.value = ConnectionPhase.FAILED
+    }
+
+    private fun stopLivePipeline() {
+        keepaliveJob?.cancel()
+        keepaliveJob = null
+        endGimbalStick()
+        failAllWaiters(IllegalStateException("the camera disconnected"))
+        datalink?.close()
+        datalink = null
+        decoder.reset()
+        videoPackets = 0
+        accessUnits = 0
+        framesEnqueued = 0
+        droppedIncomplete = 0
+        decoderErrors = 0
+        hasVideoFormat = false
+        streamStartedAt = null
     }
 
     private fun ingestDatalinkFrame(frame: DumlFrame) {
@@ -655,5 +699,41 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     companion object {
         private const val TAG = "PocketCameraSession"
+    }
+}
+
+internal fun phaseAllowsReconnect(phase: ConnectionPhase): Boolean =
+    when (phase) {
+        ConnectionPhase.IDLE,
+        ConnectionPhase.SCANNING,
+        ConnectionPhase.FAILED,
+        ConnectionPhase.LIVE,
+        -> true
+        else -> false
+    }
+
+/** First-picture resend is 2 s; after packets, only a missing format at 5 s — never 1 Hz. */
+internal object LiveViewEnablePolicy {
+    const val FIRST_PICTURE_RESEND_MS = 2_000L
+    const val STALLED_FORMAT_RESEND_MS = 5_000L
+    const val FORMAT_STALL_MS = 2_000L
+
+    fun shouldResendEnable(
+        videoPackets: Int,
+        nowElapsedRealtime: Long,
+        lastIdrRequest: Long,
+        hasFormat: Boolean,
+        decoderErrors: Int,
+        streamStartedAt: Long?,
+    ): Boolean {
+        if (videoPackets == 0) {
+            return nowElapsedRealtime - lastIdrRequest >= FIRST_PICTURE_RESEND_MS
+        }
+        val started = streamStartedAt ?: nowElapsedRealtime
+        val stalled =
+            (decoderErrors > 0 && !hasFormat) ||
+                (!hasFormat && nowElapsedRealtime - started > FORMAT_STALL_MS)
+        if (!stalled) return false
+        return nowElapsedRealtime - lastIdrRequest >= STALLED_FORMAT_RESEND_MS
     }
 }

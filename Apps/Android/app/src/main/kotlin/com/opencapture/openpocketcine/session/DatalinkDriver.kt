@@ -39,8 +39,10 @@ class DatalinkDriver(
     private var peerCursor = 0
     private var camChannel = 0
     @Volatile private var handshakeAcked = false
+    @Volatile private var liveViewEnabled = false
     private var depacketizer = 0L
     private val rawVideoPackets = AtomicInteger(0)
+    private val loggedLeftoverGop = AtomicBoolean(false)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -61,6 +63,8 @@ class DatalinkDriver(
         cmdCounter = 0
         peerCursor = 0
         handshakeAcked = false
+        liveViewEnabled = false
+        loggedLeftoverGop.set(false)
         rawVideoPackets.set(0)
         depacketizer = SwiftCore.depacketizerCreate()
         val sock = DatagramSocket()
@@ -95,6 +99,7 @@ class DatalinkDriver(
     }
 
     fun startLiveView() {
+        liveViewEnabled = true
         sendCommand(SwiftCore.CMD_LIVE_VIEW_ENABLE)
     }
 
@@ -125,6 +130,7 @@ class DatalinkDriver(
 
     fun close() {
         running.set(false)
+        liveViewEnabled = false
         ackThread?.interrupt()
         receiver?.interrupt()
         ackThread = null
@@ -249,6 +255,12 @@ class DatalinkDriver(
             if (seq >= 0) peerCursor = seq
         }
         if (datagram.size > 20 && datagram[6] == 0x02.toByte()) {
+            if (!liveViewEnabled) {
+                if (loggedLeftoverGop.compareAndSet(false, true)) {
+                    Log.i(TAG, "datalink: drop leftover video before enable")
+                }
+                return
+            }
             rawVideoPackets.incrementAndGet()
             if (depacketizer != 0L) {
                 val au = SwiftCore.depacketizerFeed(depacketizer, datagram)
@@ -268,8 +280,8 @@ class DatalinkDriver(
 
     private fun poke7001() {
         val sock = Socket()
-        sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
         joiner.bindSocket(sock)
+        sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
         val frame = SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, extra = pairingToken)
         sock.getOutputStream().write(frame)
         sock.getOutputStream().flush()
@@ -278,6 +290,7 @@ class DatalinkDriver(
     }
 
     companion object {
+        private const val TAG = "DatalinkDriver"
         private const val CAMERA_HOST = "192.168.2.1"
         private val SUBSCRIPTION_KEYS =
             listOf(
