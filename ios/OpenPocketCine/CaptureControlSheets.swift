@@ -183,6 +183,14 @@ struct CapturePickerPanel: View {
             }
             reseatShutterOrEv()
         }
+        .onChange(of: model.session.status.evComp) { _, _ in
+            guard isEvSheet else { return }
+            reseatEv()
+        }
+        .onChange(of: model.facePriorityExposureEnabled) { _, _ in
+            guard isEvSheet else { return }
+            reseatEv()
+        }
         .onChange(of: model.session.status.colorMode) { _, _ in
             guard sheet == .iso else { return }
             reseatIso()
@@ -1003,7 +1011,7 @@ enum CaptureLists {
 
     static let facePriorityTitle = "Face Priority"
     static let facePriorityHelp =
-        "On: EV follows faces to middle gray. Several faces use the median. No face keeps the last EV."
+        "On: EV follows faces to middle gray. Several faces use the median. Off: put EV back to what it was, or 0.0."
 
     static let nativeIsoHopTitle = "Auto Native ISO"
     static let nativeIsoHopHelp =

@@ -59,7 +59,10 @@ final class AppModel {
         didSet { OperatorPrefs.nativeISOHopEnabled = nativeISOHopEnabled }
     }
     var facePriorityExposureEnabled: Bool = OperatorPrefs.facePriorityExposureEnabled {
-        didSet { OperatorPrefs.facePriorityExposureEnabled = facePriorityExposureEnabled }
+        didSet {
+            OperatorPrefs.facePriorityExposureEnabled = facePriorityExposureEnabled
+            session.setFacePriorityEnabled(facePriorityExposureEnabled)
+        }
     }
     var portraitRailExpanded = false
     var frameioConnecting = false

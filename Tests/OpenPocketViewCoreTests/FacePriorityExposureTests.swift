@@ -47,6 +47,12 @@ import Testing
                 == nil)
     }
 
+    @Test func restoreUsesSavedOrZero() {
+        #expect(FacePriorityExposure.restoreEV(saved: nil) == .zero)
+        #expect(FacePriorityExposure.restoreEV(saved: EvComp(thirds: 3)) == EvComp(thirds: 3))
+        #expect(FacePriorityExposure.restoreEV(saved: EvComp(thirds: -2)) == EvComp(thirds: -2))
+    }
+
     @Test func twoFacesUseMedian() {
         #expect(FacePriorityExposure.median([0.1, 0.9]) == 0.5)
         #expect(FacePriorityExposure.median([0.2, 0.4, 0.9]) == 0.4)

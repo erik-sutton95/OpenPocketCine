@@ -216,6 +216,7 @@ final class CameraSession {
     @ObservationIgnored private var faceTracks: [FaceTrack] = []
     @ObservationIgnored private let faceDetector = LiveFaceDetector()
     @ObservationIgnored private var lastFacePriorityEVAt = Date.distantPast
+    @ObservationIgnored private var evBeforeFacePriority: EvComp?
     /// Last 1× / 3× / 6× / 12× stop from the cycle button.
     var zoomStop: Double = 1
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
@@ -911,6 +912,20 @@ final class CameraSession {
                 ControlLiveLog.line(
                     "iso: limit \(limit.label(base: base)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
             })
+    }
+
+    /// Snapshot EV on enable; restore it (or 0.0) on disable.
+    func setFacePriorityEnabled(_ on: Bool) {
+        if on {
+            evBeforeFacePriority = status.evComp ?? .zero
+            return
+        }
+        let restore = FacePriorityExposure.restoreEV(saved: evBeforeFacePriority)
+        evBeforeFacePriority = nil
+        lastFacePriorityEVAt = .distantPast
+        guard status.expoMode == .auto, status.evComp != restore else { return }
+        setEv(restore)
+        ControlLiveLog.line("ev: face-priority off → \(restore.label)")
     }
 
     func setEv(_ ev: EvComp) {

@@ -77,6 +77,11 @@ public enum FacePriorityExposure: Sendable {
         return next == current ? nil : next
     }
 
+    /// EV to write when Face Priority turns off.
+    public static func restoreEV(saved: EvComp?) -> EvComp {
+        saved ?? .zero
+    }
+
     public static func median(_ values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         let sorted = values.sorted()

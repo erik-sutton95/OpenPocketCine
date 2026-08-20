@@ -12,4 +12,4 @@ What to test
 - Set MODE to Auto, open EV, turn Face Priority on, and confirm the drum is gray and the EV tile shows a face mark.
 - Put a face in frame (then two). EV should move without touching the drum; two faces should sit between the two skin tones.
 - Cover every face — EV should hold, not snap to 0.0.
-- Switch to Manual — the SHUTTER tile is speed/angle again, no face mark.
+- Turn Face Priority off — EV should return to the value from before it was on (or 0.0).
