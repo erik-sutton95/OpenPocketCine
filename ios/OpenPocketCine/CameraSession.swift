@@ -180,6 +180,13 @@ final class CameraSession {
     var wantsFaceAF: Bool {
         status.focusMode == .continuous && faceAFArmed
     }
+    /// Face-priority EV also needs Vision, including AF-S.
+    var wantsFaceDetect: Bool {
+        wantsFaceAF || wantsFacePriorityMeter
+    }
+    var wantsFacePriorityMeter: Bool {
+        OperatorPrefs.facePriorityExposureEnabled && status.expoMode == .auto
+    }
     /// Side-rail lock (OpenZCine `interfaceLocked`). Disables capture-bar tiles.
     var isLocked = false
     /// Latest held gimbal stick. Nil when the operator is not touching it.
@@ -208,6 +215,7 @@ final class CameraSession {
     @ObservationIgnored private var faceTarget: TrackingBox?
     @ObservationIgnored private var faceTracks: [FaceTrack] = []
     @ObservationIgnored private let faceDetector = LiveFaceDetector()
+    @ObservationIgnored private var lastFacePriorityEVAt = Date.distantPast
     /// Last 1× / 3× / 6× / 12× stop from the cycle button.
     var zoomStop: Double = 1
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
@@ -2040,7 +2048,7 @@ final class CameraSession {
     }
 
     private func considerFaceAF(_ buffer: CVPixelBuffer) {
-        guard wantsFaceAF else {
+        guard wantsFaceDetect else {
             clearFaceAF()
             return
         }
@@ -2049,6 +2057,7 @@ final class CameraSession {
         faceDetector.consider(buffer, rectanglesOnly: moving) { [weak self] result in
             self?.applyDetectedFaces(result.faces)
         }
+        tickFacePriority(from: buffer)
     }
 
     private func tickFaceBoxes(sceneMoving: Bool) {
@@ -2083,7 +2092,7 @@ final class CameraSession {
     }
 
     private func applyDetectedFaces(_ hits: [FaceHit]) {
-        guard wantsFaceAF else {
+        guard wantsFaceDetect else {
             clearFaceAF()
             return
         }
@@ -2121,7 +2130,47 @@ final class CameraSession {
             lastFaceHitAt = nil
             return
         }
+        guard wantsFaceAF else {
+            faceBox = nil
+            faceTarget = nil
+            lastFaceHitAt = nil
+            return
+        }
         applyPrimaryFace(hits: heads, now: now, sceneMoving: moving)
+    }
+
+    private static let facePriorityInterval: TimeInterval = 0.5
+
+    private func tickFacePriority(from buffer: CVPixelBuffer) {
+        guard wantsFacePriorityMeter, !isBrowsingMedia, !status.inPlayback else { return }
+        guard case .live = phase else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastFacePriorityEVAt) >= Self.facePriorityInterval else {
+            return
+        }
+        let boxes: [TrackingBox]
+        if !sceneFaces.isEmpty {
+            boxes = sceneFaces
+        } else if let faceBox {
+            boxes = [faceBox]
+        } else {
+            return
+        }
+        guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
+        else { return }
+        let transfer = MonitorTransfer.resolved(
+            status.monitorTransfer, colorMode: status.colorMode)
+        guard let encoded = FacePriorityExposure.medianEncoded(
+            bytes: packed.bytes, width: packed.width, height: packed.height,
+            bytesPerRow: packed.bytesPerRow, boxes: boxes, transfer: transfer)
+        else { return }
+        let current = status.evComp ?? .zero
+        guard let next = FacePriorityExposure.nextEV(
+            current: current, encoded: encoded, transfer: transfer)
+        else { return }
+        lastFacePriorityEVAt = now
+        setEv(next)
+        ControlLiveLog.line("ev: face-priority \(current.label) → \(next.label)")
     }
 
     private func applyPrimaryFace(

@@ -1,23 +1,15 @@
 New and changed
 
-- Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
-- A look that was already on should grade the first picture instead of popping in seconds later.
-- ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
-- The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
-- Opening LUT keeps 50/50 on screen instead of scrolling it under the catalog.
-- AUDIO Channel, Wind, Dir, and Vocal now stay on the value you pick.
+- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray.
+- The EV tile shows a small face mark while Face Priority is on.
 
 Fixes
 
-- The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
-- If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
-- A Bluetooth or camera-Wi-Fi drop now leaves the live screen instead of pretending the feed is still up.
-- Wind and directional rows could bounce back after a tap because the previous DSP byte was still on screen.
+- Nothing to call out yet — this build adds Face Priority on Auto EV.
 
 What to test
 
-- Pair a saved Pocket 4 or 4 Pro. Confirm the picture and LUT appear together, then gimbal still works.
-- Background the app, return, and confirm the feed comes back without a full re-pair.
-- On ISO, turn Auto Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.
-- In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.
-- Long-press LUT in landscape and confirm 50/50 is visible without scrolling.
+- Set MODE to Auto, open EV, turn Face Priority on, and confirm the drum is gray and the EV tile shows a face mark.
+- Put a face in frame (then two). EV should move without touching the drum; two faces should sit between the two skin tones.
+- Cover every face — EV should hold, not snap to 0.0.
+- Switch to Manual — the SHUTTER tile is speed/angle again, no face mark.

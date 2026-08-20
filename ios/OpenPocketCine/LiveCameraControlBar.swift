@@ -29,7 +29,9 @@ struct LiveCameraControlBar: View {
         HStack(spacing: 0) {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
-                tile(.shutter, label: "EV", value: evValue, widest: "+3.0")
+                tile(
+                    .shutter, label: "EV", value: evValue, widest: "+3.0",
+                    badgeIcon: model.facePriorityExposureEnabled ? "face.smiling" : nil)
             } else {
                 tile(
                     .shutter, label: "SHUTTER", value: shutterValue,
@@ -58,7 +60,8 @@ struct LiveCameraControlBar: View {
         label: String,
         value: String,
         widest: String,
-        valueIcon: String? = nil
+        valueIcon: String? = nil,
+        badgeIcon: String? = nil
     ) -> some View {
         let isActive = model.captureSheet == sheet
         return Button {
@@ -69,7 +72,8 @@ struct LiveCameraControlBar: View {
                 value: value,
                 widest: widest,
                 isActive: isActive,
-                valueIcon: valueIcon
+                valueIcon: valueIcon,
+                badgeIcon: badgeIcon
             )
         }
         .buttonStyle(.plain)
@@ -85,7 +89,8 @@ struct LiveCameraControlBar: View {
             }
         }
         .accessibilityLabel(label)
-        .accessibilityValue(value)
+        .accessibilityValue(
+            badgeIcon == nil ? value : "\(value), \(CaptureLists.facePriorityTitle)")
     }
 
     private func open(_ sheet: CaptureSheet) {
@@ -156,6 +161,8 @@ struct CaptureBarReadout: View {
     let widest: String
     var isActive = false
     var valueIcon: String? = nil
+    /// Shown beside the value (EV face-priority). Distinct from `valueIcon`, which replaces it.
+    var badgeIcon: String? = nil
 
     var body: some View {
         VStack(spacing: 3) {
@@ -171,11 +178,17 @@ struct CaptureBarReadout: View {
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
                     } else {
-                        Text(value)
-                            .font(.system(size: 17, weight: .medium, design: .default))
-                            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        HStack(spacing: 3) {
+                            Text(value)
+                                .font(.system(size: 17, weight: .medium, design: .default))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            if let badgeIcon {
+                                Image(systemName: badgeIcon)
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                        }
+                        .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
                     }
                 }
         }

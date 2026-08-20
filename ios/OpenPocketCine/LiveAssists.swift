@@ -631,6 +631,7 @@ enum OperatorPrefs {
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
     private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
+    private static let facePriorityExposureKey = "OpenPocketCine.FacePriorityExposure"
     private static let shutterUsesAngleKey = "OpenPocketCine.ShutterUsesAngle"
     private static let shutterAngleKey = "OpenPocketCine.ShutterAngleDegrees"
 
@@ -703,6 +704,12 @@ enum OperatorPrefs {
                 ?? .fit16x9
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: portraitFeedAspectKey) }
+    }
+
+    /// Auto-expo: meter Vision faces to middle gray and write EV.
+    static var facePriorityExposureEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: facePriorityExposureKey) }
+        set { UserDefaults.standard.set(newValue, forKey: facePriorityExposureKey) }
     }
 
     /// D-Log 400 ↔ D-Log2 1600 when the operator is still on native ISO.
