@@ -47,9 +47,10 @@ All notable changes to this project are documented here. The format is based on
   fraction, fading to DJI black rather than a full-width cyan wash.
 - Android operator chrome now uses the same Kyant liquid-glass pipeline as
   OpenZCine (`glass` / `overlayGlass` / `chipGlass`) with Pocket iOS DJI-black
-  and Sky Blue tokens. Pairing glyphs, landscape InfoPill, portrait fill rail,
-  assist cells, capture sheets, Operator Setup rows, and media cells follow
-  that shell instead of Material slabs.
+  and Sky Blue tokens, and only on the same surfaces iOS glasses: live HUD,
+  settings row cards / tab rail / close, media category/filter/layout chrome,
+  and playback/delivery buttons. Portrait info bar, rec-options menu, media
+  list rows, filter/sort pills, and help popovers stay solid fills like iOS.
 - Pull-request CI reports one suite instead of duplicating every job from the
   branch push. Gitleaks runs inside Meta checks. **CI gate** remains the only
   required check.

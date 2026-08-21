@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.glass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -239,10 +238,12 @@ fun MediaClipListRow(
         Modifier
             .fillMaxWidth()
             .clip(MediaCornerShape)
-            .background(if (isSelected) LiveDesign.accentDim else Color.Transparent, MediaCornerShape)
-            .glass(MediaCornerShape)
+            .background(
+                if (isSelected) LiveDesign.accentDim.copy(alpha = 0.55f) else LiveDesign.surface.copy(alpha = 0.45f),
+                MediaCornerShape,
+            )
             .border(
-                if (isSelected) 2.dp else 1.dp,
+                1.dp,
                 if (isSelected) LiveDesign.accent.copy(alpha = 0.45f) else LiveDesign.hairline,
                 MediaCornerShape,
             )
@@ -339,24 +340,15 @@ fun FavoriteStar(
     Box(
         Modifier
             .size(44.dp)
-            .chromeClickable(onClick = onClick)
-            .padding(6.dp),
+            .chromeClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .glass(CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-                tint = if (favorite) LiveDesign.accent else LiveDesign.text,
-                modifier = Modifier.size(iconSize + 4.dp),
-            )
-        }
+        Icon(
+            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+            contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
+            tint = if (favorite) LiveDesign.accent else LiveDesign.faint,
+            modifier = Modifier.size(iconSize),
+        )
     }
 }
 

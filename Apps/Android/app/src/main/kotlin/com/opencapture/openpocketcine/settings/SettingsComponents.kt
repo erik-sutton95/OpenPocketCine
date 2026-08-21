@@ -459,7 +459,13 @@ fun SettingsHelpBadge(text: String) {
         }
         if (open) {
             Popup(onDismissRequest = { open = false }) {
-                Box(Modifier.widthIn(max = 280.dp).glass(ChromeShape).padding(10.dp)) {
+                Box(
+                    Modifier
+                        .widthIn(max = 280.dp)
+                        .background(LiveDesign.surface, ChromeShape)
+                        .border(1.dp, LiveDesign.hairline, ChromeShape)
+                        .padding(10.dp),
+                ) {
                     Text(
                         text,
                         style = chromeStyle(11f, FontWeight.Normal),

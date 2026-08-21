@@ -51,7 +51,6 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.glass
-import com.opencapture.openpocketcine.overlayGlass
 import kotlin.math.max
 
 val MediaCapsuleShape: RoundedCornerShape = RoundedCornerShape(percent = 50)
@@ -156,7 +155,7 @@ fun MediaActionPill(
             .alpha(if (enabled) 1f else 0.5f)
             .clip(MediaCapsuleShape)
             .then(if (active) Modifier.background(LiveDesign.accentDim, MediaCapsuleShape) else Modifier)
-            .glass(MediaCapsuleShape)
+            .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription ?: title }
             .padding(horizontal = 10.dp, vertical = 8.dp),
@@ -273,7 +272,8 @@ fun MediaConfirmPopup(
                 .padding(24.dp)
                 .width(320.dp)
                 .clip(MediaCornerShape)
-                .overlayGlass(MediaCornerShape)
+                .background(LiveDesign.surface, MediaCornerShape)
+                .border(1.dp, LiveDesign.hairline, MediaCornerShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -288,7 +288,7 @@ fun MediaConfirmPopup(
                     Modifier
                         .weight(1f)
                         .clip(MediaCornerShape)
-                        .glass(MediaCornerShape)
+                        .border(1.dp, LiveDesign.hairline, MediaCornerShape)
                         .chromeClickable(onClick = onDismiss)
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center,
@@ -303,7 +303,6 @@ fun MediaConfirmPopup(
                             if (destructive) LiveDesign.rec.copy(alpha = 0.22f) else LiveDesign.accentDim,
                             MediaCornerShape,
                         )
-                        .glass(MediaCornerShape)
                         .border(
                             1.dp,
                             if (destructive) LiveDesign.rec.copy(alpha = 0.55f) else LiveDesign.accent.copy(alpha = 0.55f),

@@ -6,7 +6,7 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | --- | --- | --- |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML framing, datalink, BLE advert decode, commands, status, LUTs, layout policy. Pure Foundation — no SwiftUI, UIKit, Android, or I/O. |
 | **iOS app** | `ios/OpenPocketCine/` | SwiftUI shell, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal |
-| **Android app** | `Apps/Android/app/` | Jetpack Compose phone shell. Live/pairing chrome uses Kyant liquid glass (`GlassChrome.kt`) with Pocket iOS tokens; HEVC live view stays a `SurfaceView` (Kyant cannot sample it). System bars are sticky-immersive (`ImmersiveSystemBars.kt`). |
+| **Android app** | `Apps/Android/app/` | Jetpack Compose phone shell. Kyant liquid glass (`GlassChrome.kt`) is only on the same surfaces as iOS `liquidGlass` / `liveChromeGlass` (live HUD, settings row cards / tab rail / close, media category/filter/layout and playback chrome). Pairing, media list rows, and solid `LiveDesign.glass` fills are not Kyant. HEVC live view stays a `SurfaceView` (Kyant cannot sample it). System bars are sticky-immersive (`ImmersiveSystemBars.kt`). |
 | **Android facade** | `Sources/OpenPocketCineAndroidFacade/` | Swift session and JNI boundary |
 | **Tests** | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core |
 

@@ -427,7 +427,7 @@ fun LivePortraitChrome(
 
 @Composable
 fun LivePortraitTopBar(model: AppModel, status: CameraStatus) {
-    Box(Modifier.fillMaxSize().monitorGlass()) {
+    Box(Modifier.fillMaxSize().background(LiveDesign.glass)) {
         if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
             Text(
                 portraitStorageLabel(status),
@@ -659,7 +659,7 @@ fun LivePortraitRecOptionsButton(
                 offset = menuOffset,
                 onDismissRequest = { open = false },
             ) {
-                Column(Modifier.width(220.dp).monitorGlass()) {
+                Column(Modifier.width(220.dp).background(LiveDesign.glass)) {
                     RecOptionsRow("Resolution · Framerate") {
                         open = false
                         onOpen(LiveSheet.FORMAT)
@@ -704,9 +704,7 @@ private fun LivePortraitRailTool(
             Modifier
                 .fillMaxWidth()
                 .clip(ChromeShape)
-                .chipGlass()
-                .then(if (on) Modifier.background(LiveDesign.accentDim, ChromeShape) else Modifier)
-                .then(if (on) Modifier.border(1.dp, LiveDesign.accent, ChromeShape) else Modifier)
+                .background(if (on) LiveDesign.accentDim else Color.Transparent, ChromeShape)
                 .chromeClickable(
                     enabled = !locked,
                     onLongClick = if (tool.hasConfiguration) onLongPress else null,

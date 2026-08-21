@@ -137,6 +137,11 @@ private val GlassEdgeHighlight =
             ),
     )
 
+/**
+ * Kyant liquid glass. Use only where iOS applies `liquidGlass` /
+ * `liveChromeGlass` / `glassCircle` / `glassCapsule`. Solid fills such as
+ * `LiveDesign.glass` are not this modifier.
+ */
 @Composable
 fun Modifier.glass(shape: Shape = ChromeShape): Modifier {
     val glass = LocalMonitorGlass.current
