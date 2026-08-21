@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.media
 
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import org.json.JSONObject
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -127,23 +128,31 @@ object ConformPreview {
     fun rateLabel(rate: Double): String {
         if (!rate.isFinite() || rate <= 0) return "—"
         val whole = round(rate)
-        return if (abs(rate - whole) < rateTolerance) whole.toInt().toString() else String.format("%.2f", rate)
+        return if (abs(rate - whole) < rateTolerance) {
+            whole.toInt().toString()
+        } else {
+            String.format(Locale.US, "%.2f", rate)
+        }
     }
 
     fun label(captureRate: Double, targetRate: Double): String {
         val percent = speed(captureRate, targetRate) * 100
-        return "${rateLabel(captureRate)} → ${rateLabel(targetRate)} fps · ${percentLabel(percent)}"
+        return "${rateLabel(captureRate)} → ${rateLabel(targetRate)} fps · ${percentLabel(percent)}%"
     }
 
     fun targetLabel(captureRate: Double, targetRate: Double): String {
         val percent = speed(captureRate, targetRate) * 100
-        return "${rateLabel(targetRate)} fps · ${percentLabel(percent)}"
+        return "${rateLabel(targetRate)} fps · ${percentLabel(percent)}%"
     }
 
     fun menuHeader(captureRate: Double): String = "Conform ${rateLabel(captureRate)} fps to"
 
     private fun percentLabel(percent: Double): String =
-        if (abs(percent - round(percent)) < 0.05) round(percent).toInt().toString() else String.format("%.1f", percent)
+        if (abs(percent - round(percent)) < 0.05) {
+            round(percent).toInt().toString()
+        } else {
+            String.format(Locale.US, "%.1f", percent)
+        }
 
     private fun usableRate(rate: Double?): Double? {
         if (rate == null || !rate.isFinite() || rate <= 1.0 || rate > 250.0) return null
@@ -205,11 +214,8 @@ enum class PlaybackFrameTap {
     ;
 
     companion object {
-        fun action(chromeVisible: Boolean, reachedEnd: Boolean): PlaybackFrameTap {
-            @Suppress("UNUSED_VARIABLE")
-            val unused = chromeVisible
-            return if (reachedEnd) RESTART_PLAYBACK else TOGGLE_TRANSPORT
-        }
+        fun action(@Suppress("UNUSED_PARAMETER") chromeVisible: Boolean, reachedEnd: Boolean): PlaybackFrameTap =
+            if (reachedEnd) RESTART_PLAYBACK else TOGGLE_TRANSPORT
     }
 }
 

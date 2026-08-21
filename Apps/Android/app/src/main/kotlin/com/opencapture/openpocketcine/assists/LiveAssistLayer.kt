@@ -30,9 +30,10 @@ import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.roundToInt
 
 /**
- * Feed-aligned assist overlays. ZEBRA / FALSE / PEAK do not paint the picture
- * until GPU/AGSL exists; chips still toggle. WAVE / PARADE / VECTOR / LIGHTS
- * draw empty traces + axis — JNI LiveColorScience will feed samples later.
+ * Feed-aligned assist overlays. LUT / PEAK / FALSE / ZEBRA paint through the
+ * GLES live feed (`LiveFeedEffectsSession`); this layer draws guides, scopes,
+ * and the false-colour ruler. WAVE / PARADE / VECTOR / LIGHTS still wait on
+ * JNI LiveColorScience samples.
  *
  * [LiveAssistLayer] does not flip the video. See [LiveAssistState.mirror].
  * Pass [playback] to gate chips on [LiveAssistState.isPlaybackVisible] instead of

@@ -744,16 +744,16 @@ public enum AndroidSessionWire {
             "isVariableFrameRate": source.isVariableFrameRate,
             "isAlreadyConformed": source.isAlreadyConformed,
             "audioLabel": ConformPreview.audioLabel,
-            "conformFloor": ConformPreview.conformFloor,
-            "targetRates": ConformPreview.targetRates,
+            "conformFloor": NSNumber(value: ConformPreview.conformFloor),
+            "targetRates": ConformPreview.targetRates.map { NSNumber(value: $0) },
             "availability": availabilityName(availability),
-            "targets": availability.targets,
+            "targets": availability.targets.map { NSNumber(value: $0) },
         ]
         if let reason = availability.unavailableReason {
             dict["unavailableReason"] = reason
         }
         if let capture = source.captureRate {
-            dict["captureRate"] = capture
+            dict["captureRate"] = NSNumber(value: capture)
             dict["menuHeader"] = ConformPreview.menuHeader(captureRate: capture)
             dict["rateLabel"] = ConformPreview.rateLabel(capture)
             dict["targetLabels"] = availability.targets.map {
@@ -761,13 +761,13 @@ public enum AndroidSessionWire {
             }
             if let target = jsonOptionalNumber(request, key: "targetRate") {
                 let speed = ConformPreview.speed(captureRate: capture, targetRate: target)
-                dict["speed"] = speed
+                dict["speed"] = NSNumber(value: speed)
                 dict["targetLabel"] = ConformPreview.targetLabel(
                     captureRate: capture, targetRate: target)
                 dict["label"] = ConformPreview.label(captureRate: capture, targetRate: target)
                 if let seconds = jsonOptionalNumber(request, key: "sourceSeconds") {
-                    dict["conformedDuration"] = ConformPreview.conformedDuration(
-                        sourceSeconds: seconds, speed: speed)
+                    dict["conformedDuration"] = NSNumber(
+                        value: ConformPreview.conformedDuration(sourceSeconds: seconds, speed: speed))
                 }
             }
         }

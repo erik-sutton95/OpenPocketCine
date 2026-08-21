@@ -126,4 +126,37 @@ class LiveAssistStateTest {
         assertEquals(LiveAssistState.defaultPinned, state.pinned)
         assertEquals("GRID", LiveAssistTool.GRID.label)
     }
+
+    @Test
+    fun playbackToolbarIncludesAudioAndCinemaSet() {
+        assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.AUDIO))
+        assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.FALSE))
+        assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.ZEBRA))
+        assertEquals(LiveAssistTool.AUDIO, LiveAssistTool.playbackToolbarCases.last())
+        assertEquals(LiveAssistTool.toolbarCases, LiveAssistTool.playbackToolbarCases.dropLast(1))
+    }
+
+    @Test
+    fun playbackToolsAreIndependentOfLiveAndPersistSeparately() {
+        var liveSaved = 0
+        var playbackSaved: Set<String>? = null
+        val state =
+            LiveAssistState(
+                onPersist = { liveSaved += 1 },
+                onPersistPlayback = { playbackSaved = it },
+                playbackNames = setOf("FALSE"),
+            )
+        assertTrue(state.isPlaybackVisible(LiveAssistTool.FALSE))
+        assertFalse(state.isOn(LiveAssistTool.FALSE))
+        assertTrue(state.playbackVisibleTools.isNotEmpty())
+        val afterLive = liveSaved
+        state.togglePlayback(LiveAssistTool.ZEBRA)
+        assertTrue(state.isPlaybackVisible(LiveAssistTool.ZEBRA))
+        assertFalse(state.isOn(LiveAssistTool.ZEBRA))
+        assertEquals(afterLive, liveSaved)
+        assertEquals(setOf("FALSE", "ZEBRA"), playbackSaved)
+        state.togglePlayback(LiveAssistTool.FALSE)
+        assertFalse(state.isPlaybackVisible(LiveAssistTool.FALSE))
+        assertEquals(setOf("ZEBRA"), playbackSaved)
+    }
 }

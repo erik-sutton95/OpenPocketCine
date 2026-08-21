@@ -1,3 +1,5 @@
+@file:androidx.media3.common.util.UnstableApi
+
 package com.opencapture.openpocketcine.media
 
 import android.graphics.Bitmap
@@ -7,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,13 +18,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -37,8 +40,8 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -609,47 +612,53 @@ fun MediaPlayerScreen(
                                 )
                             }
                             MediaTransportSkipButton("+15", "Forward 15 seconds") { seekBy(15f) }
-                            Spacer(Modifier.weight(1f))
-                            MediaTransportIconButton(
-                                if (isMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
-                                if (isMuted) "Unmute" else "Mute",
-                                action = true,
-                                highlighted = isMuted,
-                                onClick = { isMuted = !isMuted },
-                            )
-                            PlaybackConformButton(
-                                availability = conformAvailability,
-                                captureRate = conformSource.captureRate ?: 0.0,
-                                selected = conformTarget,
-                                menuOpen = conformMenu,
-                                onMenuOpenChange = { conformMenu = it },
-                                onSelect = { conformTarget = it },
-                            )
-                            MediaTransportIconButton(
-                                Icons.Filled.Fullscreen,
-                                "Hide playback controls",
-                                action = true,
-                                onClick = { chromeVisible = false },
-                            )
-                            MediaTransportIconButton(
-                                Icons.Filled.CropFree,
-                                "View Assist",
-                                action = true,
-                                highlighted = assistMode || anyPlaybackAssistOn,
-                                onClick = { assistMode = true },
-                            )
-                            if (controller.canDelete(active)) {
-                                MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
+                            Row(
+                                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End),
+                            ) {
+                                Spacer(Modifier.width(6.dp))
+                                MediaTransportIconButton(
+                                    if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                    if (isMuted) "Unmute" else "Mute",
+                                    action = true,
+                                    highlighted = isMuted,
+                                    onClick = { isMuted = !isMuted },
+                                )
+                                PlaybackConformButton(
+                                    availability = conformAvailability,
+                                    captureRate = conformSource.captureRate ?: 0.0,
+                                    selected = conformTarget,
+                                    menuOpen = conformMenu,
+                                    onMenuOpenChange = { conformMenu = it },
+                                    onSelect = { conformTarget = it },
+                                )
+                                MediaTransportIconButton(
+                                    Icons.Filled.Fullscreen,
+                                    "Hide playback controls",
+                                    action = true,
+                                    onClick = { chromeVisible = false },
+                                )
+                                MediaTransportIconButton(
+                                    Icons.Filled.CropFree,
+                                    "View Assist",
+                                    action = true,
+                                    highlighted = assistMode || anyPlaybackAssistOn,
+                                    onClick = { assistMode = true },
+                                )
+                                if (controller.canDelete(active)) {
+                                    MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
+                                }
+                                MediaTransportIconButton(
+                                    Icons.Filled.Share,
+                                    "Share clip",
+                                    action = true,
+                                    onClick = {
+                                        player.pause()
+                                        onDeliver(active)
+                                    },
+                                )
                             }
-                            MediaTransportIconButton(
-                                Icons.Filled.Share,
-                                "Share clip",
-                                action = true,
-                                onClick = {
-                                    player.pause()
-                                    onDeliver(active)
-                                },
-                            )
                         }
                     }
                 }

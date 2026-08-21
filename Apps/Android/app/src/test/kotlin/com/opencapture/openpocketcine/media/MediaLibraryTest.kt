@@ -198,6 +198,26 @@ class MediaLibraryTest {
     }
 
     @Test
+    fun fiftyFpsClipOffersHalfSpeedConform() {
+        val file =
+            MediaFile(
+                path = "DCIM/DJI_001/DJI_20260819000000_0050_D.MP4",
+                thumbPath = "MISC/THM/DJI_001/DJI_20260819000000_0050_D.scr",
+                resolution = "3840x2160",
+                fps = 50,
+            )
+        val source = ConformPreview.probeLocal(listedRate = file.fps?.toDouble())
+        val availability = ConformPreview.availability(source)
+        assertEquals(50.0, source.captureRate)
+        assertTrue(availability.targets.contains(25.0))
+        assertEquals("25 fps · 50%", ConformPreview.targetLabel(50.0, 25.0))
+        assertEquals(
+            PlaybackVideoLayout.Size(3840f, 2160f),
+            PlaybackVideoLayout.sizeFromResolution(file.resolution),
+        )
+    }
+
+    @Test
     fun filterAndSortOfManifestFiles() {
         val videos =
             listOf(
