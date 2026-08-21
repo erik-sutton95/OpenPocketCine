@@ -47,8 +47,9 @@ All notable changes to this project are documented here. The format is based on
   intro card tracks session phase instead of a stale `isBusy` getter.
 - Saved-cameras home is titled **Operator Setup** on iOS and Android (the
   header no longer repeats the intro card's "Your cameras."). Android's
-  startup glow matches iOS: Sky Blue at 10%, 760 pt on a 956×440 landscape
-  fraction, fading to DJI black rather than a full-width cyan wash.
+  startup glow is Sky Blue at 7.5% (25% under iOS's 10% so the OLED wash
+  is not hotter), 760 pt on a 956×440 landscape fraction, fading to DJI
+  black rather than a full-width cyan wash.
 - Android operator chrome now uses the same Kyant liquid-glass pipeline as
   OpenZCine (`glass` / `overlayGlass` / `chipGlass`) with Pocket iOS DJI-black
   and Sky Blue tokens, and only on the same surfaces iOS glasses: live HUD,

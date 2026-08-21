@@ -66,8 +66,11 @@ object StartupColors {
     val destructive: Color = Color(0.930f, 0.267f, 0.267f)
     val darkText: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
     val backdropBase: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
-    /** iOS `StartupColors.backdrop` — Sky Blue at 10%. */
-    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.10f)
+    /**
+     * Operator Setup wash. iOS uses Sky Blue at 10%; Samsung OLEDs read that
+     * hotter, so Android sits 25% lower (7.5%).
+     */
+    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.075f)
 }
 
 fun Modifier.startupBackdrop(): Modifier = drawBehind {
