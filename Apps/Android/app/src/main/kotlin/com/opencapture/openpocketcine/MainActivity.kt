@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -37,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -93,12 +93,14 @@ class MainActivity : ComponentActivity() {
 private fun OpenPocketCineApp(model: AppModel) {
     val phase by model.session.phaseFlow.collectAsState()
     var launchSplashVisible by remember { mutableStateOf(true) }
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalActivity.current
     val permissions = pocketRuntimePermissions()
-    fun permissionsAreGranted(): Boolean =
-        permissions.all {
-            ContextCompat.checkSelfPermission(activity, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    fun permissionsAreGranted(): Boolean {
+        val current = activity ?: return false
+        return permissions.all {
+            ContextCompat.checkSelfPermission(current, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
+    }
     var permissionsGranted by remember { mutableStateOf(permissionsAreGranted()) }
     val launcher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -106,11 +108,12 @@ private fun OpenPocketCineApp(model: AppModel) {
             if (permissionsGranted) model.session.startScan()
         }
 
-    LaunchedEffect(model.keepScreenAwake) {
+    LaunchedEffect(model.keepScreenAwake, activity) {
+        val window = activity?.window ?: return@LaunchedEffect
         if (model.keepScreenAwake) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
