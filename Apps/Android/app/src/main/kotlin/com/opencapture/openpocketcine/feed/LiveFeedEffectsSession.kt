@@ -38,8 +38,9 @@ internal class LiveFeedEffectsSession(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val plan = AtomicReference(FeedEffectsRenderPlan.IDENTITY)
     private val running = AtomicBoolean(false)
-    private val frameLock = Object()
+    private val frameLock = java.lang.Object()
     @Volatile private var frameAvailable = false
+    @Volatile private var oesFramePending = false
     @Volatile private var planDirty = true
     @Volatile private var displayTexture: SurfaceTexture? = null
     @Volatile private var displayWidth = 0
@@ -109,18 +110,30 @@ internal class LiveFeedEffectsSession(
             oesSurfaceTexture =
                 SurfaceTexture(oesTexture).apply {
                     setDefaultBufferSize(SOURCE_WIDTH, SOURCE_HEIGHT)
-                    setOnFrameAvailableListener({ requestRender() }, mainHandler)
+                    setOnFrameAvailableListener(
+                        {
+                            synchronized(frameLock) {
+                                oesFramePending = true
+                                frameAvailable = true
+                                frameLock.notifyAll()
+                            }
+                        },
+                        mainHandler,
+                    )
                 }
             decoderSurface = Surface(oesSurfaceTexture)
-            mainHandler.post { onDecoderSurface(decoderSurface) }
+            if (running.get()) onDecoderSurface(decoderSurface)
             sourceTarget = SourceTarget.create(SOURCE_WIDTH, SOURCE_HEIGHT)
             GLES20.glClearColor(0f, 0f, 0f, 1f)
-            var hasFrame = false
+            var hasOesFrame = false
             while (running.get()) {
+                val pullOes: Boolean
                 synchronized(frameLock) {
                     if (running.get() && !frameAvailable && !planDirty) {
                         frameLock.wait(100)
                     }
+                    pullOes = oesFramePending
+                    oesFramePending = false
                     frameAvailable = false
                 }
                 if (!running.get()) break
@@ -131,9 +144,12 @@ internal class LiveFeedEffectsSession(
                     activePlan = nextPlan
                     planDirty = false
                 }
-                oesSurfaceTexture.updateTexImage()
-                oesSurfaceTexture.getTransformMatrix(texMatrix)
-                hasFrame = true
+                if (pullOes) {
+                    oesSurfaceTexture.updateTexImage()
+                    oesSurfaceTexture.getTransformMatrix(texMatrix)
+                    hasOesFrame = true
+                }
+                if (!hasOesFrame) continue
                 val width = displayWidth
                 val height = displayHeight
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, sourceTarget.framebufferId)
@@ -142,15 +158,13 @@ internal class LiveFeedEffectsSession(
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
                 GLES20.glViewport(0, 0, width, height)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-                if (hasFrame) {
-                    effects.draw(
-                        sourceTarget.textureId,
-                        sourceTarget.width.toFloat(),
-                        sourceTarget.height.toFloat(),
-                        width.toFloat(),
-                        height.toFloat(),
-                    )
-                }
+                effects.draw(
+                    sourceTarget.textureId,
+                    sourceTarget.width.toFloat(),
+                    sourceTarget.height.toFloat(),
+                    width.toFloat(),
+                    height.toFloat(),
+                )
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
             }
         } catch (error: Exception) {

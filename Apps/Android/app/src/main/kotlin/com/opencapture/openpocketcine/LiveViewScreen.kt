@@ -26,9 +26,11 @@ import android.content.Context
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +61,9 @@ import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
+import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
+import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.hypot
@@ -298,10 +303,19 @@ fun LiveViewScreen(model: AppModel) {
                     )
                     .clipToBounds(),
             ) {
+                val effectsPlan =
+                    rememberLiveFeedEffectsPlan(
+                        assist = assist,
+                        lutSelection = model.lutSelection,
+                        status = status,
+                        family = model.session.connectedCamera?.model?.family.orEmpty(),
+                        cameraName = model.session.connectedCamera?.name,
+                    )
                 LiveFeedPresenter(
                     mirrored = assist.mirror,
                     captureFrames = glass.tier == GlassTier.FULL,
-                    onSurface = { model.session.attachSurface(it) },
+                    plan = effectsPlan,
+                    onDecoderSurface = { model.session.attachSurface(it) },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -529,53 +543,82 @@ fun LiveViewScreen(model: AppModel) {
  * MediaCodec still needs a Surface. Kyant cannot sample that TextureView, so FULL
  * glass also blits each frame into a Compose Canvas inside the recorded well —
  * the same present split OpenZCine uses for liquid glass.
+ *
+ * LUT / PEAK / FALSE / ZEBRA paint through GLES on a `GL_TEXTURE_EXTERNAL_OES`
+ * producer so the identity HEVC surface is never remade when those tools toggle.
  */
 @Composable
 private fun LiveFeedPresenter(
     mirrored: Boolean,
     captureFrames: Boolean,
-    onSurface: (Surface) -> Unit,
+    plan: FeedEffectsRenderPlan,
+    onDecoderSurface: (Surface) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var frameGen by remember { mutableIntStateOf(0) }
     val frameBmp = remember { arrayOfNulls<Bitmap>(1) }
     val capture = rememberUpdatedState(captureFrames)
-    val attach = rememberUpdatedState(onSurface)
+    val attach = rememberUpdatedState(onDecoderSurface)
+    val context = LocalContext.current
+    var gpuFailed by remember { mutableStateOf(false) }
+    val session =
+        remember {
+            LiveFeedEffectsSession(
+                context = context,
+                onDecoderSurface = { attach.value(it) },
+                onGpuFailed = { gpuFailed = true },
+            )
+        }
+    DisposableEffect(session) {
+        onDispose { session.detachDisplay() }
+    }
+    LaunchedEffect(plan) { session.updatePlan(plan) }
 
     Box(modifier.graphicsLayer { scaleX = if (mirrored) -1f else 1f }) {
-        AndroidView(
-            factory = { context ->
-                TextureView(context).apply {
-                    isOpaque = true
-                    surfaceTextureListener =
-                        TextureFeedListener(
-                            host = this,
-                            onSurface = { attach.value(it) },
-                            onUpdated = { tv ->
-                                if (capture.value) {
-                                    val w = tv.width
-                                    val h = tv.height
-                                    if (w > 0 && h > 0) {
-                                        val dst =
-                                            frameBmp[0]?.takeIf { it.width == w && it.height == h }
-                                                ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                                                    .also { frameBmp[0] = it }
-                                        tv.getBitmap(dst)
-                                        tv.post { frameGen += 1 }
-                                    }
+        key(gpuFailed) {
+            AndroidView(
+                factory = { viewContext ->
+                    TextureView(viewContext).apply {
+                        isOpaque = true
+                        val onUpdated: (TextureView) -> Unit = { tv ->
+                            if (capture.value) {
+                                val w = tv.width
+                                val h = tv.height
+                                if (w > 0 && h > 0) {
+                                    val dst =
+                                        frameBmp[0]?.takeIf { it.width == w && it.height == h }
+                                            ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                                                .also { frameBmp[0] = it }
+                                    tv.getBitmap(dst)
+                                    tv.post { frameGen += 1 }
                                 }
-                            },
-                        )
-                }
-            },
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = 0.999f
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    },
-        )
+                            }
+                        }
+                        surfaceTextureListener =
+                            if (gpuFailed) {
+                                TextureFeedListener(
+                                    host = this,
+                                    onSurface = { attach.value(it) },
+                                    onUpdated = onUpdated,
+                                )
+                            } else {
+                                EffectsFeedListener(
+                                    host = this,
+                                    session = session,
+                                    onUpdated = onUpdated,
+                                )
+                            }
+                    }
+                },
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = 0.999f
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        },
+            )
+        }
         val gen = frameGen
         val bmp = frameBmp[0]
         if (captureFrames && gen > 0 && bmp != null && !bmp.isRecycled) {
@@ -588,6 +631,38 @@ private fun LiveFeedPresenter(
                 }
             }
         }
+    }
+}
+
+/** GPU path: TextureView is the EGL window; MediaCodec writes an OES SurfaceTexture. */
+private class EffectsFeedListener(
+    private val host: TextureView,
+    private val session: LiveFeedEffectsSession,
+    private val onUpdated: ((TextureView) -> Unit)?,
+) : TextureView.SurfaceTextureListener {
+    override fun onSurfaceTextureAvailable(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+    ) {
+        session.attachDisplay(surfaceTexture, width, height)
+    }
+
+    override fun onSurfaceTextureSizeChanged(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+    ) {
+        session.resize(width, height)
+    }
+
+    override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+        session.detachDisplay()
+        return true
+    }
+
+    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
+        onUpdated?.invoke(host)
     }
 }
 
@@ -699,14 +774,14 @@ private fun LandscapeChrome(
         if (showsSettings) {
             Box(Modifier.liveModuleFrame(layout.settings).chromeEditStroke(editing != null, true)) {
                 AuxCircleButton(onClick = { if (hits) model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
-                    GearGlyph(it)
+                    OpcIcon(OpcIcon.SETTINGS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
                 }
             }
         }
         if (showsMedia) {
             Box(Modifier.liveModuleFrame(layout.media).chromeEditStroke(editing != null, true)) {
                 AuxCircleButton(onClick = { if (hits) model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) {
-                    MediaGlyph(it)
+                    OpcIcon(OpcIcon.LAYERS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
                 }
             }
         }
