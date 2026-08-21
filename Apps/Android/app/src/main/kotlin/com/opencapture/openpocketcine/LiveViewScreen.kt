@@ -65,12 +65,11 @@ fun LiveViewScreen(model: AppModel) {
     var showStorageDuration by remember { mutableStateOf(false) }
     val recovery by model.session.recoveryState.collectAsState()
 
+    ObservePhoneBattery(model)
     LaunchedEffect(Unit) {
-        model.refreshPhoneBattery()
         while (true) {
             delay(1_000)
             tick += 1
-            model.refreshPhoneBattery()
         }
     }
     LaunchedEffect(model.assistClean, model.chromeEditorMode) {

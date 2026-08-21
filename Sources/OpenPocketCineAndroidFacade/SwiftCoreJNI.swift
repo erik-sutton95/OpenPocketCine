@@ -349,4 +349,25 @@
                 snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_validateImportedLut")
+    public func swiftCoreValidateImportedLut(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        utf8: jbyteArray?, fileName: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            LUTLibraryWire.validatedImport(
+                utf8: swiftBytes(env, utf8) ?? [],
+                fileName: swiftString(env, fileName) ?? "") ?? "")
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packImportedLut")
+    public func swiftCorePackImportedLut(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, utf8: jbyteArray?
+    ) -> jbyteArray? {
+        guard let packed = LUTLibraryWire.packedImportedLUT(utf8: swiftBytes(env, utf8) ?? [])
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
 #endif

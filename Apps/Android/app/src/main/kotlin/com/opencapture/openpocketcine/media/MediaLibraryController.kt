@@ -25,7 +25,7 @@ class MediaLibraryController(
     private val appContext = context.applicationContext
     private val cache =
         MediaCache(
-            filesDir = appContext.filesDir,
+            filesDir = appContext.noBackupFilesDir,
             prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),
         )
     private val link: MediaSessionLink =

@@ -299,8 +299,8 @@ class MediaLibraryTest {
 
     @Test
     fun downloadedUsesNinetyPercentThreshold() {
-        assertTrue(MediaCache.isCompleteDownload(90, 100))
-        assertFalse(MediaCache.isCompleteDownload(89, 100))
+        assertTrue(MediaCache.isCompleteDownload(100, 100))
+        assertFalse(MediaCache.isCompleteDownload(90, 100))
         assertTrue(MediaCache.isCompleteDownload(1, 0))
         assertFalse(MediaCache.isCompleteDownload(0, 100))
     }

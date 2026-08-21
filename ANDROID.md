@@ -62,3 +62,7 @@ OpenZCine Android patterns adopted (not Nikon PTP/USB/Wear/OCR):
 - `WIFI_MODE_FULL_LOW_LATENCY` lock while live
 - In-app-gated operator haptics
 - AAR `compileSdk` 37 metadata gate disabled so the project stays on SDK 36
+- Shared `CubeLUT` packer (`LUTLibraryWire`) for GLES-ready RGBA cubes
+- GLES ES2 feed-effect shaders staged under `assets/shaders/` (SurfaceTexture wiring is next)
+- Media cache complete-at-exact-length + `noBackupFilesDir`
+- Sticky `ACTION_BATTERY_CHANGED` readout instead of a 1 Hz poll

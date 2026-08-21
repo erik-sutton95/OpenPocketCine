@@ -169,6 +169,12 @@ object SwiftCore {
 
     external fun depacketizerDestroy(handle: Long)
 
+    /** `"1\\u001F{size}\\u001Fcustom:{fileName}"` or empty on reject. */
+    external fun validateImportedLut(utf8: ByteArray, fileName: String): String?
+
+    /** Packed-2D RGBA8 cube (`n³ × 4`) for GLES upload. */
+    external fun packImportedLut(utf8: ByteArray): ByteArray?
+
     external fun gimbalStickEncode(x: Double, y: Double, sensitivity: Int): String?
 
     external fun camFovChipWrite(currentFactor: Double): String?

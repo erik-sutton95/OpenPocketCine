@@ -31,5 +31,9 @@ let package = Package(
             name: "OpenPocketCineAndroidFacade",
             dependencies: ["OpenPocketViewCore", "CJNI"]
         ),
+        .testTarget(
+            name: "OpenPocketCineAndroidFacadeTests",
+            dependencies: ["OpenPocketCineAndroidFacade", "OpenPocketViewCore"]
+        ),
     ]
 )

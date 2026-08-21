@@ -187,15 +187,17 @@ class AppModel(context: Context) {
     }
 
     fun refreshPhoneBattery() {
-        val bm = appContext.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        val pct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        phoneBatteryPercent = if (pct in 0..100) pct else -1
-        val sticky =
-            appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val status = sticky?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        phoneCharging =
-            status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
+        val readout =
+            readPhoneBatteryReadout(
+                appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)),
+                appContext.getSystemService(Context.BATTERY_SERVICE) as BatteryManager,
+            )
+        applyPhoneBattery(readout.percent ?: -1, readout.externalPower == true)
+    }
+
+    fun applyPhoneBattery(percent: Int, charging: Boolean) {
+        phoneBatteryPercent = percent
+        phoneCharging = charging
     }
 
     fun pressRecord() = session.pressRecord()

@@ -101,11 +101,11 @@ class MediaCache(
 
         fun cacheName(path: String): String = path.replace("/", "_")
 
-        /** Cached ≥90% of the manifest size counts as downloaded. */
+        /** Complete only at the expected length (OpenZCine cache contract). */
         fun isCompleteDownload(onDisk: Long, sizeBytes: Long): Boolean {
             if (onDisk <= 0L) return false
             if (sizeBytes <= 0L) return true
-            return onDisk >= sizeBytes * 9 / 10
+            return onDisk == sizeBytes
         }
     }
 }
