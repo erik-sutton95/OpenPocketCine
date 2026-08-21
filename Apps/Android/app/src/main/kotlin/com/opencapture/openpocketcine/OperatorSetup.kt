@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -149,6 +150,8 @@ object OpenPocketCineLinks {
         "https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml"
     const val FEATURE_REQUEST =
         "https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas"
+    const val PRIVACY = "https://openpocketcine.app/privacy/"
+    const val TERMS = "https://openpocketcine.app/terms/"
 }
 
 internal object OperatorLinkHealth {
@@ -314,6 +317,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
 
     val density = LocalDensity.current
     val bar = LocalImmersiveBarInsets.current
+    CompositionLocalProvider(LocalMonitorGlass provides null) {
     Box(
         Modifier
             .fillMaxSize()
@@ -432,6 +436,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
             )
         }
     }
+    }
 }
 
 @Composable
@@ -512,7 +517,7 @@ private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View
         Modifier
             .width(146.dp)
             .fillMaxHeight()
-            .glass(ChromeShape)
+            .panelGlass(ChromeShape)
             .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -533,7 +538,7 @@ private fun SettingsTabStrip(
     Row(
         modifier
             .fillMaxWidth()
-            .glass(ChromeShape)
+            .panelGlass(ChromeShape)
             .horizontalScroll(scroll)
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -1340,10 +1345,10 @@ private fun SystemRows(onLegal: (LegalKind) -> Unit) {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SOURCE) }
         }
         SettingsInlineRow("Privacy", "What this app stores on this phone.") {
-            SettingsActionPill("Open") { onLegal(LegalKind.PRIVACY) }
+            SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.PRIVACY) }
         }
         SettingsInlineRow("Terms", "How you can use OpenPocketCine.") {
-            SettingsActionPill("Open") { onLegal(LegalKind.TERMS) }
+            SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.TERMS) }
         }
         SettingsInlineRow("Licenses", "Apache 2.0 and third-party notices.") {
             SettingsActionPill("Open") { onLegal(LegalKind.LICENSES) }
@@ -1365,7 +1370,7 @@ private fun SystemRows(onLegal: (LegalKind) -> Unit) {
     }
 }
 
-private fun openUrl(context: Context, url: String) {
+internal fun openUrl(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 

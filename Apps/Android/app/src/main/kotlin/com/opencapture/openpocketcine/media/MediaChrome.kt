@@ -50,7 +50,7 @@ import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.glass
+import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.max
 
 val MediaCapsuleShape: RoundedCornerShape = RoundedCornerShape(percent = 50)
@@ -58,7 +58,7 @@ val MediaCapsuleShape: RoundedCornerShape = RoundedCornerShape(percent = 50)
 val MediaCornerShape: RoundedCornerShape = ChromeShape
 
 @Composable
-fun Modifier.mediaGlass(shape: Shape = MediaCornerShape): Modifier = glass(shape)
+fun Modifier.mediaGlass(shape: Shape = MediaCornerShape): Modifier = panelGlass(shape)
 
 @Composable
 fun MediaCloseButton(
@@ -71,7 +71,7 @@ fun MediaCloseButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .glass(CircleShape)
+            .panelGlass(CircleShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { contentDescription = "Close" },
         contentAlignment = Alignment.Center,
@@ -94,7 +94,7 @@ fun MediaBackButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .glass(CircleShape)
+            .panelGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics { contentDescription = "Back" },
         contentAlignment = Alignment.Center,
@@ -125,7 +125,7 @@ fun MediaCircleIconButton(
             .size(size)
             .clip(CircleShape)
             .then(if (highlighted) Modifier.background(LiveDesign.accentDim, CircleShape) else Modifier)
-            .glass(CircleShape)
+            .panelGlass(CircleShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
@@ -446,7 +446,7 @@ fun MediaTransportIconButton(
             .size(width = width, height = height)
             .clip(shape)
             .then(if (highlighted) Modifier.background(LiveDesign.accentDim, shape) else Modifier)
-            .glass(shape)
+            .panelGlass(shape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
@@ -475,7 +475,7 @@ fun MediaTransportSkipButton(
         Modifier
             .size(width = PlaybackChromeMetrics.transportButtonWidth, height = PlaybackChromeMetrics.transportButtonHeight)
             .clip(PlaybackChromeMetrics.corner)
-            .glass(PlaybackChromeMetrics.corner)
+            .panelGlass(PlaybackChromeMetrics.corner)
             .chromeClickable(onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,

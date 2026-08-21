@@ -41,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,11 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.glass
-import com.opencapture.openpocketcine.overlayGlass
+import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.launch
 
 @Composable
@@ -216,6 +217,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
     }
 
+    CompositionLocalProvider(LocalMonitorGlass provides null) {
     Box(Modifier.fillMaxSize().background(LiveDesign.background)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val portrait = maxHeight > maxWidth
@@ -393,6 +395,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             )
         }
     }
+    }
 }
 
 @Composable
@@ -401,7 +404,7 @@ private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab)
         Modifier
             .padding(start = 45.dp)
             .clip(MediaCornerShape)
-            .glass(MediaCornerShape)
+            .panelGlass(MediaCornerShape)
             .horizontalScroll(rememberScrollState())
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -425,7 +428,7 @@ private fun CategorySidebar(
         Column(
             Modifier
                 .clip(MediaCornerShape)
-                .glass(MediaCornerShape)
+                .panelGlass(MediaCornerShape)
                 .padding(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -589,7 +592,7 @@ private fun CacheBar(filename: String, progress: Double) {
             .padding(top = 8.dp)
             .fillMaxWidth()
             .clip(MediaCapsuleShape)
-            .glass(MediaCapsuleShape)
+            .panelGlass(MediaCapsuleShape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -684,7 +687,7 @@ private fun LayoutControls(
     Row(
         modifier
             .clip(MediaCapsuleShape)
-            .glass(MediaCapsuleShape)
+            .panelGlass(MediaCapsuleShape)
             .padding(horizontal = 6.dp, vertical = 6.dp)
             .semantics { contentDescription = "Media layout and thumbnail size" },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -757,7 +760,7 @@ private fun FilterPopup(
                 .width(320.dp)
                 .height(420.dp)
                 .clip(MediaCornerShape)
-                .overlayGlass(MediaCornerShape)
+                .panelGlass(MediaCornerShape)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {

@@ -65,12 +65,11 @@ import androidx.compose.ui.window.Popup
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.ChromeShape
-import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.glass
 import com.opencapture.openpocketcine.glass.LiquidSlider
+import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.roundToInt
 
 private fun chromeStyle(size: Float, weight: FontWeight, mono: Boolean = false): TextStyle =
@@ -108,7 +107,7 @@ fun SettingsRowCard(
 ) {
     Column(
         Modifier.fillMaxWidth()
-            .glass(ChromeShape)
+            .panelGlass(ChromeShape)
             .padding(horizontal = 13.dp)
             .padding(bottom = 4.dp),
     ) {
@@ -241,7 +240,7 @@ fun SettingsDashScale(title: String, caption: String, score: Int) {
         }
     Column(
         Modifier.fillMaxWidth()
-            .glass(ChromeShape)
+            .panelGlass(ChromeShape)
             .padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
@@ -704,9 +703,8 @@ fun GlassPillSlider(
     modifier: Modifier = Modifier,
 ) {
     val monitorGlass = LocalMonitorGlass.current
-    // Liquid glass only when the monitor session is on FULL tier. Standalone
-    // Operator Setup and FLAT-tier devices get the solid white capsule thumb.
-    val useLiquidGlass = monitorGlass?.tier == GlassTier.FULL
+    // Settings never samples the live-feed Kyant backdrop. Solid capsule only.
+    val useLiquidGlass = false
     val localBackdrop = rememberLayerBackdrop()
     val sceneBackdrop = monitorGlass?.layerBackdrop
     val latestOnChange by rememberUpdatedState(onChange)
@@ -928,7 +926,7 @@ fun SettingsGroupCard(
 ) {
     val isExpanded = expanded ?: true
     Column(
-        Modifier.fillMaxWidth().glass(ChromeShape).padding(12.dp),
+        Modifier.fillMaxWidth().panelGlass(ChromeShape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
         Column(
@@ -1012,7 +1010,7 @@ fun PanelCloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier
             .size(37.dp)
-            .glass(CircleShape)
+            .panelGlass(CircleShape)
             .settingsClickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Close" },
         contentAlignment = Alignment.Center,

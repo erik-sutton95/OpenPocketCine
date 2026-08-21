@@ -30,9 +30,10 @@ import com.kyant.backdrop.highlight.HighlightStyle
 // Liquid glass via Kyant0/AndroidLiquidGlass — same package OpenZCine uses.
 // Pocket tokens stay DJI-black / cyan (iOS LiveDesign), not OpenZCine gold.
 //
-// HEVC live view is a SurfaceView and cannot be sampled by Kyant. Chrome
-// still records the Compose scene so pills blur sibling chrome; the feed
-// itself stays a hole-punched surface (iOS samples VT separately too).
+// HEVC still decodes into a TextureView. Kyant cannot sample that buffer,
+// so FULL glass also blits the frame into a Compose Canvas inside the
+// recorded well (OpenZCine LiveFeedView). Popups stay outside the scene
+// recording so overlay glass does not loop.
 
 private const val TAG = "OpcGlass"
 
@@ -121,9 +122,9 @@ class MonitorGlass(
 
 val LocalMonitorGlass = compositionLocalOf<MonitorGlass?> { null }
 
-/** iOS `Glass.regular` over DJI black — alpha 0.24 matches LiveDesign.glass. */
-private val GlassSurfaceTint = Color(0f, 0f, 0f, 0.24f)
-private val ChipGlassFill = Color(0f, 0f, 0f, 0.38f)
+/** iOS `LiveDesign.glass` — light frost only, no HUD plate. */
+private val GlassSurfaceTint = LiveDesign.glass
+private val ChipGlassFill = LiveDesign.glassOpaque
 
 private val GlassEdgeHighlight =
     Highlight(
@@ -138,9 +139,15 @@ private val GlassEdgeHighlight =
     )
 
 /**
- * Kyant liquid glass. Use only where iOS applies `liquidGlass` /
- * `liveChromeGlass` / `glassCircle` / `glassCapsule`. Solid fills such as
- * `LiveDesign.glass` are not this modifier.
+ * Solid frost for Operator Setup and media. Not Kyant — those pages sit on
+ * DJI-black, not the live feed, so liquid glass has nothing to sample.
+ */
+fun Modifier.panelGlass(shape: Shape = ChromeShape): Modifier =
+    background(LiveDesign.glassOpaque, shape).border(1.dp, LiveDesign.hairlineStrong, shape)
+
+/**
+ * Kyant liquid glass. Live HUD only (`liveChromeGlass` / `monitorGlass`).
+ * Operator Setup and media use [panelGlass].
  */
 @Composable
 fun Modifier.glass(shape: Shape = ChromeShape): Modifier {
@@ -157,6 +164,20 @@ fun Modifier.overlayGlass(shape: Shape = ChromeShape): Modifier {
     val glass = LocalMonitorGlass.current
     return glassBackdrop(
         backdrop = glass?.overlayBackdrop ?: glass?.layerBackdrop,
+        tier = glass?.tier ?: GlassTier.FLAT,
+        shape = shape,
+    )
+}
+
+/**
+ * iOS `liveChromeGlass`: frost + Titan tint over a 52% DJI-black plate so a
+ * bright window cannot bleach the HUD.
+ */
+@Composable
+fun Modifier.liveChromeGlass(shape: Shape = ChromeShape): Modifier {
+    val glass = LocalMonitorGlass.current
+    return liveChromeBackdrop(
+        backdrop = glass?.layerBackdrop,
         tier = glass?.tier ?: GlassTier.FLAT,
         shape = shape,
     )
@@ -189,6 +210,40 @@ private fun Modifier.glassBackdrop(
         highlight = { GlassEdgeHighlight },
         onDrawSurface = { drawRect(GlassSurfaceTint) },
     )
+}
+
+@Composable
+private fun Modifier.liveChromeBackdrop(
+    backdrop: LayerBackdrop?,
+    tier: GlassTier,
+    shape: Shape,
+): Modifier {
+    if (backdrop == null || tier == GlassTier.FLAT || Build.VERSION.SDK_INT < 33) {
+        return background(LiveDesign.chromePlate, shape)
+            .border(1.dp, LiveDesign.hairlineStrong, shape)
+    }
+    return this
+        .background(LiveDesign.chromePlate, shape)
+        .drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(12f.dp.toPx())
+                if (shape is CornerBasedShape) {
+                    lens(
+                        refractionHeight = 10f.dp.toPx(),
+                        refractionAmount = 20f.dp.toPx(),
+                        depthEffect = true,
+                    )
+                }
+            },
+            highlight = { GlassEdgeHighlight },
+            onDrawSurface = {
+                drawRect(LiveDesign.chromePlate)
+                drawRect(LiveDesign.chromeTint)
+            },
+        )
 }
 
 fun Modifier.chipGlass(shape: Shape = ChromeShape): Modifier =

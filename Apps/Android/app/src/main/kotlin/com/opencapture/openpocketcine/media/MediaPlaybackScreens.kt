@@ -69,7 +69,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.glass
+import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -134,7 +134,7 @@ fun MediaPhotoViewer(
                 Modifier
                     .align(Alignment.Center)
                     .clip(MediaCornerShape)
-                    .glass(MediaCornerShape)
+                    .panelGlass(MediaCornerShape)
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -330,7 +330,7 @@ fun MediaPlayerScreen(
                 Column(
                     Modifier
                         .clip(MediaCornerShape)
-                        .glass(MediaCornerShape)
+                        .panelGlass(MediaCornerShape)
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -400,7 +400,7 @@ fun MediaPlayerScreen(
                     Modifier
                         .fillMaxWidth()
                         .clip(MediaCornerShape)
-                        .glass(MediaCornerShape)
+                        .panelGlass(MediaCornerShape)
                         .padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -537,7 +537,7 @@ private fun ClipNavButton(
         modifier
             .size(32.dp)
             .clip(CircleShape)
-            .glass(CircleShape)
+            .panelGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,

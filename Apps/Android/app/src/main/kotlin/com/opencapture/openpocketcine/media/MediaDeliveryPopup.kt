@@ -49,8 +49,7 @@ import androidx.core.content.FileProvider
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.glass
-import com.opencapture.openpocketcine.overlayGlass
+import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -187,7 +186,7 @@ fun MediaDeliveryPopup(
                 .widthIn(max = 420.dp)
                 .heightIn(max = 520.dp)
                 .clip(MediaCornerShape)
-                .overlayGlass(MediaCornerShape)
+                .panelGlass(MediaCornerShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -292,7 +291,7 @@ fun MediaDeliveryProgressOverlay(
             .fillMaxWidth()
             .shadow(12.dp, MediaCapsuleShape, ambientColor = Color.Black.copy(alpha = 0.35f))
             .clip(MediaCapsuleShape)
-            .glass(MediaCapsuleShape)
+            .panelGlass(MediaCapsuleShape)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -346,7 +345,7 @@ fun MediaDeliveryCompletionToast(message: String, modifier: Modifier = Modifier)
                 .navigationBarsPadding()
                 .padding(bottom = 28.dp)
                 .clip(MediaCapsuleShape)
-                .glass(MediaCapsuleShape)
+                .panelGlass(MediaCapsuleShape)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
@@ -368,7 +367,7 @@ private fun DestinationHeader(onClose: () -> Unit) {
             Modifier
                 .size(30.dp)
                 .clip(CircleShape)
-                .glass(CircleShape)
+                .panelGlass(CircleShape)
                 .chromeClickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) {
