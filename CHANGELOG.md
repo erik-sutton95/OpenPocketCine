@@ -37,6 +37,8 @@ All notable changes to this project are documented here. The format is based on
   installs the official Swift Android SDK without nested unpinned actions; live
   feed orientation tests read spatial edges and Metal rows instead of luma
   after false colour.
+- Android CI follows the GitHub Ubuntu Swift toolchain symlink so
+  `llvm-objcopy` is found beside the real `swift` binary.
 - Public-launch GitHub settings: CI re-enabled with **CI gate** required on
   `main`, force-push off, Actions SHA pinning, and a `scripts/go-public.sh`
   walkthrough for the remaining visibility flip.
