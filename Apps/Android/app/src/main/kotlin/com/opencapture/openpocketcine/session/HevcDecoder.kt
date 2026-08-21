@@ -42,6 +42,8 @@ class HevcDecoder {
     /** ElapsedRealtime of the last presented picture. Watchdog stall signal. */
     @Volatile var lastPresentedAt: Long? = null
         private set
+    val isPresentationReady: Boolean
+        get() = surface?.isValid == true
     private val _hasPicture = MutableStateFlow(false)
     val hasPicture: StateFlow<Boolean> = _hasPicture.asStateFlow()
     val decoderErrors = AtomicInteger(0)

@@ -186,6 +186,95 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun firstPictureEscalatesToRejoinNotEndlessUdpRebuild() {
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 2,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REJOIN,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 4,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REJOIN,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 420,
+                enableSends = 2,
+                sinceEnableMs = 8_000,
+                videoAgeMs = 8_000,
+                sinceRebuildMs = 5_000,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 800,
+                enableSends = 1,
+                sinceEnableMs = 3_000,
+                videoAgeMs = 200,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 800,
+                enableSends = 1,
+                sinceEnableMs = 5_000,
+                videoAgeMs = 200,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 370,
+                enableSends = 2,
+                sinceEnableMs = 2_000,
+                videoAgeMs = 2_500,
+                sinceRebuildMs = null,
+            ),
+        )
+    }
+
+    @Test
+    fun keepaliveDoesNotTearUdpDuringFirstPicture() {
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild = true,
+                rebuildInFlight = false,
+                sinceRebuildMs = null,
+                sawPicture = false,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild = true,
+                rebuildInFlight = false,
+                sinceRebuildMs = 10_000,
+                videoFresh = true,
+                sawPicture = true,
+            ),
+        )
+        assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = true))
+        assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = false))
+        assertTrue(!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = false))
+        assertTrue(LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = true))
+    }
+
+    @Test
     fun firstPictureWaitsTwoSecondsThenResendsNotOneHertz() {
         assertEquals(
             LiveViewEnablePolicy.FirstPictureStep.WAIT,

@@ -105,6 +105,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val pairingHold = ConcurrentHashMap<Int, DumlFrame>()
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
+    private var feedRecoveryJob: Job? = null
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
@@ -205,6 +206,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
         _isReconnecting.value = false
+        feedRecoveryJob?.cancel()
+        feedRecoveryJob = null
         connectJob?.cancel()
         keepaliveJob?.cancel()
         frameJob?.cancel()
@@ -398,6 +401,24 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 while (true) {
                     ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
                     if (ssid != null && !holdsMonitor) {
+                        if (!isBrowsingMedia && shouldStartUDPRebuild) {
+                            datalink?.rebuildUdpKeepingSession()
+                            val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
+                            val hadVideo =
+                                LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
+                            val force = LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)
+                            if (liveViewEnableSends > 0) {
+                                if (force) {
+                                    Log.i(TAG, "live: first-picture enable after UDP rebuild (neverGotVideo)")
+                                }
+                                sendRecoverEnable(
+                                    force = force,
+                                    reason =
+                                        if (force) "first-picture after UDP rebuild"
+                                        else "keepalive after UDP rebuild",
+                                )
+                            }
+                        }
                         datalink?.keepalive()
                         publishPipelineStats()
                         if (!isBrowsingMedia) recoverLiveViewIfNeeded()
@@ -406,6 +427,29 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
             }
     }
+
+    /** One UDP rebuild at a time. Keepalive must not collide with first-picture. */
+    private val shouldStartUDPRebuild: Boolean
+        get() {
+            val now = SystemClock.elapsedRealtime()
+            val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
+            val sinceEnable = if (lastIdrRequest == 0L) null else now - lastIdrRequest
+            if (LiveViewEnablePolicy.shouldHoldForGopReset(sinceEnable, videoAge)) return false
+            val videoFresh = videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS
+            return LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild = datalink?.needsRebuild == true,
+                rebuildInFlight = datalink?.isRebuilding == true || feedRecoveryJob != null,
+                sinceRebuildMs = datalink?.lastRebuildAt?.let { now - it },
+                videoFresh = videoFresh,
+                sawPicture = hasStableLivePicture,
+            )
+        }
+
+    private val hasStableLivePicture: Boolean
+        get() {
+            val at = decoder.lastPresentedAt ?: return false
+            return SystemClock.elapsedRealtime() - at >= LiveViewEnablePolicy.REBUILD_COOLDOWN_MS
+        }
 
     private fun publishPipelineStats() {
         videoPackets = datalink?.videoPackets ?: 0
@@ -425,6 +469,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun recoverLiveViewIfNeeded() {
         if (isBrowsingMedia || holdsMonitor) return
         if (!joiner.isProcessBound()) return
+        if (feedRecoveryJob != null) return
         val packets = datalink?.videoPackets ?: 0
         val now = SystemClock.elapsedRealtime()
         if (packets > 0 && streamStartedAt == null) streamStartedAt = now
@@ -466,11 +511,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun recoverFirstPictureIfNeeded(now: Long, packets: Int) {
-        if (datalink?.isRebuilding == true) return
-        val counted = if (decoder.hasFormat) maxOf(packets, 1) else packets
+        if (datalink?.isRebuilding == true || feedRecoveryJob != null) return
         when (
             LiveViewEnablePolicy.firstPictureStep(
-                videoPackets = counted,
+                videoPackets = packets,
                 enableSends = liveViewEnableSends,
                 sinceEnableMs = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest,
                 videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it },
@@ -486,9 +530,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
             }
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
-                Log.i(TAG, "live: first-picture rebuild UDP")
-                datalink?.rebuildUdpKeepingSession()
-                sendRecoverEnable(force = true, reason = "first-picture after UDP rebuild")
+                Log.i(TAG, "live: first-picture rebuild UDP (receive died pkts=$packets)")
+                startFeedRecovery {
+                    datalink?.rebuildUdpKeepingSession()
+                    sendRecoverEnable(force = true, reason = "first-picture after UDP rebuild")
+                }
+            }
+            LiveViewEnablePolicy.FirstPictureStep.REJOIN -> {
+                Log.i(TAG, "live: first-picture full rejoin (SoftAP bind kept)")
+                startFeedRecovery { rejoinDatalinkKeepingLive() }
             }
         }
     }
@@ -514,22 +564,56 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.Action.NONE -> Unit
             LiveViewEnablePolicy.Action.RESEND_ENABLE ->
                 sendRecoverEnable(force = true, reason = "watchdog")
-            LiveViewEnablePolicy.Action.REBUILD_UDP -> {
-                datalink?.rebuildUdpKeepingSession()
-                sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
-            }
+            LiveViewEnablePolicy.Action.REBUILD_UDP ->
+                startFeedRecovery {
+                    datalink?.rebuildUdpKeepingSession()
+                    sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
+                }
         }
     }
 
     private fun sendRecoverEnable(force: Boolean, reason: String) {
         if (isBrowsingMedia) return
+        val pathReady = joiner.isProcessBound()
+        val decoderReady = decoder.isPresentationReady
+        if (!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady, decoderReady)) {
+            Log.i(TAG, "feed: hold enable path=${if (pathReady) 1 else 0} decoder=${if (decoderReady) 1 else 0} reason=$reason")
+            return
+        }
         if (!force && lastIdrRequest != 0L &&
             SystemClock.elapsedRealtime() - lastIdrRequest < LiveViewEnablePolicy.ESCALATE_MS
         ) {
             return
         }
-        if (!joiner.isProcessBound()) return
         sendCapturedLiveView(reason)
+    }
+
+    private fun startFeedRecovery(work: suspend () -> Unit) {
+        feedRecoveryJob?.cancel()
+        feedRecoveryJob =
+            scope.launch {
+                try {
+                    work()
+                } finally {
+                    feedRecoveryJob = null
+                }
+            }
+    }
+
+    /** New UDP handshake on SoftAP. BLE and LIVE stay so the last frame is not dumped. */
+    private suspend fun rejoinDatalinkKeepingLive() {
+        val camera = connectedCamera ?: return
+        Log.i(TAG, "feed: full datalink rejoin (SoftAP bind kept)")
+        datalink?.close()
+        datalink = null
+        decoder.flushForRecovery()
+        liveViewEnableSends = 0
+        idrHoldEnableCount = 0
+        firstPictureSettled = false
+        if (!joiner.isProcessBound()) return
+        openDatalink(camera)
+        decoder.beginIDRHold()
+        sendCapturedLiveView("first picture")
     }
 
     private fun sendCapturedLiveView(reason: String): Boolean {
@@ -1271,7 +1355,7 @@ internal object LiveViewEnablePolicy {
 
     enum class Stage { IDLE, RESEND_ENABLE, REBUILD_UDP, COOLDOWN }
 
-    enum class FirstPictureStep { WAIT, RESEND_ENABLE, REBUILD_UDP }
+    enum class FirstPictureStep { WAIT, RESEND_ENABLE, REBUILD_UDP, REJOIN }
 
     class State {
         var stage: Stage = Stage.IDLE
@@ -1380,7 +1464,7 @@ internal object LiveViewEnablePolicy {
         val had = hadVideo(videoPackets, videoAgeMs)
         val videoFresh = had && (videoAgeMs ?: Long.MAX_VALUE) < STALL_MS
         if (!had) {
-            if (enableSends >= 4) return FirstPictureStep.REBUILD_UDP
+            if (enableSends >= 4) return FirstPictureStep.REJOIN
             if (enableSends >= 2) {
                 if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) {
                     return FirstPictureStep.WAIT
@@ -1400,10 +1484,28 @@ internal object LiveViewEnablePolicy {
             return FirstPictureStep.WAIT
         }
         if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return FirstPictureStep.WAIT
-        if (enableSends >= 4) return FirstPictureStep.REBUILD_UDP
-        if (sinceRebuildMs != null) return FirstPictureStep.REBUILD_UDP
+        if (enableSends >= 4) return FirstPictureStep.REJOIN
+        if (sinceRebuildMs != null) return FirstPictureStep.REJOIN
         return FirstPictureStep.REBUILD_UDP
     }
+
+    fun shouldKeepaliveRebuildUDP(
+        flowNeedsRebuild: Boolean,
+        rebuildInFlight: Boolean,
+        sinceRebuildMs: Long?,
+        videoFresh: Boolean = false,
+        sawPicture: Boolean = true,
+    ): Boolean {
+        if (!sawPicture) return false
+        if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return false
+        if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return false
+        return true
+    }
+
+    fun shouldForceEnableAfterUDPRebuild(hadVideo: Boolean): Boolean = !hadVideo
+
+    fun shouldSendRecoverEnable(pathReady: Boolean, decoderReady: Boolean): Boolean =
+        pathReady && decoderReady
 
     fun tick(state: State, snap: Snapshot): Action {
         if (!snap.live) {

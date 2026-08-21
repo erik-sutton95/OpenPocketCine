@@ -63,6 +63,8 @@ class DatalinkDriver(
     val lastRebuildAt: Long? get() = lastRebuildElapsed.get().takeIf { it > 0 }
     val isTcpPokeReady: Boolean get() = pokeSocket?.isConnected == true
     val isRebuilding: Boolean get() = rebuilding
+    /** Datagram send is fire-and-forget — Network.framework writeRejected does not apply. */
+    val needsRebuild: Boolean get() = false
 
     fun open() {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }

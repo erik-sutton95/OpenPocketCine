@@ -32,6 +32,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android live-feed recovery matches iOS: one UDP rebuild, then a SoftAP-kept
+  datalink rejoin — not a 5 s rebuild loop — and keepalive will not tear the
+  socket during first picture or a GOP-reset gap.
 - Android hides the system bars (status + back/home/recents) like OpenZCine:
   a swipe in from the edge reveals them for three seconds and chrome shifts
   off the overlay, then they hide again.
