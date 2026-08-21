@@ -185,6 +185,8 @@ class OperatorSetupContractTest {
     @Test
     fun systemLinksMatchIos() {
         assertEquals("https://github.com/erik-sutton95/OpenPocketCine", OpenPocketCineLinks.SOURCE)
+        assertEquals("https://openpocketcine.app/privacy/", OpenPocketCineLinks.PRIVACY)
+        assertEquals("https://openpocketcine.app/terms/", OpenPocketCineLinks.TERMS)
         assertTrue(OpenPocketCineLinks.SUPPORT.contains("/discussions/categories/q-a"))
         assertTrue(OpenPocketCineLinks.REPORT_PROBLEM.contains("bug_report.yml"))
         assertTrue(OpenPocketCineLinks.FEATURE_REQUEST.contains("category=ideas"))

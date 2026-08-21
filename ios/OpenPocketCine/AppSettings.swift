@@ -191,6 +191,8 @@ enum OpenPocketCineLinks {
     )
     static let featureRequest = URL(
         string: "https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas")
+    static let privacy = URL(string: "https://openpocketcine.app/privacy/")
+    static let terms = URL(string: "https://openpocketcine.app/terms/")
 }
 
 /// Live chrome and home both present this. `onClose` lets a cover dismiss without `homePanel`.

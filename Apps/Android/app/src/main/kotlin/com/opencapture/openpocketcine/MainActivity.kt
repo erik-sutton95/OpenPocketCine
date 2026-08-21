@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -200,6 +201,7 @@ private fun LinkExperience(
             isDiscovering = phase == ConnectionPhase.SCANNING || (model.shouldShowWizard && phase != ConnectionPhase.LIVE),
             isReconnecting = reconnecting,
         )
+    val context = LocalContext.current
     val density = LocalDensity.current
     val bar = LocalImmersiveBarInsets.current
     val barStart by animateDpAsState(with(density) { bar.left.toDp() }, label = "barStart")
@@ -216,8 +218,8 @@ private fun LinkExperience(
                 title = headerTitle,
                 statusTitle = statusTitle,
                 isBusy = busy,
-                onPrivacy = { model.homePanel = AppPanel.PRIVACY },
-                onTerms = { model.homePanel = AppPanel.TERMS },
+                onPrivacy = { openUrl(context, OpenPocketCineLinks.PRIVACY) },
+                onTerms = { openUrl(context, OpenPocketCineLinks.TERMS) },
             )
         }
         Box(Modifier.weight(1f).padding(start = 20.dp, end = 24.dp, top = 8.dp)) {
@@ -260,7 +262,11 @@ private fun LaunchSplashOverlay(visible: Boolean) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OpcMark()
-                    Text("OpenPocketCine", color = BrandColors.ink, fontSize = wordmarkSp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "OpenPocketCine",
+                        color = BrandColors.ink,
+                        style = LiveType.display(wordmarkSp.value, FontWeight.Bold),
+                    )
                 }
             } else {
                 Column(
@@ -269,7 +275,11 @@ private fun LaunchSplashOverlay(visible: Boolean) {
                     verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
                 ) {
                     OpcMark()
-                    Text("OpenPocketCine", color = BrandColors.ink, fontSize = wordmarkSp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "OpenPocketCine",
+                        color = BrandColors.ink,
+                        style = LiveType.display(wordmarkSp.value, FontWeight.Bold),
+                    )
                 }
             }
         }

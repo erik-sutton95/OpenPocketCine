@@ -32,6 +32,22 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Privacy and Terms on iOS and Android open the live website pages
+  (`openpocketcine.app/privacy/`, `/terms/`) instead of in-app stubs.
+  Licenses and NOTICE stay in-app.
+- Android Operator Setup and media library use solid panel frost instead of
+  Kyant liquid glass. Liquid glass stays on the live HUD, where it can
+  sample the feed.
+- Android on-feed gimbal stick follows the same compact chrome scale as the
+  record rail (0.935 on S25-class 360 dp) instead of staying 88 dp.
+- Android view-assist chips match iOS `AssistToolChip` when on: accent-dim
+  fill plus a 1 pt accent stroke.
+- Android landscape view-assist bar grows into the leftover beside the
+  camera-settings pill so the tools sit a 12 dp gutter from ISO rather than
+  leaving an empty gap.
+- Android live battery pills match iOS `LiveBatteryRow`: 26×15 outline, bolt
+  glyph, and the percent scales/clips inside the cell instead of spilling
+  past the stroke.
 - Android no longer treats a SoftAP `onLost` a few seconds after join as a
   full disconnect. Like OpenZCine, it waits for the Network object to
   reassociate, rebinds UDP, and only drops the session if the camera AP is
@@ -42,10 +58,33 @@ All notable changes to this project are documented here. The format is based on
   seq (that is what keeps the camera's HEVC send window open). Handshake
   then register/subscribe/`0x09/0xa8` in one turn. SoftAP `onLost` waits
   for reassociation. Pre-join Wi-Fi scan waits at most 3 s then requests.
+- Android live capture strip (ISO / shutter / mode / WB / focus / audio)
+  uses a wider gap between cells.
+- Android live HUD glass matches iOS `liveChromeGlass`: Titan tint over a
+  52% DJI-black plate so the feed cannot bleach the pills.
+- Android live-view enable and UDP ACK/keepalive no longer run on the
+  main thread (StrictMode was dropping `0x09/0xa8`, so the camera never
+  sent HEVC and the HUD stayed on Waiting for live view). UDP binds IPv4.
+- Android uses the iOS landing faces the same way iOS `LiveType` does:
+  Sora for titles / rounded startup copy, IBM Plex Sans for body and
+  chrome. Pairing, Operator Setup, and the splash wordmark no longer fall
+  through to the system default.
+- Live HUD chrome scales with the shortest screen side: 1.0 on iPhone Pro
+  Max / 6.8" class (424 dp+), down to 0.935 on compact phones (S25 360 dp).
+  Buttons, type, and gaps shrink together; the 16:9 well still fills the
+  height. Compact landscape yields 8 dp past the rail so record clears
+  the picture without parking the well in the lock lane.
+- Android live HUD glass samples the picture: HEVC still decodes into a
+  `TextureView`, and FULL glass blits each frame into a Compose Canvas
+  inside the Kyant recorded well so the pills frost the feed instead of a
+  black plate.
 - Android live feed uses OpenZCine's island-lane inset: landscape leading is
   floored at 59 dp so the 16:9 well sits right of lock/battery the way iOS
-  does, even when a punch-hole reports no cutout. Portrait keeps a 30 dp
-  bottom floor so the system rail clears the gesture area in sticky-immersive.
+  does, even when a punch-hole reports no cutout. Compact 16:9 phones
+  (S25-class 780×360) then slide the well left only enough that the record
+  rail clears the picture. Portrait keeps a 30 dp bottom floor so the system
+  rail
+  clears the gesture area in sticky-immersive.
 - Android live-feed recovery matches iOS: one UDP rebuild, then a SoftAP-kept
   datalink rejoin — not a 5 s rebuild loop — and keepalive will not tear the
   socket during first picture or a GOP-reset gap.
