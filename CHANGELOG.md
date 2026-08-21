@@ -32,6 +32,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android live stall recovery uses a **stateful** Swift `FeedWatchdog`
+  handle over JNI instead of a fresh idle tick every second.
 - Android SoftAP `onLost` no longer unbinds the process (or reports the
   path ready) until reassociation grace ends, so UDP rebuild cannot leak
   onto home Wi-Fi. Failed datagram sends now flag `needsRebuild`. ISO

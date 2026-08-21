@@ -349,6 +349,48 @@
                 snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogCreate")
+    public func swiftCoreFeedWatchdogCreate(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
+    ) -> jlong {
+        jlong(AndroidSessionWire.feedWatchdogCreate())
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogTick")
+    public func swiftCoreFeedWatchdogTick(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        handle: jlong, snapshotJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.feedWatchdogTick(
+                handle: Int64(handle),
+                snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogReset")
+    public func swiftCoreFeedWatchdogReset(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
+    ) {
+        AndroidSessionWire.feedWatchdogReset(handle: Int64(handle))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogDestroy")
+    public func swiftCoreFeedWatchdogDestroy(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
+    ) {
+        AndroidSessionWire.feedWatchdogDestroy(handle: Int64(handle))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_conformPreviewJSON")
+    public func swiftCoreConformPreviewJSON(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, request: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.conformPreviewJSON(swiftString(env, request) ?? "{}"))
+    }
+
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_validateImportedLut")
     public func swiftCoreValidateImportedLut(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
@@ -368,6 +410,59 @@
         guard let packed = LUTLibraryWire.packedImportedLUT(utf8: swiftBytes(env, utf8) ?? [])
         else { return nil }
         return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packFalseColorPaint")
+    public func swiftCorePackFalseColorPaint(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        scaleOrdinal: jint, colorMode: jint, iso: jint
+    ) -> jbyteArray? {
+        guard
+            let packed = FeedEffectsWire.packedFalseColorPaint(
+                scaleOrdinal: Int(scaleOrdinal),
+                colorModeCode: Int(colorMode),
+                iso: Int(iso))
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packFalseColorWeight")
+    public func swiftCorePackFalseColorWeight(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        scaleOrdinal: jint, colorMode: jint, iso: jint
+    ) -> jbyteArray? {
+        guard
+            let packed = FeedEffectsWire.packedFalseColorWeight(
+                scaleOrdinal: Int(scaleOrdinal),
+                colorModeCode: Int(colorMode),
+                iso: Int(iso))
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedAssistScalars")
+    public func swiftCoreFeedAssistScalars(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        colorMode: jint, iso: jint, highlightIRE: jfloat, midtoneIRE: jfloat
+    ) -> jfloatArray? {
+        javaFloatArray(
+            env,
+            FeedEffectsWire.assistScalars(
+                colorModeCode: Int(colorMode),
+                iso: Int(iso),
+                highlightIRE: Double(highlightIRE),
+                midtoneIRE: Double(midtoneIRE)))
+    }
+
+    private func javaFloatArray(
+        _ env: UnsafeMutablePointer<JNIEnv?>, _ values: [Float]
+    ) -> jfloatArray? {
+        let fns = table(env)
+        guard let array = fns.NewFloatArray!(env, jsize(values.count)) else { return nil }
+        values.withUnsafeBufferPointer { buffer in
+            fns.SetFloatArrayRegion!(env, array, 0, jsize(values.count), buffer.baseAddress)
+        }
+        return array
     }
 
 #endif

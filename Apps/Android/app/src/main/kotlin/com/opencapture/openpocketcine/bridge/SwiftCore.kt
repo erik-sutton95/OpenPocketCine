@@ -175,11 +175,39 @@ object SwiftCore {
     /** Packed-2D RGBA8 cube (`n³ × 4`) for GLES upload. */
     external fun packImportedLut(utf8: ByteArray): ByteArray?
 
+    /** Overlay paint cube for FALSE (`0` PStops / `1` IRE / `2` Limits). */
+    external fun packFalseColorPaint(scaleOrdinal: Int, colorMode: Int, iso: Int): ByteArray?
+
+    /** Overlay weight cube paired with [packFalseColorPaint]. */
+    external fun packFalseColorWeight(scaleOrdinal: Int, colorMode: Int, iso: Int): ByteArray?
+
+    /**
+     * `[highlightNative, midtoneNative, midtoneHalfNative, peakingGateScale]`
+     * on encoded camera codes (iOS `ScopeDisplayScale.signalNative`).
+     */
+    external fun feedAssistScalars(
+        colorMode: Int,
+        iso: Int,
+        highlightIRE: Float,
+        midtoneIRE: Float,
+    ): FloatArray?
+
     external fun gimbalStickEncode(x: Double, y: Double, sensitivity: Int): String?
 
     external fun camFovChipWrite(currentFactor: Double): String?
 
     external fun feedWatchdogAction(snapshotJSON: String): String?
+
+    external fun feedWatchdogCreate(): Long
+
+    external fun feedWatchdogTick(handle: Long, snapshotJSON: String): String?
+
+    external fun feedWatchdogReset(handle: Long)
+
+    external fun feedWatchdogDestroy(handle: Long)
+
+    /** Probe JSON for playback conform preview. See `AndroidSessionWire.conformPreviewJSON`. */
+    external fun conformPreviewJSON(request: String): String?
 
     fun command(kind: Int, seq: Int = 0, extra: String? = null): ByteArray {
         check(isAvailable) { "Swift core is not loaded" }

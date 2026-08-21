@@ -732,9 +732,106 @@ public enum AndroidSessionWire {
         return String(CamFov.lensPosition(for: next))
     }
 
+    /// Probe + labels for playback conform preview. Request keys: `nominalFrameRate`,
+    /// `minFrameDurationSeconds`, `listedRate`, optional `targetRate` / `sourceSeconds`.
+    public static func conformPreviewJSON(_ request: String) -> String {
+        let source = ConformPreview.probe(
+            nominalFrameRate: jsonOptionalNumber(request, key: "nominalFrameRate"),
+            minFrameDurationSeconds: jsonOptionalNumber(request, key: "minFrameDurationSeconds"),
+            listedRate: jsonOptionalNumber(request, key: "listedRate"))
+        let availability = ConformPreview.availability(for: source)
+        var dict: [String: Any] = [
+            "isVariableFrameRate": source.isVariableFrameRate,
+            "isAlreadyConformed": source.isAlreadyConformed,
+            "audioLabel": ConformPreview.audioLabel,
+            "conformFloor": ConformPreview.conformFloor,
+            "targetRates": ConformPreview.targetRates,
+            "availability": availabilityName(availability),
+            "targets": availability.targets,
+        ]
+        if let reason = availability.unavailableReason {
+            dict["unavailableReason"] = reason
+        }
+        if let capture = source.captureRate {
+            dict["captureRate"] = capture
+            dict["menuHeader"] = ConformPreview.menuHeader(captureRate: capture)
+            dict["rateLabel"] = ConformPreview.rateLabel(capture)
+            dict["targetLabels"] = availability.targets.map {
+                ConformPreview.targetLabel(captureRate: capture, targetRate: $0)
+            }
+            if let target = jsonOptionalNumber(request, key: "targetRate") {
+                let speed = ConformPreview.speed(captureRate: capture, targetRate: target)
+                dict["speed"] = speed
+                dict["targetLabel"] = ConformPreview.targetLabel(
+                    captureRate: capture, targetRate: target)
+                dict["label"] = ConformPreview.label(captureRate: capture, targetRate: target)
+                if let seconds = jsonOptionalNumber(request, key: "sourceSeconds") {
+                    dict["conformedDuration"] = ConformPreview.conformedDuration(
+                        sourceSeconds: seconds, speed: speed)
+                }
+            }
+        }
+        guard JSONSerialization.isValidJSONObject(dict),
+            let data = try? JSONSerialization.data(withJSONObject: dict),
+            let text = String(data: data, encoding: .utf8)
+        else { return "{}" }
+        return text
+    }
+
+    private final class WatchdogStore: @unchecked Sendable {
+        let lock = NSLock()
+        var boxes: [Int64: FeedWatchdog] = [:]
+        var next: Int64 = 1
+    }
+
+    private static let watchdogStore = WatchdogStore()
+
+    public static func feedWatchdogCreate() -> Int64 {
+        let store = watchdogStore
+        store.lock.lock()
+        defer { store.lock.unlock() }
+        let handle = store.next
+        store.next += 1
+        store.boxes[handle] = FeedWatchdog()
+        return handle
+    }
+
+    public static func feedWatchdogReset(handle: Int64) {
+        let store = watchdogStore
+        store.lock.lock()
+        store.boxes[handle] = FeedWatchdog()
+        store.lock.unlock()
+    }
+
+    public static func feedWatchdogDestroy(handle: Int64) {
+        let store = watchdogStore
+        store.lock.lock()
+        store.boxes.removeValue(forKey: handle)
+        store.lock.unlock()
+    }
+
+    /// Stateful tick. Keep the handle for the session — a fresh `FeedWatchdog()`
+    /// every call is always `.idle`.
+    public static func feedWatchdogTick(handle: Int64, snapshotJSON: String) -> String {
+        let store = watchdogStore
+        store.lock.lock()
+        defer { store.lock.unlock() }
+        guard var watchdog = store.boxes[handle] else { return "none" }
+        let action = feedWatchdogAction(snapshotJSON: snapshotJSON, watchdog: &watchdog)
+        store.boxes[handle] = watchdog
+        return action
+    }
+
     /// One idle-watchdog tick. Action is `none` / `resendLiveViewEnable` /
     /// `rebuildVTSession` / `reopenDatalink` / `fullSessionRejoin`.
     public static func feedWatchdogAction(snapshotJSON: String) -> String {
+        var watchdog = FeedWatchdog()
+        return feedWatchdogAction(snapshotJSON: snapshotJSON, watchdog: &watchdog)
+    }
+
+    private static func feedWatchdogAction(
+        snapshotJSON: String, watchdog: inout FeedWatchdog
+    ) -> String {
         let json = snapshotJSON
         let snap = FeedWatchdog.Snapshot(
             now: jsonNumber(json, key: "now", default: 0),
@@ -756,13 +853,22 @@ public enum AndroidSessionWire {
             secondsSinceLastEnable: jsonOptionalNumber(json, key: "secondsSinceLastEnable"),
             secondsSinceFocusTrackSet: jsonOptionalNumber(json, key: "secondsSinceFocusTrackSet")
         )
-        var watchdog = FeedWatchdog()
         switch watchdog.tick(snap) {
         case .none: return "none"
         case .resendLiveViewEnable: return "resendLiveViewEnable"
         case .rebuildVTSession: return "rebuildVTSession"
         case .reopenDatalink: return "reopenDatalink"
         case .fullSessionRejoin: return "fullSessionRejoin"
+        }
+    }
+
+    private static func availabilityName(_ availability: ConformPreview.Availability) -> String {
+        switch availability {
+        case .available: "available"
+        case .unknownRate: "unknownRate"
+        case .variableRate: "variableRate"
+        case .alreadyConformed: "alreadyConformed"
+        case .notHighFrameRate: "notHighFrameRate"
         }
     }
 

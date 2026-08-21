@@ -88,12 +88,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var liveViewEnableSends = 0
     private var idrHoldEnableCount = 0
     private var firstPictureSettled = false
+    private var focusTrackPending = false
+    private var lastFocusTrackAt: Long? = null
     private var streamStartedAt: Long? = null
     private var lastBleNotifyAt: Long? = null
     private var isBrowsingMedia = false
     private var nextTrackingId = 1
     private var mediaListCounter = 1
     private val feedWatchdog = LiveViewEnablePolicy.State()
+    private var coreWatchdog = 0L
     private val dropStorm = SessionDropStormGuard()
     private var recoveryJob: Job? = null
     private var recoveryCameraId: String? = null
@@ -251,8 +254,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
         firstPictureSettled = false
+        focusTrackPending = false
+        lastFocusTrackAt = null
         lastBleNotifyAt = null
         feedWatchdog.reset()
+        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
         ble.startScan()
     }
 
@@ -270,8 +276,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
         firstPictureSettled = false
+        focusTrackPending = true
+        lastFocusTrackAt = null
         streamStartedAt = null
         feedWatchdog.reset()
+        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
         if (!holdsMonitor) decoder.reset()
         else decoder.beginIDRHold()
         publishPhase(ConnectionPhase.CONNECTING_GATT)
@@ -530,6 +539,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             )
         ) {
             firstPictureSettled = true
+            if (focusTrackPending) {
+                focusTrackPending = false
+                refreshFocusTrack()
+            }
         }
         if (LiveViewEnablePolicy.shouldRunFirstPictureRecover(
                 presentedAgeMs = presentedAge,
@@ -609,6 +622,51 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 live = _phase.value == ConnectionPhase.LIVE,
                 sawPicture = decoder.lastPresentedAt != null,
             )
+        if (coreWatchdog == 0L && SwiftCore.isAvailable) {
+            coreWatchdog = SwiftCore.feedWatchdogCreate()
+        }
+        if (coreWatchdog != 0L) {
+            val nowSec = now / 1000.0
+            fun age(at: Long?): Double? {
+                if (at == null || at <= 0L) return null
+                return (now - at) / 1000.0
+            }
+            val json =
+                buildString {
+                    append("{")
+                    append("\"now\":$nowSec")
+                    append(",\"flowHealthy\":${snap.pathReady && datalink?.needsRebuild != true}")
+                    append(",\"pathReady\":${snap.pathReady}")
+                    append(",\"hasFormat\":${decoder.hasFormat}")
+                    append(",\"decoderFailed\":${decoderErrors > 0}")
+                    append(",\"live\":${_phase.value == ConnectionPhase.LIVE}")
+                    append(",\"sawPicture\":${decoder.lastPresentedAt != null}")
+                    append(",\"tcpPokeReady\":${datalink?.isTcpPokeReady == true}")
+                    append(",\"hadVideo\":${packets > 0}")
+                    age(decoder.lastPresentedAt)?.let { append(",\"lastDecodedFrameAge\":$it") }
+                    age(datalink?.lastVideoPacketAt)?.let { append(",\"lastVideoPacketAge\":$it") }
+                    age(datalink?.lastAccessUnitAt)?.let { append(",\"lastAccessUnitAge\":$it") }
+                    age(datalink?.lastStatusAt)?.let { append(",\"lastStatusAge\":$it") }
+                    age(lastBleNotifyAt)?.let { append(",\"lastBleNotifyAge\":$it") }
+                    age(datalink?.lastRebuildAt)?.let { append(",\"secondsSinceLastRebuild\":$it") }
+                    age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
+                    age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
+                    append("}")
+                }
+            when (SwiftCore.feedWatchdogTick(coreWatchdog, json)) {
+                "resendLiveViewEnable" ->
+                    sendRecoverEnable(force = true, reason = "watchdog")
+                "rebuildVTSession",
+                "reopenDatalink",
+                "fullSessionRejoin",
+                ->
+                    startFeedRecovery {
+                        datalink?.rebuildUdpKeepingSession()
+                        sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
+                    }
+            }
+            return
+        }
         when (LiveViewEnablePolicy.tick(feedWatchdog, snap)) {
             LiveViewEnablePolicy.Action.NONE -> Unit
             LiveViewEnablePolicy.Action.RESEND_ENABLE ->
@@ -659,6 +717,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
         firstPictureSettled = false
+        focusTrackPending = true
         if (!joiner.isProcessBound()) return
         openDatalinkKeepingLive(camera)
     }
@@ -748,7 +807,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
         firstPictureSettled = false
+        focusTrackPending = false
+        lastFocusTrackAt = null
         feedWatchdog.reset()
+        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
     }
 
     fun retrySessionRecovery() {
@@ -1104,6 +1166,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setFocusMode(continuous: Boolean) {
+        if (connectedCamera?.model?.supportsFocusMode == false) return
         if (_controlBusy.value) return
         scope.launch {
             val extra = if (continuous) "2" else "1"
@@ -1114,6 +1177,29 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                             if (continuous) CameraCommands.FOCUS_CONTINUOUS else CameraCommands.FOCUS_SINGLE,
                     )
             }
+        }
+    }
+
+    fun setFocusTrack(mode: Int) {
+        if (connectedCamera?.model?.supportsFocusMode == false) return
+        val track = FocusTrackMode.fromRaw(mode) ?: return
+        if (_controlBusy.value) return
+        scope.launch {
+            val previous = _status.value.focusTrack
+            lastFocusTrackAt = SystemClock.elapsedRealtime()
+            _status.value = _status.value.copy(focusTrack = mode)
+            val ok = sendKind(SwiftCore.CMD_SET_FOCUS_TRACK, "$mode", "AF-C ${track.label}")
+            if (!ok && _status.value.focusTrack == mode) {
+                _status.value = _status.value.copy(focusTrack = previous)
+            }
+        }
+    }
+
+    fun refreshFocusTrack() {
+        if (connectedCamera?.model?.supportsFocusMode == false) return
+        if (_controlBusy.value) return
+        scope.launch {
+            sendKind(SwiftCore.CMD_GET_FOCUS_TRACK, null, "Focus track GET")
         }
     }
 
