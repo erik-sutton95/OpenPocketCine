@@ -124,6 +124,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 failLink("the camera Wi-Fi disconnected")
             }
         }
+        joiner.onReassociated = {
+            Log.i(TAG, "wifi: SoftAP reassociated — rebuild UDP, keep LIVE")
+            startFeedRecovery {
+                datalink?.rebuildUdpKeepingSession()
+                sendRecoverEnable(force = true, reason = "wifi reassociated")
+            }
+        }
     }
 
     override fun startScan() {
@@ -299,14 +306,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         wifiLock.acquire()
 
         publishPhase(ConnectionPhase.OPENING_DATALINK)
-        openDatalink(camera)
-        decoder.beginIDRHold()
-        sendCapturedLiveView("first picture")
-        publishPhase(ConnectionPhase.LIVE)
-        if (holdsMonitor) {
-            _recoveryState.value = SessionRecoveryUi.Idle
-            holdsMonitor = false
-        }
+        openDatalinkKeepingLive(camera)
         startKeepalive(ssid)
     }
 
@@ -328,15 +328,61 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         return ssid to pass
     }
 
-    private suspend fun openDatalink(camera: FoundCamera) {
-        val dl = DatalinkDriver(joiner, camera.model.datalinkPort, camera.model.tcpPoke, camera.model.pairingToken)
-        dl.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
-        dl.onAccessUnit = { au ->
-            rawAccessUnits += 1
-            decoder.decode(au)
+    /**
+     * iOS `openDatalinkKeepingLive`: handshake then `0x09/0xa8` in the same
+     * turn. SoftAP still up after a miss → retry, do not pop pairing.
+     */
+    private suspend fun openDatalinkKeepingLive(camera: FoundCamera) {
+        val existing = datalink
+        val dl =
+            existing
+                ?: DatalinkDriver(
+                    joiner,
+                    camera.model.datalinkPort,
+                    camera.model.tcpPoke,
+                    camera.model.pairingToken,
+                ).also { created ->
+                    created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
+                    created.onAccessUnit = { au ->
+                        rawAccessUnits += 1
+                        decoder.decode(au)
+                    }
+                    datalink = created
+                }
+        var attempt = 0
+        while (true) {
+            try {
+                withTimeout(30_000) {
+                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        dl.open(
+                            afterHandshake = {
+                                publishPhase(ConnectionPhase.LIVE)
+                                decoder.beginIDRHold()
+                                sendCapturedLiveView("first picture")
+                                if (holdsMonitor) {
+                                    _recoveryState.value = SessionRecoveryUi.Idle
+                                    holdsMonitor = false
+                                }
+                            },
+                        )
+                    }
+                }
+                return
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(joiner.isProcessBound())) {
+                    throw e
+                }
+                attempt += 1
+                if (LiveViewEnablePolicy.shouldGiveUpOpenRetry(attempt)) {
+                    Log.i(TAG, "session: handshake give-up after $attempt opens")
+                    throw e
+                }
+                Log.i(TAG, "session: handshake miss #$attempt — SoftAP up, retry (no kick)")
+                delay(LiveViewEnablePolicy.HANDSHAKE_RETRY_PAUSE_MS)
+            }
         }
-        datalink = dl
-        withTimeout(30_000) { kotlinx.coroutines.withContext(Dispatchers.IO) { dl.open() } }
     }
 
     /** Stay on LIVE while recovering so the monitor (last frame) is not unmounted. */
@@ -611,9 +657,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         idrHoldEnableCount = 0
         firstPictureSettled = false
         if (!joiner.isProcessBound()) return
-        openDatalink(camera)
-        decoder.beginIDRHold()
-        sendCapturedLiveView("first picture")
+        openDatalinkKeepingLive(camera)
     }
 
     private fun sendCapturedLiveView(reason: String): Boolean {
@@ -1350,6 +1394,12 @@ internal object LiveViewEnablePolicy {
     const val FIRST_PICTURE_RESEND_MS = 2_000L
     const val STALLED_FORMAT_RESEND_MS = 5_000L
     const val FORMAT_STALL_MS = 2_000L
+    const val HANDSHAKE_RETRY_PAUSE_MS = 500L
+    const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
+
+    fun shouldGiveUpOpenRetry(attempts: Int): Boolean = attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
+
+    fun shouldKickAfterHandshakeTimeout(pathReady: Boolean): Boolean = !pathReady
 
     enum class Action { NONE, RESEND_ENABLE, REBUILD_UDP }
 

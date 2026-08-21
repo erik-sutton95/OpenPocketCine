@@ -11,6 +11,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -28,6 +29,7 @@ class DatalinkDriver(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
+    private val sendLock = Any()
     private var socket: DatagramSocket? = null
     private var pokeSocket: Socket? = null
     private var receiver: Thread? = null
@@ -38,7 +40,8 @@ class DatalinkDriver(
     private var udpSeq = 0
     private var dumlSeq = 0xA000
     private var cmdCounter = 0
-    private var peerCursor = 0
+    /** Latest video transport seq — ACK pump must echo this (iOS `videoAssembler.peerCursor`). */
+    private val peerCursor = AtomicInteger(0)
     private var camChannel = 0
     @Volatile private var handshakeAcked = false
     @Volatile private var liveViewEnabled = false
@@ -66,7 +69,12 @@ class DatalinkDriver(
     /** Datagram send is fire-and-forget — Network.framework writeRejected does not apply. */
     val needsRebuild: Boolean get() = false
 
-    fun open() {
+    /**
+     * iOS `DatalinkDriver.open(afterHandshake:)`: handshake, register,
+     * subscribe, 40 Hz ACK pump, then `0x09/0xa8`, then ingest 0x02.
+     * Do not sit on a 2 s ACK settle — that drops the camera GOP.
+     */
+    fun open(afterHandshake: (() -> Unit)? = null) {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }
         discardUdp(keepPoke = true)
         if (tcpPoke) ensurePoke()
@@ -93,7 +101,26 @@ class DatalinkDriver(
                 }
                 if (handshakeAcked) break
             }
-            if (handshakeAcked) break
+            if (handshakeAcked) {
+                Log.i(TAG, "datalink: handshake acked session=$sessionId")
+                if (camChannel != 0) udpSeq = (camChannel + 8) and 0xFFFF
+                sendAck()
+                register()
+                subscribe()
+                if (afterHandshake != null) {
+                    val done = CountDownLatch(1)
+                    main.post {
+                        try {
+                            afterHandshake()
+                        } finally {
+                            done.countDown()
+                        }
+                    }
+                    done.await()
+                }
+                armLiveVideo()
+                return
+            }
             if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
             if (rebinds >= HANDSHAKE_REBIND_LIMIT) error("camera never answered the datalink handshake")
             rebinds += 1
@@ -101,15 +128,6 @@ class DatalinkDriver(
             discardUdp(keepPoke = true)
             Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
         }
-        repeat(5) {
-            Thread.sleep(400)
-            sendAck()
-        }
-        udpSeq = (camChannel + 8) and 0xFFFF
-        register()
-        subscribe()
-        ackThread =
-            Thread({ ackPump() }, "opc.datalink.ack").also { it.isDaemon = true; it.start() }
     }
 
     fun keepalive() {
@@ -118,7 +136,6 @@ class DatalinkDriver(
     }
 
     fun startLiveView(receiver: Int = CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_POCKET) {
-        liveViewEnabled = true
         val extra = receiver.toString()
         if (receiver == CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_POCKET) {
             sendCommand(SwiftCore.CMD_LIVE_VIEW_ENABLE, extra)
@@ -130,6 +147,15 @@ class DatalinkDriver(
                 receiver = receiver,
             )
         }
+        // iOS arms after the enable write so the new GOP is not counted as
+        // leftover. Arm here, not after the Main-thread callback returns —
+        // that window dropped the IDR (pkts=0) and the 2 s resend RST the GOP.
+        armLiveVideo()
+    }
+
+    /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. */
+    fun armLiveVideo() {
+        liveViewEnabled = true
     }
 
     /** Nano `0x02/0x09` start/stop. No CMD kind yet — encodeDuml. */
@@ -155,8 +181,6 @@ class DatalinkDriver(
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
             discardUdp(keepPoke = true)
             startUdpReceiver()
-            ackThread =
-                Thread({ ackPump() }, "opc.datalink.ack").also { it.isDaemon = true; it.start() }
             sendAck()
             sendCommand(SwiftCore.CMD_APP_PRESENCE)
         } finally {
@@ -207,14 +231,20 @@ class DatalinkDriver(
         udpSeq = 0
         dumlSeq = 0xA000
         cmdCounter = 0
-        peerCursor = 0
+        peerCursor.set(0)
         handshakeAcked = false
     }
 
     private fun startUdpReceiver() {
-        val sock = DatagramSocket()
-        sock.soTimeout = 250
+        // iOS pins UDP to the SoftAP interface. `DatagramSocket()` binds the
+        // wildcard immediately, and Network.bindSocket then no-ops — traffic
+        // rides the default route until Android swaps the camera Network and
+        // the GOP dies. Create unbound, pin, then bind the local port.
+        val sock = DatagramSocket(null)
+        sock.reuseAddress = true
+        sock.soTimeout = ACK_INTERVAL_MS.toInt()
         joiner.bindSocket(sock)
+        sock.bind(InetSocketAddress(0))
         socket = sock
         running.set(true)
         receiver =
@@ -308,7 +338,7 @@ class DatalinkDriver(
     }
 
     private fun sendAck() {
-        val payload = SwiftCore.ackPayload(peerCursor, baseSeq) ?: return
+        val payload = SwiftCore.ackPayload(peerCursor.get(), baseSeq) ?: return
         val header = SwiftCore.transportHeader(0x04, payload.size, sessionId, 0) ?: return
         write(header + payload)
     }
@@ -316,32 +346,35 @@ class DatalinkDriver(
     private fun write(bytes: ByteArray) {
         val sock = socket ?: return
         val packet = DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
-        runCatching { sock.send(packet) }
-    }
-
-    private fun ackPump() {
-        while (running.get()) {
-            sendAck()
-            try {
-                Thread.sleep(25)
-            } catch (_: InterruptedException) {
-                break
-            }
+        synchronized(sendLock) {
+            runCatching { sock.send(packet) }
         }
     }
 
+    /**
+     * iOS pumps pktType-0x04 ACKs on the UDP queue (~40 Hz, latest video seq).
+     * A second send thread on [DatagramSocket] is not how Mimo / iOS keep the
+     * camera window open.
+     */
     private fun receiveLoop() {
         val buf = ByteArray(2048)
+        var lastAckAt = 0L
         while (running.get()) {
             val sock = socket ?: break
             val packet = DatagramPacket(buf, buf.size)
             try {
                 sock.receive(packet)
-            } catch (_: Exception) {
-                continue
+                if (packet.length > 0) ingest(packet.data.copyOf(packet.length))
+            } catch (_: java.net.SocketTimeoutException) {
+            } catch (e: Exception) {
+                if (!running.get()) break
+                Log.w(TAG, "datalink: UDP receive failed", e)
             }
-            if (packet.length <= 0) continue
-            ingest(packet.data.copyOf(packet.length))
+            val now = SystemClock.elapsedRealtime()
+            if (handshakeAcked && now - lastAckAt >= ACK_INTERVAL_MS) {
+                sendAck()
+                lastAckAt = now
+            }
         }
     }
 
@@ -352,10 +385,10 @@ class DatalinkDriver(
         }
         if (datagram.size >= 8 && datagram[6] == 0x00.toByte()) handshakeAcked = true
         if (datagram.size == 34 && datagram[6] == 0x01.toByte()) {
-            peerCursor = (datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8)
+            peerCursor.set((datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8))
         } else if (datagram.size >= 6 && datagram[6] == 0x02.toByte()) {
             val seq = SwiftCore.transportSeq(datagram)
-            if (seq >= 0) peerCursor = seq
+            if (seq >= 0) peerCursor.set(seq)
         }
         if (datagram.size > 20 && datagram[6] == 0x02.toByte()) {
             if (!liveViewEnabled) {
@@ -403,6 +436,7 @@ class DatalinkDriver(
         private const val HANDSHAKE_POLL_MS = 20L
         private const val HANDSHAKE_REBIND_LIMIT = 3
         private const val HANDSHAKE_RETRY_PAUSE_MS = 500L
+        private const val ACK_INTERVAL_MS = 25L
         private val SUBSCRIPTION_KEYS =
             listOf(
                 "camcap_mode_profile",

@@ -32,6 +32,16 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android no longer treats a SoftAP `onLost` a few seconds after join as a
+  full disconnect. Like OpenZCine, it waits for the Network object to
+  reassociate, rebinds UDP, and only drops the session if the camera AP is
+  still gone after 8 s.
+- Android datalink open matches iOS: 40 Hz window ACKs (latest video seq,
+  on the UDP reader) and `0x09/0xa8` run in the same turn as
+  register/subscribe — no 2 s ACK settle. Leftover GOP is ignored until
+  enable; UDP is pinned to the SoftAP Network before bind. A handshake miss
+  retries on SoftAP instead of popping pairing. Pre-join Wi-Fi scan waits
+  at most 3 s then requests.
 - Android live feed uses OpenZCine's island-lane inset: landscape leading is
   floored at 59 dp so the 16:9 well sits right of lock/battery the way iOS
   does, even when a punch-hole reports no cutout. Portrait keeps a 30 dp

@@ -79,6 +79,14 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun handshakeMissDoesNotKickWhileSoftAPUp() {
+        assertTrue(!LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(pathReady = true))
+        assertTrue(LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(pathReady = false))
+        assertTrue(!LiveViewEnablePolicy.shouldGiveUpOpenRetry(5))
+        assertTrue(LiveViewEnablePolicy.shouldGiveUpOpenRetry(6))
+    }
+
+    @Test
     fun watchdogDoesNotEnableEverySecondWhileStalled() {
         val state = LiveViewEnablePolicy.State()
         val enableAt = 10_000L
