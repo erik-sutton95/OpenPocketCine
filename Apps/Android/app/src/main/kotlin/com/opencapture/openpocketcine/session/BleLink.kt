@@ -13,7 +13,10 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
@@ -50,6 +53,25 @@ class BleLink(context: Context) {
     private val foundDevices = linkedMapOf<String, BluetoothDevice>()
     private val _found = MutableStateFlow<List<FoundCamera>>(emptyList())
     val found: StateFlow<List<FoundCamera>> = _found.asStateFlow()
+    private val _radioOn = MutableStateFlow(adapter?.isEnabled == true)
+    val radioOn: StateFlow<Boolean> = _radioOn.asStateFlow()
+    private var wantsScan = false
+    private var radioReceiverRegistered = false
+
+    private val radioReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                val on = state == BluetoothAdapter.STATE_ON
+                _radioOn.value = on
+                if (on) {
+                    startScanIfWanted()
+                } else {
+                    stopScanner()
+                }
+            }
+        }
 
     private val _frames =
         MutableSharedFlow<DumlFrame>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -69,6 +91,17 @@ class BleLink(context: Context) {
     private val connectSettled = AtomicBoolean(false)
     var onLinkLost: (() -> Unit)? = null
 
+    init {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        ContextCompat.registerReceiver(
+            appContext,
+            radioReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        radioReceiverRegistered = true
+    }
+
     private val scanCallback =
         object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -80,11 +113,33 @@ class BleLink(context: Context) {
                     }
                 }
             }
+
+            override fun onScanFailed(errorCode: Int) {
+                Log.w(TAG, "BLE scan failed code=$errorCode")
+                scanning = false
+            }
         }
 
     @SuppressLint("MissingPermission")
     fun startScan() {
-        val scanner = adapter?.bluetoothLeScanner ?: return
+        wantsScan = true
+        startScanIfWanted()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startScanIfWanted() {
+        if (!wantsScan) return
+        val radio = adapter
+        if (radio == null || !radio.isEnabled) {
+            _radioOn.value = false
+            Log.w(TAG, "BLE scan waiting: Bluetooth is not fully on (state=${radio?.state})")
+            return
+        }
+        _radioOn.value = true
+        val scanner = radio.bluetoothLeScanner ?: run {
+            Log.w(TAG, "BLE scan skipped: no LE scanner")
+            return
+        }
         if (scanning) return
         if (!hasScanPermission()) {
             Log.w(TAG, "BLE scan skipped: nearby-device permission not granted")
@@ -99,6 +154,7 @@ class BleLink(context: Context) {
                 .onFailure { Log.w(TAG, "BLE scan failed to start", it) }
                 .isSuccess
         scanning = started
+        if (started) Log.i(TAG, "BLE scan started")
     }
 
     private fun hasScanPermission(): Boolean {
@@ -114,6 +170,12 @@ class BleLink(context: Context) {
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
+        wantsScan = false
+        stopScanner()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopScanner() {
         if (!scanning) return
         scanning = false
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
@@ -176,6 +238,11 @@ class BleLink(context: Context) {
 
     fun close() {
         disconnect()
+        wantsScan = false
+        if (radioReceiverRegistered) {
+            runCatching { appContext.unregisterReceiver(radioReceiver) }
+            radioReceiverRegistered = false
+        }
         worker.quitSafely()
     }
 

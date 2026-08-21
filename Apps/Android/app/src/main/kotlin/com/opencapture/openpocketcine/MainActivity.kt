@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
@@ -102,10 +104,17 @@ private fun OpenPocketCineApp(model: AppModel) {
         }
     }
     var permissionsGranted by remember { mutableStateOf(permissionsAreGranted()) }
+    val enableBluetooth =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (permissionsAreGranted()) model.session.startScan()
+        }
+    fun requestBluetoothOn() {
+        runCatching { enableBluetooth.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+    }
     val launcher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permissionsGranted = permissionsAreGranted()
-            if (permissionsGranted) model.session.startScan()
+            if (permissionsGranted) beginDiscovery(model) { requestBluetoothOn() }
         }
 
     LaunchedEffect(model.keepScreenAwake, activity) {
@@ -120,7 +129,7 @@ private fun OpenPocketCineApp(model: AppModel) {
     LaunchedEffect(Unit) {
         model.prepareStartup()
         if (permissionsAreGranted()) {
-            model.session.startScan()
+            beginDiscovery(model, onBluetoothOff = { requestBluetoothOn() })
         } else {
             launcher.launch(permissions)
         }
@@ -138,6 +147,7 @@ private fun OpenPocketCineApp(model: AppModel) {
                 model = model,
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = { launcher.launch(permissions) },
+                onEnableBluetooth = { requestBluetoothOn() },
             )
         }
         LaunchSplashOverlay(visible = launchSplashVisible)
@@ -147,11 +157,17 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 }
 
+private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
+    model.session.startScan()
+    if (!model.session.radioOn.value) onBluetoothOff()
+}
+
 @Composable
 private fun LinkExperience(
     model: AppModel,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onEnableBluetooth: () -> Unit,
 ) {
     val phase by model.session.phaseFlow.collectAsState()
     val headerTitle =
@@ -177,7 +193,7 @@ private fun LinkExperience(
         }
         Box(Modifier.weight(1f).padding(start = 20.dp, end = 24.dp, top = 8.dp)) {
             if (model.shouldShowWizard) {
-                PairingExperience(model, permissionsGranted, onRequestPermissions)
+                PairingExperience(model, permissionsGranted, onRequestPermissions, onEnableBluetooth)
             } else {
                 SavedCamerasExperience(model)
             }

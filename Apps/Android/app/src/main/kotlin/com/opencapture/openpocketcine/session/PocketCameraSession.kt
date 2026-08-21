@@ -48,6 +48,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val failure: StateFlow<String?> = _failure.asStateFlow()
 
     val found: StateFlow<List<FoundCamera>> = ble.found
+    val radioOn: StateFlow<Boolean> get() = ble.radioOn
     private val _status = MutableStateFlow(CameraStatus())
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
 

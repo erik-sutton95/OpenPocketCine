@@ -49,6 +49,7 @@ fun PairingExperience(
     model: AppModel,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onEnableBluetooth: () -> Unit,
 ) {
     val phase by model.session.phaseFlow.collectAsState()
     val failure by model.session.failure.collectAsState()
@@ -61,7 +62,7 @@ fun PairingExperience(
         if (twoColumn) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 IntroCard(model, step, Modifier.width(introWidth).fillMaxHeight())
-                StepCard(model, phase, failure, found, step, compact, permissionsGranted, onRequestPermissions, Modifier.weight(1f).fillMaxHeight())
+                StepCard(model, phase, failure, found, step, compact, permissionsGranted, onRequestPermissions, onEnableBluetooth, Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -94,7 +95,7 @@ fun PairingExperience(
                     fontSize = 12.sp,
                 )
                 StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
-                StepCard(model, phase, failure, found, step, true, permissionsGranted, onRequestPermissions, Modifier.weight(1f))
+                StepCard(model, phase, failure, found, step, true, permissionsGranted, onRequestPermissions, onEnableBluetooth, Modifier.weight(1f))
             }
         }
     }
@@ -130,6 +131,7 @@ private fun StepCard(
     tight: Boolean,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onEnableBluetooth: () -> Unit,
     modifier: Modifier,
 ) {
     val title =
@@ -160,6 +162,7 @@ private fun StepCard(
                         tight = tight,
                         permissionsGranted = permissionsGranted,
                         onRequestPermissions = onRequestPermissions,
+                        onEnableBluetooth = onEnableBluetooth,
                     )
             }
         }
@@ -191,7 +194,13 @@ private fun ScanStep(
     tight: Boolean,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onEnableBluetooth: () -> Unit,
 ) {
+    val radioOn by model.session.radioOn.collectAsState()
+    if (!radioOn) {
+        StartupInfoBanner("Turn Bluetooth on so we can find your Pocket.", tight)
+        StartupFilledButton("Turn on Bluetooth", enabled = true, onClick = onEnableBluetooth, modifier = Modifier.fillMaxWidth(), large = true)
+    }
     if (!permissionsGranted) {
         StartupInfoBanner("Allow Bluetooth and nearby devices so we can find your Pocket.", tight)
         StartupFilledButton("Allow permissions", enabled = true, onClick = onRequestPermissions, modifier = Modifier.fillMaxWidth(), large = true)
@@ -202,7 +211,7 @@ private fun ScanStep(
     if (phase == ConnectionPhase.FAILED && !failure.isNullOrBlank()) {
         StartupInfoBanner(StartupConnectionCopy.friendly(failure), tight)
     }
-    if (found.isEmpty()) {
+    if (found.isEmpty() && radioOn && permissionsGranted) {
         Column(
             Modifier.fillMaxWidth().startupInstructionCard().padding(if (tight) 12.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
