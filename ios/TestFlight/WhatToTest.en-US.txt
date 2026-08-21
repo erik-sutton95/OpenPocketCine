@@ -9,7 +9,7 @@ New and changed
 
 Fixes
 
-- This build has no new app behavior — keep testing Face Priority, shutter angle, and reconnect.
+- This build has no new app behavior — keep testing Face Priority, shutter angle, reconnect, and the live picture staying upright with false colour or LUT on.
 - Traffic Lights crush/clip compensation starts at 0 stops. Long-press LIGHTS if you want the old ¼-stop tolerance.
 - First connect no longer sits on Waiting for live-view when a few video packets arrive and then freeze.
 - While a subject is tracked, stick left/right matches the free gimbal instead of reversing.

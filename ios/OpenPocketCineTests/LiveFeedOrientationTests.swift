@@ -2,6 +2,7 @@ import CoreImage
 import Metal
 import OpenPocketViewCore
 import XCTest
+
 @testable import OpenPocketCine
 
 /// LUT / peaking / false colour / zebra share `needsGPUFeed` → `FeedFrameBaker` →
@@ -29,8 +30,9 @@ final class LiveFeedOrientationTests: XCTestCase {
     }
 
     func testCompositorKeepsVerticalMarkerForEveryGPUAssist() {
+        Self.warmFalseColorCubes()
         let source = Self.verticalMarker()
-        XCTAssertTrue(Self.topBandIsBrighter(source))
+        XCTAssertTrue(Self.bandEdgeIsOnCITop(source))
         for (name, fx) in [
             ("peaking", Self.peaking),
             ("zebra", Self.zebra),
@@ -39,8 +41,11 @@ final class LiveFeedOrientationTests: XCTestCase {
         ] {
             let output = LiveMonitorCompositor.apply(to: source, effects: fx)
             XCTAssertEqual(output.extent, source.extent, "\(name) must not change extent")
+            // Luma is the wrong proxy here: IRE false colour remaps paper white/black
+            // onto WAVE bands whose luma can invert while the raster stays upright.
+            // The white-band *edge* is the orientation signal.
             XCTAssertTrue(
-                Self.topBandIsBrighter(output),
+                Self.bandEdgeIsOnCITop(output),
                 "\(name) must not invert the raster — colour science stays, orientation stays")
         }
         for (name, fx) in [
@@ -72,23 +77,11 @@ final class LiveFeedOrientationTests: XCTestCase {
             return
         }
         defer { baker.releaseBakedTexture(texture) }
-        // The bake is in drawable orientation; CIImage(mtlTexture:) re-flips, so
-        // the wrapped image must read upright with no extra transform — exactly
-        // the pair of cancelling flips the blit present relies on.
-        guard
-            let wrapped = CIImage(
-                mtlTexture: texture,
-                options: [.colorSpace: CGColorSpaceCreateDeviceRGB()])
-        else {
-            XCTFail("CIImage(mtlTexture:) must wrap the bake")
-            return
-        }
+        // The present path blits this texture. CIImage(mtlTexture:) origin has
+        // moved across Xcode versions, so orientation is read from Metal rows.
         XCTAssertTrue(
-            Self.topBandIsBrighter(wrapped),
+            Self.metalTopIsBrighter(texture: texture, device: device),
             "bake must land in drawable orientation — a leftover flip inverts the feed")
-        XCTAssertFalse(
-            Self.topBandIsBrighter(Self.leftoverVerticalFlip(wrapped)),
-            "re-applying the old scaleY: -1 is the inversion the operator saw")
     }
 
     private static var peaking: LiveImageEffects {
@@ -129,28 +122,114 @@ final class LiveFeedOrientationTests: XCTestCase {
         return band.composited(over: black)
     }
 
-    private static func leftoverVerticalFlip(_ image: CIImage) -> CIImage {
-        image
-            .transformed(by: CGAffineTransform(scaleX: 1, y: -1))
-            .transformed(by: CGAffineTransform(translationX: 0, y: image.extent.height))
+    /// False colour cubes are async. Earlier tests in a full suite already warm
+    /// them; isolation still needs a short wait so IRE paint actually runs.
+    private static func warmFalseColorCubes() {
+        PocketFalseColorMap.warm(scale: .ire, mode: .normal)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if PocketFalseColorMap.overlayPaintData(scale: .ire, mode: .normal) != nil,
+                PocketFalseColorMap.overlayWeightData(scale: .ire, mode: .normal) != nil
+            {
+                return
+            }
+            usleep(20_000)
+        }
     }
 
-    private static func topBandIsBrighter(_ image: CIImage) -> Bool {
+    /// White band is the CI top quarter, so the luma/chroma step sits above mid-Y.
+    /// A vertical flip moves that step into the bottom half.
+    private static func bandEdgeIsOnCITop(_ image: CIImage) -> Bool {
         let context = CIContext(options: [.cacheIntermediates: false])
         let e = image.extent
-        guard e.width > 2, e.height > 2 else { return false }
-        let top = meanLuma(
-            image,
-            rect: CGRect(x: e.minX, y: e.midY, width: e.width, height: e.height / 2),
-            context: context)
-        let bottom = meanLuma(
-            image,
-            rect: CGRect(x: e.minX, y: e.minY, width: e.width, height: e.height / 2),
-            context: context)
-        return top > bottom + 0.08
+        let height = Int(e.height.rounded(.down))
+        guard height > 4, e.width > 2 else { return false }
+        var means: [Float] = []
+        means.reserveCapacity(height)
+        for row in 0..<height {
+            let y = e.minY + CGFloat(row)
+            means.append(
+                meanRGB(
+                    image,
+                    rect: CGRect(x: e.minX, y: y, width: e.width, height: 1),
+                    context: context))
+        }
+        var bestRow = 0
+        var bestMag: Float = 0
+        for i in 1..<height {
+            let mag = abs(means[i] - means[i - 1])
+            if mag > bestMag {
+                bestMag = mag
+                bestRow = i
+            }
+        }
+        guard bestMag > 0.04 else { return false }
+        return CGFloat(bestRow) > e.height / 2
     }
 
-    private static func meanLuma(_ image: CIImage, rect: CGRect, context: CIContext) -> Float {
+    /// CI top-center maps to Metal y = 0 (`FeedFrameBaker.metalOriginTransform`).
+    private static func metalTopIsBrighter(texture: MTLTexture, device: MTLDevice) -> Bool {
+        guard let queue = device.makeCommandQueue(),
+            let commandBuffer = queue.makeCommandBuffer(),
+            let blit = commandBuffer.makeBlitCommandEncoder()
+        else {
+            XCTFail("Metal blit readback unavailable")
+            return false
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: texture.pixelFormat,
+            width: texture.width,
+            height: texture.height,
+            mipmapped: false)
+        descriptor.storageMode = .shared
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        guard let readable = device.makeTexture(descriptor: descriptor) else {
+            XCTFail("shared Metal texture unavailable")
+            return false
+        }
+        blit.copy(
+            from: texture,
+            sourceSlice: 0,
+            sourceLevel: 0,
+            sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+            sourceSize: MTLSize(width: texture.width, height: texture.height, depth: 1),
+            to: readable,
+            destinationSlice: 0,
+            destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        if let error = commandBuffer.error {
+            XCTFail("Metal blit failed: \(error.localizedDescription)")
+            return false
+        }
+        let width = texture.width
+        let height = texture.height
+        let rowBytes = width * 4
+        var bytes = [UInt8](repeating: 0, count: rowBytes * height)
+        readable.getBytes(
+            &bytes, bytesPerRow: rowBytes,
+            from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
+        func rowMean(_ rows: Range<Int>) -> Float {
+            var sum: Float = 0
+            var count = 0
+            for row in rows {
+                for x in 0..<width {
+                    let i = (row * width + x) * 4
+                    let b = Float(bytes[i])
+                    let g = Float(bytes[i + 1])
+                    let r = Float(bytes[i + 2])
+                    sum += (r + g + b) / 3
+                    count += 1
+                }
+            }
+            return sum / Float(max(count, 1)) / 255
+        }
+        return rowMean(0..<(height / 2)) > rowMean((height / 2)..<height) + 0.08
+    }
+
+    private static func meanRGB(_ image: CIImage, rect: CGRect, context: CIContext) -> Float {
         let w = max(1, Int(rect.width.rounded(.down)))
         let h = max(1, Int(rect.height.rounded(.down)))
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
@@ -164,7 +243,7 @@ final class LiveFeedOrientationTests: XCTestCase {
             let r = Float(bytes[i * 4])
             let g = Float(bytes[i * 4 + 1])
             let b = Float(bytes[i * 4 + 2])
-            sum += 0.2126 * r + 0.7152 * g + 0.0722 * b
+            sum += (r + g + b) / 3
         }
         return sum / Float(max(pixels, 1)) / 255
     }

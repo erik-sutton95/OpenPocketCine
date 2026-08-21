@@ -104,7 +104,19 @@ jobs:
       # `dorny/paths-filter` fetches the base ref to diff on push events, which needs the checkout's
       # git credentials — so this job keeps them (unlike the others). It runs no repository code, so
       # the token is never exposed to untrusted code.
+      #
+      # On push it runs `git fetch origin <base> <head>`. A head like `docs/foo` is a git refspec
+      # (`docs:foo`), so we fetch the default branch with an explicit refspec and keep enough
+      # history that the merge-base already exists and that fetch is skipped.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fetch default branch for path filter
+        run: |
+          set -euo pipefail
+          default_branch="${{ github.event.repository.default_branch }}"
+          git fetch --no-tags origin \
+            "refs/heads/${default_branch}:refs/remotes/origin/${default_branch}"
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
@@ -124,6 +136,7 @@ jobs:
               - 'Sources/CJNI/**'
               - 'Package.swift'
               - 'scripts/android-*.sh'
+              - 'scripts/ci-install-swift-android.sh'
               - 'justfile'
               - '.github/workflows/ci.yml'
             handbook:
@@ -167,16 +180,11 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Set up Swift Android toolchain
-        id: swift-android
-        uses: skiptools/swift-android-action@2044b79660f201ccef8cbce62877e4ec5409f9c8 # v2.9.5
-        with:
-          swift-version: '6.3.3'
-          ndk-version: '27'
-          compile-sdk-api-level: '29'
-          build-package: false
-          build-tests: false
-          run-tests: false
+      # Do not use skiptools/swift-android-action: it references actions/cache@v5 and
+      # reactivecircus/android-emulator-runner@v2, which SHA pinning rejects even when
+      # those steps are skipped. Ubuntu 24.04 runners already ship Swift 6.3.3.
+      - name: Install Swift Android SDK
+        run: ./scripts/ci-install-swift-android.sh
 
       - name: Build, unit-test, and lint
         working-directory: Apps/Android

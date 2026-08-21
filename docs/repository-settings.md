@@ -27,7 +27,10 @@ changes through the API or
 CI (`.github/workflows/ci.yml`): meta checks and gitleaks always run. Native
 iOS and Android jobs skip while the repository is private (paid macOS minutes)
 and run once it is public. The **CI gate** job is the merge gate even when
-those jobs are skipped.
+those jobs are skipped. The Android job installs the official Swift 6.3.3
+Android SDK with `scripts/ci-install-swift-android.sh` — do not switch back to
+`skiptools/swift-android-action`; that composite references `actions/cache@v5`
+and `reactivecircus/android-emulator-runner@v2`, which SHA pinning rejects.
 
 The Pages workflow deploys `site/` (landing) plus the Starlight handbook at
 `/docs/`. Engineering notes in `docs/` are never uploaded. The PR labeler

@@ -32,6 +32,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Public CI: path filter fetches `main` with a slash-safe refspec so
+  `docs/**` (and other slash) branch pushes do not fail Detect changes; Android
+  installs the official Swift Android SDK without nested unpinned actions; live
+  feed orientation tests read spatial edges and Metal rows instead of luma
+  after false colour.
 - Public-launch GitHub settings: CI re-enabled with **CI gate** required on
   `main`, force-push off, Actions SHA pinning, and a `scripts/go-public.sh`
   walkthrough for the remaining visibility flip.
