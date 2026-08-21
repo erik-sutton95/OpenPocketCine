@@ -1,0 +1,17 @@
+camera
+chevron-left
+chevron-right
+contrast
+crosshair
+grid-3x3
+layers
+lock
+pause
+play
+settings
+share
+star
+trash
+video
+x
+zap

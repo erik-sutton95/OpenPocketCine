@@ -4,6 +4,14 @@ OpenPocketCine is licensed under the [Apache License 2.0](LICENSE). It distribut
 third-party software, reproduced here with their required license texts, and records protocol
 references that are **not** distributed.
 
+## Lucide icons
+
+- **Homepage:** <https://github.com/lucide-icons/lucide>
+- **Used for:** shared operator HUD icons (vendored SVGs / VectorDrawables)
+- **License:** ISC (full text in `ios/OpenPocketCine/Resources/Icons/lucide/LICENSE.txt`
+  and `Apps/Android/app/src/main/assets/icons/lucide/LICENSE.txt`)
+- **Copyright:** Lucide Icons and Contributors; some glyphs derived from Feather (MIT)
+
 ## CubeLUT parser
 
 - **Source:** adapted from [OpenZCine](https://github.com/erik-sutton95/OpenZCine)
