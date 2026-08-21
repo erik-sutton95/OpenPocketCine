@@ -55,3 +55,10 @@ The Compose shell now tracks the iOS operator surface, with Apple-only pieces sk
 - **Media:** camera catalog + SoftAP HTTP cache + ExoPlayer/photo viewer + system share. No Frame.io hop.
 
 Skip / later: VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL/De-SQ/MAG.
+
+OpenZCine Android patterns adopted (not Nikon PTP/USB/Wear/OCR):
+
+- Keystore AES/GCM Wi-Fi password store (`CameraWifiCredentialStore`)
+- `WIFI_MODE_FULL_LOW_LATENCY` lock while live
+- In-app-gated operator haptics
+- AAR `compileSdk` 37 metadata gate disabled so the project stays on SDK 36

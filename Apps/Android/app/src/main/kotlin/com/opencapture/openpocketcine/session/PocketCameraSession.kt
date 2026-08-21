@@ -8,6 +8,8 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
+import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
+import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +37,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
     val decoder = HevcDecoder()
-    private val wifiCache = CameraWifiCache(appContext)
+    private val wifiCache = CameraWifiCredentialStore(appContext)
+    private val wifiLock = WifiLowLatencyLock(appContext)
 
     private val _phase = MutableStateFlow(ConnectionPhase.IDLE)
     override val phase: ConnectionPhase get() = _phase.value
@@ -206,6 +209,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         ble.disconnect()
         decoder.reset()
         joiner.release()
+        wifiLock.release()
         connectedCamera = null
         joinedSSID = null
         holdsMonitor = false
@@ -282,6 +286,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             if (!joined) error("couldn't join camera Wi-Fi — tap the system Join prompt if Android asked")
         }
         joinedSSID = ssid
+        wifiLock.acquire()
 
         publishPhase(ConnectionPhase.OPENING_DATALINK)
         openDatalink(camera)
@@ -1226,30 +1231,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     companion object {
         private const val TAG = "PocketCameraSession"
         private const val RECOVERY_ATTEMPT_MS = 30_000L
-    }
-}
-
-/** SSID+password cache. Never written into saved-camera records. */
-private class CameraWifiCache(context: Context) {
-    private val prefs =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    fun load(cameraId: String): Pair<String, String>? {
-        val ssid = prefs.getString("$cameraId.ssid", null) ?: return null
-        val password = prefs.getString("$cameraId.password", null) ?: return null
-        if (ssid.isEmpty() || password.isEmpty()) return null
-        return ssid to password
-    }
-
-    fun save(cameraId: String, ssid: String, password: String) {
-        prefs.edit()
-            .putString("$cameraId.ssid", ssid)
-            .putString("$cameraId.password", password)
-            .apply()
-    }
-
-    companion object {
-        private const val PREFS = "openpocketcine.camera-wifi"
     }
 }
 

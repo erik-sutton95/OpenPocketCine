@@ -78,16 +78,31 @@ fun Modifier.chromeClickable(
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
+    val haptics = LocalOperatorHaptics.current
     return if (onLongClick != null) {
         combinedClickable(
             enabled = enabled,
             interactionSource = interaction,
             indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick,
+            onClick = {
+                haptics.selection()
+                onClick()
+            },
+            onLongClick = {
+                haptics.longPress()
+                onLongClick()
+            },
         )
     } else {
-        clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
+        clickable(
+            enabled = enabled,
+            interactionSource = interaction,
+            indication = null,
+            onClick = {
+                haptics.selection()
+                onClick()
+            },
+        )
     }
 }
 

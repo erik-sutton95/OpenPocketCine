@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -74,7 +75,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             SideEffect { composeFirstFrameDrawn.set(true) }
             OpenPocketCineTheme {
-                OpenPocketCineApp(model)
+                val haptics = rememberOperatorHaptics { model.hapticsEnabled }
+                CompositionLocalProvider(LocalOperatorHaptics provides haptics) {
+                    OpenPocketCineApp(model)
+                }
             }
         }
     }

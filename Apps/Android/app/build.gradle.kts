@@ -93,6 +93,14 @@ tasks.named("preBuild").configure {
     dependsOn(stageSwiftCore)
 }
 
+// Compose BOM / androidx.core AARs currently declare compileSdk 37. Local and
+// CI SDKs stay on 36 (same gate OpenZCine uses). Disable only the AAR metadata
+// check so the rest of the AGP graph still runs.
+afterEvaluate {
+    tasks.matching { it.name.startsWith("check") && it.name.endsWith("AarMetadata") }
+        .configureEach { enabled = false }
+}
+
 dependencies {
     implementation(project(":core-api"))
 
