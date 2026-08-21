@@ -97,6 +97,9 @@ handbook/node_modules/
 handbook/dist/
 handbook/.astro/
 
+# Staged GitHub Pages tree (landing + handbook build)
+public-site/
+
 # Python
 __pycache__/
 *.pyc

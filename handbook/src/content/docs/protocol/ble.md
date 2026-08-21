@@ -3,7 +3,7 @@ title: BLE pairing
 description: Scan, GATT, and app-level pairing for Osmo Pocket cameras.
 ---
 
-BLE is control only. After pairing, Wi-Fi credentials are read over GATT and bulk data moves to the camera SoftAP. See the [connection spine](./connection.md).
+BLE is control only. After pairing, Wi-Fi credentials are read over GATT and bulk data moves to the camera SoftAP. See the [connection spine](../connection/).
 
 ## Scan
 
@@ -46,4 +46,4 @@ Send `SetPairingPIN` (`0x07/0x45`), payload `packString(identifier) + packString
 
 First-time approval arrives as a `0x07/0x46` **request** — ACK it with a response frame.
 
-Commands are in the [catalog](./commands.md). Frame format is [DUML](./duml-frame.md).
+Commands are in the [catalog](../commands/). Frame format is [DUML](../duml-frame/).

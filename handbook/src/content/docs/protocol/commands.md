@@ -3,7 +3,7 @@ title: Command catalog
 description: DUML set/cmd values used on the connection spine, camera control, media, and live view.
 ---
 
-Commands we know for the connection spine, status, camera control, media, and live view. Framing is in [DUML frame](./duml-frame.md). This is not a complete vendor dictionary — only what OpenPocketCine has confirmed.
+Commands we know for the connection spine, status, camera control, media, and live view. Framing is in [DUML frame](../duml-frame/). This is not a complete vendor dictionary — only what OpenPocketCine has confirmed.
 
 | set/cmd | meaning | notes |
 |---|---|---|
@@ -19,7 +19,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x00/0x27` | media list chunks | `[10B sub][chunk]`; subtype `01` is data. Concat in arrival order → CompositePack. |
 | `0x00/0x28` | delete media | `[count][handle:u32][counter:u32] 00 [count:u32] 01 01 00 00`. Do not re-send. |
 | `0x02/0xBF` | favorite / star | `01 01 [handle][counter] 00 [on] 00 00 00`. Nano star byte `== 1` only. |
-| HTTP `/v2` | SoftAP file fetch | See [HTTP media](./media.md). |
+| HTTP `/v2` | SoftAP file fetch | See [HTTP media](../media/). |
 | `0x0d/0x02` | **battery push** | percent at payload offset 20 |
 | `0x02/0xdc` | **storage push** | SD + internal capacity/free |
 | `0x02/0x80` | active-store + playback bit | unsolicited |

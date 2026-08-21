@@ -3,7 +3,7 @@ title: HTTP media
 description: SoftAP /v2 file fetch, media list, delete, and favorite/star.
 ---
 
-Once the phone is on the camera [SoftAP](./wifi.md), stills and clips are fetched over HTTP. Listing, delete, and star stay on [DUML](./commands.md).
+Once the phone is on the camera [SoftAP](../wifi/), stills and clips are fetched over HTTP. Listing, delete, and star stay on [DUML](../commands/).
 
 ## File fetch
 

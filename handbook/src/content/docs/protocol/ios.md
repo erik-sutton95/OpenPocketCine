@@ -11,4 +11,4 @@ Compared with Osmosis on Android:
 - **No MAC/OUI over CoreBluetooth** — the Xtra-by-OUI detection and per-MAC password cache in Osmosis must key off the BLE name / peripheral UUID instead.
 - **Pace `fff5` writes** with `.withoutResponse` + delays, same as Android.
 
-See [BLE pairing](./ble.md) and [camera Wi-Fi](./wifi.md).
+See [BLE pairing](../ble/) and [camera Wi-Fi](../wifi/).

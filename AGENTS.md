@@ -24,8 +24,9 @@ Install local tooling with `just setup` (macOS / Homebrew).
 - `captures/` — **gitignored.** Packet captures; never commit.
 - `docs/` — engineering references. Start with `commit-hygiene.md`.
 - `handbook/` — Astro Starlight protocol handbook (BLE, Wi-Fi, DUML). Preview with
-  `just handbook`. Markdown in `handbook/src/content/docs/` is the source; it is
-  not on GitHub Pages yet.
+  `just handbook`. Markdown in `handbook/src/content/docs/` is the source. Shipped
+  at [openpocketcine.app/docs](https://openpocketcine.app/docs/) (GitHub Pages
+  merges it next to `site/`).
 - `site/` — GitHub Pages landing page.
 - `.github/` — CI workflows, issue/PR templates.
 

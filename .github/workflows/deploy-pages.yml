@@ -1,13 +1,15 @@
-name: Deploy landing page
+name: Deploy GitHub Pages
 
-# Deploys ONLY the public landing page (site/) to GitHub Pages via the
-# "GitHub Actions" Pages source. The shared docs/ folder is NEVER uploaded.
+# Landing page (site/) plus the Starlight handbook at /docs/. Engineering notes
+# in docs/ are never uploaded.
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
+      - "handbook/**"
       - "scripts/check-site.sh"
+      - "scripts/stage-pages.sh"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
@@ -43,8 +45,17 @@ jobs:
             find site -name '*.html' -exec sed -i "s#TESTFLIGHT_URL#${TESTFLIGHT_URL}#g" {} +
           fi
 
-      - name: Verify deploy tree
+      - name: Verify landing-page tree
         run: ./scripts/check-site.sh --deployed
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: handbook/package-lock.json
+
+      - name: Stage landing page and handbook
+        run: ./scripts/stage-pages.sh public-site
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
@@ -52,7 +63,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: public-site
 
       - name: Deploy to GitHub Pages
         id: deploy

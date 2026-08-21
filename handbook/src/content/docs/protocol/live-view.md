@@ -16,7 +16,7 @@ Nano uses the same DJI `00 00 01 ff` marker and fragment layout; SPS `67 64 00 1
 
 ## Transport
 
-The video is on the [DUML datalink](./duml-transport.md) itself — **UDP port 9004**, carried as datalink **pktType `0x02`** packets. It is *not* on a separate port or protocol.
+The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 9004**, carried as datalink **pktType `0x02`** packets. It is *not* on a separate port or protocol.
 
 ## Enable
 

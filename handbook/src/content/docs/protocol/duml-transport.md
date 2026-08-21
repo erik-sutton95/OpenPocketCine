@@ -3,7 +3,7 @@ title: DUML transport
 description: TCP :7001 poke, UDP port 9004, handshake, and wrapping headers.
 ---
 
-After the phone has joined the camera [SoftAP](./wifi.md), control and live view share a UDP datalink. Framing is still [DUML](./duml-frame.md); transport adds wrapping headers.
+After the phone has joined the camera [SoftAP](../wifi/), control and live view share a UDP datalink. Framing is still [DUML](../duml-frame/); transport adds wrapping headers.
 
 ## Arm the datalink
 
@@ -25,6 +25,6 @@ Then a 40-byte UDP handshake, then register + subscribe.
 
 On the UDP datalink each DUML frame is wrapped in an **8-byte transport header** + **12-byte routing header**. OpenPocketCine’s pcap tool sidesteps that by scanning for CRC-valid `0x55` frames.
 
-Live view is **not** a separate port. Video is datalink `pktType 0x02` on the same UDP 9004 socket. See [live view](./live-view.md).
+Live view is **not** a separate port. Video is datalink `pktType 0x02` on the same UDP 9004 socket. See [live view](../live-view/).
 
 Transport parsing lives in `Sources/OpenPocketViewCore/DumlTransport.swift`.

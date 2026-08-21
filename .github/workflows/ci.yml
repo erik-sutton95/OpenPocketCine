@@ -99,6 +99,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       android: ${{ steps.filter.outputs.android }}
+      handbook: ${{ steps.filter.outputs.handbook }}
     steps:
       # `dorny/paths-filter` fetches the base ref to diff on push events, which needs the checkout's
       # git credentials — so this job keeps them (unlike the others). It runs no repository code, so
@@ -125,6 +126,10 @@ jobs:
               - 'scripts/android-*.sh'
               - 'justfile'
               - '.github/workflows/ci.yml'
+            handbook:
+              - 'handbook/**'
+              - 'scripts/stage-pages.sh'
+              - '.github/workflows/deploy-pages.yml'
 
   native:
     name: Native Swift/iOS
@@ -179,14 +184,37 @@ jobs:
           SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
         run: ./gradlew assembleDebug test lint
 
+  handbook:
+    name: Protocol handbook
+    needs: changes
+    if: ${{ needs.changes.outputs.handbook == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: handbook/package-lock.json
+      - name: Install handbook dependencies
+        run: npm --prefix handbook ci
+      - name: Build handbook at /docs/
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+          HANDBOOK_BASE: /docs
+        run: npm --prefix handbook run build
+
   gate:
     name: CI gate
-    # The single required status check on `main` (name must stay "CI gate"). `native` and
-    # `android` are conditional, and a required check that never reports leaves a pull request
-    # blocked forever — so this job always runs and collapses every other job's result into
-    # one verdict. Skipped native/android while the repository is still private is success.
+    # The single required status check on `main` (name must stay "CI gate"). `native`,
+    # `android`, and `handbook` are conditional, and a required check that never reports
+    # leaves a pull request blocked forever — so this job always runs and collapses every
+    # other job's result into one verdict. Skipped native/android while the repository is
+    # still private is success.
     if: always()
-    needs: [meta, secrets, changes, native, android]
+    needs: [meta, secrets, changes, native, android, handbook]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed or been deliberately skipped

@@ -1,0 +1,6 @@
+# Starlight in-content links are site routes (../ble/, ./protocol/wifi/), not files.
+handbook/src/content/docs
+handbook/node_modules
+handbook/dist
+handbook/.astro
+public-site

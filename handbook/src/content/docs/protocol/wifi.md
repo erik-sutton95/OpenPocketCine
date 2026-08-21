@@ -3,7 +3,7 @@ title: Camera Wi-Fi
 description: Read SoftAP credentials over BLE and join the camera access point.
 ---
 
-After [app-level pairing](./ble.md), the camera exposes its own access point. The phone joins that SoftAP; DUML and HTTP then use the camera LAN.
+After [app-level pairing](../ble/), the camera exposes its own access point. The phone joins that SoftAP; DUML and HTTP then use the camera LAN.
 
 ## Credentials over BLE
 
@@ -27,6 +27,6 @@ Phone joins the camera's SoftAP (WPA2).
 | Camera / gateway | `192.168.2.1` |
 | Phone | `192.168.2.x`/24 |
 
-On iOS this is `NEHotspotConfiguration` (Hotspot Configuration entitlement). See [iOS notes](./ios.md). SoftAP helpers live in `Sources/OpenPocketViewCore/CameraSoftAP.swift`.
+On iOS this is `NEHotspotConfiguration` (Hotspot Configuration entitlement). See [iOS notes](../ios/). SoftAP helpers live in `Sources/OpenPocketViewCore/CameraSoftAP.swift`.
 
-Once associated, open the [UDP DUML datalink](./duml-transport.md).
+Once associated, open the [UDP DUML datalink](../duml-transport/).

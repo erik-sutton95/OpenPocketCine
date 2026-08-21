@@ -39,7 +39,7 @@ lint-md:
 # The GitHub Pages landing page is validated by `site-check` instead.
 # handbook/node_modules and build output are generated; skip them.
 check-links:
-    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design --exclude-path site --exclude-path handbook/node_modules --exclude-path handbook/dist --exclude-path handbook/.astro .
+    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design --exclude-path site .
 
 # Verify files obey .editorconfig.
 check-editorconfig:
@@ -132,8 +132,8 @@ run:
 clean:
     swift package clean
 
-# ── Protocol handbook (Astro Starlight; local preview only) ────────────────
-# Serves http://localhost:4321/. Not deployed to GitHub Pages yet.
+# ── Protocol handbook (Astro Starlight) ────────────────────────────────────
+# Local preview at http://localhost:4321/. Production is /docs/ on Pages.
 
 handbook:
     #!/usr/bin/env bash
@@ -149,7 +149,11 @@ handbook-build:
     if [[ ! -d handbook/node_modules ]]; then
         npm --prefix handbook ci
     fi
-    ASTRO_TELEMETRY_DISABLED=1 npm --prefix handbook run build
+    ASTRO_TELEMETRY_DISABLED=1 HANDBOOK_BASE="${HANDBOOK_BASE:-}" npm --prefix handbook run build
+
+# Merge landing page + handbook into public-site/ as GitHub Pages will ship it.
+handbook-stage:
+    ./scripts/stage-pages.sh public-site
 
 # ── Android production stack ────────────────────────────────────────────────
 # JAVA_HOME falls back to the Homebrew OpenJDK so recipes work without shell setup.

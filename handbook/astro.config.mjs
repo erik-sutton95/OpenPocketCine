@@ -2,10 +2,14 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-// Local preview uses the site root (`just handbook` → http://localhost:4321/).
-// A `/docs/` base path is only needed if this is later merged into GitHub Pages.
+// Local preview (`just handbook`) is the site root. GitHub Pages serves the
+// handbook under /docs/ — set HANDBOOK_BASE=/docs for that build.
+const handbookBase = process.env.HANDBOOK_BASE || '/';
+
 export default defineConfig({
   site: 'https://openpocketcine.app',
+  base: handbookBase,
+  trailingSlash: 'always',
   integrations: [
     starlight({
       title: 'OpenPocketCine',
@@ -15,7 +19,7 @@ export default defineConfig({
         src: './src/assets/icon.png',
         alt: 'OpenPocketCine',
       },
-      favicon: '/favicon.png',
+      favicon: 'favicon.png',
       social: [
         {
           icon: 'github',

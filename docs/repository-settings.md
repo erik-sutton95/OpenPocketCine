@@ -29,7 +29,8 @@ iOS and Android jobs skip while the repository is private (paid macOS minutes)
 and run once it is public. The **CI gate** job is the merge gate even when
 those jobs are skipped.
 
-The landing-page workflow deploys only `site/` to GitHub Pages. The PR labeler
+The Pages workflow deploys `site/` (landing) plus the Starlight handbook at
+`/docs/`. Engineering notes in `docs/` are never uploaded. The PR labeler
 uses `pull_request_target` and does **not** check out pull-request code.
 
 ## Security

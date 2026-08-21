@@ -20,7 +20,7 @@ Format and CRCs are in `Sources/OpenPocketViewCore/DumlFrame.swift` (self-tested
 | sender / receiver | device addresses |
 | seq | `u16` little-endian |
 | flags | see below |
-| set / cmd | command identity; see the [catalog](./commands.md) |
+| set / cmd | command identity; see the [catalog](../commands/) |
 | payload | command-specific |
 | crc16 | `u16` little-endian |
 
@@ -32,4 +32,4 @@ Format and CRCs are in `Sources/OpenPocketViewCore/DumlFrame.swift` (self-tested
 | `0xC0` | response |
 | `0x00` | notify |
 
-On the UDP datalink each frame is wrapped in extra headers. See [DUML transport](./duml-transport.md). The pcap tool sidesteps that wrapping by scanning for CRC-valid frames.
+On the UDP datalink each frame is wrapped in extra headers. See [DUML transport](../duml-transport/). The pcap tool sidesteps that wrapping by scanning for CRC-valid frames.

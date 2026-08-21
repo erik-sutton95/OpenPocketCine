@@ -1,8 +1,9 @@
 # Protocol notes
 
 Human-readable protocol handbook (BLE, camera Wi-Fi, DUML) lives in
-[`handbook/src/content/docs/`](../handbook/src/content/docs/). Preview locally
-with `just handbook` (http://localhost:4321/). It is not on GitHub Pages yet.
+[`handbook/src/content/docs/`](../handbook/src/content/docs/). Read it at
+[openpocketcine.app/docs](https://openpocketcine.app/docs/). Preview locally
+with `just handbook` (http://localhost:4321/).
 
 OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
 this repo. Packet captures stay in gitignored `captures/` and are never
