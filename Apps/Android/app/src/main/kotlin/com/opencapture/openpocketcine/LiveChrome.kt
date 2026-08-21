@@ -1260,6 +1260,7 @@ fun CaptureSettingCell(
     widest: String,
     active: Boolean,
     enabled: Boolean,
+    showFacePriorityBadge: Boolean = false,
     onClick: () -> Unit,
 ) {
     val labelColor = if (active) LiveDesign.accent.copy(alpha = 0.85f) else LiveDesign.muted
@@ -1274,11 +1275,26 @@ fun CaptureSettingCell(
                     if (active) Modifier.border(1.dp, LiveDesign.accentDim, ChromeShape) else Modifier,
                 )
                 .chromeClickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .then(
+                    if (showFacePriorityBadge) {
+                        Modifier.semantics {
+                            contentDescription = "$label $value, ${CaptureLists.FACE_PRIORITY_TITLE}"
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Text(label, color = labelColor, style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = labelColor, style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
+            if (showFacePriorityBadge) FacePrioritySmile(labelColor)
+        }
         Box(contentAlignment = Alignment.Center) {
             Text(
                 widest,
@@ -1288,6 +1304,30 @@ fun CaptureSettingCell(
             )
             Text(value, color = valueColor, style = LiveType.ui(17f, FontWeight.Medium), maxLines = 1)
         }
+    }
+}
+
+/** iOS `face.smiling.fill` stand-in until Lucide. */
+@Composable
+private fun FacePrioritySmile(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(11.dp)) {
+        val stroke = 1.2.dp.toPx()
+        val r = size.minDimension / 2f
+        val c = Offset(size.width / 2f, size.height / 2f)
+        drawCircle(tint, r - stroke / 2f, c, style = Stroke(stroke))
+        val eyeY = c.y - r * 0.22f
+        val eyeOff = r * 0.28f
+        drawCircle(tint, stroke * 0.65f, Offset(c.x - eyeOff, eyeY))
+        drawCircle(tint, stroke * 0.65f, Offset(c.x + eyeOff, eyeY))
+        drawArc(
+            color = tint,
+            startAngle = 20f,
+            sweepAngle = 140f,
+            useCenter = false,
+            topLeft = Offset(c.x - r * 0.45f, c.y - r * 0.1f),
+            size = Size(r * 0.9f, r * 0.85f),
+            style = Stroke(stroke, cap = StrokeCap.Round),
+        )
     }
 }
 

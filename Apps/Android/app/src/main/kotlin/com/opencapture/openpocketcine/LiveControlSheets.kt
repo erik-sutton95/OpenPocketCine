@@ -1,5 +1,11 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -7,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +33,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -71,6 +79,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.FocusTrackMode
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.round
@@ -338,6 +347,7 @@ fun LiveControlSheet(
 
     LaunchedEffect(sheet) {
         if (sheet == LiveSheet.AUDIO) model.refreshAudio()
+        if (sheet == LiveSheet.FOCUS && status.focusTrack < 0) model.refreshFocusTrack()
         drumJob?.cancel()
         seed()
     }
@@ -510,7 +520,12 @@ fun LiveControlSheet(
                 }
                 LiveSheet.FOCUS -> {
                     if (CaptureLists.supportsFocusMode(model.session.connectedCamera?.model?.name)) {
-                        FocusBody(status = status, enabled = enabled, onContinuous = model::setFocusMode)
+                        FocusBody(
+                            status = status,
+                            enabled = enabled,
+                            onContinuous = model::setFocusMode,
+                            onTrack = model::setFocusTrack,
+                        )
                     }
                 }
                 LiveSheet.EXPO -> {
@@ -679,12 +694,55 @@ private fun CheckedRows(
     }
 }
 
+private val FocusTrackCapsule = RoundedCornerShape(percent = 50)
+
 @Composable
-private fun FocusBody(status: CameraStatus, enabled: Boolean, onContinuous: (Boolean) -> Unit) {
+private fun FocusBody(
+    status: CameraStatus,
+    enabled: Boolean,
+    onContinuous: (Boolean) -> Unit,
+    onTrack: (Int) -> Unit,
+) {
     val continuous = status.focusMode == CameraCommands.FOCUS_CONTINUOUS
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FocusTab("AF-S", active = !continuous, enabled = enabled) { onContinuous(false) }
-        FocusTab("AF-C", active = continuous, enabled = enabled) { onContinuous(true) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FocusTab("AF-S", active = !continuous, enabled = enabled) { onContinuous(false) }
+            FocusTab("AF-C", active = continuous, enabled = enabled) { onContinuous(true) }
+        }
+        AnimatedVisibility(
+            visible = continuous,
+            enter = fadeIn(tween(160)) + expandVertically(tween(160)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val selected = if (status.focusTrack < 0) FocusTrackMode.DEFAULT.raw else status.focusTrack
+                FocusTrackMode.entries.forEach { track ->
+                    val on = selected == track.raw
+                    Text(
+                        track.label,
+                        style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.3.sp),
+                        color = if (on) LiveDesign.accent else LiveDesign.muted,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier =
+                            Modifier.clip(FocusTrackCapsule)
+                                .background(
+                                    if (on) LiveDesign.accentDim else LiveDesign.background.copy(alpha = 0.28f),
+                                )
+                                .border(
+                                    1.5.dp,
+                                    if (on) LiveDesign.accent else LiveDesign.hairline,
+                                    FocusTrackCapsule,
+                                )
+                                .chromeClickable(enabled = enabled, onClick = { onTrack(track.raw) })
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

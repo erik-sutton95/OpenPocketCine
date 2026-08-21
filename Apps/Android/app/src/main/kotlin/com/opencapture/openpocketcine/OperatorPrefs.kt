@@ -212,6 +212,7 @@ object OperatorPrefs {
     private const val SHUTTER_DEGREES = "OpenPocketCine.ShutterAngleDegrees"
     private const val LUT_SELECTION = "OpenPocketCine.LUTSelection"
     private const val ASSIST_V1 = "OpenPocketCine.Assist.v1"
+    private const val PLAYBACK_ASSISTS = "OpenPocketCine.PlaybackAssists.v1"
 
     const val DEFAULT_GIMBAL_SENSITIVITY = 4
     val DEFAULT_CLEAN_PINS = setOf("LUT", "PEAK", "MIRROR")
@@ -325,5 +326,12 @@ object OperatorPrefs {
 
     fun setAssistEncoded(context: Context, value: String) {
         prefs(context).edit().putString(ASSIST_V1, value).apply()
+    }
+
+    fun playbackVisibleAssistTools(context: Context): Set<String> =
+        prefs(context).getStringSet(PLAYBACK_ASSISTS, null)?.toSet() ?: emptySet()
+
+    fun setPlaybackVisibleAssistTools(context: Context, value: Set<String>) {
+        prefs(context).edit().putStringSet(PLAYBACK_ASSISTS, value).apply()
     }
 }

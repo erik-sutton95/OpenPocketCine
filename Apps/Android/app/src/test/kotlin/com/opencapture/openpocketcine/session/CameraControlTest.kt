@@ -262,6 +262,21 @@ class CameraControlTest {
     }
 
     @Test
+    fun focusTrackReplyIsPid3B() {
+        val reply = hex("0000013b00020102")
+        assertEquals(FocusTrackMode.SUBJECT_LOCK, FocusTrackMode.parseReply(reply))
+        val next = StatusExtras.applyParamReply(reply, CameraStatus())
+        assertEquals(2, next.focusTrack)
+        assertEquals(FocusTrackMode.DEFAULT, FocusTrackMode.parseReply(hex("0000013b00020100")))
+        assertEquals(FocusTrackMode.PRODUCT_SHOWCASE, FocusTrackMode.parseReply(hex("0000013b00020101")))
+        assertEquals(FocusTrackMode.REGISTERED_PRIORITY, FocusTrackMode.parseReply(hex("0000013b00020103")))
+        assertEquals(null, FocusTrackMode.parseReply(hex("00000120000102")))
+        assertTrue(FocusTrackMode.shouldHoldWatchdog(2.2))
+        assertTrue(!FocusTrackMode.shouldHoldWatchdog(4.0))
+        assertTrue(!FocusTrackMode.shouldHoldWatchdog(null))
+    }
+
+    @Test
     fun waitKeyCoversNewCommands() {
         assertEquals(0x0201, SwiftCore.waitKey(SwiftCore.CMD_SHOOT_PHOTO))
         assertEquals(0x02E1, SwiftCore.waitKey(SwiftCore.CMD_SET_SHOOTING_MODE))
@@ -276,6 +291,8 @@ class CameraControlTest {
         assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
         assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))
         assertEquals(0x0209, SwiftCore.waitKey(SwiftCore.CMD_NANO_LIVE_VIEW_GATE))
         assertEquals(0, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_STICK))
     }

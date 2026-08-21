@@ -21,6 +21,8 @@ class LiveAssistState(
     pinnedNames: Set<String> = OperatorPrefs.DEFAULT_CLEAN_PINS,
     private val onPersist: ((String) -> Unit)? = null,
     private val onPersistPins: ((Set<String>) -> Unit)? = null,
+    playbackNames: Set<String> = emptySet(),
+    private val onPersistPlayback: ((Set<String>) -> Unit)? = null,
 ) {
     var lutOn by mutableStateOf(true)
         private set
@@ -117,6 +119,10 @@ class LiveAssistState(
 
     var configureTool by mutableStateOf<LiveAssistTool?>(null)
 
+    /** OpenZCine `playbackVisibleAssistTools` — independent of the live toolbar. */
+    var playbackVisibleTools by mutableStateOf(parsePlayback(playbackNames))
+        private set
+
     /**
      * Optional 256-bin luminance histogram. Null / all-zero draws the IRE axis
      * and empty bins. JNI LiveColorScience can replace this later.
@@ -186,6 +192,14 @@ class LiveAssistState(
             LiveAssistTool.MIRROR -> mirror = !mirror
         }
         persist()
+    }
+
+    fun isPlaybackVisible(tool: LiveAssistTool): Boolean = tool in playbackVisibleTools
+
+    fun togglePlayback(tool: LiveAssistTool) {
+        playbackVisibleTools =
+            if (tool in playbackVisibleTools) playbackVisibleTools - tool else playbackVisibleTools + tool
+        onPersistPlayback?.invoke(playbackVisibleTools.map { it.name }.toSet())
     }
 
     fun togglePin(tool: LiveAssistTool) {
@@ -465,6 +479,8 @@ class LiveAssistState(
                 pinnedNames = OperatorPrefs.cleanViewPinnedTools(app),
                 onPersist = { OperatorPrefs.setAssistEncoded(app, it) },
                 onPersistPins = { OperatorPrefs.setCleanViewPinnedTools(app, it) },
+                playbackNames = OperatorPrefs.playbackVisibleAssistTools(app),
+                onPersistPlayback = { OperatorPrefs.setPlaybackVisibleAssistTools(app, it) },
             )
         }
 
@@ -472,6 +488,9 @@ class LiveAssistState(
             val parsed = names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
             return parsed.ifEmpty { defaultPinned }
         }
+
+        private fun parsePlayback(names: Set<String>): Set<LiveAssistTool> =
+            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
 
         private fun encodeGuides(guides: ScopeGuides): JSONObject =
             JSONObject().put("clip", guides.clip).put("crush", guides.crush).put("middle", guides.middle)

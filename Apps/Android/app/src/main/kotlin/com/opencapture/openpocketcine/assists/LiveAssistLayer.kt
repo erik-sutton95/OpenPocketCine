@@ -35,6 +35,8 @@ import kotlin.math.roundToInt
  * draw empty traces + axis — JNI LiveColorScience will feed samples later.
  *
  * [LiveAssistLayer] does not flip the video. See [LiveAssistState.mirror].
+ * Pass [playback] to gate chips on [LiveAssistState.isPlaybackVisible] instead of
+ * live [LiveAssistState.isVisible] (clean-view pins do not apply).
  */
 @Composable
 fun LiveAssistLayer(
@@ -57,25 +59,32 @@ fun LiveAssistLayer(
     focus: Pair<Float, Float>?,
     modifier: Modifier = Modifier,
     locked: Boolean = false,
+    playback: Boolean = false,
 ) {
     val density = LocalDensity.current
+    val shown: (LiveAssistTool) -> Boolean =
+        if (playback) {
+            { state.isPlaybackVisible(it) }
+        } else {
+            { state.isVisible(it) }
+        }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val canvas =
             AssistRect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
         val feed = canvas
-        if (state.isVisible(LiveAssistTool.GUIDES)) {
+        if (shown(LiveAssistTool.GUIDES)) {
             GuidesOverlay(state, feed)
         }
-        if (state.isVisible(LiveAssistTool.GRID)) {
+        if (shown(LiveAssistTool.GRID)) {
             GridOverlay(state, feed)
         }
-        if (state.isVisible(LiveAssistTool.CROSS)) {
+        if (shown(LiveAssistTool.CROSS)) {
             CrosshairOverlay(feed)
         }
-        if (state.isVisible(LiveAssistTool.FALSE) && state.falseColorReference) {
+        if (shown(LiveAssistTool.FALSE) && state.falseColorReference) {
             FalseColorReferenceRuler(state, status.colorMode, Modifier.align(Alignment.BottomStart).padding(14.dp, 0.dp, 0.dp, 86.dp))
         }
-        if (state.isVisible(LiveAssistTool.WAVE)) {
+        if (shown(LiveAssistTool.WAVE)) {
             val sizePx = panelPx(ScopePanelSize.waveform, state.waveScale, density)
             MovableAssistPanel(
                 tool = LiveAssistTool.WAVE,
@@ -90,7 +99,7 @@ fun LiveAssistLayer(
                 WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())
             }
         }
-        if (state.isVisible(LiveAssistTool.PARADE)) {
+        if (shown(LiveAssistTool.PARADE)) {
             val sizePx = panelPx(ScopePanelSize.parade, state.paradeScale, density)
             MovableAssistPanel(
                 tool = LiveAssistTool.PARADE,
@@ -105,7 +114,7 @@ fun LiveAssistLayer(
                 ParadePanel(state, status.colorMode, Modifier.fillMaxSize())
             }
         }
-        if (state.isVisible(LiveAssistTool.VECTOR)) {
+        if (shown(LiveAssistTool.VECTOR)) {
             val sizePx = panelPx(ScopePanelSize.vectorscope, state.vectorScale, density)
             MovableAssistPanel(
                 tool = LiveAssistTool.VECTOR,
@@ -120,7 +129,7 @@ fun LiveAssistLayer(
                 VectorscopePanel(state, Modifier.fillMaxSize())
             }
         }
-        if (state.isVisible(LiveAssistTool.HISTO)) {
+        if (shown(LiveAssistTool.HISTO)) {
             val sizePx = panelPx(ScopePanelSize.histogram, state.histoScale, density)
             MovableAssistPanel(
                 tool = LiveAssistTool.HISTO,
@@ -135,7 +144,7 @@ fun LiveAssistLayer(
                 HistogramPanel(state, Modifier.fillMaxSize())
             }
         }
-        if (state.isVisible(LiveAssistTool.LIGHTS)) {
+        if (shown(LiveAssistTool.LIGHTS)) {
             val sizePx = panelPx(ScopePanelSize.trafficLights, state.lightsScale, density)
             MovableAssistPanel(
                 tool = LiveAssistTool.LIGHTS,
@@ -150,7 +159,7 @@ fun LiveAssistLayer(
                 TrafficLightsPanel(state, Modifier.fillMaxSize())
             }
         }
-        if (state.isVisible(LiveAssistTool.AUDIO)) {
+        if (!playback && shown(LiveAssistTool.AUDIO)) {
             val meters = status.audioMetersLeftRight()
             if (meters != null) {
                 val channels = meters.asMeterChannels()
@@ -169,8 +178,8 @@ fun LiveAssistLayer(
                 }
             }
         }
-        if (focus != null) {
-            val fx = if (state.isVisible(LiveAssistTool.MIRROR)) 1f - focus.first else focus.first
+        if (!playback && focus != null) {
+            val fx = if (shown(LiveAssistTool.MIRROR)) 1f - focus.first else focus.first
             FocusBox(fx, focus.second)
         }
     }

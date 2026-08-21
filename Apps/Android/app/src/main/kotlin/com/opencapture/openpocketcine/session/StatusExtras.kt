@@ -108,6 +108,7 @@ object StatusExtras {
     }
 
     fun applyParamReply(payload: ByteArray, status: CameraStatus): CameraStatus {
+        FocusTrackMode.parseReply(payload)?.let { return status.copy(focusTrack = it.raw) }
         if (payload.size < 7) return status
         val pid = (payload[3].toInt() and 0xFF) or ((payload[4].toInt() and 0xFF) shl 8)
         val value = payload[6].toInt() and 0xFF

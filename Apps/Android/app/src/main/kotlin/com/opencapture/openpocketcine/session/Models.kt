@@ -216,12 +216,7 @@ data class CameraStatus(
             }
 
     val focusLabel: String
-        get() =
-            when (focusMode) {
-                CameraCommands.FOCUS_SINGLE -> "AF-S"
-                CameraCommands.FOCUS_CONTINUOUS -> "AF-C"
-                else -> "—"
-            }
+        get() = FocusOption.resolve(focusMode, focusTrack)?.chip ?: "—"
 
     val audioLabel: String
         get() =

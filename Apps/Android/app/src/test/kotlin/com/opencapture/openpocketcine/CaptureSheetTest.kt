@@ -2,6 +2,8 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.FocusOption
+import com.opencapture.openpocketcine.session.FocusTrackMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -201,6 +203,33 @@ class CaptureSheetTest {
         assertTrue(CaptureLists.NATIVE_ISO_HOP_HELP.isNotEmpty())
         assertTrue(!CaptureLists.NATIVE_ISO_HOP_HELP.contains("400 ↔ 1600"))
         assertEquals("Face Priority", CaptureLists.FACE_PRIORITY_TITLE)
+    }
+
+    @Test
+    fun focusTrackChipsMatchIosCopy() {
+        assertEquals(
+            listOf(
+                "Default",
+                "Product Showcase",
+                "Subject Lock Tracking",
+                "Registered Subject Priority",
+            ),
+            FocusTrackMode.entries.map { it.label },
+        )
+        assertEquals(0x00, FocusTrackMode.DEFAULT.raw)
+        assertEquals(0x01, FocusTrackMode.PRODUCT_SHOWCASE.raw)
+        assertEquals(0x02, FocusTrackMode.SUBJECT_LOCK.raw)
+        assertEquals(0x03, FocusTrackMode.REGISTERED_PRIORITY.raw)
+        assertEquals("AF-S", FocusOption.resolve(CameraCommands.FOCUS_SINGLE, 2)?.chip)
+        assertEquals("AF-C", FocusOption.resolve(CameraCommands.FOCUS_CONTINUOUS, -1)?.chip)
+        assertEquals("Showcase", FocusOption.resolve(CameraCommands.FOCUS_CONTINUOUS, 1)?.chip)
+        assertEquals("Lock", FocusOption.resolve(CameraCommands.FOCUS_CONTINUOUS, 2)?.chip)
+        assertEquals("Priority", FocusOption.resolve(CameraCommands.FOCUS_CONTINUOUS, 3)?.chip)
+        assertEquals(
+            "Showcase",
+            CameraStatus(focusMode = CameraCommands.FOCUS_CONTINUOUS, focusTrack = 1).focusLabel,
+        )
+        assertEquals("AF-S", CameraStatus(focusMode = CameraCommands.FOCUS_SINGLE, focusTrack = 2).focusLabel)
     }
 
     @Test

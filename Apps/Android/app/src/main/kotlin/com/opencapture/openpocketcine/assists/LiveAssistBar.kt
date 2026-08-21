@@ -66,6 +66,42 @@ fun LiveAssistBar(
     )
 }
 
+/**
+ * iOS playback assist strip: [playbackToolbarCases] in groups of three, including
+ * AUDIO in the scroll. Parent supplies the glass; chips only.
+ */
+@Composable
+fun PlaybackAssistBar(
+    state: LiveAssistState,
+    onLongPress: (LiveAssistTool) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scroll = rememberScrollState()
+    Row(
+        modifier.horizontalScroll(scroll),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LiveAssistTool.playbackToolbarCases.forEachIndexed { index, tool ->
+            if (index > 0 && index % 3 == 0) AssistDivider()
+            AssistToolCell(
+                tool = tool,
+                isOn = state.isPlaybackVisible(tool),
+                enabled = true,
+                onLongClick =
+                    if (tool.hasConfiguration) {
+                        {
+                            state.configureTool = tool
+                            onLongPress(tool)
+                        }
+                    } else {
+                        null
+                    },
+                onClick = { state.togglePlayback(tool) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun LiveAssistBarRow(
     locked: Boolean,

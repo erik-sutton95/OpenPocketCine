@@ -360,6 +360,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 files = displayedVideos,
                 startingAt = file,
                 controller = controller,
+                model = model,
                 onClose = { playing = null },
                 onDeliver = { deliveryFiles = listOf(it) },
             )

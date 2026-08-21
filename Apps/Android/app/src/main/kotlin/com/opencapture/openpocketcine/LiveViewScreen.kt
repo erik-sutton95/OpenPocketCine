@@ -801,6 +801,8 @@ private fun LandscapeChrome(
                             active = sheet,
                             enabled = !uiLocked && !controlBusy && hits,
                             showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
+                            facePriority = model.facePriorityExposureEnabled,
+                            shutterUsesAngle = model.shutterUsesAngle,
                             onOpen = { onSheet(if (sheet == it) null else it) },
                         )
                     }

@@ -27,6 +27,7 @@ object CameraCommands {
     const val CMD_TAP_COMMIT = 0x32
 
     const val PID_AUDIO_CHANNEL = 0x0020
+    const val PID_FOCUS_TRACK = 0x003B
     const val PID_VOCAL_BOOST = 0x004C
 
     const val RES_1080 = 0x0A
@@ -477,5 +478,64 @@ object CameraCommands {
             ((bits shr 16) and 0xFF).toByte(),
             ((bits shr 24) and 0xFF).toByte(),
         )
+    }
+}
+
+/** AF-C submenu. `0x02/0x8E` pid `0x003B`. SET/GET value is `01 <mode>`. */
+enum class FocusTrackMode(val raw: Int, val label: String) {
+    DEFAULT(0x00, "Default"),
+    PRODUCT_SHOWCASE(0x01, "Product Showcase"),
+    SUBJECT_LOCK(0x02, "Subject Lock Tracking"),
+    REGISTERED_PRIORITY(0x03, "Registered Subject Priority"),
+    ;
+
+    companion object {
+        /** Camera can pause HEVC while switching AF-C intelligence. */
+        const val VIDEO_GRACE_SEC = 4.0
+
+        fun fromRaw(raw: Int): FocusTrackMode? = entries.firstOrNull { it.raw == raw }
+
+        fun shouldHoldWatchdog(secondsSinceSet: Double?): Boolean {
+            val s = secondsSinceSet ?: return false
+            return s >= 0.0 && s < VIDEO_GRACE_SEC
+        }
+
+        /** GET reply `00 00 01 3B 00 02 01 <mode>`. */
+        fun parseReply(payload: ByteArray): FocusTrackMode? {
+            if (payload.size < 8) return null
+            if (payload[0] != 0.toByte() || payload[1] != 0.toByte() || payload[2] != 0x01.toByte()) {
+                return null
+            }
+            val pid = (payload[3].toInt() and 0xFF) or ((payload[4].toInt() and 0xFF) shl 8)
+            if (pid != CameraCommands.PID_FOCUS_TRACK) return null
+            val len = payload[5].toInt() and 0xFF
+            if (len != 2 || payload.size < 8 || payload[6] != 0x01.toByte()) return null
+            return fromRaw(payload[7].toInt() and 0xFF)
+        }
+    }
+}
+
+/** FOCUS picker + capture-strip chip. Single is `0x24`. The rest are AF-C + pid `0x003B`. */
+enum class FocusOption(val chip: String) {
+    SINGLE("AF-S"),
+    CONTINUOUS_DEFAULT("AF-C"),
+    PRODUCT_SHOWCASE("Showcase"),
+    SUBJECT_LOCK("Lock"),
+    REGISTERED_PRIORITY("Priority"),
+    ;
+
+    companion object {
+        fun resolve(mode: Int, track: Int): FocusOption? =
+            when (mode) {
+                CameraCommands.FOCUS_SINGLE -> SINGLE
+                CameraCommands.FOCUS_CONTINUOUS ->
+                    when (FocusTrackMode.fromRaw(track)) {
+                        FocusTrackMode.PRODUCT_SHOWCASE -> PRODUCT_SHOWCASE
+                        FocusTrackMode.SUBJECT_LOCK -> SUBJECT_LOCK
+                        FocusTrackMode.REGISTERED_PRIORITY -> REGISTERED_PRIORITY
+                        FocusTrackMode.DEFAULT, null -> CONTINUOUS_DEFAULT
+                    }
+                else -> null
+            }
     }
 }

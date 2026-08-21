@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -349,6 +350,8 @@ fun LivePortraitChrome(
                     active = sheet,
                     enabled = !uiLocked && !controlBusy && chromeInteractive,
                     showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
+                    facePriority = model.facePriorityExposureEnabled,
+                    shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
                 )
             }
@@ -552,9 +555,18 @@ fun LiveCaptureStrip(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     showFocus: Boolean = true,
+    facePriority: Boolean = false,
+    shutterUsesAngle: Boolean = false,
     onOpen: (LiveSheet) -> Unit,
 ) {
+    val context = LocalContext.current
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
+    val shutterValue =
+        if (shutterUsesAngle) {
+            ShutterAngle.label(ShutterAngle.nearestDegrees(OperatorPrefs.shutterAngleDegrees(context)))
+        } else {
+            status.shutterLabel
+        }
     CaptureStripShell(modifier) {
         CaptureSettingCell("ISO", status.isoLabel, "25600", active == LiveSheet.ISO, enabled) { onOpen(LiveSheet.ISO) }
         if (auto) {
@@ -564,9 +576,16 @@ fun LiveCaptureStrip(
                 "+3.0",
                 active == LiveSheet.SHUTTER,
                 enabled,
+                showFacePriorityBadge = facePriority,
             ) { onOpen(LiveSheet.SHUTTER) }
         } else {
-            CaptureSettingCell("SHUTTER", status.shutterLabel, "1/16000", active == LiveSheet.SHUTTER, enabled) {
+            CaptureSettingCell(
+                "SHUTTER",
+                shutterValue,
+                if (shutterUsesAngle) "346°" else "1/16000",
+                active == LiveSheet.SHUTTER,
+                enabled,
+            ) {
                 onOpen(LiveSheet.SHUTTER)
             }
         }

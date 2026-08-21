@@ -61,6 +61,9 @@ enum class LiveAssistTool {
         val toolbarCases: List<LiveAssistTool> =
             listOf(LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, GUIDES, GRID, CROSS, MIRROR)
 
+        /** Playback drops nothing Pocket already omits; AUDIO rides last like live. */
+        val playbackToolbarCases: List<LiveAssistTool> = toolbarCases + AUDIO
+
         val settingsCases: List<LiveAssistTool> = toolbarCases + AUDIO
 
         val cleanPinCases: List<LiveAssistTool> = settingsCases
@@ -215,6 +218,17 @@ enum class ZebraPaint(val label: String) {
     CYAN("Cyan"),
     GREEN("Green"),
     ;
+
+    /** Overlay RGB iOS `ZebraPaint.rgb` paints on the feed. */
+    val rgb: Triple<Double, Double, Double>
+        get() =
+            when (this) {
+                WHITE -> Triple(1.0, 1.0, 1.0)
+                AMBER -> Triple(1.0, 0.72, 0.2)
+                RED -> Triple(1.0, 0.15, 0.15)
+                CYAN -> Triple(0.0, 0.85, 0.9)
+                GREEN -> Triple(0.2, 0.9, 0.35)
+            }
 
     companion object {
         fun fromPersisted(raw: String): ZebraPaint =

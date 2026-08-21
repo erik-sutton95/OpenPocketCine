@@ -248,6 +248,10 @@ class AppModel(context: Context) {
 
     fun setFocusMode(continuous: Boolean) = session.setFocusMode(continuous)
 
+    fun setFocusTrack(mode: Int) = session.setFocusTrack(mode)
+
+    fun refreshFocusTrack() = session.refreshFocusTrack()
+
     fun setColorMode(mode: Int) = session.setColorMode(mode)
 
     fun setResolutionFps(res: Int, fpsIndex: Int) = session.setResolutionFps(res, fpsIndex)

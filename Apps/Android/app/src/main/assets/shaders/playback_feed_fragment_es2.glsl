@@ -33,6 +33,7 @@ uniform float uZebraHighlight;
 uniform vec3 uZebraHighlightColor;
 uniform float uZebraMidtoneOn;
 uniform float uZebraMidtone;
+uniform float uZebraMidtoneHalf;
 uniform vec3 uZebraMidtoneColor;
 
 varying vec2 vTexSamplingCoord;
@@ -43,7 +44,6 @@ const float ATLAS_COLUMNS = 8.0;
 // constant belongs to the detector and lives with it, in the mask pass.
 const vec3 PEAKING_UNDER_COLOR = vec3(0.04, 0.04, 0.05);
 const float ZEBRA_GAIN = 40.0;
-const float ZEBRA_HALF_WIDTH = 5.0 / 255.0;
 const float STRIPE_PITCH = 14.14;
 
 vec2 atlasCoordinate(float slice, vec2 redGreen, float cubeSize) {
@@ -293,22 +293,24 @@ void main() {
             fract((displayCoordinate.x + displayCoordinate.y) / STRIPE_PITCH)
         );
         if (uZebraHighlightOn > 0.5) {
+            // +1 matches iOS `thresholdMask` so luma == threshold paints.
             float highlightMask = clamp(
-                (luma - uZebraHighlight) * ZEBRA_GAIN,
+                (luma - uZebraHighlight) * ZEBRA_GAIN + 1.0,
                 0.0,
                 1.0
             );
             color = mix(color, uZebraHighlightColor, highlightMask * stripe);
         }
         if (uZebraMidtoneOn > 0.5) {
+            float halfWidth = max(uZebraMidtoneHalf, 1e-6);
             float midtoneMask =
                 clamp(
-                    (luma - (uZebraMidtone - ZEBRA_HALF_WIDTH)) * ZEBRA_GAIN,
+                    (luma - (uZebraMidtone - halfWidth)) * ZEBRA_GAIN + 1.0,
                     0.0,
                     1.0
                 )
                 * clamp(
-                    ((uZebraMidtone + ZEBRA_HALF_WIDTH) - luma) * ZEBRA_GAIN,
+                    ((uZebraMidtone + halfWidth) - luma) * ZEBRA_GAIN + 1.0,
                     0.0,
                     1.0
                 );
