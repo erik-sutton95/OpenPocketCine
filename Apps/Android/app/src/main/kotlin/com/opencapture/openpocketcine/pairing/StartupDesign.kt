@@ -66,7 +66,8 @@ object StartupColors {
     val destructive: Color = Color(0.930f, 0.267f, 0.267f)
     val darkText: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
     val backdropBase: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
-    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f)
+    /** iOS `StartupColors.backdrop` — Sky Blue at 10%, not a full-screen wash. */
+    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.10f)
 }
 
 fun Modifier.startupBackdrop(): Modifier = drawBehind {

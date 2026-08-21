@@ -32,6 +32,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Saved-cameras home is titled **Operator Setup** on iOS and Android (the
+  header no longer repeats the intro card's "Your cameras."). Android's
+  startup glow matches iOS — Sky Blue at 10% over DJI black, not a full-screen
+  wash.
 - Android operator chrome now uses the same Kyant liquid-glass pipeline as
   OpenZCine (`glass` / `overlayGlass` / `chipGlass`) with Pocket iOS DJI-black
   and Sky Blue tokens. Pairing glyphs, landscape InfoPill, portrait fill rail,

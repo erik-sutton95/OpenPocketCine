@@ -173,7 +173,7 @@ private fun LinkExperience(
     val headerTitle =
         when {
             model.shouldShowWizard -> "Connection setup"
-            model.savedCameras.isNotEmpty() -> "Your cameras"
+            model.savedCameras.isNotEmpty() -> "Operator Setup"
             else -> "Find your camera"
         }
     val statusTitle =

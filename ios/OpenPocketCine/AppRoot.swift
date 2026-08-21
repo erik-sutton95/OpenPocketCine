@@ -432,7 +432,7 @@ struct LinkExperience: View {
 
     private var headerTitle: String {
         if model.shouldShowWizard { return "Connection setup" }
-        if !model.savedCameras.isEmpty { return "Your cameras" }
+        if !model.savedCameras.isEmpty { return "Operator Setup" }
         return "Find your camera"
     }
 
