@@ -1,6 +1,7 @@
 # OpenPocketCine
 
 [![CI](https://github.com/erik-sutton95/OpenPocketCine/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-sutton95/OpenPocketCine/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-openpocketcine.app%2Fdocs-blue)](https://openpocketcine.app/docs/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 <p align="center">
@@ -19,6 +20,8 @@
   <a href="https://testflight.apple.com/join/1tmt3aEB"><strong>Join the TestFlight</strong></a>
   &nbsp;·&nbsp;
   <a href="https://openpocketcine.app/">Visit openpocketcine.app</a>
+  &nbsp;·&nbsp;
+  <a href="https://openpocketcine.app/docs/">Protocol handbook</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/29">Explore the roadmap</a>
 </p>
@@ -142,6 +145,13 @@ lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 No subscriptions, no paywalls, no advertising, and no telemetry. OpenPocketCine is Apache-2.0
 licensed and built in public with the latest frontier models — Grok, Codex, and Claude — so
 filmmakers and developers can inspect, improve, and adapt the tool they rely on.
+
+## Documentation
+
+- **[Protocol handbook](https://openpocketcine.app/docs/)** — BLE pairing, camera Wi-Fi, DUML
+  frames, commands, and live view. Preview locally with `just handbook`.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — shared Swift core and platform shells
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, workflow, and how to report bugs
 
 ## Architecture
 

@@ -24,4 +24,5 @@ The iOS Xcode project is generated: `cd ios && xcodegen generate`.
 Platform shells own sockets, permissions, lifecycle, rendering, storage, and UI. Keep that
 boundary: do not import SwiftUI into the core.
 
-See [`protocol-notes.md`](protocol-notes.md) for wire-level detail.
+See the [protocol handbook](https://openpocketcine.app/docs/) for wire-level detail
+(Markdown source in `handbook/src/content/docs/`; stub at [`protocol-notes.md`](protocol-notes.md)).

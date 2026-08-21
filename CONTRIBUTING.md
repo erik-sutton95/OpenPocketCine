@@ -69,6 +69,9 @@ Frame.io upload is **disabled unless you configure it**. Copy
 - **Bugs only** — Open [GitHub's bug-report form](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml).
   New bugs are automatically labeled `needs-triage`; issues are strictly for bugs. Never put
   sensitive information (camera Wi-Fi passwords, captures, credentials) in an issue.
+- **Protocol questions** — Read the
+  [protocol handbook](https://openpocketcine.app/docs/) first, then ask in
+  [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a).
 - **Feature ideas, enhancements & discussions** — Use **GitHub Discussions**. Start a new
   discussion in the
   [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas)

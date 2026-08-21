@@ -4,7 +4,8 @@ body:
     attributes:
       value: |
         Ask away! Before posting, please check existing Q&A discussions to see if
-        your question has already been answered.
+        your question has already been answered. Wire-level BLE, Wi-Fi, and DUML
+        notes live in the [protocol handbook](https://openpocketcine.app/docs/).
 
         Found a bug? Open a GitHub Issue instead of a discussion.
   - type: textarea

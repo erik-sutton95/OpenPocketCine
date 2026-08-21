@@ -3,9 +3,10 @@
 Packet captures of camera traffic stay in gitignored `captures/`. Never commit
 pcaps, SoftAP passwords, BLE HCI snoop logs, or unofficial LUT dumps.
 
-Protocol facts that are confirmed on hardware belong in
-[`protocol-notes.md`](protocol-notes.md). Implementation lives in
-`Sources/OpenPocketViewCore/`.
+Protocol facts that are confirmed on hardware belong in the
+[protocol handbook](https://openpocketcine.app/docs/) (source in
+`handbook/src/content/docs/`; stub at [`protocol-notes.md`](protocol-notes.md)).
+Implementation lives in `Sources/OpenPocketViewCore/`.
 
 Offline helpers on your machine (they read gitignored captures; they are not a
 how-to for intercepting another app):

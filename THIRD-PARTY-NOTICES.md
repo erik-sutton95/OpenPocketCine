@@ -32,7 +32,9 @@ Osmosis source is included in or distributed with OpenPocketCine. Live view, mon
 native shells are our own work.
 
 No DJI SDK or proprietary DJI documentation is included in, distributed with, or required by this
-project (see [NOTICE](NOTICE) and [`docs/protocol-notes.md`](docs/protocol-notes.md)).
+project (see [NOTICE](NOTICE), the
+[protocol handbook](https://openpocketcine.app/docs/), and
+[`docs/protocol-notes.md`](docs/protocol-notes.md)).
 
 ## Official DJI Rec.709 cubes
 

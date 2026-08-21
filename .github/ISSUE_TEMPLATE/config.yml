@@ -1,6 +1,10 @@
 blank_issues_enabled: false
 
 contact_links:
+  - name: Protocol handbook
+    url: https://openpocketcine.app/docs/
+    about: BLE pairing, camera Wi-Fi, and DUML as implemented in OpenPocketCine.
+
   - name: Security vulnerability
     url: https://github.com/erik-sutton95/OpenPocketCine/security/advisories/new
     about: Please report security issues privately, not as public issues.
