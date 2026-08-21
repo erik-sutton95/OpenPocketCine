@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. Lock, settings, media, close,
+  focus-reset, and assist-bar chevrons use the same stroke glyphs; more names are vendored for
+  follow-up replacements.
+- Android clip player View Assist rail (independent of live, persisted as
+  `OpenPocketCine.PlaybackAssists.v1`) and high-frame-rate conform preview
+  (Real time + 23.976/24/25/29.97/30, muted, stretched time labels). GPU
+  LUT/peaking/zebra on playback is still a follow-up; chips already toggle.
 - Starlight protocol handbook for BLE pairing, camera Wi-Fi, and DUML at
   [openpocketcine.app/docs](https://openpocketcine.app/docs/) (`just handbook`
   locally). Markdown lives in `handbook/src/content/docs/`.
@@ -32,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android live view paints LUT, peaking, false colour, and zebra on the
+  HEVC picture through GLES (`GL_TEXTURE_EXTERNAL_OES` to `FeedEffectsGlProgram`),
+  including 50/50 log-vs-LUT when that comparison is armed.
 - Android live stall recovery uses a **stateful** Swift `FeedWatchdog`
   handle over JNI instead of a fresh idle tick every second.
 - Android SoftAP `onLost` no longer unbinds the process (or reports the
@@ -95,7 +105,7 @@ All notable changes to this project are documented here. The format is based on
 - Android live-feed recovery matches iOS: one UDP rebuild, then a SoftAP-kept
   datalink rejoin — not a 5 s rebuild loop — and keepalive will not tear the
   socket during first picture or a GOP-reset gap.
-- Android hides the system bars (status + back/home/recents) like OpenZCine:
+- Android hides the system bars (status, back, home, recents) like OpenZCine:
   a swipe in from the edge reveals them for three seconds and chrome shifts
   off the overlay, then they hide again.
 - Tapping Connect on a saved camera shows **Connecting** and **Cancel** on

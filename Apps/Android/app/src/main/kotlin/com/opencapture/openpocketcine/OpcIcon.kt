@@ -7,11 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 
-/**
- * Shared Lucide HUD catalog. Names match `assets/icons/lucide/*.svg` and
- * `res/drawable/opc_lucide_*.xml`. Drop another official Lucide SVG, regenerate
- * the VectorDrawable (`scripts/vendor-lucide-icons.py`), and add a case.
- */
+/** Shared Lucide HUD catalog. Names match vendored SVG and opc_lucide drawables. */
 enum class OpcIcon(val lucideName: String, val drawableRes: Int) {
     CAMERA("camera", R.drawable.opc_lucide_camera),
     CHEVRON_LEFT("chevron-left", R.drawable.opc_lucide_chevron_left),

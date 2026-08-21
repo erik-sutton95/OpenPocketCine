@@ -79,7 +79,10 @@ struct LiveLockButton: View {
             OpcIcon.lock
                 .frame(width: 16, height: 16)
                 .foregroundStyle(locked ? LiveDesign.accent : LiveDesign.text.opacity(0.86))
-                .frame(width: LiveChromeMetrics.lockButtonSize, height: LiveChromeMetrics.lockButtonSize)
+                .frame(
+                    width: LiveChromeMetrics.lockButtonSize,
+                    height: LiveChromeMetrics.lockButtonSize
+                )
                 .liveChromeGlass(
                     in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
                 )

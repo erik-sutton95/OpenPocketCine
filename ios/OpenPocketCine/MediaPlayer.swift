@@ -1,18 +1,18 @@
 import AVFoundation
 import ImageIO
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 // MARK: - Shared chrome
 
 struct MediaCircleIconButton: View {
-    let systemName: String
+    let icon: OpcIcon
     var size: CGFloat = 34
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: size * 0.38, weight: .semibold))
+        icon
+            .frame(width: size * 0.38, height: size * 0.38)
             .foregroundStyle(LiveDesign.text)
             .frame(width: size, height: size)
             .glassCircle(interactive: true)
@@ -141,7 +141,7 @@ struct MediaPhotoViewer: View {
                     Button {
                         dismiss()
                     } label: {
-                        MediaCircleIconButton(systemName: "xmark", size: 34)
+                        MediaCircleIconButton(icon: .x, size: 34)
                     }
                     .buttonStyle(.zcTapTarget)
                     Text(file.filename)
@@ -196,7 +196,7 @@ struct MediaPhotoViewer: View {
         Button {
             isDeleteConfirmPresented = true
         } label: {
-            MediaCircleIconButton(systemName: "trash", size: 34)
+            MediaCircleIconButton(icon: .trash, size: 34)
         }
         .buttonStyle(.zcTapTarget)
         .confirmationDialog(
@@ -222,7 +222,7 @@ struct MediaPhotoViewer: View {
                     .tint(LiveDesign.accent)
                     .frame(width: 34, height: 34)
             } else {
-                MediaCircleIconButton(systemName: "square.and.arrow.up", size: 34)
+                MediaCircleIconButton(icon: .share, size: 34)
             }
         }
         .buttonStyle(.zcTapTarget)
@@ -415,7 +415,8 @@ struct MediaPlayerView: View {
                         .scaleEffect(
                             x: model.assist.isPlaybackVisible(.mirror) ? -1 : 1,
                             y: 1,
-                            anchor: .center)
+                            anchor: .center
+                        )
                         .scaleEffect(zoom.scale)
                         .offset(zoom.offset)
                 }
@@ -593,7 +594,7 @@ struct MediaPlayerView: View {
             Button {
                 dismiss()
             } label: {
-                MediaCircleIconButton(systemName: "chevron.left", size: 34)
+                MediaCircleIconButton(icon: .chevronLeft, size: 34)
             }
             .buttonStyle(.zcTapTarget)
             Text(active.filename)
@@ -606,7 +607,9 @@ struct MediaPlayerView: View {
             } label: {
                 Image(systemName: session.isFavorite(active) ? "star.fill" : "star")
                     .font(.system(size: 17))
-                    .foregroundStyle(session.isFavorite(active) ? LiveDesign.accent : LiveDesign.text)
+                    .foregroundStyle(
+                        session.isFavorite(active) ? LiveDesign.accent : LiveDesign.text
+                    )
                     .frame(width: 34, height: 34)
                     .liquidGlass(in: Circle(), interactive: true)
             }
@@ -1043,10 +1046,12 @@ struct MediaPlayerView: View {
                 )
                 .background(
                     conformTarget != nil ? LiveDesign.accentDim : Color.clear,
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .disabled(!availability.isAvailable)
@@ -1072,7 +1077,8 @@ struct MediaPlayerView: View {
                     RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .buttonStyle(.zcTapTarget)
@@ -1113,13 +1119,15 @@ struct MediaPlayerView: View {
                 )
                 .background(
                     assistMode ? LiveDesign.accentDim : Color.clear,
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .contentShape(
                     RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .buttonStyle(.zcTapTarget)
@@ -1149,7 +1157,8 @@ struct MediaPlayerView: View {
                         height: PlaybackChrome.actionButtonSize.height
                     )
                     .contentShape(
-                        RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                        RoundedRectangle(
+                            cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                     )
                     .liquidGlass(
                         in: RoundedRectangle(

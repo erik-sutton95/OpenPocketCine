@@ -91,17 +91,17 @@ private const val DRUM_NOT_LAID_OUT = -1
 /** Settings sheet. Same body as the assist-tray form; 50/50 stays inline. */
 @Composable
 fun LUTPicker(model: AppModel, onClose: () -> Unit) {
-    var splitComparison by remember { mutableStateOf(false) }
-    var splitVertical by remember { mutableStateOf(true) }
+    val assist = model.assist
     LUTPicker(
         selection = model.lutSelection,
         onSelect = model::updateLutSelection,
         onClose = onClose,
         embedded = false,
-        splitComparison = splitComparison,
-        splitVertical = splitVertical,
-        onToggleSplit = { splitComparison = !splitComparison },
-        onSplitVertical = { splitVertical = it },
+        splitComparison = assist.splitComparison,
+        splitVertical = assist.splitVertical,
+        onToggleSplit = { assist.setSplitComparison(!assist.splitComparison) },
+        onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
+        onArmLut = { assist.armLut() },
     )
 }
 

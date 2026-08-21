@@ -6,7 +6,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,7 +60,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -617,23 +615,12 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
                 .semantics { contentDescription = "Close" },
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.size(13.dp)) {
-                val stroke = 2.2.dp.toPx()
-                drawLine(
-                    LiveDesign.text,
-                    Offset(0f, 0f),
-                    Offset(size.width, size.height),
-                    stroke,
-                    StrokeCap.Round,
-                )
-                drawLine(
-                    LiveDesign.text,
-                    Offset(size.width, 0f),
-                    Offset(0f, size.height),
-                    stroke,
-                    StrokeCap.Round,
-                )
-            }
+            OpcIcon(
+                icon = OpcIcon.X,
+                contentDescription = null,
+                tint = LiveDesign.text,
+                modifier = Modifier.size(13.dp),
+            )
         }
     }
 }

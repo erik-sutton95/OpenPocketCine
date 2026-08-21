@@ -844,7 +844,12 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
             },
         contentAlignment = Alignment.Center,
     ) {
-        PadlockGlyph(tint = tint, filled = locked, modifier = Modifier.size(13.dp, 17.dp))
+        OpcIcon(
+            icon = OpcIcon.LOCK,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
@@ -1471,47 +1476,11 @@ fun LiveFocusResetButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             .semantics { contentDescription = "Recenter focus" },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(18.dp)) {
-            val c = center
-            val r = size.minDimension / 2f
-            drawCircle(LiveDesign.text, radius = r, style = Stroke(1.6.dp.toPx()))
-            drawCircle(LiveDesign.text, radius = 2.dp.toPx())
-            drawLine(LiveDesign.text, Offset(c.x, c.y - r), Offset(c.x, c.y - r + 4.dp.toPx()), 1.4.dp.toPx())
-            drawLine(LiveDesign.text, Offset(c.x, c.y + r - 4.dp.toPx()), Offset(c.x, c.y + r), 1.4.dp.toPx())
-            drawLine(LiveDesign.text, Offset(c.x - r, c.y), Offset(c.x - r + 4.dp.toPx(), c.y), 1.4.dp.toPx())
-            drawLine(LiveDesign.text, Offset(c.x + r - 4.dp.toPx(), c.y), Offset(c.x + r, c.y), 1.4.dp.toPx())
-        }
-    }
-}
-
-@Composable
-fun PadlockGlyph(tint: Color, filled: Boolean, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val body =
-            Path().apply {
-                addRoundRect(
-                    androidx.compose.ui.geometry.RoundRect(
-                        left = w * 0.08f,
-                        top = h * 0.42f,
-                        right = w * 0.92f,
-                        bottom = h * 0.96f,
-                        radiusX = 2.dp.toPx(),
-                        radiusY = 2.dp.toPx(),
-                    ),
-                )
-            }
-        if (filled) drawPath(body, tint)
-        else drawPath(body, tint, style = Stroke(1.6.dp.toPx()))
-        drawArc(
-            color = tint,
-            startAngle = 200f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(w * 0.22f, h * 0.04f),
-            size = Size(w * 0.56f, h * 0.48f),
-            style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round),
+        OpcIcon(
+            icon = OpcIcon.CROSSHAIR,
+            contentDescription = null,
+            tint = LiveDesign.text,
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -1528,45 +1497,6 @@ fun CameraGlyph(tint: Color, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         drawRoundRect(tint, style = Stroke(1.3.dp.toPx()), cornerRadius = CornerRadius(1.8.dp.toPx()))
         drawCircle(tint, radius = size.minDimension * 0.22f, style = Stroke(1.2.dp.toPx()))
-    }
-}
-
-@Composable
-fun GearGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.fillMaxSize()) {
-        val c = Offset(size.width / 2, size.height / 2)
-        val r = size.minDimension * 0.28f
-        drawCircle(tint, radius = r, center = c, style = Stroke(1.6.dp.toPx()))
-        for (i in 0 until 6) {
-            val a = Math.toRadians((i * 60).toDouble())
-            val inner = r + 1.dp.toPx()
-            val outer = size.minDimension * 0.46f
-            drawLine(
-                tint,
-                Offset(c.x + (inner * kotlin.math.cos(a)).toFloat(), c.y + (inner * kotlin.math.sin(a)).toFloat()),
-                Offset(c.x + (outer * kotlin.math.cos(a)).toFloat(), c.y + (outer * kotlin.math.sin(a)).toFloat()),
-                2.dp.toPx(),
-                StrokeCap.Round,
-            )
-        }
-    }
-}
-
-@Composable
-fun MediaGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        drawRoundRect(
-            tint,
-            topLeft = Offset(w * 0.12f, h * 0.22f),
-            size = Size(w * 0.76f, h * 0.56f),
-            cornerRadius = CornerRadius(2.dp.toPx()),
-            style = Stroke(1.5.dp.toPx()),
-        )
-        drawLine(tint, Offset(w * 0.28f, h * 0.22f), Offset(w * 0.38f, h * 0.08f), 1.5.dp.toPx(), StrokeCap.Round)
-        drawLine(tint, Offset(w * 0.38f, h * 0.08f), Offset(w * 0.72f, h * 0.08f), 1.5.dp.toPx(), StrokeCap.Round)
-        drawLine(tint, Offset(w * 0.72f, h * 0.08f), Offset(w * 0.82f, h * 0.22f), 1.5.dp.toPx(), StrokeCap.Round)
     }
 }
 

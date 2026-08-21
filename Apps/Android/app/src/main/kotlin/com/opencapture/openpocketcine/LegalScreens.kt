@@ -144,6 +144,8 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 The portable .cube parser (CubeLUT) is adapted from OpenZCine, also Apache 2.0.
 
+HUD icons are Lucide (ISC; some glyphs also MIT from Feather). See THIRD-PARTY-NOTICES.
+
 I learned the BLE pairing and camera Wi-Fi connection path with the help of Osmosis by Konrad Iturbe, and I'm grateful. OpenPocketCine is its own implementation. The field-monitor architecture follows OpenZCine.
 
 No DJI SDK is included or required.
@@ -158,6 +160,7 @@ Copyright 2026 Erik Sutton and OpenPocketCine contributors
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 The portable .cube parser (`CubeLUT`) is adapted from OpenZCine (Apache 2.0).
+HUD icons are Lucide (ISC; Feather-derived glyphs also MIT).
 
 This project is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.
 "DJI", "Osmo", "Osmo Pocket", and "Mimo" are trademarks of SZ DJI Technology Co., Ltd.,

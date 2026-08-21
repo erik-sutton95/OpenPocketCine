@@ -10,6 +10,12 @@ Bundled UI typefaces (SIL Open Font License 1.1; copies in
 - Sora, Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
 - IBM Plex Sans, Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
 
+Bundled HUD icons from Lucide (ISC; Feather-derived glyphs also MIT; copies in
+ios/OpenPocketCine/Resources/Icons/lucide/ and
+Apps/Android/app/src/main/assets/icons/lucide/):
+- Lucide, Copyright 2026 Lucide Icons and Contributors
+  (https://github.com/lucide-icons/lucide)
+
 This project is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.
 "DJI", "Osmo", "Osmo Pocket", and "Mimo" are trademarks of SZ DJI Technology Co., Ltd.,
 used for identification only.

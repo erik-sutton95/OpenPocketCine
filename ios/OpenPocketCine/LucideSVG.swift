@@ -26,6 +26,12 @@ struct LucideSVGDocument {
         self = parsed
     }
 
+    private init(viewBox: CGRect, strokeWidth: CGFloat, elements: [Element]) {
+        self.viewBox = viewBox
+        self.strokeWidth = strokeWidth
+        self.elements = elements
+    }
+
     func draw(in context: inout GraphicsContext, size: CGSize, filled: Bool) {
         let path = combinedPath()
         guard !path.isEmpty, viewBox.width > 0, viewBox.height > 0, size.width > 0, size.height > 0
@@ -93,8 +99,10 @@ struct LucideSVGDocument {
         let afterSvg = xml[svgRange.lowerBound...]
         guard let svgEnd = afterSvg.range(of: ">") else { return nil }
         let svgTag = String(xml[svgRange.lowerBound..<svgEnd.upperBound])
-        let viewBox = parseViewBox(attribute("viewBox", in: svgTag)) ?? CGRect(
-            x: 0, y: 0, width: 24, height: 24)
+        let viewBox =
+            parseViewBox(attribute("viewBox", in: svgTag))
+            ?? CGRect(
+                x: 0, y: 0, width: 24, height: 24)
         let strokeWidth = CGFloat(Double(attribute("stroke-width", in: svgTag) ?? "2") ?? 2)
         var elements: [Element] = []
         var cursor = svgEnd.upperBound
@@ -117,7 +125,8 @@ struct LucideSVGDocument {
     }
 
     private static func parseElement(_ tag: String) -> Element? {
-        let name = tag.split(whereSeparator: { $0 == " " || $0 == "/" }).first.map(String.init) ?? ""
+        let name =
+            tag.split(whereSeparator: { $0 == " " || $0 == "/" }).first.map(String.init) ?? ""
         switch name {
         case "path":
             guard let data = attribute("d", in: tag) else { return nil }
@@ -139,7 +148,8 @@ struct LucideSVGDocument {
             let width = CGFloat(Double(attribute("width", in: tag) ?? "0") ?? 0)
             let height = CGFloat(Double(attribute("height", in: tag) ?? "0") ?? 0)
             let rx = CGFloat(Double(attribute("rx", in: tag) ?? "0") ?? 0)
-            let ry = CGFloat(Double(attribute("ry", in: tag) ?? attribute("rx", in: tag) ?? "0") ?? 0)
+            let ry = CGFloat(
+                Double(attribute("ry", in: tag) ?? attribute("rx", in: tag) ?? "0") ?? 0)
             return .roundedRect(
                 CGRect(x: x, y: y, width: width, height: height),
                 radius: CGSize(width: rx, height: ry))
@@ -201,7 +211,7 @@ private struct SVGPathBuilderState {
     mutating func append(_ data: String) {
         tokens = SVGPathScanner(data: data)
         var implicit: UInt8?
-        while !tokens.isAtEnd {
+        while !tokens.isAtEnd() {
             if let command = tokens.nextCommand() {
                 implicit = command
                 execute(command)
@@ -439,7 +449,7 @@ private struct SVGPathScanner {
         scalars = Array(data.utf8)
     }
 
-    var isAtEnd: Bool {
+    mutating func isAtEnd() -> Bool {
         skipSeparators()
         return index >= scalars.count
     }

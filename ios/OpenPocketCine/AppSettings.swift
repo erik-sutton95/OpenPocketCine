@@ -216,6 +216,7 @@ struct CloseButton: View {
         Button(action: action) {
             OpcIcon.x
                 .frame(width: size * 0.38, height: size * 0.38)
+                .foregroundStyle(LiveDesign.text)
                 .frame(width: size, height: size)
                 .glassCircle(interactive: true)
         }

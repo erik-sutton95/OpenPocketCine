@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 
 /**
@@ -72,30 +73,16 @@ internal fun AssistToolCell(
 /** Cyan edge chevron hinting at off-screen tools (OpenZCine `ScrollChevron`). */
 @Composable
 internal fun AssistScrollChevron(leading: Boolean, visible: Boolean, modifier: Modifier = Modifier) {
-    Canvas(
-        modifier
-            .padding(horizontal = 5.dp)
-            .size(8.dp, 12.dp)
-            .alpha(if (visible) 1f else 0f),
-    ) {
-        val path =
-            Path().apply {
-                if (leading) {
-                    moveTo(size.width, 0f)
-                    lineTo(0f, size.height / 2)
-                    lineTo(size.width, size.height)
-                } else {
-                    moveTo(0f, 0f)
-                    lineTo(size.width, size.height / 2)
-                    lineTo(0f, size.height)
-                }
-            }
-        drawPath(
-            path,
-            LiveDesign.accent,
-            style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-        )
-    }
+    OpcIcon(
+        icon = if (leading) OpcIcon.CHEVRON_LEFT else OpcIcon.CHEVRON_RIGHT,
+        contentDescription = null,
+        tint = LiveDesign.accent,
+        modifier =
+            modifier
+                .padding(horizontal = 5.dp)
+                .size(12.dp)
+                .alpha(if (visible) 1f else 0f),
+    )
 }
 
 /** Canvas stand-ins for the iOS SF Symbol per Pocket tool (`AssistToolIcon`). */

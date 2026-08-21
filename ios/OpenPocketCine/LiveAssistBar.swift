@@ -53,7 +53,9 @@ struct LiveAssistBar: View {
         .padding(.leading, 7)
         .padding(.trailing, 14)
         .frame(height: LiveDesign.controlHeight)
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+        .liveChromeGlass(
+            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+        )
         .overlay(alignment: .leading) { scrollChevron(.leading) }
         .overlay(alignment: .trailing) { scrollChevron(.trailing) }
         .allowsHitTesting(!locked)

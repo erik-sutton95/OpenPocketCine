@@ -502,11 +502,15 @@ fun LivePortraitSystemBar(
             ) {
                 Spacer(Modifier.weight(1f))
                 if (showsMedia) {
-                    AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) { MediaGlyph(it) }
+                    AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) {
+                        OpcIcon(OpcIcon.LAYERS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
+                    }
                     Spacer(Modifier.weight(1f))
                 }
                 if (showsSettings) {
-                    AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) { GearGlyph(it) }
+                    AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
+                        OpcIcon(OpcIcon.SETTINGS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
+                    }
                     Spacer(Modifier.weight(1f))
                 }
             }

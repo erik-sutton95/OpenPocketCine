@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.max
@@ -76,11 +77,12 @@ fun MediaCloseButton(
             .semantics { contentDescription = "Close" },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(size * 0.30f)) {
-            val stroke = 1.8.dp.toPx()
-            drawLine(LiveDesign.text, Offset(0f, 0f), Offset(this.size.width, this.size.height), stroke, StrokeCap.Round)
-            drawLine(LiveDesign.text, Offset(this.size.width, 0f), Offset(0f, this.size.height), stroke, StrokeCap.Round)
-        }
+        OpcIcon(
+            icon = OpcIcon.X,
+            contentDescription = null,
+            tint = LiveDesign.text,
+            modifier = Modifier.size(size * 0.30f),
+        )
     }
 }
 

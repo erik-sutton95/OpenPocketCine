@@ -67,6 +67,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.panelGlass
@@ -1015,22 +1016,11 @@ fun PanelCloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .semantics { contentDescription = "Close" },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(13.dp)) {
-            val stroke = 2.2.dp.toPx()
-            drawLine(
-                LiveDesign.text,
-                Offset(0f, 0f),
-                Offset(size.width, size.height),
-                stroke,
-                StrokeCap.Round,
-            )
-            drawLine(
-                LiveDesign.text,
-                Offset(size.width, 0f),
-                Offset(0f, size.height),
-                stroke,
-                StrokeCap.Round,
-            )
-        }
+        OpcIcon(
+            icon = OpcIcon.X,
+            contentDescription = null,
+            tint = LiveDesign.text,
+            modifier = Modifier.size(13.dp),
+        )
     }
 }
