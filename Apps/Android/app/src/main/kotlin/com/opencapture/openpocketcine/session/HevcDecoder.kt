@@ -51,7 +51,7 @@ class HevcDecoder {
 
     fun attachSurface(next: Surface?) {
         if (next == null) {
-            // SurfaceView is tearing down; keep the codec so the next surface can
+            // TextureView is tearing down; keep the codec so the next surface can
             // adopt it. iOS keeps VT across layout. A full reset blacks the GOP.
             return
         }

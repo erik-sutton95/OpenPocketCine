@@ -8,10 +8,11 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -30,6 +31,7 @@ class DatalinkDriver(
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
     private val sendLock = Any()
+    private val sendExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.datalink.tx") }
     private var socket: DatagramSocket? = null
     private var pokeSocket: Socket? = null
     private var receiver: Thread? = null
@@ -53,6 +55,7 @@ class DatalinkDriver(
     private val lastAccessUnitElapsed = AtomicLong(0)
     private val lastRebuildElapsed = AtomicLong(0)
     @Volatile private var rebuilding = false
+    private val sendFailLogs = AtomicInteger(0)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -84,6 +87,7 @@ class DatalinkDriver(
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
         lastAccessUnitElapsed.set(0)
+        sendFailLogs.set(0)
         if (depacketizer == 0L) depacketizer = SwiftCore.depacketizerCreate()
         else runCatching { SwiftCore.depacketizerReset(depacketizer) }
 
@@ -108,17 +112,10 @@ class DatalinkDriver(
                 register()
                 subscribe()
                 startAckPump()
-                if (afterHandshake != null) {
-                    val done = CountDownLatch(1)
-                    main.post {
-                        try {
-                            afterHandshake()
-                        } finally {
-                            done.countDown()
-                        }
-                    }
-                    done.await()
-                }
+                // Stay on this IO thread. Posting 0x09/0xa8 to Main trips
+                // StrictMode (NetworkOnMainThread) and the camera never
+                // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
+                afterHandshake?.invoke()
                 armLiveVideo()
                 return
             }
@@ -172,8 +169,16 @@ class DatalinkDriver(
      * Tear down a dead UDP bind and open a new socket. Keeps session/seq, the
      * depacketizer, and TCP 7001. Live-view enable is the caller's job.
      */
-    @Synchronized
     fun rebuildUdpKeepingSession() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            sendExecutor.execute { rebuildUdpKeepingSession() }
+            return
+        }
+        rebuildUdpOnNetwork()
+    }
+
+    @Synchronized
+    private fun rebuildUdpOnNetwork() {
         if (rebuilding) return
         if (!joiner.isProcessBound()) return
         rebuilding = true
@@ -246,7 +251,7 @@ class DatalinkDriver(
         sock.reuseAddress = true
         sock.soTimeout = 250
         joiner.bindSocket(sock)
-        sock.bind(InetSocketAddress(0))
+        sock.bind(InetSocketAddress(Inet4Address.getByName("0.0.0.0"), 0))
         runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
         Log.i(
@@ -378,6 +383,14 @@ class DatalinkDriver(
     }
 
     private fun write(bytes: ByteArray) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            sendExecutor.execute { writeOnNetwork(bytes) }
+            return
+        }
+        writeOnNetwork(bytes)
+    }
+
+    private fun writeOnNetwork(bytes: ByteArray) {
         val sock = socket ?: return
         val packet =
             if (sock.isConnected) {
@@ -387,7 +400,11 @@ class DatalinkDriver(
             }
         synchronized(sendLock) {
             runCatching { sock.send(packet) }
-                .onFailure { Log.w(TAG, "datalink: UDP send failed", it) }
+                .onFailure { err ->
+                    if (sendFailLogs.incrementAndGet() <= 3) {
+                        Log.w(TAG, "datalink: UDP send failed", err)
+                    }
+                }
         }
     }
 

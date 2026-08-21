@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.Continuation
@@ -447,25 +448,27 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 while (true) {
                     ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
                     if (ssid != null && !holdsMonitor) {
-                        if (!isBrowsingMedia && shouldStartUDPRebuild) {
-                            datalink?.rebuildUdpKeepingSession()
-                            val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
-                            val hadVideo =
-                                LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
-                            val force = LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)
-                            if (liveViewEnableSends > 0) {
-                                if (force) {
-                                    Log.i(TAG, "live: first-picture enable after UDP rebuild (neverGotVideo)")
+                        withContext(Dispatchers.IO) {
+                            if (!isBrowsingMedia && shouldStartUDPRebuild) {
+                                datalink?.rebuildUdpKeepingSession()
+                                val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
+                                val hadVideo =
+                                    LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
+                                val force = LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)
+                                if (liveViewEnableSends > 0) {
+                                    if (force) {
+                                        Log.i(TAG, "live: first-picture enable after UDP rebuild (neverGotVideo)")
+                                    }
+                                    sendRecoverEnable(
+                                        force = force,
+                                        reason =
+                                            if (force) "first-picture after UDP rebuild"
+                                            else "keepalive after UDP rebuild",
+                                    )
                                 }
-                                sendRecoverEnable(
-                                    force = force,
-                                    reason =
-                                        if (force) "first-picture after UDP rebuild"
-                                        else "keepalive after UDP rebuild",
-                                )
                             }
+                            datalink?.keepalive()
                         }
-                        datalink?.keepalive()
                         publishPipelineStats()
                         if (!isBrowsingMedia) recoverLiveViewIfNeeded()
                     }
