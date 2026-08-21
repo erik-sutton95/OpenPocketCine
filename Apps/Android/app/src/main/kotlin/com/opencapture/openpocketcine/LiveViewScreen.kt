@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import android.graphics.PixelFormat
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.foundation.background
@@ -188,6 +189,7 @@ fun LiveViewScreen(model: AppModel) {
                 AndroidView(
                     factory = { context ->
                         SurfaceView(context).apply {
+                            holder.setFormat(PixelFormat.RGBX_8888)
                             holder.addCallback(
                                 object : SurfaceHolder.Callback {
                                     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -199,10 +201,14 @@ fun LiveViewScreen(model: AppModel) {
                                         format: Int,
                                         width: Int,
                                         height: Int,
-                                    ) {}
+                                    ) {
+                                        if (holder.surface.isValid) {
+                                            model.session.attachSurface(holder.surface)
+                                        }
+                                    }
 
                                     override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                        model.session.attachSurface(null)
+                                        // Keep the codec; surfaceCreated will adopt the next buffer.
                                     }
                                 },
                             )
@@ -221,7 +227,8 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
 
-            if (!model.session.hasVideoFormat) {
+            val feedWarming = model.session.decoder.lastPresentedAt == null
+            if (feedWarming) {
                 Box(
                     Modifier.liveModuleFrame(layout.onFeed).background(Color.Black),
                     contentAlignment = Alignment.Center,

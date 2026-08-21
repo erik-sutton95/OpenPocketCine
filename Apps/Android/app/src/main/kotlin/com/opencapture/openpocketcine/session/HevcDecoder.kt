@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.session
 
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
@@ -21,6 +22,10 @@ class HevcDecoder {
     private var configured = false
     private var liveCodec: LiveCodec? = null
     private var outputThread: Thread? = null
+    private var pendingCsd: ByteArray? = null
+    private var pendingTypes: String = ""
+    private var pendingIdr: ByteArray? = null
+    private var ptsUs = 0L
     @Volatile private var running = false
     @Volatile var hasFormat = false
         private set
@@ -37,9 +42,34 @@ class HevcDecoder {
     val framesEnqueued = AtomicInteger(0)
 
     fun attachSurface(next: Surface?) {
-        if (surface == next) return
-        reset()
+        if (next == null) {
+            // SurfaceView is tearing down; keep the codec so the next surface can
+            // adopt it. iOS keeps VT across layout. A full reset blacks the GOP.
+            return
+        }
+        if (surface === next) return
         surface = next
+        if (configured) {
+            val decoder = codec
+            if (decoder != null) {
+                val swapped = runCatching { decoder.setOutputSurface(next) }
+                if (swapped.isSuccess) return
+                Log.w(TAG, "setOutputSurface failed, reconfiguring", swapped.exceptionOrNull())
+                val csd = pendingCsd
+                val types = pendingTypes
+                reset()
+                surface = next
+                pendingCsd = csd
+                pendingTypes = types
+            }
+        }
+        val csd = pendingCsd ?: return
+        if (configure(csd, pendingTypes)) {
+            awaitingIdr = true
+            pendingIdr?.let { au ->
+                if (queue(au, keyframe = true)) awaitingIdr = false
+            }
+        }
     }
 
     fun decode(accessUnit: ByteArray): Boolean {
@@ -49,9 +79,17 @@ class HevcDecoder {
         val keyframe = SwiftCore.hevcIsKeyframe(accessUnit)
         if (keyframe) lastKeyframeAt = System.currentTimeMillis()
         val idr = isIdrPicture(types)
+        val csd = SwiftCore.hevcCsd(accessUnit)
+        if (csd != null) {
+            pendingCsd = csd
+            pendingTypes = types
+        }
+        if (idr) pendingIdr = accessUnit.copyOf()
         if (!configured) {
-            val csd = SwiftCore.hevcCsd(accessUnit) ?: return false
-            if (!configure(csd, types)) return false
+            val haveCsd = pendingCsd ?: return false
+            val target = surface
+            if (target == null || !target.isValid) return false
+            if (!configure(haveCsd, pendingTypes.ifEmpty { types })) return false
             awaitingIdr = true
         }
         if (awaitingIdr && !idr) return false
@@ -80,15 +118,21 @@ class HevcDecoder {
         nalTypesSeen = ""
         lastKeyframeAt = null
         lastPresentedAt = null
+        pendingCsd = null
+        pendingTypes = ""
+        pendingIdr = null
+        ptsUs = 0L
         framesEnqueued.set(0)
         decoderErrors.set(0)
         runCatching { codec?.stop() }
         runCatching { codec?.release() }
         codec = null
+        surface = null
     }
 
     private fun configure(csd: ByteArray, nalTypes: String): Boolean {
         val target = surface ?: return false
+        if (!target.isValid) return false
         val detected = detectCodec(csd, nalTypes)
         liveCodec = detected
         return try {
@@ -96,6 +140,10 @@ class HevcDecoder {
                 if (detected == LiveCodec.AVC) MediaFormat.MIMETYPE_VIDEO_AVC
                 else MediaFormat.MIMETYPE_VIDEO_HEVC
             val format = MediaFormat.createVideoFormat(mime, LIVE_WIDTH, LIVE_HEIGHT)
+            if (Build.VERSION.SDK_INT >= 30) {
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+            }
+            format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
             if (detected == LiveCodec.AVC) {
                 val (sps, pps) = splitAvcCsd(csd)
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
@@ -108,6 +156,7 @@ class HevcDecoder {
             decoder.start()
             codec = decoder
             configured = true
+            hasFormat = true
             running = true
             outputThread =
                 Thread(
@@ -124,6 +173,7 @@ class HevcDecoder {
                                 index >= 0 -> {
                                     runCatching { decoder.releaseOutputBuffer(index, true) }
                                     lastPresentedAt = SystemClock.elapsedRealtime()
+                                    hasFormat = true
                                 }
                                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> hasFormat = true
                             }
@@ -148,7 +198,9 @@ class HevcDecoder {
             buffer.clear()
             buffer.put(accessUnit)
             val flags = if (keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
-            decoder.queueInputBuffer(index, 0, accessUnit.size, System.nanoTime() / 1000, flags)
+            val pts = ptsUs
+            ptsUs += 33_333
+            decoder.queueInputBuffer(index, 0, accessUnit.size, pts, flags)
             framesEnqueued.incrementAndGet()
             true
         } catch (e: Exception) {
