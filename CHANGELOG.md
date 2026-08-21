@@ -32,6 +32,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Pull-request CI reports one suite instead of duplicating every job from the
+  branch push. Gitleaks runs inside Meta checks. **CI gate** remains the only
+  required check.
 - Public CI: path filter fetches `main` with a slash-safe refspec so
   `docs/**` (and other slash) branch pushes do not fail Detect changes; Android
   installs the official Swift Android SDK without nested unpinned actions; live

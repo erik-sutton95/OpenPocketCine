@@ -24,11 +24,17 @@ changes through the API or
 - Hosted runners only. Do not add a self-hosted runner — CI executes pull
   request code.
 
-CI (`.github/workflows/ci.yml`): meta checks and gitleaks always run. Native
-iOS and Android jobs skip while the repository is private (paid macOS minutes)
-and run once it is public. The **CI gate** job is the merge gate even when
-those jobs are skipped. The Android job installs the official Swift 6.3.3
-Android SDK with `scripts/ci-install-swift-android.sh` — do not switch back to
+CI (`.github/workflows/ci.yml`) runs **once** per pull request (`pull_request`
+into `main`) and once per merge (`push` to `main`). Feature-branch pushes do
+not start a second suite: that duplicated every job on the PR checks list.
+Re-run a branch without a PR with **Run workflow**. Meta checks always run and
+include gitleaks. Native iOS, Android, and the protocol handbook run only when
+their paths change (and native/Android also skip while the repository is
+private so they do not burn paid macOS minutes). Skipped jobs are success.
+The **CI gate** job is the only required check — do not require Native,
+Android, or handbook by name, or a docs PR stays blocked waiting for a check
+that never reports. The Android job installs the official Swift 6.3.3 Android
+SDK with `scripts/ci-install-swift-android.sh` — do not switch back to
 `skiptools/swift-android-action`; that composite references `actions/cache@v5`
 and `reactivecircus/android-emulator-runner@v2`, which SHA pinning rejects.
 

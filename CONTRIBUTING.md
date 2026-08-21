@@ -44,9 +44,11 @@ Frame.io upload is **disabled unless you configure it**. Copy
 - Make focused commits using **[Conventional Commits](https://www.conventionalcommits.org/)**:
   `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`, `refactor:`.
 - Run `just check` before pushing. For native iOS changes, run `just native-check`.
-- Open a pull request into `main`. The required check is **CI gate**. The PR
-  template must be filled in. Maintainer GitHub settings:
-  [`docs/repository-settings.md`](docs/repository-settings.md).
+- Open a pull request into `main`. Actions runs on the PR, not a second time
+  on the branch push. The required check is **CI gate** (Meta checks, Native
+  Swift/iOS, Android, and the protocol handbook feed that gate and skip when
+  their paths did not change). The PR template must be filled in. Maintainer
+  GitHub settings: [`docs/repository-settings.md`](docs/repository-settings.md).
 - Changes that can trigger a TestFlight build must update
   [`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt). See
   [`docs/testflight-ci.md`](docs/testflight-ci.md).
