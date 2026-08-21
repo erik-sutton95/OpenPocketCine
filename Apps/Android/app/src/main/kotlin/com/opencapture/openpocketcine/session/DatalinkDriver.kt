@@ -107,6 +107,7 @@ class DatalinkDriver(
                 sendAck()
                 register()
                 subscribe()
+                startAckPump()
                 if (afterHandshake != null) {
                     val done = CountDownLatch(1)
                     main.post {
@@ -181,6 +182,7 @@ class DatalinkDriver(
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
             discardUdp(keepPoke = true)
             startUdpReceiver()
+            startAckPump()
             sendAck()
             sendCommand(SwiftCore.CMD_APP_PRESENCE)
         } finally {
@@ -236,19 +238,45 @@ class DatalinkDriver(
     }
 
     private fun startUdpReceiver() {
-        // iOS pins UDP to the SoftAP interface. `DatagramSocket()` binds the
-        // wildcard immediately, and Network.bindSocket then no-ops — traffic
-        // rides the default route until Android swaps the camera Network and
-        // the GOP dies. Create unbound, pin, then bind the local port.
+        // Handbook + iOS: one UDP 9004 5-tuple, pinned to the camera AP
+        // (`NWConnection` to 192.168.2.1:9004). `DatagramSocket()` binds the
+        // wildcard first, so Network.bindSocket no-ops. Unbound → pin → bind →
+        // connect is the Android equivalent.
         val sock = DatagramSocket(null)
         sock.reuseAddress = true
-        sock.soTimeout = ACK_INTERVAL_MS.toInt()
+        sock.soTimeout = 250
         joiner.bindSocket(sock)
         sock.bind(InetSocketAddress(0))
+        runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
+            .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
+        Log.i(
+            TAG,
+            "datalink: UDP ${if (sock.isConnected) "connected" else "unconnected"} " +
+                "$CAMERA_HOST:$port local=${sock.localSocketAddress}",
+        )
         socket = sock
         running.set(true)
         receiver =
             Thread({ receiveLoop() }, "opc.datalink.rx").also { it.isDaemon = true; it.start() }
+    }
+
+    /** iOS `startAckPump`: pktType 0x04 every 25 ms on its own loop, latest video seq. */
+    private fun startAckPump() {
+        if (ackThread?.isAlive == true) return
+        ackThread =
+            Thread(
+                {
+                    while (running.get()) {
+                        sendWindowAck()
+                        try {
+                            Thread.sleep(ACK_INTERVAL_MS)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
+                    }
+                },
+                "opc.datalink.ack",
+            ).also { it.isDaemon = true; it.start() }
     }
 
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
@@ -338,27 +366,33 @@ class DatalinkDriver(
     }
 
     private fun sendAck() {
-        val payload = SwiftCore.ackPayload(peerCursor.get(), baseSeq) ?: return
+        sendWindowAck()
+    }
+
+    /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing the video seq. */
+    private fun sendWindowAck() {
+        val cursor = peerCursor.get()
+        val payload = SwiftCore.ackPayload(cursor, baseSeq) ?: return
         val header = SwiftCore.transportHeader(0x04, payload.size, sessionId, 0) ?: return
         write(header + payload)
     }
 
     private fun write(bytes: ByteArray) {
         val sock = socket ?: return
-        val packet = DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
+        val packet =
+            if (sock.isConnected) {
+                DatagramPacket(bytes, bytes.size)
+            } else {
+                DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
+            }
         synchronized(sendLock) {
             runCatching { sock.send(packet) }
+                .onFailure { Log.w(TAG, "datalink: UDP send failed", it) }
         }
     }
 
-    /**
-     * iOS pumps pktType-0x04 ACKs on the UDP queue (~40 Hz, latest video seq).
-     * A second send thread on [DatagramSocket] is not how Mimo / iOS keep the
-     * camera window open.
-     */
     private fun receiveLoop() {
         val buf = ByteArray(2048)
-        var lastAckAt = 0L
         while (running.get()) {
             val sock = socket ?: break
             val packet = DatagramPacket(buf, buf.size)
@@ -369,11 +403,6 @@ class DatalinkDriver(
             } catch (e: Exception) {
                 if (!running.get()) break
                 Log.w(TAG, "datalink: UDP receive failed", e)
-            }
-            val now = SystemClock.elapsedRealtime()
-            if (handshakeAcked && now - lastAckAt >= ACK_INTERVAL_MS) {
-                sendAck()
-                lastAckAt = now
             }
         }
     }
@@ -398,7 +427,8 @@ class DatalinkDriver(
                 return
             }
             lastVideoElapsed.set(SystemClock.elapsedRealtime())
-            rawVideoPackets.incrementAndGet()
+            val n = rawVideoPackets.incrementAndGet()
+            if (n == 1) Log.i(TAG, "datalink: first video pktType=0x02 bytes=${datagram.size}")
             if (depacketizer != 0L) {
                 val au = SwiftCore.depacketizerFeed(depacketizer, datagram)
                 if (au != null) {

@@ -11,9 +11,14 @@ Port **9004** for the Pocket family. First a TCP `:7001` “poke”:
 
 1. Write a `SetPairingPIN("osmo")` frame.
 2. Wait 400 ms.
-3. Close the TCP socket.
+3. **Keep the TCP socket open for the session.** Closing it RSTs the camera
+   (`tcp_output`); Mimo and the iOS shell leave it up (the camera pushes
+   `0x21/0x06` on it). Video never uses this socket — only UDP 9004.
 
-Then a 40-byte UDP handshake, then register + subscribe.
+Then a 40-byte UDP handshake, then register + subscribe. One UDP 9004
+5-tuple stays for control and live view. Pin that socket to the camera
+SoftAP (iOS `NWConnection` to `192.168.2.1:9004`; Android
+`Network.bindSocket` on an unbound datagram socket, then `connect`).
 
 | Command | Meaning |
 | --- | --- |
