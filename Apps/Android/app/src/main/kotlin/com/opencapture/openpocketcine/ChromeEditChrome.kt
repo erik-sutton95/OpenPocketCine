@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,12 +45,14 @@ fun ChromeEditBanner(
 ) {
     Row(
         modifier
-            .clip(RoundedCornerShape(50))
-            .background(LiveDesign.glassOpaque)
+            .overlayGlass(RoundedCornerShape(50))
             .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        Canvas(Modifier.size(12.dp)) {
+            drawEyeGlyph(LiveDesign.accent, slashed = false)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text("Editing ${mode.title}", color = LiveDesign.text, style = LiveType.ui(11.5f, FontWeight.SemiBold))
             Text("Tap an eye to show or hide it", color = LiveDesign.muted, style = LiveType.ui(10f))
@@ -77,16 +86,19 @@ fun ChromeEditBadgeLayer(
                 .offset(frame.x.dp, frame.y.dp)
                 .size(BADGE.dp)
                 .clip(CircleShape)
-                .background(if (on) LiveDesign.accent else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.9f))
+                .background(if (on) LiveDesign.accent else Color.Black.copy(alpha = 0.9f))
                 .border(1.dp, LiveDesign.text.copy(alpha = 0.55f), CircleShape)
                 .chromeClickable(onClick = { onToggle(section) }),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                if (on) "👁" else "🚫",
-                color = if (on) LiveDesign.background else LiveDesign.text,
-                style = LiveType.ui(11f, FontWeight.Bold),
-            )
+            Canvas(Modifier.size(12.dp)) {
+                drawEyeGlyph(
+                    color = if (on) LiveDesign.background else LiveDesign.text,
+                    slashed = !on,
+                    filled = true,
+                    pupil = if (on) LiveDesign.accent else Color.Black,
+                )
+            }
         }
     }
 }
@@ -128,6 +140,37 @@ internal fun chromeEditBoxes(
     return out
 }
 
+private enum class BadgeAnchor {
+    TOP_LEADING,
+    TOP,
+    TOP_TRAILING,
+    LEADING,
+    TRAILING,
+    BOTTOM_LEADING,
+    BOTTOM,
+    BOTTOM_TRAILING,
+    ;
+
+    fun frame(box: ChromeRect): ChromeRect {
+        val inner = BADGE - OVERHANG
+        val midX = box.midX - BADGE / 2f
+        val midY = box.midY - BADGE / 2f
+        val x =
+            when (this) {
+                TOP_LEADING, LEADING, BOTTOM_LEADING -> box.minX - OVERHANG
+                TOP, BOTTOM -> midX
+                TOP_TRAILING, TRAILING, BOTTOM_TRAILING -> box.maxX - inner
+            }
+        val y =
+            when (this) {
+                TOP_LEADING, TOP, TOP_TRAILING -> box.minY - OVERHANG
+                LEADING, TRAILING -> midY
+                BOTTOM_LEADING, BOTTOM, BOTTOM_TRAILING -> box.maxY - inner
+            }
+        return ChromeRect(x, y, BADGE, BADGE)
+    }
+}
+
 private fun badgeFrames(
     boxes: List<Pair<PocketDispSection, ChromeRect>>,
     vw: Float,
@@ -147,15 +190,9 @@ private fun badgeFrames(
         val preferTrailing = box.midX < vw / 2f
         val preferBottom = box.midY < vh / 2f
         val candidates =
-            listOf(
-                ChromeRect(box.maxX - (BADGE - OVERHANG), box.minY - OVERHANG, BADGE, BADGE),
-                ChromeRect(box.minX - OVERHANG, box.minY - OVERHANG, BADGE, BADGE),
-                ChromeRect(box.maxX - (BADGE - OVERHANG), box.maxY - (BADGE - OVERHANG), BADGE, BADGE),
-                ChromeRect(box.minX - OVERHANG, box.maxY - (BADGE - OVERHANG), BADGE, BADGE),
-                ChromeRect(box.midX - BADGE / 2f, box.minY - OVERHANG, BADGE, BADGE),
-                ChromeRect(box.midX - BADGE / 2f, box.maxY - (BADGE - OVERHANG), BADGE, BADGE),
-            ).map { clampBadge(it, playable) }
-                .sortedBy { rank(it, box, preferTrailing, preferBottom) }
+            BadgeAnchor.entries
+                .sortedBy { rank(it, preferTrailing, preferBottom) }
+                .map { clampBadge(it.frame(box), playable) }
         val choice =
             candidates.firstOrNull { candidate ->
                 placed.none { overlaps(it, candidate) }
@@ -178,10 +215,63 @@ private fun overlaps(a: ChromeRect, b: ChromeRect): Boolean =
         a.minY < b.maxY + BADGE_GAP &&
         b.minY < a.maxY + BADGE_GAP
 
-private fun rank(badge: ChromeRect, box: ChromeRect, preferTrailing: Boolean, preferBottom: Boolean): Int {
-    val trailing = badge.midX >= box.midX
-    val bottom = badge.midY >= box.midY
-    val h = if (trailing == preferTrailing) 0 else 2
-    val v = if (bottom == preferBottom) 0 else 2
-    return h + v
+private fun rank(anchor: BadgeAnchor, preferTrailing: Boolean, preferBottom: Boolean): Int {
+    val horizontal =
+        when (anchor) {
+            BadgeAnchor.TOP_TRAILING, BadgeAnchor.TRAILING, BadgeAnchor.BOTTOM_TRAILING ->
+                if (preferTrailing) 0 else 2
+            BadgeAnchor.TOP_LEADING, BadgeAnchor.LEADING, BadgeAnchor.BOTTOM_LEADING ->
+                if (preferTrailing) 2 else 0
+            BadgeAnchor.TOP, BadgeAnchor.BOTTOM -> 1
+        }
+    val vertical =
+        when (anchor) {
+            BadgeAnchor.BOTTOM_LEADING, BadgeAnchor.BOTTOM, BadgeAnchor.BOTTOM_TRAILING ->
+                if (preferBottom) 0 else 2
+            BadgeAnchor.TOP_LEADING, BadgeAnchor.TOP, BadgeAnchor.TOP_TRAILING ->
+                if (preferBottom) 2 else 0
+            BadgeAnchor.LEADING, BadgeAnchor.TRAILING -> 1
+        }
+    return horizontal + vertical
+}
+
+private fun DrawScope.drawEyeGlyph(
+    color: Color,
+    slashed: Boolean,
+    filled: Boolean = false,
+    pupil: Color = color,
+) {
+    val cx = size.width / 2f
+    val cy = size.height / 2f
+    val w = size.width * 0.78f
+    val h = size.height * 0.42f
+    val outline =
+        Path().apply {
+            moveTo(cx - w / 2f, cy)
+            quadraticTo(cx, cy - h, cx + w / 2f, cy)
+            quadraticTo(cx, cy + h, cx - w / 2f, cy)
+            close()
+        }
+    val stroke =
+        Stroke(
+            width = 1.35.dp.toPx(),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+    if (filled) {
+        drawPath(outline, color)
+        drawCircle(pupil, radius = size.minDimension * 0.13f, center = Offset(cx, cy))
+    } else {
+        drawPath(outline, color, style = stroke)
+        drawCircle(color, radius = size.minDimension * 0.12f, center = Offset(cx, cy))
+    }
+    if (slashed) {
+        drawLine(
+            color,
+            Offset(size.width * 0.18f, size.height * 0.82f),
+            Offset(size.width * 0.82f, size.height * 0.18f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+    }
 }

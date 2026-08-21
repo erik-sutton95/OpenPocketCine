@@ -1,27 +1,48 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
@@ -29,6 +50,7 @@ import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 data class PortraitZones(
     val topBar: ChromeRect,
@@ -47,6 +69,35 @@ object LivePortraitMetrics {
     const val ASSIST = 58f
     const val TOGGLE = 40f
     const val TOGGLE_GAP = 8f
+    const val ASSIST_RAIL_EXPANDED = 60f
+    const val ASSIST_RAIL_COLLAPSED = 44f
+    const val ASSIST_RAIL_EDGE = 10f
+    const val REC_OPTIONS = 40f
+    const val REC_OPTIONS_INSET = 10f
+    const val REC_OPTIONS_GAP = 8f
+
+    val FIT_BELOW_FEED_SLOT: Float
+        get() =
+            max(
+                TOGGLE_GAP + TOGGLE,
+                LiveChromeMetrics.STICK_GAP + LiveChromeMetrics.ZOOM + LiveChromeMetrics.STICK_GAP +
+                    LiveChromeMetrics.STICK + LiveChromeMetrics.STICK_INSET,
+            )
+}
+
+fun liveFitFeedOriginY(
+    viewportHeight: Float,
+    feedHeight: Float,
+    topBarMaxY: Float,
+    chromeFloorY: Float,
+    belowFeedSlot: Float = LivePortraitMetrics.FIT_BELOW_FEED_SLOT,
+): Float {
+    val height = max(0f, feedHeight)
+    val top = max(0f, topBarMaxY)
+    val keepClear = chromeFloorY - max(0f, belowFeedSlot)
+    val ideal = (max(0f, viewportHeight) - height) / 2f
+    val latest = max(top, keepClear - height)
+    return min(max(ideal, top), latest)
 }
 
 fun portraitZones(
@@ -57,9 +108,11 @@ fun portraitZones(
     clean: Boolean,
     fill: Boolean,
     assistToolbarHeight: Float,
+    feedAspectRatio: Float = 16f / 9f,
 ): PortraitZones {
     val vw = max(0f, viewportWidth)
     val vh = max(0f, viewportHeight)
+    val ratio = if (feedAspectRatio > 0f) feedAspectRatio else 16f / 9f
     val topBar =
         ChromeRect(0f, max(0f, max(0f, safeTop) - LivePortraitMetrics.TOP_BAR_LIFT), vw, LivePortraitMetrics.TOP_BAR)
     val systemBottom = max(0f, max(0f, safeBottom) - LivePortraitMetrics.SYSTEM_BAR_LIFT)
@@ -70,7 +123,6 @@ fun portraitZones(
             vw,
             LivePortraitMetrics.SYSTEM_BAR,
         )
-    val ratio = 16f / 9f
     if (fill) {
         val span = max(0f, systemBar.minY - topBar.maxY)
         val feedHeight = min(vw * 16f / 9f, span)
@@ -86,17 +138,48 @@ fun portraitZones(
         )
     }
     val natural = vw / ratio
-    val toolbar = if (clean) 0f else max(0f, assistToolbarHeight)
+    val spanForVertical = max(0f, systemBar.minY - topBar.maxY)
+    if (clean) {
+        val feedHeight = if (ratio >= 1f) natural else min(natural, spanForVertical)
+        val feed = ChromeRect(0f, topBar.maxY + max(0f, (spanForVertical - feedHeight) / 2f), vw, feedHeight)
+        return PortraitZones(
+            topBar = topBar,
+            feed = feed,
+            assistToolbar = ChromeRect(0f, feed.maxY, vw, 0f),
+            controls = ChromeRect(0f, feed.maxY, vw, 0f),
+            systemBar = systemBar,
+        )
+    }
+    val toolbar = max(0f, assistToolbarHeight)
     val chromeFloor = systemBar.minY - toolbar
-    val available = max(0f, chromeFloor - topBar.maxY)
-    val feedHeight = min(natural, available)
-    val ideal = (vh - feedHeight) / 2f
-    val latest = max(topBar.maxY, chromeFloor - feedHeight)
-    val y = min(max(ideal, topBar.maxY), latest)
+    val feedHeight =
+        if (ratio >= 1f) {
+            natural
+        } else {
+            min(natural, max(0f, chromeFloor - topBar.maxY))
+        }
+    val y = liveFitFeedOriginY(vh, feedHeight, topBar.maxY, chromeFloor)
     val feed = ChromeRect(0f, y, vw, feedHeight)
     val assist = ChromeRect(0f, systemBar.minY - toolbar, vw, toolbar)
     val controls = ChromeRect(0f, feed.maxY, vw, max(0f, assist.minY - feed.maxY))
     return PortraitZones(topBar, feed, assist, controls, systemBar)
+}
+
+fun fillAssistRail(
+    feed: ChromeRect,
+    captureStripTop: Float?,
+    expanded: Boolean,
+): ChromeRect {
+    val edge = LivePortraitMetrics.ASSIST_RAIL_EDGE
+    val feedBottom = feed.maxY
+    val railBottom = captureStripTop?.let { min(max(it, feed.minY), feedBottom) } ?: feedBottom
+    val top = feed.minY + edge
+    val width =
+        if (expanded) LivePortraitMetrics.ASSIST_RAIL_EXPANDED else LivePortraitMetrics.ASSIST_RAIL_COLLAPSED
+    val height =
+        if (expanded) max(0f, railBottom - top - edge) else LivePortraitMetrics.ASSIST_RAIL_COLLAPSED
+    val y = if (expanded) top else max(top, railBottom - height - edge)
+    return ChromeRect(feed.minX + edge, y, width, height)
 }
 
 fun portraitAspectToggle(picture: ChromeRect, floorY: Float): ChromeRect {
@@ -188,19 +271,43 @@ fun LivePortraitChrome(
             floorY = floorY,
         )
     val toggle = portraitAspectToggle(layout.onFeed, floorY)
+    var railExpanded by remember { mutableStateOf(false) }
+    val captureTop = if (captureH > 1f) zones.controls.minY else null
+    val rail = fillAssistRail(zones.feed, captureTop, railExpanded)
 
     Box(Modifier.fillMaxSize()) {
         if (showsStatus) {
             Box(Modifier.liveModuleFrame(zones.topBar).chromeEditStroke(editing != null, true)) {
-                LivePortraitTopBar(status)
+                LivePortraitTopBar(model, status)
             }
         }
 
+        if (model.chromeSectionMounts(PocketDispSection.RAIL_RECORD) && editing == null) {
+            val recOptions =
+                ChromeRect(
+                    layout.feed.maxX - LivePortraitMetrics.REC_OPTIONS - LivePortraitMetrics.REC_OPTIONS_INSET,
+                    zones.topBar.maxY + LivePortraitMetrics.REC_OPTIONS_GAP,
+                    LivePortraitMetrics.REC_OPTIONS,
+                    LivePortraitMetrics.REC_OPTIONS,
+                )
+            LivePortraitRecOptionsButton(
+                locked = uiLocked,
+                modifier = Modifier.liveModuleFrame(recOptions).alpha(if (uiLocked) 0.4f else 1f),
+                onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
+            )
+        }
+
         if (!fill && showsAssist && zones.assistToolbar.height > 0f) {
+            val inset =
+                ChromeRect(
+                    zones.assistToolbar.minX + 12f,
+                    zones.assistToolbar.minY + 4f,
+                    max(0f, zones.assistToolbar.width - 24f),
+                    max(0f, zones.assistToolbar.height - 8f),
+                )
             Box(
                 Modifier
-                    .liveModuleFrame(zones.assistToolbar)
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .liveModuleFrame(inset)
                     .alpha(if (uiLocked) 0.4f else 1f)
                     .chromeEditStroke(editing != null, true),
             ) {
@@ -212,12 +319,30 @@ fun LivePortraitChrome(
             }
         }
 
+        if (fill && showsAssist) {
+            Box(
+                Modifier
+                    .liveModuleFrame(rail)
+                    .alpha(if (uiLocked) 0.4f else 1f)
+                    .chromeEditStroke(editing != null, true),
+            ) {
+                LivePortraitAssistRail(
+                    assist = assist,
+                    expanded = railExpanded,
+                    locked = uiLocked || !chromeInteractive,
+                    onExpandedChange = { if (!uiLocked) railExpanded = it },
+                    onLongPress = onAssistLongPress,
+                )
+            }
+        }
+
         if (fill && showsCapture && zones.controls.height > 1f) {
             Box(
                 Modifier
                     .liveModuleFrame(zones.controls)
                     .alpha(if (uiLocked) 0.4f else 1f)
                     .chromeEditStroke(editing != null, true),
+                contentAlignment = Alignment.Center,
             ) {
                 LiveCaptureStrip(
                     status = status,
@@ -247,7 +372,11 @@ fun LivePortraitChrome(
             LiveZoomChip(
                 factor = LiveZoom.factor(status),
                 locked = uiLocked,
-                modifier = Modifier.liveModuleFrame(zoom).alpha(if (uiLocked) 0.4f else 1f).chromeEditStroke(editing != null, true),
+                modifier =
+                    Modifier
+                        .liveModuleFrame(zoom)
+                        .alpha(if (uiLocked) 0.4f else 1f)
+                        .chromeEditStroke(editing != null, true),
                 onCycle = onZoomCycle,
             )
         }
@@ -297,22 +426,28 @@ fun LivePortraitChrome(
 }
 
 @Composable
-fun LivePortraitTopBar(status: CameraStatus) {
-    Box(Modifier.fillMaxSize().background(LiveDesign.glass)) {
-        Text(
-            status.storageLabel,
-            color = LiveDesign.text,
-            style = LiveType.ui(13f, FontWeight.SemiBold),
-            maxLines = 1,
-            modifier = Modifier.align(Alignment.Center),
-        )
+fun LivePortraitTopBar(model: AppModel, status: CameraStatus) {
+    Box(Modifier.fillMaxSize().monitorGlass()) {
+        if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
+            Text(
+                portraitStorageLabel(status),
+                color = LiveDesign.text,
+                style = LiveType.ui(13f, FontWeight.SemiBold),
+                maxLines = 1,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
         Row(
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TimecodeReadout(status.timecode, portrait = true)
+            if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
+                TimecodeReadout(status.timecode, portrait = true)
+            }
             Spacer(Modifier.weight(1f))
-            CameraBatteryReadout(status.batteryPercent)
+            if (model.chromeSectionMounts(PocketDispSection.BATTERIES)) {
+                CameraBatteryReadout(status.batteryPercent)
+            }
         }
     }
 }
@@ -337,10 +472,10 @@ fun LivePortraitSystemBar(
                 Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.weight(1f))
                 if (showsLock) {
                     LockButton(uiLocked, onClick = onLock)
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.weight(1f))
                 }
                 if (chromeInteractive) {
                     DispButton(
@@ -353,21 +488,22 @@ fun LivePortraitSystemBar(
                             }
                         },
                     )
+                    Spacer(Modifier.weight(1f))
                 }
             }
             if (showsRecord) Spacer(Modifier.width(LiveDesign.RECORD_SIZE_DP.dp))
             Row(
                 Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
             ) {
+                Spacer(Modifier.weight(1f))
                 if (showsMedia) {
                     AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) { MediaGlyph(it) }
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.weight(1f))
                 }
                 if (showsSettings) {
                     AuxCircleButton(onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) { GearGlyph(it) }
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -395,7 +531,8 @@ fun LivePortraitAspectToggle(
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.55f))
             .border(1.dp, LiveDesign.hairline, CircleShape)
-            .chromeClickable(enabled = !locked, onClick = onClick),
+            .chromeClickable(enabled = !locked, onClick = onClick)
+            .semantics { contentDescription = if (fill) "Fit feed in frame" else "Fill frame with feed" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -416,14 +553,7 @@ fun LiveCaptureStrip(
     onOpen: (LiveSheet) -> Unit,
 ) {
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
-    Row(
-        modifier
-            .fillMaxSize()
-            .monitorGlass()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
+    CaptureStripShell(modifier) {
         CaptureSettingCell("ISO", status.isoLabel, "25600", active == LiveSheet.ISO, enabled) { onOpen(LiveSheet.ISO) }
         if (auto) {
             CaptureSettingCell("EV", "—", "+3.0", active == LiveSheet.SHUTTER, enabled) { onOpen(LiveSheet.SHUTTER) }
@@ -437,4 +567,213 @@ fun LiveCaptureStrip(
         CaptureSettingCell("FOCUS", status.focusLabel, "Single", active == LiveSheet.FOCUS, enabled) { onOpen(LiveSheet.FOCUS) }
         CaptureSettingCell("AUDIO", status.audioLabel, "Spatial", active == LiveSheet.AUDIO, enabled) { onOpen(LiveSheet.AUDIO) }
     }
+}
+
+@Composable
+fun LivePortraitAssistRail(
+    assist: LiveAssistState,
+    expanded: Boolean,
+    locked: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onLongPress: (LiveAssistTool) -> Unit,
+) {
+    if (!expanded) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .monitorGlass(CircleShape)
+                .chromeClickable(enabled = !locked) { onExpandedChange(true) }
+                .semantics { contentDescription = "Show view assists" },
+            contentAlignment = Alignment.Center,
+        ) {
+            SliderHorizontal3Glyph(LiveDesign.text, Modifier.size(18.dp))
+        }
+        return
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .clip(ChromeShape)
+            .monitorGlass()
+            .padding(horizontal = 4.dp),
+    ) {
+        Box(
+            Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(36.dp, 28.dp)
+                .chromeClickable(enabled = !locked) { onExpandedChange(false) }
+                .semantics { contentDescription = "Hide view assists" },
+            contentAlignment = Alignment.Center,
+        ) {
+            ChevronLeftGlyph(LiveDesign.accent, Modifier.size(13.dp))
+        }
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            val tools = LiveAssistTool.toolbarCases + LiveAssistTool.AUDIO
+            tools.forEach { tool ->
+                LivePortraitRailTool(
+                    tool = tool,
+                    on = assist.isOn(tool),
+                    locked = locked,
+                    onClick = { assist.toggle(tool) },
+                    onLongPress = {
+                        if (tool.hasConfiguration) onLongPress(tool)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LivePortraitRecOptionsButton(
+    locked: Boolean,
+    modifier: Modifier = Modifier,
+    onOpen: (LiveSheet) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val menuOffset = with(LocalDensity.current) { IntOffset(0, 8.dp.roundToPx()) }
+    Box(modifier) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .monitorGlass(CircleShape)
+                .chromeClickable(enabled = !locked) { open = !open }
+                .semantics { contentDescription = "Recording options" },
+            contentAlignment = Alignment.Center,
+        ) {
+            VideoGlyph(LiveDesign.text.copy(alpha = 0.86f))
+        }
+        if (open) {
+            Popup(
+                alignment = Alignment.BottomEnd,
+                offset = menuOffset,
+                onDismissRequest = { open = false },
+            ) {
+                Column(Modifier.width(220.dp).monitorGlass()) {
+                    RecOptionsRow("Resolution · Framerate") {
+                        open = false
+                        onOpen(LiveSheet.FORMAT)
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
+                    RecOptionsRow("Color") {
+                        open = false
+                        onOpen(LiveSheet.COLOR)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecOptionsRow(title: String, onClick: () -> Unit) {
+    Text(
+        title,
+        color = LiveDesign.text,
+        style = LiveType.ui(14f, FontWeight.Medium),
+        maxLines = 1,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .chromeClickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+    )
+}
+
+@Composable
+private fun LivePortraitRailTool(
+    tool: LiveAssistTool,
+    on: Boolean,
+    locked: Boolean,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+) {
+    val tint = if (on) LiveDesign.accent else LiveDesign.muted
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(ChromeShape)
+                .chipGlass()
+                .then(if (on) Modifier.background(LiveDesign.accentDim, ChromeShape) else Modifier)
+                .then(if (on) Modifier.border(1.dp, LiveDesign.accent, ChromeShape) else Modifier)
+                .chromeClickable(
+                    enabled = !locked,
+                    onLongClick = if (tool.hasConfiguration) onLongPress else null,
+                    onClick = onClick,
+                )
+                .padding(vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        AssistToolGlyph(tool = tool, tint = tint, modifier = Modifier.size(19.dp))
+        Text(
+            tool.chipLabel,
+            color = tint,
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            letterSpacing = 0.9.sp,
+        )
+    }
+}
+
+@Composable
+private fun SliderHorizontal3Glyph(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val stroke = size.minDimension * 0.085f
+        val knobRadius = size.minDimension * 0.09f
+        val rows = listOf(0.24f, 0.5f, 0.76f)
+        val knobs = listOf(0.68f, 0.34f, 0.58f)
+        rows.forEachIndexed { index, rowY ->
+            val y = size.height * rowY
+            drawLine(
+                tint,
+                Offset(size.width * 0.06f, y),
+                Offset(size.width * 0.94f, y),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawCircle(tint, radius = knobRadius, center = Offset(size.width * knobs[index], y))
+        }
+    }
+}
+
+@Composable
+private fun ChevronLeftGlyph(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val path =
+            Path().apply {
+                moveTo(size.width * 0.62f, size.height * 0.22f)
+                lineTo(size.width * 0.38f, size.height * 0.5f)
+                lineTo(size.width * 0.62f, size.height * 0.78f)
+            }
+        drawPath(
+            path,
+            tint,
+            style = Stroke(width = size.minDimension * 0.12f, cap = StrokeCap.Round),
+        )
+    }
+}
+
+private fun portraitStorageLabel(status: CameraStatus): String {
+    val free = if (status.storageFreeMb > 0) status.storageFreeMb else status.sdFreeMb
+    val total = if (status.storageTotalMb > 0) status.storageTotalMb else status.sdTotalMb
+    if (total > 0) {
+        val gb = max(0, free) / 1024
+        val pct = ((max(0, free).toDouble() / total.toDouble()) * 100.0).roundToInt()
+        return "$gb GB · $pct%"
+    }
+    if (status.recordRemainingSec > 0) return "${status.recordRemainingSec / 60} Min"
+    return "—"
 }

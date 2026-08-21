@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.pairing
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,12 +31,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.AppPanel
+import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.FoundCamera
 
 @Composable
@@ -61,16 +63,39 @@ fun SavedCamerasExperience(model: AppModel) {
 
 @Composable
 private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier) {
+    val phase by model.session.phaseFlow.collectAsState()
     Column(modifier.startupCard().padding(20.dp)) {
-        Text("Your cameras.", color = StartupColors.ink, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(
-            "Tap a saved camera to reconnect. Pocket uses one connect path — BLE, then the camera's own Wi-Fi.",
+            "Your cameras.",
+            color = StartupColors.ink,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        Text(
+            "Tap a saved camera to reconnect.",
             color = StartupColors.muted,
             fontSize = 13.sp,
+            lineHeight = 16.sp,
             modifier = Modifier.padding(top = 10.dp),
         )
         if (hugsContent) Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (model.isBusy) {
+                Text(
+                    StartupConnectionCopy.phaseLabel(phase, null),
+                    color = StartupColors.muted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                StartupFilledButton(
+                    "Cancel",
+                    enabled = true,
+                    onClick = model::cancelPairing,
+                    modifier = Modifier.fillMaxWidth(),
+                    large = true,
+                )
+            }
             StartupFilledButton(
                 "Pair new camera",
                 enabled = !model.isBusy,
@@ -95,10 +120,23 @@ private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier)
 @Composable
 private fun CameraListCard(model: AppModel, modifier: Modifier) {
     val found by model.session.found.collectAsState()
+    val phase by model.session.phaseFlow.collectAsState()
     val scroll = rememberScrollState()
     Column(modifier.startupCard().padding(22.dp)) {
-        Text("CAMERA LIST", color = StartupColors.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
-        Text("Tap a camera to connect", color = StartupColors.ink, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+        Text(
+            "CAMERA LIST",
+            color = StartupColors.muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.4.sp,
+        )
+        Text(
+            "Tap a camera to connect",
+            color = StartupColors.ink,
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 6.dp),
+        )
         Column(
             Modifier.weight(1f).padding(top = 16.dp).fadeOverflowBottom(scroll).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -107,6 +145,7 @@ private fun CameraListCard(model: AppModel, modifier: Modifier) {
                 SavedCameraRow(
                     camera = camera,
                     nearby = found.firstOrNull { it.id == camera.id },
+                    phase = phase,
                     isBusy = model.isBusy,
                     onConnect = { model.reconnect(camera) },
                     onRename = { model.rename(camera, it) },
@@ -128,6 +167,7 @@ private fun CameraListCard(model: AppModel, modifier: Modifier) {
 private fun SavedCameraRow(
     camera: SavedCamera,
     nearby: FoundCamera?,
+    phase: ConnectionPhase,
     isBusy: Boolean,
     onConnect: () -> Unit,
     onRename: (String?) -> Unit,
@@ -138,35 +178,58 @@ private fun SavedCameraRow(
     var remove by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf(camera.customName.orEmpty()) }
     val online = nearby != null
-    Column(Modifier.fillMaxWidth().startupTile().padding(horizontal = 16.dp, vertical = 16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                camera.displayName,
-                color = StartupColors.ink,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                if (online) "Online" else "Offline",
-                color = if (online) StartupColors.ready else StartupColors.muted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier =
-                    Modifier.clip(CircleShape)
-                        .background((if (online) StartupColors.ready else StartupColors.muted).copy(alpha = 0.14f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-            )
-            StartupFilledButton(if (online) "Connect" else "Reconnect", enabled = !isBusy, onClick = onConnect)
+    val availability = if (online) StartupColors.ready else StartupColors.muted
+    val connectLocked =
+        phase == ConnectionPhase.JOINING_WIFI ||
+            phase == ConnectionPhase.OPENING_DATALINK ||
+            phase == ConnectionPhase.LIVE
+    Column(
+        Modifier.fillMaxWidth()
+            .startupTile(borderColor = availability.copy(alpha = 0.28f))
+            .clickable(enabled = !connectLocked, onClick = onConnect)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        camera.displayName,
+                        color = StartupColors.ink,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StartupStatusPill(if (online) "Online" else "Offline", availability)
+                    StartupConnectChrome(
+                        text = if (online) "Connect" else "Reconnect",
+                        filled = online,
+                        enabled = !isBusy,
+                    )
+                }
+                Text(
+                    camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
+                    color = StartupColors.muted,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Box {
                 Text(
-                    "···",
+                    "⋯",
                     color = StartupColors.muted,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(enabled = !isBusy) { menu = true }.padding(8.dp),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier =
+                        Modifier.clip(CircleShape)
+                            .clickable(enabled = !isBusy) { menu = true }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .semantics { contentDescription = "Camera options" },
                 )
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
@@ -187,12 +250,6 @@ private fun SavedCameraRow(
                 }
             }
         }
-        Text(
-            camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
-            color = StartupColors.muted,
-            fontSize = 13.sp,
-            maxLines = 1,
-        )
     }
     if (rename) {
         AlertDialog(

@@ -5,23 +5,24 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import android.app.ActivityManager
+import android.content.Context
+import android.os.Build
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +42,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
@@ -120,7 +123,41 @@ fun LiveViewScreen(model: AppModel) {
         }
     tick
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(LiveDesign.background)) {
+    val feedBackdrop = rememberLayerBackdrop()
+    val sceneBackdrop =
+        rememberLayerBackdrop {
+            drawRect(LiveDesign.background)
+            drawContent()
+        }
+    val activityManager =
+        remember(context) {
+            context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        }
+    val totalRamBytes =
+        remember(activityManager) {
+            ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo).totalMem
+        }
+    val glass =
+        remember(feedBackdrop, sceneBackdrop, totalRamBytes, activityManager.isLowRamDevice) {
+            MonitorGlass(
+                resolveTier(
+                    sdkInt = Build.VERSION.SDK_INT,
+                    isLowRamDevice = activityManager.isLowRamDevice,
+                    totalRamBytes = totalRamBytes,
+                ),
+                layerBackdrop = feedBackdrop,
+                overlayBackdrop = sceneBackdrop,
+                allowDemote = true,
+            )
+        }
+    MonitorGlassBudgetLoop(glass)
+
+    CompositionLocalProvider(LocalMonitorGlass provides glass) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(LiveDesign.background),
+    ) {
         val density = LocalDensity.current
         val layoutDir = LocalLayoutDirection.current
         val insets = WindowInsets.safeDrawing
@@ -179,11 +216,30 @@ fun LiveViewScreen(model: AppModel) {
         val focusOffCenter =
             focusPoint?.let { hypot(it.first - 0.5f, it.second - 0.5f) > 0.08f } == true
 
-        Box(Modifier.fillMaxSize()) {
+        // Kyant sibling pattern: this box records feed + chrome; popups sit
+        // outside so overlayGlass does not loop.
+        val sceneLayer =
+            if (glass.tier == GlassTier.FULL && glass.overlayBackdrop != null) {
+                Modifier.layerBackdrop(glass.overlayBackdrop)
+            } else {
+                Modifier
+            }
+        Box(Modifier.fillMaxSize().then(sceneLayer)) {
             Box(
                 Modifier
                     .liveModuleFrame(layout.feed)
-                    .background(LiveDesign.feedWell)
+                    .then(
+                        if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
+                            Modifier.layerBackdrop(glass.layerBackdrop)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .background(LiveDesign.feedWell),
+            )
+            Box(
+                Modifier
+                    .liveModuleFrame(layout.feed)
                     .graphicsLayer { scaleX = if (assist.mirror) -1f else 1f },
             ) {
                 AndroidView(
@@ -313,10 +369,11 @@ fun LiveViewScreen(model: AppModel) {
                             .align(Alignment.TopCenter)
                             .offset(y = (layout.onFeed.minY + 36f).dp)
                             .clip(RoundedCornerShape(50))
-                            .background(LiveDesign.glass)
+                            .chipGlass(RoundedCornerShape(50))
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
+        }
 
             if (chromeInteractive && sheet != null && !uiLocked) {
                 Box(
@@ -355,6 +412,7 @@ fun LiveViewScreen(model: AppModel) {
                         state = assist,
                         onDismiss = { assist.configureTool = null },
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 88.dp),
+                        model = model,
                     )
                 }
             }
@@ -426,7 +484,7 @@ fun LiveViewScreen(model: AppModel) {
                     onDone = { model.endChromeEditing() },
                 )
             }
-        }
+    }
     }
 }
 
@@ -466,7 +524,10 @@ private fun LandscapeChrome(
 
     Box(Modifier.fillMaxSize()) {
         if (showsStatus) {
-            Box(Modifier.liveModuleFrame(layout.topDeck).chromeEditStroke(editing != null, true)) {
+            Box(
+                Modifier.liveModuleFrame(layout.topDeck).chromeEditStroke(editing != null, true),
+                contentAlignment = Alignment.Center,
+            ) {
                 LiveTopDeck(
                     model = model,
                     status = status,
@@ -477,6 +538,7 @@ private fun LandscapeChrome(
                     showStorageDuration = showStorageDuration,
                     onToggleStorage = onToggleStorage,
                     onOpen = { if (!uiLocked && hits) onSheet(if (sheet == it) null else it) },
+                    maxWidth = layout.topDeck.width,
                 )
             }
         }
@@ -582,6 +644,7 @@ private fun LandscapeChrome(
                     .liveModuleFrame(layout.capture)
                     .alpha(if (uiLocked) 0.4f else 1f)
                     .chromeEditStroke(editing != null, true),
+                contentAlignment = Alignment.CenterEnd,
             ) {
                 LiveCaptureStrip(
                     status = status,
@@ -605,16 +668,10 @@ private fun LiveTopDeck(
     showStorageDuration: Boolean,
     onToggleStorage: () -> Unit,
     onOpen: (LiveSheet) -> Unit,
+    maxWidth: Float,
 ) {
-    Row(
-        Modifier
-            .fillMaxSize()
-            .monitorGlass()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    FitScale(maxWidth.dp) {
+    InfoPill {
         if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) RecChip(status.isRecording)
         if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) TimecodeReadout(status.timecode)
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
@@ -649,6 +706,7 @@ private fun LiveTopDeck(
             ReadoutPill(storage, onClick = onToggleStorage) { SdCardGlyph(it) }
         }
         if (model.chromeSectionMounts(PocketDispSection.FPS)) FpsChip(fps, bars)
+    }
     }
 }
 

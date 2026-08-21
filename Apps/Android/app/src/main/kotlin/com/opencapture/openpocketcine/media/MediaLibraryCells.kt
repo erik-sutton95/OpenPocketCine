@@ -6,7 +6,7 @@ import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Photo
@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.openpocketcine.glass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -55,6 +61,10 @@ fun MediaClipCell(
     file: MediaFile,
     controller: MediaLibraryController,
     onOpen: () -> Unit,
+    isSelecting: Boolean = false,
+    isSelected: Boolean = false,
+    onBeginSelection: (() -> Unit)? = null,
+    onToggleSelection: (() -> Unit)? = null,
 ) {
     val downloaded = controller.isDownloaded(file)
     val progress = controller.downloadProgress[file.path]
@@ -66,14 +76,36 @@ fun MediaClipCell(
         thumb = MediaThumbs.load(file, controller, maxPx = 640)
         duration = MediaThumbs.durationLabel(file, controller)
     }
-    Column(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+    val interaction =
+        if (isSelecting) {
+            Modifier.chromeClickable(onClick = { onToggleSelection?.invoke() ?: onOpen() })
+        } else {
+            Modifier.chromeClickable(
+                onClick = onOpen,
+                onLongClick = { onBeginSelection?.invoke() },
+            )
+        }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = file.filename
+                role = Role.Button
+            }
+            .then(interaction),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+                .clip(MediaCornerShape)
                 .background(LiveDesign.surface)
-                .border(1.dp, LiveDesign.hairline, RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)),
+                .border(
+                    if (isSelected) 2.dp else 1.dp,
+                    if (isSelected) LiveDesign.accent else LiveDesign.hairline,
+                    MediaCornerShape,
+                ),
         ) {
             val bitmap = thumb
             if (bitmap != null) {
@@ -105,11 +137,10 @@ fun MediaClipCell(
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
                             )
-                            LinearProgressIndicator(
-                                progress = { progress.toFloat() },
-                                modifier = Modifier.width(120.dp).padding(top = 6.dp),
-                                color = LiveDesign.accent,
-                                trackColor = LiveDesign.hairline,
+                            MediaGlassTrack(
+                                fraction = progress.toFloat(),
+                                modifier = Modifier.padding(top = 6.dp),
+                                trackWidth = 120.dp,
                             )
                         }
                     }
@@ -143,24 +174,18 @@ fun MediaClipCell(
                     )
                 }
             }
-            if (!isPhoto && duration != null && progress == null) {
-                Text(
+            if (!isPhoto && duration != null && progress == null && !isSelecting) {
+                MediaBadge(
                     duration!!,
-                    color = LiveDesign.text,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                            .background(LiveDesign.feedWell.copy(alpha = 0.58f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
                 )
+            }
+            if (isSelecting) {
+                SelectionMarker(selected = isSelected, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
             }
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 2.dp),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -181,6 +206,10 @@ fun MediaClipListRow(
     file: MediaFile,
     controller: MediaLibraryController,
     onOpen: () -> Unit,
+    isSelecting: Boolean = false,
+    isSelected: Boolean = false,
+    onBeginSelection: (() -> Unit)? = null,
+    onToggleSelection: (() -> Unit)? = null,
 ) {
     val downloaded = controller.isDownloaded(file)
     val progress = controller.downloadProgress[file.path]
@@ -197,13 +226,31 @@ fun MediaClipListRow(
         meta.ifEmpty {
             if (downloaded) "Cached" else "On camera"
         }
+    val interaction =
+        if (isSelecting) {
+            Modifier.chromeClickable(onClick = { onToggleSelection?.invoke() ?: onOpen() })
+        } else {
+            Modifier.chromeClickable(
+                onClick = onOpen,
+                onLongClick = { onBeginSelection?.invoke() },
+            )
+        }
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .background(LiveDesign.surface.copy(alpha = 0.45f))
-            .border(1.dp, LiveDesign.hairline, RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .clickable(onClick = onOpen)
+            .clip(MediaCornerShape)
+            .background(if (isSelected) LiveDesign.accentDim else Color.Transparent, MediaCornerShape)
+            .glass(MediaCornerShape)
+            .border(
+                if (isSelected) 2.dp else 1.dp,
+                if (isSelected) LiveDesign.accent.copy(alpha = 0.45f) else LiveDesign.hairline,
+                MediaCornerShape,
+            )
+            .semantics {
+                contentDescription = file.filename
+                role = Role.Button
+            }
+            .then(interaction)
             .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -211,9 +258,9 @@ fun MediaClipListRow(
             Modifier
                 .width(96.dp)
                 .height(54.dp)
-                .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+                .clip(MediaCornerShape)
                 .background(LiveDesign.surface)
-                .border(1.dp, LiveDesign.hairline, RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)),
+                .border(1.dp, LiveDesign.hairline, MediaCornerShape),
         ) {
             val bitmap = thumb
             if (bitmap != null) {
@@ -255,6 +302,9 @@ fun MediaClipListRow(
                     )
                 }
             }
+            if (isSelecting) {
+                SelectionMarker(selected = isSelected, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -274,7 +324,9 @@ fun MediaClipListRow(
                 maxLines = 1,
             )
         }
-        FavoriteStar(favorite, iconSize = 14.dp) { controller.toggleFavorite(file) }
+        if (!isSelecting) {
+            FavoriteStar(favorite, iconSize = 14.dp) { controller.toggleFavorite(file) }
+        }
     }
 }
 
@@ -287,15 +339,43 @@ fun FavoriteStar(
     Box(
         Modifier
             .size(44.dp)
-            .clickable(onClick = onClick)
-            .padding(4.dp),
+            .chromeClickable(onClick = onClick)
+            .padding(6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-            contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-            tint = if (favorite) LiveDesign.accent else LiveDesign.faint,
-            modifier = Modifier.size(iconSize + 4.dp),
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .glass(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
+                tint = if (favorite) LiveDesign.accent else LiveDesign.text,
+                modifier = Modifier.size(iconSize + 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+fun SelectionMarker(selected: Boolean, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(30.dp)
+            .background(
+                if (selected) LiveDesign.accent else Color.Black.copy(alpha = 0.56f),
+                CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (selected) "✓" else "○",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (selected) LiveDesign.background else LiveDesign.text,
         )
     }
 }

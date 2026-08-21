@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.view.TextureView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -15,19 +14,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -36,14 +34,9 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,6 +68,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.openpocketcine.glass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -85,8 +81,8 @@ fun MediaPhotoViewer(
     file: MediaFile,
     controller: MediaLibraryController,
     onClose: () -> Unit,
+    onDeliver: (MediaFile) -> Unit = {},
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var bitmap by remember(file.id) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
@@ -134,7 +130,14 @@ fun MediaPhotoViewer(
                         },
             )
         } else if (loading) {
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .clip(MediaCornerShape)
+                    .glass(MediaCornerShape)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 CircularProgressIndicator(color = LiveDesign.accent)
                 Text("Preparing image…", color = LiveDesign.muted, style = LiveType.ui(14f, FontWeight.Medium))
             }
@@ -158,14 +161,9 @@ fun MediaPhotoViewer(
                 modifier = Modifier.weight(1f),
             )
             if (controller.canDelete(file)) {
-                CircleAction(Icons.Filled.Delete, "Delete") { confirmDelete = true }
+                MediaCircleIconButton(Icons.Filled.Delete, "Delete", onClick = { confirmDelete = true })
             }
-            CircleAction(Icons.Filled.Share, "Share photo") {
-                scope.launch {
-                    val local = controller.cacheForPlayback(file) ?: controller.localFile(file) ?: return@launch
-                    MediaShare.shareCachedFile(context, local, MediaHTTP.playbackMIMEType(file.path))
-                }
-            }
+            MediaCircleIconButton(Icons.Filled.Share, "Share photo", onClick = { onDeliver(file) })
         }
 
         Box(
@@ -176,20 +174,21 @@ fun MediaPhotoViewer(
         ) {
             FavoriteStar(favorite) { controller.toggleFavorite(file) }
         }
-    }
 
-    if (confirmDelete) {
-        DeleteConfirmDialog(
-            title = "Delete this photo from the camera?",
-            onDismiss = { confirmDelete = false },
-            onConfirm = {
-                confirmDelete = false
-                scope.launch {
-                    controller.delete(file)
-                    onClose()
-                }
-            },
-        )
+        if (confirmDelete) {
+            MediaConfirmPopup(
+                title = "Delete this photo from the camera?",
+                confirmTitle = "Delete",
+                onDismiss = { confirmDelete = false },
+                onConfirm = {
+                    confirmDelete = false
+                    scope.launch {
+                        controller.delete(file)
+                        onClose()
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -199,8 +198,8 @@ fun MediaPlayerScreen(
     startingAt: MediaFile,
     controller: MediaLibraryController,
     onClose: () -> Unit,
+    onDeliver: (MediaFile) -> Unit = {},
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var active by remember { mutableStateOf(startingAt) }
     val playlist = if (files.any { it.id == active.id }) files else listOf(active)
@@ -216,8 +215,10 @@ fun MediaPlayerScreen(
     var ready by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var chromeVisible by remember { mutableStateOf(true) }
     val favorite = controller.isFavorite(active)
     val progress = controller.downloadProgress[active.path]
+    val context = LocalContext.current
 
     val player =
         remember {
@@ -326,14 +327,16 @@ fun MediaPlayerScreen(
                 Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.72f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier
+                        .clip(MediaCornerShape)
+                        .glass(MediaCornerShape)
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     if (loadError == null) {
                         if (progress != null && progress > 0 && progress < 1) {
-                            LinearProgressIndicator(
-                                progress = { progress.toFloat() },
-                                modifier = Modifier.width(120.dp),
-                                color = LiveDesign.accent,
-                            )
+                            MediaGlassTrack(fraction = progress.toFloat(), trackWidth = 120.dp)
                         } else {
                             CircularProgressIndicator(color = LiveDesign.accent)
                         }
@@ -351,167 +354,180 @@ fun MediaPlayerScreen(
 
         if (playlist.size > 1) {
             if (canPrev) {
-                CircleAction(Icons.Filled.ChevronLeft, "Previous clip", modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp)) {
-                    active = playlist[index - 1]
-                }
+                ClipNavButton(
+                    icon = Icons.Filled.ChevronLeft,
+                    label = "Previous clip",
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
+                ) { active = playlist[index - 1] }
             }
             if (canNext) {
-                CircleAction(Icons.Filled.ChevronRight, "Next clip", modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)) {
-                    active = playlist[index + 1]
-                }
+                ClipNavButton(
+                    icon = Icons.Filled.ChevronRight,
+                    label = "Next clip",
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
+                ) { active = playlist[index + 1] }
             }
         }
 
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(
-                    Modifier
-                        .size(34.dp)
-                        .mediaGlass(CircleShape)
-                        .clickable(onClick = onClose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LiveDesign.text, modifier = Modifier.size(16.dp))
-                }
-                Text(
-                    active.filename,
-                    color = LiveDesign.text,
-                    style = LiveType.ui(14f, FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    Modifier
-                        .size(34.dp)
-                        .mediaGlass(CircleShape)
-                        .clickable { controller.toggleFavorite(active) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (favorite) LiveDesign.accent else LiveDesign.text,
-                        modifier = Modifier.size(17.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.weight(1f))
+        if (chromeVisible) {
             Column(
                 Modifier
-                    .fillMaxWidth()
-                    .mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MediaBackButton(onClick = onClose, size = 34.dp)
                     Text(
-                        MediaClipFormatting.durationLabel(currentTime.toDouble()),
-                        color = LiveDesign.muted,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.width(40.dp),
+                        active.filename,
+                        color = LiveDesign.text,
+                        style = LiveType.ui(14f, FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
-                    Slider(
-                        value = if (duration > 0f) currentTime.coerceIn(0f, duration) else 0f,
-                        onValueChange = {
-                            scrubbing = true
-                            currentTime = it
-                            player.seekTo((it * 1000).toLong())
-                        },
-                        onValueChangeFinished = { scrubbing = false },
-                        valueRange = 0f..max(duration, 0.1f),
-                        modifier = Modifier.weight(1f).height(22.dp),
-                        colors =
-                            SliderDefaults.colors(
-                                thumbColor = LiveDesign.accent,
-                                activeTrackColor = LiveDesign.accent,
-                                inactiveTrackColor = LiveDesign.hairline,
-                            ),
-                    )
-                    Text(
-                        MediaClipFormatting.durationLabel(duration.toInt()),
-                        color = LiveDesign.muted,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.width(40.dp),
+                    MediaCircleIconButton(
+                        icon = if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                        contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
+                        onClick = { controller.toggleFavorite(active) },
+                        tint = if (favorite) LiveDesign.accent else LiveDesign.text,
+                        highlighted = favorite,
                     )
                 }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                Spacer(Modifier.weight(1f))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(MediaCornerShape)
+                        .glass(MediaCornerShape)
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    TransportLabel("−15", "Back 15 seconds") { seekBy(-15f) }
-                    if (reachedEnd) {
-                        TransportIcon(Icons.Filled.Replay, "Restart") {
-                            player.seekTo(0)
-                            player.play()
-                            reachedEnd = false
-                            isPlaying = true
-                        }
-                    } else {
-                        TransportIcon(
-                            if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            if (isPlaying) "Pause" else "Play",
-                        ) {
-                            if (isPlaying) player.pause() else player.play()
-                        }
-                    }
-                    TransportLabel("+15", "Forward 15 seconds") { seekBy(15f) }
-                    Spacer(Modifier.weight(1f))
-                    TransportIcon(
-                        if (isMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
-                        if (isMuted) "Unmute" else "Mute",
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                        isMuted = !isMuted
-                        player.volume = if (isMuted) 0f else 1f
+                        Text(
+                            MediaClipFormatting.durationLabel(currentTime.toDouble()),
+                            color = LiveDesign.muted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.width(40.dp),
+                        )
+                        MediaPlaybackScrubber(
+                            progressSeconds = if (duration > 0f) currentTime.coerceIn(0f, duration) else 0f,
+                            durationSeconds = duration,
+                            onScrubbingChanged = { scrubbing = it },
+                            onProgressChange = { currentTime = it },
+                            onSeek = {
+                                currentTime = it
+                                player.seekTo((it * 1000).toLong())
+                                if (reachedEnd && it + 0.05f < duration) reachedEnd = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            MediaClipFormatting.durationLabel(duration.toInt()),
+                            color = LiveDesign.muted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.width(40.dp),
+                        )
                     }
-                    if (controller.canDelete(active)) {
-                        TransportIcon(Icons.Filled.Delete, "Delete") { confirmDelete = true }
-                    }
-                    TransportIcon(Icons.Filled.Share, "Share clip") {
-                        player.pause()
-                        scope.launch {
-                            val local =
-                                controller.localPlaybackFile(active)
-                                    ?: controller.cacheForPlayback(active)
-                                    ?: return@launch
-                            MediaShare.shareCachedFile(context, local, MediaHTTP.playbackMIMEType(active.path))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        MediaTransportSkipButton("−15", "Back 15 seconds") { seekBy(-15f) }
+                        if (reachedEnd) {
+                            MediaTransportIconButton(Icons.Filled.Replay, "Restart", primary = true, onClick = {
+                                player.seekTo(0)
+                                player.play()
+                                reachedEnd = false
+                                isPlaying = true
+                            })
+                        } else {
+                            MediaTransportIconButton(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                if (isPlaying) "Pause" else "Play",
+                                primary = true,
+                                onClick = { if (isPlaying) player.pause() else player.play() },
+                            )
                         }
+                        MediaTransportSkipButton("+15", "Forward 15 seconds") { seekBy(15f) }
+                        Spacer(Modifier.weight(1f))
+                        MediaTransportIconButton(
+                            if (isMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                            if (isMuted) "Unmute" else "Mute",
+                            action = true,
+                            highlighted = isMuted,
+                            onClick = {
+                                isMuted = !isMuted
+                                player.volume = if (isMuted) 0f else 1f
+                            },
+                        )
+                        MediaTransportIconButton(
+                            Icons.Filled.Fullscreen,
+                            "Hide playback controls",
+                            action = true,
+                            onClick = { chromeVisible = false },
+                        )
+                        if (controller.canDelete(active)) {
+                            MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
+                        }
+                        MediaTransportIconButton(
+                            Icons.Filled.Share,
+                            "Share clip",
+                            action = true,
+                            onClick = {
+                                player.pause()
+                                onDeliver(active)
+                            },
+                        )
                     }
                 }
             }
+        } else {
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+            ) {
+                MediaCircleIconButton(
+                    icon = Icons.Filled.FullscreenExit,
+                    contentDescription = "Show playback controls",
+                    onClick = { chromeVisible = true },
+                )
+            }
         }
-    }
 
-    if (confirmDelete) {
-        DeleteConfirmDialog(
-            title = "Delete this clip from the camera?",
-            onDismiss = { confirmDelete = false },
-            onConfirm = {
-                confirmDelete = false
-                scope.launch {
-                    val dying = active
-                    controller.delete(dying)
-                    when {
-                        canNext -> active = playlist[index + 1]
-                        canPrev -> active = playlist[index - 1]
-                        else -> onClose()
+        if (confirmDelete) {
+            MediaConfirmPopup(
+                title = "Delete this clip from the camera?",
+                confirmTitle = "Delete",
+                onDismiss = { confirmDelete = false },
+                onConfirm = {
+                    confirmDelete = false
+                    scope.launch {
+                        val dying = active
+                        controller.delete(dying)
+                        when {
+                            canNext -> active = playlist[index + 1]
+                            canPrev -> active = playlist[index - 1]
+                            else -> onClose()
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun CircleAction(
+private fun ClipNavButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     modifier: Modifier = Modifier,
@@ -519,63 +535,13 @@ private fun CircleAction(
 ) {
     Box(
         modifier
-            .size(34.dp)
-            .mediaGlass(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = label, tint = LiveDesign.text, modifier = Modifier.size(16.dp))
-    }
-}
-
-@Composable
-private fun TransportLabel(
-    text: String,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        Modifier
-            .size(width = 38.dp, height = 36.dp)
-            .mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .clickable(onClick = onClick)
+            .size(32.dp)
+            .clip(CircleShape)
+            .glass(CircleShape)
+            .chromeClickable(onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = LiveDesign.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+        Icon(icon, contentDescription = null, tint = LiveDesign.accent, modifier = Modifier.size(13.dp))
     }
-}
-
-@Composable
-private fun TransportIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        Modifier
-            .size(width = 38.dp, height = 36.dp)
-            .mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = label, tint = LiveDesign.text, modifier = Modifier.size(18.dp))
-    }
-}
-
-@Composable
-private fun DeleteConfirmDialog(title: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, color = LiveDesign.text) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Delete", color = LiveDesign.rec, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = LiveDesign.muted) }
-        },
-        containerColor = LiveDesign.surface,
-    )
 }

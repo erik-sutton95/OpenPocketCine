@@ -56,6 +56,14 @@ class LiveAssistState(
     var mirror by mutableStateOf(false)
         private set
 
+    /** iOS `splitComparison` — 50/50 log vs LUT. Monitor-only. */
+    var splitComparison by mutableStateOf(false)
+        private set
+
+    /** iOS `splitVertical` — true is Left / Right, false is Top / Bottom. */
+    var splitVertical by mutableStateOf(true)
+        private set
+
     var clean by mutableStateOf(false)
     var pinned by mutableStateOf(parsePins(pinnedNames))
 
@@ -141,6 +149,20 @@ class LiveAssistState(
     fun isVisible(tool: LiveAssistTool): Boolean {
         if (!isOn(tool)) return false
         return if (clean) pinned.contains(tool) else true
+    }
+
+    /** Re-arms the last look. The bar chip is the only off (iOS `armLastLUT`). */
+    fun armLut() {
+        if (lutOn) return
+        lutOn = true
+        persist()
+    }
+
+    fun setSplitComparison(enabled: Boolean, vertical: Boolean = splitVertical) {
+        splitComparison = enabled
+        splitVertical = vertical
+        if (enabled) armLut()
+        persist()
     }
 
     fun toggle(tool: LiveAssistTool) {
@@ -339,6 +361,8 @@ class LiveAssistState(
             .put("zebraHighlightColor", zebraHighlightColor.label)
             .put("zebraMidtoneColor", zebraMidtoneColor.label)
             .put("lutArmed", lutOn)
+            .put("splitComparison", splitComparison)
+            .put("splitVertical", splitVertical)
             .put("crushClipCompensation", crushClipCompensation.raw)
             .put("waveMode", waveMode.label)
             .put("waveBrightness", waveBrightness)
@@ -384,6 +408,8 @@ class LiveAssistState(
         crosshair = LiveAssistTool.CROSS in on
         mirror = LiveAssistTool.MIRROR in on
         lutOn = if (obj.has("lutArmed")) obj.optBoolean("lutArmed", true) else LiveAssistTool.LUT in on
+        splitComparison = obj.optBoolean("splitComparison", false)
+        splitVertical = obj.optBoolean("splitVertical", true)
         guideAspect = GuideAspect.fromPersisted(obj.optString("guideAspect", GuideAspect.CINEMA.label))
         guideFamily = GuideFamily.fromPersisted(obj.optString("guideFamily", GuideFamily.FILM.label))
         val restored = buildSet {

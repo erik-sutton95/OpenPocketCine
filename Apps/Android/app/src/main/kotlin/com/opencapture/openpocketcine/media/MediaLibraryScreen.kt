@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,8 +27,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
@@ -40,7 +39,6 @@ import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,15 +46,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -65,8 +65,11 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.OperatorCloseButton
+import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.glass
+import com.opencapture.openpocketcine.overlayGlass
+import kotlinx.coroutines.launch
 
 @Composable
 fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
@@ -74,6 +77,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     val controller = remember(model) { MediaLibraryController(context.applicationContext, model.session) }
     val phase by model.session.phaseFlow.collectAsState()
     val isLive = phase == ConnectionPhase.LIVE
+    val scope = rememberCoroutineScope()
     DisposableEffect(controller) {
         controller.beginBrowse()
         onDispose { controller.release() }
@@ -89,6 +93,10 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     var dateKeyFilter by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf<MediaFile?>(null) }
     var viewingPhoto by remember { mutableStateOf<MediaFile?>(null) }
+    var isSelecting by remember { mutableStateOf(false) }
+    var selectedIDs by remember { mutableStateOf(setOf<String>()) }
+    var deliveryFiles by remember { mutableStateOf<List<MediaFile>?>(null) }
+    var confirmBatchDelete by remember { mutableStateOf(false) }
 
     val localFavorites =
         controller.files.filter { controller.isFavorite(it) }.map { it.path }.toSet()
@@ -127,6 +135,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             MediaLibraryQuery.sorted(displayed, sortOrder)
         }
     val displayedVideos = displayed.filter { it.kind == MediaKind.VIDEO }
+    val selectedFiles = displayed.filter { selectedIDs.contains(it.id) }
 
     val filterSource =
         run {
@@ -169,8 +178,25 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
 
     fun open(file: MediaFile) {
+        if (isSelecting) {
+            selectedIDs = selectedIDs.toggle(file.id)
+            return
+        }
         if (!isLive && !controller.isAvailableOffline(file)) return
         if (file.kind == MediaKind.PHOTO) viewingPhoto = file else playing = file
+    }
+
+    fun beginSelection(file: MediaFile) {
+        if (isSelecting) return
+        isSelecting = true
+        selectedIDs = setOf(file.id)
+        filterOpen = false
+    }
+
+    fun exitSelection() {
+        isSelecting = false
+        selectedIDs = emptySet()
+        confirmBatchDelete = false
     }
 
     fun dismiss() {
@@ -180,9 +206,12 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
 
     BackHandler {
         when {
+            deliveryFiles != null -> deliveryFiles = null
+            confirmBatchDelete -> confirmBatchDelete = false
             playing != null -> playing = null
             viewingPhoto != null -> viewingPhoto = null
             filterOpen -> filterOpen = false
+            isSelecting -> exitSelection()
             else -> dismiss()
         }
     }
@@ -204,7 +233,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                     .navigationBarsPadding()
                     .padding(contentPad),
             ) {
-                if (portrait) {
+                if (portrait && !isSelecting) {
                     CategoryStrip(category) { category = it }
                     Spacer(Modifier.height(8.dp))
                 }
@@ -214,18 +243,29 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         Spacer(Modifier.width(16.dp))
                     }
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        HeaderRow(
-                            headerTitle = headerTitle,
-                            headerCount = headerCount,
-                            fetchInProgress = controller.fetchInProgress,
-                            isLive = isLive,
-                            sortOrder = sortOrder,
-                            filterOpen = filterOpen,
-                            activeFilterCount = activeFilterCount,
-                            onRefresh = { controller.refresh() },
-                            onFilter = { filterOpen = !filterOpen },
-                            onSort = { sortOrder = sortOrder.next },
-                        )
+                        if (isSelecting) {
+                            SelectionHeader(
+                                selectedCount = selectedIDs.size,
+                                deleteEnabled = isLive && selectedFiles.any { controller.canDelete(it) },
+                                shareEnabled = selectedIDs.isNotEmpty(),
+                                onExit = ::exitSelection,
+                                onDelete = { confirmBatchDelete = true },
+                                onShare = { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles },
+                            )
+                        } else {
+                            HeaderRow(
+                                headerTitle = headerTitle,
+                                headerCount = headerCount,
+                                fetchInProgress = controller.fetchInProgress,
+                                isLive = isLive,
+                                sortOrder = sortOrder,
+                                filterOpen = filterOpen,
+                                activeFilterCount = activeFilterCount,
+                                onRefresh = { controller.refresh() },
+                                onFilter = { filterOpen = !filterOpen },
+                                onSort = { sortOrder = sortOrder.next },
+                            )
+                        }
                         controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
                             val name = displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')
                             CacheBar(name, progress)
@@ -235,20 +275,40 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                 displayed.isEmpty() && controller.fetchInProgress -> ListingState(controller.listedCount)
                                 displayed.isEmpty() -> EmptyState(controller.fetchInProgress, controller.note ?: emptySubtitle)
                                 layout == MediaBrowserLayout.LIST -> {
-                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    LazyColumn(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        contentPadding = PaddingValues(bottom = 24.dp),
+                                    ) {
                                         items(displayed, key = { it.id }) { file ->
-                                            MediaClipListRow(file, controller) { open(file) }
+                                            MediaClipListRow(
+                                                file = file,
+                                                controller = controller,
+                                                onOpen = { open(file) },
+                                                isSelecting = isSelecting,
+                                                isSelected = selectedIDs.contains(file.id),
+                                                onBeginSelection = { beginSelection(file) },
+                                                onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) },
+                                            )
                                         }
                                     }
                                 }
                                 else -> {
                                     LazyVerticalGrid(
                                         columns = GridCells.Adaptive(minSize = thumbnailSize.gridMinimumDp.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        contentPadding = PaddingValues(bottom = 24.dp),
                                     ) {
                                         items(displayed, key = { it.id }) { file ->
-                                            MediaClipCell(file, controller) { open(file) }
+                                            MediaClipCell(
+                                                file = file,
+                                                controller = controller,
+                                                onOpen = { open(file) },
+                                                isSelecting = isSelecting,
+                                                isSelected = selectedIDs.contains(file.id),
+                                                onBeginSelection = { beginSelection(file) },
+                                                onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) },
+                                            )
                                         }
                                     }
                                 }
@@ -282,14 +342,16 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             )
         }
 
-        OperatorCloseButton(
-            onClose = ::dismiss,
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = 16.dp, top = 16.dp),
-        )
+        if (!isSelecting) {
+            MediaCloseButton(
+                onClick = ::dismiss,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(start = 16.dp, top = 16.dp),
+            )
+        }
 
         playing?.let { file ->
             MediaPlayerScreen(
@@ -297,10 +359,38 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 startingAt = file,
                 controller = controller,
                 onClose = { playing = null },
+                onDeliver = { deliveryFiles = listOf(it) },
             )
         }
         viewingPhoto?.let { file ->
-            MediaPhotoViewer(file, controller) { viewingPhoto = null }
+            MediaPhotoViewer(
+                file = file,
+                controller = controller,
+                onClose = { viewingPhoto = null },
+                onDeliver = { deliveryFiles = listOf(it) },
+            )
+        }
+
+        MediaDeliveryHost(
+            files = deliveryFiles,
+            controller = controller,
+            onDismissPopup = { deliveryFiles = null },
+        )
+
+        if (confirmBatchDelete) {
+            MediaConfirmPopup(
+                title = "Delete ${selectedIDs.size} item${if (selectedIDs.size == 1) "" else "s"} from the camera?",
+                confirmTitle = "Delete",
+                onDismiss = { confirmBatchDelete = false },
+                onConfirm = {
+                    confirmBatchDelete = false
+                    val doomed = selectedFiles
+                    scope.launch {
+                        doomed.forEach { controller.delete(it) }
+                        exitSelection()
+                    }
+                },
+            )
         }
     }
 }
@@ -310,7 +400,8 @@ private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab)
     Row(
         Modifier
             .padding(start = 45.dp)
-            .mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+            .clip(MediaCornerShape)
+            .glass(MediaCornerShape)
             .horizontalScroll(rememberScrollState())
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -332,7 +423,10 @@ private fun CategorySidebar(
 ) {
     Column(Modifier.width(172.dp).fillMaxHeight()) {
         Column(
-            Modifier.mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)).padding(4.dp),
+            Modifier
+                .clip(MediaCornerShape)
+                .glass(MediaCornerShape)
+                .padding(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             MediaLibraryTab.entries.forEach { tab ->
@@ -356,9 +450,13 @@ private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = f
     Row(
         Modifier
             .then(if (fill) Modifier.fillMaxWidth() else Modifier)
-            .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .background(if (active) LiveDesign.accentDim else LiveDesign.feedWell.copy(alpha = 0f))
-            .clickable(onClick = onClick)
+            .clip(MediaCornerShape)
+            .background(if (active) LiveDesign.accentDim else Color.Transparent)
+            .chromeClickable(onClick = onClick)
+            .semantics {
+                contentDescription = "Show $label media"
+                role = Role.Tab
+            }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -410,7 +508,7 @@ private fun HeaderRow(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isLive) {
-                ActionPill(
+                MediaActionPill(
                     icon = Icons.Filled.Refresh,
                     title = "REFRESH",
                     active = false,
@@ -418,14 +516,14 @@ private fun HeaderRow(
                     onClick = onRefresh,
                 )
             }
-            ActionPill(
+            MediaActionPill(
                 icon = Icons.Filled.FilterList,
                 title = "FILTER",
                 active = filterOpen || activeFilterCount > 0,
                 badge = activeFilterCount.takeIf { it > 0 },
                 onClick = onFilter,
             )
-            ActionPill(
+            MediaActionPill(
                 icon = Icons.Filled.SwapVert,
                 title = "SORT",
                 active = false,
@@ -437,49 +535,50 @@ private fun HeaderRow(
 }
 
 @Composable
-private fun ActionPill(
-    icon: ImageVector,
-    title: String,
-    active: Boolean,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    badge: Int? = null,
-    contentDescription: String? = null,
+private fun SelectionHeader(
+    selectedCount: Int,
+    deleteEnabled: Boolean,
+    shareEnabled: Boolean,
+    onExit: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Row(
-        Modifier
-            .alpha(if (enabled) 1f else 0.5f)
-            .clip(RoundedCornerShape(50))
-            .background(if (active) LiveDesign.accentDim else LiveDesign.feedWell.copy(alpha = 0f))
-            .border(1.dp, LiveDesign.hairline, RoundedCornerShape(50))
-            .clickable(enabled = enabled, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription ?: title }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = if (active) LiveDesign.accent else LiveDesign.muted, modifier = Modifier.size(12.dp))
+        MediaCloseButton(onClick = onExit, size = 37.dp)
         Text(
-            title,
-            color = if (active) LiveDesign.accent else LiveDesign.muted,
-            fontSize = 9.5.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            "$selectedCount selected",
+            modifier = Modifier.weight(1f),
+            style = LiveType.ui(20f, FontWeight.SemiBold),
+            color = LiveDesign.text,
+            maxLines = 1,
         )
-        if (badge != null) {
-            Text(
-                "$badge",
-                color = LiveDesign.background,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(LiveDesign.accent)
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-            )
-        }
+        Text(
+            "Delete",
+            style = LiveType.ui(14f, FontWeight.SemiBold),
+            color = if (deleteEnabled) Color(0xFFFF5A54) else LiveDesign.faint,
+            modifier =
+                Modifier
+                    .clip(MediaCapsuleShape)
+                    .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
+                    .chromeClickable(enabled = deleteEnabled, onClick = onDelete)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+        Text(
+            "Share",
+            style = LiveType.ui(14f, FontWeight.SemiBold),
+            color = if (shareEnabled) LiveDesign.accent else LiveDesign.faint,
+            modifier =
+                Modifier
+                    .clip(MediaCapsuleShape)
+                    .background(if (shareEnabled) LiveDesign.accentDim else Color.Transparent, MediaCapsuleShape)
+                    .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
+                    .chromeClickable(enabled = shareEnabled, onClick = onShare)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+        )
     }
 }
 
@@ -489,17 +588,13 @@ private fun CacheBar(filename: String, progress: Double) {
         Modifier
             .padding(top = 8.dp)
             .fillMaxWidth()
-            .mediaGlass(RoundedCornerShape(50))
+            .clip(MediaCapsuleShape)
+            .glass(MediaCapsuleShape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LinearProgressIndicator(
-            progress = { progress.toFloat() },
-            modifier = Modifier.width(120.dp),
-            color = LiveDesign.accent,
-            trackColor = LiveDesign.hairline,
-        )
+        MediaGlassTrack(fraction = progress.toFloat(), trackWidth = 120.dp)
         Text(
             "CACHING $filename ${(progress * 100).toInt()}%",
             color = LiveDesign.muted,
@@ -588,7 +683,8 @@ private fun LayoutControls(
 ) {
     Row(
         modifier
-            .mediaGlass(RoundedCornerShape(50))
+            .clip(MediaCapsuleShape)
+            .glass(MediaCapsuleShape)
             .padding(horizontal = 6.dp, vertical = 6.dp)
             .semantics { contentDescription = "Media layout and thumbnail size" },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -597,9 +693,9 @@ private fun LayoutControls(
         Box(
             Modifier
                 .size(37.dp)
-                .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+                .clip(MediaCornerShape)
                 .background(LiveDesign.glassBright)
-                .clickable {
+                .chromeClickable {
                     onLayout(if (layout == MediaBrowserLayout.GRID) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID)
                 },
             contentAlignment = Alignment.Center,
@@ -616,16 +712,16 @@ private fun LayoutControls(
             Box(
                 Modifier
                     .size(37.dp)
-                    .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-                    .background(if (active) LiveDesign.accentDim else LiveDesign.feedWell.copy(alpha = 0f))
-                    .clickable { onSize(size) }
+                    .clip(MediaCornerShape)
+                    .background(if (active) LiveDesign.accentDim else Color.Transparent)
+                    .chromeClickable { onSize(size) }
                     .semantics { contentDescription = size.accessibilityLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     Modifier
                         .size(size.gridIconSizeDp.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
                         .background(if (active) LiveDesign.accent else LiveDesign.muted),
                 )
             }
@@ -651,7 +747,7 @@ private fun FilterPopup(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(LiveDesign.feedWell.copy(alpha = 0.18f))
+                .background(Color.Black.copy(alpha = 0.18f))
                 .clickable(onClick = onClose),
         )
         Column(
@@ -660,7 +756,8 @@ private fun FilterPopup(
                 .padding(top = 88.dp, end = 20.dp)
                 .width(320.dp)
                 .height(420.dp)
-                .mediaGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+                .clip(MediaCornerShape)
+                .overlayGlass(MediaCornerShape)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
@@ -680,21 +777,21 @@ private fun FilterPopup(
             if (formatOptions.isNotEmpty()) {
                 FilterSection("FORMAT") {
                     formatOptions.forEach { title ->
-                        FilterChip(title, formatFilters.contains(title)) { onToggleFormat(title) }
+                        MediaFilterChip(title, formatFilters.contains(title)) { onToggleFormat(title) }
                     }
                 }
             }
             if (resolutionOptions.isNotEmpty()) {
                 FilterSection("RESOLUTION") {
                     resolutionOptions.forEach { title ->
-                        FilterChip(title, resolutionFilters.contains(title)) { onToggleResolution(title) }
+                        MediaFilterChip(title, resolutionFilters.contains(title)) { onToggleResolution(title) }
                     }
                 }
             }
             if (dateOptions.isNotEmpty()) {
                 FilterSection("DATE") {
                     dateOptions.forEach { key ->
-                        FilterChip(MediaClipPresentation.dateLabel(key), dateKeyFilter == key) { onToggleDate(key) }
+                        MediaFilterChip(MediaClipPresentation.dateLabel(key), dateKeyFilter == key) { onToggleDate(key) }
                     }
                 }
             }
@@ -708,7 +805,7 @@ private fun FilterPopup(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(top = 8.dp).clickable(onClick = onClear),
+                    modifier = Modifier.padding(top = 8.dp).chromeClickable(onClick = onClear),
                 )
             }
         }
@@ -721,26 +818,6 @@ private fun FilterSection(title: String, content: @Composable () -> Unit) {
         Text(title, color = LiveDesign.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         content()
     }
-}
-
-@Composable
-private fun FilterChip(title: String, active: Boolean, onClick: () -> Unit) {
-    Text(
-        title,
-        color = if (active) LiveDesign.accent else LiveDesign.muted,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.SemiBold,
-        fontFamily = FontFamily.Monospace,
-        maxLines = 1,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(50))
-                .background(if (active) LiveDesign.accentDim else LiveDesign.glassBright)
-                .border(1.dp, if (active) LiveDesign.accent.copy(alpha = 0.45f) else LiveDesign.hairline, RoundedCornerShape(50))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-    )
 }
 
 private fun Set<String>.toggle(value: String): Set<String> =

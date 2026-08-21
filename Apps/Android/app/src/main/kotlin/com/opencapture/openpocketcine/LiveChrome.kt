@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -41,22 +44,32 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
@@ -69,8 +82,8 @@ import kotlinx.coroutines.launch
 
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
-fun Modifier.monitorGlass(shape: RoundedCornerShape = ChromeShape): Modifier =
-    clip(shape).background(LiveDesign.glass)
+@Composable
+fun Modifier.monitorGlass(shape: Shape = ChromeShape): Modifier = glass(shape)
 
 @Composable
 fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
@@ -89,6 +102,63 @@ fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
 
 fun Modifier.liveModuleFrame(rect: ChromeRect): Modifier =
     offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
+
+/** Occupies [rect] and seats wrapping chrome (InfoPill, capture strip) like iOS `alignment`. */
+fun Modifier.liveModuleFrame(rect: ChromeRect, alignment: Alignment): Modifier =
+    liveModuleFrame(rect).wrapContentSize(align = alignment)
+
+/**
+ * Measures unbounded then scales down to [maxWidth] — iOS `minimumScaleFactor` for the
+ * info-pill so chips compress instead of wrapping when the deck is tight.
+ */
+@Composable
+fun FitScale(maxWidth: Dp, content: @Composable () -> Unit) {
+    Layout(content) { measurables, _ ->
+        val measurable = measurables.firstOrNull() ?: return@Layout layout(0, 0) {}
+        val placeable = measurable.measure(Constraints())
+        val maxPx = maxWidth.roundToPx()
+        val scale = if (placeable.width > maxPx) maxPx / placeable.width.toFloat() else 1f
+        val width = (placeable.width * scale).toInt()
+        val height = (placeable.height * scale).toInt()
+        layout(width, height) {
+            placeable.placeWithLayer(0, 0) {
+                scaleX = scale
+                scaleY = scale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+        }
+    }
+}
+
+/** Landscape top deck (OpenZCine `InfoPill` / iOS `GlassDeck`): glass hugs the nested chips. */
+@Composable
+fun InfoPill(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = modifier.wrapContentWidth().monitorGlass().padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/**
+ * Landscape capture strip shell (OpenZCine `MonitorCaptureStrip` / iOS `captureBarFrame`).
+ * Glass hugs the readouts at 58dp; the host slot trailing-aligns this pill.
+ */
+@Composable
+fun CaptureStripShell(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier =
+            modifier
+                .height(LiveDesign.CONTROL_HEIGHT_DP.dp)
+                .wrapContentWidth()
+                .monitorGlass()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
 
 @Composable
 fun Modifier.chromeClickable(
@@ -172,6 +242,10 @@ object LiveChromeMetrics {
     const val POPUP_GAP = 10f
     const val TOP_PICKER_GAP = 8f
     const val CONTROL_H = LiveDesign.CONTROL_HEIGHT_DP
+    /** Caps the info-pill slot so fillMaxSize glass cannot stretch across a tablet band. */
+    const val INFO_PILL_HUG = 800f
+    /** Six Pocket cells (ISO…AUDIO) + 12+12 strip pad. Trailing-aligned in the 2/3 capture slot. */
+    const val CAPTURE_HUG = 512f
 }
 
 data class ChromeRect(val x: Float, val y: Float, val width: Float, val height: Float) {
@@ -489,10 +563,14 @@ data class LiveMonitorLayout(
             } else {
                 left = max(left, rail.maxX + gap)
             }
+            val band = max(0f, right - left)
+            // Center a content-capped pill in the feed-anchored band (iOS positions
+            // LiveTopChrome at topDeck.mid; OpenZCine FitScale-centres InfoPill).
+            val hug = min(band, LiveChromeMetrics.INFO_PILL_HUG)
             return ChromeRect(
-                left,
+                left + (band - hug) / 2f,
                 LiveChromeMetrics.CHROME_TOP,
-                max(0f, right - left),
+                hug,
                 LiveChromeMetrics.TOP_DECK_H,
             )
         }
@@ -511,7 +589,12 @@ data class LiveMonitorLayout(
             val captureWidth = max(0f, barsWidth - gap - assistWidth)
             val y = vh - LiveChromeMetrics.BOTTOM_INSET - LiveChromeMetrics.CONTROL_H
             val assist = ChromeRect(chrome.minX, y, assistWidth, LiveChromeMetrics.CONTROL_H)
-            val capture = ChromeRect(assist.maxX + gap, y, captureWidth, LiveChromeMetrics.CONTROL_H)
+            val captureSlot = ChromeRect(assist.maxX + gap, y, captureWidth, LiveChromeMetrics.CONTROL_H)
+            // OpenZCine trailing-aligns the measured glass pill in the zone slot
+            // (`contentAlignment = CenterEnd`). LiveViewScreen still fillMaxSize-glasses
+            // this module, so the slot itself is content-capped on the trailing edge.
+            val hug = min(captureSlot.width, LiveChromeMetrics.CAPTURE_HUG)
+            val capture = ChromeRect(captureSlot.maxX - hug, y, hug, LiveChromeMetrics.CONTROL_H)
             return assist to capture
         }
     }
@@ -563,7 +646,11 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
                 else Modifier,
             )
             .chromeClickable(onClick = onClick)
-            .semantics { contentDescription = if (locked) "Unlock monitor controls" else "Lock monitor controls" },
+            .semantics {
+                contentDescription = if (locked) "Unlock monitor controls" else "Lock monitor controls"
+                role = Role.Switch
+                toggleableState = ToggleableState(locked)
+            },
         contentAlignment = Alignment.Center,
     ) {
         PadlockGlyph(tint = tint, filled = locked, modifier = Modifier.size(13.dp, 17.dp))
@@ -583,7 +670,10 @@ fun DispButton(
             .height(LiveDesign.DISP_HEIGHT_DP.dp)
             .monitorGlass()
             .chromeClickable(onClick = onClick, onLongClick = onLongClick)
-            .semantics { contentDescription = if (clean) "DISP 2 clean" else "DISP 1 live" },
+            .semantics {
+                contentDescription = if (clean) "DISP 2 clean" else "DISP 1 live"
+                role = Role.Button
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
     ) {
@@ -613,10 +703,16 @@ fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @
         modifier
             .size(LiveDesign.AUX_SIZE_DP.dp)
             .monitorGlass(CircleShape)
-            .chromeClickable(onClick = onClick),
+            .chromeClickable(onClick = onClick)
+            .semantics { role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
-        glyph(LiveDesign.text.copy(alpha = 0.86f))
+        Box(
+            Modifier.size((LiveDesign.AUX_SIZE_DP * 0.36f).dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            glyph(LiveDesign.text.copy(alpha = 0.86f))
+        }
     }
 }
 
@@ -663,8 +759,13 @@ fun RecordButton(
     Box(
         modifier
             .size(LiveDesign.RECORD_SIZE_DP.dp)
+            .then(if (recording && !enabled) Modifier.graphicsLayer { alpha = 0.72f } else Modifier)
+            .shadow(2.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.40f))
             .chromeClickable(enabled = enabled, onClick = { if (confirm) confirmOpen = true else onClick() })
-            .semantics { contentDescription = if (recording) "Stop recording" else "Start recording" },
+            .semantics {
+                contentDescription = if (recording) "Stop recording" else "Start recording"
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center,
     ) {
         RecordLamp(recording = recording)
@@ -794,6 +895,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             color = LiveDesign.text,
             style = LiveType.mono(15f, FontWeight.Normal),
             maxLines = 1,
+            softWrap = false,
             modifier = modifier,
         )
         return
@@ -805,7 +907,8 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
         },
         style = LiveType.mono(20f, FontWeight.Medium),
         maxLines = 1,
-        modifier = modifier,
+        softWrap = false,
+        modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
     )
 }
 
@@ -814,7 +917,11 @@ fun RecChip(recording: Boolean) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
-        modifier = Modifier.clip(CircleShape).background(LiveDesign.glass).padding(horizontal = 12.dp, vertical = 7.dp),
+        modifier =
+            Modifier
+                .wrapContentWidth(unbounded = true)
+                .chipGlass(CircleShape)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
     ) {
         Box(Modifier.size(9.dp).clip(CircleShape).background(if (recording) LiveDesign.rec else LiveDesign.faint))
         Text(
@@ -822,6 +929,7 @@ fun RecChip(recording: Boolean) {
             color = if (recording) LiveDesign.text else LiveDesign.muted,
             style = LiveType.ui(11f, FontWeight.Bold),
             maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -836,13 +944,29 @@ fun FpsChip(fps: String, bars: Int) {
             else -> LiveDesign.faint
         }
     Row(
-        modifier = Modifier.clip(CircleShape).background(LiveDesign.glass).padding(horizontal = 11.dp, vertical = 7.dp),
+        modifier =
+            Modifier
+                .wrapContentWidth(unbounded = true)
+                .chipGlass(CircleShape)
+                .padding(horizontal = 11.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SignalBarsGlyph(bars = bars, tint = tint)
-        Text("FPS", color = LiveDesign.faint, style = LiveType.mono(8f, FontWeight.Bold), maxLines = 1)
-        Text(fps, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.Medium), maxLines = 1)
+        Text(
+            "FPS",
+            color = LiveDesign.faint,
+            style = LiveType.mono(8f, FontWeight.Bold),
+            maxLines = 1,
+            softWrap = false,
+        )
+        Text(
+            fps,
+            color = LiveDesign.text,
+            style = LiveType.mono(12f, FontWeight.Medium),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -859,11 +983,12 @@ fun ReadoutPill(
         if (active) {
             Modifier.background(LiveDesign.accentDim, CircleShape).border(1.dp, LiveDesign.accentDim, CircleShape)
         } else {
-            Modifier.clip(CircleShape).background(LiveDesign.glass)
+            Modifier.chipGlass(CircleShape)
         }
     Row(
         modifier =
             surface
+                .wrapContentWidth(unbounded = true)
                 .then(
                     if (onClick != null) {
                         Modifier.chromeClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
@@ -881,6 +1006,7 @@ fun ReadoutPill(
             color = if (active) LiveDesign.accent else LiveDesign.text,
             style = LiveType.mono(15f, FontWeight.Medium),
             maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -898,8 +1024,13 @@ fun CaptureSettingCell(
     val valueColor = if (active) LiveDesign.accent else LiveDesign.text
     Column(
         modifier =
-            Modifier.clip(ChromeShape)
+            Modifier
+                .wrapContentWidth()
+                .clip(ChromeShape)
                 .background(if (active) LiveDesign.accentDim else Color.Transparent)
+                .then(
+                    if (active) Modifier.border(1.dp, LiveDesign.accentDim, ChromeShape) else Modifier,
+                )
                 .chromeClickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 4.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1117,7 +1248,7 @@ fun CameraGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun GearGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(18.dp)) {
+    Canvas(modifier.fillMaxSize()) {
         val c = Offset(size.width / 2, size.height / 2)
         val r = size.minDimension * 0.28f
         drawCircle(tint, radius = r, center = c, style = Stroke(1.6.dp.toPx()))
@@ -1138,7 +1269,7 @@ fun GearGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun MediaGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(18.dp)) {
+    Canvas(modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
         drawRoundRect(

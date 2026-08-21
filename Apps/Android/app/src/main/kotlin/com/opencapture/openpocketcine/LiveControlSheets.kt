@@ -1,19 +1,23 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,20 +28,18 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -45,19 +47,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import java.util.Locale
@@ -149,9 +160,10 @@ fun LiveControlSheet(
 
     fun reseatEv() {
         val labels = CaptureLists.evLabels
-        val next = "0.0"
+        val live = EvComp.fromRaw(status.evComp)?.label ?: "0.0"
+        val next = if (live in labels) live else "0.0"
         lastApplied = next
-        drumSelection = if (next in labels) next else labels.firstOrNull().orEmpty()
+        drumSelection = next
     }
 
     fun reseatShutterAngle() {
@@ -329,10 +341,17 @@ fun LiveControlSheet(
         drumJob?.cancel()
         seed()
     }
-    LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode, status.isoIndex) {
+    LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode, status.isoIndex, status.isoLimit) {
         if (sheet == LiveSheet.ISO) reseatIso()
     }
-    LaunchedEffect(sheet, status.availableShutterDenoms, status.fps, status.expoMode, status.shutterDenom) {
+    LaunchedEffect(
+        sheet,
+        status.availableShutterDenoms,
+        status.fps,
+        status.expoMode,
+        status.shutterDenom,
+        status.evComp,
+    ) {
         if (sheet == LiveSheet.SHUTTER) {
             if (status.expoMode != CameraCommands.EXPO_AUTO) {
                 selectedMode = if (model.shutterUsesAngle) 1 else 0
@@ -362,8 +381,9 @@ fun LiveControlSheet(
             Modifier
                 .widthIn(max = LiveDesign.CAPTURE_PICKER_WIDTH_DP.dp)
                 .fillMaxWidth()
-                .monitorGlass()
-                .border(1.dp, LiveDesign.hairline, ChromeShape)
+                .overlayGlass(ChromeShape)
+                .border(1.dp, LiveDesign.hairlineStrong, ChromeShape)
+                .pointerInput(Unit) { detectTapGestures(onTap = {}) }
                 .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -562,7 +582,7 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
         ) {
             Text(
                 title,
-                style = LiveType.ui(18f, FontWeight.Black).copy(letterSpacing = 2.sp),
+                style = LiveType.ui(18f, FontWeight.ExtraBold).copy(letterSpacing = 2.sp),
                 maxLines = 1,
             )
             Text(
@@ -571,19 +591,34 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
                 color = LiveDesign.faint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 2.dp),
             )
         }
         Box(
             Modifier
                 .size(34.dp)
-                .clip(CircleShape)
-                .background(LiveDesign.glassOpaque)
-                .border(1.dp, LiveDesign.hairline, CircleShape)
+                .glass(CircleShape)
                 .chromeClickable(onClick = onClose)
                 .semantics { contentDescription = "Close" },
             contentAlignment = Alignment.Center,
         ) {
-            Text("×", color = LiveDesign.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Canvas(Modifier.size(13.dp)) {
+                val stroke = 2.2.dp.toPx()
+                drawLine(
+                    LiveDesign.text,
+                    Offset(0f, 0f),
+                    Offset(size.width, size.height),
+                    stroke,
+                    StrokeCap.Round,
+                )
+                drawLine(
+                    LiveDesign.text,
+                    Offset(size.width, 0f),
+                    Offset(0f, size.height),
+                    stroke,
+                    StrokeCap.Round,
+                )
+            }
         }
     }
 }
@@ -783,19 +818,11 @@ private fun TintPad(
                         .padding(vertical = 10.dp),
                 textAlign = TextAlign.Center,
             )
-            Slider(
-                value = tint,
-                onValueChange = onTint,
-                valueRange = -100f..100f,
-                steps = 199,
+            TintGlassSlider(
+                tint = tint,
                 enabled = enabled,
-                onValueChangeFinished = { onCommit(tint) },
-                colors =
-                    SliderDefaults.colors(
-                        thumbColor = LiveDesign.accent,
-                        activeTrackColor = LiveDesign.accent,
-                        inactiveTrackColor = LiveDesign.hairline,
-                    ),
+                onTint = onTint,
+                onCommit = onCommit,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -829,6 +856,41 @@ private fun TintPad(
 }
 
 @Composable
+private fun TintGlassSlider(
+    tint: Float,
+    enabled: Boolean,
+    onTint: (Float) -> Unit,
+    onCommit: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val monitorGlass = LocalMonitorGlass.current
+    val useLiquidGlass = enabled && monitorGlass?.tier == GlassTier.FULL
+    val localBackdrop = rememberLayerBackdrop()
+    val sceneBackdrop = monitorGlass?.overlayBackdrop ?: monitorGlass?.layerBackdrop
+    val latestTint by rememberUpdatedState(tint)
+    val latestOnTint by rememberUpdatedState(onTint)
+    val latestOnCommit by rememberUpdatedState(onCommit)
+    Box(
+        modifier
+            .height(40.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .then(if (useLiquidGlass && sceneBackdrop == null) Modifier.layerBackdrop(localBackdrop) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        LiquidSlider(
+            value = { latestTint },
+            onValueChange = { next -> latestOnTint(next.coerceIn(-100f, 100f)) },
+            onValueChangeFinished = { latestOnCommit(latestTint) },
+            valueRange = -100f..100f,
+            visibilityThreshold = 1f,
+            backdrop = sceneBackdrop ?: localBackdrop,
+            accentColor = LiveDesign.accent,
+            useLiquidGlass = useLiquidGlass,
+        )
+    }
+}
+
+@Composable
 private fun PrefToggle(
     title: String,
     help: String,
@@ -857,22 +919,44 @@ private fun PrefToggle(
                 Text("?", color = LiveDesign.faint, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                enabled = enabled,
-                colors =
-                    SwitchDefaults.colors(
-                        checkedThumbColor = LiveDesign.background,
-                        checkedTrackColor = LiveDesign.accent,
-                    ),
-            )
+            Box(
+                Modifier
+                    .chromeClickable(enabled = enabled, onClick = { onCheckedChange(!checked) })
+                    .semantics { role = Role.Switch }
+                    .alpha(if (enabled) 1f else 0.45f),
+            ) {
+                CaptureSwitchGraphic(checked)
+            }
         }
         if (showingHelp) {
             Text(help, style = LiveType.ui(12f), color = LiveDesign.muted)
         }
     }
 }
+
+@Composable
+private fun CaptureSwitchGraphic(isOn: Boolean) {
+    Box(
+        Modifier
+            .width(39.dp)
+            .height(22.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface)
+            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, RoundedCornerShape(50)),
+    ) {
+        Box(
+            Modifier
+                .align(if (isOn) Alignment.CenterEnd else Alignment.CenterStart)
+                .padding(3.5.dp)
+                .size(15.dp)
+                .clip(CircleShape)
+                .background(if (isOn) LiveDesign.accent else LiveDesign.muted),
+        )
+    }
+}
+
+/** Sentinel until the lazy list measures — never treat row 0 as settled pre-layout. */
+private const val DRUM_NOT_LAID_OUT = -1
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -887,57 +971,87 @@ private fun CaptureDrumWheel(
     val rowHeight = 52.dp
     val wheelHeight = 176.dp
     val optionKey = options.joinToString()
-    val listState = remember(optionKey) {
-        LazyListState(firstVisibleItemIndex = options.indexOf(selection).coerceAtLeast(0))
-    }
-    val snap = rememberSnapFlingBehavior(lazyListState = listState)
-    LaunchedEffect(selection, options) {
-        val idx = options.indexOf(selection)
-        if (idx >= 0 && listState.firstVisibleItemIndex != idx) {
-            listState.scrollToItem(idx)
+    val selectedIndex = options.indexOf(selection).coerceAtLeast(0)
+    val listState = remember(optionKey) { LazyListState(firstVisibleItemIndex = selectedIndex) }
+    val snap =
+        rememberSnapFlingBehavior(
+            lazyListState = listState,
+            snapPosition = SnapPosition.Center,
+        )
+    val haptics = LocalOperatorHaptics.current
+    val centeredIndex by remember(listState) {
+        derivedStateOf {
+            val layout = listState.layoutInfo
+            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
+            layout.visibleItemsInfo
+                .minByOrNull { abs(it.offset + it.size / 2 - center) }
+                ?.index ?: DRUM_NOT_LAID_OUT
         }
     }
+    LaunchedEffect(options, selection) {
+        val index = options.indexOf(selection).coerceAtLeast(0)
+        if (listState.isScrollInProgress) return@LaunchedEffect
+        if (centeredIndex == index) return@LaunchedEffect
+        listState.scrollToItem(index)
+    }
     LaunchedEffect(listState, options, interactive) {
-        var wasScrolling = false
-        snapshotFlow { listState.isScrollInProgress }
-            .collect { inProgress ->
-                if (inProgress) {
-                    wasScrolling = true
-                    return@collect
+        snapshotFlow { listState.isScrollInProgress to centeredIndex }
+            .collect { (scrolling, index) ->
+                if (scrolling || !interactive) return@collect
+                val value = options.getOrNull(index) ?: return@collect
+                if (value != selection) {
+                    haptics.selection()
+                    onSelect(value)
                 }
-                if (!wasScrolling || !interactive) return@collect
-                wasScrolling = false
-                val idx = listState.centeredItemIndex()
-                val value = options.getOrNull(idx) ?: return@collect
-                if (value != selection) onSelect(value)
             }
     }
-    Box(Modifier.fillMaxWidth().height(wheelHeight)) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = rowHeight * 3, max = wheelHeight)
+            .height(wheelHeight)
+            .alpha(if (interactive) 1f else 0.55f),
+        contentAlignment = Alignment.Center,
+    ) {
+        val actualHeight = maxHeight
+        val edgePadding = ((actualHeight - rowHeight) / 2).coerceAtLeast(0.dp)
         LazyColumn(
             state = listState,
             userScrollEnabled = interactive,
             flingBehavior = snap,
-            contentPadding = PaddingValues(vertical = (wheelHeight - rowHeight) / 2),
+            contentPadding = PaddingValues(vertical = edgePadding),
             modifier =
-                Modifier.fillMaxSize()
-                    .alpha(if (interactive) 1f else 0.55f)
+                Modifier.fillMaxWidth()
+                    .height(actualHeight)
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
+                        val fade = size.height * 0.22f
                         drawRect(
-                            brush =
-                                Brush.verticalGradient(
-                                    0f to Color.Transparent,
-                                    0.22f to Color.Black,
-                                    0.78f to Color.Black,
-                                    1f to Color.Transparent,
-                                ),
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                1f to Color.Black,
+                                endY = fade,
+                            ),
+                            size = Size(size.width, fade),
+                            blendMode = BlendMode.DstIn,
+                        )
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.Black,
+                                1f to Color.Transparent,
+                                startY = size.height - fade,
+                                endY = size.height,
+                            ),
+                            topLeft = Offset(0f, size.height - fade),
+                            size = Size(size.width, fade),
                             blendMode = BlendMode.DstIn,
                         )
                     },
         ) {
-            items(options, key = { it }) { option ->
-                val centered = option == selection
+            items(options.size, key = { options[it] }) { index ->
+                val option = options[index]
+                val centered = index == centeredIndex
                 Row(
                     Modifier.fillMaxWidth()
                         .height(rowHeight)
@@ -966,28 +1080,14 @@ private fun CaptureDrumWheel(
             }
         }
         Box(
-            Modifier.align(Alignment.Center)
-                .offset(y = -(rowHeight / 2))
-                .fillMaxWidth()
-                .height(1.dp)
+            Modifier.fillMaxWidth().height(1.dp).offset(y = -rowHeight / 2)
                 .background(LiveDesign.hairlineStrong),
         )
         Box(
-            Modifier.align(Alignment.Center)
-                .offset(y = rowHeight / 2)
-                .fillMaxWidth()
-                .height(1.dp)
+            Modifier.fillMaxWidth().height(1.dp).offset(y = rowHeight / 2)
                 .background(LiveDesign.hairlineStrong),
         )
     }
-}
-
-private fun LazyListState.centeredItemIndex(): Int {
-    val info = layoutInfo
-    if (info.visibleItemsInfo.isEmpty()) return firstVisibleItemIndex
-    val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
-    return info.visibleItemsInfo.minByOrNull { abs((it.offset + it.size / 2) - center) }?.index
-        ?: firstVisibleItemIndex
 }
 
 private fun initialSelectedMode(
@@ -1260,9 +1360,9 @@ object CaptureLists {
     }
 
     fun isoAutoLabel(status: CameraStatus): String {
-        isoAutoBase(status.colorMode) ?: return ""
-        // CameraStatus does not yet carry isoLimit; drum reseats to the first range.
-        return ""
+        val base = isoAutoBase(status.colorMode) ?: return ""
+        val limit = IsoLimit.entries.firstOrNull { it.rawValue == status.isoLimit } ?: return ""
+        return limit.label(base)
     }
 
     fun isoLimit(fromLabel: String, status: CameraStatus): IsoLimit? {

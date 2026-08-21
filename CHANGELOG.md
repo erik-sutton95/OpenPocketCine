@@ -32,6 +32,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android operator chrome now uses the same Kyant liquid-glass pipeline as
+  OpenZCine (`glass` / `overlayGlass` / `chipGlass`) with Pocket iOS DJI-black
+  and Sky Blue tokens. Pairing glyphs, landscape InfoPill, portrait fill rail,
+  assist cells, capture sheets, Operator Setup rows, and media cells follow
+  that shell instead of Material slabs.
 - Pull-request CI reports one suite instead of duplicating every job from the
   branch push. Gitleaks runs inside Meta checks. **CI gate** remains the only
   required check.

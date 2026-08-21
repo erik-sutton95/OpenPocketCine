@@ -2,17 +2,21 @@ package com.opencapture.openpocketcine
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,25 +32,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LinkOff
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,21 +53,59 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.assists.AudioAssist
+import com.opencapture.openpocketcine.assists.CrosshairAssist
+import com.opencapture.openpocketcine.assists.CrushClipCompensation
+import com.opencapture.openpocketcine.assists.FalseColorScale
+import com.opencapture.openpocketcine.assists.GridAssist
+import com.opencapture.openpocketcine.assists.GuideAspect
+import com.opencapture.openpocketcine.assists.GuideFamily
+import com.opencapture.openpocketcine.assists.HistogramAssist
+import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.openpocketcine.assists.LiveZebra
+import com.opencapture.openpocketcine.assists.MirrorAssist
+import com.opencapture.openpocketcine.assists.ParadeMode
+import com.opencapture.openpocketcine.assists.PeakingColor
+import com.opencapture.openpocketcine.assists.PeakingSense
+import com.opencapture.openpocketcine.assists.ScopeGuides
+import com.opencapture.openpocketcine.assists.VectorscopeZoom
+import com.opencapture.openpocketcine.assists.WaveformMode
+import com.opencapture.openpocketcine.assists.ZebraPaint
+import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.lut.LutCatalog
+import com.opencapture.openpocketcine.settings.DisplayToggleItem
+import com.opencapture.openpocketcine.settings.GlassPillSlider
+import com.opencapture.openpocketcine.settings.PanelCloseButton
+import com.opencapture.openpocketcine.settings.SettingsActionPill
+import com.opencapture.openpocketcine.settings.SettingsColorDot
+import com.opencapture.openpocketcine.settings.SettingsColorDots
+import com.opencapture.openpocketcine.settings.SettingsCrushClipSegmented
+import com.opencapture.openpocketcine.settings.SettingsDashScale
+import com.opencapture.openpocketcine.settings.SettingsGroupCard
+import com.opencapture.openpocketcine.settings.SettingsInlineRow
+import com.opencapture.openpocketcine.settings.SettingsNumberField
+import com.opencapture.openpocketcine.settings.SettingsPalette
+import com.opencapture.openpocketcine.settings.SettingsPercentSlider
+import com.opencapture.openpocketcine.settings.SettingsRowCard
+import com.opencapture.openpocketcine.settings.SettingsSegmented
+import com.opencapture.openpocketcine.settings.SettingsSwitchGraphic
+import com.opencapture.openpocketcine.settings.SettingsSwitchInlineRow
+import com.opencapture.openpocketcine.settings.SettingsSwitchRow
+import com.opencapture.openpocketcine.settings.SettingsValueText
+import com.opencapture.openpocketcine.settings.settingsClickable
 import java.io.File
 import java.util.Locale
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 object SettingsHelpCopy {
@@ -279,6 +315,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(LiveDesign.background)
+            .pointerInput(Unit) { detectTapGestures {} }
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -348,7 +385,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 16.dp),
+                    .padding(start = 16.dp, top = 22.dp),
         )
         legalKind?.let { kind ->
             LegalDocumentScreen(kind = kind, onClose = { legalKind = null })
@@ -450,16 +487,9 @@ private fun SessionControls(
         if (isLive) {
             SettingsActionPill(
                 title = "Disconnect",
+                icon = Icons.Filled.LinkOff,
                 tint = LiveDesign.rec,
                 background = LiveDesign.rec.copy(alpha = 0.16f),
-                icon = {
-                    Icon(
-                        Icons.Filled.LinkOff,
-                        contentDescription = null,
-                        tint = LiveDesign.rec,
-                        modifier = Modifier.size(13.dp),
-                    )
-                },
                 onClick = onDisconnect,
             )
         }
@@ -469,13 +499,11 @@ private fun SessionControls(
 
 @Composable
 private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View) {
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
     Column(
         Modifier
             .width(146.dp)
             .fillMaxHeight()
-            .background(LiveDesign.glass, shape)
-            .border(1.dp, LiveDesign.hairline, shape)
+            .glass(ChromeShape)
             .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -492,13 +520,11 @@ private fun SettingsTabStrip(
     view: View,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
     val scroll = rememberScrollState()
     Row(
         modifier
             .fillMaxWidth()
-            .background(LiveDesign.glass, shape)
-            .border(1.dp, LiveDesign.hairline, shape)
+            .glass(ChromeShape)
             .horizontalScroll(scroll)
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -521,12 +547,11 @@ private fun SettingsTabButton(
     Row(
         modifier
             .height(43.dp)
-            .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .background(if (selected) LiveDesign.surface else Color.Transparent)
-            .chromeClickable(onClick = {
+            .background(if (selected) LiveDesign.surface else LiveDesign.surface.copy(alpha = 0f), ChromeShape)
+            .settingsClickable(role = Role.Tab) {
                 if (tab != model.operatorSettingsTab) operatorHaptic(view, hapticsEnabled)
                 model.operatorSettingsTab = tab
-            })
+            }
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -535,8 +560,10 @@ private fun SettingsTabButton(
             Modifier
                 .width(6.dp)
                 .height(26.dp)
-                .clip(RoundedCornerShape(50))
-                .background(if (selected) LiveDesign.accent else Color.Transparent),
+                .background(
+                    if (selected) LiveDesign.accent else LiveDesign.accent.copy(alpha = 0f),
+                    CircleShape,
+                ),
         )
         Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
@@ -569,14 +596,12 @@ private fun SettingsContentPane(
     modifier: Modifier = Modifier,
 ) {
     val tab = model.operatorSettingsTab
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
-    val scroll = rememberScrollState()
     Column(
         modifier
             .fillMaxSize()
-            .background(LiveDesign.surface, shape)
-            .clip(shape)
-            .border(1.dp, LiveDesign.hairline, shape)
+            .background(LiveDesign.surface, ChromeShape)
+            .clip(ChromeShape)
+            .border(1.dp, LiveDesign.hairline, ChromeShape)
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
@@ -589,33 +614,36 @@ private fun SettingsContentPane(
                 style = LiveType.mono(10f, FontWeight.Bold).copy(letterSpacing = 0.6.sp, color = LiveDesign.accent),
                 modifier =
                     Modifier
-                        .border(1.dp, LiveDesign.accentDim, RoundedCornerShape(50))
+                        .border(1.dp, LiveDesign.accentDim, CircleShape)
                         .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
         Spacer(Modifier.height(10.dp))
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scroll)
-                    .padding(bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                when (tab) {
-                    OperatorSettingsTab.LINK ->
-                        LinkRows(model, isLive, phaseLabel, bars)
-                    OperatorSettingsTab.SHARING -> SharingRows()
-                    OperatorSettingsTab.ASSIST -> AssistRows(model, onOpenLut)
-                    OperatorSettingsTab.CONTROLS -> ControlsRows(model)
-                    OperatorSettingsTab.DISPLAY ->
-                        DisplayRows(model, isLive, expandedDisp, onExpandDisp)
-                    OperatorSettingsTab.STORAGE -> StorageRows(onClearCache)
-                    OperatorSettingsTab.SYSTEM -> SystemRows(onLegal)
+        key(tab) {
+            val scroll = rememberScrollState()
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scroll)
+                        .padding(bottom = 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    when (tab) {
+                        OperatorSettingsTab.LINK ->
+                            LinkRows(model, isLive, phaseLabel, bars)
+                        OperatorSettingsTab.SHARING -> SharingRows()
+                        OperatorSettingsTab.ASSIST -> AssistRows(model, onOpenLut)
+                        OperatorSettingsTab.CONTROLS -> ControlsRows(model)
+                        OperatorSettingsTab.DISPLAY ->
+                            DisplayRows(model, isLive, expandedDisp, onExpandDisp)
+                        OperatorSettingsTab.STORAGE -> StorageRows(onClearCache)
+                        OperatorSettingsTab.SYSTEM -> SystemRows(onLegal)
+                    }
                 }
-            }
-            if (scroll.canScrollForward) {
-                ScrollMoreCue(Modifier.align(Alignment.BottomCenter))
+                if (scroll.canScrollForward) {
+                    ScrollMoreCue(Modifier.align(Alignment.BottomCenter))
+                }
             }
         }
     }
@@ -672,7 +700,43 @@ private fun SharingRows() {
 
 @Composable
 private fun AssistRows(model: AppModel, onOpenLut: () -> Unit) {
-    AssistToolCard("LUT") {
+    val context = LocalContext.current
+    val assist = remember { LiveAssistState.from(context) }
+    val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+
+    if (isPortrait) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FalseColorAssistCard(assist)
+            ZebraAssistCard(assist)
+            WaveformAssistCard(assist)
+            ParadeAssistCard(assist)
+            HistogramAssistCard(assist)
+            VectorscopeAssistCard(assist)
+            PeakingAssistCard(assist)
+            TrafficLightsAssistCard(assist)
+        }
+    } else {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FalseColorAssistCard(assist)
+                WaveformAssistCard(assist)
+                HistogramAssistCard(assist)
+                PeakingAssistCard(assist)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ZebraAssistCard(assist)
+                ParadeAssistCard(assist)
+                VectorscopeAssistCard(assist)
+                TrafficLightsAssistCard(assist)
+            }
+        }
+    }
+
+    SettingsRowCard(title = "LUT") {
         SettingsInlineRow("Look", SettingsHelpCopy.LUT_LOOK, showTopDivider = false) {
             SettingsValueText(lutLookLabel(model.lutSelection))
         }
@@ -680,21 +744,343 @@ private fun AssistRows(model: AppModel, onOpenLut: () -> Unit) {
             SettingsActionPill(title = "Open", onClick = onOpenLut)
         }
     }
-    AssistCard.entries.filter { it != AssistCard.LUT }.forEach { card ->
-        AssistToolCard(card.title) {
-            Text(
-                "Configure this tool from the live toolbar.",
-                style = LiveType.ui(11.5f, FontWeight.SemiBold),
-                color = LiveDesign.muted,
-                modifier = Modifier.padding(vertical = 10.dp),
-            )
+
+    AudioAssistCard()
+    GuidesAssistCard(assist)
+    GridAssistCard(assist)
+    SettingsRowCard(title = "Crosshair") {
+        SettingsInlineRow("Crosshair", CrosshairAssist.HELP, showTopDivider = false) {
+            SettingsValueText("Toolbar")
+        }
+    }
+    SettingsRowCard(title = "Mirror") {
+        SettingsInlineRow("Mirror", MirrorAssist.EXPLANATION, showTopDivider = false) {
+            SettingsValueText("Toolbar")
         }
     }
 }
 
 @Composable
-private fun AssistToolCard(title: String, content: @Composable () -> Unit) {
-    SettingsRowCard(title = title, onReset = {}) { content() }
+private fun FalseColorAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "False Color",
+        onReset = {
+            assist.setFalseColor(scale = FalseColorScale.STOPS, reference = true)
+        },
+    ) {
+        SettingsInlineRow("Scale", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = listOf("PStops", "IRE", "Limits"),
+                selected = assist.falseColorScale.menuLabel,
+            ) { label ->
+                assist.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))
+            }
+        }
+        SettingsSwitchRow(
+            title = "Reference Display",
+            isOn = assist.falseColorReference,
+            stacked = true,
+        ) {
+            assist.setFalseColor(reference = !assist.falseColorReference)
+        }
+    }
+}
+
+@Composable
+private fun PeakingAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Peaking",
+        onReset = { assist.setPeaking(color = PeakingColor.RED, sense = PeakingSense.MED) },
+    ) {
+        SettingsInlineRow("Sensitivity", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = PeakingSense.entries.map { it.label },
+                selected = assist.peakingSensitivity.label,
+            ) { label ->
+                assist.setPeaking(sense = PeakingSense.fromPersisted(label))
+            }
+        }
+        SettingsInlineRow("Color", stacked = true) {
+            SettingsColorDots(
+                dots = SettingsPalette.peaking,
+                selectedName = assist.peakingColor.label,
+            ) { name ->
+                assist.setPeaking(color = PeakingColor.fromPersisted(name))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZebraAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Zebra",
+        onReset = {
+            assist.updateZebraUnit(ZebraUnit.IRE)
+            assist.setZebraHighlight(enabled = true, ire = LiveZebra.HIGHLIGHT_IRE, color = ZebraPaint.WHITE)
+            assist.setZebraMidtone(enabled = true, ire = LiveZebra.MIDTONE_IRE, color = ZebraPaint.AMBER)
+        },
+    ) {
+        SettingsInlineRow("Units", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = listOf("0-255", "IRE"),
+                selected = assist.zebraUnit.editorLabel,
+            ) { label ->
+                assist.updateZebraUnit(ZebraUnit.fromEditorLabel(label))
+            }
+        }
+        ZebraZoneRow(
+            title = "Highlight",
+            enabled = assist.zebraHighlight,
+            value = assist.zebraHighlightIRE.toInt(),
+            selectedColor = assist.zebraHighlightColor.label,
+            palette = SettingsPalette.highlight,
+            onEnabled = { assist.setZebraHighlight(enabled = !assist.zebraHighlight) },
+            onValue = { assist.setZebraHighlight(ire = it.toDouble()) },
+            onColor = { assist.setZebraHighlight(color = ZebraPaint.fromPersisted(it)) },
+        )
+        ZebraZoneRow(
+            title = "Midtone",
+            enabled = assist.zebraMidtone,
+            value = assist.zebraMidtoneIRE.toInt(),
+            selectedColor = assist.zebraMidtoneColor.label,
+            palette = SettingsPalette.midtone,
+            onEnabled = { assist.setZebraMidtone(enabled = !assist.zebraMidtone) },
+            onValue = { assist.setZebraMidtone(ire = it.toDouble()) },
+            onColor = { assist.setZebraMidtone(color = ZebraPaint.fromPersisted(it)) },
+        )
+    }
+}
+
+@Composable
+private fun ZebraZoneRow(
+    title: String,
+    enabled: Boolean,
+    value: Int,
+    selectedColor: String,
+    palette: List<SettingsColorDot>,
+    onEnabled: () -> Unit,
+    onValue: (Int) -> Unit,
+    onColor: (String) -> Unit,
+) {
+    SettingsInlineRow(title = title, stacked = true) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.settingsClickable(role = Role.Switch, onClick = onEnabled)) {
+                SettingsSwitchGraphic(isOn = enabled)
+            }
+            SettingsNumberField(value = value.coerceIn(0, 100), maximum = 100, onChange = onValue)
+            Spacer(Modifier.weight(1f))
+            SettingsColorDots(dots = palette, selectedName = selectedColor, onSelect = onColor)
+        }
+    }
+}
+
+@Composable
+private fun WaveformAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Waveform",
+        onReset = { assist.setWaveform(mode = WaveformMode.RGB, brightness = 100, guides = ScopeGuides()) },
+    ) {
+        SettingsInlineRow("Mode", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = WaveformMode.entries.map { it.label },
+                selected = assist.waveMode.label,
+            ) { label ->
+                assist.setWaveform(mode = WaveformMode.fromPersisted(label))
+            }
+        }
+        SettingsInlineRow("Brightness", stacked = true) {
+            SettingsPercentSlider(value = assist.waveBrightness, range = 0..200) {
+                assist.setWaveform(brightness = it)
+            }
+        }
+        ScopeGuideRows(assist.waveGuides) { assist.setWaveform(guides = it) }
+    }
+}
+
+@Composable
+private fun ParadeAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Parade",
+        onReset = { assist.setParade(mode = ParadeMode.RGB, brightness = 100, guides = ScopeGuides()) },
+    ) {
+        SettingsInlineRow("Mode", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = ParadeMode.entries.map { it.label },
+                selected = assist.paradeMode.label,
+            ) { label ->
+                assist.setParade(mode = ParadeMode.fromPersisted(label))
+            }
+        }
+        SettingsInlineRow("Brightness", stacked = true) {
+            SettingsPercentSlider(value = assist.paradeBrightness, range = 0..200) {
+                assist.setParade(brightness = it)
+            }
+        }
+        ScopeGuideRows(assist.paradeGuides) { assist.setParade(guides = it) }
+    }
+}
+
+@Composable
+private fun HistogramAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Histogram",
+        onReset = {
+            assist.setHistogram(traffic = true, compensation = CrushClipCompensation.ZERO)
+        },
+    ) {
+        SettingsSwitchRow(
+            title = HistogramAssist.TRAFFIC_LIGHTS_TITLE,
+            isOn = assist.histoTrafficLights,
+            help = HistogramAssist.TRAFFIC_LIGHTS_HELP,
+            showTopDivider = false,
+            stacked = true,
+        ) {
+            assist.setHistogram(traffic = !assist.histoTrafficLights)
+        }
+        SettingsInlineRow(title = HistogramAssist.COMPENSATION_TITLE, stacked = true) {
+            CrushClipControl(assist.crushClipCompensation) { assist.setHistogram(compensation = it) }
+        }
+    }
+}
+
+@Composable
+private fun VectorscopeAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Vectorscope",
+        onReset = { assist.setVectorscope(zoom = VectorscopeZoom.X1, brightness = 100) },
+    ) {
+        SettingsInlineRow("Trace Zoom", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = VectorscopeZoom.entries.map { it.label },
+                selected = assist.vectorZoom.label,
+            ) { label ->
+                assist.setVectorscope(zoom = VectorscopeZoom.fromPersisted(label))
+            }
+        }
+        SettingsInlineRow("Brightness", stacked = true) {
+            SettingsPercentSlider(value = assist.vectorBrightness, range = 0..200) {
+                assist.setVectorscope(brightness = it)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrafficLightsAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Traffic Lights",
+        onReset = { assist.setCompensation(CrushClipCompensation.ZERO) },
+    ) {
+        SettingsInlineRow(
+            title = HistogramAssist.COMPENSATION_TITLE,
+            showTopDivider = false,
+            stacked = true,
+        ) {
+            CrushClipControl(assist.crushClipCompensation) { assist.setCompensation(it) }
+        }
+    }
+}
+
+@Composable
+private fun CrushClipControl(selected: CrushClipCompensation, onSelect: (CrushClipCompensation) -> Unit) {
+    SettingsCrushClipSegmented(
+        options = CrushClipCompensation.entries.map { it.label to it.compactLabel },
+        selectedLabel = selected.label,
+    ) { label ->
+        CrushClipCompensation.entries.firstOrNull { it.label == label }?.let(onSelect)
+    }
+}
+
+@Composable
+private fun ScopeGuideRows(guides: ScopeGuides, onChange: (ScopeGuides) -> Unit) {
+    SettingsSwitchRow("Safe Border Clip", isOn = guides.clip, stacked = true) {
+        onChange(guides.copy(clip = !guides.clip))
+    }
+    SettingsSwitchRow("Safe Border Crush", isOn = guides.crush, stacked = true) {
+        onChange(guides.copy(crush = !guides.crush))
+    }
+    SettingsSwitchRow("Middle Gray", isOn = guides.middle, stacked = true) {
+        onChange(guides.copy(middle = !guides.middle))
+    }
+}
+
+@Composable
+private fun AudioAssistCard() {
+    SettingsRowCard(title = "Audio Levels") {
+        SettingsInlineRow("Audio Levels", AudioAssist.HELP, showTopDivider = false) {
+            SettingsValueText("Live")
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GuidesAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Guides",
+        onReset = {
+            assist.updateGuideFamily(GuideFamily.FILM)
+            assist.updateGuideMask(false)
+            assist.guideAspect = GuideAspect.CINEMA
+            assist.selectedGuides = setOf(GuideAspect.CINEMA)
+            assist.persist()
+        },
+    ) {
+        SettingsInlineRow("Family", showTopDivider = false, stacked = true) {
+            SettingsSegmented(
+                options = GuideFamily.entries.map { it.label },
+                selected = assist.guideFamily.label,
+            ) { label ->
+                assist.updateGuideFamily(GuideFamily.fromPersisted(label))
+            }
+        }
+        SettingsInlineRow("Ratios", stacked = true) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                GuideAspect.ratios(assist.guideFamily).forEach { aspect ->
+                    DisplayToggleItem(
+                        title = aspect.label,
+                        isOn = aspect in assist.selectedGuides,
+                        onToggle = { assist.toggleGuide(aspect) },
+                    )
+                }
+            }
+        }
+        SettingsSwitchRow("Mask outside frame", isOn = assist.guideMask, stacked = true) {
+            assist.updateGuideMask(!assist.guideMask)
+        }
+    }
+}
+
+@Composable
+private fun GridAssistCard(assist: LiveAssistState) {
+    SettingsRowCard(
+        title = "Grid",
+        onReset = { assist.setGridOption(thirds = true, phi = false, diagonal = false) },
+    ) {
+        GridAssist.optionLabels.forEachIndexed { index, label ->
+            val on =
+                when (label) {
+                    "Thirds" -> assist.gridThirds
+                    "Phi Grid" -> assist.gridPhi
+                    else -> assist.gridDiagonal
+                }
+            SettingsSwitchRow(title = label, isOn = on, showTopDivider = index > 0, stacked = true) {
+                when (label) {
+                    "Thirds" -> assist.setGridOption(thirds = !assist.gridThirds)
+                    "Phi Grid" -> assist.setGridOption(phi = !assist.gridPhi)
+                    else -> assist.setGridOption(diagonal = !assist.gridDiagonal)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -724,25 +1110,21 @@ private fun ControlsRows(model: AppModel) {
             help = SettingsHelpCopy.JOYSTICK_SENSITIVITY,
             stacked = true,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                Slider(
-                    value = model.gimbalStickSensitivity.toFloat(),
-                    onValueChange = { next ->
-                        val clamped = next.roundToInt().coerceIn(1, 5)
-                        if (clamped != model.gimbalStickSensitivity) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                GlassPillSlider(
+                    value = model.gimbalStickSensitivity,
+                    range = 1..5,
+                    onChange = { next ->
+                        if (next != model.gimbalStickSensitivity) {
                             operatorHaptic(view, model.hapticsEnabled)
-                            model.updateGimbalStickSensitivity(clamped)
+                            model.updateGimbalStickSensitivity(next)
                         }
                     },
-                    valueRange = 1f..5f,
-                    steps = 3,
-                    modifier = Modifier.weight(1f).semantics { contentDescription = "Joystick sensitivity" },
-                    colors =
-                        SliderDefaults.colors(
-                            thumbColor = LiveDesign.accent,
-                            activeTrackColor = LiveDesign.accent,
-                            inactiveTrackColor = LiveDesign.hairline,
-                        ),
+                    modifier = Modifier.weight(1f),
                 )
                 Text(
                     "${model.gimbalStickSensitivity}",
@@ -772,39 +1154,21 @@ private fun DisplayRows(
 ) {
     val view = LocalView.current
     PocketDispMode.entries.forEach { mode ->
-        SettingsRowCard(
+        SettingsGroupCard(
             title = mode.settingsTitle,
+            caption = mode.settingsCaption,
             onReset = {
                 operatorHaptic(view, model.hapticsEnabled)
                 resetDispChrome(model, mode)
             },
+            captionMaxLines = Int.MAX_VALUE,
+            expanded = expandedDisp == mode,
+            onExpandToggle = {
+                operatorHaptic(view, model.hapticsEnabled)
+                onExpandDisp(if (expandedDisp == mode) null else mode)
+            },
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .chromeClickable(onClick = {
-                        operatorHaptic(view, model.hapticsEnabled)
-                        onExpandDisp(if (expandedDisp == mode) null else mode)
-                    })
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    mode.settingsCaption,
-                    style = LiveType.ui(11f, FontWeight.SemiBold),
-                    color = LiveDesign.muted,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    if (expandedDisp == mode) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = LiveDesign.faint,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            if (expandedDisp == mode) {
-                DispSectionBody(model, mode, isLive, view)
-            }
+            DispSectionBody(model, mode, isLive, view)
         }
     }
 }
@@ -884,7 +1248,7 @@ private val dispToggleSpecs =
 @Composable
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
-    dispToggleSpecs.forEachIndexed { index, spec ->
+    dispToggleSpecs.forEach { spec ->
         SettingsSwitchInlineRow(
             title = spec.title,
             help = spec.help,
@@ -908,7 +1272,7 @@ private fun CleanViewPinStrip(model: AppModel, view: View) {
                         title = tool.title,
                         isOn = on,
                         modifier = Modifier.weight(1f),
-                        onClick = {
+                        onToggle = {
                             operatorHaptic(view, model.hapticsEnabled)
                             val next = model.cleanViewPinnedTools.toMutableSet()
                             if (!next.add(tool.key)) next.remove(tool.key)
@@ -942,7 +1306,7 @@ private fun StorageRows(onClearCache: () -> Unit) {
                 "Clear",
                 style = LiveType.ui(13f, FontWeight.SemiBold),
                 color = LiveDesign.rec,
-                modifier = Modifier.chromeClickable(onClick = onClearCache),
+                modifier = Modifier.settingsClickable(role = Role.Button, onClick = onClearCache),
             )
         }
     }
@@ -1003,338 +1367,7 @@ private fun operatorHaptic(view: View, enabled: Boolean) {
 
 @Composable
 fun OperatorCloseButton(onClose: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(37.dp)
-            .clip(CircleShape)
-            .background(LiveDesign.glass)
-            .border(1.dp, LiveDesign.hairline, CircleShape)
-            .chromeClickable(onClick = onClose)
-            .semantics { contentDescription = "Close" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            Icons.Filled.Close,
-            contentDescription = null,
-            tint = LiveDesign.text,
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
-@Composable
-private fun HelpBadge(text: String) {
-    var showing by remember { mutableStateOf(false) }
-    Box {
-        Box(
-            Modifier
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(LiveDesign.background.copy(alpha = 0.5f))
-                .border(1.dp, LiveDesign.hairline, CircleShape)
-                .chromeClickable(onClick = { showing = !showing }),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("?", style = LiveType.ui(8.5f, FontWeight.Bold), color = LiveDesign.faint)
-        }
-        DropdownMenu(expanded = showing, onDismissRequest = { showing = false }) {
-            Text(
-                text,
-                style = LiveType.ui(12f),
-                color = LiveDesign.text,
-                modifier = Modifier.width(248.dp).padding(12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsInlineRow(
-    title: String,
-    help: String? = null,
-    showTopDivider: Boolean = true,
-    stacked: Boolean = false,
-    trailing: @Composable () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        if (showTopDivider) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
-        }
-        if (stacked) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingsLabelRow(title, help, stacked = true)
-                trailing()
-            }
-        } else {
-            Row(
-                Modifier.fillMaxWidth().height(50.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SettingsLabelRow(title, help, stacked = false, modifier = Modifier.weight(1f))
-                trailing()
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsLabelRow(
-    title: String,
-    help: String?,
-    stacked: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            title,
-            style = LiveType.ui(12.5f, FontWeight.SemiBold),
-            color = LiveDesign.text,
-            maxLines = if (stacked) 2 else 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (help != null) HelpBadge(help)
-    }
-}
-
-@Composable
-private fun SettingsValueText(value: String) {
-    Text(
-        value,
-        style = LiveType.mono(12.5f),
-        color = LiveDesign.muted,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
-private fun SettingsActionPill(
-    title: String,
-    tint: Color = LiveDesign.accent,
-    background: Color = LiveDesign.accentDim,
-    icon: (@Composable () -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(background)
-            .border(1.dp, tint.copy(alpha = 0.5f), RoundedCornerShape(50))
-            .chromeClickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        icon?.invoke()
-        Text(
-            title.uppercase(),
-            style = LiveType.mono(10.5f, FontWeight.Bold).copy(letterSpacing = 0.6.sp, color = tint),
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun SettingsSwitchGraphic(isOn: Boolean) {
-    Box(
-        Modifier
-            .width(39.dp)
-            .height(22.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface)
-            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, RoundedCornerShape(50)),
-    ) {
-        Box(
-            Modifier
-                .align(if (isOn) Alignment.CenterEnd else Alignment.CenterStart)
-                .padding(3.5.dp)
-                .size(15.dp)
-                .clip(CircleShape)
-                .background(if (isOn) LiveDesign.accent else LiveDesign.muted),
-        )
-    }
-}
-
-@Composable
-private fun SettingsSwitchInlineRow(
-    title: String,
-    help: String? = null,
-    showTopDivider: Boolean = true,
-    isOn: Boolean,
-    onToggle: () -> Unit,
-) {
-    SettingsInlineRow(title, help, showTopDivider) {
-        Box(Modifier.chromeClickable(onClick = onToggle)) {
-            SettingsSwitchGraphic(isOn)
-        }
-    }
-}
-
-@Composable
-private fun SettingsRowCard(
-    title: String? = null,
-    onReset: (() -> Unit)? = null,
-    content: @Composable () -> Unit,
-) {
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(LiveDesign.glass, shape)
-            .border(1.dp, LiveDesign.hairline, shape)
-            .padding(start = 13.dp, end = 13.dp, bottom = 4.dp),
-    ) {
-        if (title != null) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(title, style = LiveType.ui(13f, FontWeight.SemiBold), color = LiveDesign.text, modifier = Modifier.weight(1f))
-                if (onReset != null) {
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(LiveDesign.background.copy(alpha = 0.42f))
-                            .border(1.dp, LiveDesign.hairline, CircleShape)
-                            .chromeClickable(onClick = onReset)
-                            .semantics { contentDescription = "Reset to defaults" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = null, tint = LiveDesign.muted, modifier = Modifier.size(12.dp))
-                    }
-                }
-            }
-        } else {
-            Spacer(Modifier.height(8.dp))
-        }
-        content()
-    }
-}
-
-@Composable
-private fun DisplayToggleItem(
-    title: String,
-    isOn: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
-    Row(
-        modifier
-            .height(46.dp)
-            .clip(shape)
-            .background(LiveDesign.background.copy(alpha = 0.38f))
-            .border(1.dp, LiveDesign.hairline, shape)
-            .chromeClickable(onClick = onClick)
-            .padding(horizontal = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        Text(
-            title,
-            style = LiveType.ui(11.5f, FontWeight.SemiBold),
-            color = LiveDesign.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(Modifier.size(width = 34.dp, height = 19.dp), contentAlignment = Alignment.Center) {
-            SettingsSwitchGraphic(isOn)
-        }
-    }
-}
-
-@Composable
-private fun SettingsDashScale(title: String, caption: String, score: Int) {
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
-    val band =
-        when {
-            score >= 80 -> 2
-            score >= 50 -> 1
-            else -> 0
-        }
-    val watch = Color(0.96f, 0.52f, 0.12f)
-    val bandColor =
-        when (band) {
-            2 -> LiveDesign.good
-            1 -> watch
-            else -> LiveDesign.rec
-        }
-    val bandName =
-        when (band) {
-            2 -> "STABLE"
-            1 -> "WATCH"
-            else -> "POOR"
-        }
-    val litCount =
-        when (band) {
-            2 -> 12
-            1 -> 8
-            else -> 4
-        }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(LiveDesign.glass, shape)
-            .border(1.dp, LiveDesign.hairline, shape)
-            .padding(13.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        Text(title, style = LiveType.ui(13f, FontWeight.SemiBold), color = LiveDesign.text)
-        Text(caption, style = LiveType.mono(11.5f), color = LiveDesign.muted)
-        Row(Modifier.fillMaxWidth().height(19.dp)) {
-            repeat(3) { slot ->
-                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                    if (slot == band) {
-                        Text(
-                            bandName,
-                            style = LiveType.mono(9.5f, FontWeight.Bold).copy(letterSpacing = 0.5.sp, color = bandColor),
-                            modifier =
-                                Modifier
-                                    .background(bandColor.copy(alpha = 0.12f), RoundedCornerShape(50))
-                                    .border(1.dp, bandColor, RoundedCornerShape(50))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
-            repeat(12) { index ->
-                val fill =
-                    when {
-                        index >= litCount -> LiveDesign.hairlineStrong
-                        index < 4 -> LiveDesign.rec.copy(alpha = 0.8f)
-                        index < 8 -> watch.copy(alpha = 0.85f)
-                        else -> LiveDesign.good.copy(alpha = 0.9f)
-                    }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(fill),
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            Text("Poor  <50", style = LiveType.ui(10f, FontWeight.SemiBold), color = LiveDesign.muted, modifier = Modifier.weight(1f))
-            Text(
-                "Watch  50-79",
-                style = LiveType.ui(10f, FontWeight.SemiBold),
-                color = LiveDesign.muted,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "Stable  80+",
-                style = LiveType.ui(10f, FontWeight.SemiBold),
-                color = LiveDesign.muted,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
+    PanelCloseButton(onClick = onClose, modifier = modifier)
 }
 
 @Composable
@@ -1348,17 +1381,16 @@ private fun SettingsLiveTile(isLive: Boolean, phaseLabel: String, bars: Int, cam
             else -> LiveDesign.faint
         }
     val lit = if (isLive) bars.coerceIn(0, 4) else 0
-    val shape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
     val detail = if (isLive) "$cameraName · BLE + Wi-Fi" else phaseLabel
     Row(
         Modifier
-            .background(LiveDesign.surface, shape)
-            .border(1.dp, LiveDesign.hairline, shape)
+            .background(LiveDesign.surface, ChromeShape)
+            .border(1.dp, LiveDesign.hairline, ChromeShape)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(tint))
+        Box(Modifier.size(8.dp).background(tint, CircleShape))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 if (isLive) "Active Link" else "No Link",
@@ -1380,9 +1412,9 @@ private fun SettingsLiveTile(isLive: Boolean, phaseLabel: String, bars: Int, cam
                     Modifier
                         .width(3.dp)
                         .height((6 + index * 3).dp)
-                        .clip(RoundedCornerShape(1.5.dp))
                         .background(
                             if (index < lit) tint.copy(alpha = 0.52f + index * 0.12f) else LiveDesign.hairline,
+                            CircleShape,
                         ),
                 )
             }

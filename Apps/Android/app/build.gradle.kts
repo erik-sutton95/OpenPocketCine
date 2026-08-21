@@ -110,6 +110,8 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.kyant.backdrop)
+    implementation(libs.kyant.shapes)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)

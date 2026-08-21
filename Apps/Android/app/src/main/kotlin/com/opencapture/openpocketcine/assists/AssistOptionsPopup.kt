@@ -22,36 +22,57 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.monitorGlass
+import com.opencapture.openpocketcine.lut.LUTPicker
+import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
+import com.opencapture.openpocketcine.overlayGlass
 
 private val CardShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 @Composable
 private fun Modifier.assistClick(onClick: () -> Unit): Modifier = chromeClickable(onClick = onClick)
 
+/**
+ * OpenZCine / iOS long-press tray. Overlay glass, not the feed-layer pill.
+ *
+ * [model] owns the live LUT selection. When omitted (current live-view call
+ * site), the picker writes [OperatorPrefs] so a later process still restores.
+ */
 @Composable
 fun AssistOptionsPopup(
     tool: LiveAssistTool,
     state: LiveAssistState,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    model: AppModel? = null,
 ) {
     val width = AssistLongPress.preferredWidthDp(tool).dp
+    val context = LocalContext.current
+    var fallbackLut by remember {
+        mutableStateOf(model?.lutSelection ?: OperatorPrefs.lutSelection(context))
+    }
+    val lutSelection = model?.lutSelection ?: fallbackLut
     Column(
         modifier
             .widthIn(max = width)
             .width(width)
-            .monitorGlass(CardShape)
+            .overlayGlass(CardShape)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -73,8 +94,35 @@ fun AssistOptionsPopup(
                 modifier = Modifier.assistClick(onClick = onDismiss).padding(6.dp),
             )
         }
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            AssistOptionsBody(tool, state)
+        if (tool == LiveAssistTool.LUT) {
+            LUTPicker(
+                selection = lutSelection,
+                onSelect = { id ->
+                    if (model != null) {
+                        model.updateLutSelection(id)
+                    } else {
+                        fallbackLut = id
+                        OperatorPrefs.setLutSelection(context, id)
+                    }
+                    state.armLut()
+                },
+                embedded = true,
+                splitComparison = state.splitComparison,
+                splitVertical = state.splitVertical,
+                onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
+                onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
+                onArmLut = { state.armLut() },
+            )
+            LUTSplitComparisonBar(
+                splitComparison = state.splitComparison,
+                splitVertical = state.splitVertical,
+                onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
+                onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
+            )
+        } else {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                AssistOptionsBody(tool, state)
+            }
         }
     }
 }
@@ -82,8 +130,7 @@ fun AssistOptionsPopup(
 @Composable
 private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState) {
     when (tool) {
-        LiveAssistTool.LUT ->
-            OptionCopy("The LUT picker lives in a separate catalog. Tap the chip to arm or disarm Auto Rec.709.")
+        LiveAssistTool.LUT -> Spacer(Modifier.height(0.dp))
         LiveAssistTool.PEAK -> PeakingOptions(state)
         LiveAssistTool.FALSE -> FalseColorOptions(state)
         LiveAssistTool.ZEBRA -> ZebraOptions(state)

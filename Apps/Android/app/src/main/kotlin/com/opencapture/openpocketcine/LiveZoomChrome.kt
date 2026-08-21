@@ -1,15 +1,18 @@
 package com.opencapture.openpocketcine
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -23,7 +26,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlin.math.abs
-import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 object LiveZoom {
@@ -62,24 +64,43 @@ object LiveZoom {
         (1.0 * magnification).coerceIn(1.0, 12.0)
 }
 
+/** Ignore sub-tenth `cam_fov` jitter on the chip unless the operator is pinching. */
+object LiveZoomLabelHold {
+    fun shouldReplace(
+        held: Double,
+        next: Double,
+        pinching: Boolean,
+        epsilon: Double = 0.12,
+    ): Boolean {
+        if (pinching) return true
+        return abs(next - held) >= epsilon
+    }
+}
+
 @Composable
 fun LiveZoomChip(
     factor: Double,
     locked: Boolean,
     modifier: Modifier = Modifier,
+    pinching: Boolean = false,
     onCycle: () -> Unit,
 ) {
+    var held by remember { mutableStateOf(factor) }
+    LaunchedEffect(factor, pinching) {
+        if (LiveZoomLabelHold.shouldReplace(held, factor, pinching)) {
+            held = factor
+        }
+    }
     Box(
         modifier
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
-            .clip(CircleShape)
-            .background(LiveDesign.glass)
+            .monitorGlass(CircleShape)
             .chromeClickable(enabled = !locked, onClick = onCycle)
-            .semantics { contentDescription = "Zoom ${LiveZoom.label(factor)}" },
+            .semantics { contentDescription = "Zoom ${LiveZoom.label(held)}" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            LiveZoom.label(factor),
+            LiveZoom.label(held),
             color = LiveDesign.text.copy(alpha = if (locked) 0.4f else 1f),
             style = LiveType.ui(13f, FontWeight.Bold),
             maxLines = 1,
