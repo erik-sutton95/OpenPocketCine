@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -40,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
         window.isNavigationBarContrastEnforced = false
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        applyImmersiveSystemBars(window)
         setContent {
             SideEffect { composeFirstFrameDrawn.set(true) }
             OpenPocketCineTheme {
@@ -84,6 +87,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveSystemBars(window)
     }
 
     override fun onDestroy() {
@@ -139,7 +147,13 @@ private fun OpenPocketCineApp(model: AppModel) {
         model.showsLaunchSplash = false
     }
 
+    LaunchedEffect(activity) {
+        val window = activity?.window ?: return@LaunchedEffect
+        applyImmersiveSystemBars(window)
+    }
+
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
+    ImmersiveSystemBarCycle {
     Box(Modifier.fillMaxSize().startupBackdrop()) {
         if (showLive) {
             LiveViewScreen(model)
@@ -155,6 +169,7 @@ private fun OpenPocketCineApp(model: AppModel) {
         if (model.homePanel != null && !showLive) {
             AppPanelHost(model)
         }
+    }
     }
 }
 
@@ -185,7 +200,17 @@ private fun LinkExperience(
             isDiscovering = phase == ConnectionPhase.SCANNING || (model.shouldShowWizard && phase != ConnectionPhase.LIVE),
             isReconnecting = reconnecting,
         )
-    Column(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 16.dp)) {
+    val density = LocalDensity.current
+    val bar = LocalImmersiveBarInsets.current
+    val barStart by animateDpAsState(with(density) { bar.left.toDp() }, label = "barStart")
+    val barTop by animateDpAsState(with(density) { bar.top.toDp() }, label = "barTop")
+    val barEnd by animateDpAsState(with(density) { bar.right.toDp() }, label = "barEnd")
+    val barBottom by animateDpAsState(with(density) { bar.bottom.toDp() }, label = "barBottom")
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
+    ) {
         Box(Modifier.padding(horizontal = 20.dp)) {
             StartupHeader(
                 title = headerTitle,

@@ -32,6 +32,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android hides the system bars (status + back/home/recents) like OpenZCine:
+  a swipe in from the edge reveals them for three seconds and chrome shifts
+  off the overlay, then they hide again.
 - Tapping Connect on a saved camera shows **Connecting** and **Cancel** on
   Android the way iOS does — GATT starts in `CONNECTING` immediately, and the
   intro card tracks session phase instead of a stale `isBusy` getter.

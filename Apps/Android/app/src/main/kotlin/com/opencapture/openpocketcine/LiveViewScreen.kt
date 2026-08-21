@@ -9,12 +9,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -160,14 +161,34 @@ fun LiveViewScreen(model: AppModel) {
     ) {
         val density = LocalDensity.current
         val layoutDir = LocalLayoutDirection.current
-        val insets = WindowInsets.safeDrawing
-        val safeLeading = with(density) { insets.getLeft(this, layoutDir).toDp().value }
-        val safeTrailing = with(density) { insets.getRight(this, layoutDir).toDp().value }
-        val safeTop = with(density) { insets.getTop(this).toDp().value }
-        val safeBottom = with(density) { insets.getBottom(this).toDp().value }
-        val vw = maxWidth.value
+        val cutout = WindowInsets.displayCutout
+        val barInsets = LocalImmersiveBarInsets.current
+        val portrait = maxHeight > maxWidth
+        val safeTop by animateFloatAsState(
+            with(density) { maxOf(cutout.getTop(this), barInsets.top).toDp().value },
+            label = "safeTop",
+        )
+        val safeBottom by animateFloatAsState(
+            with(density) { maxOf(cutout.getBottom(this), barInsets.bottom).toDp().value },
+            label = "safeBottom",
+        )
+        val safeLeading by animateFloatAsState(
+            with(density) { maxOf(cutout.getLeft(this, layoutDir), barInsets.left).toDp().value },
+            label = "safeLeading",
+        )
+        val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }
+        val navLane by animateFloatAsState(
+            if (portrait) {
+                0f
+            } else {
+                with(density) {
+                    maxOf(0, barInsets.right - cutout.getRight(this, layoutDir)).toDp().value
+                }
+            },
+            label = "navLane",
+        )
+        val vw = maxWidth.value - navLane
         val vh = maxHeight.value
-        val portrait = vh > vw
         val fill = model.portraitFeedAspect == PortraitFeedAspect.FILL
         val assistH =
             if (!model.assistClean && !fill && model.chromeSectionMounts(PocketDispSection.TOOL_BAR)) {

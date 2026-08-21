@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -311,12 +312,20 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
         model.chromeEditorReturnMode = null
     }
 
+    val density = LocalDensity.current
+    val bar = LocalImmersiveBarInsets.current
     Box(
         Modifier
             .fillMaxSize()
             .background(LiveDesign.background)
             .pointerInput(Unit) { detectTapGestures {} }
-            .windowInsetsPadding(WindowInsets.safeDrawing),
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(
+                start = with(density) { bar.left.toDp() },
+                top = with(density) { bar.top.toDp() },
+                end = with(density) { bar.right.toDp() },
+                bottom = with(density) { bar.bottom.toDp() },
+            ),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val portrait = maxHeight > maxWidth
