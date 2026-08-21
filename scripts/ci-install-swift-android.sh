@@ -17,23 +17,26 @@ fail() {
   exit 1
 }
 
-swift_bin="$(command -v swift || true)"
-[[ -n "$swift_bin" && -x "$swift_bin" ]] || fail "swift is not on PATH"
+swift_cmd="$(command -v swift || true)"
+[[ -n "$swift_cmd" && -x "$swift_cmd" ]] || fail "swift is not on PATH"
 # GitHub Ubuntu images extract the toolchain to /usr/share/swift and only
-# symlink swift/swiftc into /usr/local/bin. llvm-objcopy and llvm-objdump stay
-# in the real usr/bin. Follow the binary; `pwd -P` on its directory is not enough.
-swift_bin="$(readlink -f "$swift_bin")"
-[[ -x "$swift_bin" ]] || fail "could not resolve the swift executable"
-swift_version="$("$swift_bin" --version)"
+# symlink swift/swiftc into /usr/local/bin. Those names are often links to
+# `swift-driver`. Invoking the resolved binary makes argv0 `swift-driver`,
+# which exits: "invalid driver name: swift-driver". Always invoke as `swift`.
+# llvm-objcopy / llvm-objdump live next to the real driver — follow the link
+# only to find that directory.
+swift_real="$(readlink -f "$swift_cmd")"
+[[ -x "$swift_real" ]] || fail "could not resolve the swift executable"
+swift_version="$("$swift_cmd" --version)"
 [[ "$swift_version" == *"${SWIFT_VERSION}"* ]] || fail \
   "Swift ${SWIFT_VERSION} is required; found: ${swift_version%%$'\n'*}"
 
-toolchain_bin="$(dirname "$swift_bin")"
-[[ -x "$toolchain_bin/llvm-objcopy" ]] || fail "llvm-objcopy is missing beside $swift_bin"
-[[ -x "$toolchain_bin/llvm-objdump" ]] || fail "llvm-objdump is missing beside $swift_bin"
+toolchain_bin="$(dirname "$swift_real")"
+[[ -x "$toolchain_bin/llvm-objcopy" ]] || fail "llvm-objcopy is missing beside $swift_real"
+[[ -x "$toolchain_bin/llvm-objdump" ]] || fail "llvm-objdump is missing beside $swift_real"
 
-if ! "$swift_bin" sdk list 2>/dev/null | grep -Fxq "$SDK_ID"; then
-  "$swift_bin" sdk install "$SDK_URL" --checksum "$SDK_CHECKSUM"
+if ! "$swift_cmd" sdk list 2>/dev/null | grep -Fxq "$SDK_ID"; then
+  "$swift_cmd" sdk install "$SDK_URL" --checksum "$SDK_CHECKSUM"
 fi
 
 sdk_home=""
@@ -59,7 +62,7 @@ done
 unset ANDROID_NDK_ROOT
 (cd "$sdk_home" && ./scripts/setup-android-sdk.sh)
 
-"$swift_bin" sdk configure --show-configuration "$SDK_ID" "$TARGET" >/dev/null \
+"$swift_cmd" sdk configure --show-configuration "$SDK_ID" "$TARGET" >/dev/null \
   || fail "Swift Android SDK $SDK_ID is not configured for $TARGET"
 
 if [[ -n "${GITHUB_ENV:-}" ]]; then
