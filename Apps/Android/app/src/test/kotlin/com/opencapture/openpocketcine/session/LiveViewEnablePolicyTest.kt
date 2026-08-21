@@ -258,6 +258,7 @@ class LiveViewEnablePolicyTest {
         val avcCsd = byteArrayOf(0, 0, 0, 1, 0x67, 0x42, 0, 0, 0, 1, 0x68, 0xCE.toByte())
         assertEquals(HevcDecoder.LiveCodec.AVC, HevcDecoder.detectCodec(avcCsd, "7,8"))
         assertTrue(HevcDecoder.isIdrPicture("20,33,34"))
+        assertTrue(HevcDecoder.isIdrPicture("16,6,8"))
         assertTrue(HevcDecoder.isIdrPicture("5,7,8"))
         assertTrue(!HevcDecoder.isIdrPicture("1,33,34"))
     }

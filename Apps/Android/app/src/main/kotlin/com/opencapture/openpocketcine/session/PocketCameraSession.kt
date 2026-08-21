@@ -461,9 +461,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun recoverFirstPictureIfNeeded(now: Long, packets: Int) {
         if (datalink?.isRebuilding == true) return
+        val counted = if (decoder.hasFormat) maxOf(packets, 1) else packets
         when (
             LiveViewEnablePolicy.firstPictureStep(
-                videoPackets = packets,
+                videoPackets = counted,
                 enableSends = liveViewEnableSends,
                 sinceEnableMs = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest,
                 videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it },

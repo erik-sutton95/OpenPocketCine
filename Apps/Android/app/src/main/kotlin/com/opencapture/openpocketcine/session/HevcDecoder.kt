@@ -9,6 +9,9 @@ import android.view.Surface
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Best-effort live-view decode via MediaCodec. Access units come from the Swift
@@ -26,6 +29,7 @@ class HevcDecoder {
     private var pendingTypes: String = ""
     private var pendingIdr: ByteArray? = null
     private var ptsUs = 0L
+    private var decodeLogLeft = 6
     @Volatile private var running = false
     @Volatile var hasFormat = false
         private set
@@ -38,6 +42,8 @@ class HevcDecoder {
     /** ElapsedRealtime of the last presented picture. Watchdog stall signal. */
     @Volatile var lastPresentedAt: Long? = null
         private set
+    private val _hasPicture = MutableStateFlow(false)
+    val hasPicture: StateFlow<Boolean> = _hasPicture.asStateFlow()
     val decoderErrors = AtomicInteger(0)
     val framesEnqueued = AtomicInteger(0)
 
@@ -85,16 +91,28 @@ class HevcDecoder {
             pendingTypes = types
         }
         if (idr) pendingIdr = accessUnit.copyOf()
+        if (decodeLogLeft > 0) {
+            decodeLogLeft -= 1
+            Log.i(
+                TAG,
+                "au nals=$types idr=$idr await=$awaitingIdr cfg=$configured bytes=${accessUnit.size}",
+            )
+        }
         if (!configured) {
             val haveCsd = pendingCsd ?: return false
             val target = surface
             if (target == null || !target.isValid) return false
             if (!configure(haveCsd, pendingTypes.ifEmpty { types })) return false
             awaitingIdr = true
+            Log.i(TAG, "configured ${liveCodec?.name} nals=$nalTypesSeen")
+            val queued = queue(accessUnit, keyframe = true)
+            if (queued && idr) awaitingIdr = false
+            return queued
         }
         if (awaitingIdr && !idr) return false
-        if (idr) awaitingIdr = false
-        return queue(accessUnit, keyframe)
+        val queued = queue(accessUnit, keyframe)
+        if (queued && idr) awaitingIdr = false
+        return queued
     }
 
     /** After a GOP-reset enable, ignore P-frames until the next IDR. Keeps the last picture. */
@@ -118,6 +136,7 @@ class HevcDecoder {
         nalTypesSeen = ""
         lastKeyframeAt = null
         lastPresentedAt = null
+        _hasPicture.value = false
         pendingCsd = null
         pendingTypes = ""
         pendingIdr = null
@@ -173,6 +192,7 @@ class HevcDecoder {
                                 index >= 0 -> {
                                     runCatching { decoder.releaseOutputBuffer(index, true) }
                                     lastPresentedAt = SystemClock.elapsedRealtime()
+                                    _hasPicture.value = true
                                     hasFormat = true
                                 }
                                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> hasFormat = true
@@ -192,8 +212,11 @@ class HevcDecoder {
     private fun queue(accessUnit: ByteArray, keyframe: Boolean): Boolean {
         val decoder = codec ?: return false
         return try {
-            val index = decoder.dequeueInputBuffer(0)
-            if (index < 0) return false
+            val index = decoder.dequeueInputBuffer(50_000)
+            if (index < 0) {
+                Log.w(TAG, "no input buffer (nals=$nalTypesSeen)")
+                return false
+            }
             val buffer = decoder.getInputBuffer(index) ?: return false
             buffer.clear()
             buffer.put(accessUnit)
@@ -221,10 +244,14 @@ class HevcDecoder {
         private const val LIVE_WIDTH = 1280
         private const val LIVE_HEIGHT = 720
 
-        /** HEVC IDR_N_LP is 20; AVC IDR is 5. Param sets alone are not a picture. */
+        /**
+         * HEVC IRAP pictures (BLA 16–18, IDR 19–20, CRA 21) start a GOP.
+         * Pocket 4 Pro live view uses BLA_W_LP (16), not only IDR_N_LP (20).
+         * AVC IDR is 5.
+         */
         internal fun isIdrPicture(nalTypes: String): Boolean {
             val types = nalTypes.split(',').mapNotNull { it.trim().toIntOrNull() }
-            return types.any { it == 20 || it == 5 }
+            return types.any { it in 16..21 || it == 5 }
         }
 
         /**

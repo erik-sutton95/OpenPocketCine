@@ -201,11 +201,7 @@ fun LiveViewScreen(model: AppModel) {
                                         format: Int,
                                         width: Int,
                                         height: Int,
-                                    ) {
-                                        if (holder.surface.isValid) {
-                                            model.session.attachSurface(holder.surface)
-                                        }
-                                    }
+                                    ) {}
 
                                     override fun surfaceDestroyed(holder: SurfaceHolder) {
                                         // Keep the codec; surfaceCreated will adopt the next buffer.
@@ -227,8 +223,8 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
 
-            val feedWarming = model.session.decoder.lastPresentedAt == null
-            if (feedWarming) {
+            val hasPicture by model.session.decoder.hasPicture.collectAsState()
+            if (!hasPicture) {
                 Box(
                     Modifier.liveModuleFrame(layout.onFeed).background(Color.Black),
                     contentAlignment = Alignment.Center,
