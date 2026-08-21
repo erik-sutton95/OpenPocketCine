@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.assists
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
@@ -30,8 +31,8 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.chromeClickable
 
 /**
- * OpenZCine `AssistToolCell`: 19dp glyph over a 9sp mono label, accent-dim
- * fill while on, no border pill. Compact tracking matches iOS `AssistToolChip`.
+ * OpenZCine `AssistToolCell`: 19dp glyph over a 9sp mono label. On-state is
+ * iOS `AssistToolChip`: accent-dim fill plus a 1pt accent stroke.
  */
 @Composable
 internal fun AssistToolCell(
@@ -46,6 +47,7 @@ internal fun AssistToolCell(
         modifier =
             Modifier
                 .background(if (isOn) LiveDesign.accentDim else Color.Transparent, ChromeShape)
+                .border(1.dp, if (isOn) LiveDesign.accent else Color.Transparent, ChromeShape)
                 .chromeClickable(
                     enabled = enabled,
                     onLongClick = onLongClick,

@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -64,9 +65,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -83,7 +87,7 @@ import kotlinx.coroutines.launch
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 @Composable
-fun Modifier.monitorGlass(shape: Shape = ChromeShape): Modifier = glass(shape)
+fun Modifier.monitorGlass(shape: Shape = ChromeShape): Modifier = liveChromeGlass(shape)
 
 @Composable
 fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
@@ -130,6 +134,48 @@ fun FitScale(maxWidth: Dp, content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * Uniform scale-to-fit, centered. Floor matches iOS `minimumScaleFactor(0.65)`
+ * on the battery readout so "100" + bolt stay inside the outline.
+ */
+internal fun scaleToFitFactor(
+    contentWidth: Int,
+    contentHeight: Int,
+    maxWidth: Int,
+    maxHeight: Int,
+    minScale: Float = 0.65f,
+): Float {
+    if (contentWidth <= 0 || contentHeight <= 0 || maxWidth <= 0 || maxHeight <= 0) return 1f
+    val scaleX = if (contentWidth > maxWidth) maxWidth / contentWidth.toFloat() else 1f
+    val scaleY = if (contentHeight > maxHeight) maxHeight / contentHeight.toFloat() else 1f
+    return min(scaleX, scaleY).coerceIn(minScale, 1f)
+}
+
+@Composable
+private fun ScaleToFit(
+    minScale: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(content, modifier) { measurables, constraints ->
+        val measurable = measurables.firstOrNull() ?: return@Layout layout(0, 0) {}
+        val placeable = measurable.measure(Constraints())
+        val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width
+        val maxH = if (constraints.hasBoundedHeight) constraints.maxHeight else placeable.height
+        val scale = scaleToFitFactor(placeable.width, placeable.height, maxW, maxH, minScale)
+        layout(maxW, maxH) {
+            placeable.placeWithLayer(
+                ((maxW - placeable.width * scale) / 2f).toInt(),
+                ((maxH - placeable.height * scale) / 2f).toInt(),
+            ) {
+                scaleX = scale
+                scaleY = scale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+        }
+    }
+}
+
 /** Landscape top deck (OpenZCine `InfoPill` / iOS `GlassDeck`): glass hugs the nested chips. */
 @Composable
 fun InfoPill(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
@@ -154,10 +200,66 @@ fun CaptureStripShell(modifier: Modifier = Modifier, content: @Composable RowSco
                 .wrapContentWidth()
                 .monitorGlass()
                 .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(LiveChromeMetrics.CAPTURE_CELL_GAP.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
+}
+
+/**
+ * Landscape bottom row: capture hugs its chips on the trailing edge; the
+ * view-assist bar fills the leftover so the 12 dp gutter is the only gap.
+ */
+@Composable
+fun LiveBottomChromeBand(
+    band: ChromeRect,
+    showAssist: Boolean,
+    showCapture: Boolean,
+    modifier: Modifier = Modifier,
+    assist: @Composable () -> Unit,
+    capture: @Composable () -> Unit,
+) {
+    Layout(
+        modifier = modifier.liveModuleFrame(band),
+        content = {
+            Box(Modifier.layoutId("capture")) { if (showCapture) capture() }
+            Box(Modifier.layoutId("assist")) { if (showAssist) assist() }
+        },
+    ) { measurables, constraints ->
+        val gap = LiveChromeMetrics.BOTTOM_GAP.dp.roundToPx()
+        val hug = LiveChromeMetrics.CAPTURE_HUG.dp.roundToPx()
+        val captureMeasurable = measurables.first { it.layoutId == "capture" }
+        val assistMeasurable = measurables.first { it.layoutId == "assist" }
+        val minAssist =
+            if (showAssist) max(0, (constraints.maxWidth - gap) / 3) else 0
+        val maxCapture =
+            if (showCapture) {
+                min(hug, constraints.maxWidth - minAssist - if (showAssist) gap else 0).coerceAtLeast(0)
+            } else {
+                0
+            }
+        val capturePlaceable =
+            captureMeasurable.measure(
+                Constraints(maxWidth = maxCapture, maxHeight = constraints.maxHeight),
+            )
+        val captureW = if (showCapture) capturePlaceable.width else 0
+        val assistW =
+            if (!showAssist) {
+                0
+            } else if (captureW == 0) {
+                constraints.maxWidth
+            } else {
+                (constraints.maxWidth - captureW - gap).coerceAtLeast(minAssist)
+            }
+        val assistPlaceable =
+            assistMeasurable.measure(
+                Constraints.fixed(assistW.coerceAtLeast(0), constraints.maxHeight),
+            )
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            if (showAssist) assistPlaceable.place(0, 0)
+            if (showCapture) capturePlaceable.place(constraints.maxWidth - capturePlaceable.width, 0)
+        }
+    }
 }
 
 @Composable
@@ -207,45 +309,59 @@ fun Modifier.chromeClickable(
 }
 
 object LiveChromeMetrics {
-    const val LOCK = LiveDesign.LOCK_SIZE_DP
-    const val AUX = LiveDesign.AUX_SIZE_DP
-    const val RECORD = LiveDesign.RECORD_SIZE_DP
-    const val DISP_W = LiveDesign.DISP_WIDTH_DP
-    const val DISP_H = LiveDesign.DISP_HEIGHT_DP
-    const val TOP_DECK_H = LiveDesign.TOP_DECK_HEIGHT_DP
-    const val TOP_DECK_SIDE = 10f
-    const val TOP_DECK_GAP = 12f
-    const val BOTTOM_INSET = 14f
-    const val BOTTOM_GAP = 12f
-    const val RAIL_W = LiveDesign.RAIL_WIDTH_DP
-    const val CHROME_TOP = 14f
-    const val CHROME_LEADING = 16f
-    const val CHROME_BOTTOM = 12f
-    const val CHROME_TRAILING = 18f
+    /** Compact-phone multiplier. `fit` / live view set this; tests leave it at 1. */
+    var scale: Float = 1f
+
+    val LOCK get() = LiveDesign.LOCK_SIZE_DP * scale
+    val AUX get() = LiveDesign.AUX_SIZE_DP * scale
+    val RECORD get() = LiveDesign.RECORD_SIZE_DP * scale
+    val DISP_W get() = LiveDesign.DISP_WIDTH_DP * scale
+    val DISP_H get() = LiveDesign.DISP_HEIGHT_DP * scale
+    val TOP_DECK_H get() = LiveDesign.TOP_DECK_HEIGHT_DP * scale
+    val TOP_DECK_SIDE get() = 10f * scale
+    val TOP_DECK_GAP get() = 12f * scale
+    val BOTTOM_INSET get() = 14f * scale
+    val BOTTOM_GAP get() = 12f * scale
+    val RAIL_W get() = LiveDesign.RAIL_WIDTH_DP * scale
+    val RAIL_SIDE_GUTTER get() = 8f * scale
+    val CHROME_TOP get() = 14f * scale
+    val CHROME_LEADING get() = 16f * scale
+    val CHROME_BOTTOM get() = 12f * scale
+    val CHROME_TRAILING get() = 18f * scale
     const val FEED_ASPECT = 16f / 9f
     const val CUTOUT_MIN = 50f
     const val CLASSIC_NOTCH_SHIFT = 10f
-    const val BATTERY_PILL_W = 48f
-    const val BATTERY_PILL_H = 40f
-    const val BATTERY_PILL_LEADING = 8f
-    const val BATTERY_PILL_GAP = 6f
-    const val BATTERY_INLINE_GAP = 12f
-    const val BATTERY_INLINE_W = 52f
-    const val ZOOM_INSET = 10f
-    const val ZOOM = LiveDesign.ZOOM_CHIP_DP
-    const val STICK = LiveDesign.GIMBAL_STICK_DP
-    const val KNOB = LiveDesign.GIMBAL_KNOB_DP
-    const val STICK_INSET = 16f
-    const val STICK_GAP = 8f
-    const val FOCUS_RESET = LiveDesign.FOCUS_RESET_DP
-    const val FOCUS_RESET_GAP = 24f
-    const val POPUP_GAP = 10f
-    const val TOP_PICKER_GAP = 8f
-    const val CONTROL_H = LiveDesign.CONTROL_HEIGHT_DP
-    /** Caps the info-pill slot so fillMaxSize glass cannot stretch across a tablet band. */
-    const val INFO_PILL_HUG = 800f
-    /** Six Pocket cells (ISO…AUDIO) + 12+12 strip pad. Trailing-aligned in the 2/3 capture slot. */
-    const val CAPTURE_HUG = 512f
+    val BATTERY_PILL_W get() = 48f * scale
+    val BATTERY_PILL_H get() = 40f * scale
+    val BATTERY_PILL_LEADING get() = 8f * scale
+    val BATTERY_PILL_GAP get() = 6f * scale
+    val BATTERY_INLINE_GAP get() = 12f * scale
+    val BATTERY_INLINE_W get() = 52f * scale
+    val ZOOM_INSET get() = 10f * scale
+    val ZOOM get() = LiveDesign.ZOOM_CHIP_DP * scale
+    val STICK get() = LiveDesign.GIMBAL_STICK_DP * scale
+    val KNOB get() = LiveDesign.GIMBAL_KNOB_DP * scale
+    val STICK_INSET get() = 16f * scale
+    val STICK_GAP get() = 8f * scale
+    val FOCUS_RESET get() = LiveDesign.FOCUS_RESET_DP * scale
+    val FOCUS_RESET_GAP get() = 24f * scale
+    val POPUP_GAP get() = 10f * scale
+    val TOP_PICKER_GAP get() = 8f * scale
+    val CONTROL_H get() = LiveDesign.CONTROL_HEIGHT_DP * scale
+    val INFO_PILL_HUG get() = 800f * scale
+    val CAPTURE_HUG get() = 512f * scale
+    val CAPTURE_CELL_GAP get() = 16f * scale
+}
+
+/** Assist takes leftover after the capture pill hugs the trailing edge. */
+internal data class BottomBarSplit(val assistWidth: Float, val captureWidth: Float)
+
+internal fun bottomBarSplit(barsWidth: Float, gap: Float, captureHug: Float): BottomBarSplit {
+    val inner = max(0f, barsWidth - gap)
+    val captureShare = inner - inner / 3f
+    val capture = min(captureShare, captureHug).coerceAtLeast(0f)
+    val assist = max(0f, barsWidth - gap - capture)
+    return BottomBarSplit(assist, capture)
 }
 
 /**
@@ -253,9 +369,26 @@ object LiveChromeMetrics {
  * the canonical iOS geometry throughout the layout tests (`LiveMonitorLayout`
  * 874×402 with leading 59). `feedFrame` turns it into a left chrome lane: the
  * feed starts at x = 59 while the fixed-margin lock button (chrome insets
- * ignore the safe area; lock spans x 16–56) sits beside it.
+ * ignore the safe area; lock spans x 16–56) sits beside it. Compact 16:9
+ * viewports may slide a couple of dp left of 59 so the trailing rail still
+ * fits in the letterbox.
  */
 internal const val IOS_ISLAND_LANE_DP = 59f
+
+/**
+ * Shortest side (sw dp / landscape height) of the iPhone Pro Max / 6.8" class
+ * the live HUD is authored against. Compact phones (S25 360 dp) scale chrome
+ * down to [CHROME_SCALE_MIN] so record / rail / type match that board.
+ */
+internal const val CHROME_SCALE_REFERENCE_DP = 424f
+
+internal const val CHROME_SCALE_MIN = 0.935f
+
+/** 1 on Pro Max / 6.8"+; [CHROME_SCALE_MIN] on S25-class 360 dp; lerp in between. */
+internal fun monitorChromeScale(smallestWidthDp: Float): Float {
+    if (smallestWidthDp <= 0f) return 1f
+    return (smallestWidthDp / CHROME_SCALE_REFERENCE_DP).coerceIn(CHROME_SCALE_MIN, 1f)
+}
 
 /**
  * The bottom inset handed to the portrait zone map while Android's system bars
@@ -277,8 +410,15 @@ internal const val PORTRAIT_SYSTEM_RAIL_BOTTOM_INSET_DP = 30f
  * floor is a MINIMUM under the physical cutout only; a transient bar on this
  * edge still ADDS its lane on top so the feed clears the overlay.
  */
-internal fun monitorLeadingInsetDp(cutoutDp: Float, transientBarDp: Float): Float =
-    maxOf(cutoutDp, IOS_ISLAND_LANE_DP) + maxOf(0f, transientBarDp - cutoutDp)
+internal fun monitorLeadingInsetDp(
+    cutoutDp: Float,
+    transientBarDp: Float,
+    chromeScale: Float = 1f,
+): Float {
+    // Island floor is geometry, not chrome scale — compact phones still get
+    // the iPhone lane. `chromeScale` is unused here (callers pass it).
+    return maxOf(cutoutDp, IOS_ISLAND_LANE_DP) + maxOf(0f, transientBarDp - cutoutDp)
+}
 
 /**
  * Bottom inset handed to the zone map, in dp.
@@ -409,7 +549,9 @@ data class LiveMonitorLayout(
             safeTop: Float,
             safeBottom: Float,
             showsBottomBars: Boolean,
+            chromeScale: Float = 1f,
         ): LiveMonitorLayout {
+            LiveChromeMetrics.scale = chromeScale
             val vw = max(0f, viewportWidth)
             val vh = max(0f, viewportHeight)
             val constrained = isWidthConstrained(vw, vh)
@@ -477,7 +619,7 @@ data class LiveMonitorLayout(
             val leadCut = if (safeLeading >= LiveChromeMetrics.CUTOUT_MIN) safeLeading else 0f
             val trailCut = if (safeTrailing >= LiveChromeMetrics.CUTOUT_MIN) safeTrailing else 0f
             val leadingInset = if (trailCut > leadCut) 0f else leadCut
-            val x =
+            val xWanted =
                 if (isClassicNotch(safeLeading, safeTrailing)) {
                     val available = max(0f, remaining - max(0f, safeLeading) - max(0f, safeTrailing))
                     val shift = min(LiveChromeMetrics.CLASSIC_NOTCH_SHIFT, available)
@@ -485,6 +627,11 @@ data class LiveMonitorLayout(
                 } else {
                     min(remaining, leadingInset)
                 }
+            // S25 leftover 140. Reserve the rail plus a few dp so record
+            // clears the picture without parking the well in the lock lane.
+            // Auditor 874×402 still pins x at 59.
+            val trailLane = LiveChromeMetrics.RAIL_W + 8f
+            val x = min(xWanted, max(0f, remaining - trailLane))
             return ChromeRect(x, 0f, width, vh)
         }
 
@@ -528,7 +675,10 @@ data class LiveMonitorLayout(
             return if (laneWidth >= railWidth) {
                 ChromeRect(laneX + (laneWidth - railWidth) / 2f, chrome.minY, railWidth, chrome.height)
             } else {
-                ChromeRect(chrome.maxX - railWidth, chrome.minY, railWidth, chrome.height)
+                // Prefer clipping the screen edge over covering the picture.
+                // Hug-to-chrome.maxX jumped ~20 dp onto the feed when the lane
+                // was only a couple of dp short of RAIL_W.
+                ChromeRect(laneX, chrome.minY, railWidth, chrome.height)
             }
         }
 
@@ -632,16 +782,10 @@ data class LiveMonitorLayout(
                 LiveChromeMetrics.RECORD + LiveChromeMetrics.DISP_W + 2f * LiveChromeMetrics.BOTTOM_GAP
             val barsWidth = if (constrained) max(0f, chrome.width - reserved) else chrome.width
             val gap = LiveChromeMetrics.BOTTOM_GAP
-            val assistWidth = max(0f, (barsWidth - gap) / 3f)
-            val captureWidth = max(0f, barsWidth - gap - assistWidth)
             val y = vh - LiveChromeMetrics.BOTTOM_INSET - LiveChromeMetrics.CONTROL_H
-            val assist = ChromeRect(chrome.minX, y, assistWidth, LiveChromeMetrics.CONTROL_H)
-            val captureSlot = ChromeRect(assist.maxX + gap, y, captureWidth, LiveChromeMetrics.CONTROL_H)
-            // OpenZCine trailing-aligns the measured glass pill in the zone slot
-            // (`contentAlignment = CenterEnd`). LiveViewScreen still fillMaxSize-glasses
-            // this module, so the slot itself is content-capped on the trailing edge.
-            val hug = min(captureSlot.width, LiveChromeMetrics.CAPTURE_HUG)
-            val capture = ChromeRect(captureSlot.maxX - hug, y, hug, LiveChromeMetrics.CONTROL_H)
+            val split = bottomBarSplit(barsWidth, gap, LiveChromeMetrics.CAPTURE_HUG)
+            val capture = ChromeRect(chrome.minX + barsWidth - split.captureWidth, y, split.captureWidth, LiveChromeMetrics.CONTROL_H)
+            val assist = ChromeRect(chrome.minX, y, split.assistWidth, LiveChromeMetrics.CONTROL_H)
             return assist to capture
         }
     }
@@ -686,7 +830,7 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
     val tint = if (locked) LiveDesign.accent else LiveDesign.text.copy(alpha = 0.86f)
     Box(
         modifier
-            .size(LiveDesign.LOCK_SIZE_DP.dp)
+            .size(LiveChromeMetrics.LOCK.dp)
             .monitorGlass()
             .then(
                 if (locked) Modifier.border(1.5.dp, LiveDesign.accent.copy(alpha = 0.75f), ChromeShape)
@@ -713,8 +857,8 @@ fun DispButton(
 ) {
     Column(
         modifier
-            .width(LiveDesign.DISP_WIDTH_DP.dp)
-            .height(LiveDesign.DISP_HEIGHT_DP.dp)
+            .width(LiveChromeMetrics.DISP_W.dp)
+            .height(LiveChromeMetrics.DISP_H.dp)
             .monitorGlass()
             .chromeClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics {
@@ -748,14 +892,14 @@ fun DispButton(
 fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
     Box(
         modifier
-            .size(LiveDesign.AUX_SIZE_DP.dp)
+            .size(LiveChromeMetrics.AUX.dp)
             .monitorGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics { role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.size((LiveDesign.AUX_SIZE_DP * 0.36f).dp),
+            Modifier.size((LiveChromeMetrics.AUX * 0.36f).dp),
             contentAlignment = Alignment.Center,
         ) {
             glyph(LiveDesign.text.copy(alpha = 0.86f))
@@ -805,7 +949,7 @@ fun RecordButton(
     }
     Box(
         modifier
-            .size(LiveDesign.RECORD_SIZE_DP.dp)
+            .size(LiveChromeMetrics.RECORD.dp)
             .then(if (recording && !enabled) Modifier.graphicsLayer { alpha = 0.72f } else Modifier)
             .shadow(2.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.40f))
             .chromeClickable(enabled = enabled, onClick = { if (confirm) confirmOpen = true else onClick() })
@@ -867,6 +1011,10 @@ fun BatteryPair(
     }
 }
 
+/** iOS `LiveBatteryRow` outline: 26×15 body, nub drawn outside the trailing edge. */
+internal const val BATTERY_CELL_W_DP = 26f
+internal const val BATTERY_CELL_H_DP = 15f
+
 @Composable
 private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) {
     val tint =
@@ -876,41 +1024,82 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
             percent <= 40 -> LiveDesign.amber
             else -> LiveDesign.good
         }
+    val readout = if (percent < 0) "—" else "$percent"
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) {
             if (camera) CameraGlyph(LiveDesign.muted, Modifier.size(12.dp, 10.dp))
             else PhoneGlyph(LiveDesign.muted, Modifier.size(7.dp, 11.dp))
         }
-        Box(Modifier.size(28.dp, 16.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val stroke = 1.2.dp.toPx()
-                val bodyWidth = size.width - 3.dp.toPx()
-                drawRoundRect(
-                    tint.copy(alpha = 0.85f),
-                    topLeft = Offset.Zero,
-                    size = Size(bodyWidth, size.height),
-                    cornerRadius = CornerRadius(3.5.dp.toPx()),
-                    style = Stroke(stroke),
-                )
-                drawRoundRect(
-                    tint.copy(alpha = 0.85f),
-                    topLeft = Offset(bodyWidth, size.height * 0.28f),
-                    size = Size(2.4.dp.toPx(), size.height * 0.44f),
-                    cornerRadius = CornerRadius(1.dp.toPx()),
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                if (charging) {
-                    Text("⚡", color = tint, fontSize = 7.sp)
+        Box(Modifier.size(BATTERY_CELL_W_DP.dp, BATTERY_CELL_H_DP.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 2.dp, vertical = 1.dp)
+                    .clip(RoundedCornerShape(2.5.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                ScaleToFit(minScale = 0.65f, modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    ) {
+                        if (charging) BoltGlyph(tint, Modifier.size(5.dp, 7.dp))
+                        Text(
+                            readout,
+                            color = tint,
+                            style =
+                                LiveType.ui(10f, FontWeight.Medium).copy(
+                                    color = tint,
+                                    fontFeatureSettings = "tnum",
+                                    lineHeight = 10.sp,
+                                    lineHeightStyle =
+                                        LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                ),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                        )
+                    }
                 }
-                Text(
-                    if (percent < 0) "—" else "$percent",
-                    color = tint,
-                    style = LiveType.ui(10f, FontWeight.Medium),
-                    maxLines = 1,
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                drawRoundRect(
+                    tint.copy(alpha = 0.85f),
+                    cornerRadius = CornerRadius(3.5.dp.toPx()),
+                    style = Stroke(1.2.dp.toPx()),
                 )
             }
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = 3.dp)
+                    .size(1.6.dp, 6.dp)
+                    .background(tint.copy(alpha = 0.85f), RoundedCornerShape(1.dp)),
+            )
         }
+    }
+}
+
+@Composable
+private fun BoltGlyph(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val path =
+            Path().apply {
+                moveTo(w * 0.62f, 0f)
+                lineTo(w * 0.08f, h * 0.55f)
+                lineTo(w * 0.46f, h * 0.55f)
+                lineTo(w * 0.38f, h)
+                lineTo(w * 0.92f, h * 0.42f)
+                lineTo(w * 0.54f, h * 0.42f)
+                close()
+            }
+        drawPath(path, tint)
     }
 }
 
@@ -1079,7 +1268,7 @@ fun CaptureSettingCell(
                     if (active) Modifier.border(1.dp, LiveDesign.accentDim, ChromeShape) else Modifier,
                 )
                 .chromeClickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
@@ -1101,7 +1290,8 @@ fun AssistToolChip(label: String, on: Boolean, enabled: Boolean, stub: Boolean, 
     Column(
         modifier =
             Modifier.clip(ChromeShape)
-                .background(if (on) LiveDesign.accentDim else Color.Transparent)
+                .background(if (on) LiveDesign.accentDim else Color.Transparent, ChromeShape)
+                .border(1.dp, if (on) LiveDesign.accent else Color.Transparent, ChromeShape)
                 .chromeClickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1128,18 +1318,18 @@ fun LiveGimbalStick(
     onFlip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val size = LiveDesign.GIMBAL_STICK_DP.dp
-    val knob = LiveDesign.GIMBAL_KNOB_DP.dp
+    val knobRatio = LiveDesign.GIMBAL_KNOB_DP / LiveDesign.GIMBAL_STICK_DP
     var knobOffset by remember { mutableStateOf(Offset.Zero) }
     val scope = rememberCoroutineScope()
     var recenterJob by remember { mutableStateOf<Job?>(null) }
     Box(
         modifier
-            .size(size)
+            .fillMaxSize()
             .semantics { contentDescription = "Gimbal stick" }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
-                val travel = (size.toPx() - knob.toPx()) / 2f
+                val stickPx = min(this.size.width, this.size.height).toFloat()
+                val travel = (stickPx - stickPx * knobRatio) / 2f
                 var taps = 0
                 var lastTap = 0L
                 awaitEachGesture {
@@ -1199,15 +1389,17 @@ fun LiveGimbalStick(
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            val stickPx = size.minDimension
+            val knobPx = stickPx * knobRatio
             val stroke = 2.dp.toPx()
             drawCircle(
                 color = Color.White.copy(alpha = 0.30f),
-                radius = size.toPx() / 2f - stroke / 2f,
+                radius = stickPx / 2f - stroke / 2f,
                 style = Stroke(width = stroke),
             )
             drawCircle(
                 color = Color.White.copy(alpha = 0.30f),
-                radius = knob.toPx() / 2f,
+                radius = knobPx / 2f,
                 center = center + knobOffset,
             )
         }

@@ -61,20 +61,20 @@ data class PortraitZones(
 )
 
 object LivePortraitMetrics {
-    const val TOP_BAR = 44f
-    const val TOP_BAR_LIFT = 8f
-    const val SYSTEM_BAR = 100f
-    const val SYSTEM_BAR_LIFT = 14f
-    const val CAPTURE = 64f
-    const val ASSIST = 58f
-    const val TOGGLE = 40f
-    const val TOGGLE_GAP = 8f
-    const val ASSIST_RAIL_EXPANDED = 60f
-    const val ASSIST_RAIL_COLLAPSED = 44f
-    const val ASSIST_RAIL_EDGE = 10f
-    const val REC_OPTIONS = 40f
-    const val REC_OPTIONS_INSET = 10f
-    const val REC_OPTIONS_GAP = 8f
+    val TOP_BAR get() = 44f * LiveChromeMetrics.scale
+    val TOP_BAR_LIFT get() = 8f * LiveChromeMetrics.scale
+    val SYSTEM_BAR get() = 100f * LiveChromeMetrics.scale
+    val SYSTEM_BAR_LIFT get() = 14f * LiveChromeMetrics.scale
+    val CAPTURE get() = 64f * LiveChromeMetrics.scale
+    val ASSIST get() = 58f * LiveChromeMetrics.scale
+    val TOGGLE get() = 40f * LiveChromeMetrics.scale
+    val TOGGLE_GAP get() = 8f * LiveChromeMetrics.scale
+    val ASSIST_RAIL_EXPANDED get() = 60f * LiveChromeMetrics.scale
+    val ASSIST_RAIL_COLLAPSED get() = 44f * LiveChromeMetrics.scale
+    val ASSIST_RAIL_EDGE get() = 10f * LiveChromeMetrics.scale
+    val REC_OPTIONS get() = 40f * LiveChromeMetrics.scale
+    val REC_OPTIONS_INSET get() = 10f * LiveChromeMetrics.scale
+    val REC_OPTIONS_GAP get() = 8f * LiveChromeMetrics.scale
 
     val FIT_BELOW_FEED_SLOT: Float
         get() =
@@ -491,7 +491,7 @@ fun LivePortraitSystemBar(
                     Spacer(Modifier.weight(1f))
                 }
             }
-            if (showsRecord) Spacer(Modifier.width(LiveDesign.RECORD_SIZE_DP.dp))
+            if (showsRecord) Spacer(Modifier.width(LiveChromeMetrics.RECORD.dp))
             Row(
                 Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -703,8 +703,8 @@ private fun LivePortraitRailTool(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(ChromeShape)
                 .background(if (on) LiveDesign.accentDim else Color.Transparent, ChromeShape)
+                .border(1.dp, if (on) LiveDesign.accent else Color.Transparent, ChromeShape)
                 .chromeClickable(
                     enabled = !locked,
                     onLongClick = if (tool.hasConfiguration) onLongPress else null,

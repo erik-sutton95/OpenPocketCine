@@ -49,7 +49,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
+
+private fun startupType(size: Float, weight: FontWeight = FontWeight.Normal) =
+    LiveType.ui(size, weight, LiveTypeDesign.Rounded)
 
 /** Pairing chrome — DJI Sky Blue `#00A3E0` on Black, no Nikon gold. */
 object StartupColors {
@@ -253,16 +258,13 @@ fun StartupHeader(
             Text(
                 "OPENPOCKETCINE",
                 color = StartupColors.muted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.3.sp,
+                style = startupType(10f, FontWeight.SemiBold).copy(letterSpacing = 1.3.sp),
             )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
                     title,
                     color = StartupColors.ink,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = startupType(17f, FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -286,7 +288,7 @@ fun StartupHeader(
                     .padding(horizontal = 14.dp, vertical = 7.dp),
         ) {
             Box(Modifier.size(7.dp).background(statusColor, CircleShape))
-            Text(statusTitle, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(statusTitle, color = statusColor, style = startupType(12f, FontWeight.Medium), maxLines = 1)
         }
     }
 }
@@ -296,8 +298,7 @@ private fun StartupLegalLink(label: String, onClick: () -> Unit) {
     Text(
         label,
         color = StartupColors.dim,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
+        style = startupType(11f, FontWeight.Medium),
         maxLines = 1,
         modifier =
             Modifier.semantics { contentDescription = "$label policy" }
@@ -310,13 +311,12 @@ private fun StartupLegalLink(label: String, onClick: () -> Unit) {
 fun StartupWizardProgress(currentStep: Int, totalSteps: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row {
-            Text("Setup", color = StartupColors.muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text("Setup", color = StartupColors.muted, style = startupType(10f, FontWeight.SemiBold))
             Spacer(Modifier.weight(1f))
             Text(
                 "Step $currentStep of $totalSteps",
                 color = StartupColors.dim,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
+                style = startupType(10f, FontWeight.Medium),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -401,14 +401,12 @@ fun StartupEmptyDiscoveryCard(
             Text(
                 title,
                 color = StartupColors.ink,
-                fontSize = if (compact) 13.sp else 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = startupType(if (compact) 13f else 15f, FontWeight.SemiBold),
             )
             Text(
                 hint,
                 color = StartupColors.muted,
-                fontSize = if (compact) 10.sp else 12.sp,
-                lineHeight = if (compact) 14.sp else 16.sp,
+                style = startupType(if (compact) 10f else 12f).copy(lineHeight = if (compact) 14.sp else 16.sp),
             )
         }
         StartupIndeterminateBar()
@@ -420,8 +418,7 @@ fun StartupStatusPill(text: String, color: Color) {
     Text(
         text,
         color = color,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.SemiBold,
+        style = startupType(11f, FontWeight.SemiBold),
         maxLines = 1,
         modifier =
             Modifier.border(1.dp, color.copy(alpha = 0.50f), CircleShape)
@@ -451,13 +448,13 @@ fun StartupConnectionProgress(
                 StartupGlyphTile(glyph, size = if (tight) 36.dp else 48.dp)
             }
             if (glyph == null) {
-                Text(label, color = StartupColors.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(label, color = StartupColors.ink, style = startupType(13f, FontWeight.SemiBold))
             }
         }
         if (glyph != null) {
-            Text(label, color = StartupColors.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(label, color = StartupColors.ink, style = startupType(15f, FontWeight.SemiBold))
             if (detail != null) {
-                Text(detail, color = StartupColors.muted, fontSize = 13.sp)
+                Text(detail, color = StartupColors.muted, style = startupType(13f))
             }
         }
     }
@@ -480,7 +477,7 @@ fun StartupQuietButton(
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = StartupColors.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text, color = StartupColors.ink, style = startupType(13f, FontWeight.SemiBold), maxLines = 1)
     }
 }
 
@@ -493,7 +490,7 @@ fun StartupFilledButton(
     large: Boolean = false,
 ) {
     val height = if (large) 48.dp else 40.dp
-    val size = if (large) 16.sp else 14.sp
+    val type = startupType(if (large) 16f else 14f, FontWeight.SemiBold)
     Box(
         modifier
             .height(height)
@@ -507,8 +504,7 @@ fun StartupFilledButton(
         Text(
             text,
             color = if (enabled) StartupColors.darkText else StartupColors.muted,
-            fontSize = size,
-            fontWeight = FontWeight.SemiBold,
+            style = type,
             maxLines = 1,
         )
     }
@@ -538,7 +534,7 @@ fun StartupOutlineButton(
             StartupGlyph(StartupGlyphKind.CHEVRON_LEFT, tint = StartupColors.ink, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(5.dp))
         }
-        Text(text, color = StartupColors.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text, color = StartupColors.ink, style = startupType(14f, FontWeight.SemiBold), maxLines = 1)
     }
 }
 
@@ -565,7 +561,7 @@ fun StartupYourCamerasButton(
         Spacer(Modifier.width(7.dp))
         StartupGlyph(StartupGlyphKind.CAMERA, tint = StartupColors.ink, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(7.dp))
-        Text("Your cameras", color = StartupColors.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text("Your cameras", color = StartupColors.ink, style = startupType(14f, FontWeight.SemiBold), maxLines = 1)
     }
 }
 

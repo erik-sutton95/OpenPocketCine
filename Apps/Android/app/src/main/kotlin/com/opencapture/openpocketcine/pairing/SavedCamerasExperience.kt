@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.AppPanel
+import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.FoundCamera
 
@@ -76,15 +78,13 @@ private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier)
         Text(
             "Your cameras.",
             color = StartupColors.ink,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
+            style = LiveType.ui(24f, FontWeight.Bold, LiveTypeDesign.Rounded),
             maxLines = 1,
         )
         Text(
             "Tap a saved camera to reconnect.",
             color = StartupColors.muted,
-            fontSize = 13.sp,
-            lineHeight = 16.sp,
+            style = LiveType.ui(13f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
             modifier = Modifier.padding(top = 10.dp),
         )
         if (hugsContent) Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(1f))
@@ -131,15 +131,12 @@ private fun CameraListCard(model: AppModel, modifier: Modifier) {
         Text(
             "CAMERA LIST",
             color = StartupColors.muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.4.sp,
+            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
         )
         Text(
             "Tap a camera to connect",
             color = StartupColors.ink,
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Bold,
+            style = LiveType.ui(20f, FontWeight.Bold, LiveTypeDesign.Rounded),
             modifier = Modifier.padding(top = 6.dp),
         )
         Column(
@@ -161,7 +158,7 @@ private fun CameraListCard(model: AppModel, modifier: Modifier) {
                 Text(
                     "No cameras saved yet — Pair new camera walks you through it.",
                     color = StartupColors.muted,
-                    fontSize = 12.sp,
+                    style = LiveType.ui(12f, design = LiveTypeDesign.Rounded),
                 )
             }
         }
@@ -203,8 +200,7 @@ private fun SavedCameraRow(
                     Text(
                         camera.displayName,
                         color = StartupColors.ink,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        style = LiveType.ui(16f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -219,7 +215,7 @@ private fun SavedCameraRow(
                 Text(
                     camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
                     color = StartupColors.muted,
-                    fontSize = 13.sp,
+                    style = LiveType.ui(13f, design = LiveTypeDesign.Rounded),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -228,8 +224,7 @@ private fun SavedCameraRow(
                 Text(
                     "⋯",
                     color = StartupColors.muted,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = LiveType.ui(17f, FontWeight.Bold, LiveTypeDesign.Rounded),
                     modifier =
                         Modifier.clip(CircleShape)
                             .clickable(enabled = !isBusy) { menu = true }

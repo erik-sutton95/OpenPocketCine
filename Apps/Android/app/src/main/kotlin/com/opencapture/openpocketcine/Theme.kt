@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -41,17 +42,42 @@ object OpcFonts {
     val mono = FontFamily.Monospace
 }
 
+/** iOS `LiveType.ui(design:)`. Rounded is the startup/home face. */
+enum class LiveTypeDesign {
+    Default,
+    Rounded,
+    Monospaced,
+}
+
+/**
+ * Landing-page type, same as iOS `LiveType`: Sora for titles, IBM Plex Sans
+ * for body / chrome. Camera readouts stay platform mono (`LiveType.mono`),
+ * matching iOS SF Mono via `.system(..., design: .monospaced)`.
+ */
 object LiveType {
-    fun title(size: Float, weight: FontWeight = FontWeight.SemiBold) =
+    fun display(size: Float, weight: FontWeight = FontWeight.SemiBold) =
         TextStyle(fontFamily = OpcFonts.sora, fontWeight = weight, fontSize = size.sp, color = LiveDesign.text)
 
-    fun ui(size: Float, weight: FontWeight = FontWeight.Normal) =
-        TextStyle(
-            fontFamily = if (weight >= FontWeight.SemiBold && size >= 16f) OpcFonts.sora else OpcFonts.plex,
-            fontWeight = weight,
-            fontSize = size.sp,
-            color = LiveDesign.text,
-        )
+    fun title(size: Float, weight: FontWeight = FontWeight.SemiBold) = display(size, weight)
+
+    fun text(size: Float, weight: FontWeight = FontWeight.Normal) =
+        TextStyle(fontFamily = OpcFonts.plex, fontWeight = weight, fontSize = size.sp, color = LiveDesign.text)
+
+    fun ui(
+        size: Float,
+        weight: FontWeight = FontWeight.Normal,
+        design: LiveTypeDesign = LiveTypeDesign.Default,
+    ): TextStyle {
+        if (design == LiveTypeDesign.Monospaced) return mono(size, weight)
+        val titleWeight = weight >= FontWeight.SemiBold
+        val useSora =
+            when (design) {
+                LiveTypeDesign.Rounded -> titleWeight || size >= 16f
+                LiveTypeDesign.Default -> titleWeight && size >= 17f
+                LiveTypeDesign.Monospaced -> false
+            }
+        return if (useSora) display(size, weight) else text(size, weight)
+    }
 
     fun mono(size: Float, weight: FontWeight = FontWeight.Medium) =
         TextStyle(fontFamily = OpcFonts.mono, fontWeight = weight, fontSize = size.sp, color = LiveDesign.text)
@@ -124,6 +150,7 @@ fun OpenPocketCineTheme(content: @Composable () -> Unit) {
                 onPrimary = BrandColors.darkText,
             ),
         typography = OpcTypography,
-        content = content,
-    )
+    ) {
+        ProvideTextStyle(LiveType.text(16f), content)
+    }
 }

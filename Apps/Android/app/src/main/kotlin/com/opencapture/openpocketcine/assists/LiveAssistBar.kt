@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.glass
+import com.opencapture.openpocketcine.monitorGlass
 
 /**
  * OpenZCine landscape assist strip: glass pill, tools in groups of three,
@@ -81,7 +81,7 @@ private fun LiveAssistBarRow(
         modifier
             .height(LiveDesign.CONTROL_HEIGHT_DP.dp)
             .fillMaxWidth()
-            .glass(),
+            .monitorGlass(),
     ) {
         Row(
             Modifier

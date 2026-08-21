@@ -1,8 +1,10 @@
 package com.opencapture.openpocketcine
 
-import android.graphics.PixelFormat
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.graphics.Bitmap
+import android.graphics.SurfaceTexture
+import android.view.Surface
+import android.view.TextureView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,16 +32,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -164,10 +173,14 @@ fun LiveViewScreen(model: AppModel) {
         val cutout = WindowInsets.displayCutout
         val barInsets = LocalImmersiveBarInsets.current
         val portrait = maxHeight > maxWidth
+        val chromeScale =
+            monitorChromeScale(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
+        LiveChromeMetrics.scale = chromeScale
         // Live safe area: punch-hole cutout plus applied system-bar lanes.
         // Landscape leading is floored at the iPhone island lane so the 16:9
         // feed sits right of lock/battery (OpenZCine `monitorLeadingInsetDp`).
-        // Trailing gets no floor — the rail centres in the letterbox lane.
+        // Trailing gets no floor; `feedFrame` yields a RAIL_W lane so the
+        // record rail clears the picture.
         fun edgeDp(cutoutPx: Int, barPx: Int): Float =
             with(density) { maxOf(cutoutPx, barPx).toDp().value }
         val safeTop by animateFloatAsState(
@@ -190,6 +203,7 @@ fun LiveViewScreen(model: AppModel) {
                     monitorLeadingInsetDp(
                         cutoutDp = cutoutDp,
                         transientBarDp = barInsets.left.toDp().value,
+                        chromeScale = chromeScale,
                     )
                 }
             },
@@ -238,6 +252,7 @@ fun LiveViewScreen(model: AppModel) {
                 safeTop = safeTop,
                 safeBottom = safeBottom,
                 showsBottomBars = showsBottomBars,
+                chromeScale = chromeScale,
             )
         val layout =
             if (zones != null) {
@@ -264,7 +279,13 @@ fun LiveViewScreen(model: AppModel) {
             } else {
                 Modifier
             }
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density, density.fontScale * chromeScale),
+        ) {
         Box(Modifier.fillMaxSize().then(sceneLayer)) {
+            // TextureView lives *inside* the recorded well so Kyant samples the
+            // picture. A SurfaceView is a separate SurfaceFlinger buffer and
+            // reads as black under HUD glass (OpenZCine LiveFeedView / Kyant #82).
             Box(
                 Modifier
                     .liveModuleFrame(layout.feed)
@@ -275,37 +296,12 @@ fun LiveViewScreen(model: AppModel) {
                             Modifier
                         },
                     )
-                    .background(LiveDesign.feedWell),
-            )
-            Box(
-                Modifier
-                    .liveModuleFrame(layout.feed)
-                    .graphicsLayer { scaleX = if (assist.mirror) -1f else 1f },
+                    .clipToBounds(),
             ) {
-                AndroidView(
-                    factory = { context ->
-                        SurfaceView(context).apply {
-                            holder.setFormat(PixelFormat.RGBX_8888)
-                            holder.addCallback(
-                                object : SurfaceHolder.Callback {
-                                    override fun surfaceCreated(holder: SurfaceHolder) {
-                                        model.session.attachSurface(holder.surface)
-                                    }
-
-                                    override fun surfaceChanged(
-                                        holder: SurfaceHolder,
-                                        format: Int,
-                                        width: Int,
-                                        height: Int,
-                                    ) {}
-
-                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                        // Keep the codec; surfaceCreated will adopt the next buffer.
-                                    }
-                                },
-                            )
-                        }
-                    },
+                LiveFeedPresenter(
+                    mirrored = assist.mirror,
+                    captureFrames = glass.tier == GlassTier.FULL,
+                    onSurface = { model.session.attachSurface(it) },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -524,7 +520,110 @@ fun LiveViewScreen(model: AppModel) {
                     onDone = { model.endChromeEditing() },
                 )
             }
+        }
     }
+    }
+}
+
+/**
+ * MediaCodec still needs a Surface. Kyant cannot sample that TextureView, so FULL
+ * glass also blits each frame into a Compose Canvas inside the recorded well —
+ * the same present split OpenZCine uses for liquid glass.
+ */
+@Composable
+private fun LiveFeedPresenter(
+    mirrored: Boolean,
+    captureFrames: Boolean,
+    onSurface: (Surface) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var frameGen by remember { mutableIntStateOf(0) }
+    val frameBmp = remember { arrayOfNulls<Bitmap>(1) }
+    val capture = rememberUpdatedState(captureFrames)
+    val attach = rememberUpdatedState(onSurface)
+
+    Box(modifier.graphicsLayer { scaleX = if (mirrored) -1f else 1f }) {
+        AndroidView(
+            factory = { context ->
+                TextureView(context).apply {
+                    isOpaque = true
+                    surfaceTextureListener =
+                        TextureFeedListener(
+                            host = this,
+                            onSurface = { attach.value(it) },
+                            onUpdated = { tv ->
+                                if (capture.value) {
+                                    val w = tv.width
+                                    val h = tv.height
+                                    if (w > 0 && h > 0) {
+                                        val dst =
+                                            frameBmp[0]?.takeIf { it.width == w && it.height == h }
+                                                ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                                                    .also { frameBmp[0] = it }
+                                        tv.getBitmap(dst)
+                                        tv.post { frameGen += 1 }
+                                    }
+                                }
+                            },
+                        )
+                }
+            },
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = 0.999f
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    },
+        )
+        val gen = frameGen
+        val bmp = frameBmp[0]
+        if (captureFrames && gen > 0 && bmp != null && !bmp.isRecycled) {
+            Canvas(Modifier.fillMaxSize()) {
+                @Suppress("UNUSED_EXPRESSION")
+                gen
+                drawIntoCanvas { canvas ->
+                    val dst = android.graphics.Rect(0, 0, size.width.toInt(), size.height.toInt())
+                    canvas.nativeCanvas.drawBitmap(bmp, null, dst, null)
+                }
+            }
+        }
+    }
+}
+
+/** Hands MediaCodec a TextureView surface without resetting the GOP on teardown. */
+private class TextureFeedListener(
+    private val host: TextureView,
+    private val onSurface: (Surface) -> Unit,
+    private val onUpdated: ((TextureView) -> Unit)?,
+) : TextureView.SurfaceTextureListener {
+    private var surface: Surface? = null
+
+    override fun onSurfaceTextureAvailable(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+    ) {
+        val next = Surface(surfaceTexture)
+        surface?.release()
+        surface = next
+        onSurface(next)
+    }
+
+    override fun onSurfaceTextureSizeChanged(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+    ) = Unit
+
+    override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+        surface?.release()
+        surface = null
+        return true
+    }
+
+    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
+        onUpdated?.invoke(host)
     }
 }
 
@@ -664,35 +763,48 @@ private fun LandscapeChrome(
                 LiveFocusResetButton(onClick = onFocusReset)
             }
         }
-        if (showsAssist) {
-            Box(
-                Modifier
-                    .liveModuleFrame(layout.assist)
-                    .alpha(if (uiLocked) 0.4f else 1f)
-                    .chromeEditStroke(editing != null, true),
-            ) {
-                LiveAssistBar(
-                    state = assist,
-                    locked = uiLocked || !hits,
-                    onLongPress = onAssistLongPress,
+        if (showsAssist || showsCapture) {
+            val bandMinX = minOf(layout.assist.minX, layout.capture.minX)
+            val band =
+                ChromeRect(
+                    bandMinX,
+                    minOf(layout.assist.minY, layout.capture.minY),
+                    maxOf(layout.assist.maxX, layout.capture.maxX) - bandMinX,
+                    maxOf(layout.assist.height, layout.capture.height),
                 )
-            }
-        }
-        if (showsCapture) {
-            Box(
-                Modifier
-                    .liveModuleFrame(layout.capture)
-                    .alpha(if (uiLocked) 0.4f else 1f)
-                    .chromeEditStroke(editing != null, true),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                LiveCaptureStrip(
-                    status = status,
-                    active = sheet,
-                    enabled = !uiLocked && !controlBusy && hits,
-                    onOpen = { onSheet(if (sheet == it) null else it) },
-                )
-            }
+            LiveBottomChromeBand(
+                band = band,
+                showAssist = showsAssist,
+                showCapture = showsCapture,
+                assist = {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .alpha(if (uiLocked) 0.4f else 1f)
+                            .chromeEditStroke(editing != null, true),
+                    ) {
+                        LiveAssistBar(
+                            state = assist,
+                            locked = uiLocked || !hits,
+                            onLongPress = onAssistLongPress,
+                        )
+                    }
+                },
+                capture = {
+                    Box(
+                        Modifier
+                            .alpha(if (uiLocked) 0.4f else 1f)
+                            .chromeEditStroke(editing != null, true),
+                    ) {
+                        LiveCaptureStrip(
+                            status = status,
+                            active = sheet,
+                            enabled = !uiLocked && !controlBusy && hits,
+                            onOpen = { onSheet(if (sheet == it) null else it) },
+                        )
+                    }
+                },
+            )
         }
     }
 }

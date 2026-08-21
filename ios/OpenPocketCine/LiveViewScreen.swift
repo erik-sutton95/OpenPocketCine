@@ -26,6 +26,9 @@ struct LiveViewScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let chromeScale = LiveChromeMetrics.chromeScale(
+                shortestSide: min(proxy.size.width, proxy.size.height))
+            LiveChromeMetrics.scale = chromeScale
             let safeArea = LiveMonitorLayout.resolvedSafeArea(
                 proxy.safeAreaInsets, scene: LiveMonitorLayout.sceneSafeArea)
             let base = LiveMonitorLayout.fit(

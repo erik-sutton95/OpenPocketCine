@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.FoundCamera
 
@@ -78,8 +80,7 @@ fun PairingExperience(
                 Text(
                     "We'll walk you through it — your camera is connected in about a minute.",
                     color = StartupColors.muted,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+                    style = LiveType.ui(12f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
                 )
                 StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
                 StepCard(
@@ -106,15 +107,12 @@ private fun PortraitIntroHeader(model: AppModel) {
             Text(
                 "FIRST RUN",
                 color = StartupColors.muted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.4.sp,
+                style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
             )
             Text(
                 "Pair your camera.",
                 color = StartupColors.ink,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                style = LiveType.ui(22f, FontWeight.Bold, LiveTypeDesign.Rounded),
                 maxLines = 1,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -132,22 +130,18 @@ private fun IntroCard(model: AppModel, step: Int, modifier: Modifier) {
         Text(
             "FIRST RUN",
             color = StartupColors.muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.4.sp,
+            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
         )
         Text(
             "Pair your camera.",
             color = StartupColors.ink,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
+            style = LiveType.ui(32f, FontWeight.Bold, LiveTypeDesign.Rounded),
             modifier = Modifier.padding(top = 10.dp),
         )
         Text(
             "We'll walk you through it — your camera is connected in about a minute.",
             color = StartupColors.muted,
-            fontSize = 13.sp,
-            lineHeight = 16.sp,
+            style = LiveType.ui(13f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
             modifier = Modifier.padding(top = 12.dp),
         )
         Spacer(Modifier.weight(1f))
@@ -184,15 +178,12 @@ private fun StepCard(
         Text(
             "STEP $step OF ${StartupConnectionCopy.WIZARD_STEP_COUNT}",
             color = StartupColors.muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.4.sp,
+            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
         )
         Text(
             title,
             color = StartupColors.ink,
-            fontSize = if (tight) 22.sp else 25.sp,
-            fontWeight = FontWeight.Bold,
+            style = LiveType.ui(if (tight) 22f else 25f, FontWeight.Bold, LiveTypeDesign.Rounded),
             modifier = Modifier.padding(top = 6.dp),
         )
         Column(
