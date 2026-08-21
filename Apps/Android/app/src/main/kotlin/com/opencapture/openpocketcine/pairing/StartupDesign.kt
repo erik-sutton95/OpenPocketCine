@@ -67,23 +67,24 @@ object StartupColors {
     val darkText: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
     val backdropBase: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
     /**
-     * Operator Setup wash. iOS uses Sky Blue at 10%; Samsung OLEDs read that
-     * hotter, so Android sits 25% lower (7.5%).
+     * Operator Setup wash. iOS uses Sky Blue at 10% / 760 pt; Android is 20%
+     * quieter and tighter on top of the OLED dim (6% / 608 pt).
      */
-    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.075f)
+    val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.06f)
 }
 
 fun Modifier.startupBackdrop(): Modifier = drawBehind {
     drawRect(StartupColors.backdropBase)
-    // iOS `RadialGradient` endRadius 760 is sized for ~956×440 pt landscape.
-    // 760.dp on a shorter-dp Android window fills the screen; keep the same
-    // fraction of the long/short sides. Fade to DJI black at 0, not cyan at 0,
-    // so chroma collapses the way SwiftUI interpolates.
+    // iOS `RadialGradient` endRadius 760 on ~956×440 pt landscape. Android
+    // uses 80% of that (608) so the wash does not bloom as far, still
+    // fraction-of-the-window so a shorter-dp device does not fill the screen.
+    // Fade to DJI black at 0, not cyan at 0, so chroma collapses the way
+    // SwiftUI interpolates.
     val radius =
         minOf(
-            760.dp.toPx(),
-            size.maxDimension * (760f / 956f),
-            size.minDimension * (760f / 440f),
+            608.dp.toPx(),
+            size.maxDimension * (608f / 956f),
+            size.minDimension * (608f / 440f),
         )
     val inner = (8.dp.toPx() / radius).coerceIn(0f, 0.2f)
     drawRect(
