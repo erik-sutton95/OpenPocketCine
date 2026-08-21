@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
@@ -16,6 +17,7 @@ class WifiLowLatencyLock(context: Context) {
     private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
     private var lock: WifiManager.WifiLock? = null
 
+    @SuppressLint("MissingPermission")
     fun acquire() {
         if (lock?.isHeld == true) return
         val manager = wifi ?: return
@@ -34,6 +36,7 @@ class WifiLowLatencyLock(context: Context) {
         if (held?.isHeld == true) Log.i(TAG, "wifi low-latency lock held")
     }
 
+    @SuppressLint("MissingPermission")
     fun release() {
         val current = lock ?: return
         lock = null

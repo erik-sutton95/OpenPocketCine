@@ -208,9 +208,10 @@ class BleLink(context: Context) {
         main.post { cb?.invoke() }
     }
 
+    @SuppressLint("MissingPermission")
     private fun classify(result: ScanResult): FoundCamera? {
         val record = result.scanRecord ?: return null
-        val name = record.deviceName ?: result.device.name
+        val name = record.deviceName ?: runCatching { result.device.name }.getOrNull()
         var modelId: Int? = null
         var isDji = false
         for (companyId in DJI_COMPANY_IDS) {
