@@ -66,17 +66,33 @@ object StartupColors {
     val destructive: Color = Color(0.930f, 0.267f, 0.267f)
     val darkText: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
     val backdropBase: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
-    /** iOS `StartupColors.backdrop` — Sky Blue at 10%, not a full-screen wash. */
+    /** iOS `StartupColors.backdrop` — Sky Blue at 10%. */
     val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.10f)
 }
 
 fun Modifier.startupBackdrop(): Modifier = drawBehind {
     drawRect(StartupColors.backdropBase)
+    // iOS `RadialGradient` endRadius 760 is sized for ~956×440 pt landscape.
+    // 760.dp on a shorter-dp Android window fills the screen; keep the same
+    // fraction of the long/short sides. Fade to DJI black at 0, not cyan at 0,
+    // so chroma collapses the way SwiftUI interpolates.
+    val radius =
+        minOf(
+            760.dp.toPx(),
+            size.maxDimension * (760f / 956f),
+            size.minDimension * (760f / 440f),
+        )
+    val inner = (8.dp.toPx() / radius).coerceIn(0f, 0.2f)
     drawRect(
         Brush.radialGradient(
-            colors = listOf(StartupColors.backdropGlow, StartupColors.backdropGlow.copy(alpha = 0f)),
+            colorStops =
+                arrayOf(
+                    0f to StartupColors.backdropGlow,
+                    inner to StartupColors.backdropGlow,
+                    1f to StartupColors.backdropBase.copy(alpha = 0f),
+                ),
             center = Offset(size.width * 0.5f, size.height * 0.24f),
-            radius = 760.dp.toPx(),
+            radius = radius,
         )
     )
 }
