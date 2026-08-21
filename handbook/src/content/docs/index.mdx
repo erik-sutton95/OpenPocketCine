@@ -1,0 +1,40 @@
+---
+title: Protocol handbook
+description: BLE pairing, camera Wi-Fi, and DUML as implemented in OpenPocketCine.
+---
+
+OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
+this repository. The BLE pairing and camera Wi-Fi path was learned with the help
+of [Osmosis](https://github.com/KonradIT/osmosis) by Konrad Iturbe. Live view,
+monitoring, and the rest of the monitor were confirmed on hardware we own. This
+is OpenPocketCine's condensed reference — not an Osmosis port.
+
+Implementation lives in `Sources/OpenPocketViewCore/`. These pages are Markdown
+in `handbook/src/content/docs/` so people can read them as a site and agents can
+still read the source.
+
+:::caution[Do not publish captures]
+Packet captures stay in gitignored `captures/` and are never committed. Do not
+open issues with pcaps or SoftAP passwords. Protocol facts here are from public
+behavior and hardware observation — never from proprietary DJI documentation.
+:::
+
+## The connection spine
+
+BLE is control only; bulk data goes over Wi-Fi.
+
+```text
+BLE scan → GATT connect → app-pairing → read Wi-Fi creds → join AP → UDP DUML → HTTP media
+```
+
+## Pages
+
+- [Connection spine](./protocol/connection.md) — order of operations
+- [BLE pairing](./protocol/ble.md) — scan, GATT, app-level pairing
+- [Camera Wi-Fi](./protocol/wifi.md) — credentials over BLE, SoftAP join
+- [DUML frame](./protocol/duml-frame.md) — `0x55` framing and CRCs
+- [DUML transport](./protocol/duml-transport.md) — UDP 9004, TCP poke, wrapping headers
+- [Command catalog](./protocol/commands.md) — set/cmd table
+- [Live view](./protocol/live-view.md) — enable, HEVC/AVC, fragments
+- [HTTP media](./protocol/media.md) — SoftAP `/v2` fetch, list, delete, star
+- [iOS notes](./protocol/ios.md) — Hotspot Configuration, Local Network, Simulator

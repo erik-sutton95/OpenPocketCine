@@ -23,6 +23,9 @@ Install local tooling with `just setup` (macOS / Homebrew).
 - `Apps/Android/` — production Jetpack Compose app and platform adapters.
 - `captures/` — **gitignored.** Packet captures; never commit.
 - `docs/` — engineering references. Start with `commit-hygiene.md`.
+- `handbook/` — Astro Starlight protocol handbook (BLE, Wi-Fi, DUML). Preview with
+  `just handbook`. Markdown in `handbook/src/content/docs/` is the source; it is
+  not on GitHub Pages yet.
 - `site/` — GitHub Pages landing page.
 - `.github/` — CI workflows, issue/PR templates.
 

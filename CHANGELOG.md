@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Local Starlight protocol handbook (`just handbook`) for BLE pairing, camera
+  Wi-Fi, and DUML. Markdown lives in `handbook/src/content/docs/`. Not on GitHub
+  Pages yet.
 - **Face Priority** on the Auto EV sheet. On: the drum is grayed, EV follows
   faces to middle gray (median of several; fast third-stops for 2.5 s after a
   face appears, then one third-stop every 1 s), and a face mark sits on the EV

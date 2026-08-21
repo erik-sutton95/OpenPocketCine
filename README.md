@@ -193,6 +193,7 @@ Tooling is managed through [`just`](https://github.com/casey/just):
 ```bash
 just setup         # install meta-check tools (macOS / Homebrew)
 just               # list all recipes
+just handbook      # protocol handbook at http://127.0.0.1:4321/
 just check         # run repository quality checks
 just format        # format Swift sources
 just test          # run Swift package tests

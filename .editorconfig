@@ -23,7 +23,7 @@ indent_size = unset
 
 # Ordered-list continuation lines align under the list marker (3 spaces for `1. `),
 # which a fixed indent_size would flag.
-[*.md]
+[*.{md,mdx}]
 indent_size = unset
 trim_trailing_whitespace = false
 

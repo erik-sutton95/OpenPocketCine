@@ -8,6 +8,7 @@ default:
 # ── Setup ──────────────────────────────────────────────────────────────────
 # Install the meta-check tools used by `just check` (macOS / Homebrew),
 # and enable the repo's git hooks (pre-commit secret scan + proprietary guard).
+# Node is required for the protocol handbook (`just handbook`).
 setup:
     brew install node typos-cli editorconfig-checker lychee markdownlint-cli2 actionlint gitleaks swift-format xcodegen
     git config core.hooksPath .githooks
@@ -36,8 +37,9 @@ lint-md:
 
 # Check that on-disk links resolve (offline; no network flakiness).
 # The GitHub Pages landing page is validated by `site-check` instead.
+# handbook/node_modules and build output are generated; skip them.
 check-links:
-    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design --exclude-path site .
+    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design --exclude-path site --exclude-path handbook/node_modules --exclude-path handbook/dist --exclude-path handbook/.astro .
 
 # Verify files obey .editorconfig.
 check-editorconfig:
@@ -129,6 +131,25 @@ run:
 # Remove SwiftPM build artifacts.
 clean:
     swift package clean
+
+# ── Protocol handbook (Astro Starlight; local preview only) ────────────────
+# Serves http://localhost:4321/. Not deployed to GitHub Pages yet.
+
+handbook:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -d handbook/node_modules ]]; then
+        npm --prefix handbook ci
+    fi
+    ASTRO_TELEMETRY_DISABLED=1 npm --prefix handbook run dev -- --host 127.0.0.1 --port 4321
+
+handbook-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -d handbook/node_modules ]]; then
+        npm --prefix handbook ci
+    fi
+    ASTRO_TELEMETRY_DISABLED=1 npm --prefix handbook run build
 
 # ── Android production stack ────────────────────────────────────────────────
 # JAVA_HOME falls back to the Homebrew OpenJDK so recipes work without shell setup.

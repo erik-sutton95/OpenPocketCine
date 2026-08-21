@@ -92,6 +92,11 @@ DerivedData/
 ios/OpenPocketView.xcodeproj/
 ios/OpenPocketCine.xcodeproj/
 
+# Protocol handbook (Astro Starlight)
+handbook/node_modules/
+handbook/dist/
+handbook/.astro/
+
 # Python
 __pycache__/
 *.pyc

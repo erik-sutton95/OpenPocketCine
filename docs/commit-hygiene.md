@@ -41,7 +41,8 @@ re-run the checklist.
   Route contact through GitHub-native channels (Security Advisories, maintainer profiles).
 - **Vendor / proprietary protocol material.** Any vendor SDK, specification PDF, header, binary, or
   network capture (`*.pcap`, `*.pcapng`). Protocol facts must be attributable to public sources in
-  [`protocol-notes.md`](protocol-notes.md) and hardware observation — never pasted from proprietary
+  [`protocol-notes.md`](protocol-notes.md) (handbook pages in `handbook/src/content/docs/`) and
+  hardware observation — never pasted from proprietary
   DJI documentation.
 - **Unofficial LUT dumps.** The bundled official Rec.709 cubes under
   `ios/OpenPocketCine/Resources/` are redistributable and tracked. Copies under `Osmo LUTS/`
