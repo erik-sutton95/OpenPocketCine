@@ -13,6 +13,7 @@ import com.opencapture.openpocketcine.pairing.SavedCamera
 import com.opencapture.openpocketcine.pairing.SavedCameras
 import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
+import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ class AppModel(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SharedPreferencesSavedCameraStore(context)
     val session = PocketCameraSession(context)
+    val assist = LiveAssistState.from(appContext)
 
     var savedCameras by mutableStateOf(store.load())
         private set

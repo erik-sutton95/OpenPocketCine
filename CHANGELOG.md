@@ -32,6 +32,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android SoftAP `onLost` no longer unbinds the process (or reports the
+  path ready) until reassociation grace ends, so UDP rebuild cannot leak
+  onto home Wi-Fi. Failed datagram sends now flag `needsRebuild`. ISO
+  Auto / EV / AF-S chips match iOS; live assist state is shared with
+  Operator Setup.
 - Privacy and Terms on iOS and Android open the live website pages
   (`openpocketcine.app/privacy/`, `/terms/`) instead of in-app stubs.
   Licenses and NOTICE stay in-app.

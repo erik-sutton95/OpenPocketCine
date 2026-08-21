@@ -74,7 +74,7 @@ fun LiveViewScreen(model: AppModel) {
     var uiLocked by remember { mutableStateOf(model.uiLocked) }
     var sheet by remember { mutableStateOf<LiveSheet?>(null) }
     val context = LocalContext.current
-    val assist = remember { LiveAssistState.from(context) }
+    val assist = model.assist
     var chromeNote by remember { mutableStateOf<String?>(null) }
     var showStorageDuration by remember { mutableStateOf(false) }
     val recovery by model.session.recoveryState.collectAsState()
@@ -800,6 +800,7 @@ private fun LandscapeChrome(
                             status = status,
                             active = sheet,
                             enabled = !uiLocked && !controlBusy && hits,
+                            showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
                             onOpen = { onSheet(if (sheet == it) null else it) },
                         )
                     }

@@ -714,8 +714,7 @@ private fun SharingRows() {
 
 @Composable
 private fun AssistRows(model: AppModel, onOpenLut: () -> Unit) {
-    val context = LocalContext.current
-    val assist = remember { LiveAssistState.from(context) }
+    val assist = model.assist
     val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
 
     if (isPortrait) {

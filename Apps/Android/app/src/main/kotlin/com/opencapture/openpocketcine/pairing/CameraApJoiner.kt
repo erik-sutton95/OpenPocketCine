@@ -67,7 +67,7 @@ class CameraApJoiner(context: Context) {
     }
 
     fun isProcessBound(): Boolean =
-        synchronized(lock) { availability.hasEstablishedNetwork() }
+        synchronized(lock) { boundNetwork != null }
 
     fun release() {
         val toUnregister: ConnectivityManager.NetworkCallback?
@@ -235,7 +235,8 @@ class CameraApJoiner(context: Context) {
             if (callback !== expectedCallback) return
             if (!availability.onLost(network)) return
             if (boundNetwork == network) boundNetwork = null
-            connectivity.bindProcessToNetwork(null)
+            // Keep process bound to the SoftAP until grace expires so UDP
+            // rebuild cannot leak onto home Wi-Fi (iOS pathLost ≠ default route).
             scheduleReassociationGraceLocked()
             scheduleGrace = true
         }
@@ -253,6 +254,7 @@ class CameraApJoiner(context: Context) {
                     }
                 if (expired) {
                     Log.i(TAG, "wifi: reassociation grace expired")
+                    connectivity.bindProcessToNetwork(null)
                     onPathLost?.invoke()
                 }
             }

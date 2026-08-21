@@ -348,6 +348,7 @@ fun LivePortraitChrome(
                     status = status,
                     active = sheet,
                     enabled = !uiLocked && !controlBusy && chromeInteractive,
+                    showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
                     onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
                 )
             }
@@ -550,13 +551,20 @@ fun LiveCaptureStrip(
     active: LiveSheet?,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    showFocus: Boolean = true,
     onOpen: (LiveSheet) -> Unit,
 ) {
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
     CaptureStripShell(modifier) {
         CaptureSettingCell("ISO", status.isoLabel, "25600", active == LiveSheet.ISO, enabled) { onOpen(LiveSheet.ISO) }
         if (auto) {
-            CaptureSettingCell("EV", "—", "+3.0", active == LiveSheet.SHUTTER, enabled) { onOpen(LiveSheet.SHUTTER) }
+            CaptureSettingCell(
+                "EV",
+                EvComp.fromRaw(status.evComp)?.label ?: "—",
+                "+3.0",
+                active == LiveSheet.SHUTTER,
+                enabled,
+            ) { onOpen(LiveSheet.SHUTTER) }
         } else {
             CaptureSettingCell("SHUTTER", status.shutterLabel, "1/16000", active == LiveSheet.SHUTTER, enabled) {
                 onOpen(LiveSheet.SHUTTER)
@@ -564,7 +572,11 @@ fun LiveCaptureStrip(
         }
         CaptureSettingCell("MODE", status.expoLabel, "Manual", active == LiveSheet.EXPO, enabled) { onOpen(LiveSheet.EXPO) }
         CaptureSettingCell("WB", status.wbLabel, "10000K", active == LiveSheet.WB, enabled) { onOpen(LiveSheet.WB) }
-        CaptureSettingCell("FOCUS", status.focusLabel, "Single", active == LiveSheet.FOCUS, enabled) { onOpen(LiveSheet.FOCUS) }
+        if (showFocus) {
+            CaptureSettingCell("FOCUS", status.focusLabel, "Showcase", active == LiveSheet.FOCUS, enabled) {
+                onOpen(LiveSheet.FOCUS)
+            }
+        }
         CaptureSettingCell("AUDIO", status.audioLabel, "Spatial", active == LiveSheet.AUDIO, enabled) { onOpen(LiveSheet.AUDIO) }
     }
 }

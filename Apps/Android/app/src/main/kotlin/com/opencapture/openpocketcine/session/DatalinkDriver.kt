@@ -56,6 +56,7 @@ class DatalinkDriver(
     private val lastRebuildElapsed = AtomicLong(0)
     @Volatile private var rebuilding = false
     private val sendFailLogs = AtomicInteger(0)
+    private val writeRejected = AtomicBoolean(false)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -69,8 +70,7 @@ class DatalinkDriver(
     val lastRebuildAt: Long? get() = lastRebuildElapsed.get().takeIf { it > 0 }
     val isTcpPokeReady: Boolean get() = pokeSocket?.isConnected == true
     val isRebuilding: Boolean get() = rebuilding
-    /** Datagram send is fire-and-forget — Network.framework writeRejected does not apply. */
-    val needsRebuild: Boolean get() = false
+    val needsRebuild: Boolean get() = writeRejected.get()
 
     /**
      * iOS `DatalinkDriver.open(afterHandshake:)`: handshake, register,
@@ -116,7 +116,6 @@ class DatalinkDriver(
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
                 afterHandshake?.invoke()
-                armLiveVideo()
                 return
             }
             if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
@@ -145,15 +144,19 @@ class DatalinkDriver(
                 receiver = receiver,
             )
         }
-        // iOS arms after the enable write so the new GOP is not counted as
-        // leftover. Arm here, not after the Main-thread callback returns —
-        // that window dropped the IDR (pkts=0) and the 2 s resend RST the GOP.
-        armLiveVideo()
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            sendExecutor.execute { armLiveVideo() }
+        } else {
+            armLiveVideo()
+        }
     }
 
     /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. */
     fun armLiveVideo() {
         liveViewEnabled = true
+        if (depacketizer != 0L && SwiftCore.isAvailable) {
+            runCatching { SwiftCore.depacketizerReset(depacketizer) }
+        }
     }
 
     /** Nano `0x02/0x09` start/stop. No CMD kind yet — encodeDuml. */
@@ -182,6 +185,7 @@ class DatalinkDriver(
         if (rebuilding) return
         if (!joiner.isProcessBound()) return
         rebuilding = true
+        writeRejected.set(false)
         lastRebuildElapsed.set(SystemClock.elapsedRealtime())
         try {
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
@@ -400,7 +404,9 @@ class DatalinkDriver(
             }
         synchronized(sendLock) {
             runCatching { sock.send(packet) }
+                .onSuccess { writeRejected.set(false) }
                 .onFailure { err ->
+                    writeRejected.set(true)
                     if (sendFailLogs.incrementAndGet() <= 3) {
                         Log.w(TAG, "datalink: UDP send failed", err)
                     }

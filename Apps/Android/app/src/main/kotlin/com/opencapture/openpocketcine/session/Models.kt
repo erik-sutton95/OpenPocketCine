@@ -186,8 +186,8 @@ data class CameraStatus(
     val isoLabel: String
         get() =
             when {
-                iso > 0 -> "$iso"
                 isoIndex == 0 -> "Auto"
+                iso > 0 -> "$iso"
                 else -> "—"
             }
 
@@ -203,7 +203,7 @@ data class CameraStatus(
     val recFormatLabel: String
         get() {
             val res = resolutionLabel
-            val rate = if (fps > 0) "$fps" else "—"
+            val rate = if (fps > 0) "${fps}p" else "—"
             return if (res == "—") rate else "$res $rate"
         }
 
@@ -218,8 +218,8 @@ data class CameraStatus(
     val focusLabel: String
         get() =
             when (focusMode) {
-                CameraCommands.FOCUS_SINGLE -> "Single"
-                CameraCommands.FOCUS_CONTINUOUS -> "Cont"
+                CameraCommands.FOCUS_SINGLE -> "AF-S"
+                CameraCommands.FOCUS_CONTINUOUS -> "AF-C"
                 else -> "—"
             }
 
@@ -229,7 +229,7 @@ data class CameraStatus(
                 CameraCommands.AUDIO_MONO -> "Mono"
                 CameraCommands.AUDIO_STEREO -> "Stereo"
                 CameraCommands.AUDIO_SPATIAL -> "Spatial"
-                else -> "Audio"
+                else -> "—"
             }
 
     val hasHudFields: Boolean
