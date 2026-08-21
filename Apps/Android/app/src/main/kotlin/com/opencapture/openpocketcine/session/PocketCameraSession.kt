@@ -105,6 +105,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val pairingHold = ConcurrentHashMap<Int, DumlFrame>()
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
+    private val _isReconnecting = MutableStateFlow(false)
+    val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
     init {
         ble.onLinkLost = {
@@ -129,6 +131,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun startScan(reconnect: String?) {
         reconnectTarget = reconnect
+        _isReconnecting.value = reconnect != null
         _phase.value = ConnectionPhase.SCANNING
         _failure.value = null
         ble.startScan()
@@ -174,7 +177,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
         }
         reconnectTarget = null
+        _isReconnecting.value = false
         connectJob?.cancel()
+        if (!holdsMonitor) publishPhase(ConnectionPhase.CONNECTING_GATT)
         connectJob =
             scope.launch {
                 try {
@@ -199,6 +204,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     override fun disconnect() {
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
+        _isReconnecting.value = false
         connectJob?.cancel()
         keepaliveJob?.cancel()
         frameJob?.cancel()

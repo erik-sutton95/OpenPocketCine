@@ -32,6 +32,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Tapping Connect on a saved camera shows **Connecting** and **Cancel** on
+  Android the way iOS does — GATT starts in `CONNECTING` immediately, and the
+  intro card tracks session phase instead of a stale `isBusy` getter.
 - Saved-cameras home is titled **Operator Setup** on iOS and Android (the
   header no longer repeats the intro card's "Your cameras."). Android's
   startup glow matches iOS: Sky Blue at 10%, 760 pt on a 956×440 landscape

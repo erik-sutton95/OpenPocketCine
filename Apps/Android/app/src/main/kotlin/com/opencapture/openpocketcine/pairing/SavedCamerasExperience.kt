@@ -64,6 +64,14 @@ fun SavedCamerasExperience(model: AppModel) {
 @Composable
 private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier) {
     val phase by model.session.phaseFlow.collectAsState()
+    val reconnecting by model.session.isReconnecting.collectAsState()
+    val busy = phase.isBusy() || reconnecting
+    val connectingLabel =
+        if (reconnecting && (phase == ConnectionPhase.SCANNING || phase == ConnectionPhase.IDLE)) {
+            "Connecting…"
+        } else {
+            StartupConnectionCopy.phaseLabel(phase, null)
+        }
     Column(modifier.startupCard().padding(20.dp)) {
         Text(
             "Your cameras.",
@@ -81,13 +89,8 @@ private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier)
         )
         if (hugsContent) Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (model.isBusy) {
-                Text(
-                    StartupConnectionCopy.phaseLabel(phase, null),
-                    color = StartupColors.muted,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
+            if (busy) {
+                StartupConnectionProgress(connectingLabel)
                 StartupFilledButton(
                     "Cancel",
                     enabled = true,
@@ -98,7 +101,7 @@ private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier)
             }
             StartupFilledButton(
                 "Pair new camera",
-                enabled = !model.isBusy,
+                enabled = !busy,
                 onClick = model::pairNewCamera,
                 modifier = Modifier.fillMaxWidth(),
                 large = true,
@@ -121,6 +124,8 @@ private fun IntroCard(model: AppModel, hugsContent: Boolean, modifier: Modifier)
 private fun CameraListCard(model: AppModel, modifier: Modifier) {
     val found by model.session.found.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
+    val reconnecting by model.session.isReconnecting.collectAsState()
+    val busy = phase.isBusy() || reconnecting
     val scroll = rememberScrollState()
     Column(modifier.startupCard().padding(22.dp)) {
         Text(
@@ -146,7 +151,7 @@ private fun CameraListCard(model: AppModel, modifier: Modifier) {
                     camera = camera,
                     nearby = found.firstOrNull { it.id == camera.id },
                     phase = phase,
-                    isBusy = model.isBusy,
+                    isBusy = busy,
                     onConnect = { model.reconnect(camera) },
                     onRename = { model.rename(camera, it) },
                     onRemove = { model.forget(camera) },

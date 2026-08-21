@@ -145,20 +145,40 @@ fun Modifier.startupInstructionCard(): Modifier =
         .background(StartupColors.card)
         .border(1.dp, StartupColors.border.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
 
+fun ConnectionPhase.isBusy(): Boolean =
+    when (this) {
+        ConnectionPhase.IDLE,
+        ConnectionPhase.SCANNING,
+        ConnectionPhase.FAILED,
+        ConnectionPhase.LIVE,
+        -> false
+        else -> true
+    }
+
 object StartupConnectionCopy {
-    fun statusTitle(phase: ConnectionPhase, isDiscovering: Boolean): String =
-        when (phase) {
-            ConnectionPhase.IDLE -> if (isDiscovering) "Looking" else "Ready"
-            ConnectionPhase.SCANNING -> "Looking"
-            ConnectionPhase.CONNECTING_GATT,
-            ConnectionPhase.PAIRING,
-            ConnectionPhase.AWAITING_APPROVAL,
-            -> "Pairing"
-            ConnectionPhase.READING_WIFI_CREDS -> "Reading"
-            ConnectionPhase.JOINING_WIFI -> "Joining"
-            ConnectionPhase.OPENING_DATALINK -> "Connecting"
-            ConnectionPhase.LIVE -> "Connected"
-            ConnectionPhase.FAILED -> "Ready"
+    fun statusTitle(
+        phase: ConnectionPhase,
+        isDiscovering: Boolean,
+        isReconnecting: Boolean = false,
+    ): String =
+        when {
+            isReconnecting &&
+                (phase == ConnectionPhase.SCANNING || phase == ConnectionPhase.IDLE) ->
+                "Connecting"
+            else ->
+                when (phase) {
+                    ConnectionPhase.IDLE -> if (isDiscovering) "Looking" else "Ready"
+                    ConnectionPhase.SCANNING -> "Looking"
+                    ConnectionPhase.CONNECTING_GATT -> "Connecting"
+                    ConnectionPhase.PAIRING,
+                    ConnectionPhase.AWAITING_APPROVAL,
+                    -> "Pairing"
+                    ConnectionPhase.READING_WIFI_CREDS -> "Reading"
+                    ConnectionPhase.JOINING_WIFI -> "Joining"
+                    ConnectionPhase.OPENING_DATALINK -> "Connecting"
+                    ConnectionPhase.LIVE -> "Connected"
+                    ConnectionPhase.FAILED -> "Ready"
+                }
         }
 
     fun phaseLabel(phase: ConnectionPhase, failure: String?): String =

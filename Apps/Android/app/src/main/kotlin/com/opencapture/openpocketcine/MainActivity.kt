@@ -53,6 +53,7 @@ import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
 import com.opencapture.openpocketcine.pairing.StartupColors
 import com.opencapture.openpocketcine.pairing.StartupConnectionCopy
 import com.opencapture.openpocketcine.pairing.StartupHeader
+import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.pairing.pocketRuntimePermissions
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean
@@ -170,6 +171,8 @@ private fun LinkExperience(
     onEnableBluetooth: () -> Unit,
 ) {
     val phase by model.session.phaseFlow.collectAsState()
+    val reconnecting by model.session.isReconnecting.collectAsState()
+    val busy = phase.isBusy() || reconnecting
     val headerTitle =
         when {
             model.shouldShowWizard -> "Connection setup"
@@ -180,13 +183,14 @@ private fun LinkExperience(
         StartupConnectionCopy.statusTitle(
             phase,
             isDiscovering = phase == ConnectionPhase.SCANNING || (model.shouldShowWizard && phase != ConnectionPhase.LIVE),
+            isReconnecting = reconnecting,
         )
     Column(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 16.dp)) {
         Box(Modifier.padding(horizontal = 20.dp)) {
             StartupHeader(
                 title = headerTitle,
                 statusTitle = statusTitle,
-                isBusy = model.isBusy,
+                isBusy = busy,
                 onPrivacy = { model.homePanel = AppPanel.PRIVACY },
                 onTerms = { model.homePanel = AppPanel.TERMS },
             )

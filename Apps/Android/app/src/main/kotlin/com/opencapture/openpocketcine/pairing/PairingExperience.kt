@@ -216,7 +216,7 @@ private fun StepCard(
                     )
             }
         }
-        val busy = model.isBusy
+        val busy = phase.isBusy()
         val showFooter =
             phase == ConnectionPhase.FAILED ||
                 busy ||
@@ -283,7 +283,7 @@ private fun ScanStep(
             DiscoveredCameraTile(
                 camera = camera,
                 tight = tight,
-                enabled = !model.isBusy,
+                enabled = !phase.isBusy(),
                 onClick = { model.session.connect(camera) },
             )
         }

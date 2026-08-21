@@ -12,6 +12,7 @@ import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.pairing.SavedCamera
 import com.opencapture.openpocketcine.pairing.SavedCameras
 import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
+import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -275,15 +276,7 @@ class AppModel(context: Context) {
         get() = session.phaseFlow.value == ConnectionPhase.LIVE || session.holdsMonitor
 
     val isBusy: Boolean
-        get() =
-            when (session.phaseFlow.value) {
-                ConnectionPhase.IDLE,
-                ConnectionPhase.SCANNING,
-                ConnectionPhase.FAILED,
-                ConnectionPhase.LIVE,
-                -> false
-                else -> true
-            }
+        get() = session.phase.isBusy() || session.isReconnecting.value
 
     fun prepareStartup() {
         savedCameras = store.load()
