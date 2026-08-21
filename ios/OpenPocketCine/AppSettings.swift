@@ -214,8 +214,8 @@ struct CloseButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
-                .font(.system(size: size * 0.38, weight: .bold))
+            OpcIcon.x
+                .frame(width: size * 0.38, height: size * 0.38)
                 .frame(width: size, height: size)
                 .glassCircle(interactive: true)
         }

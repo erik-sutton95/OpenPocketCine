@@ -76,8 +76,8 @@ struct LiveLockButton: View {
         Button {
             locked.toggle()
         } label: {
-            Image(systemName: locked ? "lock.fill" : "lock")
-                .font(.system(size: 16, weight: .medium))
+            OpcIcon.lock
+                .frame(width: 16, height: 16)
                 .foregroundStyle(locked ? LiveDesign.accent : LiveDesign.text.opacity(0.86))
                 .frame(width: LiveChromeMetrics.lockButtonSize, height: LiveChromeMetrics.lockButtonSize)
                 .liveChromeGlass(
