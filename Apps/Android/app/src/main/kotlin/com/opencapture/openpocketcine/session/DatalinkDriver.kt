@@ -32,6 +32,7 @@ class DatalinkDriver(
     private val running = AtomicBoolean(false)
     private val sendLock = Any()
     private val sendExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.datalink.tx") }
+    private val decodeExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.hevc") }
     private var socket: DatagramSocket? = null
     private var pokeSocket: Socket? = null
     private var receiver: Thread? = null
@@ -457,7 +458,7 @@ class DatalinkDriver(
                 if (au != null) {
                     lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
                     val callback = onAccessUnit
-                    main.post { callback?.invoke(au) }
+                    decodeExecutor.execute { callback?.invoke(au) }
                 }
             }
             return

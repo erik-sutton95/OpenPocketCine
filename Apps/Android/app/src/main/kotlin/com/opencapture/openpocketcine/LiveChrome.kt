@@ -1121,7 +1121,13 @@ fun CameraBatteryReadout(percent: Int, modifier: Modifier = Modifier) {
 
 @Composable
 fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: Boolean = false) {
-    val raw = timecode?.takeIf { it.isNotBlank() } ?: if (portrait) "00:00:00" else "--:--:--"
+    val incoming = timecode?.takeIf { it.isNotBlank() }
+    val clock =
+        incoming?.let { value ->
+            val parts = value.split(':')
+            if (parts.size >= 4) parts.take(3).joinToString(":") else value
+        } ?: if (portrait) "00:00:00" else "--:--:--"
+    val raw = clock
     val colon = raw.lastIndexOf(':')
     val head = if (colon >= 0) raw.substring(0, colon + 1) else raw
     val tail = if (colon >= 0) raw.substring(colon + 1) else ""

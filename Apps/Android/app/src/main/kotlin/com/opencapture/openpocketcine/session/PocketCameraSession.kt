@@ -680,11 +680,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun liveViewEnableReceiver(camera: FoundCamera?): Int {
+        val model = camera?.model
+        if (model != null && model.liveViewEnableReceiver != 0x08) return model.liveViewEnableReceiver
+        if (model?.usesNanoLiveViewGate == true || model?.family == "nano") {
+            return CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_NANO
+        }
         if (isNanoBody(camera)) return CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_NANO
         return CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_POCKET
     }
 
-    private fun usesNanoLiveViewGate(camera: FoundCamera?): Boolean = isNanoBody(camera)
+    private fun usesNanoLiveViewGate(camera: FoundCamera?): Boolean =
+        camera?.model?.usesNanoLiveViewGate == true || isNanoBody(camera)
 
     private fun isNanoBody(camera: FoundCamera?): Boolean {
         if (camera == null) return false
