@@ -119,6 +119,11 @@ private fun OpenPocketCineApp(model: AppModel) {
 
     LaunchedEffect(Unit) {
         model.prepareStartup()
+        if (permissionsAreGranted()) {
+            model.session.startScan()
+        } else {
+            launcher.launch(permissions)
+        }
         delay(2_250)
         launchSplashVisible = false
         model.showsLaunchSplash = false

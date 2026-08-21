@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -13,11 +14,13 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import java.util.UUID
 import kotlinx.coroutines.channels.BufferOverflow
@@ -83,12 +86,30 @@ class BleLink(context: Context) {
     fun startScan() {
         val scanner = adapter?.bluetoothLeScanner ?: return
         if (scanning) return
+        if (!hasScanPermission()) {
+            Log.w(TAG, "BLE scan skipped: nearby-device permission not granted")
+            return
+        }
         foundDevices.clear()
         _found.value = emptyList()
-        scanning = true
         val settings =
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        scanner.startScan(null, settings, scanCallback)
+        val started =
+            runCatching { scanner.startScan(null, settings, scanCallback) }
+                .onFailure { Log.w(TAG, "BLE scan failed to start", it) }
+                .isSuccess
+        scanning = started
+    }
+
+    private fun hasScanPermission(): Boolean {
+        val required =
+            if (Build.VERSION.SDK_INT >= 31) {
+                Manifest.permission.BLUETOOTH_SCAN
+            } else {
+                Manifest.permission.ACCESS_FINE_LOCATION
+            }
+        return ContextCompat.checkSelfPermission(appContext, required) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     @SuppressLint("MissingPermission")

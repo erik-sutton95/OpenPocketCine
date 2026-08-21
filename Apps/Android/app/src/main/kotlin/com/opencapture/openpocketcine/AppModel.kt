@@ -290,7 +290,6 @@ class AppModel(context: Context) {
         coreVersion =
             if (SwiftCore.isAvailable) runCatching { SwiftCore.coreVersion() }.getOrNull() else null
         isPairingNewCamera = SavedCameras.launchShowsWizard(savedCameras)
-        session.startScan()
         scope.launch {
             session.phaseFlow.collect { phase ->
                 if (phase == ConnectionPhase.LIVE) {
