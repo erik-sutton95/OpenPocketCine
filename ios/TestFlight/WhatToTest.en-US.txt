@@ -1,9 +1,8 @@
 New and changed
 
-- Android now has the same operator loop as iOS: pairing wizard, saved cameras, live chrome (DISP 1/2, record, zoom, gimbal), Operator Setup, and a media library. LUT/peaking/zebra chips are there; GPU grade of the live picture is still next.
 - In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second.
 - The EV tile keeps the number and puts a small face mark on the EV label.
-- Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
+- Saved cameras remember the camera Wi-Fi on this phone, so reconnect should not re-prompt every time.
 - A look that was already on should grade the first picture instead of popping in seconds later.
 - ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
 - The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
