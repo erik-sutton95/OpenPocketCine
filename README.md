@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>The open field monitor for DJI Osmo Pocket.</strong><br>
+  <strong>The open field monitor for DJI Osmo.</strong><br>
   Pro monitoring scopes, playback, camera control, and Camera-to-Cloud export with LUT
   baking. Free and open source.
 </p>
@@ -28,33 +28,36 @@
 
 ## Made for the shot
 
-OpenPocketCine turns an iPhone, iPad, or Android phone into a production monitor and remote for
-**DJI Osmo Pocket** cameras, with current development and testing centered on the **Osmo Pocket 4 /
-4 Pro** (HEVC live view) and **Osmo Nano** (AVC live view). iOS is the daily driver; Android lives
-in this repository and is not on Google Play yet.
+OpenPocketCine is a production monitor and remote for the **DJI Osmo** series. Live view is
+captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (AVC). Other Osmo
+bodies can show up in Bluetooth scan; Action and 360 live view is not captured yet.
 
-- **Read the image like a colorist.** Waveform, RGB parade, histogram, and vectorscope run live
-  beside the image you are judging.
-- **Catch exposure and focus before the take.** False color, zebras, Traffic Lights, and
-  industry-standard focus peaking work directly on the monitor feed.
-- **Frame once for every delivery.** Stack grids, guides, and crosshairs without losing sight of
-  the shot.
-- **Run the camera from the cage.** Full camera control, plus Pocket 4 Pro fixes such as zoom
-  in D-Log2 — OpenPocketCine switches automatically so you keep moving.
-- **Lock a face the official app won't.** Custom face tracking drives a hard gimbal lock-on —
-  something Mimo has been missing.
-- **Review before striking the set.** Browse clips, scrub playback, check scopes, and preview the
-  selected look on-device.
-- **Ship it with the look baked in.** Apply built-in or custom `.cube` LUTs, then send through
-  platform-native sharing or directly to Frame.io.
+iOS (iPhone and iPad) is the daily driver. Android lives in this repository as an early phone shell
+and is not on Google Play.
+
+- **Read the image like a colorist.** Waveform, RGB parade, histogram, and vectorscope run live on
+  the iOS monitor.
+- **Catch exposure and focus before the take.** False color, zebras, Traffic Lights, and focus
+  peaking paint the iOS feed.
+- **Frame once for every delivery.** Grids, aspect guides, and a center crosshair stay on the
+  picture.
+- **Run the camera from the phone.** Record, ISO, EV, zoom, and related writes on iOS, plus
+  gimbal on Pocket. On Pocket 4 Pro, zoom in D-Log2 hops to D-Log automatically so you keep
+  moving.
+- **Lock a face from the monitor.** On iOS Pocket in AF-C, tap an on-device face box to start
+  the camera's subject tracking.
+- **Review before striking the set.** On iOS, browse clips and stills, scrub playback, check
+  scopes, and preview the look.
+- **Ship it with the look baked in.** On iOS, built-in or custom `.cube` LUTs, native share, and
+  optional Frame.io Camera to Cloud when you add your own Adobe app keys.
 
 Verify record start/stop on the camera body until you trust the link. Reverse-engineered control
 can be incomplete.
 
 ## See it in action
 
-**Face lock.** Custom face tracking for a hard gimbal lock-on — something Mimo has been
-missing. Histogram, zebras, and a LUT stay on the feed while you record.
+**Face lock.** On iOS Pocket in AF-C, tap a face on the feed to start the camera's
+subject tracking. Histogram, zebras, and a LUT stay on while you record.
 
 <p align="center">
   <a href="https://openpocketcine.app/">
@@ -72,7 +75,7 @@ vectorscope run live beside the image you are judging, with Traffic Lights on th
 </p>
 
 **View assist.** Catch it before the take. False color, zebras, Traffic Lights, peaking,
-grids, and crosshairs sit on a rail next to the image — including in portrait.
+grids, and crosshairs sit on the iOS assist rail — including in portrait.
 
 <p align="center">
   <a href="https://openpocketcine.app/#vertical">
@@ -80,9 +83,9 @@ grids, and crosshairs sit on a rail next to the image — including in portrait.
   </a>
 </p>
 
-**Camera control.** Full camera controls from the phone, plus fixes for Pocket 4 Pro
-gotchas — zoom while you're in D-Log2 is one of them. OpenPocketCine handles that
-switch automatically so you keep moving.
+**Camera control.** On iOS: record, ISO, EV, zoom, and related writes, plus gimbal on
+Pocket. On Pocket 4 Pro, zoom while you're in D-Log2 hops to D-Log automatically so you
+keep moving.
 
 <p align="center">
   <a href="https://openpocketcine.app/#controls">
@@ -90,7 +93,7 @@ switch automatically so you keep moving.
   </a>
 </p>
 
-**Media library.** Browse clips and stills on the camera. Star the keepers and
+**Media library.** On iOS, browse clips and stills on the camera. Star the keepers and
 delete bad takes before you pack up.
 
 <p align="center">
@@ -99,9 +102,10 @@ delete bad takes before you pack up.
   </a>
 </p>
 
-**Playback.** The same scopes and assists as live view. Export with an optional
-baked LUT, conform slow motion, share natively, or send Camera to Cloud —
-including [Frame.io](https://www.frame.io/).
+**Playback.** On iOS, the same scopes and assists as live view, armed from the playback
+rail. Export with an optional baked LUT, preview high-frame-rate clips at conform speed,
+share natively, or upload to [Frame.io](https://www.frame.io/) when Camera to Cloud is
+configured.
 
 <p>
   <a href="https://www.frame.io/">
@@ -120,16 +124,19 @@ including [Frame.io](https://www.frame.io/).
 
 ## Available today
 
-- Resilient Bluetooth pairing, camera Wi-Fi join, saved-camera profiles, and reconnect
+- Bluetooth pairing, camera Wi-Fi join, saved-camera profiles, and reconnect
 - Live-view monitoring, timecode, battery, storage, and camera status readouts
-- Record control plus ISO, EV, zoom, gimbal, and related camera writes
-- Professional scopes, exposure and focus assists, framing tools, and customizable monitor layouts
-- On-device clip browsing, playback review, LUT preview, and optional Frame.io delivery
-- Native iPhone and iPad layouts
+- Record, ISO, EV, zoom, and related camera writes on iOS, plus gimbal on Pocket (Android live
+  control is a thinner set: record, ISO, shutter, white balance, tap-focus, gimbal stick)
+- Scopes, exposure and focus assists, framing tools, and customizable DISP chrome on iOS
+- Clip browsing, playback, LUT preview, LUT bake on export, and optional Frame.io on iOS
+- Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
-The native Android implementation lives in this repository. It is not available through Google Play
-yet. Pocket 4 / 4 Pro and Nano are the hardware targets today; wider Osmo coverage continues with
-real-world testing.
+The native Android implementation lives in this repository as a phone shell with live pairing and
+HEVC live view. It is not on Google Play. Clip library, GPU scopes, and LUT baking are iOS today.
+
+Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may
+appear in scan. Action and 360 live view is not captured yet.
 
 ## Roadmap shaped in the open
 
@@ -218,7 +225,8 @@ The iOS Xcode project is generated:
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
-The Simulator has no Bluetooth or camera Wi-Fi. Pairing and live view need a physical iPhone.
+The Simulator has no Bluetooth or camera Wi-Fi. Pairing and live view need a physical iPhone or
+Android phone.
 
 iOS beta: [TestFlight](https://testflight.apple.com/join/1tmt3aEB). Archives come from Xcode Cloud. One-time App Store Connect setup:
 
