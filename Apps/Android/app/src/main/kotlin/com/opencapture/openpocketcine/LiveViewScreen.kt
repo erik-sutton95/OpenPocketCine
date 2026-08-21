@@ -164,16 +164,35 @@ fun LiveViewScreen(model: AppModel) {
         val cutout = WindowInsets.displayCutout
         val barInsets = LocalImmersiveBarInsets.current
         val portrait = maxHeight > maxWidth
+        // Live safe area: punch-hole cutout plus applied system-bar lanes.
+        // Landscape leading is floored at the iPhone island lane so the 16:9
+        // feed sits right of lock/battery (OpenZCine `monitorLeadingInsetDp`).
+        // Trailing gets no floor — the rail centres in the letterbox lane.
+        fun edgeDp(cutoutPx: Int, barPx: Int): Float =
+            with(density) { maxOf(cutoutPx, barPx).toDp().value }
         val safeTop by animateFloatAsState(
-            with(density) { maxOf(cutout.getTop(this), barInsets.top).toDp().value },
+            edgeDp(cutout.getTop(density), barInsets.top),
             label = "safeTop",
         )
         val safeBottom by animateFloatAsState(
-            with(density) { maxOf(cutout.getBottom(this), barInsets.bottom).toDp().value },
+            monitorBottomInsetDp(
+                rawInsetDp = edgeDp(cutout.getBottom(density), barInsets.bottom),
+                isPortrait = portrait,
+            ),
             label = "safeBottom",
         )
         val safeLeading by animateFloatAsState(
-            with(density) { maxOf(cutout.getLeft(this, layoutDir), barInsets.left).toDp().value },
+            with(density) {
+                val cutoutDp = cutout.getLeft(this, layoutDir).toDp().value
+                if (portrait) {
+                    cutoutDp
+                } else {
+                    monitorLeadingInsetDp(
+                        cutoutDp = cutoutDp,
+                        transientBarDp = barInsets.left.toDp().value,
+                    )
+                }
+            },
             label = "safeLeading",
         )
         val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }

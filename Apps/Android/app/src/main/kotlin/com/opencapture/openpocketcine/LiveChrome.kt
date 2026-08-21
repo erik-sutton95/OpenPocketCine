@@ -248,6 +248,53 @@ object LiveChromeMetrics {
     const val CAPTURE_HUG = 512f
 }
 
+/**
+ * The iPhone Dynamic Island's landscape leading safe-area inset, in points/dp —
+ * the canonical iOS geometry throughout the layout tests (`LiveMonitorLayout`
+ * 874×402 with leading 59). `feedFrame` turns it into a left chrome lane: the
+ * feed starts at x = 59 while the fixed-margin lock button (chrome insets
+ * ignore the safe area; lock spans x 16–56) sits beside it.
+ */
+internal const val IOS_ISLAND_LANE_DP = 59f
+
+/**
+ * The bottom inset handed to the portrait zone map while Android's system bars
+ * are hidden. Sticky immersive can report a zero bottom inset, but the physical
+ * gesture area is still present. This floor keeps the record control above that
+ * edge after the shared layout reclaims its 14dp system-bar lift.
+ */
+internal const val PORTRAIT_SYSTEM_RAIL_BOTTOM_INSET_DP = 30f
+
+/**
+ * Leading inset handed to the zone map, in dp: the display cutout floored at
+ * [IOS_ISLAND_LANE_DP], plus any transient system-bar lane on this edge.
+ *
+ * Devices whose punch-hole resolves below the core's 50dp cutout threshold
+ * would otherwise run the feed edge-to-edge, putting the lock button and
+ * battery rail ON the image. Flooring the cutout at the iPhone island lane
+ * synthesizes the iOS composition — feed right of the chrome — as a
+ * platform-adapter decision, keeping the layout math platform-blind. The
+ * floor is a MINIMUM under the physical cutout only; a transient bar on this
+ * edge still ADDS its lane on top so the feed clears the overlay.
+ */
+internal fun monitorLeadingInsetDp(cutoutDp: Float, transientBarDp: Float): Float =
+    maxOf(cutoutDp, IOS_ISLAND_LANE_DP) + maxOf(0f, transientBarDp - cutoutDp)
+
+/**
+ * Bottom inset handed to the zone map, in dp.
+ *
+ * Sticky immersive mode can report no Android navigation-bar inset even
+ * though a device still reserves its gesture area at the physical bottom.
+ * Keep a portrait-only floor so the fixed system rail and its record button
+ * never touch that edge; a real, larger system-bar/cutout inset still wins.
+ */
+internal fun monitorBottomInsetDp(rawInsetDp: Float, isPortrait: Boolean): Float =
+    if (isPortrait) {
+        maxOf(rawInsetDp, PORTRAIT_SYSTEM_RAIL_BOTTOM_INSET_DP)
+    } else {
+        rawInsetDp
+    }
+
 data class ChromeRect(val x: Float, val y: Float, val width: Float, val height: Float) {
     val minX: Float get() = x
     val minY: Float get() = y
