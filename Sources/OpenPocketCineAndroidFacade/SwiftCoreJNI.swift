@@ -119,11 +119,13 @@
         kind: jint, seq: jint, extra: jstring?
     ) -> jbyteArray? {
         guard let commandKind = AndroidSessionWire.CommandKind(rawValue: kind) else { return nil }
-        guard let frame = AndroidSessionWire.encodeCommand(
-            kind: commandKind,
-            seq: UInt16(truncatingIfNeeded: seq),
-            extra: swiftString(env, extra)
-        ) else { return nil }
+        guard
+            let frame = AndroidSessionWire.encodeCommand(
+                kind: commandKind,
+                seq: UInt16(truncatingIfNeeded: seq),
+                extra: swiftString(env, extra)
+            )
+        else { return nil }
         return javaByteArray(env, Duml.encode(frame))
     }
 
@@ -143,7 +145,8 @@
         modelId: jint, name: jstring?
     ) -> jstring? {
         let id: Int? = modelId < 0 ? nil : Int(modelId)
-        return javaString(env, AndroidSessionWire.cameraModelJSON(modelId: id, name: swiftString(env, name)))
+        return javaString(
+            env, AndroidSessionWire.cameraModelJSON(modelId: id, name: swiftString(env, name)))
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_transportHeader")
@@ -181,7 +184,8 @@
     public func swiftCoreHandshakePayload(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, baseSeq: jint
     ) -> jbyteArray? {
-        javaByteArray(env, DumlTransport.handshakePayload(baseSeq: UInt16(truncatingIfNeeded: baseSeq)))
+        javaByteArray(
+            env, DumlTransport.handshakePayload(baseSeq: UInt16(truncatingIfNeeded: baseSeq)))
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_ackPayload")
@@ -253,7 +257,8 @@
         let avc = LiveVideo.detect(nals: nals) == .avc
         for nal in nals {
             guard let first = nal.first else { continue }
-            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first)) {
+            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first))
+            {
                 return 1
             }
         }
@@ -314,6 +319,34 @@
         depacketizerStore.lock.lock()
         depacketizerStore.boxes.removeValue(forKey: handle)
         depacketizerStore.lock.unlock()
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_gimbalStickEncode")
+    public func swiftCoreGimbalStickEncode(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        x: jdouble, y: jdouble, sensitivity: jint
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.gimbalStickEncode(
+                x: Double(x), y: Double(y), sensitivity: Int(sensitivity)))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_camFovChipWrite")
+    public func swiftCoreCamFovChipWrite(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, currentFactor: jdouble
+    ) -> jstring? {
+        javaString(env, AndroidSessionWire.camFovChipWrite(currentFactor: Double(currentFactor)))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogAction")
+    public func swiftCoreFeedWatchdogAction(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, snapshotJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.feedWatchdogAction(
+                snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
 #endif

@@ -42,11 +42,13 @@ captures/
 *.btsnoop
 
 # ── LUT dumps that are not the bundled official looks ─────────────────────────
-# Official Rec.709 cubes in ios/OpenPocketCine/Resources/ are redistributable
-# and tracked. Unofficial copies (spaces, "vivid", duplicates) stay local.
+# Official Rec.709 cubes in ios/OpenPocketCine/Resources/ (and the Android
+# asset copies) are redistributable and tracked. Unofficial copies (spaces,
+# "vivid", duplicates) stay local.
 *.cube
 !Tests/**/*.cube
 !ios/OpenPocketCine/Resources/*.cube
+!Apps/Android/app/src/main/assets/luts/*.cube
 Osmo LUTS/
 
 # Raw design-source files are kept under .local/ and never shipped.

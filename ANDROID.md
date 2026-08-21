@@ -43,3 +43,15 @@ Done in-tree (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
 2. `OpenPocketCineAndroidFacade` + `CJNI` in `Package.swift` (`#if os(Android)` JNI).
 3. Gradle `:app:stageSwiftCore` stages `libOpenPocketCineAndroid.so`.
 4. Compose splash → empty-store wizard / saved list → live HEVC (MediaCodec) using enable-once + ACK pump.
+
+## Operator parity (iOS baseline)
+
+The Compose shell now tracks the iOS operator surface, with Apple-only pieces skipped:
+
+- **Connection:** BLE → SoftAP → UDP datalink, FeedWatchdog-style enable policy (never 1 Hz `0x09/0xa8`), session recovery that holds the last frame, Nano AVC + Pocket HEVC via MediaCodec 720p, cached Wi-Fi creds in private prefs (not saved-camera JSON).
+- **Live chrome:** landscape/portrait layout metrics matching iOS (`LiveDesign`), DISP 1/2 maps, chrome editor, record confirmation, zoom chip, gimbal recenter/flip, capture sheets (ISO/shutter angle/EV/WB/focus/audio/format/color).
+- **Assists:** toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, AUDIO, GUIDES, GRID, CROSS, MIRROR). Canvas paints guides/grid/crosshair/scope panels; GPU peaking/false-color/zebra/LUT apply is still AGSL follow-up (VideoToolbox / Metal skipped).
+- **Operator Setup:** seven tabs (Link, Sharing, View Assist, Controls, Display, Storage, System), DJI Black, Sora + IBM Plex, NOTICE legal page. Frame.io is **Not configured** (optional on iOS too).
+- **Media:** camera catalog + SoftAP HTTP cache + ExoPlayer/photo viewer + system share. No Frame.io hop.
+
+Skip / later: VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL/De-SQ/MAG.

@@ -117,8 +117,9 @@ private fun OpenPocketCineApp(model: AppModel) {
         model.showsLaunchSplash = false
     }
 
+    val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
     Box(Modifier.fillMaxSize().startupBackdrop()) {
-        if (phase == ConnectionPhase.LIVE) {
+        if (showLive) {
             LiveViewScreen(model)
         } else {
             LinkExperience(
@@ -128,7 +129,7 @@ private fun OpenPocketCineApp(model: AppModel) {
             )
         }
         LaunchSplashOverlay(visible = launchSplashVisible)
-        if (model.homePanel != null) {
+        if (model.homePanel != null && !showLive) {
             AppPanelHost(model)
         }
     }

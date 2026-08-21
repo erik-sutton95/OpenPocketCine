@@ -103,6 +103,9 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.okhttp)
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.json)

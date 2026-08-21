@@ -133,6 +133,144 @@ object CameraCommands {
     fun tapCommit(x: Float, y: Float): ByteArray =
         byteArrayOf(0x00, 0x02, 0x01, 0x00) + floatLE(x) + floatLE(y) + ByteArray(8)
 
+    const val RX_GIMBAL = 0x04
+    const val LIVE_VIEW_ENABLE_RECEIVER_POCKET = 0x08
+    const val LIVE_VIEW_ENABLE_RECEIVER_NANO = 0x41
+
+    const val CMD_PHOTO = 0x01
+    const val CMD_EV = 0x2E
+    const val CMD_ZOOM = 0xB8
+    const val CMD_TRACK_SET = 0xA6
+    const val CMD_TRACK_POLL = 0xA5
+    const val CMD_PLAYBACK = 0x0C
+    const val CMD_GIMBAL_MODE = 0x4C
+    const val CMD_MEDIA_LIST = 0x26
+    const val CMD_MEDIA_DELETE = 0x28
+    const val CMD_MEDIA_FAVORITE = 0xBF
+    const val CMD_NANO_GATE = 0x09
+    const val CMD_LIVE_VIEW = 0xA8
+
+    const val PID_ISO_LIMIT = 0x000F
+
+    const val ZOOM_LENS_1X = 217
+    const val ZOOM_LENS_3X = 651
+    const val ZOOM_LENS_6X = 1302
+    const val ZOOM_LENS_12X = 2604
+    const val ZOOM_SLEW_TELE = 100
+    const val ZOOM_SLEW_WIDE = 300
+
+    const val SHOOT_PHOTO = 0x05
+    const val SHOOT_PHOTO_POCKET4 = 0x17
+    const val SHOOT_SUPER_NIGHT = 0x28
+
+    fun isPhotoMode(shootingMode: Int): Boolean =
+        shootingMode == SHOOT_PHOTO ||
+            shootingMode == SHOOT_PHOTO_POCKET4 ||
+            shootingMode == SHOOT_SUPER_NIGHT
+
+    fun shootPhoto(): ByteArray = byteArrayOf(0x01)
+
+    /** `0x02/0x2E` 1-byte EV. `0x10` = 0.0; ⅓-stop steps, −9…+9 thirds. */
+    fun ev(thirds: Int): ByteArray {
+        val t = thirds.coerceIn(-9, 9)
+        return byteArrayOf((0x10 + t).toByte())
+    }
+
+    fun isoLimit(raw: Int): ByteArray = paramSet(PID_ISO_LIMIT, raw)
+
+    fun zoomLens(position: Int): ByteArray {
+        val p = position.coerceIn(0, 0xFFFF)
+        return byteArrayOf(0x0A, 0x4E, (p and 0xFF).toByte(), ((p shr 8) and 0xFF).toByte())
+    }
+
+    fun zoomSlew(value: Int): ByteArray {
+        val v = value.coerceIn(0, 0xFFFF)
+        return byteArrayOf(0x03, 0x00, (v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte())
+    }
+
+    fun zoomStop(): ByteArray = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00)
+
+    /** Chip 1× / 3× / 6× / 12× land on 217 / 651 / 1302 / 2604. */
+    fun lensForZoomFactor(factor: Double): Int {
+        val f = factor
+        return when {
+            kotlin.math.abs(f - 1.0) < 0.1 -> ZOOM_LENS_1X
+            kotlin.math.abs(f - 3.0) < 0.1 -> ZOOM_LENS_3X
+            kotlin.math.abs(f - 6.0) < 0.1 -> ZOOM_LENS_6X
+            kotlin.math.abs(f - 12.0) < 0.1 -> ZOOM_LENS_12X
+            else -> {
+                val c = f.coerceIn(1.0, 12.0)
+                if (c <= 3.0) {
+                    lerpLens(ZOOM_LENS_1X, ZOOM_LENS_3X, (c - 1.0) / 2.0)
+                } else {
+                    lerpLens(ZOOM_LENS_3X, ZOOM_LENS_12X, (c - 3.0) / 9.0)
+                }
+            }
+        }
+    }
+
+    fun zoomForFactor(factor: Double): ByteArray = zoomLens(lensForZoomFactor(factor))
+
+    fun gimbalRecenter(): ByteArray = byteArrayOf(0xFE.toByte(), 0x08)
+
+    fun gimbalFlip(): ByteArray = byteArrayOf(0xFE.toByte(), 0x09)
+
+    fun liveViewEnablePayload(): ByteArray =
+        byteArrayOf(0x00, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
+
+    /** Nano `0x02/0x09` start `…03` / stop `…04`. Do not send on Pocket. */
+    fun nanoLiveViewGate(start: Boolean): ByteArray =
+        ByteArray(11).also { it[10] = if (start) 0x03 else 0x04 }
+
+    fun enterPlayback(): ByteArray = byteArrayOf(0x01, 0x01, 0x00, 0x01)
+
+    fun exitPlayback(): ByteArray = byteArrayOf(0x01, 0x01, 0x00, 0x00)
+
+    fun trackingBox(id: Int, x: Float, y: Float, width: Float, height: Float): ByteArray {
+        val uid = id and 0xFFFF
+        return byteArrayOf(0x01, 0x00, 0x00) +
+            u16LE(uid) +
+            floatLE(x) +
+            floatLE(y) +
+            floatLE(width) +
+            floatLE(height)
+    }
+
+    fun clearTracking(): ByteArray = ByteArray(21)
+
+    fun pollTracking(): ByteArray = byteArrayOf(0x00)
+
+    fun mediaList(counter: Int, cursor: Int): ByteArray {
+        val payload = MEDIA_LIST_TEMPLATE.copyOf()
+        payload[4] = (counter and 0xFF).toByte()
+        payload[10] = (cursor and 0xFF).toByte()
+        payload[11] = ((cursor shr 8) and 0xFF).toByte()
+        payload[12] = ((cursor shr 16) and 0xFF).toByte()
+        payload[13] = ((cursor shr 24) and 0xFF).toByte()
+        return payload
+    }
+
+    fun mediaListTrigger(): ByteArray =
+        byteArrayOf(
+            0x4A, 0x04, 0x0E, 0x10,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00,
+        )
+
+    fun deleteMedia(handle: Int, counter: Int): ByteArray =
+        byteArrayOf(0x01) +
+            u32LE(handle) +
+            u32LE(counter) +
+            byteArrayOf(0x00) +
+            u32LE(1) +
+            byteArrayOf(0x01, 0x01, 0x00, 0x00)
+
+    fun setMediaFavorite(handle: Int, on: Boolean, counter: Int): ByteArray =
+        byteArrayOf(0x01, 0x01) +
+            u32LE(handle) +
+            u32LE(counter) +
+            byteArrayOf(0x00, if (on) 0x01 else 0x00, 0x00, 0x00, 0x00)
+
     const val GIMBAL_STICK_CENTER = 1024
     const val GIMBAL_STICK_TRAVEL = 550
     const val GIMBAL_STICK_MIN = 474
@@ -302,6 +440,34 @@ object CameraCommands {
     }
 
     val kelvinPresets = listOf(2000, 3200, 4000, 5000, 5600, 6500, 8000, 10000)
+
+    private val MEDIA_LIST_TEMPLATE =
+        byteArrayOf(
+            0x4A, 0x00, 0x2A, 0x10,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00,
+            0x2D, 0x00, 0x0D, 0x01, 0x00,
+            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00,
+        )
+
+    private fun lerpLens(a: Int, b: Int, t: Double): Int {
+        val clamped = t.coerceIn(0.0, 1.0)
+        return (a + (clamped * (b - a))).toInt()
+    }
+
+    private fun u16LE(value: Int): ByteArray =
+        byteArrayOf((value and 0xFF).toByte(), ((value shr 8) and 0xFF).toByte())
+
+    private fun u32LE(value: Int): ByteArray =
+        byteArrayOf(
+            (value and 0xFF).toByte(),
+            ((value shr 8) and 0xFF).toByte(),
+            ((value shr 16) and 0xFF).toByte(),
+            ((value shr 24) and 0xFF).toByte(),
+        )
 
     private fun floatLE(value: Float): ByteArray {
         val bits = value.toRawBits()

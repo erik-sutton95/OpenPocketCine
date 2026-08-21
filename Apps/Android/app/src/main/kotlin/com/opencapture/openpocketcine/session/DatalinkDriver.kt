@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.session
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
@@ -12,6 +13,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
 /**
@@ -43,6 +45,11 @@ class DatalinkDriver(
     private var depacketizer = 0L
     private val rawVideoPackets = AtomicInteger(0)
     private val loggedLeftoverGop = AtomicBoolean(false)
+    private val lastVideoElapsed = AtomicLong(0)
+    private val lastStatusElapsed = AtomicLong(0)
+    private val lastAccessUnitElapsed = AtomicLong(0)
+    private val lastRebuildElapsed = AtomicLong(0)
+    @Volatile private var rebuilding = false
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -50,38 +57,48 @@ class DatalinkDriver(
     val videoPackets: Int get() = rawVideoPackets.get()
     val droppedIncomplete: Int
         get() = if (depacketizer != 0L && SwiftCore.isAvailable) SwiftCore.depacketizerDropped(depacketizer) else 0
+    val lastVideoPacketAt: Long? get() = lastVideoElapsed.get().takeIf { it > 0 }
+    val lastStatusAt: Long? get() = lastStatusElapsed.get().takeIf { it > 0 }
+    val lastAccessUnitAt: Long? get() = lastAccessUnitElapsed.get().takeIf { it > 0 }
+    val lastRebuildAt: Long? get() = lastRebuildElapsed.get().takeIf { it > 0 }
+    val isTcpPokeReady: Boolean get() = pokeSocket?.isConnected == true
+    val isRebuilding: Boolean get() = rebuilding
 
     fun open() {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }
-        close()
-        if (tcpPoke) runCatching { poke7001() }
-        sessionId = Random.nextInt(0x1000, 0xFFFE)
-        baseSeq = Random.nextInt(0x1000, 0xF000) and 0xFFF8
-        camChannel = baseSeq
-        udpSeq = 0
-        dumlSeq = 0xA000
-        cmdCounter = 0
-        peerCursor = 0
-        handshakeAcked = false
+        discardUdp(keepPoke = true)
+        if (tcpPoke) ensurePoke()
         liveViewEnabled = false
         loggedLeftoverGop.set(false)
         rawVideoPackets.set(0)
-        depacketizer = SwiftCore.depacketizerCreate()
-        val sock = DatagramSocket()
-        sock.soTimeout = 250
-        joiner.bindSocket(sock)
-        socket = sock
-        running.set(true)
-        receiver =
-            Thread({ receiveLoop() }, "opc.datalink.rx").also { it.isDaemon = true; it.start() }
+        lastVideoElapsed.set(0)
+        lastStatusElapsed.set(0)
+        lastAccessUnitElapsed.set(0)
+        if (depacketizer == 0L) depacketizer = SwiftCore.depacketizerCreate()
+        else runCatching { SwiftCore.depacketizerReset(depacketizer) }
 
-        val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
-        for (i in 0 until 20) {
-            sendRaw(0x00, handshake)
-            Thread.sleep(350)
+        var rebinds = 0
+        while (true) {
+            resetHandshakeSession()
+            startUdpReceiver()
+            val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
+            for (send in 1..HANDSHAKE_SENDS_PER_BIND) {
+                sendRaw(0x00, handshake)
+                val deadline = SystemClock.elapsedRealtime() + HANDSHAKE_SEND_INTERVAL_MS
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    if (handshakeAcked) break
+                    Thread.sleep(HANDSHAKE_POLL_MS)
+                }
+                if (handshakeAcked) break
+            }
             if (handshakeAcked) break
+            if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
+            if (rebinds >= HANDSHAKE_REBIND_LIMIT) error("camera never answered the datalink handshake")
+            rebinds += 1
+            Log.i(TAG, "datalink: handshake miss — SoftAP up, rebind UDP ($rebinds/$HANDSHAKE_REBIND_LIMIT)")
+            discardUdp(keepPoke = true)
+            Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
         }
-        if (!handshakeAcked) error("camera never answered the datalink handshake")
         repeat(5) {
             Thread.sleep(400)
             sendAck()
@@ -98,9 +115,51 @@ class DatalinkDriver(
         sendAck()
     }
 
-    fun startLiveView() {
+    fun startLiveView(receiver: Int = CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_POCKET) {
         liveViewEnabled = true
-        sendCommand(SwiftCore.CMD_LIVE_VIEW_ENABLE)
+        val extra = receiver.toString()
+        if (receiver == CameraCommands.LIVE_VIEW_ENABLE_RECEIVER_POCKET) {
+            sendCommand(SwiftCore.CMD_LIVE_VIEW_ENABLE, extra)
+        } else {
+            sendDuml(
+                cmdSet = 0x09,
+                cmdId = CameraCommands.CMD_LIVE_VIEW,
+                payload = CameraCommands.liveViewEnablePayload(),
+                receiver = receiver,
+            )
+        }
+    }
+
+    /** Nano `0x02/0x09` start/stop. No CMD kind yet — encodeDuml. */
+    fun sendNanoGate(start: Boolean) {
+        sendDuml(
+            cmdSet = 0x02,
+            cmdId = CameraCommands.CMD_NANO_GATE,
+            payload = CameraCommands.nanoLiveViewGate(start),
+        )
+    }
+
+    /**
+     * Tear down a dead UDP bind and open a new socket. Keeps session/seq, the
+     * depacketizer, and TCP 7001. Live-view enable is the caller's job.
+     */
+    @Synchronized
+    fun rebuildUdpKeepingSession() {
+        if (rebuilding) return
+        if (!joiner.isProcessBound()) return
+        rebuilding = true
+        lastRebuildElapsed.set(SystemClock.elapsedRealtime())
+        try {
+            Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
+            discardUdp(keepPoke = true)
+            startUdpReceiver()
+            ackThread =
+                Thread({ ackPump() }, "opc.datalink.ack").also { it.isDaemon = true; it.start() }
+            sendAck()
+            sendCommand(SwiftCore.CMD_APP_PRESENCE)
+        } finally {
+            rebuilding = false
+        }
     }
 
     /**
@@ -129,20 +188,62 @@ class DatalinkDriver(
     }
 
     fun close() {
-        running.set(false)
         liveViewEnabled = false
-        ackThread?.interrupt()
-        receiver?.interrupt()
-        ackThread = null
-        receiver = null
-        runCatching { socket?.close() }
-        socket = null
+        discardUdp(keepPoke = false)
         runCatching { pokeSocket?.close() }
         pokeSocket = null
         if (depacketizer != 0L && SwiftCore.isAvailable) {
             SwiftCore.depacketizerDestroy(depacketizer)
             depacketizer = 0L
         }
+    }
+
+    private fun resetHandshakeSession() {
+        sessionId = Random.nextInt(0x1000, 0xFFFE)
+        baseSeq = Random.nextInt(0x1000, 0xF000) and 0xFFF8
+        camChannel = baseSeq
+        udpSeq = 0
+        dumlSeq = 0xA000
+        cmdCounter = 0
+        peerCursor = 0
+        handshakeAcked = false
+    }
+
+    private fun startUdpReceiver() {
+        val sock = DatagramSocket()
+        sock.soTimeout = 250
+        joiner.bindSocket(sock)
+        socket = sock
+        running.set(true)
+        receiver =
+            Thread({ receiveLoop() }, "opc.datalink.rx").also { it.isDaemon = true; it.start() }
+    }
+
+    /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
+    private fun discardUdp(keepPoke: Boolean) {
+        running.set(false)
+        val rx = receiver
+        val ack = ackThread
+        receiver = null
+        ackThread = null
+        runCatching { socket?.close() }
+        socket = null
+        rx?.interrupt()
+        ack?.interrupt()
+        runCatching { rx?.join(200) }
+        runCatching { ack?.join(200) }
+        if (!keepPoke) {
+            runCatching { pokeSocket?.close() }
+            pokeSocket = null
+        }
+    }
+
+    private fun ensurePoke() {
+        if (pokeSocket?.isConnected == true) {
+            Log.i(TAG, "datalink: TCP 7001 poke already ready")
+            return
+        }
+        runCatching { poke7001() }
     }
 
     private fun register() {
@@ -261,10 +362,12 @@ class DatalinkDriver(
                 }
                 return
             }
+            lastVideoElapsed.set(SystemClock.elapsedRealtime())
             rawVideoPackets.incrementAndGet()
             if (depacketizer != 0L) {
                 val au = SwiftCore.depacketizerFeed(depacketizer, datagram)
                 if (au != null) {
+                    lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
                     val callback = onAccessUnit
                     main.post { callback?.invoke(au) }
                 }
@@ -274,6 +377,7 @@ class DatalinkDriver(
         val packed = SwiftCore.scanDuml(datagram) ?: return
         val frames = DumlCodec.unpackFrames(packed)
         if (frames.isEmpty()) return
+        lastStatusElapsed.set(SystemClock.elapsedRealtime())
         val callback = onStatusFrame
         main.post { frames.forEach { callback?.invoke(it) } }
     }
@@ -292,6 +396,11 @@ class DatalinkDriver(
     companion object {
         private const val TAG = "DatalinkDriver"
         private const val CAMERA_HOST = "192.168.2.1"
+        private const val HANDSHAKE_SENDS_PER_BIND = 20
+        private const val HANDSHAKE_SEND_INTERVAL_MS = 350L
+        private const val HANDSHAKE_POLL_MS = 20L
+        private const val HANDSHAKE_REBIND_LIMIT = 3
+        private const val HANDSHAKE_RETRY_PAUSE_MS = 500L
         private val SUBSCRIPTION_KEYS =
             listOf(
                 "camcap_mode_profile",

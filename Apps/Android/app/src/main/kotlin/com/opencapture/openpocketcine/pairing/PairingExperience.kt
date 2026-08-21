@@ -60,13 +60,39 @@ fun PairingExperience(
         val introWidth = maxOf(236.dp, maxWidth * 0.28f)
         if (twoColumn) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                IntroCard(model, compact, Modifier.width(introWidth).fillMaxHeight())
+                IntroCard(model, step, Modifier.width(introWidth).fillMaxHeight())
                 StepCard(model, phase, failure, found, step, compact, permissionsGranted, onRequestPermissions, Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("FIRST RUN", color = StartupColors.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
-                Text("Pair your camera.", color = StartupColors.ink, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "FIRST RUN",
+                            color = StartupColors.muted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.4.sp,
+                        )
+                        Text(
+                            "Pair your camera.",
+                            color = StartupColors.ink,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    if (model.savedCameras.isNotEmpty()) {
+                        Spacer(Modifier.width(12.dp))
+                        StartupOutlineButton("Your cameras", onClick = model::cancelPairing)
+                    }
+                }
+                Text(
+                    "We'll walk you through it — your camera is connected in about a minute.",
+                    color = StartupColors.muted,
+                    fontSize = 12.sp,
+                )
                 StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
                 StepCard(model, phase, failure, found, step, true, permissionsGranted, onRequestPermissions, Modifier.weight(1f))
             }
@@ -75,21 +101,21 @@ fun PairingExperience(
 }
 
 @Composable
-private fun IntroCard(model: AppModel, compact: Boolean, modifier: Modifier) {
+private fun IntroCard(model: AppModel, step: Int, modifier: Modifier) {
     Column(modifier.startupCard().padding(20.dp)) {
         Text("FIRST RUN", color = StartupColors.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
         Text("Pair your camera.", color = StartupColors.ink, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
         Text(
-            "We'll walk you through it — your Pocket is connected in about a minute.",
+            "We'll walk you through it — your camera is connected in about a minute.",
             color = StartupColors.muted,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 12.dp),
         )
         Spacer(Modifier.weight(1f))
-        StartupWizardProgress(StartupConnectionCopy.wizardStep(model.session.phaseFlow.value), StartupConnectionCopy.WIZARD_STEP_COUNT)
+        StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
         if (model.savedCameras.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            StartupOutlineButton("Back to cameras", onClick = model::cancelPairing, modifier = Modifier.fillMaxWidth(), enabled = !model.isBusy)
+            StartupOutlineButton("Your cameras", onClick = model::cancelPairing, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -122,7 +148,7 @@ private fun StepCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (step) {
-                2 -> ApproveStep(phase)
+                2 -> ApproveStep(phase, tight)
                 3 -> JoinWifiStep(phase, tight)
                 4 -> DatalinkStep(phase)
                 else ->
@@ -137,11 +163,16 @@ private fun StepCard(
                     )
             }
         }
-        val showFooter = phase == ConnectionPhase.FAILED || (step == 1 && model.savedCameras.isNotEmpty())
+        val busy = model.isBusy
+        val showFooter = phase == ConnectionPhase.FAILED || busy || (step == 1 && model.savedCameras.isNotEmpty())
         if (showFooter) {
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (model.savedCameras.isNotEmpty()) {
-                    StartupOutlineButton("Back", onClick = model::cancelPairing, modifier = Modifier.weight(1f), enabled = !model.isBusy)
+                if (model.savedCameras.isNotEmpty() || busy) {
+                    StartupOutlineButton(
+                        if (busy) "Cancel" else "Back",
+                        onClick = model::cancelPairing,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 if (phase == ConnectionPhase.FAILED) {
                     StartupFilledButton("Try again", enabled = true, onClick = { model.session.startScan() }, modifier = Modifier.weight(1f))
@@ -184,7 +215,7 @@ private fun ScanStep(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Turn the Osmo Pocket on and keep the phone nearby. Tap a camera when it appears.",
+                "Turn the camera on and keep the phone nearby. Pocket and Nano both appear — tap the one you want.",
                 color = StartupColors.muted,
                 fontSize = if (tight) 10.sp else 12.sp,
             )
@@ -226,15 +257,20 @@ private fun ScanStep(
 }
 
 @Composable
-private fun ApproveStep(phase: ConnectionPhase) {
-    StartupInfoBanner("If the Pocket shows Approve, tap it on the camera screen. First-time pairing can wait up to 90 seconds.")
+private fun ApproveStep(phase: ConnectionPhase, tight: Boolean) {
+    StartupInfoBanner(
+        "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+        tight,
+    )
     StartupDeviceInstructionCard(
-        "On Pocket",
+        "On the camera",
         listOf("Look for an Approve / pairing prompt", "Tap it on the camera screen"),
+        tight,
     )
     StartupDeviceInstructionCard(
         "On this phone",
         listOf("Wait here — we keep the Bluetooth link alive", "Don't force-quit the app"),
+        tight,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(color = StartupColors.accent, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -245,12 +281,12 @@ private fun ApproveStep(phase: ConnectionPhase) {
 @Composable
 private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
     Text(
-        "We read the Pocket's SSID and password over Bluetooth, then join its Wi-Fi for you.",
+        "We read the camera's SSID and password over Bluetooth, then join its Wi-Fi for you.",
         color = StartupColors.muted,
         fontSize = if (tight) 12.sp else 13.sp,
     )
     StartupDeviceInstructionCard(
-        "On Pocket",
+        "On the camera",
         listOf("Leave the camera on — it brings up its own Wi-Fi", "No menu tap needed on this path"),
         tight,
     )
@@ -269,8 +305,17 @@ private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
 private fun DatalinkStep(phase: ConnectionPhase) {
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(color = StartupColors.accent, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-        Text("Opening the video link…", color = StartupColors.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Box(
+            Modifier.size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(StartupColors.tile)
+                .border(1.dp, StartupColors.accent.copy(alpha = 0.46f), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("cam", color = StartupColors.accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
+    Text("Opening the video link…", color = StartupColors.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     Text(StartupConnectionCopy.phaseLabel(phase, null), color = StartupColors.muted, fontSize = 13.sp)
 }
 

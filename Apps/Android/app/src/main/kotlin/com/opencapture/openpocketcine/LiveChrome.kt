@@ -1,10 +1,17 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,43 +19,63 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 fun Modifier.monitorGlass(shape: RoundedCornerShape = ChromeShape): Modifier =
     clip(shape).background(LiveDesign.glass)
 
+fun Modifier.liveModuleFrame(rect: ChromeRect): Modifier =
+    offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
+
 @Composable
 fun Modifier.chromeClickable(
     enabled: Boolean = true,
-    onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
     return if (onLongClick != null) {
@@ -64,6 +91,421 @@ fun Modifier.chromeClickable(
     }
 }
 
+object LiveChromeMetrics {
+    const val LOCK = LiveDesign.LOCK_SIZE_DP
+    const val AUX = LiveDesign.AUX_SIZE_DP
+    const val RECORD = LiveDesign.RECORD_SIZE_DP
+    const val DISP_W = LiveDesign.DISP_WIDTH_DP
+    const val DISP_H = LiveDesign.DISP_HEIGHT_DP
+    const val TOP_DECK_H = LiveDesign.TOP_DECK_HEIGHT_DP
+    const val TOP_DECK_SIDE = 10f
+    const val TOP_DECK_GAP = 12f
+    const val BOTTOM_INSET = 14f
+    const val BOTTOM_GAP = 12f
+    const val RAIL_W = LiveDesign.RAIL_WIDTH_DP
+    const val CHROME_TOP = 14f
+    const val CHROME_LEADING = 16f
+    const val CHROME_BOTTOM = 12f
+    const val CHROME_TRAILING = 18f
+    const val FEED_ASPECT = 16f / 9f
+    const val CUTOUT_MIN = 50f
+    const val CLASSIC_NOTCH_SHIFT = 10f
+    const val BATTERY_PILL_W = 48f
+    const val BATTERY_PILL_H = 40f
+    const val BATTERY_PILL_LEADING = 8f
+    const val BATTERY_PILL_GAP = 6f
+    const val BATTERY_INLINE_GAP = 12f
+    const val BATTERY_INLINE_W = 52f
+    const val ZOOM_INSET = 10f
+    const val ZOOM = LiveDesign.ZOOM_CHIP_DP
+    const val STICK = LiveDesign.GIMBAL_STICK_DP
+    const val KNOB = LiveDesign.GIMBAL_KNOB_DP
+    const val STICK_INSET = 16f
+    const val STICK_GAP = 8f
+    const val FOCUS_RESET = LiveDesign.FOCUS_RESET_DP
+    const val FOCUS_RESET_GAP = 24f
+    const val POPUP_GAP = 10f
+    const val TOP_PICKER_GAP = 8f
+    const val CONTROL_H = LiveDesign.CONTROL_HEIGHT_DP
+}
+
+data class ChromeRect(val x: Float, val y: Float, val width: Float, val height: Float) {
+    val minX: Float get() = x
+    val minY: Float get() = y
+    val maxX: Float get() = x + width
+    val maxY: Float get() = y + height
+    val midX: Float get() = x + width / 2f
+    val midY: Float get() = y + height / 2f
+    val isEmpty: Boolean get() = width <= 1f || height <= 1f
+
+    fun inset(dx: Float, dy: Float): ChromeRect =
+        ChromeRect(
+            x + dx,
+            y + dy,
+            (width - 2f * dx).coerceAtLeast(0f),
+            (height - 2f * dy).coerceAtLeast(0f),
+        )
+
+    fun intersects(other: ChromeRect): Boolean =
+        minX < other.maxX && other.minX < maxX && minY < other.maxY && other.minY < maxY
+}
+
+data class LiveMonitorLayout(
+    val viewportWidth: Float,
+    val viewportHeight: Float,
+    val feed: ChromeRect,
+    val picture: ChromeRect,
+    val lock: ChromeRect,
+    val battery: ChromeRect,
+    val topDeck: ChromeRect,
+    val assist: ChromeRect,
+    val capture: ChromeRect,
+    val rail: ChromeRect,
+    val settings: ChromeRect,
+    val media: ChromeRect,
+    val record: ChromeRect,
+    val disp: ChromeRect,
+    val isWidthConstrained: Boolean,
+    val showsBottomBars: Boolean,
+    val safeLeading: Float,
+    val safeTrailing: Float,
+    val safeTop: Float,
+    val safeBottom: Float,
+) {
+    val onFeed: ChromeRect
+        get() = if (picture.width > 1f) picture else feed
+
+    val zoomButton: ChromeRect
+        get() {
+            val size = LiveChromeMetrics.ZOOM
+            val inset = LiveChromeMetrics.ZOOM_INSET
+            val clear = 8f
+            val well = feed
+            return if (record.midX >= well.midX) {
+                val trailing = min(well.maxX - inset, record.minX - clear)
+                ChromeRect(trailing - size, record.midY - size / 2f, size, size)
+            } else {
+                val leading = max(well.minX + inset, record.maxX + clear)
+                ChromeRect(leading, record.midY - size / 2f, size, size)
+            }
+        }
+
+    val gimbalStick: ChromeRect
+        get() {
+            val size = LiveChromeMetrics.STICK
+            val inset = LiveChromeMetrics.STICK_INSET
+            val gap = LiveChromeMetrics.STICK_GAP
+            var barTop = Float.POSITIVE_INFINITY
+            if (showsBottomBars) {
+                if (assist.height > 1f) barTop = min(barTop, assist.minY)
+                if (capture.height > 1f) barTop = min(barTop, capture.minY)
+            }
+            val well = feed
+            val floorY = if (barTop < Float.POSITIVE_INFINITY) min(well.maxY - inset, barTop - gap) else well.maxY - inset
+            var x = well.maxX - inset - size
+            var y = floorY - size
+            x = min(max(x, well.minX + inset), max(well.minX, well.maxX - inset - size))
+            y = min(max(y, well.minY + inset), max(well.minY, well.maxY - inset - size))
+            var rect = ChromeRect(x, y, size, size)
+            val zoom = zoomButton
+            if (zoom.width > 1f && rect.intersects(zoom.inset(-gap, -gap))) {
+                rect = rect.copy(y = zoom.maxY + gap)
+            }
+            if (record.width > 1f && rect.intersects(record.inset(-gap, -gap))) {
+                rect = rect.copy(x = record.minX - gap - size)
+            }
+            return rect
+        }
+
+    val focusReset: ChromeRect
+        get() {
+            val size = LiveChromeMetrics.FOCUS_RESET
+            if (viewportHeight > viewportWidth) {
+                val well = onFeed
+                return ChromeRect(well.maxX - size - 10f, well.maxY - size - 10f, size, size)
+            }
+            val towardFeed =
+                if (battery.midX < feed.midX) {
+                    battery.maxX + LiveChromeMetrics.FOCUS_RESET_GAP
+                } else {
+                    battery.minX - LiveChromeMetrics.FOCUS_RESET_GAP
+                }
+            val baseY = (if (assist.height > 1f) assist.minY else viewportHeight) - 30f
+            return ChromeRect(towardFeed - size / 2f, baseY - size / 2f, size, size)
+        }
+
+    companion object {
+        fun fit(
+            viewportWidth: Float,
+            viewportHeight: Float,
+            safeLeading: Float,
+            safeTrailing: Float,
+            safeTop: Float,
+            safeBottom: Float,
+            showsBottomBars: Boolean,
+        ): LiveMonitorLayout {
+            val vw = max(0f, viewportWidth)
+            val vh = max(0f, viewportHeight)
+            val constrained = isWidthConstrained(vw, vh)
+            val chrome = chromeRect(vw, vh)
+            val feed = feedFrame(vw, vh, safeLeading, safeTrailing)
+            val picture = feed
+            val lock = lockRect(chrome)
+            val battery = batteryRect(chrome, lock, constrained)
+            val rail = rightRailRect(vw, chrome, feed)
+            val slots =
+                if (constrained) constrainedSlots(vh, chrome, lock)
+                else railSlots(rail, if (showsBottomBars) LiveChromeMetrics.CONTROL_H else 0f)
+            val bars = bottomBand(vw, vh, chrome, constrained)
+            var layout =
+                LiveMonitorLayout(
+                    viewportWidth = vw,
+                    viewportHeight = vh,
+                    feed = feed,
+                    picture = picture,
+                    lock = lock,
+                    battery = battery,
+                    topDeck = ChromeRect(0f, 0f, 0f, 0f),
+                    assist = bars.first,
+                    capture = bars.second,
+                    rail = rail,
+                    settings = slots.settings,
+                    media = slots.media,
+                    record = slots.record,
+                    disp = slots.disp,
+                    isWidthConstrained = constrained,
+                    showsBottomBars = showsBottomBars,
+                    safeLeading = safeLeading,
+                    safeTrailing = safeTrailing,
+                    safeTop = safeTop,
+                    safeBottom = safeBottom,
+                )
+            layout =
+                layout.copy(
+                    topDeck =
+                        topDeckRect(layout.feed, layout.lock, layout.battery, layout.rail, constrained),
+                )
+            return layout
+        }
+
+        fun isWidthConstrained(vw: Float, vh: Float, aspect: Float = LiveChromeMetrics.FEED_ASPECT): Boolean =
+            vh <= vw && vh * aspect > vw + 0.5f
+
+        private fun chromeRect(vw: Float, vh: Float): ChromeRect =
+            ChromeRect(
+                LiveChromeMetrics.CHROME_LEADING,
+                LiveChromeMetrics.CHROME_TOP,
+                max(0f, vw - LiveChromeMetrics.CHROME_LEADING - LiveChromeMetrics.CHROME_TRAILING),
+                max(0f, vh - LiveChromeMetrics.CHROME_TOP - LiveChromeMetrics.CHROME_BOTTOM),
+            )
+
+        private fun feedFrame(vw: Float, vh: Float, safeLeading: Float, safeTrailing: Float): ChromeRect {
+            val aspect = LiveChromeMetrics.FEED_ASPECT
+            if (vh > vw) return ChromeRect(0f, 0f, vw, vw / aspect)
+            val width = vh * aspect
+            if (width > vw + 0.5f) {
+                val height = vw / aspect
+                return ChromeRect(0f, (vh - height) / 2f, vw, height)
+            }
+            val remaining = max(0f, vw - width)
+            val leadCut = if (safeLeading >= LiveChromeMetrics.CUTOUT_MIN) safeLeading else 0f
+            val trailCut = if (safeTrailing >= LiveChromeMetrics.CUTOUT_MIN) safeTrailing else 0f
+            val leadingInset = if (trailCut > leadCut) 0f else leadCut
+            val x =
+                if (isClassicNotch(safeLeading, safeTrailing)) {
+                    val available = max(0f, remaining - max(0f, safeLeading) - max(0f, safeTrailing))
+                    val shift = min(LiveChromeMetrics.CLASSIC_NOTCH_SHIFT, available)
+                    min(remaining, safeLeading + shift)
+                } else {
+                    min(remaining, leadingInset)
+                }
+            return ChromeRect(x, 0f, width, vh)
+        }
+
+        private fun isClassicNotch(leading: Float, trailing: Float): Boolean {
+            val minimum = min(max(0f, leading), max(0f, trailing))
+            val maximum = max(max(0f, leading), max(0f, trailing))
+            return minimum >= 40f && maximum <= 50f && abs(leading - trailing) < 4f
+        }
+
+        private fun lockRect(chrome: ChromeRect): ChromeRect {
+            val size = LiveChromeMetrics.LOCK
+            return ChromeRect(
+                chrome.minX,
+                chrome.minY + (LiveChromeMetrics.TOP_DECK_H - size) / 2f,
+                size,
+                size,
+            )
+        }
+
+        private fun batteryRect(chrome: ChromeRect, lock: ChromeRect, constrained: Boolean): ChromeRect {
+            if (constrained) {
+                return ChromeRect(
+                    chrome.minX + LiveChromeMetrics.LOCK + LiveChromeMetrics.BATTERY_INLINE_GAP,
+                    lock.minY,
+                    LiveChromeMetrics.BATTERY_INLINE_W,
+                    LiveChromeMetrics.LOCK,
+                )
+            }
+            return ChromeRect(
+                LiveChromeMetrics.BATTERY_PILL_LEADING,
+                lock.maxY + LiveChromeMetrics.BATTERY_PILL_GAP,
+                LiveChromeMetrics.BATTERY_PILL_W,
+                LiveChromeMetrics.BATTERY_PILL_H,
+            )
+        }
+
+        private fun rightRailRect(vw: Float, chrome: ChromeRect, feed: ChromeRect): ChromeRect {
+            val railWidth = min(chrome.width, LiveChromeMetrics.RAIL_W)
+            val laneX = min(vw, max(0f, feed.maxX))
+            val laneWidth = max(0f, vw - laneX)
+            return if (laneWidth >= railWidth) {
+                ChromeRect(laneX + (laneWidth - railWidth) / 2f, chrome.minY, railWidth, chrome.height)
+            } else {
+                ChromeRect(chrome.maxX - railWidth, chrome.minY, railWidth, chrome.height)
+            }
+        }
+
+        private data class RailSlots(
+            val settings: ChromeRect,
+            val media: ChromeRect,
+            val record: ChromeRect,
+            val disp: ChromeRect,
+        )
+
+        private fun railSlots(rail: ChromeRect, bottomBarHeight: Float): RailSlots {
+            val aux = LiveChromeMetrics.AUX
+            val rec = LiveChromeMetrics.RECORD
+            val dispW = LiveChromeMetrics.DISP_W
+            val dispH = LiveChromeMetrics.DISP_H
+            val recordCenterX = max(rec / 2f, rail.width - rec / 2f)
+            val settingsCenterY = aux / 2f
+            val recordCenterY = rail.height / 2f
+            val mediaCenterY = (settingsCenterY + aux / 2f + recordCenterY - rec / 2f) / 2f
+            val bottomBarTop = max(0f, rail.height - max(0f, bottomBarHeight))
+            val dispHalf = dispH / 2f
+            val clearOfRecord = recordCenterY + rec / 2f + dispHalf
+            val displayCenterY =
+                if (bottomBarHeight > 0f) (recordCenterY + rec / 2f + bottomBarTop) / 2f
+                else max(clearOfRecord, rail.height - dispHalf)
+
+            fun slot(cx: Float, cy: Float, w: Float, h: Float) =
+                ChromeRect(rail.minX + cx - w / 2f, rail.minY + cy - h / 2f, w, h)
+
+            return RailSlots(
+                settings = slot(recordCenterX, settingsCenterY, aux, aux),
+                media = slot(recordCenterX, mediaCenterY, aux, aux),
+                record = slot(recordCenterX, recordCenterY, rec, rec),
+                disp = slot(recordCenterX, displayCenterY, dispW, dispH),
+            )
+        }
+
+        private fun constrainedSlots(vh: Float, chrome: ChromeRect, lock: ChromeRect): RailSlots {
+            val aux = LiveChromeMetrics.AUX
+            val gap = LiveChromeMetrics.BOTTOM_GAP
+            val bandCenterY = chrome.minY + LiveChromeMetrics.TOP_DECK_H / 2f
+            val settings = ChromeRect(chrome.maxX - aux, bandCenterY - aux / 2f, aux, aux)
+            val media = ChromeRect(settings.minX - gap - aux, bandCenterY - aux / 2f, aux, aux)
+            val rec = LiveChromeMetrics.RECORD
+            val recordBottom = vh - LiveChromeMetrics.BOTTOM_INSET
+            val record = ChromeRect(chrome.maxX - rec, recordBottom - rec, rec, rec)
+            val disp =
+                ChromeRect(
+                    record.minX - gap - LiveChromeMetrics.DISP_W,
+                    record.midY - LiveChromeMetrics.DISP_H / 2f,
+                    LiveChromeMetrics.DISP_W,
+                    LiveChromeMetrics.DISP_H,
+                )
+            return RailSlots(settings, media, record, disp)
+        }
+
+        private fun topDeckRect(
+            feed: ChromeRect,
+            lock: ChromeRect,
+            battery: ChromeRect,
+            rail: ChromeRect,
+            constrained: Boolean,
+        ): ChromeRect {
+            val gap = LiveChromeMetrics.TOP_DECK_GAP
+            val side = LiveChromeMetrics.TOP_DECK_SIDE
+            var left = feed.minX + side
+            var right = feed.maxX - side
+            val clusterRight = max(lock.maxX, battery.maxX)
+            val clusterLeft = min(lock.minX, battery.minX)
+            if (clusterRight < feed.midX) left = max(left, clusterRight + gap)
+            if (clusterLeft > feed.midX) right = min(right, clusterLeft - gap)
+            if (constrained) {
+                val reserved = 2f * LiveChromeMetrics.AUX + 2f * LiveChromeMetrics.BOTTOM_GAP
+                val inset = side + reserved + gap
+                left = max(left, feed.minX + inset)
+                right = min(right, feed.maxX - inset)
+            } else if (rail.midX > feed.midX) {
+                right = min(right, rail.minX - gap)
+            } else {
+                left = max(left, rail.maxX + gap)
+            }
+            return ChromeRect(
+                left,
+                LiveChromeMetrics.CHROME_TOP,
+                max(0f, right - left),
+                LiveChromeMetrics.TOP_DECK_H,
+            )
+        }
+
+        private fun bottomBand(
+            @Suppress("UNUSED_PARAMETER") vw: Float,
+            vh: Float,
+            chrome: ChromeRect,
+            constrained: Boolean,
+        ): Pair<ChromeRect, ChromeRect> {
+            val reserved =
+                LiveChromeMetrics.RECORD + LiveChromeMetrics.DISP_W + 2f * LiveChromeMetrics.BOTTOM_GAP
+            val barsWidth = if (constrained) max(0f, chrome.width - reserved) else chrome.width
+            val gap = LiveChromeMetrics.BOTTOM_GAP
+            val assistWidth = max(0f, (barsWidth - gap) / 3f)
+            val captureWidth = max(0f, barsWidth - gap - assistWidth)
+            val y = vh - LiveChromeMetrics.BOTTOM_INSET - LiveChromeMetrics.CONTROL_H
+            val assist = ChromeRect(chrome.minX, y, assistWidth, LiveChromeMetrics.CONTROL_H)
+            val capture = ChromeRect(assist.maxX + gap, y, captureWidth, LiveChromeMetrics.CONTROL_H)
+            return assist to capture
+        }
+    }
+}
+
+internal object LiveSessionBridge {
+    fun call(target: Any, name: String, vararg args: Any?): Boolean {
+        val method =
+            target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == args.size }
+                ?: return false
+        val coerced =
+            method.parameterTypes
+                .mapIndexed { i, type ->
+                    val arg = args[i] ?: return@mapIndexed null
+                    when (type) {
+                        java.lang.Float.TYPE,
+                        java.lang.Float::class.java,
+                        -> (arg as Number).toFloat()
+                        java.lang.Double.TYPE,
+                        java.lang.Double::class.java,
+                        -> (arg as Number).toDouble()
+                        Integer.TYPE,
+                        java.lang.Integer::class.java,
+                        -> (arg as Number).toInt()
+                        java.lang.Boolean.TYPE,
+                        java.lang.Boolean::class.java,
+                        -> arg as Boolean
+                        else -> arg
+                    }
+                }
+                .toTypedArray()
+        return runCatching {
+                method.invoke(target, *coerced)
+                true
+            }
+            .getOrDefault(false)
+    }
+}
+
 @Composable
 fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val tint = if (locked) LiveDesign.accent else LiveDesign.text.copy(alpha = 0.86f)
@@ -73,9 +515,10 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
             .monitorGlass()
             .then(
                 if (locked) Modifier.border(1.5.dp, LiveDesign.accent.copy(alpha = 0.75f), ChromeShape)
-                else Modifier
+                else Modifier,
             )
-            .chromeClickable(onClick = onClick),
+            .chromeClickable(onClick = onClick)
+            .semantics { contentDescription = if (locked) "Unlock monitor controls" else "Lock monitor controls" },
         contentAlignment = Alignment.Center,
     ) {
         PadlockGlyph(tint = tint, filled = locked, modifier = Modifier.size(13.dp, 17.dp))
@@ -83,22 +526,26 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
 }
 
 @Composable
-fun DispButton(clean: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+fun DispButton(
+    clean: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
     Column(
         modifier
-            .width(52.dp)
-            .height(44.dp)
+            .width(LiveDesign.DISP_WIDTH_DP.dp)
+            .height(LiveDesign.DISP_HEIGHT_DP.dp)
             .monitorGlass()
             .chromeClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 6.dp),
+            .semantics { contentDescription = if (clean) "DISP 2 clean" else "DISP 1 live" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
     ) {
         Text(
             "DISP",
             color = if (clean) LiveDesign.text else LiveDesign.info,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            style = LiveType.ui(12f, FontWeight.Bold),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Box(
@@ -129,43 +576,86 @@ fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @
 }
 
 @Composable
-fun RecordButton(recording: Boolean, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Canvas(
+fun RecordButton(
+    recording: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    confirm: Boolean = false,
+    onClick: () -> Unit,
+) {
+    var confirmOpen by remember { mutableStateOf(false) }
+    if (confirmOpen) {
+        AlertDialog(
+            onDismissRequest = { confirmOpen = false },
+            title = {
+                Text(
+                    if (recording) "Stop recording?" else "Start recording?",
+                    color = LiveDesign.text,
+                    style = LiveType.ui(16f, FontWeight.SemiBold),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmOpen = false
+                        onClick()
+                    },
+                ) {
+                    Text(
+                        if (recording) "Stop" else "Start",
+                        color = if (recording) LiveDesign.rec else LiveDesign.accent,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmOpen = false }) {
+                    Text("Cancel", color = LiveDesign.muted)
+                }
+            },
+            containerColor = LiveDesign.surface,
+        )
+    }
+    Box(
         modifier
             .size(LiveDesign.RECORD_SIZE_DP.dp)
-            .chromeClickable(enabled = enabled, onClick = onClick),
+            .chromeClickable(enabled = enabled, onClick = { if (confirm) confirmOpen = true else onClick() })
+            .semantics { contentDescription = if (recording) "Stop recording" else "Start recording" },
+        contentAlignment = Alignment.Center,
     ) {
+        RecordLamp(recording = recording)
+    }
+}
+
+@Composable
+private fun RecordLamp(recording: Boolean) {
+    val transition = rememberInfiniteTransition(label = "recordPulse")
+    val pulse by
+        transition.animateFloat(
+            initialValue = 0.22f,
+            targetValue = 0.55f,
+            animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
+            label = "recordGlow",
+        )
+    val glow = if (recording) pulse else 0f
+    Canvas(Modifier.fillMaxSize()) {
         val d = size.minDimension
         val center = Offset(size.width / 2, size.height / 2)
+        val ring = d * 0.50f
+        val ringLine = max(2.dp.toPx(), d * 0.026f)
         if (recording) {
-            drawCircle(LiveDesign.rec.copy(alpha = 0.28f), radius = d * 0.56f, center = center)
+            drawCircle(LiveDesign.pocketRing.copy(alpha = glow), radius = d * 0.58f, center = center)
         }
-        drawCircle(
-            brush =
-                Brush.radialGradient(
-                    colors = listOf(Color(0.88f, 0.28f, 0.30f), LiveDesign.rec),
-                    center = Offset(center.x, center.y - d / 2),
-                    radius = d * (48f / 72f),
-                ),
-            radius = d / 2,
-            center = center,
-        )
-        drawCircle(
-            Color.White.copy(alpha = 0.17f),
-            radius = d / 2 - 1.5.dp.toPx(),
-            center = center,
-            style = Stroke(width = 3.dp.toPx()),
-        )
+        drawCircle(LiveDesign.recordWell, radius = d / 2f, center = center)
+        drawCircle(Color.Black.copy(alpha = 0.55f), radius = d / 2f, center = center, style = Stroke(1.5.dp.toPx()))
         if (recording) {
-            val side = d * (25f / 72f)
-            drawRoundRect(
-                LiveDesign.rec,
-                topLeft = Offset(center.x - side / 2, center.y - side / 2),
-                size = Size(side, side),
-                cornerRadius = CornerRadius(7.dp.toPx()),
-            )
+            drawCircle(LiveDesign.pocketRing, radius = ring / 2f, center = center)
         } else {
-            drawCircle(LiveDesign.rec, radius = d * (58f / 72f) / 2, center = center)
+            drawCircle(
+                LiveDesign.pocketRing,
+                radius = ring / 2f,
+                center = center,
+                style = Stroke(ringLine),
+            )
         }
     }
 }
@@ -189,9 +679,9 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
     val tint =
         when {
             percent < 0 -> LiveDesign.faint
-            percent <= 15 -> LiveDesign.rec
-            camera -> Color(0xFF6BCC87)
-            else -> LiveDesign.text.copy(alpha = 0.85f)
+            percent <= 20 -> LiveDesign.rec
+            percent <= 40 -> LiveDesign.amber
+            else -> LiveDesign.good
         }
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(12.dp), contentAlignment = Alignment.Center) {
@@ -216,34 +706,59 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
                     cornerRadius = CornerRadius(1.dp.toPx()),
                 )
             }
-            Text(
-                if (percent < 0) "—" else "$percent",
-                color = tint,
-                fontSize = 8.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-        if (charging) {
-            Text("⚡", color = tint, fontSize = 8.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (charging) {
+                    Text("⚡", color = tint, fontSize = 7.sp)
+                }
+                Text(
+                    if (percent < 0) "—" else "$percent",
+                    color = tint,
+                    style = LiveType.ui(10f, FontWeight.Medium),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
 
 @Composable
-fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier) {
-    val raw = timecode ?: "--:--:--:--"
-    val parts = raw.split(":")
-    val main = if (parts.size >= 4) parts.take(3).joinToString(":") else raw
-    val frames = if (parts.size >= 4) ":${parts[3]}" else ""
+fun CameraBatteryReadout(percent: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CameraGlyph(LiveDesign.text, Modifier.size(12.dp, 10.dp))
+        Text(
+            if (percent in 0..100) "$percent%" else "—",
+            color = LiveDesign.text,
+            style = LiveType.ui(12f, FontWeight.SemiBold),
+        )
+    }
+}
+
+@Composable
+fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: Boolean = false) {
+    val raw = timecode?.takeIf { it.isNotBlank() } ?: if (portrait) "00:00:00" else "--:--:--"
+    val colon = raw.lastIndexOf(':')
+    val head = if (colon >= 0) raw.substring(0, colon + 1) else raw
+    val tail = if (colon >= 0) raw.substring(colon + 1) else ""
+    if (portrait) {
+        Text(
+            raw,
+            color = LiveDesign.text,
+            style = LiveType.mono(15f, FontWeight.Normal),
+            maxLines = 1,
+            modifier = modifier,
+        )
+        return
+    }
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(color = LiveDesign.text)) { append(main) }
-            withStyle(SpanStyle(color = LiveDesign.accent)) { append(frames) }
+            withStyle(SpanStyle(color = LiveDesign.text)) { append("TC $head") }
+            withStyle(SpanStyle(color = LiveDesign.accent)) { append(tail) }
         },
-        fontSize = 20.sp,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
+        style = LiveType.mono(20f, FontWeight.Medium),
         maxLines = 1,
         modifier = modifier,
     )
@@ -260,10 +775,29 @@ fun RecChip(recording: Boolean) {
         Text(
             if (recording) "REC" else "STBY",
             color = if (recording) LiveDesign.text else LiveDesign.muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            style = LiveType.ui(11f, FontWeight.Bold),
+            maxLines = 1,
         )
+    }
+}
+
+@Composable
+fun FpsChip(fps: String, bars: Int) {
+    val tint =
+        when {
+            bars >= 3 -> LiveDesign.good
+            bars == 2 -> LiveDesign.accent
+            bars == 1 -> LiveDesign.rec
+            else -> LiveDesign.faint
+        }
+    Row(
+        modifier = Modifier.clip(CircleShape).background(LiveDesign.glass).padding(horizontal = 11.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SignalBarsGlyph(bars = bars, tint = tint)
+        Text("FPS", color = LiveDesign.faint, style = LiveType.mono(8f, FontWeight.Bold), maxLines = 1)
+        Text(fps, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.Medium), maxLines = 1)
     }
 }
 
@@ -300,34 +834,9 @@ fun ReadoutPill(
         Text(
             value.replace(" · ", "·"),
             color = if (active) LiveDesign.accent else LiveDesign.text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
+            style = LiveType.mono(15f, FontWeight.Medium),
             maxLines = 1,
         )
-    }
-}
-
-@Composable
-fun ConnectionPill(bars: Int, onLongClick: () -> Unit) {
-    val tint =
-        when {
-            bars >= 3 -> LiveDesign.good
-            bars == 2 -> LiveDesign.accent
-            bars == 1 -> LiveDesign.rec
-            else -> LiveDesign.faint
-        }
-    Row(
-        modifier =
-            Modifier.clip(CircleShape)
-                .background(LiveDesign.glass)
-                .chromeClickable(onClick = {}, onLongClick = onLongClick)
-                .padding(horizontal = 11.dp, vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SignalBarsGlyph(bars = bars, tint = tint)
-        Text("LINK", color = LiveDesign.faint, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -340,21 +849,26 @@ fun CaptureSettingCell(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val labelColor = if (active) LiveDesign.accent.copy(alpha = 0.85f) else LiveDesign.faint
+    val labelColor = if (active) LiveDesign.accent.copy(alpha = 0.85f) else LiveDesign.muted
     val valueColor = if (active) LiveDesign.accent else LiveDesign.text
     Column(
         modifier =
             Modifier.clip(ChromeShape)
                 .background(if (active) LiveDesign.accentDim else Color.Transparent)
                 .chromeClickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 5.dp),
+                .padding(horizontal = 4.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Text(label, color = labelColor, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = labelColor, style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
         Box(contentAlignment = Alignment.Center) {
-            Text(widest, color = Color.Transparent, fontSize = 19.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text(value, color = valueColor, fontSize = 19.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(
+                widest,
+                color = Color.Transparent,
+                style = LiveType.ui(17f, FontWeight.Medium),
+                maxLines = 1,
+            )
+            Text(value, color = valueColor, style = LiveType.ui(17f, FontWeight.Medium), maxLines = 1)
         }
     }
 }
@@ -373,13 +887,138 @@ fun AssistToolChip(label: String, on: Boolean, enabled: Boolean, stub: Boolean, 
         Text(
             label,
             color = if (on) LiveDesign.accent else LiveDesign.muted,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
+            style = LiveType.mono(9f, FontWeight.Medium),
             maxLines = 1,
         )
         if (stub && on) {
-            Text("local", color = LiveDesign.faint, fontSize = 7.sp, fontFamily = FontFamily.Monospace)
+            Text("local", color = LiveDesign.faint, style = LiveType.mono(7f), maxLines = 1)
+        }
+    }
+}
+
+@Composable
+fun LiveGimbalStick(
+    enabled: Boolean,
+    onMove: (Float, Float) -> Unit,
+    onRelease: () -> Unit,
+    onRecenter: () -> Unit,
+    onFlip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val size = LiveDesign.GIMBAL_STICK_DP.dp
+    val knob = LiveDesign.GIMBAL_KNOB_DP.dp
+    var knobOffset by remember { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    var recenterJob by remember { mutableStateOf<Job?>(null) }
+    Box(
+        modifier
+            .size(size)
+            .semantics { contentDescription = "Gimbal stick" }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                val travel = (size.toPx() - knob.toPx()) / 2f
+                var taps = 0
+                var lastTap = 0L
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var dragged = false
+                    var translation = Offset.Zero
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.pressed) {
+                            translation += change.positionChange()
+                            val mag = hypot(translation.x, translation.y)
+                            if (mag > 10f) {
+                                dragged = true
+                                taps = 0
+                                recenterJob?.cancel()
+                                val limited =
+                                    if (mag > travel && mag > 0f) translation * (travel / mag) else translation
+                                knobOffset = limited
+                                val denom = if (travel > 0f) travel else 1f
+                                onMove(limited.x / denom, -limited.y / denom)
+                            }
+                            change.consume()
+                        } else {
+                            break
+                        }
+                    }
+                    if (dragged) {
+                        knobOffset = Offset.Zero
+                        onRelease()
+                    } else {
+                        knobOffset = Offset.Zero
+                        val now = System.currentTimeMillis()
+                        if (now - lastTap > 420L) taps = 0
+                        taps += 1
+                        lastTap = now
+                        when (taps) {
+                            2 -> {
+                                recenterJob?.cancel()
+                                recenterJob =
+                                    scope.launch {
+                                        delay(280)
+                                        onRecenter()
+                                        taps = 0
+                                    }
+                            }
+                            3 -> {
+                                recenterJob?.cancel()
+                                recenterJob = null
+                                taps = 0
+                                onFlip()
+                            }
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 2.dp.toPx()
+            drawCircle(
+                color = Color.White.copy(alpha = 0.30f),
+                radius = size.toPx() / 2f - stroke / 2f,
+                style = Stroke(width = stroke),
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.30f),
+                radius = knob.toPx() / 2f,
+                center = center + knobOffset,
+            )
+        }
+    }
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            recenterJob?.cancel()
+            knobOffset = Offset.Zero
+            onRelease()
+        }
+    }
+}
+
+@Composable
+fun LiveFocusResetButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .size(LiveDesign.FOCUS_RESET_DP.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, LiveDesign.hairline, CircleShape)
+            .chromeClickable(onClick = onClick)
+            .semantics { contentDescription = "Recenter focus" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(18.dp)) {
+            val c = center
+            val r = size.minDimension / 2f
+            drawCircle(LiveDesign.text, radius = r, style = Stroke(1.6.dp.toPx()))
+            drawCircle(LiveDesign.text, radius = 2.dp.toPx())
+            drawLine(LiveDesign.text, Offset(c.x, c.y - r), Offset(c.x, c.y - r + 4.dp.toPx()), 1.4.dp.toPx())
+            drawLine(LiveDesign.text, Offset(c.x, c.y + r - 4.dp.toPx()), Offset(c.x, c.y + r), 1.4.dp.toPx())
+            drawLine(LiveDesign.text, Offset(c.x - r, c.y), Offset(c.x - r + 4.dp.toPx(), c.y), 1.4.dp.toPx())
+            drawLine(LiveDesign.text, Offset(c.x + r - 4.dp.toPx(), c.y), Offset(c.x + r, c.y), 1.4.dp.toPx())
         }
     }
 }
@@ -389,18 +1028,19 @@ fun PadlockGlyph(tint: Color, filled: Boolean, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val body = Path().apply {
-            addRoundRect(
-                androidx.compose.ui.geometry.RoundRect(
-                    left = w * 0.08f,
-                    top = h * 0.42f,
-                    right = w * 0.92f,
-                    bottom = h * 0.96f,
-                    radiusX = 2.dp.toPx(),
-                    radiusY = 2.dp.toPx(),
+        val body =
+            Path().apply {
+                addRoundRect(
+                    androidx.compose.ui.geometry.RoundRect(
+                        left = w * 0.08f,
+                        top = h * 0.42f,
+                        right = w * 0.92f,
+                        bottom = h * 0.96f,
+                        radiusX = 2.dp.toPx(),
+                        radiusY = 2.dp.toPx(),
+                    ),
                 )
-            )
-        }
+            }
         if (filled) drawPath(body, tint)
         else drawPath(body, tint, style = Stroke(1.6.dp.toPx()))
         drawArc(

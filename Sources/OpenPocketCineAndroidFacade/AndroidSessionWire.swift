@@ -66,16 +66,23 @@ public enum AndroidSessionWire {
         let escaped = (model.name)
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+        let family: String
+        switch model.family {
+        case .pocket: family = "pocket"
+        case .nano: family = "nano"
+        case .other: family = "other"
+        }
         return """
-        {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)"}
-        """
+            {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)","family":"\(family)","liveViewEnableReceiver":\(Int(model.liveViewEnableReceiver)),"usesNanoLiveViewGate":\(bool(model.usesNanoLiveViewGate)),"supportsTapFocus":\(bool(model.supportsTapFocus)),"supportsFocusMode":\(bool(model.supportsFocusMode)),"usesCapturedLiveEnable":\(bool(model.usesCapturedLiveEnable))}
+            """
     }
 
     public static func statusJSON(_ status: CameraStatus) -> String {
         func bool(_ v: Bool) -> String { v ? "true" : "false" }
         func quote(_ s: String?) -> String {
             guard let s else { return "null" }
-            let escaped = s
+            let escaped =
+                s
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
             return "\"\(escaped)\""
@@ -85,9 +92,12 @@ public enum AndroidSessionWire {
             "[\(xs.map(String.init).joined(separator: ","))]"
         }
         let isoCaps = status.availableIsoIndices.map { Int($0.rawValue) }
+        let colorCaps = status.availableColorModes.map { Int($0.rawValue) }
+        let zoomFactorJSON = status.zoomFactor.map { String($0) } ?? "null"
+        let glamourJSON = status.glamourEnabled.map { bool($0) } ?? "null"
         return """
-        {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps))}
-        """
+            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
+            """
     }
 
     public static func status(fromJSON json: String) -> CameraStatus {
@@ -97,7 +107,10 @@ public enum AndroidSessionWire {
             let tail = json[range.upperBound...]
             var digits = ""
             for ch in tail {
-                if ch == "-" && digits.isEmpty { digits.append(ch); continue }
+                if ch == "-" && digits.isEmpty {
+                    digits.append(ch)
+                    continue
+                }
                 if ch.isNumber { digits.append(ch) } else { break }
             }
             return Int(digits) ?? def
@@ -123,14 +136,46 @@ public enum AndroidSessionWire {
                     if let n = Int(digits) { out.append(n) }
                     break
                 }
-                if ch == "-" && digits.isEmpty { digits.append(ch); continue }
-                if ch.isNumber { digits.append(ch) }
-                else if ch == "," {
+                if ch == "-" && digits.isEmpty {
+                    digits.append(ch)
+                    continue
+                }
+                if ch.isNumber {
+                    digits.append(ch)
+                } else if ch == "," {
                     if let n = Int(digits) { out.append(n) }
                     digits = ""
                 }
             }
             return out
+        }
+        func optionalNumber(_ key: String) -> Double? {
+            guard let range = json.range(of: "\"\(key)\":") else { return nil }
+            var s = ""
+            var started = false
+            for ch in json[range.upperBound...] {
+                if ch.isWhitespace && !started { continue }
+                if !started && ch == "n" { return nil }
+                started = true
+                if ch == "-" && s.isEmpty {
+                    s.append(ch)
+                    continue
+                }
+                if ch.isNumber || ch == "." || ch == "e" || ch == "E" || ch == "+" {
+                    s.append(ch)
+                } else {
+                    break
+                }
+            }
+            return Double(s)
+        }
+        func number(_ key: String, default def: Double) -> Double {
+            optionalNumber(key) ?? def
+        }
+        func optionalFlag(_ key: String) -> Bool? {
+            if json.contains("\"\(key)\":true") { return true }
+            if json.contains("\"\(key)\":false") { return false }
+            return nil
         }
         status.batteryPercent = int("batteryPercent", default: -1)
         status.batteryMilliVolts = int("batteryMilliVolts", default: 0)
@@ -159,17 +204,23 @@ public enum AndroidSessionWire {
         if let idx = IsoIndex(rawValue: UInt8(truncatingIfNeeded: int("isoIndex", default: -1))) {
             status.isoIndex = idx
         }
-        if let color = ColorMode(rawValue: UInt8(truncatingIfNeeded: int("colorMode", default: -1))) {
+        if let color = ColorMode(rawValue: UInt8(truncatingIfNeeded: int("colorMode", default: -1)))
+        {
             status.colorMode = color
         }
-        if let res = VideoResolution(rawValue: UInt8(truncatingIfNeeded: int("videoResolution", default: -1))) {
+        if let res = VideoResolution(
+            rawValue: UInt8(truncatingIfNeeded: int("videoResolution", default: -1)))
+        {
             status.videoResolution = res
         }
-        if let fpsIdx = VideoFrameRate(rawValue: UInt8(truncatingIfNeeded: int("fpsIndex", default: -1))),
-           let res = status.videoResolution {
+        if let fpsIdx = VideoFrameRate(
+            rawValue: UInt8(truncatingIfNeeded: int("fpsIndex", default: -1))),
+            let res = status.videoResolution
+        {
             status.videoFormat = VideoFormat(resolution: res, frameRate: fpsIdx)
         }
-        let wbMode = WhiteBalanceMode(rawValue: UInt8(truncatingIfNeeded: int("whiteBalanceMode", default: -1)))
+        let wbMode = WhiteBalanceMode(
+            rawValue: UInt8(truncatingIfNeeded: int("whiteBalanceMode", default: -1)))
         if let wbMode {
             status.whiteBalance = WhiteBalance(
                 mode: wbMode,
@@ -181,16 +232,23 @@ public enum AndroidSessionWire {
         } else {
             status.whiteBalanceKelvin = int("whiteBalanceKelvin", default: -1)
         }
-        if let focus = FocusMode(rawValue: UInt8(truncatingIfNeeded: int("focusMode", default: -1))) {
+        if let focus = FocusMode(rawValue: UInt8(truncatingIfNeeded: int("focusMode", default: -1)))
+        {
             status.focusMode = focus
         }
-        if let ch = AudioChannel(rawValue: UInt8(truncatingIfNeeded: int("audioChannel", default: -1))) {
+        if let ch = AudioChannel(
+            rawValue: UInt8(truncatingIfNeeded: int("audioChannel", default: -1)))
+        {
             status.audioChannel = ch
         }
-        if let boost = VocalBoost(rawValue: UInt8(truncatingIfNeeded: int("vocalBoost", default: -1))) {
+        if let boost = VocalBoost(
+            rawValue: UInt8(truncatingIfNeeded: int("vocalBoost", default: -1)))
+        {
             status.vocalBoost = boost
         }
-        if let hex = str("audioDspBlob"), let bytes = hexBytes(hex), bytes.count == AudioDspBlob.size {
+        if let hex = str("audioDspBlob"), let bytes = hexBytes(hex),
+            bytes.count == AudioDspBlob.size
+        {
             status.audioDspBlob = bytes
             if bytes.count > 2 {
                 AudioDspBlob.applyByte2(bytes[2], to: &status)
@@ -202,9 +260,56 @@ public enum AndroidSessionWire {
         }
         let zoomRaw = int("zoomFactorRaw", default: 0)
         if zoomRaw > 0 { status.zoomFactorRaw = UInt32(clamping: zoomRaw) }
-        status.availableShutterDenoms = intArray("availableShutterDenoms").filter { (1...16_000).contains($0) }
+        status.availableShutterDenoms = intArray("availableShutterDenoms").filter {
+            (1...16_000).contains($0)
+        }
         status.availableIsoIndices = intArray("availableIsoIndices").compactMap {
             IsoIndex(rawValue: UInt8(truncatingIfNeeded: $0))
+        }
+        if let ev = EvComp(rawValue: UInt8(truncatingIfNeeded: int("evComp", default: -1))) {
+            status.evComp = ev
+        }
+        if let limit = IsoLimit(rawValue: UInt8(truncatingIfNeeded: int("isoLimit", default: -1))) {
+            status.isoLimit = limit
+        }
+        status.availableColorModes = intArray("availableColorModes").compactMap {
+            ColorMode(rawValue: UInt8(truncatingIfNeeded: $0))
+        }
+        status.focusX = number("focusX", default: CamLensState.defaultX)
+        status.focusY = number("focusY", default: CamLensState.defaultY)
+        status.hasCameraFocusPoint = flag("hasCameraFocusPoint")
+        if let track = FocusTrackMode(
+            rawValue: UInt8(truncatingIfNeeded: int("focusTrack", default: -1)))
+        {
+            status.focusTrack = track
+        }
+        let lens = int("zoomLens", default: -1)
+        if (0...65_535).contains(lens) { status.zoomLens = UInt16(lens) }
+        if let glamour = optionalFlag("glamourEnabled") { status.glamourEnabled = glamour }
+        if let wind = optionalUInt8(int("windNR", default: -1)).flatMap(
+            WindNoiseReduction.init(rawValue:))
+        {
+            status.windNR = wind
+        }
+        if let dir = optionalUInt8(int("directionalAudio", default: -1)).flatMap(
+            DirectionalAudio.init(rawValue:))
+        {
+            status.directionalAudio = dir
+        }
+        if json.contains("\"audioMetersLeft\":") || json.contains("\"audioMetersRight\":")
+            || json.contains("\"audioPeakLeft\":") || json.contains("\"audioPeakRight\":")
+        {
+            let floor = AudioMeterBallistics.floorDB
+            status.audioMeters = AudioMeterLevels(
+                left: AudioMeterChannel(
+                    levelDB: number("audioMetersLeft", default: floor),
+                    peakDB: number("audioPeakLeft", default: floor)
+                ),
+                right: AudioMeterChannel(
+                    levelDB: number("audioMetersRight", default: floor),
+                    peakDB: number("audioPeakRight", default: floor)
+                )
+            )
         }
         return status
     }
@@ -245,9 +350,35 @@ public enum AndroidSessionWire {
         case tapFocusPoint = 33
         case tapFocusHint = 34
         case tapFocusCommit = 35
+        case shootPhoto = 36
+        case setShootingMode = 37
+        case setEv = 38
+        case setIsoLimit = 39
+        case getIsoLimit = 40
+        case setFov = 41
+        case setZoomLens = 42
+        case setZoomSlew = 43
+        case setZoomStop = 44
+        case gimbalRecenter = 45
+        case gimbalFlip = 46
+        case gimbalStick = 47
+        case setTrackingBox = 48
+        case clearTrackingBox = 49
+        case pollTracking = 50
+        case setFocusTrack = 51
+        case getFocusTrack = 52
+        case getGlamour = 53
+        case setGlamour = 54
+        case exitPlayback = 55
+        case mediaList = 56
+        case mediaListTrigger = 57
+        case deleteMedia = 58
+        case setMediaFavorite = 59
+        case nanoLiveViewGate = 60
     }
 
-    public static func encodeCommand(kind: CommandKind, seq: UInt16, extra: String?) -> Duml.Frame? {
+    public static func encodeCommand(kind: CommandKind, seq: UInt16, extra: String?) -> Duml.Frame?
+    {
         switch kind {
         case .sessionWake:
             return Commands.sessionWake(id: seq)
@@ -270,13 +401,15 @@ public enum AndroidSessionWire {
         case .gimbalInit:
             return Commands.gimbalInit(seq: seq)
         case .subscribe:
-            let parts = (extra ?? "").split(separator: "\u{1f}", maxSplits: 1, omittingEmptySubsequences: false)
+            let parts = (extra ?? "").split(
+                separator: "\u{1f}", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2, let subId = UInt32(parts[1]) else { return nil }
             return Commands.subscribe(key: String(parts[0]), subId: subId, seq: seq)
         case .enterPlayback:
             return Commands.enterPlayback(seq: seq)
         case .liveViewEnable:
-            return Commands.liveViewEnable(seq: seq)
+            let receiver = parseUInt8(extra) ?? Commands.liveViewEnableReceiverPocket
+            return Commands.liveViewEnable(seq: seq, receiver: receiver)
         case .recordStart:
             return Commands.recordStart(seq: seq)
         case .recordStop:
@@ -288,10 +421,14 @@ public enum AndroidSessionWire {
             guard let denom = extra.flatMap(Int.init) else { return nil }
             return Commands.setShutter(denom: denom, seq: seq)
         case .setIsoIndex:
-            guard let raw = extra.flatMap({ UInt8($0) }), let index = IsoIndex(rawValue: raw) else { return nil }
+            guard let raw = extra.flatMap({ UInt8($0) }), let index = IsoIndex(rawValue: raw) else {
+                return nil
+            }
             return Commands.setIsoIndex(index, seq: seq)
         case .setColorMode:
-            guard let raw = extra.flatMap({ UInt8($0) }), let mode = ColorMode(rawValue: raw) else { return nil }
+            guard let raw = extra.flatMap({ UInt8($0) }), let mode = ColorMode(rawValue: raw) else {
+                return nil
+            }
             return Commands.setColorMode(mode, seq: seq)
         case .setFocusMode:
             let mode: FocusMode = (extra == "2" || extra == "continuous") ? .continuous : .single
@@ -300,12 +437,15 @@ public enum AndroidSessionWire {
             return Commands.setWhiteBalanceAuto(seq: seq)
         case .setWhiteBalanceCustom:
             let parts = splitExtra(extra)
-            guard parts.count >= 2, let kelvin = Int(parts[0]), let tint = Int(parts[1]) else { return nil }
+            guard parts.count >= 2, let kelvin = Int(parts[0]), let tint = Int(parts[1]) else {
+                return nil
+            }
             return Commands.setWhiteBalanceCustom(kelvin: kelvin, tint: tint, seq: seq)
         case .getAudioChannel:
             return Commands.getAudioChannel(seq: seq)
         case .setAudioChannel:
-            guard let raw = extra.flatMap({ UInt8($0) }), let channel = AudioChannel(rawValue: raw) else { return nil }
+            guard let raw = extra.flatMap({ UInt8($0) }), let channel = AudioChannel(rawValue: raw)
+            else { return nil }
             return Commands.setAudioChannel(channel, seq: seq)
         case .getVocalBoost:
             return Commands.getVocalBoost(seq: seq)
@@ -335,27 +475,141 @@ public enum AndroidSessionWire {
         case .setVideoFormat:
             let parts = splitExtra(extra)
             guard parts.count >= 2,
-                  let resRaw = UInt8(parts[0]), let fpsRaw = UInt8(parts[1]),
-                  let res = VideoResolution(rawValue: resRaw),
-                  let fps = VideoFrameRate(rawValue: fpsRaw)
+                let resRaw = UInt8(parts[0]), let fpsRaw = UInt8(parts[1]),
+                let res = VideoResolution(rawValue: resRaw),
+                let fps = VideoFrameRate(rawValue: fpsRaw)
             else { return nil }
             return Commands.setVideoFormat(resolution: res, frameRate: fps, seq: seq)
         case .tapFocusPrepare:
             return Commands.tapFocusPrepare(seq: seq)
         case .tapFocusPoint:
             let parts = splitExtra(extra)
-            guard parts.count >= 2, let x = Float(parts[0]), let y = Float(parts[1]) else { return nil }
+            guard parts.count >= 2, let x = Float(parts[0]), let y = Float(parts[1]) else {
+                return nil
+            }
             return Commands.tapFocusPoint(x, y, seq: seq)
         case .tapFocusHint:
             return Commands.tapFocusLiveHint(seq: seq)
         case .tapFocusCommit:
             let parts = splitExtra(extra)
-            guard parts.count >= 2, let x = Float(parts[0]), let y = Float(parts[1]) else { return nil }
+            guard parts.count >= 2, let x = Float(parts[0]), let y = Float(parts[1]) else {
+                return nil
+            }
             return Commands.tapFocusCommit(x, y, seq: seq)
+        case .shootPhoto:
+            return Commands.shootPhoto(seq: seq)
+        case .setShootingMode:
+            guard let raw = parseUInt8(extra), let mode = ShootingMode(rawValue: raw) else {
+                return nil
+            }
+            return Commands.setShootingMode(mode, seq: seq)
+        case .setEv:
+            guard let raw = parseUInt8(extra), let ev = EvComp(rawValue: raw) else { return nil }
+            return Commands.setEv(ev, seq: seq)
+        case .setIsoLimit:
+            guard let raw = parseUInt8(extra), let limit = IsoLimit(rawValue: raw) else {
+                return nil
+            }
+            return Commands.setIsoLimit(limit, seq: seq)
+        case .getIsoLimit:
+            return Commands.getIsoLimit(seq: seq)
+        case .setFov:
+            guard let raw = parseUInt8(extra), let fov = FovSetting(rawValue: raw) else {
+                return nil
+            }
+            return Commands.setFov(fov, seq: seq)
+        case .setZoomLens:
+            guard let position = parseUInt16(extra) else { return nil }
+            return Commands.setZoomLens(position, seq: seq)
+        case .setZoomSlew:
+            guard let value = parseUInt16(extra) else { return nil }
+            return Commands.setZoomSlew(value, seq: seq)
+        case .setZoomStop:
+            return Commands.setZoomStop(seq: seq)
+        case .gimbalRecenter:
+            return Commands.gimbalRecenter(seq: seq)
+        case .gimbalFlip:
+            return Commands.gimbalFlip(seq: seq)
+        case .gimbalStick:
+            return encodeGimbalStick(seq: seq, extra: extra)
+        case .setTrackingBox:
+            let parts = splitExtra(extra)
+            guard parts.count >= 5,
+                let id = parseUInt16(parts[0]),
+                let x = Float(parts[1]), let y = Float(parts[2]),
+                let width = Float(parts[3]), let height = Float(parts[4])
+            else { return nil }
+            return Commands.setTrackingBox(
+                id: id, x: x, y: y, width: width, height: height, seq: seq)
+        case .clearTrackingBox:
+            return Commands.clearTrackingBox(seq: seq)
+        case .pollTracking:
+            return Commands.pollTracking(seq: seq)
+        case .setFocusTrack:
+            guard let raw = parseUInt8(extra), let mode = FocusTrackMode(rawValue: raw) else {
+                return nil
+            }
+            return Commands.setFocusTrack(mode, seq: seq)
+        case .getFocusTrack:
+            return Commands.getFocusTrack(seq: seq)
+        case .getGlamour:
+            return Commands.getGlamour(seq: seq)
+        case .setGlamour:
+            guard let blob = hexBytes(extra ?? "") else { return nil }
+            return Commands.setGlamour(blob, seq: seq)
+        case .exitPlayback:
+            return Commands.exitPlayback(seq: seq)
+        case .mediaList:
+            let parts = splitExtra(extra)
+            guard parts.count >= 2, let counter = parseUInt8(parts[0]),
+                let cursor = parseUInt32(parts[1])
+            else { return nil }
+            return Commands.mediaList(counter: counter, cursor: cursor, seq: seq)
+        case .mediaListTrigger:
+            return Commands.mediaListTrigger(seq: seq)
+        case .deleteMedia:
+            let parts = splitExtra(extra)
+            guard parts.count >= 2, let handle = parseUInt32(parts[0]),
+                let counter = parseUInt32(parts[1])
+            else { return nil }
+            return Commands.deleteMedia(handle: handle, counter: counter, seq: seq)
+        case .setMediaFavorite:
+            let parts = splitExtra(extra)
+            guard parts.count >= 3, let handle = parseUInt32(parts[0]),
+                let counter = parseUInt32(parts[2])
+            else { return nil }
+            return Commands.setMediaFavorite(
+                handle: handle, on: isOn(parts[1]), counter: counter, seq: seq)
+        case .nanoLiveViewGate:
+            guard extra != nil else { return nil }
+            return Commands.nanoLiveViewGate(start: isOn(extra), seq: seq)
         }
     }
 
-    private static func intOrMinus(_ value: UInt8?) -> Int {
+    /// `"x\u{1f}y\u{1f}sensitivity"` uses `GimbalStick.encode`. Two parts are
+    /// normalized x,y when both sit in −1…1, otherwise raw axis0,axis1.
+    private static func encodeGimbalStick(seq: UInt16, extra: String?) -> Duml.Frame? {
+        let parts = splitStickExtra(extra)
+        if parts.count >= 3,
+            let x = Double(parts[0]), let y = Double(parts[1]), let sensitivity = Int(parts[2])
+        {
+            let axes = GimbalStick.encode(x: x, y: y, sensitivity: sensitivity)
+            return Commands.gimbalStick(axis0: axes.axis0, axis1: axes.axis1, seq: seq)
+        }
+        guard parts.count >= 2, let a0 = Double(parts[0]), let a1 = Double(parts[1]) else {
+            return nil
+        }
+        if abs(a0) <= 1, abs(a1) <= 1 {
+            let axes = GimbalStick.encode(x: a0, y: a1)
+            return Commands.gimbalStick(axis0: axes.axis0, axis1: axes.axis1, seq: seq)
+        }
+        guard let axis0 = parseUInt16(parts[0]), let axis1 = parseUInt16(parts[1]) else {
+            return nil
+        }
+        return Commands.gimbalStick(axis0: axis0, axis1: axis1, seq: seq)
+    }
+
+    private static func intOrMinus<T: BinaryInteger>(_ value: T?) -> Int {
         guard let value else { return -1 }
         return Int(value)
     }
@@ -367,6 +621,46 @@ public enum AndroidSessionWire {
 
     private static func splitExtra(_ extra: String?) -> [String] {
         (extra ?? "").split(separator: "\u{1f}", omittingEmptySubsequences: false).map(String.init)
+    }
+
+    private static func splitStickExtra(_ extra: String?) -> [String] {
+        let raw = extra ?? ""
+        if raw.contains("\u{1f}") { return splitExtra(raw) }
+        if raw.contains(",") {
+            return raw.split(separator: ",", omittingEmptySubsequences: false).map {
+                String($0).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return raw.isEmpty ? [] : [raw]
+    }
+
+    private static func isOn(_ raw: String?) -> Bool {
+        raw == "1" || raw == "true" || raw == "on"
+    }
+
+    private static func parseUInt64(_ raw: String?) -> UInt64? {
+        guard let s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else {
+            return nil
+        }
+        if s.lowercased().hasPrefix("0x") {
+            return UInt64(s.dropFirst(2), radix: 16)
+        }
+        return UInt64(s)
+    }
+
+    private static func parseUInt8(_ raw: String?) -> UInt8? {
+        guard let value = parseUInt64(raw), value <= UInt64(UInt8.max) else { return nil }
+        return UInt8(value)
+    }
+
+    private static func parseUInt16(_ raw: String?) -> UInt16? {
+        guard let value = parseUInt64(raw), value <= UInt64(UInt16.max) else { return nil }
+        return UInt16(value)
+    }
+
+    private static func parseUInt32(_ raw: String?) -> UInt32? {
+        guard let value = parseUInt64(raw), value <= UInt64(UInt32.max) else { return nil }
+        return UInt32(value)
     }
 
     static func hex(_ bytes: [UInt8]) -> String {
@@ -418,6 +712,89 @@ public enum AndroidSessionWire {
             return avc ? Avc.nalType(first) : Hevc.nalType(first)
         }
         return Set(types).sorted().map(String.init).joined(separator: ",")
+    }
+
+    /// Stick axes as `"axis0,axis1"` (`x` −1…1 right, `y` −1…1 up).
+    public static func gimbalStickEncode(x: Double, y: Double, sensitivity: Int) -> String {
+        let axes = GimbalStick.encode(x: x, y: y, sensitivity: sensitivity)
+        return "\(axes.axis0),\(axes.axis1)"
+    }
+
+    /// Next chip-cycle lens from `currentFactor` (1 → 3 → 6 → 12 → 1).
+    public static func camFovChipWrite(currentFactor: Double) -> String {
+        let next = CamFov.nextJump(from: currentFactor)
+        if let write = CamFov.chipWrite(forJump: next) {
+            switch write {
+            case .lens(let position), .slew(let position):
+                return String(position)
+            }
+        }
+        return String(CamFov.lensPosition(for: next))
+    }
+
+    /// One idle-watchdog tick. Action is `none` / `resendLiveViewEnable` /
+    /// `rebuildVTSession` / `reopenDatalink` / `fullSessionRejoin`.
+    public static func feedWatchdogAction(snapshotJSON: String) -> String {
+        let json = snapshotJSON
+        let snap = FeedWatchdog.Snapshot(
+            now: jsonNumber(json, key: "now", default: 0),
+            lastDecodedFrameAge: jsonOptionalNumber(json, key: "lastDecodedFrameAge"),
+            lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
+            lastAccessUnitAge: jsonOptionalNumber(json, key: "lastAccessUnitAge"),
+            lastStatusAge: jsonOptionalNumber(json, key: "lastStatusAge"),
+            flowHealthy: jsonBool(json, key: "flowHealthy", default: false),
+            pathReady: jsonBool(json, key: "pathReady", default: false),
+            hasFormat: jsonBool(json, key: "hasFormat", default: false),
+            decoderFailed: jsonBool(json, key: "decoderFailed", default: false),
+            live: jsonBool(json, key: "live", default: false),
+            sawPicture: jsonBool(json, key: "sawPicture", default: false),
+            tcpPokeReady: jsonBool(json, key: "tcpPokeReady", default: false),
+            displayedImageRemoved: jsonBool(json, key: "displayedImageRemoved", default: false),
+            lastBleNotifyAge: jsonOptionalNumber(json, key: "lastBleNotifyAge"),
+            secondsSinceLastRebuild: jsonOptionalNumber(json, key: "secondsSinceLastRebuild"),
+            hadVideo: jsonBool(json, key: "hadVideo", default: true),
+            secondsSinceLastEnable: jsonOptionalNumber(json, key: "secondsSinceLastEnable"),
+            secondsSinceFocusTrackSet: jsonOptionalNumber(json, key: "secondsSinceFocusTrackSet")
+        )
+        var watchdog = FeedWatchdog()
+        switch watchdog.tick(snap) {
+        case .none: return "none"
+        case .resendLiveViewEnable: return "resendLiveViewEnable"
+        case .rebuildVTSession: return "rebuildVTSession"
+        case .reopenDatalink: return "reopenDatalink"
+        case .fullSessionRejoin: return "fullSessionRejoin"
+        }
+    }
+
+    private static func jsonBool(_ json: String, key: String, default def: Bool) -> Bool {
+        if json.contains("\"\(key)\":true") { return true }
+        if json.contains("\"\(key)\":false") { return false }
+        return def
+    }
+
+    private static func jsonOptionalNumber(_ json: String, key: String) -> Double? {
+        guard let range = json.range(of: "\"\(key)\":") else { return nil }
+        var s = ""
+        var started = false
+        for ch in json[range.upperBound...] {
+            if ch.isWhitespace && !started { continue }
+            if !started && ch == "n" { return nil }
+            started = true
+            if ch == "-" && s.isEmpty {
+                s.append(ch)
+                continue
+            }
+            if ch.isNumber || ch == "." || ch == "e" || ch == "E" || ch == "+" {
+                s.append(ch)
+            } else {
+                break
+            }
+        }
+        return Double(s)
+    }
+
+    private static func jsonNumber(_ json: String, key: String, default def: Double) -> Double {
+        jsonOptionalNumber(json, key: key) ?? def
     }
 }
 
