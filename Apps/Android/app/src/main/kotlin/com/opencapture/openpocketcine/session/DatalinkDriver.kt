@@ -119,6 +119,10 @@ class DatalinkDriver(
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
                 afterHandshake?.invoke()
+                // iOS: enable first, then accept 0x02. Arming earlier ingested
+                // leftover P-frames (videoPkts=315, nals 1/35/40, no VPS) and
+                // first-picture never recovered.
+                armLiveVideo()
                 return
             }
             if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
@@ -146,11 +150,6 @@ class DatalinkDriver(
                 payload = CameraCommands.liveViewEnablePayload(),
                 receiver = receiver,
             )
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            sendExecutor.execute { armLiveVideo() }
-        } else {
-            armLiveVideo()
         }
         Log.i(
             TAG,

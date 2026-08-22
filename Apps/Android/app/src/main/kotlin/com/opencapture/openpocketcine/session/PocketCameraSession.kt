@@ -600,6 +600,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
                 val statusAge = datalink?.lastStatusAt?.let { now - it }
                 val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
+                val noPicture = decoder.lastPresentedAt == null && !decoder.hasFormat
+                if (noPicture && packets > 0) {
+                    Log.i(
+                        TAG,
+                        "live: leftover GOP without picture pkts=$packets — resend enable, keep UDP",
+                    )
+                    sendRecoverEnable(force = true, reason = "first-picture leftover GOP")
+                    return
+                }
                 if (statusAge != null && statusAge < LiveViewEnablePolicy.STALL_MS &&
                     sinceEnable < LiveViewEnablePolicy.GOP_GRACE_MS
                 ) {
