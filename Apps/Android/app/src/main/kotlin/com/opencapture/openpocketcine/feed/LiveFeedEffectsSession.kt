@@ -38,6 +38,7 @@ internal class LiveFeedEffectsSession(
     context: Context,
     private val onDecoderSurface: (Surface) -> Unit,
     private val onGpuFailed: () -> Unit,
+    private val onFirstFrame: () -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -228,6 +229,7 @@ internal class LiveFeedEffectsSession(
             tapScratch = ByteArray(tapBytes)
             GLES20.glClearColor(0f, 0f, 0f, 1f)
             var hasOesFrame = false
+            var signaledFirstFrame = false
             while (running.get()) {
                 val pullOes: Boolean
                 synchronized(frameLock) {
@@ -268,6 +270,10 @@ internal class LiveFeedEffectsSession(
                     height.toFloat(),
                 )
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                if (!signaledFirstFrame) {
+                    signaledFirstFrame = true
+                    mainHandler.post(onFirstFrame)
+                }
                 maybeTapScopes(
                     policy = nextPlan.scopeTap,
                     oesCopy = oesCopy,

@@ -364,6 +364,7 @@ fun LiveViewScreen(model: AppModel) {
                     captureFrames = glass.tier == GlassTier.FULL,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
+                    onPresented = { model.session.decoder.notePresented() },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -612,12 +613,14 @@ private fun LiveFeedPresenter(
     captureFrames: Boolean,
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
+    onPresented: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var frameGen by remember { mutableIntStateOf(0) }
     val frameBmp = remember { arrayOfNulls<Bitmap>(1) }
     val capture = rememberUpdatedState(captureFrames)
     val attach = rememberUpdatedState(onDecoderSurface)
+    val presented = rememberUpdatedState(onPresented)
     val context = LocalContext.current
     var gpuFailed by remember { mutableStateOf(false) }
     val session =
@@ -626,6 +629,7 @@ private fun LiveFeedPresenter(
                 context = context,
                 onDecoderSurface = { attach.value(it) },
                 onGpuFailed = { gpuFailed = true },
+                onFirstFrame = { presented.value() },
             )
         }
     DisposableEffect(session) {
@@ -640,6 +644,7 @@ private fun LiveFeedPresenter(
                     TextureView(viewContext).apply {
                         isOpaque = true
                         val onUpdated: (TextureView) -> Unit = { tv ->
+                            presented.value()
                             if (capture.value) {
                                 val w = tv.width
                                 val h = tv.height

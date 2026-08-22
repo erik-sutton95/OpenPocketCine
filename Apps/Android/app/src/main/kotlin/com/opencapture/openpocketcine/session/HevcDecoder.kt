@@ -49,6 +49,16 @@ class HevcDecoder {
     val decoderErrors = AtomicInteger(0)
     val framesEnqueued = AtomicInteger(0)
 
+    /** TextureView / GLES presented a frame. C2 surface output may never
+     *  surface through [dequeueOutputBuffer], which left WAITING FOR LIVE VIEW up. */
+    fun notePresented() {
+        lastPresentedAt = SystemClock.elapsedRealtime()
+        if (!_hasPicture.value) {
+            _hasPicture.value = true
+            Log.i(TAG, "presented first picture")
+        }
+    }
+
     fun attachSurface(next: Surface?) {
         if (next == null) {
             // TextureView is tearing down; keep the codec so the next surface can
