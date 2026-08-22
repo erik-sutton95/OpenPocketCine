@@ -119,11 +119,13 @@
         kind: jint, seq: jint, extra: jstring?
     ) -> jbyteArray? {
         guard let commandKind = AndroidSessionWire.CommandKind(rawValue: kind) else { return nil }
-        guard let frame = AndroidSessionWire.encodeCommand(
-            kind: commandKind,
-            seq: UInt16(truncatingIfNeeded: seq),
-            extra: swiftString(env, extra)
-        ) else { return nil }
+        guard
+            let frame = AndroidSessionWire.encodeCommand(
+                kind: commandKind,
+                seq: UInt16(truncatingIfNeeded: seq),
+                extra: swiftString(env, extra)
+            )
+        else { return nil }
         return javaByteArray(env, Duml.encode(frame))
     }
 
@@ -143,7 +145,8 @@
         modelId: jint, name: jstring?
     ) -> jstring? {
         let id: Int? = modelId < 0 ? nil : Int(modelId)
-        return javaString(env, AndroidSessionWire.cameraModelJSON(modelId: id, name: swiftString(env, name)))
+        return javaString(
+            env, AndroidSessionWire.cameraModelJSON(modelId: id, name: swiftString(env, name)))
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_transportHeader")
@@ -181,7 +184,8 @@
     public func swiftCoreHandshakePayload(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, baseSeq: jint
     ) -> jbyteArray? {
-        javaByteArray(env, DumlTransport.handshakePayload(baseSeq: UInt16(truncatingIfNeeded: baseSeq)))
+        javaByteArray(
+            env, DumlTransport.handshakePayload(baseSeq: UInt16(truncatingIfNeeded: baseSeq)))
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_ackPayload")
@@ -253,7 +257,8 @@
         let avc = LiveVideo.detect(nals: nals) == .avc
         for nal in nals {
             guard let first = nal.first else { continue }
-            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first)) {
+            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first))
+            {
                 return 1
             }
         }
@@ -314,6 +319,150 @@
         depacketizerStore.lock.lock()
         depacketizerStore.boxes.removeValue(forKey: handle)
         depacketizerStore.lock.unlock()
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_gimbalStickEncode")
+    public func swiftCoreGimbalStickEncode(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        x: jdouble, y: jdouble, sensitivity: jint
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.gimbalStickEncode(
+                x: Double(x), y: Double(y), sensitivity: Int(sensitivity)))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_camFovChipWrite")
+    public func swiftCoreCamFovChipWrite(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, currentFactor: jdouble
+    ) -> jstring? {
+        javaString(env, AndroidSessionWire.camFovChipWrite(currentFactor: Double(currentFactor)))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogAction")
+    public func swiftCoreFeedWatchdogAction(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, snapshotJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.feedWatchdogAction(
+                snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogCreate")
+    public func swiftCoreFeedWatchdogCreate(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
+    ) -> jlong {
+        jlong(AndroidSessionWire.feedWatchdogCreate())
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogTick")
+    public func swiftCoreFeedWatchdogTick(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        handle: jlong, snapshotJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.feedWatchdogTick(
+                handle: Int64(handle),
+                snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogReset")
+    public func swiftCoreFeedWatchdogReset(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
+    ) {
+        AndroidSessionWire.feedWatchdogReset(handle: Int64(handle))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogDestroy")
+    public func swiftCoreFeedWatchdogDestroy(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
+    ) {
+        AndroidSessionWire.feedWatchdogDestroy(handle: Int64(handle))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_conformPreviewJSON")
+    public func swiftCoreConformPreviewJSON(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, request: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.conformPreviewJSON(swiftString(env, request) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_validateImportedLut")
+    public func swiftCoreValidateImportedLut(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        utf8: jbyteArray?, fileName: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            LUTLibraryWire.validatedImport(
+                utf8: swiftBytes(env, utf8) ?? [],
+                fileName: swiftString(env, fileName) ?? "") ?? "")
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packImportedLut")
+    public func swiftCorePackImportedLut(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, utf8: jbyteArray?
+    ) -> jbyteArray? {
+        guard let packed = LUTLibraryWire.packedImportedLUT(utf8: swiftBytes(env, utf8) ?? [])
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packFalseColorPaint")
+    public func swiftCorePackFalseColorPaint(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        scaleOrdinal: jint, colorMode: jint, iso: jint
+    ) -> jbyteArray? {
+        guard
+            let packed = FeedEffectsWire.packedFalseColorPaint(
+                scaleOrdinal: Int(scaleOrdinal),
+                colorModeCode: Int(colorMode),
+                iso: Int(iso))
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packFalseColorWeight")
+    public func swiftCorePackFalseColorWeight(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        scaleOrdinal: jint, colorMode: jint, iso: jint
+    ) -> jbyteArray? {
+        guard
+            let packed = FeedEffectsWire.packedFalseColorWeight(
+                scaleOrdinal: Int(scaleOrdinal),
+                colorModeCode: Int(colorMode),
+                iso: Int(iso))
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedAssistScalars")
+    public func swiftCoreFeedAssistScalars(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        colorMode: jint, iso: jint, highlightIRE: jfloat, midtoneIRE: jfloat
+    ) -> jfloatArray? {
+        javaFloatArray(
+            env,
+            FeedEffectsWire.assistScalars(
+                colorModeCode: Int(colorMode),
+                iso: Int(iso),
+                highlightIRE: Double(highlightIRE),
+                midtoneIRE: Double(midtoneIRE)))
+    }
+
+    private func javaFloatArray(
+        _ env: UnsafeMutablePointer<JNIEnv?>, _ values: [Float]
+    ) -> jfloatArray? {
+        let fns = table(env)
+        guard let array = fns.NewFloatArray!(env, jsize(values.count)) else { return nil }
+        values.withUnsafeBufferPointer { buffer in
+            fns.SetFloatArrayRegion!(env, array, 0, jsize(values.count), buffer.baseAddress)
+        }
+        return array
     }
 
 #endif

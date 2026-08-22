@@ -95,7 +95,8 @@ struct LUTPicker: View {
                 cameraName: model.session.connectedCamera?.model.name)
         }
         .confirmationDialog(
-            pendingDeletion.map { "Clear \(CustomLUTIndex.displayName(fileName: $0))?" } ?? "Clear LUT?",
+            pendingDeletion.map { "Clear \(CustomLUTIndex.displayName(fileName: $0))?" }
+                ?? "Clear LUT?",
             isPresented: Binding(
                 get: { pendingDeletion != nil },
                 set: { if !$0 { pendingDeletion = nil } }),
@@ -168,7 +169,9 @@ struct LUTPicker: View {
                         inCatalog ? assist.lutSelection.title : fallback.title
                     },
                     set: { name in
-                        guard let selection = cases.first(where: { $0.title == name }) else { return }
+                        guard let selection = cases.first(where: { $0.title == name }) else {
+                            return
+                        }
                         assist.selectLUT(selection)
                     }
                 ),
@@ -234,7 +237,8 @@ struct LUTPicker: View {
     }
 
     private func customFileRow(_ lut: StoredCustomLUT) -> some View {
-        let selected = assist.lutSelection == .customFile
+        let selected =
+            assist.lutSelection == .customFile
             && OperatorPrefs.selectedCustomFileName == lut.fileName
         return HStack(spacing: 6) {
             Button {
@@ -320,12 +324,10 @@ struct LUTSplitComparisonBar: View {
                 assist.persist()
             } label: {
                 HStack(spacing: 8) {
-                    Image(
-                        systemName: assist.splitComparison
-                            ? "checkmark.circle.fill" : "circle"
-                    )
-                    .foregroundStyle(
-                        assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
+                    (assist.splitComparison ? OpcIcon.circleCheck : OpcIcon.circle)
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(
+                            assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
                     Text("50/50")
                         .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(LiveDesign.text)
@@ -466,7 +468,11 @@ private struct LUTDrumWheel: View {
                     Button(role: .destructive) {
                         onDeleteOption(option)
                     } label: {
-                        Label("Delete LUT", systemImage: "trash")
+                        Label {
+                            Text("Delete LUT")
+                        } icon: {
+                            OpcIcon.trash
+                        }
                     }
                 }
                 .accessibilityAction(named: Text("Delete \(option)")) {

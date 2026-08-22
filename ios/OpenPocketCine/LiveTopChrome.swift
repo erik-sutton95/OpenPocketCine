@@ -90,9 +90,10 @@ struct FPSChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "cellularbars", variableValue: Double(signalBars) / 4.0)
-                .font(.system(size: 14, weight: .semibold))
+            OpcIcon.signal
                 .foregroundStyle(signalTint)
+                .frame(width: 14, height: 14)
+                .opacity(max(0.35, Double(signalBars) / 4.0))
             Text("FPS")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundStyle(LiveDesign.faint)

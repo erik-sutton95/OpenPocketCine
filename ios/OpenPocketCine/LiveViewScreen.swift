@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// Live HEVC feed with OpenZCine landscape chrome. Video and chrome are **siblings**:
 /// the feed is an explicit 16:9 well; chrome is a physical-screen overlay (`ignoresSafeArea`).
@@ -26,6 +26,10 @@ struct LiveViewScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let _: Void = {
+                LiveChromeMetrics.scale = LiveChromeMetrics.chromeScale(
+                    shortestSide: min(proxy.size.width, proxy.size.height))
+            }()
             let safeArea = LiveMonitorLayout.resolvedSafeArea(
                 proxy.safeAreaInsets, scene: LiveMonitorLayout.sceneSafeArea)
             let base = LiveMonitorLayout.fit(
@@ -74,9 +78,9 @@ struct LiveViewScreen: View {
                 },
                 transfer: { [weak app] in app?.session.status.monitorTransfer }
             )
-#if targetEnvironment(simulator)
-            model.session.status.colorMode = .dLog2
-#endif
+            #if targetEnvironment(simulator)
+                model.session.status.colorMode = .dLog2
+            #endif
             model.assist.syncLUT(
                 to: model.session.status.colorMode,
                 family: model.session.bodyFamily,
@@ -280,7 +284,8 @@ struct LiveViewScreen: View {
     }
 
     private func chromeEditBannerY(_ layout: LiveMonitorLayout) -> CGFloat {
-        let floor = showsBottomBars
+        let floor =
+            showsBottomBars
             ? min(layout.assist.minY, layout.capture.minY)
             : layout.feed.maxY
         return floor - 28
@@ -320,7 +325,10 @@ struct LiveViewScreen: View {
             if showsBatteries {
                 LiveBatteryCluster()
                     .chromeEditable(.batteries, editing: editingMode)
-                    .frame(width: layout.battery.width, height: layout.battery.height, alignment: .topLeading)
+                    .frame(
+                        width: layout.battery.width, height: layout.battery.height,
+                        alignment: .topLeading
+                    )
                     .position(x: layout.battery.midX, y: layout.battery.midY)
             }
 
@@ -358,13 +366,14 @@ struct LiveViewScreen: View {
 
             if model.chromeSectionMounts(.gimbalStick) {
                 LiveGimbalStick(
-                    enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive,
+                    enabled: !interfaceLocked && model.liveOperatorPanel == nil
+                        && chromeInteractive,
                     feed: layout.onFeed,
                     frame: layout.gimbalStick
                 )
-                    .chromeEditable(.gimbalStick, editing: editingMode)
-                    .liveModuleFrame(layout.gimbalStick)
-                    .zIndex(3)
+                .chromeEditable(.gimbalStick, editing: editingMode)
+                .liveModuleFrame(layout.gimbalStick)
+                .zIndex(3)
             }
 
             if !interfaceLocked, model.session.isFocusResetAvailable, chromeInteractive {
@@ -380,7 +389,8 @@ struct LiveViewScreen: View {
                 LiveTrackingCancelButton()
                     .liveModuleFrame(
                         LiveTrackingChrome.cancelRect(
-                            box: box, feed: layout.onFeed, mirrored: model.assist.isVisible(.mirror))
+                            box: box, feed: layout.onFeed, mirrored: model.assist.isVisible(.mirror)
+                        )
                     )
                     .zIndex(4)
             }
@@ -412,7 +422,9 @@ struct LiveViewScreen: View {
     }
 
     @ViewBuilder
-    private func portraitChrome(_ layout: LiveMonitorLayout, zones: MonitorPortraitZones) -> some View {
+    private func portraitChrome(_ layout: LiveMonitorLayout, zones: MonitorPortraitZones)
+        -> some View
+    {
         let choice = Self.portraitChoice(model: model)
         let isFill = choice.fill
         let well = layout.feed
@@ -485,7 +497,8 @@ struct LiveViewScreen: View {
                 )
                 .chromeEditable(.toolBar, editing: editingMode)
                 .frame(
-                    width: model.portraitRailExpanded ? CGFloat(expanded.width) : CGFloat(collapsed.width),
+                    width: model.portraitRailExpanded
+                        ? CGFloat(expanded.width) : CGFloat(collapsed.width),
                     height: model.portraitRailExpanded
                         ? CGFloat(expanded.height) : CGFloat(collapsed.height),
                     alignment: .bottomLeading
@@ -510,7 +523,9 @@ struct LiveViewScreen: View {
                 LivePortraitAspectToggle(aspect: Bindable(model).portraitFeedAspect)
                     .opacity(interfaceLocked ? 0.4 : 1)
                     .allowsHitTesting(!interfaceLocked)
-                    .liveModuleFrame(Self.portraitAspectToggleFrame(picture: picture, fill: isFill, zones: zones))
+                    .liveModuleFrame(
+                        Self.portraitAspectToggleFrame(picture: picture, fill: isFill, zones: zones)
+                    )
                     .zIndex(6)
             }
 
@@ -524,7 +539,8 @@ struct LiveViewScreen: View {
 
             if model.chromeSectionMounts(.gimbalStick) {
                 LiveGimbalStick(
-                    enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive,
+                    enabled: !interfaceLocked && model.liveOperatorPanel == nil
+                        && chromeInteractive,
                     feed: picture,
                     frame: stickFrame
                 )
@@ -693,7 +709,9 @@ struct LiveViewScreen: View {
     /// Settings gets OpenZCine `fullScreenPanelSafeArea` from the monitor's real insets —
     /// this overlay sits on an `ignoresSafeArea` canvas, so a child GeometryReader reads 0.
     @ViewBuilder
-    private func operatorPanelCover(_ panel: LiveOperatorPanel, layout: LiveMonitorLayout) -> some View {
+    private func operatorPanelCover(_ panel: LiveOperatorPanel, layout: LiveMonitorLayout)
+        -> some View
+    {
         switch panel {
         case .settings:
             SettingsRootView(
@@ -834,8 +852,10 @@ enum LiveChromeEditGeometry {
             tracked = faces.first
         }
         if let box = tracked {
-            let drawn = mirrored
-                ? TrackingBox(x: 1 - box.x - box.width, y: box.y, width: box.width, height: box.height)
+            let drawn =
+                mirrored
+                ? TrackingBox(
+                    x: 1 - box.x - box.width, y: box.y, width: box.width, height: box.height)
                 : box
             return CGRect(
                 x: feed.minX + drawn.x * feed.width,

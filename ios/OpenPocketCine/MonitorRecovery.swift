@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// Recovery card over a held live-view frame after an established session dropped.
 /// OpenZCine `MonitorRecoveryOverlay`. A camera power cycle must not throw the
@@ -57,14 +57,14 @@ struct MonitorRecoveryOverlay: View {
             HStack(spacing: 10) {
                 actionButton(
                     title: "Retry connection",
-                    systemImage: "arrow.clockwise",
+                    icon: .refreshCw,
                     tint: LiveDesign.accent
                 ) {
                     model.session.retrySessionRecovery()
                 }
                 actionButton(
                     title: "Operator menu",
-                    systemImage: "chevron.backward",
+                    icon: .chevronLeft,
                     tint: nil
                 ) {
                     model.exitMonitorToOperatorMenu()
@@ -86,29 +86,33 @@ struct MonitorRecoveryOverlay: View {
                 .controlSize(.small)
                 .tint(LiveDesign.accent)
         case .waitingForOperator, .pausedAfterRepeatedDrops, .idle:
-            Image(systemName: "cable.connector.slash")
-                .font(.system(size: 20, weight: .regular))
+            OpcIcon.unplug
+                .frame(width: 20, height: 20)
                 .foregroundStyle(LiveDesign.accent)
         }
     }
 
     private func actionButton(
         title: String,
-        systemImage: String,
+        icon: OpcIcon,
         tint: Color?,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(tint == nil ? LiveDesign.text : Color.black)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .frame(maxWidth: .infinity)
-                .liquidGlass(in: Capsule(), tint: tint, interactive: true)
-                .minTapTarget()
+            Label {
+                Text(title)
+            } icon: {
+                icon.frame(width: 13, height: 13)
+            }
+            .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(tint == nil ? LiveDesign.text : Color.black)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .liquidGlass(in: Capsule(), tint: tint, interactive: true)
+            .minTapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

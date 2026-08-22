@@ -1,15 +1,19 @@
 package com.opencapture.openpocketcine
 
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -25,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -37,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +56,7 @@ import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
 import com.opencapture.openpocketcine.pairing.StartupColors
 import com.opencapture.openpocketcine.pairing.StartupConnectionCopy
 import com.opencapture.openpocketcine.pairing.StartupHeader
+import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.pairing.pocketRuntimePermissions
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean
@@ -71,12 +78,31 @@ class MainActivity : ComponentActivity() {
         window.isNavigationBarContrastEnforced = false
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        applyImmersiveSystemBars(window)
         setContent {
             SideEffect { composeFirstFrameDrawn.set(true) }
             OpenPocketCineTheme {
-                OpenPocketCineApp(model)
+                val haptics = rememberOperatorHaptics { model.hapticsEnabled }
+                CompositionLocalProvider(LocalOperatorHaptics provides haptics) {
+                    OpenPocketCineApp(model)
+                }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveSystemBars(window)
+    }
+
+    override fun onPause() {
+        if (::model.isInitialized) model.session.noteSceneBecameInactive()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::model.isInitialized) model.session.noteSceneBecameActive()
     }
 
     override fun onDestroy() {
@@ -89,49 +115,78 @@ class MainActivity : ComponentActivity() {
 private fun OpenPocketCineApp(model: AppModel) {
     val phase by model.session.phaseFlow.collectAsState()
     var launchSplashVisible by remember { mutableStateOf(true) }
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalActivity.current
     val permissions = pocketRuntimePermissions()
-    fun permissionsAreGranted(): Boolean =
-        permissions.all {
-            ContextCompat.checkSelfPermission(activity, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    fun permissionsAreGranted(): Boolean {
+        val current = activity ?: return false
+        return permissions.all {
+            ContextCompat.checkSelfPermission(current, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
+    }
     var permissionsGranted by remember { mutableStateOf(permissionsAreGranted()) }
+    val enableBluetooth =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (permissionsAreGranted()) model.session.startScan()
+        }
+    fun requestBluetoothOn() {
+        runCatching { enableBluetooth.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+    }
     val launcher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permissionsGranted = permissionsAreGranted()
-            if (permissionsGranted) model.session.startScan()
+            if (permissionsGranted) beginDiscovery(model) { requestBluetoothOn() }
         }
 
-    LaunchedEffect(model.keepScreenAwake) {
+    LaunchedEffect(model.keepScreenAwake, activity) {
+        val window = activity?.window ?: return@LaunchedEffect
         if (model.keepScreenAwake) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
     LaunchedEffect(Unit) {
         model.prepareStartup()
+        if (permissionsAreGranted()) {
+            beginDiscovery(model, onBluetoothOff = { requestBluetoothOn() })
+        } else {
+            launcher.launch(permissions)
+        }
         delay(2_250)
         launchSplashVisible = false
         model.showsLaunchSplash = false
     }
 
+    LaunchedEffect(activity) {
+        val window = activity?.window ?: return@LaunchedEffect
+        applyImmersiveSystemBars(window)
+    }
+
+    val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
+    ImmersiveSystemBarCycle {
     Box(Modifier.fillMaxSize().startupBackdrop()) {
-        if (phase == ConnectionPhase.LIVE) {
+        if (showLive) {
             LiveViewScreen(model)
         } else {
             LinkExperience(
                 model = model,
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = { launcher.launch(permissions) },
+                onEnableBluetooth = { requestBluetoothOn() },
             )
         }
         LaunchSplashOverlay(visible = launchSplashVisible)
-        if (model.homePanel != null) {
+        if (model.homePanel != null && !showLive) {
             AppPanelHost(model)
         }
     }
+    }
+}
+
+private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
+    model.session.startScan()
+    if (!model.session.radioOn.value) onBluetoothOff()
 }
 
 @Composable
@@ -139,32 +194,47 @@ private fun LinkExperience(
     model: AppModel,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onEnableBluetooth: () -> Unit,
 ) {
     val phase by model.session.phaseFlow.collectAsState()
+    val reconnecting by model.session.isReconnecting.collectAsState()
+    val busy = phase.isBusy() || reconnecting
     val headerTitle =
         when {
             model.shouldShowWizard -> "Connection setup"
-            model.savedCameras.isNotEmpty() -> "Your cameras"
+            model.savedCameras.isNotEmpty() -> "Operator Setup"
             else -> "Find your camera"
         }
     val statusTitle =
         StartupConnectionCopy.statusTitle(
             phase,
             isDiscovering = phase == ConnectionPhase.SCANNING || (model.shouldShowWizard && phase != ConnectionPhase.LIVE),
+            isReconnecting = reconnecting,
         )
-    Column(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 16.dp)) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val bar = LocalImmersiveBarInsets.current
+    val barStart by animateDpAsState(with(density) { bar.left.toDp() }, label = "barStart")
+    val barTop by animateDpAsState(with(density) { bar.top.toDp() }, label = "barTop")
+    val barEnd by animateDpAsState(with(density) { bar.right.toDp() }, label = "barEnd")
+    val barBottom by animateDpAsState(with(density) { bar.bottom.toDp() }, label = "barBottom")
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
+    ) {
         Box(Modifier.padding(horizontal = 20.dp)) {
             StartupHeader(
                 title = headerTitle,
                 statusTitle = statusTitle,
-                isBusy = model.isBusy,
-                onPrivacy = { model.homePanel = AppPanel.PRIVACY },
-                onTerms = { model.homePanel = AppPanel.TERMS },
+                isBusy = busy,
+                onPrivacy = { openUrl(context, OpenPocketCineLinks.PRIVACY) },
+                onTerms = { openUrl(context, OpenPocketCineLinks.TERMS) },
             )
         }
         Box(Modifier.weight(1f).padding(start = 20.dp, end = 24.dp, top = 8.dp)) {
             if (model.shouldShowWizard) {
-                PairingExperience(model, permissionsGranted, onRequestPermissions)
+                PairingExperience(model, permissionsGranted, onRequestPermissions, onEnableBluetooth)
             } else {
                 SavedCamerasExperience(model)
             }
@@ -202,7 +272,11 @@ private fun LaunchSplashOverlay(visible: Boolean) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OpcMark()
-                    Text("OpenPocketCine", color = BrandColors.ink, fontSize = wordmarkSp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "OpenPocketCine",
+                        color = BrandColors.ink,
+                        style = LiveType.display(wordmarkSp.value, FontWeight.Bold),
+                    )
                 }
             } else {
                 Column(
@@ -211,7 +285,11 @@ private fun LaunchSplashOverlay(visible: Boolean) {
                     verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
                 ) {
                     OpcMark()
-                    Text("OpenPocketCine", color = BrandColors.ink, fontSize = wordmarkSp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "OpenPocketCine",
+                        color = BrandColors.ink,
+                        style = LiveType.display(wordmarkSp.value, FontWeight.Bold),
+                    )
                 }
             }
         }

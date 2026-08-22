@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OSMO first-pair wizard: BLE scan → tap camera → Approve on Pocket → join Wi-Fi → datalink.
 /// Visual clone of OpenZCine `StartupFirstPairWizardView`, Pocket steps only.
@@ -73,7 +73,7 @@ struct ConnectionSetupView: View {
 
             if !model.savedCameras.isEmpty {
                 StartupYourCamerasButton(action: { model.cancelPairing() })
-                .padding(.top, 12)
+                    .padding(.top, 12)
             }
         }
         .padding(20)
@@ -170,7 +170,8 @@ struct ConnectionSetupView: View {
             if model.session.found.isEmpty {
                 StartupEmptyDiscoveryCard(
                     title: model.isScanning ? "Looking for cameras" : "No cameras yet",
-                    hint: "Turn the camera on and keep the phone nearby. Pocket and Nano both appear — tap the one you want.",
+                    hint:
+                        "Turn the camera on and keep the phone nearby. Pocket and Nano both appear — tap the one you want.",
                     compact: tight
                 )
                 StartupIndeterminateBar()
@@ -195,14 +196,15 @@ struct ConnectionSetupView: View {
     private var approveStep: some View {
         VStack(alignment: .leading, spacing: 12) {
             StartupWizardInfoBanner(
-                text: "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+                text:
+                    "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
                 tight: tight
             )
             StartupWizardDeviceInstructionCard(
                 section: StartupWizardDeviceSection(
                     id: "approve-pocket",
                     title: "On the camera",
-                    systemImage: "camera.aperture",
+                    icon: .aperture,
                     steps: [
                         "Look for an Approve / pairing prompt",
                         "Tap it on the camera screen",
@@ -214,7 +216,7 @@ struct ConnectionSetupView: View {
                 section: StartupWizardDeviceSection(
                     id: "approve-iphone",
                     title: "On iPhone",
-                    systemImage: "iphone",
+                    icon: .smartphone,
                     steps: [
                         "Wait here — we keep the Bluetooth link alive",
                         "Don't force-quit the app",
@@ -234,16 +236,18 @@ struct ConnectionSetupView: View {
 
     private var joinWifiStep: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("We read the camera's SSID and password over Bluetooth, then join its Wi-Fi for you.")
-                .font(LiveType.ui(size: tight ? 12 : 13, weight: .regular, design: .rounded))
-                .foregroundStyle(StartupColors.muted)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "We read the camera's SSID and password over Bluetooth, then join its Wi-Fi for you."
+            )
+            .font(LiveType.ui(size: tight ? 12 : 13, weight: .regular, design: .rounded))
+            .foregroundStyle(StartupColors.muted)
+            .fixedSize(horizontal: false, vertical: true)
 
             StartupWizardDeviceInstructionCard(
                 section: StartupWizardDeviceSection(
                     id: "wifi-pocket",
                     title: "On the camera",
-                    systemImage: "camera.aperture",
+                    icon: .aperture,
                     steps: [
                         "Leave the camera on — it brings up its own Wi-Fi",
                         "No menu tap needed on this path",
@@ -255,7 +259,7 @@ struct ConnectionSetupView: View {
                 section: StartupWizardDeviceSection(
                     id: "wifi-iphone",
                     title: "On iPhone",
-                    systemImage: "iphone",
+                    icon: .smartphone,
                     steps: [
                         "Tap Join when iOS asks to join the camera network",
                         "Stay on this screen until we open the datalink",
@@ -279,7 +283,7 @@ struct ConnectionSetupView: View {
                 ProgressView()
                     .controlSize(.regular)
                     .tint(StartupColors.accent)
-                StartupIconSquare(systemName: "camera.aperture", size: 48)
+                StartupIconSquare(icon: .aperture, size: 48)
             }
             Text("Opening the video link…")
                 .font(LiveType.ui(size: 15, weight: .semibold, design: .rounded))
@@ -294,7 +298,7 @@ struct ConnectionSetupView: View {
         if case .failed = phase { return true }
         if case .idle = phase { return !model.savedCameras.isEmpty }
         if case .scanning = phase { return !model.savedCameras.isEmpty }
-        return model.isBusy   // pairing / creds / Wi-Fi — always allow cancel
+        return model.isBusy  // pairing / creds / Wi-Fi — always allow cancel
     }
 
     private var footer: some View {

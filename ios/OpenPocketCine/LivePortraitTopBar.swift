@@ -70,8 +70,8 @@ private struct LivePortraitCameraBattery: View {
     var body: some View {
         let percent = model.session.status.batteryPercent
         HStack(spacing: 4) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 11, weight: .semibold))
+            OpcIcon.camera
+                .frame(width: 11, height: 11)
             Text(percent > 0 ? "\(percent)%" : "—")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
         }

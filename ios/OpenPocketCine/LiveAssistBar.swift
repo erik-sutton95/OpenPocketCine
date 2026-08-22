@@ -53,7 +53,9 @@ struct LiveAssistBar: View {
         .padding(.leading, 7)
         .padding(.trailing, 14)
         .frame(height: LiveDesign.controlHeight)
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+        .liveChromeGlass(
+            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+        )
         .overlay(alignment: .leading) { scrollChevron(.leading) }
         .overlay(alignment: .trailing) { scrollChevron(.trailing) }
         .allowsHitTesting(!locked)
@@ -94,8 +96,8 @@ struct LiveAssistBar: View {
     }
 
     private func scrollChevron(_ edge: HorizontalEdge) -> some View {
-        Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
-            .font(.system(size: 12, weight: .bold))
+        (edge == .leading ? OpcIcon.chevronLeft : OpcIcon.chevronRight)
+            .frame(width: 12, height: 12)
             .foregroundStyle(LiveDesign.accent)
             .shadow(color: .black.opacity(0.65), radius: 4)
             .padding(.horizontal, 5)

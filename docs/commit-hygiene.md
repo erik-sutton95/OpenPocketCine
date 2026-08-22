@@ -45,8 +45,9 @@ re-run the checklist.
   (`handbook/src/content/docs/`) and hardware observation — never pasted from proprietary
   DJI documentation.
 - **Unofficial LUT dumps.** The bundled official Rec.709 cubes under
-  `ios/OpenPocketCine/Resources/` are redistributable and tracked. Copies under `Osmo LUTS/`
-  (duplicate names, vivid variants, files with spaces) stay local and gitignored.
+  `ios/OpenPocketCine/Resources/` and `Apps/Android/app/src/main/assets/luts/` are
+  redistributable and tracked. Copies under `Osmo LUTS/` (duplicate names, vivid
+  variants, files with spaces) stay local and gitignored.
 - **Internal planning dumps.** `.planning/`, `STATUS.md`, and `OVERNIGHT.md` are local working
   notes. Public direction lives in [`ROADMAP.md`](ROADMAP.md).
 - **Raw working media.** Layered design files, unreviewed captures, and full-resolution marketing

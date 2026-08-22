@@ -191,6 +191,8 @@ enum OpenPocketCineLinks {
     )
     static let featureRequest = URL(
         string: "https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas")
+    static let privacy = URL(string: "https://openpocketcine.app/privacy/")
+    static let terms = URL(string: "https://openpocketcine.app/terms/")
 }
 
 /// Live chrome and home both present this. `onClose` lets a cover dismiss without `homePanel`.
@@ -212,8 +214,9 @@ struct CloseButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
-                .font(.system(size: size * 0.38, weight: .bold))
+            OpcIcon.x
+                .frame(width: size * 0.38, height: size * 0.38)
+                .foregroundStyle(LiveDesign.text)
                 .frame(width: size, height: size)
                 .glassCircle(interactive: true)
         }
@@ -230,9 +233,9 @@ struct HelpBadge: View {
         Button {
             showing.toggle()
         } label: {
-            Image(systemName: "questionmark")
-                .font(.system(size: 8.5, weight: .bold))
+            OpcIcon.info
                 .foregroundStyle(LiveDesign.faint)
+                .frame(width: 9, height: 9)
                 .frame(width: 16, height: 16)
                 .background(LiveDesign.background.opacity(0.5), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
@@ -495,9 +498,9 @@ struct SettingsResetButton: View {
             OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
             action()
         } label: {
-            Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 12, weight: .semibold))
+            OpcIcon.refreshCw
                 .foregroundStyle(LiveDesign.muted)
+                .frame(width: 12, height: 12)
                 .frame(width: 28, height: 28)
                 .background(LiveDesign.background.opacity(0.42), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
@@ -664,9 +667,9 @@ struct ScrollMoreCue: View {
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .kerning(1.2)
                 .foregroundStyle(LiveDesign.muted)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 8, weight: .bold))
+            OpcIcon.chevronDown
                 .foregroundStyle(LiveDesign.muted)
+                .frame(width: 8, height: 8)
         }
         .padding(.bottom, 13)
         .frame(maxWidth: .infinity)

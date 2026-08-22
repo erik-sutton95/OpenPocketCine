@@ -53,9 +53,9 @@ struct LivePortraitRecOptionsButton: View {
         Button {
             popoverOpen = true
         } label: {
-            Image(systemName: "video.badge.waveform")
-                .font(.system(size: 16, weight: .medium))
+            OpcIcon.audioWaveform
                 .foregroundStyle(LiveDesign.text.opacity(0.86))
+                .frame(width: 16, height: 16)
                 .frame(width: 40, height: 40)
                 .liquidGlass(in: Circle())
         }
@@ -145,9 +145,9 @@ struct LivePortraitAssistRail: View {
         Button {
             withAnimation(.spring(duration: 0.28)) { expanded = true }
         } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 16, weight: .semibold))
+            OpcIcon.slidersHorizontal
                 .foregroundStyle(LiveDesign.text)
+                .frame(width: 16, height: 16)
                 .frame(width: 44, height: 44)
                 .liveChromeGlass(in: Circle())
         }
@@ -160,9 +160,9 @@ struct LivePortraitAssistRail: View {
             Button {
                 withAnimation(.spring(duration: 0.28)) { expanded = false }
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .bold))
+                OpcIcon.chevronLeft
                     .foregroundStyle(LiveDesign.accent)
+                    .frame(width: 13, height: 13)
                     .frame(width: 36, height: 28)
             }
             .buttonStyle(.zcTapTarget)

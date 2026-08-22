@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OpenZCine `MonitorSystemCluster.settingsButton` (`MonitorUnified.swift` ~1098).
 struct LiveSettingsButton: View {
@@ -7,7 +7,7 @@ struct LiveSettingsButton: View {
 
     var body: some View {
         Button(action: onOpen) {
-            LiveRailCircle(systemName: "gearshape")
+            LiveRailCircle(icon: .settings)
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel("Open Operator Setup")
@@ -21,7 +21,7 @@ struct LiveMediaButton: View {
 
     var body: some View {
         Button(action: onOpen) {
-            LiveRailCircle(systemName: "rectangle.stack")
+            LiveRailCircle(icon: .layers)
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel("Open Media")
@@ -37,8 +37,8 @@ struct LiveTrackingCancelButton: View {
         Button {
             model.session.cancelSubjectTracking()
         } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .bold))
+            OpcIcon.x
+                .frame(width: 11, height: 11)
                 .foregroundStyle(LiveDesign.background)
                 .frame(
                     width: LiveTrackingChrome.cancelSize,
@@ -60,8 +60,8 @@ struct LiveFocusResetButton: View {
         Button {
             model.session.resetFocusPoint()
         } label: {
-            Image(systemName: "dot.viewfinder")
-                .font(.system(size: 17, weight: .semibold))
+            OpcIcon.crosshair
+                .frame(width: 17, height: 17)
                 .foregroundStyle(LiveDesign.text)
                 .frame(
                     width: LiveChromeMetrics.focusResetSize,
@@ -77,14 +77,14 @@ struct LiveFocusResetButton: View {
     }
 }
 
-/// OpenZCine `AssetCircleButton` with an SF Symbol stand-in (no copyrighted rail assets).
+/// Rail circle with a Lucide glyph (no copyrighted rail assets, no SF Symbols).
 private struct LiveRailCircle: View {
-    let systemName: String
+    let icon: OpcIcon
 
     var body: some View {
         let size = LiveChromeMetrics.auxiliaryButtonSize
-        Image(systemName: systemName)
-            .font(.system(size: size * 0.36, weight: .medium))
+        icon
+            .frame(width: size * 0.36, height: size * 0.36)
             .foregroundStyle(LiveDesign.text.opacity(0.86))
             .frame(width: size, height: size)
             .liveChromeCircle()

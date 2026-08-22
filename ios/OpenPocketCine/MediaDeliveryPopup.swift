@@ -16,9 +16,10 @@ struct MediaDeliveryPopupOverlay: View {
                 MediaDeliveryPopup(
                     files: files,
                     preferredDestination: preferredDestination,
-                    onClose: onDismiss)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 28)
+                    onClose: onDismiss
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
             }
         }
         .ignoresSafeArea()
@@ -119,7 +120,8 @@ struct MediaDeliveryPopup: View {
         .frame(maxWidth: 420)
         .liquidGlass(
             in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
-            interactive: false)
+            interactive: false
+        )
         .onAppear {
             if !lutAvailable { configuration.bakeLUT = false }
             if let saved = FrameioDestination.loaded {
@@ -158,8 +160,8 @@ struct MediaDeliveryPopup: View {
                     Label {
                         Text("Share")
                     } icon: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 13, weight: .semibold))
+                        OpcIcon.share
+                            .frame(width: 13, height: 13)
                     }
                     .font(LiveType.display(14, weight: .bold))
                     .kerning(1)
@@ -173,9 +175,14 @@ struct MediaDeliveryPopup: View {
                     Button {
                         step = .destination
                     } label: {
-                        Label("Back", systemImage: "chevron.left")
-                            .font(LiveType.ui(size: 13, weight: .semibold))
-                            .foregroundStyle(LiveDesign.accent)
+                        Label {
+                            Text("Back")
+                        } icon: {
+                            OpcIcon.chevronLeft
+                                .frame(width: 12, height: 12)
+                        }
+                        .font(LiveType.ui(size: 13, weight: .semibold))
+                        .foregroundStyle(LiveDesign.accent)
                     }
                     .buttonStyle(.zcTapTarget)
                     VStack(alignment: .leading, spacing: 2) {
@@ -210,8 +217,9 @@ struct MediaDeliveryPopup: View {
                 Text("Frame.io isn't configured — add credentials in Settings → Storage.")
                     .font(LiveType.ui(size: 12))
                     .foregroundStyle(LiveDesign.accent)
-            } else if destination == .frameio, let name = selectedFrameioProject?.name
-                ?? FrameioDestination.loaded?.projectName, step == .options
+            } else if destination == .frameio,
+                let name = selectedFrameioProject?.name
+                    ?? FrameioDestination.loaded?.projectName, step == .options
             {
                 Text("Project: \(name)")
                     .font(LiveType.ui(size: 12))
@@ -256,8 +264,8 @@ struct MediaDeliveryPopup: View {
                     .foregroundStyle(LiveDesign.muted)
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                OpcIcon.chevronRight
+                    .frame(width: 12, height: 12)
                     .foregroundStyle(LiveDesign.faint)
             }
             .padding(.horizontal, 12)
@@ -274,8 +282,8 @@ struct MediaDeliveryPopup: View {
     private func destinationIcon(_ candidate: MediaDeliveryDestination) -> some View {
         switch candidate {
         case .nativeShare:
-            Image(systemName: candidate.systemImage)
-                .font(.system(size: 18))
+            OpcIcon.share
+                .frame(width: 18, height: 18)
                 .foregroundStyle(LiveDesign.text)
         case .frameio:
             FrameioMark()
@@ -345,20 +353,26 @@ struct MediaDeliveryPopup: View {
             Button {
                 showFrameioHopConfirm = true
             } label: {
-                Label("Hop to internet", systemImage: "wifi.exclamationmark")
-                    .font(LiveType.ui(size: 15, weight: .semibold))
-                    .foregroundStyle(LiveDesign.text)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        LiveDesign.accent.opacity(0.22),
-                        in: RoundedRectangle(
-                            cornerRadius: DesignTokens.cornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(
-                            cornerRadius: DesignTokens.cornerRadius, style: .continuous
-                        )
-                        .strokeBorder(LiveDesign.accent.opacity(0.55), lineWidth: 1))
+                Label {
+                    Text("Hop to internet")
+                } icon: {
+                    OpcIcon.wifiOff
+                        .frame(width: 16, height: 16)
+                }
+                .font(LiveType.ui(size: 15, weight: .semibold))
+                .foregroundStyle(LiveDesign.text)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    LiveDesign.accent.opacity(0.22),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous
+                    )
+                    .strokeBorder(LiveDesign.accent.opacity(0.55), lineWidth: 1))
             }
             .buttonStyle(.zcTapTarget)
         }
@@ -398,8 +412,8 @@ struct MediaDeliveryPopup: View {
                     showCreateProjectAlert = true
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16))
+                        OpcIcon.circlePlus
+                            .frame(width: 16, height: 16)
                             .foregroundStyle(LiveDesign.accent)
                         Text("Create new project")
                             .font(LiveType.ui(size: 13, weight: .semibold))
@@ -428,7 +442,11 @@ struct MediaDeliveryPopup: View {
                         selectFrameioProject(project)
                     } label: {
                         if selectedFrameioProjectID == project.id {
-                            Label(project.name, systemImage: "checkmark")
+                            Label {
+                                Text(project.name)
+                            } icon: {
+                                OpcIcon.check
+                            }
                         } else {
                             Text(project.name)
                         }
@@ -437,17 +455,18 @@ struct MediaDeliveryPopup: View {
             }
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 14))
+                OpcIcon.folder
+                    .frame(width: 14, height: 14)
                     .foregroundStyle(LiveDesign.muted)
                 Text(selectedFrameioProject?.name ?? "Select a project")
                     .font(LiveType.ui(size: 13, weight: .semibold))
                     .foregroundStyle(
-                        selectedFrameioProject != nil ? LiveDesign.text : LiveDesign.muted)
+                        selectedFrameioProject != nil ? LiveDesign.text : LiveDesign.muted
+                    )
                     .lineLimit(1)
                 Spacer()
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
+                OpcIcon.chevronsUpDown
+                    .frame(width: 11, height: 11)
                     .foregroundStyle(LiveDesign.muted)
             }
             .padding(.horizontal, 12)
@@ -545,7 +564,8 @@ struct MediaDeliveryPopup: View {
                         canContinue
                             ? LiveDesign.accent.opacity(0.22) : LiveDesign.hairline.opacity(0.25),
                         in: RoundedRectangle(
-                            cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+                            cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    )
                     .overlay(
                         RoundedRectangle(
                             cornerRadius: DesignTokens.cornerRadius, style: .continuous
@@ -601,7 +621,8 @@ struct MediaDeliveryPopup: View {
         .padding(.vertical, 10)
         .background(
             LiveDesign.hairline.opacity(0.35),
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+        )
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.55)
     }

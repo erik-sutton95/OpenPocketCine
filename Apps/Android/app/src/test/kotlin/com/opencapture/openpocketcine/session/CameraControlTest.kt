@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.openpocketcine.bridge.SwiftCore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -175,6 +176,125 @@ class CameraControlTest {
         assertEquals(60, next.fps)
         val json = next.toJson()
         assertEquals(next.availableShutterDenoms, CameraStatus.fromJson(json).availableShutterDenoms)
+    }
+
+    @Test
+    fun statusJsonRoundTripsParityFields() {
+        val src =
+            CameraStatus(
+                evComp = 0x10,
+                isoLimit = 0x07,
+                availableColorModes = listOf(0x3F, 0x3C),
+                focusX = 0.25,
+                focusY = 0.75,
+                hasCameraFocusPoint = true,
+                focusTrack = 2,
+                zoomLens = 217,
+                zoomFactor = 1.0,
+                glamourEnabled = false,
+                windNr = 1,
+                directionalAudio = 0,
+                audioMetersLeft = -12.0,
+                audioMetersRight = -14.0,
+                audioPeakLeft = -6.0,
+                audioPeakRight = -8.0,
+            )
+        val json = src.toJson()
+        assertTrue(json.contains("\"windNR\":"))
+        assertTrue(json.contains("\"evComp\":16"))
+        val decoded = CameraStatus.fromJson(json)
+        assertEquals(0x10, decoded.evComp)
+        assertEquals(0x07, decoded.isoLimit)
+        assertEquals(listOf(0x3F, 0x3C), decoded.availableColorModes)
+        assertEquals(0.25, decoded.focusX, 1e-6)
+        assertEquals(0.75, decoded.focusY, 1e-6)
+        assertEquals(true, decoded.hasCameraFocusPoint)
+        assertEquals(2, decoded.focusTrack)
+        assertEquals(217, decoded.zoomLens)
+        assertEquals(1.0, decoded.zoomFactor ?: 0.0, 1e-6)
+        assertEquals(false as Boolean?, decoded.glamourEnabled)
+        assertEquals(1, decoded.windNr)
+        assertEquals(0, decoded.directionalAudio)
+        assertEquals(-12.0, decoded.audioMetersLeft, 1e-6)
+        assertEquals(-14.0, decoded.audioMetersRight, 1e-6)
+        assertEquals(-6.0, decoded.audioPeakLeft, 1e-6)
+        assertEquals(-8.0, decoded.audioPeakRight, 1e-6)
+    }
+
+    @Test
+    fun statusJsonParsesCoreWindAndDirectionalRaws() {
+        val json =
+            """{"windNR":26,"directionalAudio":218,"evComp":16,"zoomLens":651,"zoomFactor":3.0,"glamourEnabled":true}"""
+        val decoded = CameraStatus.fromJson(json)
+        assertEquals(1, decoded.windNr)
+        assertEquals(0, decoded.directionalAudio)
+        assertEquals(0x10, decoded.evComp)
+        assertEquals(651, decoded.zoomLens)
+        assertEquals(3.0, decoded.zoomFactor ?: 0.0, 1e-6)
+        assertEquals(true as Boolean?, decoded.glamourEnabled)
+    }
+
+    @Test
+    fun cameraModelJsonUsesPocketDefaults() {
+        val parsed =
+            CameraModel.fromJson(
+                """{"name":"Osmo Pocket 4","datalinkPort":9004,"tcpPoke":true,"wpa3":false,"verified":true,"isDrone":false,"pairingToken":"osmo"}""",
+            )
+        assertEquals("pocket", parsed.family)
+        assertEquals(8, parsed.liveViewEnableReceiver)
+        assertEquals(false, parsed.usesNanoLiveViewGate)
+        assertEquals(true, parsed.supportsTapFocus)
+        assertEquals(true, parsed.supportsFocusMode)
+        assertEquals(true, parsed.usesCapturedLiveEnable)
+    }
+
+    @Test
+    fun cameraModelJsonParsesNanoFields() {
+        val parsed =
+            CameraModel.fromJson(
+                """{"name":"Osmo Nano","family":"nano","liveViewEnableReceiver":65,"usesNanoLiveViewGate":true,"supportsTapFocus":false,"supportsFocusMode":false,"usesCapturedLiveEnable":true}""",
+            )
+        assertEquals("nano", parsed.family)
+        assertEquals(65, parsed.liveViewEnableReceiver)
+        assertEquals(true, parsed.usesNanoLiveViewGate)
+        assertEquals(false, parsed.supportsTapFocus)
+        assertEquals(false, parsed.supportsFocusMode)
+    }
+
+    @Test
+    fun focusTrackReplyIsPid3B() {
+        val reply = hex("0000013b00020102")
+        assertEquals(FocusTrackMode.SUBJECT_LOCK, FocusTrackMode.parseReply(reply))
+        val next = StatusExtras.applyParamReply(reply, CameraStatus())
+        assertEquals(2, next.focusTrack)
+        assertEquals(FocusTrackMode.DEFAULT, FocusTrackMode.parseReply(hex("0000013b00020100")))
+        assertEquals(FocusTrackMode.PRODUCT_SHOWCASE, FocusTrackMode.parseReply(hex("0000013b00020101")))
+        assertEquals(FocusTrackMode.REGISTERED_PRIORITY, FocusTrackMode.parseReply(hex("0000013b00020103")))
+        assertEquals(null, FocusTrackMode.parseReply(hex("00000120000102")))
+        assertTrue(FocusTrackMode.shouldHoldWatchdog(2.2))
+        assertTrue(!FocusTrackMode.shouldHoldWatchdog(4.0))
+        assertTrue(!FocusTrackMode.shouldHoldWatchdog(null))
+    }
+
+    @Test
+    fun waitKeyCoversNewCommands() {
+        assertEquals(0x0201, SwiftCore.waitKey(SwiftCore.CMD_SHOOT_PHOTO))
+        assertEquals(0x02E1, SwiftCore.waitKey(SwiftCore.CMD_SET_SHOOTING_MODE))
+        assertEquals(0x022E, SwiftCore.waitKey(SwiftCore.CMD_SET_EV))
+        assertEquals(0x02B8, SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS))
+        assertEquals(0x02A6, SwiftCore.waitKey(SwiftCore.CMD_SET_TRACKING_BOX))
+        assertEquals(0x02A5, SwiftCore.waitKey(SwiftCore.CMD_POLL_TRACKING))
+        assertEquals(0x044C, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_RECENTER))
+        assertEquals(0x044C, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_FLIP))
+        assertEquals(0x020C, SwiftCore.waitKey(SwiftCore.CMD_EXIT_PLAYBACK))
+        assertEquals(0x0026, SwiftCore.waitKey(SwiftCore.CMD_MEDIA_LIST))
+        assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
+        assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))
+        assertEquals(0x0209, SwiftCore.waitKey(SwiftCore.CMD_NANO_LIVE_VIEW_GATE))
+        assertEquals(0, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_STICK))
     }
 
     companion object {

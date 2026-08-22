@@ -213,8 +213,15 @@ private struct GuidesToggleRow: View {
             Text(title)
                 .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
             Spacer()
-            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.muted)
+            Group {
+                if isOn {
+                    LucideIconView(name: OpcIcon.circleCheck.lucideName, filled: true)
+                } else {
+                    OpcIcon.circle
+                }
+            }
+            .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.muted)
+            .frame(width: 18, height: 18)
         }
         .padding(14)
         .background(

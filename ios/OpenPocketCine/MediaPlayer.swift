@@ -1,18 +1,18 @@
 import AVFoundation
 import ImageIO
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 // MARK: - Shared chrome
 
 struct MediaCircleIconButton: View {
-    let systemName: String
+    let icon: OpcIcon
     var size: CGFloat = 34
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: size * 0.38, weight: .semibold))
+        icon
+            .frame(width: size * 0.38, height: size * 0.38)
             .foregroundStyle(LiveDesign.text)
             .frame(width: size, height: size)
             .glassCircle(interactive: true)
@@ -141,7 +141,7 @@ struct MediaPhotoViewer: View {
                     Button {
                         dismiss()
                     } label: {
-                        MediaCircleIconButton(systemName: "xmark", size: 34)
+                        MediaCircleIconButton(icon: .x, size: 34)
                     }
                     .buttonStyle(.zcTapTarget)
                     Text(file.filename)
@@ -182,8 +182,8 @@ struct MediaPhotoViewer: View {
         return Button {
             session.toggleFavorite(file)
         } label: {
-            Image(systemName: favorite ? "star.fill" : "star")
-                .font(.system(size: 17))
+            OpcIcon.star.view(filled: favorite)
+                .frame(width: 17, height: 17)
                 .foregroundStyle(favorite ? LiveDesign.accent : LiveDesign.text)
                 .frame(width: 34, height: 34)
                 .liquidGlass(in: Circle(), interactive: true)
@@ -196,7 +196,7 @@ struct MediaPhotoViewer: View {
         Button {
             isDeleteConfirmPresented = true
         } label: {
-            MediaCircleIconButton(systemName: "trash", size: 34)
+            MediaCircleIconButton(icon: .trash, size: 34)
         }
         .buttonStyle(.zcTapTarget)
         .confirmationDialog(
@@ -222,7 +222,7 @@ struct MediaPhotoViewer: View {
                     .tint(LiveDesign.accent)
                     .frame(width: 34, height: 34)
             } else {
-                MediaCircleIconButton(systemName: "square.and.arrow.up", size: 34)
+                MediaCircleIconButton(icon: .share, size: 34)
             }
         }
         .buttonStyle(.zcTapTarget)
@@ -309,7 +309,7 @@ struct MediaPlayerView: View {
     @State private var isRemoteStream = false
     @State private var timeObserver: Any?
     @State private var endObserver: NSObjectProtocol?
-    @State private var playbackFlashSymbol: String?
+    @State private var playbackFlashIcon: OpcIcon?
     @State private var playbackFlashVisible = false
     @State private var playbackFlashTask: Task<Void, Never>?
     @State private var isSharePresented = false
@@ -415,7 +415,8 @@ struct MediaPlayerView: View {
                         .scaleEffect(
                             x: model.assist.isPlaybackVisible(.mirror) ? -1 : 1,
                             y: 1,
-                            anchor: .center)
+                            anchor: .center
+                        )
                         .scaleEffect(zoom.scale)
                         .offset(zoom.offset)
                 }
@@ -593,7 +594,7 @@ struct MediaPlayerView: View {
             Button {
                 dismiss()
             } label: {
-                MediaCircleIconButton(systemName: "chevron.left", size: 34)
+                MediaCircleIconButton(icon: .chevronLeft, size: 34)
             }
             .buttonStyle(.zcTapTarget)
             Text(active.filename)
@@ -604,9 +605,11 @@ struct MediaPlayerView: View {
             Button {
                 session.toggleFavorite(active)
             } label: {
-                Image(systemName: session.isFavorite(active) ? "star.fill" : "star")
-                    .font(.system(size: 17))
-                    .foregroundStyle(session.isFavorite(active) ? LiveDesign.accent : LiveDesign.text)
+                OpcIcon.star.view(filled: session.isFavorite(active))
+                    .frame(width: 17, height: 17)
+                    .foregroundStyle(
+                        session.isFavorite(active) ? LiveDesign.accent : LiveDesign.text
+                    )
                     .frame(width: 34, height: 34)
                     .liquidGlass(in: Circle(), interactive: true)
             }
@@ -694,28 +697,28 @@ struct MediaPlayerView: View {
             }
 
             HStack(spacing: PlaybackChrome.transportRowSpacing) {
-                transportButton("gobackward.15") { seek(by: -15) }
+                transportButton(.skipBack) { seek(by: -15) }
                 if reachedEnd {
                     transportButton(
-                        "arrow.counterclockwise",
+                        .rotateCw,
                         size: PlaybackChrome.primaryTransportIconSize
                     ) {
                         restartPlayback()
                     }
                 } else {
                     transportButton(
-                        isPlaying ? "pause.fill" : "play.fill",
+                        isPlaying ? .pause : .play,
                         size: PlaybackChrome.primaryTransportIconSize
                     ) {
                         togglePlay()
                     }
                 }
-                transportButton("goforward.15") { seek(by: 15) }
+                transportButton(.skipForward) { seek(by: 15) }
 
                 Spacer(minLength: 6)
 
                 actionToggle(
-                    "speaker.slash.fill", "speaker.wave.2.fill", on: isMuted
+                    .volumeX, .volume2, on: isMuted
                 ) {
                     toggleMute()
                 }
@@ -747,12 +750,12 @@ struct MediaPlayerView: View {
                         .tint(LiveDesign.accent)
                         .frame(width: 22, height: 22)
                 } else {
-                    Image(
-                        systemName: downloaded
-                            ? "square.and.arrow.up" : "arrow.down.to.line"
-                    )
-                    .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
-                    .foregroundStyle(LiveDesign.text)
+                    (downloaded ? OpcIcon.share : OpcIcon.download)
+                        .frame(
+                            width: PlaybackChrome.actionIconSize,
+                            height: PlaybackChrome.actionIconSize
+                        )
+                        .foregroundStyle(LiveDesign.text)
                 }
             }
             .frame(
@@ -774,8 +777,11 @@ struct MediaPlayerView: View {
         Button {
             isDeleteConfirmPresented = true
         } label: {
-            Image(systemName: "trash")
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            OpcIcon.trash
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(LiveDesign.text)
                 .frame(
                     width: PlaybackChrome.actionButtonSize.width,
@@ -807,8 +813,8 @@ struct MediaPlayerView: View {
             Button {
                 goToAdjacent(offset: -1)
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .semibold))
+                OpcIcon.chevronLeft
+                    .frame(width: 13, height: 13)
                     .foregroundStyle(LiveDesign.accent)
                     .frame(width: 32, height: 32)
                     .liquidGlass(in: Circle(), interactive: true)
@@ -821,8 +827,8 @@ struct MediaPlayerView: View {
             Button {
                 goToAdjacent(offset: 1)
             } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                OpcIcon.chevronRight
+                    .frame(width: 13, height: 13)
                     .foregroundStyle(LiveDesign.accent)
                     .frame(width: 32, height: 32)
                     .liquidGlass(in: Circle(), interactive: true)
@@ -1030,8 +1036,11 @@ struct MediaPlayerView: View {
                 Section { Text(ConformPreview.audioLabel) }
             }
         } label: {
-            Image(systemName: "timelapse")
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            OpcIcon.timer
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(
                     conformTarget != nil
                         ? LiveDesign.accent
@@ -1043,10 +1052,12 @@ struct MediaPlayerView: View {
                 )
                 .background(
                     conformTarget != nil ? LiveDesign.accentDim : Color.clear,
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .disabled(!availability.isAvailable)
@@ -1061,8 +1072,11 @@ struct MediaPlayerView: View {
         Button {
             withAnimation(.spring(duration: 0.32)) { chromeVisible = false }
         } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            OpcIcon.maximize
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(LiveDesign.text)
                 .frame(
                     width: PlaybackChrome.actionButtonSize.width,
@@ -1072,7 +1086,8 @@ struct MediaPlayerView: View {
                     RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .buttonStyle(.zcTapTarget)
@@ -1084,8 +1099,11 @@ struct MediaPlayerView: View {
         Button {
             withAnimation(.spring(duration: 0.32)) { chromeVisible = true }
         } label: {
-            Image(systemName: "arrow.down.right.and.arrow.up.left")
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            OpcIcon.minimize
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(LiveDesign.text.opacity(0.75))
                 .frame(
                     width: PlaybackChrome.actionButtonSize.width,
@@ -1104,8 +1122,11 @@ struct MediaPlayerView: View {
         return Button {
             withAnimation(.spring(duration: 0.32)) { assistMode.toggle() }
         } label: {
-            Image(systemName: "camera.viewfinder")
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            OpcIcon.scan
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(highlighted ? LiveDesign.accent : LiveDesign.text)
                 .frame(
                     width: PlaybackChrome.actionButtonSize.width,
@@ -1113,13 +1134,15 @@ struct MediaPlayerView: View {
                 )
                 .background(
                     assistMode ? LiveDesign.accentDim : Color.clear,
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .contentShape(
                     RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                 )
                 .liquidGlass(
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous),
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous),
                     interactive: true)
         }
         .buttonStyle(.zcTapTarget)
@@ -1141,15 +1164,19 @@ struct MediaPlayerView: View {
                         width: PlaybackChrome.actionButtonSize.width,
                         height: PlaybackChrome.actionButtonSize.height)
             } else {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+                OpcIcon.share
+                    .frame(
+                        width: PlaybackChrome.actionIconSize,
+                        height: PlaybackChrome.actionIconSize
+                    )
                     .foregroundStyle(downloaded ? LiveDesign.text : LiveDesign.faint)
                     .frame(
                         width: PlaybackChrome.actionButtonSize.width,
                         height: PlaybackChrome.actionButtonSize.height
                     )
                     .contentShape(
-                        RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                        RoundedRectangle(
+                            cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                     )
                     .liquidGlass(
                         in: RoundedRectangle(
@@ -1173,13 +1200,13 @@ struct MediaPlayerView: View {
     }
 
     private func transportButton(
-        _ systemName: String,
+        _ icon: OpcIcon,
         size: CGFloat = PlaybackChrome.transportIconSize,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: size, weight: .medium))
+            icon
+                .frame(width: size, height: size)
                 .foregroundStyle(LiveDesign.text)
                 .frame(
                     width: PlaybackChrome.transportButtonSize.width,
@@ -1197,11 +1224,14 @@ struct MediaPlayerView: View {
     }
 
     private func actionToggle(
-        _ onName: String, _ offName: String, on: Bool, action: @escaping () -> Void
+        _ onIcon: OpcIcon, _ offIcon: OpcIcon, on: Bool, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: on ? onName : offName)
-                .font(.system(size: PlaybackChrome.actionIconSize, weight: .medium))
+            (on ? onIcon : offIcon)
+                .frame(
+                    width: PlaybackChrome.actionIconSize,
+                    height: PlaybackChrome.actionIconSize
+                )
                 .foregroundStyle(on ? LiveDesign.accent : LiveDesign.text)
                 .frame(
                     width: PlaybackChrome.actionButtonSize.width,
@@ -1313,14 +1343,14 @@ struct MediaPlayerView: View {
 
     @ViewBuilder
     private func playbackTransportFlashOverlay(in videoRect: CGRect) -> some View {
-        if playbackFlashSymbol != nil {
-            Image(systemName: playbackFlashSymbol ?? "play.fill")
-                .font(.system(size: 48, weight: .semibold))
+        if let playbackFlashIcon {
+            playbackFlashIcon
+                .frame(width: 48, height: 48)
                 .foregroundStyle(LiveDesign.text)
                 .shadow(color: .black.opacity(0.5), radius: 10, y: 3)
                 .overlay {
-                    Image(systemName: playbackFlashSymbol ?? "play.fill")
-                        .font(.system(size: 48, weight: .semibold))
+                    playbackFlashIcon
+                        .frame(width: 48, height: 48)
                         .foregroundStyle(LiveDesign.accent.opacity(0.28))
                         .blendMode(.overlay)
                 }
@@ -1540,19 +1570,19 @@ struct MediaPlayerView: View {
         switch PlaybackFrameTap.action(chromeVisible: chromeVisible, reachedEnd: reachedEnd) {
         case .restartPlayback:
             restartPlayback()
-            flash("play.fill")
+            flash(.play)
         case .toggleTransport:
             let willPlay = !isPlaying
             togglePlay()
-            flash(willPlay ? "play.fill" : "pause.fill")
+            flash(willPlay ? .play : .pause)
         case .ignore:
             break
         }
     }
 
-    private func flash(_ symbol: String) {
+    private func flash(_ icon: OpcIcon) {
         playbackFlashTask?.cancel()
-        playbackFlashSymbol = symbol
+        playbackFlashIcon = icon
         playbackFlashVisible = false
         playbackFlashTask = Task {
             await MainActor.run { playbackFlashVisible = true }
@@ -1561,7 +1591,7 @@ struct MediaPlayerView: View {
             await MainActor.run { playbackFlashVisible = false }
             try? await Task.sleep(for: .seconds(PlaybackFlash.fadeOut))
             guard !Task.isCancelled else { return }
-            await MainActor.run { playbackFlashSymbol = nil }
+            await MainActor.run { playbackFlashIcon = nil }
         }
     }
 

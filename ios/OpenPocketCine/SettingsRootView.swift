@@ -620,9 +620,15 @@ struct SettingsRootView: View {
                         .foregroundStyle(LiveDesign.muted)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 8)
-                    Image(systemName: expandedDisp == section ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(LiveDesign.faint)
+                    Group {
+                        if expandedDisp == section {
+                            OpcIcon.chevronUp
+                        } else {
+                            OpcIcon.chevronDown
+                        }
+                    }
+                    .foregroundStyle(LiveDesign.faint)
+                    .frame(width: 11, height: 11)
                 }
                 .padding(.vertical, 8)
             }
@@ -870,10 +876,14 @@ struct SettingsRootView: View {
                 }
             }
             SettingsInlineRow(title: "Privacy", help: "What this app stores on this phone.") {
-                SettingsActionPill(title: "Open") { legalKind = .privacy }
+                SettingsActionPill(title: "Open") {
+                    if let url = OpenPocketCineLinks.privacy { openURL(url) }
+                }
             }
             SettingsInlineRow(title: "Terms", help: "How you can use OpenPocketCine.") {
-                SettingsActionPill(title: "Open") { legalKind = .terms }
+                SettingsActionPill(title: "Open") {
+                    if let url = OpenPocketCineLinks.terms { openURL(url) }
+                }
             }
             SettingsInlineRow(title: "Licenses", help: "Apache 2.0 and third-party notices.") {
                 SettingsActionPill(title: "Open") { legalKind = .licenses }

@@ -25,6 +25,7 @@ BA = "BA"
 DA = "DA"
 # Simulator device identifier (not a UUID misspelling).
 UDID = "UDID"
+Lucide = "Lucide"
 
 [default]
 extend-ignore-re = [

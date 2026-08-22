@@ -1,0 +1,5 @@
+Lucide icons — https://github.com/lucide-icons/lucide
+Pinned commit: 33a44aa8b0b43d9b0ed14eb08860a1b5550a1573
+Official 24px stroke SVGs (currentColor, stroke-width 2).
+License: ISC; Feather-derived glyphs also MIT. See LICENSE.txt.
+Do not vendor the npm package or add a JS runtime.

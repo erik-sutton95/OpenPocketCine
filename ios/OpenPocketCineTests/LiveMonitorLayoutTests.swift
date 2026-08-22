@@ -5,6 +5,11 @@ import OpenPocketViewCore
 
 /// Golden pins from OpenZCine `MonitorLiveViewModuleLayout` on the auditor's 874×402 phone.
 final class LiveMonitorLayoutTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        LiveChromeMetrics.scale = 1
+    }
+
     func testAuditorPhonePinsLeadingIsland() {
         let layout = LiveMonitorLayout.fit(
             viewportWidth: 874,
@@ -63,6 +68,15 @@ final class LiveMonitorLayoutTests: XCTestCase {
             stick.intersects(layout.record),
             "gimbal stick stays clear of record"
         )
+    }
+
+    func testChromeScaleFloorsCompactPhonesAndLeavesProMaxAlone() {
+        XCTAssertEqual(LiveChromeMetrics.chromeScale(shortestSide: 360), 0.935, accuracy: 0.001)
+        XCTAssertEqual(LiveChromeMetrics.chromeScale(shortestSide: 320), 0.935, accuracy: 0.001)
+        XCTAssertEqual(LiveChromeMetrics.chromeScale(shortestSide: 424), 1, accuracy: 0.001)
+        XCTAssertEqual(LiveChromeMetrics.chromeScale(shortestSide: 440), 1, accuracy: 0.001)
+        XCTAssertEqual(
+            LiveChromeMetrics.chromeScale(shortestSide: 410), 410 / 424, accuracy: 0.001)
     }
 
     /// OpenZCine `liveViewModuleFramesMirrorFeedAndChromeTogetherForLandscapeRight`.

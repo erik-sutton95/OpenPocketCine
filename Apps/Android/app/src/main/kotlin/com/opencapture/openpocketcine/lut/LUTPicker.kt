@@ -1,0 +1,689 @@
+package com.opencapture.openpocketcine.lut
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.openpocketcine.pairing.StartupColors
+import java.io.File
+import kotlin.math.abs
+
+private enum class LutTab(val label: String) {
+    BUILT_IN("Built-in"),
+    DJI("DJI"),
+    CUSTOM("Custom"),
+}
+
+/** iOS `LUTPickerContent.contentHeight` — landscape has no headroom for a taller drum. */
+private val LutContentHeight = 146.dp
+private val LutCaptionHeight = 28.dp
+private val LutDrumRowHeight = 52.dp
+
+private const val DRUM_NOT_LAID_OUT = -1
+
+/** Settings sheet. Same body as the assist-tray form; 50/50 stays inline. */
+@Composable
+fun LUTPicker(model: AppModel, onClose: () -> Unit) {
+    val assist = model.assist
+    LUTPicker(
+        selection = model.lutSelection,
+        onSelect = model::updateLutSelection,
+        onClose = onClose,
+        embedded = false,
+        splitComparison = assist.splitComparison,
+        splitVertical = assist.splitVertical,
+        onToggleSplit = { assist.setSplitComparison(!assist.splitComparison) },
+        onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
+        onArmLut = { assist.armLut() },
+    )
+}
+
+/**
+ * Built-in / DJI / Custom catalog with an AccentDrumWheel (iOS `LUTPicker`).
+ * `embedded` is the assist-tray form; the sheet wraps the same body.
+ */
+@Composable
+internal fun LUTPicker(
+    selection: String,
+    onSelect: (String) -> Unit,
+    embedded: Boolean,
+    splitComparison: Boolean,
+    splitVertical: Boolean,
+    onToggleSplit: () -> Unit,
+    onSplitVertical: (Boolean) -> Unit,
+    onArmLut: () -> Unit = {},
+    onClose: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val djiEntries =
+        remember(context) {
+            val names = context.assets.list(LutCatalog.ASSET_DIRECTORY)?.toList().orEmpty()
+            LutCatalog.djiEntries(names)
+        }
+    val builtInEntries =
+        remember {
+            listOfNotNull(LutCatalog.builtIn.firstOrNull { it.id == LutCatalog.AUTO }) +
+                LutCatalog.officialBuiltInLooks
+        }
+    var tab by remember {
+        mutableStateOf(
+            when (LutCatalog.categoryOf(selection)) {
+                LutCategory.DJI -> LutTab.DJI
+                LutCategory.CUSTOM -> LutTab.CUSTOM
+                LutCategory.BUILT_IN -> LutTab.BUILT_IN
+            }
+        )
+    }
+    var customRevision by remember { mutableIntStateOf(0) }
+    var pendingDeletion by remember { mutableStateOf<String?>(null) }
+    var deletionError by remember { mutableStateOf<String?>(null) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    val customDir = remember(context) { LutCatalog.customDirectory(context.filesDir) }
+    val customEntries = remember(customRevision, customDir) { LutCatalog.listCustom(customDir) }
+    val importer =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            runCatching { importCube(context, uri, customDir) }
+                .onSuccess { entry ->
+                    importError = null
+                    customRevision += 1
+                    val current = selection
+                    if (current != LutCatalog.AUTO && current != LutCatalog.DJI_AUTO) {
+                        onSelect(entry.id)
+                    }
+                    onArmLut()
+                }
+                .onFailure { error ->
+                    importError = error.message ?: "The .cube file could not be read."
+                }
+        }
+
+    val onTab: (LutTab) -> Unit = { next ->
+        if (next != tab) {
+            tab = next
+            when (next) {
+                LutTab.BUILT_IN ->
+                    if (LutCatalog.categoryOf(selection) != LutCategory.BUILT_IN) {
+                        onSelect(LutCatalog.AUTO)
+                        onArmLut()
+                    }
+                LutTab.DJI ->
+                    if (LutCatalog.categoryOf(selection) != LutCategory.DJI) {
+                        onSelect(LutCatalog.DJI_AUTO)
+                        onArmLut()
+                    }
+                LutTab.CUSTOM -> Unit
+            }
+        }
+    }
+    val onPick: (String) -> Unit = { id ->
+        onSelect(id)
+        onArmLut()
+    }
+    val body =
+        @Composable {
+            LUTPickerBody(
+                tab = tab,
+                onTab = onTab,
+                selection = selection,
+                onSelect = onPick,
+                builtInEntries = builtInEntries,
+                djiEntries = djiEntries,
+                customEntries = customEntries,
+                onImport = { importer.launch(arrayOf("*/*")) },
+                onClear = { pendingDeletion = it },
+                importError = importError,
+                embedded = embedded,
+                splitComparison = splitComparison,
+                splitVertical = splitVertical,
+                onToggleSplit = onToggleSplit,
+                onSplitVertical = onSplitVertical,
+            )
+        }
+
+    if (embedded) {
+        body()
+    } else {
+        BackHandler(enabled = onClose != null, onBack = { onClose?.invoke() })
+        Column(
+            Modifier.fillMaxSize()
+                .background(LiveDesign.background)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(20.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("LUT", color = LiveDesign.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                if (onClose != null) {
+                    Text(
+                        "Done",
+                        color = LiveDesign.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier =
+                            Modifier.chromeClickable(onClick = onClose)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            body()
+        }
+    }
+
+    val pending = pendingDeletion
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeletion = null },
+            title = { Text("Clear ${LutCatalog.displayName(pending)}?") },
+            text = { Text("This removes the stored LUT from this device. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeletion = null
+                        runCatching { LutCatalog.deleteCustom(pending, customDir) }
+                            .onSuccess {
+                                customRevision += 1
+                                if (selection == LutCatalog.customId(pending)) {
+                                    onSelect(LutCatalog.AUTO)
+                                    onArmLut()
+                                }
+                            }
+                            .onFailure { error ->
+                                deletionError = error.message ?: "The LUT could not be deleted."
+                            }
+                    }
+                ) { Text("Clear LUT", color = StartupColors.destructive) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeletion = null }) { Text("Cancel") } },
+        )
+    }
+    if (deletionError != null) {
+        AlertDialog(
+            onDismissRequest = { deletionError = null },
+            title = { Text("Couldn’t Delete LUT") },
+            text = { Text(deletionError ?: "The LUT could not be deleted.") },
+            confirmButton = { TextButton(onClick = { deletionError = null }) { Text("OK") } },
+        )
+    }
+}
+
+@Composable
+private fun LUTPickerBody(
+    tab: LutTab,
+    onTab: (LutTab) -> Unit,
+    selection: String,
+    onSelect: (String) -> Unit,
+    builtInEntries: List<LutEntry>,
+    djiEntries: List<LutEntry>,
+    customEntries: List<LutEntry>,
+    onImport: () -> Unit,
+    onClear: (String) -> Unit,
+    importError: String?,
+    embedded: Boolean,
+    splitComparison: Boolean,
+    splitVertical: Boolean,
+    onToggleSplit: () -> Unit,
+    onSplitVertical: (Boolean) -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LutSegmentedButtons(
+            items = LutTab.entries.map { it.label },
+            selected = tab.label,
+        ) { label ->
+            LutTab.entries.firstOrNull { it.label == label }?.let(onTab)
+        }
+        Box(Modifier.fillMaxWidth().height(LutContentHeight)) {
+            when (tab) {
+                LutTab.BUILT_IN ->
+                    CatalogTab(
+                        caption = builtInCaption(selection),
+                        entries = builtInEntries,
+                        selection = selection,
+                        fallbackId = LutCatalog.AUTO,
+                        onSelect = onSelect,
+                    )
+                LutTab.DJI ->
+                    CatalogTab(
+                        caption = djiCaption(selection),
+                        entries = djiEntries,
+                        selection = selection,
+                        fallbackId = LutCatalog.DJI_AUTO,
+                        onSelect = onSelect,
+                    )
+                LutTab.CUSTOM ->
+                    CustomTab(
+                        imported = customEntries,
+                        selection = selection,
+                        onImport = onImport,
+                        onSelect = onSelect,
+                        onClear = onClear,
+                    )
+            }
+        }
+        if (!embedded) {
+            LUTSplitComparisonBar(
+                splitComparison = splitComparison,
+                splitVertical = splitVertical,
+                onToggleSplit = onToggleSplit,
+                onSplitVertical = onSplitVertical,
+            )
+        }
+        if (importError != null) {
+            Text(
+                importError,
+                color = StartupColors.destructive,
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatalogTab(
+    caption: String,
+    entries: List<LutEntry>,
+    selection: String,
+    fallbackId: String,
+    onSelect: (String) -> Unit,
+) {
+    val inCatalog = entries.any { LutCatalog.matches(it, selection) }
+    val wheelSelection = if (inCatalog) selection else fallbackId
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            caption,
+            color = LiveDesign.muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier =
+                Modifier.fillMaxWidth()
+                    .height(LutCaptionHeight)
+                    .padding(bottom = 4.dp),
+        )
+        LutDrumWheel(
+            entries = entries,
+            selection = wheelSelection,
+            onSelect = onSelect,
+            modifier = Modifier.fillMaxWidth().height(LutContentHeight - LutCaptionHeight - 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun CustomTab(
+    imported: List<LutEntry>,
+    selection: String,
+    onImport: () -> Unit,
+    onSelect: (String) -> Unit,
+    onClear: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(50))
+                .background(LiveDesign.glassBright)
+                .clickable(onClick = onImport)
+                .padding(vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("Import .cube", color = LiveDesign.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(6.dp))
+        if (imported.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    "Imported looks land here. Auto stays on Built-in or DJI.",
+                    color = LiveDesign.muted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        } else {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                imported.forEach { entry ->
+                    val selected = LutCatalog.matches(entry, selection)
+                    val fileName = entry.fileName ?: return@forEach
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
+                            .background(if (selected) LiveDesign.accentDim else LiveDesign.glassBright)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            entry.title,
+                            color = if (selected) LiveDesign.accent else LiveDesign.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier =
+                                Modifier.weight(1f)
+                                    .clickable { onSelect(entry.id) }
+                                    .padding(vertical = 6.dp),
+                        )
+                        Box(
+                            Modifier.clip(RoundedCornerShape(50))
+                                .background(LiveDesign.glassBright)
+                                .clickable { onClear(fileName) }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                        ) {
+                            Text("Clear", color = StartupColors.destructive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+}
+
+/** OpenZCine 50/50: off-by-default; orientation chips only while armed. */
+@Composable
+internal fun LUTSplitComparisonBar(
+    splitComparison: Boolean,
+    splitVertical: Boolean,
+    onToggleSplit: () -> Unit,
+    onSplitVertical: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            Modifier.clip(RoundedCornerShape(50))
+                .background(if (splitComparison) LiveDesign.accentDim else LiveDesign.glassBright)
+                .clickable(onClick = onToggleSplit)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OpcIcon(
+                icon = if (splitComparison) OpcIcon.CIRCLE_CHECK else OpcIcon.CIRCLE,
+                contentDescription = null,
+                tint = if (splitComparison) LiveDesign.accent else LiveDesign.muted,
+                modifier = Modifier.size(18.dp),
+            )
+            Text("50/50", color = LiveDesign.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+        if (splitComparison) {
+            LutSegmentedButtons(
+                items = listOf("Left / Right", "Top / Bottom"),
+                selected = if (splitVertical) "Left / Right" else "Top / Bottom",
+                modifier = Modifier.weight(1f),
+            ) { label ->
+                onSplitVertical(label == "Left / Right")
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun LutSegmentedButtons(
+    items: List<String>,
+    selected: String,
+    modifier: Modifier = Modifier,
+    onSelect: (String) -> Unit,
+) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { item ->
+            val on = item == selected
+            Box(
+                Modifier.weight(1f)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (on) LiveDesign.accentDim else LiveDesign.glassBright)
+                    .clickable { onSelect(item) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    item,
+                    color = if (on) LiveDesign.accent else LiveDesign.muted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * iOS `AccentDrumWheel`: snapping wheel — the settled row renders large in
+ * accent between two hairlines; neighbours dim above and below.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LutDrumWheel(
+    entries: List<LutEntry>,
+    selection: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (entries.isEmpty()) return
+    val selectedIndex = entries.indexOfFirst { LutCatalog.matches(it, selection) }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    val fling =
+        rememberSnapFlingBehavior(
+            lazyListState = listState,
+            snapPosition = SnapPosition.Center,
+        )
+    val centeredIndex by remember {
+        derivedStateOf {
+            val layout = listState.layoutInfo
+            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
+            layout.visibleItemsInfo
+                .minByOrNull { abs(it.offset + it.size / 2 - center) }
+                ?.index ?: DRUM_NOT_LAID_OUT
+        }
+    }
+    LaunchedEffect(entries, selection) {
+        val index = entries.indexOfFirst { LutCatalog.matches(it, selection) }.coerceAtLeast(0)
+        if (listState.isScrollInProgress) return@LaunchedEffect
+        if (centeredIndex == index) return@LaunchedEffect
+        listState.scrollToItem(index)
+    }
+    LaunchedEffect(listState, entries) {
+        snapshotFlow { listState.isScrollInProgress to centeredIndex }
+            .collect { (scrolling, index) ->
+                if (scrolling) return@collect
+                val entry = entries.getOrNull(index) ?: return@collect
+                if (!LutCatalog.matches(entry, selection)) onSelect(entry.id)
+            }
+    }
+    BoxWithConstraints(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = LutDrumRowHeight * 2, max = LutDrumRowHeight * 3)
+            .height(LutContentHeight - LutCaptionHeight - 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val actualHeight = maxHeight
+        val edgePadding = ((actualHeight - LutDrumRowHeight) / 2).coerceAtLeast(0.dp)
+        LazyColumn(
+            state = listState,
+            flingBehavior = fling,
+            contentPadding = PaddingValues(vertical = edgePadding),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .height(actualHeight)
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val fade = size.height * 0.22f
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                1f to Color.Black,
+                                endY = fade,
+                            ),
+                            size = Size(size.width, fade),
+                            blendMode = BlendMode.DstIn,
+                        )
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.Black,
+                                1f to Color.Transparent,
+                                startY = size.height - fade,
+                                endY = size.height,
+                            ),
+                            topLeft = Offset(0f, size.height - fade),
+                            size = Size(size.width, fade),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
+        ) {
+            items(entries.size, key = { entries[it].id }) { index ->
+                val entry = entries[index]
+                val centered = index == centeredIndex
+                Box(
+                    Modifier.fillMaxWidth()
+                        .height(LutDrumRowHeight)
+                        .pointerInput(entry.id) {
+                            detectTapGestures(onTap = { onSelect(entry.id) })
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        entry.title,
+                        style =
+                            LiveType.mono(
+                                if (centered) 30f else 23f,
+                                if (centered) FontWeight.SemiBold else FontWeight.Normal,
+                            ),
+                        color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Box(
+            Modifier.fillMaxWidth()
+                .height(1.dp)
+                .offset(y = -LutDrumRowHeight / 2)
+                .background(LiveDesign.hairlineStrong),
+        )
+        Box(
+            Modifier.fillMaxWidth()
+                .height(1.dp)
+                .offset(y = LutDrumRowHeight / 2)
+                .background(LiveDesign.hairlineStrong),
+        )
+    }
+}
+
+private fun builtInCaption(selection: String): String =
+    when (selection) {
+        LutCatalog.AUTO -> "App looks for this color / camera"
+        LutCatalog.OFF -> "No matching look for this color / camera"
+        "officialDLog" -> "Built-in D-Log look"
+        "officialDLog2" -> "Built-in D-Log2 look"
+        else -> "App looks for this color / camera"
+    }
+
+private fun djiCaption(selection: String): String =
+    when (selection) {
+        LutCatalog.DJI_AUTO -> "Official DJI looks for this color / camera"
+        else ->
+            if (LutCatalog.categoryOf(selection) == LutCategory.DJI) {
+                "Official DJI Rec.709 cube"
+            } else {
+                "Official DJI looks for this color / camera"
+            }
+    }
+
+private fun importCube(context: Context, uri: Uri, directory: File): LutEntry {
+    runCatching {
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    val rawName = queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "Imported.cube"
+    val bytes =
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("The .cube file could not be read.")
+    return LutCatalog.importCube(rawName, bytes, directory)
+}
+
+private fun queryDisplayName(context: Context, uri: Uri): String? {
+    val cursor = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) return it.getString(index)
+        }
+    }
+    return null
+}

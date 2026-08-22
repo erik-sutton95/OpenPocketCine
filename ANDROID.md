@@ -43,3 +43,26 @@ Done in-tree (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
 2. `OpenPocketCineAndroidFacade` + `CJNI` in `Package.swift` (`#if os(Android)` JNI).
 3. Gradle `:app:stageSwiftCore` stages `libOpenPocketCineAndroid.so`.
 4. Compose splash → empty-store wizard / saved list → live HEVC (MediaCodec) using enable-once + ACK pump.
+
+## Operator parity (iOS baseline)
+
+The Compose shell now tracks the iOS operator surface, with Apple-only pieces skipped:
+
+- **Connection:** BLE → SoftAP → UDP datalink, FeedWatchdog-style enable policy (never 1 Hz `0x09/0xa8`), session recovery that holds the last frame, Nano AVC + Pocket HEVC via MediaCodec 720p, cached Wi-Fi creds in private prefs (not saved-camera JSON).
+- **Live chrome:** landscape/portrait layout metrics matching iOS (`LiveDesign`), DISP 1/2 maps, chrome editor, record confirmation, zoom chip, gimbal recenter/flip, capture sheets (ISO/shutter angle/EV/WB/focus/audio/format/color).
+- **Assists:** toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, AUDIO, GUIDES, GRID, CROSS, MIRROR). Canvas paints guides/grid/crosshair/scope panels. LUT / PEAK / FALSE / ZEBRA paint on the live HEVC picture through GLES (`FeedEffectsGlProgram` on `GL_TEXTURE_EXTERNAL_OES`); 50/50 split follows `assist.splitComparison`. WAVE / PARADE / HISTO / VECTOR / LIGHTS traces still wait on JNI LiveColorScience samples.
+- **Operator Setup:** seven tabs (Link, Sharing, View Assist, Controls, Display, Storage, System), DJI Black, Sora + IBM Plex, NOTICE legal page. Frame.io is **Not configured** (optional on iOS too).
+- **Media:** camera catalog + SoftAP HTTP cache + ExoPlayer/photo viewer + system share. Playback View Assist rail (independent of live) and HFR conform preview; GPU LUT/peaking/zebra on the clip is still AGSL follow-up. No Frame.io hop.
+
+Skip / later: VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL/De-SQ/MAG.
+
+OpenZCine Android patterns adopted (not Nikon PTP/USB/Wear/OCR):
+
+- Keystore AES/GCM Wi-Fi password store (`CameraWifiCredentialStore`)
+- `WIFI_MODE_FULL_LOW_LATENCY` lock while live
+- In-app-gated operator haptics
+- AAR `compileSdk` 37 metadata gate disabled so the project stays on SDK 36
+- Shared `CubeLUT` packer (`LUTLibraryWire`) for GLES-ready RGBA cubes
+- GLES ES2 feed-effect shaders under `assets/shaders/`. MediaCodec writes an OES `SurfaceTexture`; `LiveFeedEffectsSession` blits to 2D and runs `FeedEffectsGlProgram` into the TextureView (Kyant can still sample the picture).
+- Media cache complete-at-exact-length + `noBackupFilesDir`
+- Sticky `ACTION_BATTERY_CHANGED` readout instead of a 1 Hz poll

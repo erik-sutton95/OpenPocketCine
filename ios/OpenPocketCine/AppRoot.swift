@@ -389,6 +389,7 @@ struct AppRoot: View {
 /// Connection home: first-pair wizard, or saved cameras. Mirrors OpenZCine `LinkExperience`.
 struct LinkExperience: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         GeometryReader { proxy in
@@ -402,8 +403,8 @@ struct LinkExperience: View {
                     title: headerTitle,
                     statusTitle: statusTitle,
                     isBusy: isBusy,
-                    onPrivacy: { model.homePanel = .privacy },
-                    onTerms: { model.homePanel = .terms }
+                    onPrivacy: { if let url = OpenPocketCineLinks.privacy { openURL(url) } },
+                    onTerms: { if let url = OpenPocketCineLinks.terms { openURL(url) } }
                 )
                     .padding(.horizontal, 20)
 
@@ -432,7 +433,7 @@ struct LinkExperience: View {
 
     private var headerTitle: String {
         if model.shouldShowWizard { return "Connection setup" }
-        if !model.savedCameras.isEmpty { return "Your cameras" }
+        if !model.savedCameras.isEmpty { return "Operator Setup" }
         return "Find your camera"
     }
 

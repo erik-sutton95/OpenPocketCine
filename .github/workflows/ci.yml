@@ -1,17 +1,18 @@
 name: CI
 
+# One suite per pull request. `push` of feat/** (etc.) used to run in parallel
+# with `pull_request` for the same SHA, so GitHub listed every job twice and
+# CI gate failed twice whenever anything failed. Post-merge coverage is `push`
+# to main. Re-run a branch without a PR via workflow_dispatch.
+#
+# Required check on `main` is **CI gate**. Native / Android / handbook skip when
+# their paths did not change; skip is success. Do not add those job names to
+# branch protection — a skipped required check blocks the PR.
 on:
   push:
-    branches:
-      - main
-      - "feature/**"
-      - "feat/**"
-      - "fix/**"
-      - "docs/**"
-      - "chore/**"
-      - "ci/**"
-      - "codex/**"
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,7 @@ permissions:
   pull-requests: read # dorny/paths-filter lists changed PR files via the API
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,6 +32,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Gitleaks
+        # Digest-pinned for reproducibility. Update the version manually when needed. v8.30.1
+        uses: docker://ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+        with:
+          args: "detect --source=. --redact --no-banner --config=.gitleaks.toml"
 
       - name: Repository hygiene
         run: ./scripts/check-repository-hygiene.sh
@@ -79,20 +86,6 @@ jobs:
         with:
           args: "-color"
 
-  secrets:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Gitleaks
-        # Digest-pinned for reproducibility. Update the version manually when needed. v8.30.1
-        uses: docker://ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-        with:
-          args: "detect --source=. --redact --no-banner --config=.gitleaks.toml"
-
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
@@ -101,13 +94,15 @@ jobs:
       android: ${{ steps.filter.outputs.android }}
       handbook: ${{ steps.filter.outputs.handbook }}
     steps:
-      # `dorny/paths-filter` fetches the base ref to diff on push events, which needs the checkout's
-      # git credentials — so this job keeps them (unlike the others). It runs no repository code, so
-      # the token is never exposed to untrusted code.
+      # `dorny/paths-filter` fetches the base ref to diff on push / dispatch, which
+      # needs the checkout's git credentials — so this job keeps them (unlike the
+      # others). It runs no repository code, so the token is never exposed to
+      # untrusted code.
       #
-      # On push it runs `git fetch origin <base> <head>`. A head like `docs/foo` is a git refspec
-      # (`docs:foo`), so we fetch the default branch with an explicit refspec and keep enough
-      # history that the merge-base already exists and that fetch is skipped.
+      # On push it runs `git fetch origin <base> <head>`. A head like `docs/foo`
+      # (workflow_dispatch on a slash branch) is a git refspec (`docs:foo`), so we
+      # fetch the default branch with an explicit refspec and keep enough history
+      # that the merge-base already exists and that fetch is skipped.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -183,6 +178,13 @@ jobs:
       # Do not use skiptools/swift-android-action: it references actions/cache@v5 and
       # reactivecircus/android-emulator-runner@v2, which SHA pinning rejects even when
       # those steps are skipped. Ubuntu 24.04 runners already ship Swift 6.3.3.
+      # The runner image does not export ANDROID_NDK_HOME; the install script
+      # needs NDK 27 for the Swift Android SDK sysroot.
+      - name: Set up Android NDK 27
+        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        with:
+          ndk-version: r27c
+          link-to-sdk: true
       - name: Install Swift Android SDK
         run: ./scripts/ci-install-swift-android.sh
 
@@ -219,10 +221,10 @@ jobs:
     # The single required status check on `main` (name must stay "CI gate"). `native`,
     # `android`, and `handbook` are conditional, and a required check that never reports
     # leaves a pull request blocked forever — so this job always runs and collapses every
-    # other job's result into one verdict. Skipped native/android while the repository is
-    # still private is success.
+    # other job's result into one verdict. Path-filter skips and private-repo native/
+    # android skips are success.
     if: always()
-    needs: [meta, secrets, changes, native, android, handbook]
+    needs: [meta, changes, native, android, handbook]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed or been deliberately skipped

@@ -2,46 +2,55 @@ import SwiftUI
 
 /// OpenZCine `MonitorLiveViewModuleLayout` / `MonitorSideRailControlLayout` / chrome insets.
 enum LiveChromeMetrics {
-    static let lockButtonSize: CGFloat = 40
-    static let lockBatteryGap: CGFloat = 4
-    static let auxiliaryButtonSize: CGFloat = 63.25
-    static let recordButtonSize: CGFloat = 82.8
-    static let displayButtonWidth: CGFloat = 73.6
-    static let displayButtonHeight: CGFloat = 43.7
-    static let topInfoDeckHeight: CGFloat = 46
-    static let topInfoDeckSideInset: CGFloat = 10
-    static let topInfoDeckControlGap: CGFloat = 12
-    static let bottomBarBottomInset: CGFloat = 14
-    static let bottomModuleSpacing: CGFloat = 12
-    static let railWidth: CGFloat = 82.8
-    static let chromeTop: CGFloat = 14
-    static let chromeLeading: CGFloat = 16
-    static let chromeBottom: CGFloat = 12
-    static let chromeTrailing: CGFloat = 18
+    static var scale: CGFloat = 1
+    static var lockButtonSize: CGFloat { 40 * scale }
+    static var lockBatteryGap: CGFloat { 4 * scale }
+    static var auxiliaryButtonSize: CGFloat { 63.25 * scale }
+    static var recordButtonSize: CGFloat { 82.8 * scale }
+    static var displayButtonWidth: CGFloat { 73.6 * scale }
+    static var displayButtonHeight: CGFloat { 43.7 * scale }
+    static var topInfoDeckHeight: CGFloat { 46 * scale }
+    static var topInfoDeckSideInset: CGFloat { 10 * scale }
+    static var topInfoDeckControlGap: CGFloat { 12 * scale }
+    static var bottomBarBottomInset: CGFloat { 14 * scale }
+    static var bottomModuleSpacing: CGFloat { 12 * scale }
+    static var railWidth: CGFloat { 82.8 * scale }
+    static var chromeTop: CGFloat { 14 * scale }
+    static var chromeLeading: CGFloat { 16 * scale }
+    static var chromeBottom: CGFloat { 12 * scale }
+    static var chromeTrailing: CGFloat { 18 * scale }
     static let feedAspect: CGFloat = 16 / 9
     static let cutoutMinimum: CGFloat = 50
     static let classicNotchRailwardShift: CGFloat = 10
-    static let batteryIndicatorWidth: CGFloat = 38
-    static let batteryPillWidth: CGFloat = 48
-    static let batteryPillHeight: CGFloat = 40
-    static let batteryPillLeading: CGFloat = 8
-    static let batteryPillGap: CGFloat = 6
-    static let batteryInlineGap: CGFloat = 12
-    static let batteryInlineWidth: CGFloat = 52
-    static let zoomChipInset: CGFloat = 10
-    static let zoomButtonSize: CGFloat = 44
-    static let gimbalStickSize: CGFloat = 88
-    static let gimbalKnobSize: CGFloat = 36
-    static let gimbalStickInset: CGFloat = 16
-    static let gimbalStickGap: CGFloat = 8
+    static var batteryIndicatorWidth: CGFloat { 38 * scale }
+    static var batteryPillWidth: CGFloat { 48 * scale }
+    static var batteryPillHeight: CGFloat { 40 * scale }
+    static var batteryPillLeading: CGFloat { 8 * scale }
+    static var batteryPillGap: CGFloat { 6 * scale }
+    static var batteryInlineGap: CGFloat { 12 * scale }
+    static var batteryInlineWidth: CGFloat { 52 * scale }
+    static var zoomChipInset: CGFloat { 10 * scale }
+    static var zoomButtonSize: CGFloat { 44 * scale }
+    static var gimbalStickSize: CGFloat { 88 * scale }
+    static var gimbalKnobSize: CGFloat { 36 * scale }
+    static var gimbalStickInset: CGFloat { 16 * scale }
+    static var gimbalStickGap: CGFloat { 8 * scale }
     /// On-feed stick. Light on dark picture, dark on bright picture.
     static let gimbalStickOpacity: CGFloat = 0.55
-    static let focusResetSize: CGFloat = 40
-    static let focusResetGap: CGFloat = 24
-    static let popupGap: CGFloat = 10
-    static let topPickerGap: CGFloat = 8
-    static let topPickerWidth: CGFloat = 340
-    static let capturePickerMaxWidth: CGFloat = 420
+    static var focusResetSize: CGFloat { 40 * scale }
+    static var focusResetGap: CGFloat { 24 * scale }
+    static var popupGap: CGFloat { 10 * scale }
+    static var topPickerGap: CGFloat { 8 * scale }
+    static var topPickerWidth: CGFloat { 340 * scale }
+    static var capturePickerMaxWidth: CGFloat { 420 * scale }
+    /// Shortest side of the Pro Max / 6.8" board the HUD is authored against.
+    static let chromeScaleReference: CGFloat = 424
+    static let chromeScaleMin: CGFloat = 0.935
+    /// 1 on Pro Max / 6.8"+; 0.935 on compact 360 pt phones; lerp in between.
+    static func chromeScale(shortestSide: CGFloat) -> CGFloat {
+        guard shortestSide > 0 else { return 1 }
+        return min(1, max(chromeScaleMin, shortestSide / chromeScaleReference))
+    }
     /// OpenZCine `PickerPanel` + `GlassPanel` (16+16 pad, 34 close header, 14 gap, 176 drum).
     static let drumPickerHeight: CGFloat = 256
     /// Extra hug when a mode-tab row sits under the drum (ISO / WB / resolution / audio).
@@ -67,10 +76,13 @@ struct LiveLockButton: View {
         Button {
             locked.toggle()
         } label: {
-            Image(systemName: locked ? "lock.fill" : "lock")
-                .font(.system(size: 16, weight: .medium))
+            OpcIcon.lock
+                .frame(width: 16, height: 16)
                 .foregroundStyle(locked ? LiveDesign.accent : LiveDesign.text.opacity(0.86))
-                .frame(width: LiveChromeMetrics.lockButtonSize, height: LiveChromeMetrics.lockButtonSize)
+                .frame(
+                    width: LiveChromeMetrics.lockButtonSize,
+                    height: LiveChromeMetrics.lockButtonSize
+                )
                 .liveChromeGlass(
                     in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
                 )

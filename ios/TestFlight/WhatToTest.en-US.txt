@@ -1,8 +1,8 @@
 New and changed
 
-- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second.
-- The EV tile keeps the number and puts a small face mark on the EV label.
-- Saved cameras keep the camera Wi-Fi when you leave the app, so reconnect should not re-prompt every time.
+- Live lock, settings, media, close, focus-reset, and assist chevrons use simple line icons instead of iPhone-only symbols.
+- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second. The EV tile keeps the number and a small face mark.
+- Saved cameras remember the camera Wi-Fi on this phone, so reconnect should not re-prompt every time.
 - A look that was already on should grade the first picture instead of popping in seconds later.
 - ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
 - The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
@@ -20,7 +20,7 @@ Fixes
 
 What to test
 
-- Set MODE to Auto, open EV, turn Face Priority on. Confirm the EV number is readable, the face mark sits on the EV label, and a face in a dark or bright frame moves EV quickly for a couple of seconds, then about once a second.
+- On the live monitor, confirm lock, settings, media, and the close X are simple line icons. Set MODE to Auto, open EV, turn Face Priority on. Confirm the EV number is readable, the face mark sits on the EV label, and a face in a dark or bright frame moves EV quickly for a couple of seconds, then about one third-stop a second.
 - Put a face in frame, then turn Face Priority off — EV should return to the value from before it was on (or 0.0).
 - Open a clip, leave it, and confirm live view returns in a couple of seconds — not a long black well.
 - On ISO, turn Auto Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.

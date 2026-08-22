@@ -13,7 +13,7 @@ is_forbidden_path() {
   local path="$1"
 
   case "$path" in
-    .env.example|*/.env.example|Tests/*.cube|ios/OpenPocketCine/Resources/*.cube)
+    .env.example|*/.env.example|Tests/*.cube|ios/OpenPocketCine/Resources/*.cube|Apps/Android/app/src/main/assets/luts/*.cube)
       return 1
       ;;
   esac

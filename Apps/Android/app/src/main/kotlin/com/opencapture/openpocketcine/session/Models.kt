@@ -11,6 +11,14 @@ data class CameraModel(
     val verified: Boolean = false,
     val isDrone: Boolean = false,
     val pairingToken: String = "osmo",
+    /** `"pocket"` / `"nano"` / `"other"`. Missing JSON defaults to Pocket. */
+    val family: String = "pocket",
+    /** `0x09/0xa8` receiver. Pocket `0x08`; Nano `0x41`. */
+    val liveViewEnableReceiver: Int = 0x08,
+    val usesNanoLiveViewGate: Boolean = false,
+    val supportsTapFocus: Boolean = true,
+    val supportsFocusMode: Boolean = true,
+    val usesCapturedLiveEnable: Boolean = true,
 ) {
     companion object {
         val default = CameraModel(name = "DJI Osmo camera")
@@ -27,6 +35,12 @@ data class CameraModel(
                     verified = obj.optBoolean("verified", false),
                     isDrone = obj.optBoolean("isDrone", false),
                     pairingToken = obj.optString("pairingToken", "osmo"),
+                    family = obj.optString("family", "pocket").ifBlank { "pocket" },
+                    liveViewEnableReceiver = obj.optInt("liveViewEnableReceiver", 0x08),
+                    usesNanoLiveViewGate = obj.optBoolean("usesNanoLiveViewGate", false),
+                    supportsTapFocus = obj.optBoolean("supportsTapFocus", true),
+                    supportsFocusMode = obj.optBoolean("supportsFocusMode", true),
+                    usesCapturedLiveEnable = obj.optBoolean("usesCapturedLiveEnable", true),
                 )
             }.getOrElse { default }
         }
@@ -124,6 +138,29 @@ data class CameraStatus(
     val availableShutterDenoms: List<Int> = emptyList(),
     /** Legal ISO indices from `camcap_iso`. */
     val availableIsoIndices: List<Int> = emptyList(),
+    /** `cam_expo_param` `@6` EV raw (`0x10` = 0.0). `-1` unknown. */
+    val evComp: Int = -1,
+    /** `0x8E` pid `0x000F` Auto ISO ceiling. `-1` unknown. */
+    val isoLimit: Int = -1,
+    /** Legal `0x02/0x42` values from `camcap_color_mode`. */
+    val availableColorModes: List<Int> = emptyList(),
+    /** AF point from `cam_lens_state`. 0.5, 0.5 until a tap. */
+    val focusX: Double = 0.5,
+    val focusY: Double = 0.5,
+    val hasCameraFocusPoint: Boolean = false,
+    /** `0x8E` pid `0x003B` AF-C track. `-1` unknown. */
+    val focusTrack: Int = -1,
+    /** `cam_lens_state` u16-LE `@14`. `-1` unknown. */
+    val zoomLens: Int = -1,
+    /** Hybrid zoom (1.0×…12×). Null until lens/`cam_fov` lands. */
+    val zoomFactor: Double? = null,
+    /** Last `0x8E` pid `0x0039` blob `@5` non-zero. Null unknown. */
+    val glamourEnabled: Boolean? = null,
+    /** Live VU from `cam_audio_status_v2`, dBFS. Floor is −60. */
+    val audioMetersLeft: Double = -60.0,
+    val audioMetersRight: Double = -60.0,
+    val audioPeakLeft: Double = -60.0,
+    val audioPeakRight: Double = -60.0,
 ) {
     val shootingModeLabel: String
         get() =
@@ -149,8 +186,8 @@ data class CameraStatus(
     val isoLabel: String
         get() =
             when {
-                iso > 0 -> "$iso"
                 isoIndex == 0 -> "Auto"
+                iso > 0 -> "$iso"
                 else -> "—"
             }
 
@@ -166,7 +203,7 @@ data class CameraStatus(
     val recFormatLabel: String
         get() {
             val res = resolutionLabel
-            val rate = if (fps > 0) "$fps" else "—"
+            val rate = if (fps > 0) "${fps}p" else "—"
             return if (res == "—") rate else "$res $rate"
         }
 
@@ -179,12 +216,7 @@ data class CameraStatus(
             }
 
     val focusLabel: String
-        get() =
-            when (focusMode) {
-                CameraCommands.FOCUS_SINGLE -> "Single"
-                CameraCommands.FOCUS_CONTINUOUS -> "Cont"
-                else -> "—"
-            }
+        get() = FocusOption.resolve(focusMode, focusTrack)?.chip ?: "—"
 
     val audioLabel: String
         get() =
@@ -192,7 +224,7 @@ data class CameraStatus(
                 CameraCommands.AUDIO_MONO -> "Mono"
                 CameraCommands.AUDIO_STEREO -> "Stereo"
                 CameraCommands.AUDIO_SPATIAL -> "Spatial"
-                else -> "Audio"
+                else -> "—"
             }
 
     val hasHudFields: Boolean
@@ -205,7 +237,15 @@ data class CameraStatus(
                 focusMode >= 0 ||
                 audioChannel >= 0 ||
                 audioDspBlob.isNotEmpty() ||
-                zoomFactorRaw > 0
+                zoomFactorRaw > 0 ||
+                evComp >= 0 ||
+                isoLimit >= 0 ||
+                availableColorModes.isNotEmpty() ||
+                hasCameraFocusPoint ||
+                focusTrack >= 0 ||
+                zoomLens >= 0 ||
+                zoomFactor != null ||
+                glamourEnabled != null
 
     val storageLabel: String
         get() {
@@ -262,6 +302,20 @@ data class CameraStatus(
             zoomFactorRaw = prev.zoomFactorRaw,
             availableShutterDenoms = prev.availableShutterDenoms,
             availableIsoIndices = prev.availableIsoIndices,
+            evComp = prev.evComp,
+            isoLimit = prev.isoLimit,
+            availableColorModes = prev.availableColorModes,
+            focusX = prev.focusX,
+            focusY = prev.focusY,
+            hasCameraFocusPoint = prev.hasCameraFocusPoint,
+            focusTrack = prev.focusTrack,
+            zoomLens = prev.zoomLens,
+            zoomFactor = prev.zoomFactor,
+            glamourEnabled = prev.glamourEnabled,
+            audioMetersLeft = prev.audioMetersLeft,
+            audioMetersRight = prev.audioMetersRight,
+            audioPeakLeft = prev.audioPeakLeft,
+            audioPeakRight = prev.audioPeakRight,
         )
 
     fun toJson(): String =
@@ -303,7 +357,40 @@ data class CameraStatus(
             .put("zoomFactorRaw", zoomFactorRaw)
             .put("availableShutterDenoms", JSONArray(availableShutterDenoms))
             .put("availableIsoIndices", JSONArray(availableIsoIndices))
+            .put("evComp", evComp)
+            .put("isoLimit", isoLimit)
+            .put("availableColorModes", JSONArray(availableColorModes))
+            .put("focusX", focusX)
+            .put("focusY", focusY)
+            .put("hasCameraFocusPoint", hasCameraFocusPoint)
+            .put("focusTrack", focusTrack)
+            .put("zoomLens", zoomLens)
+            .put("zoomFactor", zoomFactor ?: JSONObject.NULL)
+            .put("glamourEnabled", glamourEnabled ?: JSONObject.NULL)
+            .put("windNR", windNRJson())
+            .put("directionalAudio", directionalAudioJson())
+            .put("audioMetersLeft", audioMetersLeft)
+            .put("audioMetersRight", audioMetersRight)
+            .put("audioPeakLeft", audioPeakLeft)
+            .put("audioPeakRight", audioPeakRight)
             .toString()
+
+    /** Core `WindNoiseReduction` raw (`1A`/`18`); Kotlin HUD keeps `windNr` as 0/1. */
+    private fun windNRJson(): Int =
+        when (windNr) {
+            0 -> CameraCommands.WIND_OFF
+            1 -> CameraCommands.WIND_ON
+            else -> windNr
+        }
+
+    /** Core `DirectionalAudio` raw (`DA`/`3A`/`BA`); HUD keeps 0/1/2. */
+    private fun directionalAudioJson(): Int =
+        when (directionalAudio) {
+            0 -> CameraCommands.DIR_ALL
+            1 -> CameraCommands.DIR_FRONT
+            2 -> CameraCommands.DIR_FRONT_BACK
+            else -> directionalAudio
+        }
 
     companion object {
         fun fromJson(raw: String?): CameraStatus {
@@ -351,6 +438,22 @@ data class CameraStatus(
                     zoomFactorRaw = obj.optInt("zoomFactorRaw", 0),
                     availableShutterDenoms = intList(obj.optJSONArray("availableShutterDenoms")),
                     availableIsoIndices = intList(obj.optJSONArray("availableIsoIndices")),
+                    evComp = obj.optInt("evComp", -1),
+                    isoLimit = obj.optInt("isoLimit", -1),
+                    availableColorModes = intList(obj.optJSONArray("availableColorModes")),
+                    focusX = obj.optDouble("focusX", 0.5),
+                    focusY = obj.optDouble("focusY", 0.5),
+                    hasCameraFocusPoint = obj.optBoolean("hasCameraFocusPoint", false),
+                    focusTrack = obj.optInt("focusTrack", -1),
+                    zoomLens = obj.optInt("zoomLens", -1),
+                    zoomFactor = optionalDouble(obj, "zoomFactor"),
+                    glamourEnabled = optionalBoolean(obj, "glamourEnabled"),
+                    windNr = mapWindNr(obj),
+                    directionalAudio = mapDirectionalAudio(obj),
+                    audioMetersLeft = obj.optDouble("audioMetersLeft", -60.0),
+                    audioMetersRight = obj.optDouble("audioMetersRight", -60.0),
+                    audioPeakLeft = obj.optDouble("audioPeakLeft", -60.0),
+                    audioPeakRight = obj.optDouble("audioPeakRight", -60.0),
                 ).withAudioDspAt2()
             }.getOrElse { CameraStatus() }
         }
@@ -359,6 +462,41 @@ data class CameraStatus(
             if (arr == null) return emptyList()
             return buildList(arr.length()) {
                 for (i in 0 until arr.length()) add(arr.optInt(i))
+            }
+        }
+
+        private fun optionalDouble(obj: JSONObject, key: String): Double? {
+            if (!obj.has(key) || obj.isNull(key)) return null
+            val value = obj.optDouble(key)
+            return if (value.isNaN()) null else value
+        }
+
+        private fun optionalBoolean(obj: JSONObject, key: String): Boolean? {
+            if (!obj.has(key) || obj.isNull(key)) return null
+            return obj.optBoolean(key)
+        }
+
+        private fun mapWindNr(obj: JSONObject): Int {
+            val raw =
+                when {
+                    obj.has("windNR") && !obj.isNull("windNR") -> obj.optInt("windNR", -1)
+                    obj.has("windNr") && !obj.isNull("windNr") -> obj.optInt("windNr", -1)
+                    else -> -1
+                }
+            return when (raw) {
+                CameraCommands.WIND_ON, 1 -> 1
+                CameraCommands.WIND_OFF, 0 -> 0
+                else -> if (raw < 0) -1 else raw
+            }
+        }
+
+        private fun mapDirectionalAudio(obj: JSONObject): Int {
+            val raw = obj.optInt("directionalAudio", -1)
+            return when (raw) {
+                CameraCommands.DIR_ALL, 0 -> 0
+                CameraCommands.DIR_FRONT, 1 -> 1
+                CameraCommands.DIR_FRONT_BACK, 2 -> 2
+                else -> if (raw < 0) -1 else raw
             }
         }
     }

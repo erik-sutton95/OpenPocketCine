@@ -8,7 +8,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  triage:
+  labels:
+    name: PR labels
     runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0

@@ -102,10 +102,11 @@ delete bad takes before you pack up.
   </a>
 </p>
 
-**Playback.** On iOS, the same scopes and assists as live view, armed from the playback
-rail. Export with an optional baked LUT, preview high-frame-rate clips at conform speed,
-share natively, or upload to [Frame.io](https://www.frame.io/) when Camera to Cloud is
-configured.
+**Playback.** On iOS and Android, the same scopes and assists as live view, armed from
+the playback rail (GPU LUT / peaking / zebra on Android playback is a follow-up; the
+chips already persist). Export with an optional baked LUT on iOS, preview high-frame-rate
+clips at conform speed, share natively, or upload to [Frame.io](https://www.frame.io/)
+when Camera to Cloud is configured.
 
 <p>
   <a href="https://www.frame.io/">
@@ -132,8 +133,9 @@ configured.
 - Clip browsing, playback, LUT preview, LUT bake on export, and optional Frame.io on iOS
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
-The native Android implementation lives in this repository as a phone shell with live pairing and
-HEVC live view. It is not on Google Play. Clip library, GPU scopes, and LUT baking are iOS today.
+The native Android implementation lives in this repository as a phone shell with live pairing,
+HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. It is not on Google Play.
+Clip export LUT bake and GPU scopes are iOS today.
 
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may
 appear in scan. Action and 360 live view is not captured yet.

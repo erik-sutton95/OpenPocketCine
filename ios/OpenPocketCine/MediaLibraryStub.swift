@@ -1,8 +1,8 @@
 import AVFoundation
 import ImageIO
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 /// Decodes cell images downsampled to a bounded pixel size, off the main actor.
 actor MediaCellImageLoader {
@@ -98,12 +98,12 @@ enum MediaCategoryTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var systemImage: String {
+    var opcIcon: OpcIcon {
         switch self {
-        case .all: "square.grid.2x2"
-        case .videos: "film.stack"
-        case .photos: "photo.on.rectangle.angled"
-        case .favorites: "star"
+        case .all: .layoutGrid
+        case .videos: .film
+        case .photos: .image
+        case .favorites: .star
         }
     }
 
@@ -130,10 +130,10 @@ enum MediaBrowserLayout: String, CaseIterable {
     case grid
     case list
 
-    var toggleIcon: String {
+    var toggleIcon: OpcIcon {
         switch self {
-        case .grid: "list.bullet"
-        case .list: "square.grid.2x2"
+        case .grid: .layoutList
+        case .list: .layoutGrid
         }
     }
 
@@ -412,13 +412,17 @@ struct MediaLibraryView: View {
                                 mainHeader
                                 gridContent
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .frame(
+                                maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(.top, OperatorPanelMetrics.mediaTopPadding(safeArea: safeArea))
-                .padding(.leading, OperatorPanelMetrics.mediaLeadingPadding(safeArea: safeArea, portrait: portrait))
+                .padding(
+                    .leading,
+                    OperatorPanelMetrics.mediaLeadingPadding(safeArea: safeArea, portrait: portrait)
+                )
                 .padding(.trailing, OperatorPanelMetrics.mediaTrailingPadding(safeArea: safeArea))
                 .padding(.bottom, OperatorPanelMetrics.mediaBottomPadding(safeArea: safeArea))
             }
@@ -529,8 +533,8 @@ struct MediaLibraryView: View {
             category = tab
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: tab.systemImage)
-                    .font(.system(size: 12, weight: .semibold))
+                tab.opcIcon
+                    .frame(width: 12, height: 12)
                     .frame(width: 16)
                 Text(tab.rawValue)
                     .font(LiveType.ui(size: 12, weight: active ? .semibold : .medium))
@@ -612,12 +616,16 @@ struct MediaLibraryView: View {
             Button {
                 isBatchDeleteConfirmPresented = true
             } label: {
-                Label("Delete", systemImage: "trash")
-                    .font(LiveType.ui(size: 14, weight: .semibold))
-                    .foregroundStyle(selectedIDs.isEmpty ? LiveDesign.faint : Color.red)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .overlay(Capsule().stroke(LiveDesign.hairline, lineWidth: 1))
+                Label {
+                    Text("Delete")
+                } icon: {
+                    OpcIcon.trash.frame(width: 14, height: 14)
+                }
+                .font(LiveType.ui(size: 14, weight: .semibold))
+                .foregroundStyle(selectedIDs.isEmpty ? LiveDesign.faint : Color.red)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .overlay(Capsule().stroke(LiveDesign.hairline, lineWidth: 1))
             }
             .buttonStyle(.zcTapTarget)
             .disabled(selectedIDs.isEmpty)
@@ -637,16 +645,20 @@ struct MediaLibraryView: View {
             Button {
                 Task { await share(selectedFiles) }
             } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .font(LiveType.ui(size: 14, weight: .semibold))
-                    .foregroundStyle(selectedIDs.isEmpty ? LiveDesign.faint : LiveDesign.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        selectedIDs.isEmpty ? Color.clear : LiveDesign.accentDim,
-                        in: Capsule()
-                    )
-                    .overlay(Capsule().stroke(LiveDesign.hairline, lineWidth: 1))
+                Label {
+                    Text("Share")
+                } icon: {
+                    OpcIcon.share.frame(width: 14, height: 14)
+                }
+                .font(LiveType.ui(size: 14, weight: .semibold))
+                .foregroundStyle(selectedIDs.isEmpty ? LiveDesign.faint : LiveDesign.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    selectedIDs.isEmpty ? Color.clear : LiveDesign.accentDim,
+                    in: Capsule()
+                )
+                .overlay(Capsule().stroke(LiveDesign.hairline, lineWidth: 1))
             }
             .buttonStyle(.zcTapTarget)
             .disabled(selectedIDs.isEmpty)
@@ -654,7 +666,7 @@ struct MediaLibraryView: View {
     }
 
     private var sortButton: some View {
-        MediaActionPill(icon: "arrow.up.arrow.down", title: "SORT", isActive: false) {
+        MediaActionPill(icon: .chevronsUpDown, title: "SORT", isActive: false) {
             sortOrder = sortOrder.next
         }
         .accessibilityLabel("Sort \(sortOrder.menuLabel)")
@@ -665,8 +677,8 @@ struct MediaLibraryView: View {
             session.refreshMedia()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10, weight: .semibold))
+                OpcIcon.refreshCw
+                    .frame(width: 10, height: 10)
                 Text("REFRESH")
                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
             }
@@ -686,8 +698,8 @@ struct MediaLibraryView: View {
             isFilterPopupPresented.toggle()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 10, weight: .semibold))
+                OpcIcon.listFilter
+                    .frame(width: 10, height: 10)
                 Text("FILTER")
                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 if activeFilterCount > 0 {
@@ -913,8 +925,8 @@ struct MediaLibraryView: View {
                 ProgressView()
                     .tint(LiveDesign.accent)
             } else {
-                Image(systemName: "film.stack")
-                    .font(.system(size: 40, weight: .light))
+                OpcIcon.film
+                    .frame(width: 40, height: 40)
                     .foregroundStyle(LiveDesign.faint)
             }
             Text(model.session.mediaFetchInProgress ? "Listing clips" : "No clips yet")
@@ -1045,8 +1057,11 @@ struct MediaLibraryView: View {
         Button {
             layout = layout == .grid ? .list : .grid
         } label: {
-            Image(systemName: layout.toggleIcon)
-                .font(.system(size: SidebarGridControlMetrics.toggleIconSize, weight: .semibold))
+            layout.toggleIcon
+                .frame(
+                    width: SidebarGridControlMetrics.toggleIconSize,
+                    height: SidebarGridControlMetrics.toggleIconSize
+                )
                 .foregroundStyle(LiveDesign.muted)
                 .frame(
                     width: SidebarGridControlMetrics.buttonSize,
@@ -1067,8 +1082,8 @@ struct MediaLibraryView: View {
         return Button {
             thumbnailSize = size
         } label: {
-            Image(systemName: "square.fill")
-                .font(.system(size: size.gridIconSize, weight: .bold))
+            OpcIcon.square.view(filled: true)
+                .frame(width: size.gridIconSize, height: size.gridIconSize)
                 .foregroundStyle(active ? LiveDesign.accent : LiveDesign.muted)
                 .frame(
                     width: SidebarGridControlMetrics.buttonSize,
@@ -1087,7 +1102,7 @@ struct MediaLibraryView: View {
 }
 
 private struct MediaActionPill: View {
-    let icon: String
+    let icon: OpcIcon
     let title: String
     var isActive: Bool
     let action: () -> Void
@@ -1095,8 +1110,8 @@ private struct MediaActionPill: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
+                icon
+                    .frame(width: 10, height: 10)
                 Text(title)
                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                     .lineLimit(1)
@@ -1148,8 +1163,8 @@ private struct MediaClipFavoriteButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: isFavorite ? "star.fill" : "star")
-                .font(.system(size: iconSize))
+            OpcIcon.star.view(filled: isFavorite)
+                .frame(width: iconSize, height: iconSize)
                 .foregroundStyle(isFavorite ? LiveDesign.accent : LiveDesign.faint)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -1217,13 +1232,10 @@ private struct MediaClipListRow: View {
                 Spacer(minLength: 4)
 
                 if isSelecting {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22, weight: .semibold))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(
-                            isSelected ? Color.white : Color.white.opacity(0.92),
-                            isSelected ? LiveDesign.accent : Color.black.opacity(0.45)
-                        )
+                    (isSelected ? OpcIcon.circleCheck : OpcIcon.circle)
+                        .view(filled: isSelected)
+                        .frame(width: 22, height: 22)
+                        .foregroundStyle(isSelected ? LiveDesign.accent : Color.white.opacity(0.92))
                 }
             }
             .contentShape(
@@ -1278,8 +1290,8 @@ private struct MediaClipListRow: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                Image(systemName: isPhoto ? "photo" : "film")
-                    .font(.system(size: 20, weight: .light))
+                (isPhoto ? OpcIcon.image : OpcIcon.film)
+                    .frame(width: 20, height: 20)
                     .foregroundStyle(LiveDesign.faint)
             }
             if let cacheProgress {
@@ -1292,8 +1304,8 @@ private struct MediaClipListRow: View {
             } else if !isDownloaded {
                 ZStack {
                     Color.black.opacity(0.35)
-                    Image(systemName: isPhoto ? "photo.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 18))
+                    (isPhoto ? OpcIcon.image : OpcIcon.circlePlay)
+                        .frame(width: 18, height: 18)
                         .foregroundStyle(LiveDesign.text.opacity(0.9))
                 }
             }
@@ -1393,8 +1405,8 @@ private struct MediaClipCell: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    Image(systemName: isPhoto ? "photo" : "film")
-                        .font(.system(size: 28, weight: .light))
+                    (isPhoto ? OpcIcon.image : OpcIcon.film)
+                        .frame(width: 28, height: 28)
                         .foregroundStyle(LiveDesign.faint)
                 }
                 overlay
@@ -1416,19 +1428,18 @@ private struct MediaClipCell: View {
                         .foregroundStyle(LiveDesign.text)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 4))
+                        .background(
+                            Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 4)
+                        )
                         .padding(8)
                 }
             }
             .overlay(alignment: .topTrailing) {
                 if isSelecting {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 24, weight: .semibold))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(
-                            isSelected ? Color.white : Color.white.opacity(0.92),
-                            isSelected ? LiveDesign.accent : Color.black.opacity(0.45)
-                        )
+                    (isSelected ? OpcIcon.circleCheck : OpcIcon.circle)
+                        .view(filled: isSelected)
+                        .frame(width: 24, height: 24)
+                        .foregroundStyle(isSelected ? LiveDesign.accent : Color.white.opacity(0.92))
                         .padding(8)
                         .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
                 }
@@ -1481,8 +1492,8 @@ private struct MediaClipCell: View {
             ZStack {
                 Color.black.opacity(0.35)
                 VStack(spacing: 4) {
-                    Image(systemName: isPhoto ? "photo.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 26))
+                    (isPhoto ? OpcIcon.image : OpcIcon.circlePlay)
+                        .frame(width: 26, height: 26)
                     Text("On camera")
                         .font(LiveType.ui(size: 10, weight: .semibold))
                 }
@@ -1492,8 +1503,8 @@ private struct MediaClipCell: View {
             VStack {
                 Spacer()
                 HStack {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 22))
+                    OpcIcon.circlePlay
+                        .frame(width: 22, height: 22)
                         .foregroundStyle(LiveDesign.text.opacity(0.9))
                         .padding(8)
                     Spacer()

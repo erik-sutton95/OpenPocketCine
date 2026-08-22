@@ -26,17 +26,18 @@ public enum LiveVideoCodec: Equatable, Sendable {
 
 public enum LiveVideo {
     /// Classify from a NAL's first byte. Parameter sets are unambiguous;
-    /// P-slices alone are not classified.
+    /// P-slices and IRAP slices alone are not classified.
     public static func codec(ofNAL firstByte: UInt8) -> LiveVideoCodec? {
-        // HEVC param sets are 0x40/0x42/0x44. AVC P-slice 0x41 is HEVC type 32
-        // (VPS) if we only look at `(b>>1)&0x3f` — that latched Nano P-frames as HEVC.
+        // HEVC param sets are 0x40/0x42/0x44. Nano AVC SPS/PPS are 0x67/0x68
+        // (nal_ref_idc=3). Do not use `firstByte & 0x1f` — HEVC IDR_N_LP is 0x28,
+        // which is also AVC PPS with nal_ref_idc=1, and that latched Pocket IDRs
+        // as AVC (Android then MediaCodec.configure(AVC) threw; WAITING FOR LIVE VIEW).
+        // AVC P-slice 0x41 is HEVC type 32 if we only look at `(b>>1)&0x3f`.
         switch firstByte {
         case 0x40, 0x42, 0x44: return .hevc
-        default: break
+        case 0x67, 0x68: return .avc
+        default: return nil
         }
-        let avc = Avc.nalType(firstByte)
-        if avc == Avc.sps || avc == Avc.pps || avc == Avc.idr { return .avc }
-        return nil
     }
 
     public static func detect(nals: [[UInt8]]) -> LiveVideoCodec? {
