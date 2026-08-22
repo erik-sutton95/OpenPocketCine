@@ -21,7 +21,6 @@ The iOS Xcode project is generated: `cd ios && xcodegen generate`.
 
 1. BLE scan and pair (GATT FFF0).
 2. Read camera Wi-Fi credentials.
-<<<<<<< HEAD
 3. Join the camera SoftAP (`192.168.2.1`). The phone is on-path only after DHCP
    gives it `192.168.2.2…254` (`CameraSoftAP.isAssociatedIPv4`).
 4. UDP DUML datalink on that LAN, **bound to the camera-local IPv4**, then
