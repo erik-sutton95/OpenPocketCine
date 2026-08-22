@@ -30,7 +30,11 @@ The iOS Xcode project is generated: `cd ios && xcodegen generate`.
    handshake ACKs and dropped HEVC. Keep TCP 7001 poke across UDP rebuilds.
 5. Enable live view once (`0x09/0xa8`) after path + display are ready. Never 1 Hz.
    Media is pktType `0x02`; ACK is pktType `0x04` at 40 Hz echoing the video seq.
-6. Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p.
+6. Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
+   decoder from VPS/SPS/PPS (`0x40/0x42/0x44`) or Nano AVC SPS/PPS (`0x67/0x68`).
+   Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
+   `nal_ref_idc=1`) must not latch AVC — that threw `MediaCodec.configure` and
+   left Waiting for live view up.
 
 ### Policy in Swift, I/O in the shells
 

@@ -52,6 +52,8 @@ Fragments arrive in order — capture order is correct.
 
 A DJI private marker `00 00 01 ff …` (~17 B, NAL type 63) precedes the standard Annex-B NALs. VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
 
+Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or Nano AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view.
+
 ## Window ACK
 
 Mimo sends pktType `0x04` ~40 Hz with cursor = latest **video** transport seq. 1 Hz is not enough once live view is flowing.

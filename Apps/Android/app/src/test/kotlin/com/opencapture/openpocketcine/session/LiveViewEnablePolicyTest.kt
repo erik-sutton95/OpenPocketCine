@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.session
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LiveViewEnablePolicyTest {
@@ -407,6 +408,31 @@ class LiveViewEnablePolicyTest {
         assertTrue(HevcDecoder.isIdrPicture("16,6,8"))
         assertTrue(HevcDecoder.isIdrPicture("5,7,8"))
         assertTrue(!HevcDecoder.isIdrPicture("1,33,34"))
+        assertTrue(!HevcDecoder.isIdrPicture("8"))
+        assertTrue(
+            HevcDecoder.isIdrPicture("8", byteArrayOf(0, 0, 0, 1, 0x28, 0x01)),
+            "HEVC IDR_N_LP must count as IDR even if JNI summarized it as AVC PPS",
+        )
+    }
+
+    @Test
+    fun leftoverPFramesAndIdrNlpDoNotConfigureAsAvc() {
+        // Pocket leftover GOP: TRAIL_R / AUD / SUFFIX_SEI. No VPS/SPS/PPS.
+        val leftover =
+            byteArrayOf(
+                0, 0, 0, 1, 0x02, 0x01,
+                0, 0, 0, 1, 0x46, 0x01,
+                0, 0, 0, 1, 0x50, 0x01,
+            )
+        assertNull(HevcDecoder.detectCodec(leftover, "1,35,40"))
+        // HEVC IDR_N_LP first byte 0x28 == AVC PPS (nal_ref_idc=1). Must wait for VPS.
+        val idrNlp = byteArrayOf(0, 0, 0, 1, 0x28, 0x01)
+        assertNull(HevcDecoder.detectCodec(idrNlp, "20"))
+        assertNull(HevcDecoder.detectCodec(idrNlp, "8"))
+        // IDR then VPS in one AU still latches HEVC from 0x40, not AVC from 0x28.
+        val idrThenVps = byteArrayOf(0, 0, 0, 1, 0x28, 0x01, 0, 0, 0, 1, 0x40, 0x01)
+        assertEquals(HevcDecoder.LiveCodec.HEVC, HevcDecoder.detectCodec(idrThenVps, "20,32"))
+        assertEquals(HevcDecoder.LiveCodec.AVC, HevcDecoder.detectCodec(byteArrayOf(0, 0, 0, 1, 0x68, 0xCE.toByte()), "8"))
     }
 
     @Test

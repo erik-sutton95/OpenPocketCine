@@ -96,15 +96,20 @@ class HevcDecoder {
         if (types.isNotEmpty()) nalTypesSeen = mergeTypes(nalTypesSeen, types)
         val keyframe = SwiftCore.hevcIsKeyframe(accessUnit)
         if (keyframe) lastKeyframeAt = System.currentTimeMillis()
-        val idr = isIdrPicture(types)
+        val idr = isIdrPicture(types, accessUnit)
         val csd = SwiftCore.hevcCsd(accessUnit)
-        if (csd != null) {
+        if (csd != null && detectCodec(csd, types) != null) {
             pendingCsd = csd
             pendingTypes = types
         }
         if (idr) pendingIdr = accessUnit.copyOf()
-        if (decodeLogLeft > 0) {
-            decodeLogLeft -= 1
+        val notable =
+            idr ||
+                types.split(',').mapNotNull { it.trim().toIntOrNull() }.any {
+                    it in 16..21 || it in 32..34 || it == 7
+                }
+        if (decodeLogLeft > 0 || notable) {
+            if (decodeLogLeft > 0) decodeLogLeft -= 1
             Log.i(
                 TAG,
                 "au nals=$types idr=$idr await=$awaitingIdr cfg=$configured bytes=${accessUnit.size}",
@@ -117,9 +122,13 @@ class HevcDecoder {
             if (!configure(haveCsd, pendingTypes.ifEmpty { types })) return false
             awaitingIdr = true
             Log.i(TAG, "configured ${liveCodec?.name} nals=$nalTypesSeen")
-            val queued = queue(accessUnit, keyframe = true)
-            if (queued && idr) awaitingIdr = false
-            return queued
+            val idrAu = pendingIdr ?: if (idr) accessUnit else null
+            if (idrAu != null) {
+                val queued = queue(idrAu, keyframe = true)
+                if (queued) awaitingIdr = false
+                return queued
+            }
+            return true
         }
         if (awaitingIdr && !idr) return false
         val queued = queue(accessUnit, keyframe)
@@ -173,8 +182,9 @@ class HevcDecoder {
     private fun configure(csd: ByteArray, nalTypes: String): Boolean {
         val target = surface ?: return false
         if (!target.isValid) return false
-        val detected = detectCodec(csd, nalTypes)
+        val detected = detectCodec(csd, nalTypes) ?: return false
         liveCodec = detected
+        var decoder: MediaCodec? = null
         return try {
             val mime =
                 if (detected == LiveCodec.AVC) MediaFormat.MIMETYPE_VIDEO_AVC
@@ -191,13 +201,15 @@ class HevcDecoder {
             } else {
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(csd))
             }
-            val decoder = MediaCodec.createDecoderByType(mime)
-            decoder.configure(format, target, null, 0)
-            decoder.start()
-            codec = decoder
+            val created = MediaCodec.createDecoderByType(mime)
+            decoder = created
+            created.configure(format, target, null, 0)
+            created.start()
+            codec = created
             configured = true
             hasFormat = true
             running = true
+            val started = created
             outputThread =
                 Thread(
                     {
@@ -205,13 +217,13 @@ class HevcDecoder {
                         while (running) {
                             val index =
                                 try {
-                                    decoder.dequeueOutputBuffer(info, 10_000)
+                                    started.dequeueOutputBuffer(info, 10_000)
                                 } catch (_: Exception) {
                                     break
                                 }
                             when {
                                 index >= 0 -> {
-                                    runCatching { decoder.releaseOutputBuffer(index, true) }
+                                    runCatching { started.releaseOutputBuffer(index, true) }
                                     lastPresentedAt = SystemClock.elapsedRealtime()
                                     _hasPicture.value = true
                                     hasFormat = true
@@ -224,6 +236,13 @@ class HevcDecoder {
                 ).also { it.isDaemon = true; it.start() }
             true
         } catch (e: Exception) {
+            runCatching { decoder?.stop() }
+            runCatching { decoder?.release() }
+            codec = null
+            configured = false
+            liveCodec = null
+            pendingCsd = null
+            pendingTypes = ""
             decoderErrors.incrementAndGet()
             Log.w(TAG, "${detected.name} configure failed", e)
             false
@@ -270,16 +289,30 @@ class HevcDecoder {
          * Pocket 4 Pro live view uses BLA_W_LP (16), not only IDR_N_LP (20).
          * AVC IDR is 5.
          */
-        internal fun isIdrPicture(nalTypes: String): Boolean {
+        internal fun isIdrPicture(nalTypes: String, accessUnit: ByteArray? = null): Boolean {
             val types = nalTypes.split(',').mapNotNull { it.trim().toIntOrNull() }
-            return types.any { it in 16..21 || it == 5 }
+            if (types.any { it in 16..21 || it == 5 }) return true
+            if (accessUnit == null) return false
+            for (nal in annexBNals(accessUnit)) {
+                val skip = startCodeLength(nal)
+                if (nal.size <= skip) continue
+                val first = nal[skip].toInt() and 0xFF
+                val hevcType = (first shr 1) and 0x3F
+                if (hevcType in 16..21) return true
+                if (first and 0x1F == 5) return true
+            }
+            return false
         }
 
         /**
-         * Pocket HEVC param sets are 0x40/0x42/0x44. Nano AVC SPS/PPS/IDR latch as AVC.
-         * Matches OpenPocketViewCore `LiveVideo.codec(ofNAL:)`.
+         * Pocket HEVC param sets are 0x40/0x42/0x44. Nano AVC SPS/PPS are 0x67/0x68.
+         * Matches OpenPocketViewCore `LiveVideo.codec(ofNAL:)`. HEVC IDR_N_LP is 0x28 —
+         * do not treat `(first & 0x1f) ∈ {5,7,8}` as AVC or leftover P-frames configure
+         * as AVC and WAITING FOR LIVE VIEW never drops.
          */
-        internal fun detectCodec(csd: ByteArray, nalTypes: String): LiveCodec {
+        internal fun detectCodec(csd: ByteArray, nalTypes: String): LiveCodec? {
+            var sawHevc = false
+            var sawAvc = false
             var offset = 0
             while (offset + 3 < csd.size) {
                 val sc4 =
@@ -302,20 +335,17 @@ class HevcDecoder {
                         }
                     }
                 if (nalStart >= csd.size) break
-                val first = csd[nalStart].toInt() and 0xFF
-                when (first) {
-                    0x40, 0x42, 0x44 -> return LiveCodec.HEVC
-                    else -> {
-                        val avc = first and 0x1F
-                        if (avc == 7 || avc == 8 || avc == 5) return LiveCodec.AVC
-                    }
+                when (csd[nalStart].toInt() and 0xFF) {
+                    0x40, 0x42, 0x44 -> sawHevc = true
+                    0x67, 0x68 -> sawAvc = true
                 }
                 offset = nalStart + 1
             }
+            if (sawHevc) return LiveCodec.HEVC
+            if (sawAvc) return LiveCodec.AVC
             val types = nalTypes.split(',').mapNotNull { it.trim().toIntOrNull() }.toSet()
             if (32 in types || 33 in types || 34 in types) return LiveCodec.HEVC
-            if (7 in types || 8 in types) return LiveCodec.AVC
-            return LiveCodec.HEVC
+            return null
         }
 
         internal fun splitAvcCsd(csd: ByteArray): Pair<ByteArray, ByteArray?> {
