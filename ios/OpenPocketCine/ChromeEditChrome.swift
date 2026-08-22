@@ -53,9 +53,10 @@ enum PocketChromeEditLayout {
         for box in boxes where box.frame.width > 1 && box.frame.height > 1 {
             let candidates = anchors(on: box.frame, viewport: viewport, badgeSize: badgeSize)
                 .map { clamped($0, in: playable) }
-            let choice = candidates.first { candidate in
-                !placed.contains { overlaps($0, candidate) }
-            } ?? candidates[0]
+            let choice =
+                candidates.first { candidate in
+                    !placed.contains { overlaps($0, candidate) }
+                } ?? candidates[0]
             placed.append(choice)
             result[box.section] = choice
         }
@@ -227,8 +228,8 @@ struct ChromeEditBadge: View {
             OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
             model.toggleChrome(section, for: mode)
         } label: {
-            Image(systemName: on ? "eye.fill" : "eye.slash.fill")
-                .font(.system(size: 11, weight: .bold))
+            (on ? OpcIcon.eye : OpcIcon.eyeOff)
+                .frame(width: 11, height: 11)
                 .foregroundStyle(on ? LiveDesign.background : LiveDesign.text)
                 .frame(
                     width: PocketChromeEditLayout.badgeSize,
@@ -281,8 +282,8 @@ struct ChromeEditBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "eye")
-                .font(.system(size: 11, weight: .bold))
+            OpcIcon.eye
+                .frame(width: 11, height: 11)
                 .foregroundStyle(LiveDesign.accent)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Editing \(mode.title)")

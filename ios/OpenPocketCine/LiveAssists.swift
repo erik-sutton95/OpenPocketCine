@@ -1,7 +1,7 @@
 import CoreMotion
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 /// OpenZCine `MonitorAssistTool` — cinema live-monitor set. MAG is retired; EV / PLAY are
 /// photography-only and stay off the video toolbar.
@@ -75,27 +75,27 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     }
 
     /// OpenZCine `MonitorAssistTool.icon`. ZEBRA draws `ZebraStripesShape` instead.
-    var symbol: String {
+    var opcIcon: OpcIcon? {
         switch self {
-        case .lut: "camera.filters"
-        case .peaking: "mountain.2"
-        case .falseColor: "circle.lefthalf.filled"
-        case .zebra: "line.diagonal"
-        case .waveform: "waveform.path"
-        case .parade: "chart.bar.xaxis"
-        case .histogram: "waveform"
-        case .vectorscope: "circle.grid.cross"
-        case .trafficLights: "light.beacon.max"
-        case .audioMeters: "slider.vertical.3"
-        case .guides: "rectangle.dashed"
-        case .grid: "grid"
-        case .crosshair: "plus"
-        case .level: "gyroscope"
-        case .evMeter: "plusminus"
-        case .desqueeze: "arrow.left.and.right"
-        case .mirror: "arrow.left.and.right.righttriangle.left.righttriangle.right"
-        case .magnification: "plus.magnifyingglass"
-        case .instantReview: "photo.badge.checkmark"
+        case .lut: .blend
+        case .peaking: .mountain
+        case .falseColor: .contrast
+        case .zebra: nil
+        case .waveform: .audioWaveform
+        case .parade: .chartColumn
+        case .histogram: .audioLines
+        case .vectorscope: .crosshair
+        case .trafficLights: .sun
+        case .audioMeters: .slidersVertical
+        case .guides: .squareDashed
+        case .grid: .grid3x3
+        case .crosshair: .plus
+        case .level: .circle
+        case .evMeter: .plus
+        case .desqueeze: .chevronsUpDown
+        case .mirror: .flipHorizontal2
+        case .magnification: .zoomIn
+        case .instantReview: .image
         }
     }
 
@@ -538,7 +538,9 @@ final class LiveAssistState {
     }
 
     func clearCustomSlot(_ slot: CustomLUTSlot) {
-        if lutSelection == slot.selection || OperatorPrefs.selectedCustomFileName == OperatorPrefs.customFileName(for: slot) {
+        if lutSelection == slot.selection
+            || OperatorPrefs.selectedCustomFileName == OperatorPrefs.customFileName(for: slot)
+        {
             lutSelection = .auto
             OperatorPrefs.lutSelection = .auto
             OperatorPrefs.selectedCustomFileName = nil
@@ -558,7 +560,8 @@ final class LiveAssistState {
             OperatorPrefs.lutSelection = .auto
             OperatorPrefs.selectedCustomFileName = nil
         }
-        for slot in CustomLUTSlot.allCases where OperatorPrefs.customFileName(for: slot) == fileName {
+        for slot in CustomLUTSlot.allCases where OperatorPrefs.customFileName(for: slot) == fileName
+        {
             OperatorPrefs.setCustomFileName(nil, for: slot)
         }
         try? CustomLUTStore.remove(StoredCustomLUT(fileName: fileName))
@@ -694,13 +697,15 @@ enum OperatorPrefs {
             return stored > 0 ? ShutterAngle.nearestDegrees(stored) : ShutterAngle.defaultDegrees
         }
         set {
-            UserDefaults.standard.set(ShutterAngle.nearestDegrees(newValue), forKey: shutterAngleKey)
+            UserDefaults.standard.set(
+                ShutterAngle.nearestDegrees(newValue), forKey: shutterAngleKey)
         }
     }
 
     static var portraitFeedAspect: PortraitFeedAspect {
         get {
-            PortraitFeedAspect(rawValue: UserDefaults.standard.string(forKey: portraitFeedAspectKey) ?? "")
+            PortraitFeedAspect(
+                rawValue: UserDefaults.standard.string(forKey: portraitFeedAspectKey) ?? "")
                 ?? .fit16x9
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: portraitFeedAspectKey) }
@@ -742,7 +747,8 @@ enum OperatorPrefs {
             return Set(raw.compactMap(LiveAssistTool.init(rawValue:))).intersection(allowed)
         }
         set {
-            let ordered = LiveAssistTool.cleanPinCases.filter { newValue.contains($0) }.map(\.rawValue)
+            let ordered = LiveAssistTool.cleanPinCases.filter { newValue.contains($0) }.map(
+                \.rawValue)
             UserDefaults.standard.set(ordered, forKey: cleanPinsKey)
         }
     }
@@ -1009,33 +1015,35 @@ struct FeedAlignedAssists: View {
                         lineWidth: 1.6
                     )
                 }
-                if showFocusChrome { switch overlay {
-                case .search(let box):
-                    TrackingBoxView(feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
-                    FocusBoxView(
-                        feed: feed,
-                        normalized: assist.isVisible(.mirror)
-                            ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
-                            : focusPoint
-                    )
-                case .subject(let box):
-                    SubjectBoxView(feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
-                case .face(let box):
-                    TrackingBracketView(
-                        rect: feedRect(mirroredBox(box, assist.isVisible(.mirror)), in: feed),
-                        color: LiveDesign.text.opacity(0.92),
-                        lineWidth: 1.6
-                    )
-                case .focus:
-                    if showTapFocusBox {
+                if showFocusChrome {
+                    switch overlay {
+                    case .search(let box):
+                        TrackingBoxView(
+                            feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
                         FocusBoxView(
                             feed: feed,
                             normalized: assist.isVisible(.mirror)
                                 ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
                                 : focusPoint
                         )
+                    case .subject(let box):
+                        SubjectBoxView(feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
+                    case .face(let box):
+                        TrackingBracketView(
+                            rect: feedRect(mirroredBox(box, assist.isVisible(.mirror)), in: feed),
+                            color: LiveDesign.text.opacity(0.92),
+                            lineWidth: 1.6
+                        )
+                    case .focus:
+                        if showTapFocusBox {
+                            FocusBoxView(
+                                feed: feed,
+                                normalized: assist.isVisible(.mirror)
+                                    ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
+                                    : focusPoint
+                            )
+                        }
                     }
-                }
                 }
                 VStack {
                     Spacer()
@@ -1369,7 +1377,8 @@ final class DeviceLevel {
     }
 
     private func refreshOrientation() {
-        let portrait = UIApplication.shared.connectedScenes
+        let portrait =
+            UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.interfaceOrientation.isPortrait ?? false
         isPortrait = portrait
@@ -1495,20 +1504,20 @@ private struct LevelAxisGauge: View {
 
     private var chevrons: some View {
         let toNegative = value > 0
-        let symbol =
+        let icon: OpcIcon =
             isHorizontal
-            ? (toNegative ? "chevron.left" : "chevron.right")
-            : (toNegative ? "chevron.down" : "chevron.up")
+            ? (toNegative ? .chevronLeft : .chevronRight)
+            : (toNegative ? .chevronDown : .chevronUp)
         let gap: CGFloat = 16
         let sign = CGFloat(value > 0 ? 1 : -1)
         return Group {
             if isHorizontal {
                 HStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(symbol, index: i) }
+                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
                 }
             } else {
                 VStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(symbol, index: i) }
+                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
                 }
             }
         }
@@ -1517,9 +1526,9 @@ private struct LevelAxisGauge: View {
             y: isHorizontal ? 0 : -beadOffset + sign * gap)
     }
 
-    private func chevronGlyph(_ symbol: String, index: Int) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 10, weight: .heavy))
+    private func chevronGlyph(_ icon: OpcIcon, index: Int) -> some View {
+        icon
+            .frame(width: 10, height: 10)
             .foregroundStyle(LiveDesign.accent)
             .opacity(1.0 - Double(index) * 0.22)
     }
@@ -1643,9 +1652,9 @@ struct AssistToolIcon: View {
                         lineWidth: max(1.6, size * 0.13), lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: size, height: size)
-        } else {
-            Image(systemName: tool.symbol)
-                .font(.system(size: size, weight: .regular))
+        } else if let icon = tool.opcIcon {
+            icon
+                .frame(width: size, height: size)
         }
     }
 }

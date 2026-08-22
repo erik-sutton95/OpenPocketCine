@@ -28,17 +28,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -51,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,6 +58,7 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.panelGlass
@@ -446,10 +438,10 @@ private fun CategorySidebar(
 private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = false, onClick: () -> Unit) {
     val (icon, label) =
         when (tab) {
-            MediaLibraryTab.ALL -> Icons.Filled.GridView to "All"
-            MediaLibraryTab.VIDEOS -> Icons.Filled.Movie to "Videos"
-            MediaLibraryTab.PHOTOS -> Icons.Filled.PhotoLibrary to "Photos"
-            MediaLibraryTab.FAVORITES -> Icons.Filled.Star to "Favorites"
+            MediaLibraryTab.ALL -> OpcIcon.LAYOUT_GRID to "All"
+            MediaLibraryTab.VIDEOS -> OpcIcon.FILM to "Videos"
+            MediaLibraryTab.PHOTOS -> OpcIcon.IMAGE to "Photos"
+            MediaLibraryTab.FAVORITES -> OpcIcon.STAR to "Favorites"
         }
     Row(
         Modifier
@@ -465,7 +457,12 @@ private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = f
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = if (active) LiveDesign.accent else LiveDesign.muted, modifier = Modifier.size(16.dp))
+        OpcIcon(
+            icon = icon,
+            contentDescription = null,
+            tint = if (active) LiveDesign.accent else LiveDesign.muted,
+            modifier = Modifier.size(16.dp),
+        )
         Text(
             label,
             color = if (active) LiveDesign.accent else LiveDesign.muted,
@@ -512,23 +509,23 @@ private fun HeaderRow(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isLive) {
-                MediaActionPill(
-                    icon = Icons.Filled.Refresh,
+                LucideActionPill(
+                    icon = OpcIcon.REFRESH_CW,
                     title = "REFRESH",
                     active = false,
                     enabled = !fetchInProgress,
                     onClick = onRefresh,
                 )
             }
-            MediaActionPill(
-                icon = Icons.Filled.FilterList,
+            LucideActionPill(
+                icon = OpcIcon.LIST_FILTER,
                 title = "FILTER",
                 active = filterOpen || activeFilterCount > 0,
                 badge = activeFilterCount.takeIf { it > 0 },
                 onClick = onFilter,
             )
-            MediaActionPill(
-                icon = Icons.Filled.SwapVert,
+            LucideActionPill(
+                icon = OpcIcon.CHEVRONS_UP_DOWN,
                 title = "SORT",
                 active = false,
                 onClick = onSort,
@@ -620,7 +617,12 @@ private fun EmptyState(listing: Boolean, subtitle: String) {
         if (listing) {
             CircularProgressIndicator(color = LiveDesign.accent)
         } else {
-            Icon(Icons.Filled.Movie, contentDescription = null, tint = LiveDesign.faint, modifier = Modifier.size(40.dp))
+            OpcIcon(
+                icon = OpcIcon.FILM,
+                contentDescription = null,
+                tint = LiveDesign.faint,
+                modifier = Modifier.size(40.dp),
+            )
         }
         Text(
             if (listing) "Listing clips" else "No clips yet",
@@ -704,8 +706,8 @@ private fun LayoutControls(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                if (layout == MediaBrowserLayout.GRID) Icons.Filled.ViewList else Icons.Filled.GridView,
+            OpcIcon(
+                icon = if (layout == MediaBrowserLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID,
                 contentDescription = if (layout == MediaBrowserLayout.GRID) "List view" else "Grid view",
                 tint = LiveDesign.muted,
                 modifier = Modifier.size(14.dp),
@@ -729,6 +731,58 @@ private fun LayoutControls(
                         .background(if (active) LiveDesign.accent else LiveDesign.muted),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LucideActionPill(
+    icon: OpcIcon,
+    title: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    badge: Int? = null,
+    contentDescription: String? = null,
+) {
+    Row(
+        Modifier
+            .alpha(if (enabled) 1f else 0.5f)
+            .clip(MediaCapsuleShape)
+            .then(if (active) Modifier.background(LiveDesign.accentDim, MediaCapsuleShape) else Modifier)
+            .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
+            .chromeClickable(enabled = enabled, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription ?: title }
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        OpcIcon(
+            icon = icon,
+            contentDescription = null,
+            tint = if (active) LiveDesign.accent else LiveDesign.muted,
+            modifier = Modifier.size(12.dp),
+        )
+        Text(
+            title,
+            color = if (active) LiveDesign.accent else LiveDesign.muted,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+        )
+        if (badge != null) {
+            Text(
+                "$badge",
+                color = LiveDesign.background,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                modifier =
+                    Modifier
+                        .clip(MediaCapsuleShape)
+                        .background(LiveDesign.accent)
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+            )
         }
     }
 }

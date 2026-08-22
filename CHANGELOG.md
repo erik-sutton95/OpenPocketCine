@@ -8,9 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. Lock, settings, media, close,
-  focus-reset, and assist-bar chevrons use the same stroke glyphs; more names are vendored for
-  follow-up replacements.
+- Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. The vendored set is 72 official
+  24px stroke glyphs (plus a filled star). Pairing, media library, playback, LUT 50/50, chrome-edit
+  eyes, assist tools (zebra stripes stay custom), and recovery chrome use the same paths. SF Symbols
+  and Material icons remain on settings sheets, live capture bars, and playback screens the HUD
+  agents still own.
 - Android clip player View Assist rail (independent of live, persisted as
   `OpenPocketCine.PlaybackAssists.v1`) and high-frame-rate conform preview
   (Real time + 23.976/24/25/29.97/30, muted, stretched time labels). GPU

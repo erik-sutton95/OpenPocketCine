@@ -64,8 +64,8 @@ private struct LiveBatteryRow: View {
                 .frame(width: 10)
             HStack(spacing: 1) {
                 if isCharging {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 7, weight: .bold))
+                    OpcIcon.zap
+                        .frame(width: 7, height: 7)
                         .foregroundStyle(batteryTint)
                 }
                 Text(readout)

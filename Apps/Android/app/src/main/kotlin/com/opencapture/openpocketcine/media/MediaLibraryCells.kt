@@ -19,13 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,8 +109,8 @@ fun MediaClipCell(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Icon(
-                    if (isPhoto) Icons.Filled.Photo else Icons.Filled.Movie,
+                OpcIcon(
+                    icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.FILM,
                     contentDescription = null,
                     tint = LiveDesign.faint,
                     modifier = Modifier.size(28.dp).align(Alignment.Center),
@@ -150,8 +144,8 @@ fun MediaClipCell(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                if (isPhoto) Icons.Filled.Photo else Icons.Filled.PlayCircle,
+                            OpcIcon(
+                                icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.CIRCLE_PLAY,
                                 contentDescription = null,
                                 tint = LiveDesign.text,
                                 modifier = Modifier.size(26.dp),
@@ -165,8 +159,8 @@ fun MediaClipCell(
                     }
                 }
                 !isPhoto -> {
-                    Icon(
-                        Icons.Filled.PlayCircle,
+                    OpcIcon(
+                        icon = OpcIcon.CIRCLE_PLAY,
                         contentDescription = null,
                         tint = LiveDesign.text.copy(alpha = 0.9f),
                         modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).size(22.dp),
@@ -272,8 +266,8 @@ fun MediaClipListRow(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Icon(
-                    if (isPhoto) Icons.Filled.Photo else Icons.Filled.Movie,
+                OpcIcon(
+                    icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.FILM,
                     contentDescription = null,
                     tint = LiveDesign.faint,
                     modifier = Modifier.size(20.dp).align(Alignment.Center),
@@ -295,8 +289,8 @@ fun MediaClipListRow(
                     }
                 }
                 !downloaded -> {
-                    Icon(
-                        if (isPhoto) Icons.Filled.Photo else Icons.Filled.PlayCircle,
+                    OpcIcon(
+                        icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.CIRCLE_PLAY,
                         contentDescription = null,
                         tint = LiveDesign.text.copy(alpha = 0.9f),
                         modifier = Modifier.size(18.dp).align(Alignment.Center),
@@ -343,11 +337,12 @@ fun FavoriteStar(
             .chromeClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+        OpcIcon(
+            icon = OpcIcon.STAR,
             contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
             tint = if (favorite) LiveDesign.accent else LiveDesign.faint,
             modifier = Modifier.size(iconSize),
+            filled = favorite,
         )
     }
 }

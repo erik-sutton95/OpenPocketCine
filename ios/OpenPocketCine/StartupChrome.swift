@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 enum StartupColors {
     /// DJI Black / Titan pairing chrome — Sky Blue accent, no Nikon gold.
@@ -212,12 +212,13 @@ struct StartupCardBackground: View {
 }
 
 struct StartupIconSquare: View {
-    let systemName: String
+    let icon: OpcIcon
     var size: CGFloat = 56
     var cornerRadius: CGFloat = DesignTokens.cornerRadius
     var tint: Color = StartupColors.accent
 
     var body: some View {
+        let glyph = max(16, size * 0.38)
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(StartupColors.tile)
             .overlay(
@@ -225,8 +226,8 @@ struct StartupIconSquare: View {
                     tint.opacity(0.46), lineWidth: 1)
             )
             .overlay {
-                Image(systemName: systemName)
-                    .font(.system(size: max(16, size * 0.38), weight: .medium))
+                icon
+                    .frame(width: glyph, height: glyph)
                     .foregroundStyle(tint)
             }
             .frame(width: size, height: size)
@@ -316,7 +317,7 @@ struct StartupWizardPrepareCards: View {
 struct StartupWizardDeviceSection: Identifiable {
     let id: String
     let title: String
-    let systemImage: String
+    let icon: OpcIcon
     let steps: [String]
 }
 
@@ -327,8 +328,8 @@ struct StartupWizardDeviceInstructionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: tight ? 6 : 8) {
             HStack(spacing: 8) {
-                Image(systemName: section.systemImage)
-                    .font(.system(size: tight ? 13 : 15, weight: .semibold))
+                section.icon
+                    .frame(width: tight ? 13 : 15, height: tight ? 13 : 15)
                     .foregroundStyle(StartupColors.accent)
                 Text(section.title)
                     .font(LiveType.ui(size: tight ? 11 : 12, weight: .bold, design: .rounded))
@@ -345,7 +346,10 @@ struct StartupWizardDeviceInstructionCard: View {
                             .frame(width: 14, alignment: .trailing)
                             .padding(.top, 1)
                         Text(step)
-                            .font(LiveType.ui(size: tight ? 11 : 13, weight: .medium, design: .rounded))
+                            .font(
+                                LiveType.ui(
+                                    size: tight ? 11 : 13, weight: .medium, design: .rounded)
+                            )
                             .foregroundStyle(StartupColors.ink)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -371,8 +375,8 @@ struct StartupWizardInfoBanner: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: tight ? 8 : 10) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: tight ? 12 : 14, weight: .semibold))
+            OpcIcon.info
+                .frame(width: tight ? 12 : 14, height: tight ? 12 : 14)
                 .foregroundStyle(StartupColors.accent)
             Text(text)
                 .font(LiveType.ui(size: tight ? 10 : 12, weight: .regular, design: .rounded))
@@ -422,8 +426,8 @@ struct StartupEmptyDiscoveryCard: View {
 
     var body: some View {
         VStack(spacing: compact ? 6 : 10) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: compact ? 18 : 24, weight: .semibold))
+            OpcIcon.radio
+                .frame(width: compact ? 18 : 24, height: compact ? 18 : 24)
                 .foregroundStyle(StartupColors.accent)
             Text(title)
                 .font(LiveType.ui(size: compact ? 13 : 15, weight: .semibold, design: .rounded))
@@ -453,28 +457,30 @@ struct StartupDiscoveredCameraCard: View {
 
     var body: some View {
         HStack(spacing: compact ? 10 : 14) {
-            StartupIconSquare(systemName: "viewfinder", size: compact ? 36 : 48)
+            StartupIconSquare(icon: .scan, size: compact ? 36 : 48)
 
             VStack(alignment: .leading, spacing: compact ? 3 : 7) {
-                Text(FoundCameraIdentity.listTitle(
-                    advertisedName: camera.name, modelName: camera.model.name))
-                    .font(LiveType.ui(size: compact ? 13 : 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(StartupColors.ink)
-                    .lineLimit(1)
+                Text(
+                    FoundCameraIdentity.listTitle(
+                        advertisedName: camera.name, modelName: camera.model.name)
+                )
+                .font(LiveType.ui(size: compact ? 13 : 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(StartupColors.ink)
+                .lineLimit(1)
                 Text(
                     FoundCameraIdentity.listSubtitle(
                         advertisedName: camera.name, modelName: camera.model.name)
                         + (camera.model.verified ? "" : " · unverified")
                 )
-                    .font(LiveType.ui(size: compact ? 10 : 12, weight: .regular, design: .rounded))
-                    .foregroundStyle(StartupColors.muted)
-                    .lineLimit(1)
+                .font(LiveType.ui(size: compact ? 10 : 12, weight: .regular, design: .rounded))
+                .foregroundStyle(StartupColors.muted)
+                .lineLimit(1)
             }
 
             Spacer()
 
-            Image(systemName: "cellularbars")
-                .font(.system(size: compact ? 16 : 20, weight: .semibold))
+            OpcIcon.signal
+                .frame(width: compact ? 16 : 20, height: compact ? 16 : 20)
                 .foregroundStyle(StartupColors.accent)
         }
         .padding(.horizontal, compact ? 12 : 16)
@@ -602,10 +608,10 @@ struct StartupYourCamerasButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .semibold))
-                Image(systemName: "camera")
-                    .font(.system(size: 13, weight: .semibold))
+                OpcIcon.chevronLeft
+                    .frame(width: 12, height: 12)
+                OpcIcon.camera
+                    .frame(width: 13, height: 13)
                 Text("Your cameras")
             }
             .lineLimit(1)

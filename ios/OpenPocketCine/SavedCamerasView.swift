@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// Returning-user home. OpenZCine `StartupSavedCamerasView` chrome, Pocket-only (no setups).
 struct SavedCamerasView: View {
@@ -181,7 +181,8 @@ private struct SavedCameraRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(StartupColors.tile.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(StartupColors.border.opacity(0.10), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14).stroke(
+                StartupColors.border.opacity(0.10), lineWidth: 1)
         )
         .contextMenu { menuActions }
         .alert("Remove camera?", isPresented: $isDeleteConfirmationPresented) {
@@ -222,7 +223,10 @@ private struct SavedCameraRow: View {
             .fixedSize()
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .overlay(Capsule().stroke((online ? StartupColors.ready : StartupColors.muted).opacity(0.5), lineWidth: 1))
+            .overlay(
+                Capsule().stroke(
+                    (online ? StartupColors.ready : StartupColors.muted).opacity(0.5), lineWidth: 1)
+            )
     }
 
     /// Visual Connect / Reconnect chrome inside the row button (OpenZCine filled vs outline).
@@ -252,8 +256,8 @@ private struct SavedCameraRow: View {
         Menu {
             menuActions
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+            OpcIcon.ellipsis
+                .frame(width: 15, height: 15)
                 .foregroundStyle(StartupColors.muted)
                 .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
@@ -267,12 +271,20 @@ private struct SavedCameraRow: View {
             renameText = camera.customName ?? ""
             isRenamePresented = true
         } label: {
-            Label("Rename", systemImage: "pencil")
+            Label {
+                Text("Rename")
+            } icon: {
+                OpcIcon.pencil
+            }
         }
         Button(role: .destructive) {
             isDeleteConfirmationPresented = true
         } label: {
-            Label("Remove", systemImage: "trash")
+            Label {
+                Text("Remove")
+            } icon: {
+                OpcIcon.trash
+            }
         }
     }
 }

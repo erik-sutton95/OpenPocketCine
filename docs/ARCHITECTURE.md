@@ -12,7 +12,8 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 
 HUD glyphs that both shells share are vendored Lucide SVGs (`OpcIcon` on iOS and Android).
 Regenerate Android VectorDrawables with `python3 scripts/vendor-lucide-icons.py`. Do not add a JS
-runtime. SF Symbols stay only on controls this catalog has not replaced yet.
+runtime. Custom keepers: zebra stripes, the Frame.io F mark, and the battery outline pill.
+SF Symbols / Material stay only on controls this catalog has not replaced yet.
 
 The iOS Xcode project is generated: `cd ios && xcodegen generate`.
 
