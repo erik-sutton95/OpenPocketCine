@@ -8,23 +8,78 @@ final class OpcIconTests: XCTestCase {
         XCTAssertEqual(
             OpcIcon.allCases.map(\.lucideName),
             [
+                "aperture",
+                "audio-lines",
+                "audio-waveform",
+                "blend",
                 "camera",
+                "chart-column",
+                "check",
+                "chevron-down",
                 "chevron-left",
                 "chevron-right",
+                "chevron-up",
+                "chevrons-up-down",
+                "circle",
+                "circle-check",
+                "circle-play",
+                "circle-plus",
                 "contrast",
+                "copy",
                 "crosshair",
+                "download",
+                "ellipsis",
+                "eye",
+                "eye-off",
+                "film",
+                "flip-horizontal-2",
+                "folder",
+                "focus",
+                "funnel",
                 "grid-3x3",
+                "image",
+                "info",
                 "layers",
+                "layout-grid",
+                "layout-list",
+                "list-filter",
                 "lock",
+                "maximize",
+                "minimize",
+                "mountain",
                 "pause",
+                "pencil",
                 "play",
+                "plus",
+                "radio",
+                "refresh-cw",
+                "rotate-cw",
+                "scan",
                 "settings",
                 "share",
+                "signal",
+                "skip-back",
+                "skip-forward",
+                "sliders-horizontal",
+                "sliders-vertical",
+                "smartphone",
+                "square",
+                "square-dashed",
                 "star",
+                "sun",
+                "thermometer",
+                "timer",
                 "trash",
+                "unplug",
+                "upload",
                 "video",
+                "volume-2",
+                "volume-x",
+                "wifi",
+                "wifi-off",
                 "x",
                 "zap",
+                "zoom-in",
             ])
     }
 
@@ -62,5 +117,21 @@ final class OpcIconTests: XCTestCase {
         let bounds = document?.combinedPath().boundingRect ?? .zero
         XCTAssertEqual(bounds.minX, 6, accuracy: 0.05)
         XCTAssertEqual(bounds.maxX, 18, accuracy: 0.05)
+    }
+
+    func testPolylineAndEllipseParse() {
+        let xml = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2">
+              <polyline points="20 6 9 17 4 12" />
+              <ellipse cx="12" cy="12" rx="4" ry="2" />
+            </svg>
+            """
+        let document = LucideSVGDocument(xml: xml)
+        XCTAssertEqual(document?.elements.count, 2)
+        let bounds = document?.combinedPath().boundingRect ?? .zero
+        XCTAssertEqual(bounds.minX, 4, accuracy: 0.05)
+        XCTAssertEqual(bounds.maxX, 20, accuracy: 0.05)
+        XCTAssertEqual(bounds.minY, 6, accuracy: 0.05)
+        XCTAssertEqual(bounds.maxY, 17, accuracy: 0.05)
     }
 }

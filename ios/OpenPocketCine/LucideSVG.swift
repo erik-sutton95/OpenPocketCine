@@ -136,6 +136,18 @@ struct LucideSVGDocument {
             let cy = CGFloat(Double(attribute("cy", in: tag) ?? "0") ?? 0)
             let radius = CGFloat(Double(attribute("r", in: tag) ?? "0") ?? 0)
             return .circle(center: CGPoint(x: cx, y: cy), radius: radius)
+        case "ellipse":
+            let cx = CGFloat(Double(attribute("cx", in: tag) ?? "0") ?? 0)
+            let cy = CGFloat(Double(attribute("cy", in: tag) ?? "0") ?? 0)
+            let rx = CGFloat(Double(attribute("rx", in: tag) ?? "0") ?? 0)
+            let ry = CGFloat(Double(attribute("ry", in: tag) ?? "0") ?? 0)
+            return .roundedRect(
+                CGRect(x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2),
+                radius: CGSize(width: rx, height: ry))
+        case "polyline", "polygon":
+            guard let raw = attribute("points", in: tag) else { return nil }
+            let closed = name == "polygon"
+            return .path(pointsPathData(raw, closed: closed))
         case "line":
             let x1 = CGFloat(Double(attribute("x1", in: tag) ?? "0") ?? 0)
             let y1 = CGFloat(Double(attribute("y1", in: tag) ?? "0") ?? 0)
@@ -156,6 +168,20 @@ struct LucideSVGDocument {
         default:
             return nil
         }
+    }
+
+    private static func pointsPathData(_ raw: String, closed: Bool) -> String {
+        let numbers = raw.split { $0 == " " || $0 == "," || $0 == "\n" || $0 == "\t" }
+            .compactMap { Double($0) }
+        guard numbers.count >= 4, numbers.count.isMultiple(of: 2) else { return "" }
+        var parts = ["M\(numbers[0]) \(numbers[1])"]
+        var index = 2
+        while index + 1 < numbers.count {
+            parts.append("L\(numbers[index]) \(numbers[index + 1])")
+            index += 2
+        }
+        if closed { parts.append("Z") }
+        return parts.joined(separator: " ")
     }
 
     private static func parseViewBox(_ raw: String?) -> CGRect? {

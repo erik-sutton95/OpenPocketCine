@@ -45,7 +45,9 @@ project (see [NOTICE](NOTICE), the
   `Apps/Android/app/src/main/res/drawable/opc_lucide_*.xml`.
 - **License:** ISC (full text in those `LICENSE.txt` files). Some glyphs in this set are derived
   from [Feather](https://github.com/feathericons/feather) and are additionally MIT
-  (`chevron-left`, `chevron-right`, `crosshair`, `lock`, `share`, `trash`, `x`).
+  (`aperture`, `check`, `chevron-down`, `chevron-left`, `chevron-right`, `chevron-up`, `circle`,
+  `circle-plus`, `crosshair`, `download`, `ellipsis`, `info`, `lock`, `maximize`, `minimize`,
+  `plus`, `radio`, `share`, `smartphone`, `square`, `trash`, `upload`, `x`, `zoom-in`).
 - **Copyright:** 2026 Lucide Icons and Contributors. Feather-derived icons: Copyright 2013-present
   Cole Bemis.
 
