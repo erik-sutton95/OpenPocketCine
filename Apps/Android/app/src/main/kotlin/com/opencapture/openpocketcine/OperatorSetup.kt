@@ -32,11 +32,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LinkOff
+
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -630,7 +627,7 @@ private fun SessionControls(
         if (isLive) {
             SettingsActionPill(
                 title = "Disconnect",
-                icon = Icons.Filled.LinkOff,
+                icon = OpcIcon.UNPLUG,
                 tint = LiveDesign.rec,
                 background = LiveDesign.rec.copy(alpha = 0.16f),
                 onClick = onDisconnect,
@@ -1566,8 +1563,8 @@ private fun ScrollMoreCue(modifier: Modifier = Modifier) {
             "MORE",
             style = LiveType.mono(9.5f, FontWeight.Bold).copy(letterSpacing = 1.2.sp, color = LiveDesign.muted),
         )
-        Icon(
-            Icons.Filled.KeyboardArrowDown,
+        OpcIcon(
+            icon = OpcIcon.CHEVRON_DOWN,
             contentDescription = null,
             tint = LiveDesign.muted,
             modifier = Modifier.size(10.dp),

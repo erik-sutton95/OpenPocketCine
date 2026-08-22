@@ -23,10 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,7 +43,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -181,7 +176,7 @@ fun SettingsResetButton(onClick: () -> Unit) {
 @Composable
 fun SettingsActionPill(
     title: String,
-    icon: ImageVector? = null,
+    icon: OpcIcon? = null,
     tint: Color = LiveDesign.accent,
     background: Color = LiveDesign.accentDim,
     modifier: Modifier = Modifier,
@@ -197,7 +192,7 @@ fun SettingsActionPill(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let {
-            Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
+            OpcIcon(icon = it, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
         }
         Text(
             title.uppercase(),
@@ -954,9 +949,8 @@ fun SettingsGroupCard(
                     SettingsResetButton(onClick = onReset)
                 }
                 if (expanded != null) {
-                    Icon(
-                        imageVector =
-                            if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    OpcIcon(
+                        icon = if (isExpanded) OpcIcon.CHEVRON_UP else OpcIcon.CHEVRON_DOWN,
                         contentDescription = null,
                         tint = LiveDesign.muted,
                         modifier = Modifier.size(20.dp),

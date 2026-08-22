@@ -20,11 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
@@ -38,7 +33,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -103,8 +97,8 @@ fun MediaBackButton(
             .semantics { contentDescription = "Back" },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            Icons.AutoMirrored.Filled.ArrowBack,
+        OpcIcon(
+            icon = OpcIcon.CHEVRON_LEFT,
             contentDescription = null,
             tint = LiveDesign.text,
             modifier = Modifier.size(size * 0.47f),
@@ -130,18 +124,19 @@ fun MediaFavoriteButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+        OpcIcon(
+            icon = OpcIcon.STAR,
             contentDescription = null,
             tint = if (favorite) LiveDesign.accent else LiveDesign.text,
             modifier = Modifier.size(size * 0.50f),
+            filled = favorite,
         )
     }
 }
 
 @Composable
 fun MediaCircleIconButton(
-    icon: ImageVector,
+    icon: OpcIcon,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -150,6 +145,7 @@ fun MediaCircleIconButton(
     tint: androidx.compose.ui.graphics.Color = LiveDesign.text,
     enabled: Boolean = true,
     highlighted: Boolean = false,
+    filled: Boolean = false,
 ) {
     Box(
         modifier
@@ -161,11 +157,12 @@ fun MediaCircleIconButton(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
+        OpcIcon(
+            icon = icon,
             contentDescription = null,
             tint = if (!enabled) LiveDesign.faint else if (highlighted) LiveDesign.accent else tint,
             modifier = Modifier.size(iconSize),
+            filled = filled,
         )
     }
 }
@@ -175,7 +172,7 @@ fun MediaActionPill(
     title: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
+    icon: OpcIcon? = null,
     active: Boolean = false,
     enabled: Boolean = true,
     badge: Int? = null,
@@ -194,8 +191,8 @@ fun MediaActionPill(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (icon != null) {
-            Icon(
-                icon,
+            OpcIcon(
+                icon = icon,
                 contentDescription = null,
                 tint = if (active) LiveDesign.accent else LiveDesign.muted,
                 modifier = Modifier.size(12.dp),
@@ -469,7 +466,7 @@ internal object PlaybackChromeMetrics {
 
 @Composable
 fun MediaTransportIconButton(
-    icon: ImageVector,
+    icon: OpcIcon,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -497,8 +494,8 @@ fun MediaTransportIconButton(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
+        OpcIcon(
+            icon = icon,
             contentDescription = null,
             tint =
                 when {

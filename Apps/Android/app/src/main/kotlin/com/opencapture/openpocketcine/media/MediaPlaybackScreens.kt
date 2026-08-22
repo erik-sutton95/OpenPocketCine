@@ -27,26 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CropFree
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,7 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import com.opencapture.openpocketcine.OpcIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -223,9 +207,9 @@ fun MediaPhotoViewer(
                 modifier = Modifier.weight(1f),
             )
             if (controller.canDelete(file)) {
-                MediaCircleIconButton(Icons.Filled.Delete, "Delete", onClick = { confirmDelete = true })
+                MediaCircleIconButton(OpcIcon.TRASH, "Delete", onClick = { confirmDelete = true })
             }
-            MediaCircleIconButton(Icons.Filled.Share, "Share photo", onClick = { onDeliver(file) })
+            MediaCircleIconButton(OpcIcon.SHARE, "Share photo", onClick = { onDeliver(file) })
         }
 
         Box(
@@ -292,7 +276,7 @@ fun MediaPlayerScreen(
     var zoom by remember { mutableStateOf(AnchoredPinchZoom()) }
     var frameScrubbing by remember { mutableStateOf(false) }
     var frameScrubOrigin by remember { mutableFloatStateOf(0f) }
-    var flashSymbol by remember { mutableStateOf<ImageVector?>(null) }
+    var flashSymbol by remember { mutableStateOf<OpcIcon?>(null) }
     var flashVisible by remember { mutableStateOf(false) }
     var flashJob by remember { mutableStateOf<Job?>(null) }
     var meterLeft by remember { mutableStateOf(AudioMeterChannel.Silent) }
@@ -475,7 +459,7 @@ fun MediaPlayerScreen(
         flashJob?.cancel()
         flashJob =
             scope.launch {
-                flashSymbol = if (willPlay) Icons.Filled.PlayArrow else Icons.Filled.Pause
+                flashSymbol = if (willPlay) OpcIcon.PLAY else OpcIcon.PAUSE
                 flashVisible = true
                 delay(550)
                 flashVisible = false
@@ -651,14 +635,14 @@ fun MediaPlayerScreen(
                 if (playlist.size > 1) {
                     if (canPrev) {
                         ClipNavButton(
-                            icon = Icons.Filled.ChevronLeft,
+                            icon = OpcIcon.CHEVRON_LEFT,
                             label = "Previous clip",
                             modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
                         ) { goToAdjacent(-1) }
                     }
                     if (canNext) {
                         ClipNavButton(
-                            icon = Icons.Filled.ChevronRight,
+                            icon = OpcIcon.CHEVRON_RIGHT,
                             label = "Next clip",
                             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
                         ) { goToAdjacent(1) }
@@ -761,7 +745,7 @@ fun MediaPlayerScreen(
                             modifier = Modifier.weight(1f),
                         )
                         MediaTransportIconButton(
-                            Icons.Filled.CropFree,
+                            OpcIcon.SCAN,
                             "View Assist",
                             action = true,
                             highlighted = true,
@@ -832,7 +816,7 @@ fun MediaPlayerScreen(
                     ) {
                         MediaTransportSkipButton("−15", "Back 15 seconds") { seekBy(-15f) }
                         if (reachedEnd) {
-                            MediaTransportIconButton(Icons.Filled.Replay, "Restart", primary = true, onClick = {
+                            MediaTransportIconButton(OpcIcon.ROTATE_CW, "Restart", primary = true, onClick = {
                                 player.seekTo(0)
                                 applyPlaybackRate()
                                 player.play()
@@ -841,7 +825,7 @@ fun MediaPlayerScreen(
                             })
                         } else {
                             MediaTransportIconButton(
-                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                if (isPlaying) OpcIcon.PAUSE else OpcIcon.PLAY,
                                 if (isPlaying) "Pause" else "Play",
                                 primary = true,
                                 onClick = {
@@ -862,7 +846,7 @@ fun MediaPlayerScreen(
                         ) {
                             Spacer(Modifier.width(6.dp))
                             MediaTransportIconButton(
-                                if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                if (isMuted) OpcIcon.VOLUME_X else OpcIcon.VOLUME_2,
                                 if (isMuted) "Unmute" else "Mute",
                                 action = true,
                                 highlighted = isMuted,
@@ -877,23 +861,23 @@ fun MediaPlayerScreen(
                                 onSelect = { conformTarget = it },
                             )
                             MediaTransportIconButton(
-                                Icons.Filled.Fullscreen,
+                                OpcIcon.MINIMIZE,
                                 "Hide playback controls",
                                 action = true,
                                 onClick = { chromeVisible = false },
                             )
                             MediaTransportIconButton(
-                                Icons.Filled.CropFree,
+                                OpcIcon.SCAN,
                                 "View Assist",
                                 action = true,
                                 highlighted = assistMode || anyPlaybackAssistOn,
                                 onClick = { assistMode = true },
                             )
                             if (controller.canDelete(active)) {
-                                MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
+                                MediaTransportIconButton(OpcIcon.TRASH, "Delete", action = true, onClick = { confirmDelete = true })
                             }
                             MediaTransportIconButton(
-                                Icons.Filled.Share,
+                                OpcIcon.SHARE,
                                 "Share clip",
                                 action = true,
                                 onClick = {
@@ -913,7 +897,7 @@ fun MediaPlayerScreen(
                     .padding(16.dp),
             ) {
                 MediaCircleIconButton(
-                    icon = Icons.Filled.FullscreenExit,
+                    icon = OpcIcon.MAXIMIZE,
                     contentDescription = "Show playback controls",
                     onClick = { chromeVisible = true },
                 )
@@ -962,13 +946,13 @@ fun MediaPlayerScreen(
 
 @Composable
 private fun PlaybackTransportFlash(
-    symbol: ImageVector?,
+    symbol: OpcIcon?,
     visible: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (symbol == null) return
-    Icon(
-        symbol,
+    OpcIcon(
+        icon = symbol,
         contentDescription = null,
         tint = LiveDesign.text.copy(alpha = if (visible) 1f else 0f),
         modifier = modifier.size(48.dp),
@@ -1049,7 +1033,7 @@ private fun PlaybackAudioMetersOverlay(
 
 @Composable
 private fun ClipNavButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: OpcIcon,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -1063,7 +1047,7 @@ private fun ClipNavButton(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = LiveDesign.accent, modifier = Modifier.size(13.dp))
+        OpcIcon(icon = icon, contentDescription = null, tint = LiveDesign.accent, modifier = Modifier.size(13.dp))
     }
 }
 
@@ -1078,7 +1062,7 @@ private fun PlaybackConformButton(
 ) {
     Box {
         MediaTransportIconButton(
-            Icons.Filled.Timelapse,
+            OpcIcon.TIMER,
             "Conform preview",
             action = true,
             enabled = availability.isAvailable,
@@ -1105,7 +1089,7 @@ private fun PlaybackConformButton(
                 },
                 trailingIcon = {
                     if (selected == null) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = LiveDesign.accent)
+                        OpcIcon(OpcIcon.CHECK, contentDescription = null, tint = LiveDesign.accent)
                     }
                 },
             )
@@ -1120,7 +1104,7 @@ private fun PlaybackConformButton(
                     },
                     trailingIcon = {
                         if (selected == target) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = LiveDesign.accent)
+                            OpcIcon(OpcIcon.CHECK, contentDescription = null, tint = LiveDesign.accent)
                         }
                     },
                 )
