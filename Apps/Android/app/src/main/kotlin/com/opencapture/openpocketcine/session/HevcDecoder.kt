@@ -225,7 +225,10 @@ class HevcDecoder {
                                 index >= 0 -> {
                                     runCatching { started.releaseOutputBuffer(index, true) }
                                     lastPresentedAt = SystemClock.elapsedRealtime()
-                                    _hasPicture.value = true
+                                    if (!_hasPicture.value) {
+                                        _hasPicture.value = true
+                                        Log.i(TAG, "presented first picture")
+                                    }
                                     hasFormat = true
                                 }
                                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> hasFormat = true

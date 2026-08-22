@@ -308,6 +308,38 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun leftoverGopKeepsUdpOnlyWhileVideoIsFresh() {
+        assertTrue(
+            LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
+                noPicture = true,
+                videoPackets = 375,
+                videoAgeMs = 200,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
+                noPicture = true,
+                videoPackets = 375,
+                videoAgeMs = 8_000,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
+                noPicture = true,
+                videoPackets = 375,
+                videoAgeMs = null,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
+                noPicture = false,
+                videoPackets = 375,
+                videoAgeMs = 200,
+            ),
+        )
+    }
+
+    @Test
     fun keepaliveDoesNotTearUdpDuringFirstPicture() {
         assertTrue(
             !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(

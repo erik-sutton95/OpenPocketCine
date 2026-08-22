@@ -600,11 +600,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
                 val statusAge = datalink?.lastStatusAt?.let { now - it }
                 val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
+                val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
                 val noPicture = decoder.lastPresentedAt == null && !decoder.hasFormat
-                if (noPicture && packets > 0) {
+                if (LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
+                        noPicture = noPicture,
+                        videoPackets = packets,
+                        videoAgeMs = videoAge,
+                    )
+                ) {
                     Log.i(
                         TAG,
-                        "live: leftover GOP without picture pkts=$packets — resend enable, keep UDP",
+                        "live: leftover GOP without picture pkts=$packets " +
+                            "lastVideo=${videoAge}ms — resend enable, keep UDP",
                     )
                     sendRecoverEnable(force = true, reason = "first-picture leftover GOP")
                     return
@@ -1797,6 +1804,21 @@ internal object LiveViewEnablePolicy {
         if (enableSends >= 4) return FirstPictureStep.REJOIN
         if (sinceRebuildMs != null) return FirstPictureStep.REJOIN
         return FirstPictureStep.REBUILD_UDP
+    }
+
+    /**
+     * Leftover TRAIL P-frames still arriving: ask for IDR, keep the socket.
+     * [videoPackets] > 0 with a stale [videoAgeMs] is a dead receive — rebuild UDP.
+     * Frozen pkts=375 then three enable resends delayed first picture ~32 s.
+     */
+    fun shouldKeepUdpForLeftoverGop(
+        noPicture: Boolean,
+        videoPackets: Int,
+        videoAgeMs: Long?,
+    ): Boolean {
+        if (!noPicture || videoPackets <= 0) return false
+        val age = videoAgeMs ?: return false
+        return age < STALL_MS
     }
 
     fun shouldKeepaliveRebuildUDP(
