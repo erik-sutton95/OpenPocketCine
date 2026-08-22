@@ -27,6 +27,8 @@ Phone joins the camera's SoftAP (WPA2).
 | Camera / gateway | `192.168.2.1` |
 | Phone | `192.168.2.x`/24 |
 
-On iOS this is `NEHotspotConfiguration` (Hotspot Configuration entitlement). See [iOS notes](../ios/). SoftAP helpers live in `Sources/OpenPocketViewCore/CameraSoftAP.swift`.
+On iOS this is `NEHotspotConfiguration` (Hotspot Configuration entitlement). See [iOS notes](../ios/). On Android this is `WifiNetworkSpecifier` plus `ConnectivityManager.bindProcessToNetwork`. SoftAP helpers live in `Sources/OpenPocketViewCore/CameraSoftAP.swift` — both shells must use that predicate, not a platform copy.
+
+The UDP 9004 socket is bound to the **phone's** camera-local IPv4 (`192.168.2.2…254`), then connected to `192.168.2.1:9004`. Binding only `0.0.0.0` and hoping `Network.bindSocket` pins the flow is how Android sessions hopped onto home Wi-Fi after a SoftAP `onLost`. iOS sets `NWParameters.requiredLocalEndpoint` to that DHCP address.
 
 Once associated, open the [UDP DUML datalink](../duml-transport/).
