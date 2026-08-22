@@ -9,6 +9,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+class FeedUpscaleTest {
+    @Test
+    fun reconstructsOnlyWhenThePanelMagnifies() {
+        assertTrue(
+            FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1920f, 1080f),
+        )
+        assertTrue(
+            !FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1080f, 608f),
+            "portrait S25 well minifies 720p — cubic would alias",
+        )
+        assertTrue(!FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1280f, 720f))
+        assertTrue(!FeedUpscaler.shouldReconstructToDisplay(0f, 720f, 1920f, 1080f))
+    }
+}
+
 class LiveColorScienceTest {
     private val transfers = MonitorTransfer.entries
 

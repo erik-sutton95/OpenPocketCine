@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import android.graphics.Bitmap
+import android.graphics.Paint
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
@@ -44,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -599,6 +599,13 @@ fun LiveViewScreen(model: AppModel) {
     }
 }
 
+private val GLASS_BLIT_PAINT =
+    Paint().apply {
+        isFilterBitmap = false
+        isAntiAlias = false
+        isDither = false
+    }
+
 /**
  * MediaCodec still needs a Surface. Kyant cannot sample that TextureView, so FULL
  * glass also blits each frame into a Compose Canvas inside the recorded well —
@@ -674,13 +681,7 @@ private fun LiveFeedPresenter(
                             }
                     }
                 },
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            alpha = 0.999f
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        },
+                modifier = Modifier.fillMaxSize(),
             )
         }
         val gen = frameGen
@@ -690,8 +691,14 @@ private fun LiveFeedPresenter(
                 @Suppress("UNUSED_EXPRESSION")
                 gen
                 drawIntoCanvas { canvas ->
-                    val dst = android.graphics.Rect(0, 0, size.width.toInt(), size.height.toInt())
-                    canvas.nativeCanvas.drawBitmap(bmp, null, dst, null)
+                    val dstW = size.width.toInt()
+                    val dstH = size.height.toInt()
+                    if (bmp.width == dstW && bmp.height == dstH) {
+                        canvas.nativeCanvas.drawBitmap(bmp, 0f, 0f, GLASS_BLIT_PAINT)
+                    } else {
+                        val dst = android.graphics.Rect(0, 0, dstW, dstH)
+                        canvas.nativeCanvas.drawBitmap(bmp, null, dst, GLASS_BLIT_PAINT)
+                    }
                 }
             }
         }

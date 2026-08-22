@@ -18,6 +18,7 @@ import android.util.Log
 import android.view.Surface
 import androidx.media3.common.util.GlUtil
 import com.opencapture.openpocketcine.OperatorPrefs
+import com.opencapture.openpocketcine.liveFeedContentRect
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
@@ -260,14 +261,27 @@ internal class LiveFeedEffectsSession(
                 GLES20.glViewport(0, 0, sourceTarget.width, sourceTarget.height)
                 oesCopy.draw(oesTexture, texMatrix)
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
-                GLES20.glViewport(0, 0, width, height)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                val content =
+                    liveFeedContentRect(
+                        width.toFloat(),
+                        height.toFloat(),
+                        sourceTarget.width,
+                        sourceTarget.height,
+                    )
+                val presentWidth = content?.width ?: width
+                val presentHeight = content?.height ?: height
+                if (content != null) {
+                    GLES20.glViewport(content.left, content.top, content.width, content.height)
+                } else {
+                    GLES20.glViewport(0, 0, width, height)
+                }
                 effects.draw(
                     sourceTarget.textureId,
                     sourceTarget.width.toFloat(),
                     sourceTarget.height.toFloat(),
-                    width.toFloat(),
-                    height.toFloat(),
+                    presentWidth.toFloat(),
+                    presentHeight.toFloat(),
                 )
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
                 if (!signaledFirstFrame) {
@@ -365,15 +379,17 @@ internal class LiveFeedEffectsSession(
         val texture = textures[0]
         check(texture != 0) { "no OES texture" }
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texture)
+        // 1:1 blit into the 720p FBO. LINEAR here was a free blur before
+        // Catmull-Rom / the panel present.
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
             GLES20.GL_TEXTURE_MIN_FILTER,
-            GLES20.GL_LINEAR,
+            GLES20.GL_NEAREST,
         )
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
             GLES20.GL_TEXTURE_MAG_FILTER,
-            GLES20.GL_LINEAR,
+            GLES20.GL_NEAREST,
         )
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,

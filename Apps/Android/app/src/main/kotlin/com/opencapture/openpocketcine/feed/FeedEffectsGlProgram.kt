@@ -99,7 +99,15 @@ internal class FeedEffectsGlProgram(
         )
         program.setFloatsUniform(
             "uFeedUpscale",
-            flag(FeedUpscaleSwitch.rendererReads == FeedUpscaler.FAST),
+            flag(
+                FeedUpscaleSwitch.rendererReads == FeedUpscaler.FAST &&
+                    FeedUpscaler.shouldReconstructToDisplay(
+                        sourceWidth,
+                        sourceHeight,
+                        displayWidth,
+                        displayHeight,
+                    ),
+            ),
         )
         program.setFloatsUniform("uMirror", flag(mirrored))
         program.bindAttributesAndUniforms()

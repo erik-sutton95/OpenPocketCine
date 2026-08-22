@@ -25,6 +25,22 @@ enum class FeedUpscaler(val label: String) {
                 else -> FAST
             }
         }
+
+        /**
+         * Catmull-Rom is for magnification only. A 720p panel (or portrait
+         * 1080×608 well) minifies — cubic aliases there and GL_LINEAR is right.
+         */
+        fun shouldReconstructToDisplay(
+            sourceWidth: Float,
+            sourceHeight: Float,
+            displayWidth: Float,
+            displayHeight: Float,
+        ): Boolean {
+            if (sourceWidth < 1f || sourceHeight < 1f) return false
+            val scale =
+                maxOf(displayWidth / sourceWidth, displayHeight / sourceHeight)
+            return scale > 1.01f
+        }
     }
 }
 

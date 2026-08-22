@@ -146,8 +146,8 @@ vec3 sampleSourceReconstructed(vec2 coordinate, vec2 sourceSize) {
 // floor device pays nothing for this.
 vec3 sampleSourceForDisplay(vec2 coordinate) {
     vec2 sourceSize = max(uSourceSize, vec2(1.0));
-    if (uFeedUpscale < 0.5 ||
-        (uDisplaySize.x <= sourceSize.x && uDisplaySize.y <= sourceSize.y)) {
+    // Kotlin already gated Fast to magnification (`shouldReconstructToDisplay`).
+    if (uFeedUpscale < 0.5) {
         return sampleSource(coordinate);
     }
     return sampleSourceReconstructed(coordinate, sourceSize);

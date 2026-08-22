@@ -2,7 +2,6 @@ package com.opencapture.openpocketcine.session
 
 import android.media.MediaCodec
 import android.media.MediaFormat
-import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
@@ -190,10 +189,11 @@ class HevcDecoder {
                 if (detected == LiveCodec.AVC) MediaFormat.MIMETYPE_VIDEO_AVC
                 else MediaFormat.MIMETYPE_VIDEO_HEVC
             val format = MediaFormat.createVideoFormat(mime, LIVE_WIDTH, LIVE_HEIGHT)
-            if (Build.VERSION.SDK_INT >= 30) {
-                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
-            }
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
+            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30)
+            format.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+            format.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+            format.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
             if (detected == LiveCodec.AVC) {
                 val (sps, pps) = splitAvcCsd(csd)
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
