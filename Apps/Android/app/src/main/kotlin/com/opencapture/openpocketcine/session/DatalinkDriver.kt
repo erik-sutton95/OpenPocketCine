@@ -159,6 +159,12 @@ class DatalinkDriver(
         )
     }
 
+    /** iOS `DatalinkDriver.exitPlayback`. Live enable ACKs E0 while the body is in playback. */
+    fun exitPlayback() {
+        sendCommand(SwiftCore.CMD_EXIT_PLAYBACK)
+        Log.i(TAG, "datalink: sent exit playback")
+    }
+
     /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. */
     fun armLiveVideo() {
         liveViewEnabled = true
@@ -484,6 +490,16 @@ class DatalinkDriver(
         val frames = DumlCodec.unpackFrames(packed)
         if (frames.isEmpty()) return
         lastStatusElapsed.set(SystemClock.elapsedRealtime())
+        frames.forEach { frame ->
+            if (frame.cmdSet == 0x09 && (frame.cmdId and 0xFF) == 0xA8) {
+                val pay0 = frame.payload.firstOrNull()?.toInt()?.and(0xFF) ?: -1
+                Log.i(
+                    TAG,
+                    "datalink: 0x09/0xa8 reply flags=0x${(frame.flags and 0xFF).toString(16)} " +
+                        "pay0=0x${pay0.toString(16)} bytes=${frame.payload.size}",
+                )
+            }
+        }
         val callback = onStatusFrame
         main.post { frames.forEach { callback?.invoke(it) } }
     }
@@ -535,6 +551,8 @@ class DatalinkDriver(
                 "cam_record_time",
                 "cam_image_effect",
                 "cam_lens_state",
+                "cam_fov",
+                "cam_audio_status_v2",
             )
     }
 }

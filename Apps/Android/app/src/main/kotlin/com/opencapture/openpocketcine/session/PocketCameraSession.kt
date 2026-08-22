@@ -598,6 +598,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
             }
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
+                val statusAge = datalink?.lastStatusAt?.let { now - it }
+                val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
+                if (statusAge != null && statusAge < LiveViewEnablePolicy.STALL_MS &&
+                    sinceEnable < LiveViewEnablePolicy.GOP_GRACE_MS
+                ) {
+                    Log.i(
+                        TAG,
+                        "live: hold first-picture UDP rebuild — telemetry alive " +
+                            "lastStatus=${statusAge}ms pkts=$packets",
+                    )
+                    return
+                }
                 Log.i(TAG, "live: first-picture rebuild UDP (receive died pkts=$packets)")
                 startFeedRecovery {
                     datalink?.rebuildUdpKeepingSession()
@@ -712,6 +724,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun sendRecoverEnable(force: Boolean, reason: String) {
         if (isBrowsingMedia) return
+        if (_status.value.inPlayback) {
+            datalink?.exitPlayback()
+            Log.i(TAG, "feed: hold enable — camera still in playback ($reason)")
+            return
+        }
         val pathReady = joiner.isProcessBound()
         val decoderReady = decoder.isPresentationReady
         if (!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady, decoderReady)) {
@@ -1037,7 +1054,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         .withAudioDspAt2()
             }
         }
-        if (next != prev) _status.value = next
+        if (next != prev) {
+            if (next.inPlayback != prev.inPlayback) {
+                Log.i(TAG, "live: inPlayback=${if (next.inPlayback) 1 else 0}")
+            }
+            _status.value = next
+        }
     }
 
     fun pressRecord() {
