@@ -38,5 +38,6 @@ class CameraLocalIpv4Test {
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost("192.168.2.15"))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(null))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(""))
+        assertEquals(9004, DatalinkDriver.udpBindPort())
     }
 }

@@ -300,7 +300,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             error("pairing timed out — tap Approve on the camera if it asked")
         }
 
-        startKeepalive(ssid = null)
+        startKeepalive(joinedSSID)
         publishPhase(ConnectionPhase.READING_WIFI_CREDS)
         val skipApSettle = joiner.isProcessBound() && wifiCache.load(camera.id) != null
         if (!skipApSettle) delay(200)
@@ -458,6 +458,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             scope.launch {
                 while (true) {
                     ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
+                    val live = _phase.value == ConnectionPhase.LIVE && datalink != null
                     if (ssid != null && !holdsMonitor) {
                         withContext(Dispatchers.IO) {
                             if (!isBrowsingMedia && shouldStartUDPRebuild) {
@@ -480,8 +481,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                             }
                             datalink?.keepalive()
                         }
+                    } else if (live && !isBrowsingMedia) {
+                        withContext(Dispatchers.IO) { datalink?.keepalive() }
+                    }
+                    if (live && !isBrowsingMedia) {
                         publishPipelineStats()
-                        if (!isBrowsingMedia) recoverLiveViewIfNeeded()
+                        recoverLiveViewIfNeeded()
                     }
                     delay(1_000)
                 }
@@ -851,6 +856,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (isBrowsingMedia && reason != "media browse ended") return false
         val camera = connectedCamera
         val receiver = liveViewEnableReceiver(camera)
+        if (_status.value.inPlayback) datalink?.exitPlayback()
         if (usesNanoLiveViewGate(camera)) datalink?.sendNanoGate(start = true)
         datalink?.startLiveView(receiver)
         val now = SystemClock.elapsedRealtime()

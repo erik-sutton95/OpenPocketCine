@@ -56,6 +56,8 @@ class DatalinkDriver(
     private val lastStatusElapsed = AtomicLong(0)
     private val lastAccessUnitElapsed = AtomicLong(0)
     private val lastRebuildElapsed = AtomicLong(0)
+    private val lastEnableSentElapsed = AtomicLong(0)
+    private val lastLiveViewReplyElapsed = AtomicLong(0)
     @Volatile private var rebuilding = false
     private val sendFailLogs = AtomicInteger(0)
     private val writeRejected = AtomicBoolean(false)
@@ -90,6 +92,8 @@ class DatalinkDriver(
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
         lastAccessUnitElapsed.set(0)
+        lastEnableSentElapsed.set(0)
+        lastLiveViewReplyElapsed.set(0)
         sendFailLogs.set(0)
         if (depacketizer == 0L) depacketizer = SwiftCore.depacketizerCreate()
         else runCatching { SwiftCore.depacketizerReset(depacketizer) }
@@ -119,9 +123,9 @@ class DatalinkDriver(
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
                 afterHandshake?.invoke()
-                // iOS: enable first, then accept 0x02. Arming earlier ingested
-                // leftover P-frames (videoPkts=315, nals 1/35/40, no VPS) and
-                // first-picture never recovered.
+                // Enable ACK (0x03) then VPS (0x02). Arming on the send ingested
+                // leftover P-frames and dropped the IDR in the depacketizer.
+                awaitLiveViewReply(ENABLE_ACK_WAIT_MS)
                 armLiveVideo()
                 return
             }
@@ -151,6 +155,7 @@ class DatalinkDriver(
                 receiver = receiver,
             )
         }
+        lastEnableSentElapsed.set(SystemClock.elapsedRealtime())
         Log.i(
             TAG,
             "datalink: sent 0x09/0xa8 rcv=0x${receiver.toString(16)} " +
@@ -162,6 +167,22 @@ class DatalinkDriver(
     fun exitPlayback() {
         sendCommand(SwiftCore.CMD_EXIT_PLAYBACK)
         Log.i(TAG, "datalink: sent exit playback")
+    }
+
+    /** Wait until the camera ACKs `0x09/0xa8` (or [timeoutMs]). */
+    fun awaitLiveViewReply(timeoutMs: Long = ENABLE_ACK_WAIT_MS) {
+        val sent = lastEnableSentElapsed.get()
+        if (sent == 0L) return
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (lastLiveViewReplyElapsed.get() >= sent) return
+            try {
+                Thread.sleep(10)
+            } catch (_: InterruptedException) {
+                return
+            }
+        }
+        Log.i(TAG, "datalink: 0x09/0xa8 ACK wait timed out (${timeoutMs}ms)")
     }
 
     /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. */
@@ -269,7 +290,12 @@ class DatalinkDriver(
         sock.soTimeout = 250
         runCatching { sock.receiveBufferSize = 512 * 1024 }
         joiner.bindSocket(sock)
-        sock.bind(InetSocketAddress(Inet4Address.getByName(WILDCARD_BIND_HOST), 0))
+        val bindHost = Inet4Address.getByName(WILDCARD_BIND_HOST)
+        runCatching { sock.bind(InetSocketAddress(bindHost, UDP_BIND_PORT)) }
+            .onFailure {
+                Log.w(TAG, "datalink: bind :$UDP_BIND_PORT failed — ephemeral", it)
+                sock.bind(InetSocketAddress(bindHost, 0))
+            }
         runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
         val dhcp = joiner.cameraLocalIPv4() ?: "-"
@@ -492,6 +518,7 @@ class DatalinkDriver(
         frames.forEach { frame ->
             if (frame.cmdSet == 0x09 && (frame.cmdId and 0xFF) == 0xA8) {
                 val pay0 = frame.payload.firstOrNull()?.toInt()?.and(0xFF) ?: -1
+                lastLiveViewReplyElapsed.set(SystemClock.elapsedRealtime())
                 Log.i(
                     TAG,
                     "datalink: 0x09/0xa8 reply flags=0x${(frame.flags and 0xFF).toString(16)} " +
@@ -518,12 +545,17 @@ class DatalinkDriver(
         private const val TAG = "DatalinkDriver"
         private const val CAMERA_HOST = "192.168.2.1"
         internal const val WILDCARD_BIND_HOST = "0.0.0.0"
+        /** Stable local port so UDP rebuilds keep the camera's client 5-tuple. */
+        internal const val UDP_BIND_PORT = 9004
+        private const val ENABLE_ACK_WAIT_MS = 200L
 
         /**
          * Android UDP bind host after `Network.bindSocket`. Always the wildcard —
          * the SoftAP Network pin is the path, not a DHCP bind. [localIPv4] is
          * logged as `dhcp=` only.
          */
+        internal fun udpBindPort(): Int = UDP_BIND_PORT
+
         internal fun udpBindHost(@Suppress("UNUSED_PARAMETER") localIPv4: String?): String =
             WILDCARD_BIND_HOST
 
