@@ -134,6 +134,55 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun foregroundRecoverSkipsWhenPictureIsFresh() {
+        assertTrue(!LiveViewEnablePolicy.shouldRecoverAfterForeground(0.4))
+        assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(2.0))
+        assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(null))
+        assertTrue(!LiveViewEnablePolicy.shouldEscalateForegroundRecover(0.5))
+        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(2.0))
+        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(null))
+    }
+
+    @Test
+    fun gopAndAfcHoldLogsMatchIos() {
+        assertEquals(
+            "feed: hold UDP rebuild — GOP-reset grace lastEnable=2.5s lastVideo=1.0s",
+            LiveViewEnablePolicy.holdUdpRebuildGopLog(2_500, 1_000),
+        )
+        assertEquals(
+            "feed: hold UDP rebuild — AF-C grace lastSet=2.2s lastVideo=0.4s",
+            LiveViewEnablePolicy.holdUdpRebuildAfcLog(2_200, 400),
+        )
+        assertEquals(
+            "feed: hold UDP rebuild — GOP-reset grace lastEnable=-1.0s lastVideo=-1.0s",
+            LiveViewEnablePolicy.holdUdpRebuildGopLog(null, null),
+        )
+    }
+
+    @Test
+    fun prepareAfterForegroundDoesNotHoldIdr() {
+        val decoder = HevcDecoder()
+        decoder.prepareAfterForeground()
+        assertTrue(!decoder.awaitingIdr)
+    }
+
+    @Test
+    fun afcGraceHoldsWatchdog() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 8_000,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+            ).copy(lastFocusTrackAt = now - 2_200)
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+    }
+
+    @Test
     fun gopGraceHoldsEnableForEightSeconds() {
         val state = LiveViewEnablePolicy.State()
         val enableAt = 5_000L

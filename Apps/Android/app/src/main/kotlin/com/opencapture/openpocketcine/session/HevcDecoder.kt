@@ -122,6 +122,15 @@ class HevcDecoder {
         awaitingIdr = true
     }
 
+    /**
+     * SoftAP / codec can stall while backgrounded. Keep the last picture.
+     * Do **not** begin an IDR hold here — that dropped every P-frame after
+     * Control Center when `0x09/0xa8` was then skipped.
+     */
+    fun prepareAfterForeground() {
+        // MediaCodec stays configured; TextureView reattach is attachSurface.
+    }
+
     /** Drop P-frames until IDR. Do not release the codec — the last frame stays on the surface. */
     fun flushForRecovery() {
         beginIDRHold()

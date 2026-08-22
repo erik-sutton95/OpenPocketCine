@@ -93,6 +93,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var streamStartedAt: Long? = null
     private var lastBleNotifyAt: Long? = null
     private var isBrowsingMedia = false
+    private var needsForegroundRecover = false
     private var nextTrackingId = 1
     private var mediaListCounter = 1
     private val feedWatchdog = LiveViewEnablePolicy.State()
@@ -257,6 +258,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         focusTrackPending = false
         lastFocusTrackAt = null
         lastBleNotifyAt = null
+        needsForegroundRecover = false
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
         ble.startScan()
@@ -493,6 +495,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
             val sinceEnable = if (lastIdrRequest == 0L) null else now - lastIdrRequest
             if (LiveViewEnablePolicy.shouldHoldForGopReset(sinceEnable, videoAge)) return false
+            if (FocusTrackMode.shouldHoldWatchdog(lastFocusTrackAt?.let { (now - it) / 1000.0 })) {
+                return false
+            }
             val videoFresh = videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS
             return LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
                 flowNeedsRebuild = datalink?.needsRebuild == true,
@@ -526,6 +531,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
     private fun recoverLiveViewIfNeeded() {
         if (isBrowsingMedia || holdsMonitor) return
+        if (needsForegroundRecover) return
         if (!joiner.isProcessBound()) return
         if (feedRecoveryJob != null) return
         val packets = datalink?.videoPackets ?: 0
@@ -606,6 +612,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun applyFeedWatchdog(now: Long, packets: Int) {
+        if (needsForegroundRecover) return
+        val videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it }
         val snap =
             LiveViewEnablePolicy.Snapshot(
                 now = now,
@@ -621,6 +629,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 decoderErrors = decoderErrors,
                 live = _phase.value == ConnectionPhase.LIVE,
                 sawPicture = decoder.lastPresentedAt != null,
+                lastFocusTrackAt = lastFocusTrackAt,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
             coreWatchdog = SwiftCore.feedWatchdogCreate()
@@ -642,7 +651,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     append(",\"live\":${_phase.value == ConnectionPhase.LIVE}")
                     append(",\"sawPicture\":${decoder.lastPresentedAt != null}")
                     append(",\"tcpPokeReady\":${datalink?.isTcpPokeReady == true}")
-                    append(",\"hadVideo\":${packets > 0}")
+                    append(",\"hadVideo\":${LiveViewEnablePolicy.hadVideo(packets, videoAgeMs)}")
                     age(decoder.lastPresentedAt)?.let { append(",\"lastDecodedFrameAge\":$it") }
                     age(datalink?.lastVideoPacketAt)?.let { append(",\"lastVideoPacketAge\":$it") }
                     age(datalink?.lastAccessUnitAt)?.let { append(",\"lastAccessUnitAge\":$it") }
@@ -664,11 +673,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         datalink?.rebuildUdpKeepingSession()
                         sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                     }
+                else -> logWatchdogHold(snap)
             }
             return
         }
         when (LiveViewEnablePolicy.tick(feedWatchdog, snap)) {
-            LiveViewEnablePolicy.Action.NONE -> Unit
+            LiveViewEnablePolicy.Action.NONE -> logWatchdogHold(snap)
             LiveViewEnablePolicy.Action.RESEND_ENABLE ->
                 sendRecoverEnable(force = true, reason = "watchdog")
             LiveViewEnablePolicy.Action.REBUILD_UDP ->
@@ -676,6 +686,27 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     datalink?.rebuildUdpKeepingSession()
                     sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                 }
+        }
+    }
+
+    private fun logWatchdogHold(snap: LiveViewEnablePolicy.Snapshot) {
+        if (LiveViewEnablePolicy.udpReceiveAlive(snap)) return
+        val sinceEnable = if (snap.lastEnableAt == 0L) null else snap.now - snap.lastEnableAt
+        val videoAge = LiveViewEnablePolicy.age(snap.now, snap.lastVideoPacketAt)
+        if (LiveViewEnablePolicy.shouldHoldForGopReset(sinceEnable, videoAge)) {
+            Log.i(TAG, LiveViewEnablePolicy.holdUdpRebuildGopLog(sinceEnable, videoAge))
+        } else if (
+            FocusTrackMode.shouldHoldWatchdog(
+                LiveViewEnablePolicy.age(snap.now, snap.lastFocusTrackAt)?.div(1000.0),
+            )
+        ) {
+            Log.i(
+                TAG,
+                LiveViewEnablePolicy.holdUdpRebuildAfcLog(
+                    LiveViewEnablePolicy.age(snap.now, snap.lastFocusTrackAt),
+                    videoAge,
+                ),
+            )
         }
     }
 
@@ -705,6 +736,67 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     feedRecoveryJob = null
                 }
             }
+    }
+
+    /** iOS `CameraSession.noteSceneBecameInactive`. */
+    fun noteSceneBecameInactive() {
+        if (_phase.value == ConnectionPhase.LIVE) needsForegroundRecover = true
+        Log.i(TAG, "live: scene inactive — will recover feed on active")
+    }
+
+    /** iOS `CameraSession.noteSceneBecameActive`. Skip while browsing media. */
+    fun noteSceneBecameActive() {
+        if (isBrowsingMedia) {
+            needsForegroundRecover = false
+            return
+        }
+        if (holdsMonitor) return
+        if (!needsForegroundRecover) return
+        needsForegroundRecover = false
+        if (_phase.value == ConnectionPhase.LIVE) {
+            recoverAfterForeground()
+            return
+        }
+        val id = connectedCamera?.id ?: reconnectTarget
+        if (id != null) {
+            Log.i(TAG, "live: scene active — session not live, reconnect")
+            reconnect(id)
+        }
+    }
+
+    /**
+     * UDP and the present path die while suspended. Watchdog will not fire if
+     * packets still arrive but the picture is frozen — that is the resume canvas.
+     */
+    private fun recoverAfterForeground() {
+        val now = SystemClock.elapsedRealtime()
+        val presentedAgeSec = decoder.lastPresentedAt?.let { (now - it) / 1000.0 }
+        if (!LiveViewEnablePolicy.shouldRecoverAfterForeground(presentedAgeSec)) {
+            Log.i(TAG, "live: foreground — picture still fresh, skip rebuild")
+            return
+        }
+        Log.i(TAG, "live: recover after foreground")
+        firstPictureSettled = false
+        decoder.prepareAfterForeground()
+        startFeedRecovery {
+            withContext(Dispatchers.IO) {
+                datalink?.rebuildUdpKeepingSession()
+            }
+            if (liveViewEnableSends > 0) {
+                sendRecoverEnable(force = true, reason = "foreground")
+            } else {
+                sendCapturedLiveView("first picture")
+            }
+            delay(LiveViewEnablePolicy.FOREGROUND_PICTURE_GRACE_MS)
+            val stillFrozen =
+                LiveViewEnablePolicy.shouldEscalateForegroundRecover(
+                    decoder.lastPresentedAt?.let { (SystemClock.elapsedRealtime() - it) / 1000.0 },
+                )
+            if (stillFrozen) {
+                Log.i(TAG, "live: foreground still frozen — full datalink rejoin")
+                rejoinDatalinkKeepingLive()
+            }
+        }
     }
 
     /** New UDP handshake on SoftAP. BLE and LIVE stay so the last frame is not dumped. */
@@ -809,6 +901,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         firstPictureSettled = false
         focusTrackPending = false
         lastFocusTrackAt = null
+        needsForegroundRecover = false
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
     }
@@ -1491,6 +1584,8 @@ internal object LiveViewEnablePolicy {
     const val FORMAT_STALL_MS = 2_000L
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
     const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
+    /** After a foreground rebuild, wait this long for an IDR before a full rejoin. */
+    const val FOREGROUND_PICTURE_GRACE_MS = 2_000L
 
     fun shouldGiveUpOpenRetry(attempts: Int): Boolean = attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
 
@@ -1526,6 +1621,7 @@ internal object LiveViewEnablePolicy {
         val decoderErrors: Int,
         val live: Boolean,
         val sawPicture: Boolean,
+        val lastFocusTrackAt: Long? = null,
     )
 
     fun age(now: Long, at: Long?): Long? = at?.let { now - it }
@@ -1549,6 +1645,34 @@ internal object LiveViewEnablePolicy {
         if (sinceEnableMs == null || sinceEnableMs >= GOP_GRACE_MS) return false
         if (videoAgeMs != null && videoAgeMs > sinceEnableMs + STALL_MS) return false
         return true
+    }
+
+    /** Control Center / a short app-switcher peek still has a live GOP — do not tear UDP. */
+    fun shouldRecoverAfterForeground(
+        secondsSinceLastPresented: Double?,
+        stallSec: Double = STALL_MS / 1000.0,
+    ): Boolean {
+        val age = secondsSinceLastPresented ?: return true
+        return age >= stallSec
+    }
+
+    fun shouldEscalateForegroundRecover(
+        secondsSinceLastPresented: Double?,
+        graceSec: Double = FOREGROUND_PICTURE_GRACE_MS / 1000.0,
+    ): Boolean {
+        val age = secondsSinceLastPresented ?: return true
+        return age >= graceSec
+    }
+
+    fun holdUdpRebuildGopLog(sinceEnableMs: Long?, videoAgeMs: Long?): String =
+        "feed: hold UDP rebuild — GOP-reset grace lastEnable=${ageSec(sinceEnableMs)}s lastVideo=${ageSec(videoAgeMs)}s"
+
+    fun holdUdpRebuildAfcLog(sinceSetMs: Long?, videoAgeMs: Long?): String =
+        "feed: hold UDP rebuild — AF-C grace lastSet=${ageSec(sinceSetMs)}s lastVideo=${ageSec(videoAgeMs)}s"
+
+    private fun ageSec(ageMs: Long?): String {
+        val value = if (ageMs == null) -1.0 else ageMs / 1000.0
+        return String.format(java.util.Locale.US, "%.1f", value)
     }
 
     fun shouldHoldBind(pathReady: Boolean, bleAgeMs: Long?): Boolean =
@@ -1665,6 +1789,9 @@ internal object LiveViewEnablePolicy {
         val sinceEnable = if (snap.lastEnableAt == 0L) null else snap.now - snap.lastEnableAt
         val videoAge = age(snap.now, snap.lastVideoPacketAt)
         if (shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
+        if (FocusTrackMode.shouldHoldWatchdog(age(snap.now, snap.lastFocusTrackAt)?.div(1000.0))) {
+            return Action.NONE
+        }
 
         val had = hadVideo(snap.videoPackets, videoAge)
         if (!had) {

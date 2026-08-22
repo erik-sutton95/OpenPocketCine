@@ -95,6 +95,16 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) applyImmersiveSystemBars(window)
     }
 
+    override fun onPause() {
+        if (::model.isInitialized) model.session.noteSceneBecameInactive()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::model.isInitialized) model.session.noteSceneBecameActive()
+    }
+
     override fun onDestroy() {
         if (::model.isInitialized) model.close()
         super.onDestroy()
