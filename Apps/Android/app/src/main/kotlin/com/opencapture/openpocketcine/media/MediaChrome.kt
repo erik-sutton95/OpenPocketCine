@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -106,6 +108,33 @@ fun MediaBackButton(
             contentDescription = null,
             tint = LiveDesign.text,
             modifier = Modifier.size(size * 0.47f),
+        )
+    }
+}
+
+@Composable
+fun MediaFavoriteButton(
+    favorite: Boolean,
+    modifier: Modifier = Modifier,
+    size: Dp = 34.dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .size(size)
+            .clip(CircleShape)
+            .panelGlass(CircleShape)
+            .chromeClickable(onClick = onClick)
+            .semantics {
+                contentDescription = if (favorite) "Remove from favorites" else "Add to favorites"
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+            contentDescription = null,
+            tint = if (favorite) LiveDesign.accent else LiveDesign.text,
+            modifier = Modifier.size(size * 0.50f),
         )
     }
 }
@@ -421,6 +450,21 @@ internal object PlaybackChromeMetrics {
     val primaryTransportIconSize = 22.dp
     val actionIconSize = 16.dp
     val corner = MediaCornerShape
+    const val barPaddingH = 10f
+    const val transportRowSpacing = 5f
+    const val narrowestScreenWidth = 375f
+    const val chromeHorizontalPadding = 16f
+
+    /** iOS `MediaPlayerView.PlaybackChrome.transportRowWidth`. */
+    fun transportRowWidth(
+        transportCount: Int = 3,
+        actionCount: Int = 5,
+        minimumSpacer: Float = 6f,
+    ): Float {
+        val buttons = 38f * transportCount + 32f * actionCount
+        val gaps = transportRowSpacing * (transportCount + actionCount - 1)
+        return buttons + gaps + barPaddingH * 2 + minimumSpacer
+    }
 }
 
 @Composable

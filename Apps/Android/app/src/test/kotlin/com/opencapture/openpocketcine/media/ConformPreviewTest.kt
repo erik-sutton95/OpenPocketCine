@@ -87,6 +87,8 @@ class ConformPreviewTest {
         assertEquals(320f, rect.width, 0.01f)
         assertEquals(180f, rect.height, 0.01f)
         assertEquals(160f, rect.midY, 0.01f)
+        assertEquals(0f, rect.minX, 0.01f)
+        assertEquals(320f, rect.maxX, 0.01f)
     }
 
     @Test

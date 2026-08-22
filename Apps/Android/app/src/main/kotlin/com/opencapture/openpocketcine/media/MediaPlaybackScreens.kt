@@ -4,11 +4,10 @@ package com.opencapture.openpocketcine.media
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import android.view.TextureView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -26,7 +26,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -38,11 +41,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,16 +53,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -81,23 +84,28 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
-import androidx.media3.exoplayer.ExoPlayer
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
+import com.opencapture.openpocketcine.assists.AudioAssist
+import com.opencapture.openpocketcine.assists.AudioMetersPanel
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
+import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.panelGlass
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 @Composable
@@ -110,13 +118,13 @@ fun MediaPhotoViewer(
     val scope = rememberCoroutineScope()
     var bitmap by remember(file.id) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    var zoom by remember(file.id) { mutableStateOf(AnchoredPinchZoom()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val favorite = controller.isFavorite(file)
 
     LaunchedEffect(file.id) {
         loading = true
+        zoom = AnchoredPinchZoom()
         bitmap =
             withContext(Dispatchers.IO) {
                 val cached = controller.localFile(file) ?: controller.thumbnailFile(file)
@@ -132,27 +140,57 @@ fun MediaPhotoViewer(
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         val image = bitmap
         if (image != null) {
-            Image(
-                image.asImageBitmap(),
-                contentDescription = file.filename,
-                contentScale = ContentScale.Fit,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = offset.x
-                            translationY = offset.y
-                        }
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                val next = (scale * zoom).coerceIn(1f, 4f)
-                                scale = next
-                                offset = if (next > 1.05f) offset + pan else Offset.Zero
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val widthPx = constraints.maxWidth.toFloat()
+                val heightPx = constraints.maxHeight.toFloat()
+                Image(
+                    image.asImageBitmap(),
+                    contentDescription = file.filename,
+                    contentScale = ContentScale.Fit,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = zoom.scale
+                                scaleY = zoom.scale
+                                translationX = zoom.offsetX
+                                translationY = zoom.offsetY
                             }
-                        },
-            )
+                            .pointerInput(file.id) {
+                                detectPlaybackVideoGestures(
+                                    isReady = { true },
+                                    isZoomed = { zoom.isZoomed },
+                                    config =
+                                        PlaybackGestureConfig(
+                                            enableTap = false,
+                                            enableScrub = false,
+                                            enableSwipe = false,
+                                        ),
+                                    onTap = {},
+                                    onChromeSwipe = {},
+                                    onScrubStart = {},
+                                    onScrubDelta = {},
+                                    onScrubEnd = {},
+                                    onPinch = { magnification, centroid ->
+                                        val anchor = unitPoint(centroid, widthPx, heightPx)
+                                        zoom =
+                                            zoom.pinchChanged(
+                                                magnification,
+                                                anchor.first,
+                                                anchor.second,
+                                                widthPx,
+                                                heightPx,
+                                            )
+                                    },
+                                    onPinchEnd = { zoom = zoom.endGesture(widthPx, heightPx) },
+                                    onPan = { translation ->
+                                        zoom = zoom.panChanged(translation.x, translation.y)
+                                    },
+                                    onPanEnd = { zoom = zoom.endGesture(widthPx, heightPx) },
+                                )
+                            },
+                )
+            }
         } else if (loading) {
             Column(
                 Modifier
@@ -196,7 +234,7 @@ fun MediaPhotoViewer(
                 .navigationBarsPadding()
                 .padding(bottom = 18.dp),
         ) {
-            FavoriteStar(favorite) { controller.toggleFavorite(file) }
+            MediaFavoriteButton(favorite) { controller.toggleFavorite(file) }
         }
 
         if (confirmDelete) {
@@ -227,6 +265,7 @@ fun MediaPlayerScreen(
 ) {
     val scope = rememberCoroutineScope()
     val assist = model.assist
+    val haptics = LocalOperatorHaptics.current
     var active by remember { mutableStateOf(startingAt) }
     val playlist = if (files.any { it.id == active.id }) files else listOf(active)
     val index = playlist.indexOfFirst { it.id == active.id }
@@ -237,6 +276,8 @@ fun MediaPlayerScreen(
     var currentTime by remember { mutableFloatStateOf(0f) }
     var duration by remember { mutableFloatStateOf(active.durationSeconds.toFloat()) }
     var scrubbing by remember { mutableStateOf(false) }
+    var wasPlayingBeforeScrub by remember { mutableStateOf(false) }
+    var lastScrubSeekAt by remember { mutableLongStateOf(0L) }
     var reachedEnd by remember { mutableStateOf(false) }
     var ready by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -248,11 +289,20 @@ fun MediaPlayerScreen(
     var conformTarget by remember { mutableStateOf<Double?>(null) }
     var videoWidth by remember { mutableFloatStateOf(16f) }
     var videoHeight by remember { mutableFloatStateOf(9f) }
+    var zoom by remember { mutableStateOf(AnchoredPinchZoom()) }
+    var frameScrubbing by remember { mutableStateOf(false) }
+    var frameScrubOrigin by remember { mutableFloatStateOf(0f) }
+    var flashSymbol by remember { mutableStateOf<ImageVector?>(null) }
+    var flashVisible by remember { mutableStateOf(false) }
+    var flashJob by remember { mutableStateOf<Job?>(null) }
+    var meterLeft by remember { mutableStateOf(AudioMeterChannel.Silent) }
+    var meterRight by remember { mutableStateOf(AudioMeterChannel.Silent) }
     val favorite = controller.isFavorite(active)
     val progress = controller.downloadProgress[active.path]
     val context = LocalContext.current
     val density = LocalDensity.current
     val anyPlaybackAssistOn = assist.playbackVisibleTools.isNotEmpty()
+    val audioMetersOn = assist.isPlaybackVisible(LiveAssistTool.AUDIO)
     val conformSpeed =
         run {
             val target = conformTarget
@@ -260,6 +310,8 @@ fun MediaPlayerScreen(
             if (target == null || rate == null) 1.0 else ConformPreview.speed(rate, target)
         }
     val conformAvailability = ConformPreview.availability(conformSource)
+    val meterBox = remember { AudioLevelTapBox() }
+    val meterSink = remember { PlaybackPcmBufferSink(meterBox) }
 
     fun applyListedGeometry() {
         val listed = PlaybackVideoLayout.sizeFromResolution(active.resolution)
@@ -274,9 +326,7 @@ fun MediaPlayerScreen(
 
     val player =
         remember {
-            ExoPlayer.Builder(context).build().apply {
-                playWhenReady = true
-            }
+            createPlaybackExoPlayer(context, meterSink).apply { playWhenReady = true }
         }
 
     fun applyPlaybackRate() {
@@ -314,6 +364,7 @@ fun MediaPlayerScreen(
         player.addListener(listener)
         onDispose {
             assist.configureTool = null
+            flashJob?.cancel()
             player.removeListener(listener)
             player.release()
         }
@@ -325,7 +376,10 @@ fun MediaPlayerScreen(
         reachedEnd = false
         currentTime = 0f
         duration = active.durationSeconds.toFloat()
+        zoom = AnchoredPinchZoom()
+        frameScrubbing = false
         applyListedGeometry()
+        meterBox.readAndReset()
         player.stop()
         player.clearMediaItems()
         val local =
@@ -381,11 +435,89 @@ fun MediaPlayerScreen(
         }
     }
 
+    LaunchedEffect(audioMetersOn, conformTarget != null) {
+        if (!audioMetersOn) {
+            meterLeft = AudioMeterChannel.Silent
+            meterRight = AudioMeterChannel.Silent
+            meterBox.readAndReset()
+            return@LaunchedEffect
+        }
+        var left = AudioMeterChannel.Silent
+        var right = AudioMeterChannel.Silent
+        var last = System.nanoTime()
+        val conforming = conformTarget != null
+        if (conforming) {
+            meterBox.readAndReset()
+            meterLeft = AudioMeterChannel.Silent
+            meterRight = AudioMeterChannel.Silent
+        }
+        while (true) {
+            delay(42)
+            val now = System.nanoTime()
+            val dt = (now - last) / 1_000_000_000.0
+            last = now
+            val peaks = meterBox.peaksForMeters(conforming = conformTarget != null)
+            left = AudioMeterBallistics.step(left, peaks.first.toDouble(), dt)
+            right = AudioMeterBallistics.step(right, peaks.second.toDouble(), dt)
+            meterLeft = left
+            meterRight = right
+        }
+    }
+
     fun seekBy(delta: Float) {
         val target = (currentTime + delta).coerceIn(0f, max(duration, 0f))
         player.seekTo((target * 1000).toLong())
         currentTime = target
         if (reachedEnd && target + 0.05f < duration) reachedEnd = false
+    }
+
+    fun flashTransport(willPlay: Boolean) {
+        flashJob?.cancel()
+        flashJob =
+            scope.launch {
+                flashSymbol = if (willPlay) Icons.Filled.PlayArrow else Icons.Filled.Pause
+                flashVisible = true
+                delay(550)
+                flashVisible = false
+                delay(220)
+                flashSymbol = null
+            }
+    }
+
+    fun handleFrameTap() {
+        if (!ready || frameScrubbing) return
+        when (PlaybackFrameTap.action(chromeVisible, reachedEnd)) {
+            PlaybackFrameTap.RESTART_PLAYBACK -> {
+                player.seekTo(0)
+                applyPlaybackRate()
+                player.play()
+                reachedEnd = false
+                isPlaying = true
+                flashTransport(true)
+            }
+            PlaybackFrameTap.TOGGLE_TRANSPORT -> {
+                val willPlay = !isPlaying
+                if (isPlaying) {
+                    player.pause()
+                } else {
+                    applyPlaybackRate()
+                    player.play()
+                }
+                flashTransport(willPlay)
+            }
+            PlaybackFrameTap.IGNORE -> Unit
+        }
+    }
+
+    fun goToAdjacent(offset: Int) {
+        val next = index + offset
+        if (next !in playlist.indices) return
+        player.pause()
+        isPlaying = true
+        reachedEnd = false
+        ready = false
+        zoom = AnchoredPinchZoom()
+        active = playlist[next]
     }
 
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
@@ -403,7 +535,8 @@ fun MediaPlayerScreen(
                     .size(
                         with(density) { fitted.width.toDp() },
                         with(density) { fitted.height.toDp() },
-                    ),
+                    )
+                    .clipToBounds(),
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -416,30 +549,98 @@ fun MediaPlayerScreen(
                         Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
-                            }
-                            .pointerInput(ready, reachedEnd, isPlaying) {
-                                detectTapGestures {
-                                    if (!ready) return@detectTapGestures
-                                    when (PlaybackFrameTap.action(chromeVisible, reachedEnd)) {
-                                        PlaybackFrameTap.RESTART_PLAYBACK -> {
-                                            player.seekTo(0)
-                                            applyPlaybackRate()
-                                            player.play()
-                                            reachedEnd = false
-                                            isPlaying = true
-                                        }
-                                        PlaybackFrameTap.TOGGLE_TRANSPORT -> {
-                                            if (isPlaying) player.pause() else {
-                                                applyPlaybackRate()
-                                                player.play()
-                                            }
-                                        }
-                                        PlaybackFrameTap.IGNORE -> Unit
-                                    }
-                                }
+                                val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
+                                scaleX = zoom.scale * mirror
+                                scaleY = zoom.scale
+                                translationX = zoom.offsetX
+                                translationY = zoom.offsetY
                             },
                 )
+                val latestReady by rememberUpdatedState(ready)
+                val latestZoomed by rememberUpdatedState(zoom.isZoomed)
+                val latestOnTap by rememberUpdatedState({ handleFrameTap() })
+                val latestOnSwipe by rememberUpdatedState<(PlaybackChromeSwipe) -> Unit>({ swipe ->
+                    chromeVisible = swipe == PlaybackChromeSwipe.SHOW
+                })
+                val latestOnScrubStart by rememberUpdatedState({
+                    wasPlayingBeforeScrub = isPlaying
+                    frameScrubOrigin = currentTime
+                    scrubbing = true
+                    frameScrubbing = true
+                    player.pause()
+                    isPlaying = false
+                    haptics.longPress()
+                })
+                val latestOnScrubDelta by rememberUpdatedState<(Float) -> Unit>({ dx ->
+                    val time =
+                        PlaybackFrameScrub.timeAfterDelta(
+                            originSeconds = frameScrubOrigin,
+                            deltaPx = dx,
+                            videoWidthPx = fitted.width,
+                            durationSeconds = duration,
+                        )
+                    currentTime = time
+                    if (reachedEnd && time + 0.05f < duration) reachedEnd = false
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastScrubSeekAt >=
+                        (PlaybackFrameScrub.SEEK_THROTTLE_SECONDS * 1000).toLong()
+                    ) {
+                        lastScrubSeekAt = now
+                        player.seekTo((time * 1000).toLong())
+                    }
+                })
+                val latestOnScrubEnd by rememberUpdatedState({
+                    player.seekTo((currentTime * 1000).toLong())
+                    scrubbing = false
+                    frameScrubbing = false
+                    if (reachedEnd && currentTime + 0.05f < duration) reachedEnd = false
+                    if (wasPlayingBeforeScrub) {
+                        applyPlaybackRate()
+                        player.play()
+                    }
+                })
+                val latestOnPinch by rememberUpdatedState<(Float, Offset) -> Unit>({ magnification, centroid ->
+                    val anchor = unitPoint(centroid, fitted.width, fitted.height)
+                    zoom =
+                        zoom.pinchChanged(
+                            magnification,
+                            anchor.first,
+                            anchor.second,
+                            fitted.width,
+                            fitted.height,
+                        )
+                })
+                val latestOnPinchEnd by rememberUpdatedState({
+                    zoom = zoom.endGesture(fitted.width, fitted.height)
+                })
+                val latestOnPan by rememberUpdatedState<(Offset) -> Unit>({ translation ->
+                    zoom = zoom.panChanged(translation.x, translation.y)
+                })
+                val latestOnPanEnd by rememberUpdatedState({
+                    zoom = zoom.endGesture(fitted.width, fitted.height)
+                })
+                // Gesture well matches iOS: hits the unzoomed letterbox, not the scaled raster.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(active.id) {
+                            detectPlaybackVideoGestures(
+                                isReady = { latestReady },
+                                isZoomed = { latestZoomed },
+                                onTap = { latestOnTap() },
+                                onChromeSwipe = { latestOnSwipe(it) },
+                                onScrubStart = { latestOnScrubStart() },
+                                onScrubDelta = { latestOnScrubDelta(it) },
+                                onScrubEnd = { latestOnScrubEnd() },
+                                onPinch = { mag, centroid -> latestOnPinch(mag, centroid) },
+                                onPinchEnd = { latestOnPinchEnd() },
+                                onPan = { latestOnPan(it) },
+                                onPanEnd = { latestOnPanEnd() },
+                            )
+                        },
+                )
+                // GPU LUT/PEAK/FALSE/ZEBRA on the clip is blocked on LiveFeedEffectsSession
+                // (live HEVC OES @ 1280×720; plan factory keys live isVisible). Chrome toggles persist.
                 LiveAssistLayer(
                     state = assist,
                     status = CameraStatus(),
@@ -453,16 +654,36 @@ fun MediaPlayerScreen(
                             icon = Icons.Filled.ChevronLeft,
                             label = "Previous clip",
                             modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
-                        ) { active = playlist[index - 1] }
+                        ) { goToAdjacent(-1) }
                     }
                     if (canNext) {
                         ClipNavButton(
                             icon = Icons.Filled.ChevronRight,
                             label = "Next clip",
                             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
-                        ) { active = playlist[index + 1] }
+                        ) { goToAdjacent(1) }
                     }
                 }
+                PlaybackTransportFlash(
+                    symbol = flashSymbol,
+                    visible = flashVisible,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                if (frameScrubbing && duration > 0f) {
+                    PlaybackFrameScrubOverlay(
+                        scrubSeconds = currentTime,
+                        durationSeconds = duration,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            if (audioMetersOn) {
+                PlaybackAudioMetersOverlay(
+                    video = fitted,
+                    canvas = container,
+                    left = meterLeft,
+                    right = meterRight,
+                )
             }
         }
 
@@ -497,168 +718,189 @@ fun MediaPlayerScreen(
         }
 
         if (chromeVisible) {
+            Row(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MediaBackButton(onClick = onClose, size = 34.dp)
+                Text(
+                    active.filename,
+                    color = LiveDesign.text,
+                    style = LiveType.ui(14f, FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                MediaFavoriteButton(favorite) { controller.toggleFavorite(active) }
+            }
             Column(
                 Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .clip(MediaCornerShape)
+                    .panelGlass(MediaCornerShape)
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MediaBackButton(onClick = onClose, size = 34.dp)
-                    Text(
-                        active.filename,
-                        color = LiveDesign.text,
-                        style = LiveType.ui(14f, FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    MediaCircleIconButton(
-                        icon = if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-                        onClick = { controller.toggleFavorite(active) },
-                        tint = if (favorite) LiveDesign.accent else LiveDesign.text,
-                        highlighted = favorite,
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(MediaCornerShape)
-                        .panelGlass(MediaCornerShape)
-                        .padding(horizontal = 10.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (assistMode) {
+                if (assistMode) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        PlaybackAssistBar(
+                            state = assist,
+                            onLongPress = { assist.configureTool = it },
+                            modifier = Modifier.weight(1f),
+                        )
+                        MediaTransportIconButton(
+                            Icons.Filled.CropFree,
+                            "View Assist",
+                            action = true,
+                            highlighted = true,
+                            onClick = { assistMode = false },
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Text(
+                            conformedLabel(currentTime),
+                            color = LiveDesign.muted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.width(40.dp),
+                        )
+                        MediaPlaybackScrubber(
+                            progressSeconds = if (duration > 0f) currentTime.coerceIn(0f, duration) else 0f,
+                            durationSeconds = duration,
+                            onScrubbingChanged = { dragging ->
+                                if (dragging) {
+                                    if (!scrubbing) {
+                                        wasPlayingBeforeScrub = isPlaying
+                                        player.pause()
+                                    }
+                                    scrubbing = true
+                                } else {
+                                    scrubbing = false
+                                }
+                            },
+                            onProgressChange = { time ->
+                                currentTime = time
+                                if (reachedEnd && time + 0.05f < duration) reachedEnd = false
+                                val now = SystemClock.elapsedRealtime()
+                                if (now - lastScrubSeekAt >=
+                                    (PlaybackFrameScrub.SEEK_THROTTLE_SECONDS * 1000).toLong()
+                                ) {
+                                    lastScrubSeekAt = now
+                                    player.seekTo((time * 1000).toLong())
+                                }
+                            },
+                            onSeek = {
+                                currentTime = it
+                                player.seekTo((it * 1000).toLong())
+                                if (reachedEnd && it + 0.05f < duration) reachedEnd = false
+                                scrubbing = false
+                                if (wasPlayingBeforeScrub) {
+                                    applyPlaybackRate()
+                                    player.play()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            conformedLabel(duration),
+                            color = LiveDesign.muted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.width(40.dp),
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        MediaTransportSkipButton("−15", "Back 15 seconds") { seekBy(-15f) }
+                        if (reachedEnd) {
+                            MediaTransportIconButton(Icons.Filled.Replay, "Restart", primary = true, onClick = {
+                                player.seekTo(0)
+                                applyPlaybackRate()
+                                player.play()
+                                reachedEnd = false
+                                isPlaying = true
+                            })
+                        } else {
+                            MediaTransportIconButton(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                if (isPlaying) "Pause" else "Play",
+                                primary = true,
+                                onClick = {
+                                    if (isPlaying) {
+                                        player.pause()
+                                    } else {
+                                        applyPlaybackRate()
+                                        player.play()
+                                    }
+                                },
+                            )
+                        }
+                        MediaTransportSkipButton("+15", "Forward 15 seconds") { seekBy(15f) }
                         Row(
-                            Modifier.fillMaxWidth(),
+                            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End),
                         ) {
-                            PlaybackAssistBar(
-                                state = assist,
-                                onLongPress = { assist.configureTool = it },
-                                modifier = Modifier.weight(1f),
+                            Spacer(Modifier.width(6.dp))
+                            MediaTransportIconButton(
+                                if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                if (isMuted) "Unmute" else "Mute",
+                                action = true,
+                                highlighted = isMuted,
+                                onClick = { isMuted = !isMuted },
+                            )
+                            PlaybackConformButton(
+                                availability = conformAvailability,
+                                captureRate = conformSource.captureRate ?: 0.0,
+                                selected = conformTarget,
+                                menuOpen = conformMenu,
+                                onMenuOpenChange = { conformMenu = it },
+                                onSelect = { conformTarget = it },
+                            )
+                            MediaTransportIconButton(
+                                Icons.Filled.Fullscreen,
+                                "Hide playback controls",
+                                action = true,
+                                onClick = { chromeVisible = false },
                             )
                             MediaTransportIconButton(
                                 Icons.Filled.CropFree,
                                 "View Assist",
                                 action = true,
-                                highlighted = true,
-                                onClick = { assistMode = false },
+                                highlighted = assistMode || anyPlaybackAssistOn,
+                                onClick = { assistMode = true },
                             )
-                        }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Text(
-                                conformedLabel(currentTime),
-                                color = LiveDesign.muted,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.width(40.dp),
-                            )
-                            MediaPlaybackScrubber(
-                                progressSeconds = if (duration > 0f) currentTime.coerceIn(0f, duration) else 0f,
-                                durationSeconds = duration,
-                                onScrubbingChanged = { scrubbing = it },
-                                onProgressChange = { currentTime = it },
-                                onSeek = {
-                                    currentTime = it
-                                    player.seekTo((it * 1000).toLong())
-                                    if (reachedEnd && it + 0.05f < duration) reachedEnd = false
+                            if (controller.canDelete(active)) {
+                                MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
+                            }
+                            MediaTransportIconButton(
+                                Icons.Filled.Share,
+                                "Share clip",
+                                action = true,
+                                onClick = {
+                                    player.pause()
+                                    onDeliver(active)
                                 },
-                                modifier = Modifier.weight(1f),
                             )
-                            Text(
-                                conformedLabel(duration),
-                                color = LiveDesign.muted,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.width(40.dp),
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            MediaTransportSkipButton("−15", "Back 15 seconds") { seekBy(-15f) }
-                            if (reachedEnd) {
-                                MediaTransportIconButton(Icons.Filled.Replay, "Restart", primary = true, onClick = {
-                                    player.seekTo(0)
-                                    applyPlaybackRate()
-                                    player.play()
-                                    reachedEnd = false
-                                    isPlaying = true
-                                })
-                            } else {
-                                MediaTransportIconButton(
-                                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                    if (isPlaying) "Pause" else "Play",
-                                    primary = true,
-                                    onClick = {
-                                        if (isPlaying) {
-                                            player.pause()
-                                        } else {
-                                            applyPlaybackRate()
-                                            player.play()
-                                        }
-                                    },
-                                )
-                            }
-                            MediaTransportSkipButton("+15", "Forward 15 seconds") { seekBy(15f) }
-                            Row(
-                                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End),
-                            ) {
-                                Spacer(Modifier.width(6.dp))
-                                MediaTransportIconButton(
-                                    if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                    if (isMuted) "Unmute" else "Mute",
-                                    action = true,
-                                    highlighted = isMuted,
-                                    onClick = { isMuted = !isMuted },
-                                )
-                                PlaybackConformButton(
-                                    availability = conformAvailability,
-                                    captureRate = conformSource.captureRate ?: 0.0,
-                                    selected = conformTarget,
-                                    menuOpen = conformMenu,
-                                    onMenuOpenChange = { conformMenu = it },
-                                    onSelect = { conformTarget = it },
-                                )
-                                MediaTransportIconButton(
-                                    Icons.Filled.Fullscreen,
-                                    "Hide playback controls",
-                                    action = true,
-                                    onClick = { chromeVisible = false },
-                                )
-                                MediaTransportIconButton(
-                                    Icons.Filled.CropFree,
-                                    "View Assist",
-                                    action = true,
-                                    highlighted = assistMode || anyPlaybackAssistOn,
-                                    onClick = { assistMode = true },
-                                )
-                                if (controller.canDelete(active)) {
-                                    MediaTransportIconButton(Icons.Filled.Delete, "Delete", action = true, onClick = { confirmDelete = true })
-                                }
-                                MediaTransportIconButton(
-                                    Icons.Filled.Share,
-                                    "Share clip",
-                                    action = true,
-                                    onClick = {
-                                        player.pause()
-                                        onDeliver(active)
-                                    },
-                                )
-                            }
                         }
                     }
                 }
@@ -715,6 +957,93 @@ fun MediaPlayerScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun PlaybackTransportFlash(
+    symbol: ImageVector?,
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (symbol == null) return
+    Icon(
+        symbol,
+        contentDescription = null,
+        tint = LiveDesign.text.copy(alpha = if (visible) 1f else 0f),
+        modifier = modifier.size(48.dp),
+    )
+}
+
+@Composable
+private fun PlaybackFrameScrubOverlay(
+    scrubSeconds: Float,
+    durationSeconds: Float,
+    modifier: Modifier = Modifier,
+) {
+    val fraction = if (durationSeconds > 0f) (scrubSeconds / durationSeconds).coerceIn(0f, 1f) else 0f
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .panelGlass(RoundedCornerShape(percent = 50))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                MediaClipFormatting.durationLabel(scrubSeconds.toDouble()),
+                color = LiveDesign.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+            )
+            Text(
+                "/ ${MediaClipFormatting.durationLabel(durationSeconds.toDouble())}",
+                color = LiveDesign.muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 18.dp)
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(LiveDesign.hairline),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction.coerceAtLeast(0.01f))
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(LiveDesign.accent),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackAudioMetersOverlay(
+    video: PlaybackVideoLayout.Rect,
+    canvas: PlaybackVideoLayout.Rect,
+    left: AudioMeterChannel,
+    right: AudioMeterChannel,
+) {
+    val density = LocalDensity.current
+    val panelW = with(density) { AudioAssist.PANEL_WIDTH_DP.dp.toPx() }
+    val panelH = with(density) { AudioAssist.PANEL_HEIGHT_DP.dp.toPx() }
+    val cx = min(video.maxX - 22f, canvas.maxX - 28f)
+    val cy = min(video.maxY - 96f, canvas.maxY - 120f)
+    Box(
+        Modifier
+            .offset { IntOffset((cx - panelW / 2f).roundToInt(), (cy - panelH / 2f).roundToInt()) }
+            .size(AudioAssist.PANEL_WIDTH_DP.dp, AudioAssist.PANEL_HEIGHT_DP.dp)
+            .scopePanelChrome(),
+    ) {
+        AudioMetersPanel(left = left.asReading(), right = right.asReading(), sensitivity = null)
     }
 }
 

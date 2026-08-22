@@ -224,6 +224,14 @@ object PlaybackVideoLayout {
     data class Size(val width: Float, val height: Float)
 
     data class Rect(val x: Float, val y: Float, val width: Float, val height: Float) {
+        val minX: Float
+            get() = x
+        val minY: Float
+            get() = y
+        val maxX: Float
+            get() = x + width
+        val maxY: Float
+            get() = y + height
         val midX: Float
             get() = x + width / 2f
         val midY: Float
