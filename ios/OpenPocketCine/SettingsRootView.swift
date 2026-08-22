@@ -620,9 +620,15 @@ struct SettingsRootView: View {
                         .foregroundStyle(LiveDesign.muted)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 8)
-                    Image(systemName: expandedDisp == section ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(LiveDesign.faint)
+                    Group {
+                        if expandedDisp == section {
+                            OpcIcon.chevronUp
+                        } else {
+                            OpcIcon.chevronDown
+                        }
+                    }
+                    .foregroundStyle(LiveDesign.faint)
+                    .frame(width: 11, height: 11)
                 }
                 .padding(.vertical, 8)
             }

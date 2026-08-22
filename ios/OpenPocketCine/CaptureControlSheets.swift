@@ -532,9 +532,9 @@ struct CapturePickerPanel: View {
                             .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.text)
                         Spacer()
                         if isOn {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
+                            OpcIcon.check
                                 .foregroundStyle(LiveDesign.accent)
+                                .frame(width: 14, height: 14)
                         }
                     }
                     .padding(.vertical, 10)
@@ -910,8 +910,8 @@ struct CaptureDrumWheel: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                             if markedValues.contains(option) {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: centered ? 13 : 10))
+                                LucideIconView(name: OpcIcon.star.lucideName, filled: true)
+                                    .frame(width: centered ? 13 : 10, height: centered ? 13 : 10)
                                     .opacity(0.85)
                             }
                         }

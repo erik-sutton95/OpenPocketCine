@@ -233,9 +233,9 @@ struct HelpBadge: View {
         Button {
             showing.toggle()
         } label: {
-            Image(systemName: "questionmark")
-                .font(.system(size: 8.5, weight: .bold))
+            OpcIcon.info
                 .foregroundStyle(LiveDesign.faint)
+                .frame(width: 9, height: 9)
                 .frame(width: 16, height: 16)
                 .background(LiveDesign.background.opacity(0.5), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
@@ -498,9 +498,9 @@ struct SettingsResetButton: View {
             OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
             action()
         } label: {
-            Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 12, weight: .semibold))
+            OpcIcon.refreshCw
                 .foregroundStyle(LiveDesign.muted)
+                .frame(width: 12, height: 12)
                 .frame(width: 28, height: 28)
                 .background(LiveDesign.background.opacity(0.42), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
@@ -667,9 +667,9 @@ struct ScrollMoreCue: View {
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .kerning(1.2)
                 .foregroundStyle(LiveDesign.muted)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 8, weight: .bold))
+            OpcIcon.chevronDown
                 .foregroundStyle(LiveDesign.muted)
+                .frame(width: 8, height: 8)
         }
         .padding(.bottom, 13)
         .frame(maxWidth: .infinity)
