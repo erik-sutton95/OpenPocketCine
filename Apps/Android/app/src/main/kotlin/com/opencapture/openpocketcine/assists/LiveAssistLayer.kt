@@ -26,14 +26,15 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.roundToInt
 
 /**
  * Feed-aligned assist overlays. LUT / PEAK / FALSE / ZEBRA paint through the
  * GLES live feed (`LiveFeedEffectsSession`); this layer draws guides, scopes,
- * and the false-colour ruler. WAVE / PARADE / VECTOR / LIGHTS still wait on
- * JNI LiveColorScience samples.
+ * and the false-colour ruler. WAVE / PARADE / HISTO / VECTOR / LIGHTS read
+ * the GLES tap on [com.opencapture.openpocketcine.feed.LiveScopeSampleBus].
  *
  * [LiveAssistLayer] does not flip the video. See [LiveAssistState.mirror].
  * Pass [playback] to gate chips on [LiveAssistState.isPlaybackVisible] instead of
@@ -69,6 +70,9 @@ fun LiveAssistLayer(
         } else {
             { state.isVisible(it) }
         }
+    if (!playback) {
+        state.acceptScopeBundle(LiveScopeSampleBus.bundle)
+    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val canvas =
             AssistRect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())

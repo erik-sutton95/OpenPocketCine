@@ -132,6 +132,23 @@ class ScopeGeometryTest {
     }
 
     @Test
+    fun waveformIreAndIntensityMatchIos() {
+        val black = WaveformAxis.ire(16.0 / 255.0, CameraCommands.COLOR_DLOG2)
+        val grey = WaveformAxis.ire(78.0 / 255.0, CameraCommands.COLOR_DLOG2)
+        val clip = WaveformAxis.ire(247.0 / 255.0, CameraCommands.COLOR_DLOG2)
+        assertEquals(0.0, black, 0.05)
+        assertEquals(30.50, grey, 0.6)
+        assertEquals(100.0, clip, 0.05)
+        assertEquals(0.25, WaveformAssist.intensity(100), 1e-9)
+        assertEquals(1.0, ParadeAssist.intensity(100), 1e-9)
+        assertEquals(1.0, VectorscopeAssist.intensity(100), 1e-9)
+        val remapped = WaveformAxis.remapHistogram(IntArray(256).also { it[16] = 8; it[247] = 2 }, CameraCommands.COLOR_DLOG2)
+        assertEquals(10, remapped.sum())
+        assertEquals(8, remapped[0])
+        assertEquals(2, remapped[255])
+    }
+
+    @Test
     fun lumaHistogramIs256Bins() {
         val empty = LiveLumaHistogram.empty()
         assertEquals(256, empty.size)

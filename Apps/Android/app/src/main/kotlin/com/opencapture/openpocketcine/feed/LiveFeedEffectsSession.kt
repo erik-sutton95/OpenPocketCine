@@ -13,10 +13,14 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Surface
 import androidx.media3.common.util.GlUtil
 import com.opencapture.openpocketcine.OperatorPrefs
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -51,6 +55,13 @@ internal class LiveFeedEffectsSession(
     @Volatile private var displayWidth = 0
     @Volatile private var displayHeight = 0
     private var renderThread: Thread? = null
+    private val sampleExecutor =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "opc.scope.tap").apply { isDaemon = true }
+        }
+    private val sampleBusy = AtomicBoolean(false)
+    @Volatile private var nextScopeAtNs = 0L
+    @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
 
     fun attachDisplay(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
         detachDisplay()
@@ -83,12 +94,90 @@ internal class LiveFeedEffectsSession(
         renderThread?.join(800)
         renderThread = null
         displayTexture = null
+        previousBundle = ScopeAssistBundle.EMPTY
+        nextScopeAtNs = 0L
+        mainHandler.post { LiveScopeSampleBus.reset() }
     }
 
     private fun requestRender() {
         synchronized(frameLock) {
             frameAvailable = true
             frameLock.notifyAll()
+        }
+    }
+
+    /**
+     * After present. Downsample the OES frame to the iOS tap size, walk it off
+     * the GL thread at 15 Hz (10 Hz with three or more scopes).
+     */
+    private fun maybeTapScopes(
+        policy: ScopeTapPolicy,
+        oesCopy: OesCopyGlProgram,
+        oesTexture: Int,
+        texMatrix: FloatArray,
+        tapTarget: SourceTarget?,
+        tapPixels: ByteBuffer?,
+        tapScratch: ByteArray?,
+    ) {
+        if (!policy.needsTap || tapTarget == null || tapPixels == null || tapScratch == null) return
+        val now = System.nanoTime()
+        if (now < nextScopeAtNs) return
+        if (!sampleBusy.compareAndSet(false, true)) return
+        val thermal =
+            runCatching {
+                val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
+            }.getOrDefault(1.0)
+        nextScopeAtNs = now + PocketScopeSampler.minIntervalNs(policy.activeScopeCount, thermal)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, tapTarget.framebufferId)
+        GLES20.glViewport(0, 0, tapTarget.width, tapTarget.height)
+        oesCopy.draw(oesTexture, texMatrix)
+        tapPixels.clear()
+        GLES20.glReadPixels(
+            0,
+            0,
+            tapTarget.width,
+            tapTarget.height,
+            GLES20.GL_RGBA,
+            GLES20.GL_UNSIGNED_BYTE,
+            tapPixels,
+        )
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        tapPixels.rewind()
+        tapPixels.get(tapScratch)
+        val packed = tapScratch.copyOf()
+        val width = tapTarget.width
+        val height = tapTarget.height
+        val look = policy.vectorLut
+        val previous = previousBundle
+        sampleExecutor.execute {
+            try {
+                var transfer = MonitorTransfer.fromColorMode(policy.colorMode)
+                ScopeExposureCeiling.syncISO(policy.iso)
+                val (minC, maxC) = PocketScopeSampler.minMaxRGB(packed)
+                transfer = MonitorTransfer.inferred(minC, maxC, transfer)
+                ScopeExposureCeiling.observeTapMax(maxC, transfer)
+                val sampled =
+                    PocketScopeSampler.sample(
+                        bytes = packed,
+                        width = width,
+                        height = height,
+                        bytesPerRow = width * 4,
+                        transfer = transfer,
+                        includePoints = policy.includePoints,
+                        includeVectorPoints = policy.includeVectorPoints,
+                        look = if (policy.includeVectorPoints) look else null,
+                        trafficThreshold = policy.trafficThreshold,
+                        previous = previous,
+                        iso = ScopeExposureCeiling.resolvedISO(),
+                    )
+                previousBundle = sampled
+                mainHandler.post { LiveScopeSampleBus.publish(sampled) }
+            } catch (error: Exception) {
+                Log.w(TAG, "scope tap failed", error)
+            } finally {
+                sampleBusy.set(false)
+            }
         }
     }
 
@@ -103,8 +192,12 @@ internal class LiveFeedEffectsSession(
         var oesSurfaceTexture: SurfaceTexture? = null
         var decoderSurface: Surface? = null
         var sourceTarget: SourceTarget? = null
+        var tapTarget: SourceTarget? = null
+        var tapPixels: ByteBuffer? = null
+        var tapScratch: ByteArray? = null
         var activePlan: FeedEffectsRenderPlan? = null
         val texMatrix = FloatArray(16)
+        val tapSize = PocketScopeSampler.tapSize(SOURCE_WIDTH, SOURCE_HEIGHT)
         try {
             val egl = eglSetup(window)
             eglDisplay = egl.display
@@ -129,6 +222,10 @@ internal class LiveFeedEffectsSession(
             decoderSurface = Surface(oesSurfaceTexture)
             if (running.get()) onDecoderSurface(decoderSurface)
             sourceTarget = SourceTarget.create(SOURCE_WIDTH, SOURCE_HEIGHT)
+            tapTarget = SourceTarget.create(tapSize.first, tapSize.second)
+            val tapBytes = tapSize.first * tapSize.second * 4
+            tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
+            tapScratch = ByteArray(tapBytes)
             GLES20.glClearColor(0f, 0f, 0f, 1f)
             var hasOesFrame = false
             while (running.get()) {
@@ -171,6 +268,15 @@ internal class LiveFeedEffectsSession(
                     height.toFloat(),
                 )
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                maybeTapScopes(
+                    policy = nextPlan.scopeTap,
+                    oesCopy = oesCopy,
+                    oesTexture = oesTexture,
+                    texMatrix = texMatrix,
+                    tapTarget = tapTarget,
+                    tapPixels = tapPixels,
+                    tapScratch = tapScratch,
+                )
             }
         } catch (error: Exception) {
             Log.e(TAG, "live GPU feed failed; falling back to the identity surface", error)
@@ -179,6 +285,7 @@ internal class LiveFeedEffectsSession(
             runCatching { effects?.release() }
             runCatching { oesCopy?.release() }
             sourceTarget?.release()
+            tapTarget?.release()
             decoderSurface?.release()
             oesSurfaceTexture?.release()
             if (oesTexture != 0) {

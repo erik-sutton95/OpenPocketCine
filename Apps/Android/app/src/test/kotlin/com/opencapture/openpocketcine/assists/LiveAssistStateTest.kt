@@ -66,6 +66,27 @@ class LiveAssistStateTest {
     }
 
     @Test
+    fun acceptScopeBundleMirrorsLumaHistogram() {
+        val state = LiveAssistState()
+        val luma = IntArray(256).also { it[128] = 9 }
+        val bundle =
+            com.opencapture.openpocketcine.feed.ScopeAssistBundle(
+                revision = 3,
+                samples =
+                    com.opencapture.openpocketcine.feed.ScopeSamples(
+                        histogramLuma = luma,
+                        histogramRed = IntArray(256),
+                        histogramGreen = IntArray(256),
+                        histogramBlue = IntArray(256),
+                        points = emptyList(),
+                    ),
+            )
+        state.acceptScopeBundle(bundle)
+        assertEquals(3L, state.scopeBundle.revision)
+        assertEquals(9, state.lumaHistogram?.get(128))
+    }
+
+    @Test
     fun encodedRoundTripsOnToolsAndLut() {
         var saved: String? = null
         val state = LiveAssistState(onPersist = { saved = it })

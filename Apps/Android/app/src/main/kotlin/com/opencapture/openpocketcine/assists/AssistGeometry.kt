@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.openpocketcine.feed.WaveformIre
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.abs
 import kotlin.math.cos
@@ -199,17 +200,18 @@ object WaveformAxis {
         return rect.minX + PLOT_INSET + (ire / 100.0).toFloat() * span
     }
 
-    /**
-     * Paper IRE of 18% grey. Rec.709 ≈ 40.9, D-Log 39.88, D-Log2 30.50.
-     * JNI LiveColorScience will replace this once a tap exists.
-     */
+    /** Paper IRE of 18% grey. Rec.709 ≈ 40.9, D-Log 39.88, D-Log2 30.50, HLG ≈ 37.8. */
     fun middleGrayIRE(colorMode: Int): Double =
-        when (colorMode) {
-            CameraCommands.COLOR_DLOG2 -> 30.50
-            CameraCommands.COLOR_DLOG -> 39.88
-            CameraCommands.COLOR_HDR -> 47.0
-            else -> 40.9
-        }
+        WaveformIre.middleGrayIRE(MonitorTransfer.fromColorMode(colorMode))
+
+    fun ire(encoded: Double, colorMode: Int, iso: Int? = null): Double =
+        WaveformIre.ire(encoded, MonitorTransfer.fromColorMode(colorMode), iso)
+
+    fun levelTable(colorMode: Int, iso: Int? = null): FloatArray =
+        WaveformIre.levelTable(MonitorTransfer.fromColorMode(colorMode), iso)
+
+    fun remapHistogram(bins: IntArray, colorMode: Int, iso: Int? = null): IntArray =
+        WaveformIre.remapHistogram(bins, MonitorTransfer.fromColorMode(colorMode), iso)
 
     data class GuideStroke(val ire: Double, val dashed: Boolean, val crushClip: Boolean)
 
@@ -263,7 +265,14 @@ object HistogramAssist {
     fun ireX(scaleIRE: Double, rect: AssistRect): Float = WaveformAxis.plotX(scaleIRE, rect)
 }
 
+object WaveformAssist {
+    /** OpenZCine `waveformParadeBrightnessMultiplier` — 100% = former 25%. */
+    fun intensity(brightness: Int): Double = brightness.coerceIn(0, 200) / 400.0
+}
+
 object ParadeAssist {
+    fun intensity(brightness: Int): Double = brightness.coerceIn(0, 200) / 100.0
+
     fun laneWidth(mode: ParadeMode, plot: AssistRect): Float = plot.width / mode.laneCount
 
     fun laneX(xRatio: Double, lane: Int, mode: ParadeMode, plot: AssistRect): Float {
@@ -279,6 +288,8 @@ object ParadeAssist {
 }
 
 object VectorscopeAssist {
+    fun intensity(brightness: Int): Double = brightness.coerceIn(0, 200) / 100.0
+
     fun chip(zoom: VectorscopeZoom): String = "MON · ${zoom.label.uppercase()}"
 }
 

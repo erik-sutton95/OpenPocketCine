@@ -40,6 +40,12 @@ internal fun rememberLiveFeedEffectsPlan(
     val zebraHighlightColor = assist.zebraHighlightColor
     val zebraMidtoneColor = assist.zebraMidtoneColor
     val pinned = assist.pinned
+    val waveform = assist.waveform
+    val parade = assist.parade
+    val histogram = assist.histogram
+    val vectorscope = assist.vectorscope
+    val trafficLights = assist.trafficLights
+    val crushClip = assist.crushClipCompensation
     LaunchedEffect(
         lutOn,
         lutSelection,
@@ -59,6 +65,12 @@ internal fun rememberLiveFeedEffectsPlan(
         zebraHighlightColor,
         zebraMidtoneColor,
         pinned,
+        waveform,
+        parade,
+        histogram,
+        vectorscope,
+        trafficLights,
+        crushClip,
         status.colorMode,
         status.iso,
         family,

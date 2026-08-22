@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.OperatorPrefs
+import com.opencapture.openpocketcine.feed.ScopeAssistBundle
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -124,10 +125,18 @@ class LiveAssistState(
         private set
 
     /**
-     * Optional 256-bin luminance histogram. Null / all-zero draws the IRE axis
-     * and empty bins. JNI LiveColorScience can replace this later.
+     * Latest GLES tap. WAVE / PARADE / HISTO / VECTOR / LIGHTS read this;
+     * [lumaHistogram] mirrors native luma counts for tests.
      */
+    var scopeBundle by mutableStateOf(ScopeAssistBundle.EMPTY)
+
+    /** Optional 256-bin luminance histogram. Null / all-zero draws empty bins. */
     var lumaHistogram by mutableStateOf<IntArray?>(null)
+
+    fun acceptScopeBundle(bundle: ScopeAssistBundle) {
+        scopeBundle = bundle
+        lumaHistogram = bundle.samples.histogramLuma
+    }
 
     init {
         if (!encoded.isNullOrBlank()) applyEncoded(encoded)

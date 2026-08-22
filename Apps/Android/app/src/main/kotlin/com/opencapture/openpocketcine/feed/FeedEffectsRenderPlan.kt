@@ -7,6 +7,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.lut.LutCatalog
+import com.opencapture.openpocketcine.session.CameraCommands
 import java.io.File
 import java.util.LinkedHashMap
 
@@ -35,6 +36,7 @@ internal class FeedEffectsRenderPlan(
     val zebraMidtoneColor: FloatArray,
     val splitComparison: Boolean,
     val splitVertical: Boolean,
+    val scopeTap: ScopeTapPolicy = ScopeTapPolicy.IDLE,
 ) {
     val falseColorOn: Boolean
         get() = falseColorPaint != null && falseColorWeight != null
@@ -76,6 +78,11 @@ internal object FeedEffectsRenderPlanFactory {
         val peaking = assist.isVisible(LiveAssistTool.PEAK)
         val falseColor = assist.isVisible(LiveAssistTool.FALSE)
         val zebra = assist.isVisible(LiveAssistTool.ZEBRA)
+        val waveform = assist.isVisible(LiveAssistTool.WAVE)
+        val parade = assist.isVisible(LiveAssistTool.PARADE)
+        val histogram = assist.isVisible(LiveAssistTool.HISTO)
+        val vectorscope = assist.isVisible(LiveAssistTool.VECTOR)
+        val trafficLights = assist.isVisible(LiveAssistTool.LIGHTS)
         val look =
             LutLookResolver.resolve(
                 selection = lutSelection,
@@ -138,6 +145,39 @@ internal object FeedEffectsRenderPlanFactory {
                 floatArrayOf(midRgb.first.toFloat(), midRgb.second.toFloat(), midRgb.third.toFloat()),
             splitComparison = split,
             splitVertical = assist.splitVertical,
+            scopeTap =
+                ScopeTapPolicy(
+                    waveform = waveform,
+                    parade = parade,
+                    histogram = histogram,
+                    vectorscope = vectorscope,
+                    trafficLights = trafficLights,
+                    trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
+                    colorMode = colorMode,
+                    iso = if (iso in 50..102_400) iso else ScopeExposureCeiling.REFERENCE_EI,
+                    vectorLut =
+                        if (vectorscope) {
+                            lutCube
+                                ?: when (colorMode) {
+                                    CameraCommands.COLOR_DLOG,
+                                    CameraCommands.COLOR_DLOG2,
+                                    ->
+                                        lutCube(
+                                            context,
+                                            LutLookResolver.resolve(
+                                                LutCatalog.AUTO,
+                                                lutOn = true,
+                                                colorMode = colorMode,
+                                                family = family,
+                                                cameraName = cameraName,
+                                            ),
+                                        )
+                                    else -> null
+                                }
+                        } else {
+                            null
+                        },
+                ),
         )
     }
 
