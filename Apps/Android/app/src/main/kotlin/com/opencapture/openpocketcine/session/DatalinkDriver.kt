@@ -249,21 +249,24 @@ class DatalinkDriver(
 
     private fun startUdpReceiver() {
         // Handbook + iOS: one UDP 9004 5-tuple, pinned to the camera AP
-        // (`NWConnection` to 192.168.2.1:9004). `DatagramSocket()` binds the
-        // wildcard first, so Network.bindSocket no-ops. Unbound → pin → bind →
-        // connect is the Android equivalent.
+        // (`requiredLocalEndpoint` = DHCP `192.168.2.2…254`, then connect
+        // `192.168.2.1:9004`). `DatagramSocket()` binds the wildcard first, so
+        // Network.bindSocket no-ops. Unbound → pin → bind local IPv4 → connect
+        // is the Android equivalent.
         val sock = DatagramSocket(null)
         sock.reuseAddress = true
         sock.soTimeout = 250
         joiner.bindSocket(sock)
-        sock.bind(InetSocketAddress(Inet4Address.getByName("0.0.0.0"), 0))
+        val localIPv4 = joiner.cameraLocalIPv4()
+        val bindHost = udpBindHost(localIPv4)
+        if (localIPv4 == null) {
+            Log.i(TAG, "datalink: camera local IPv4 unknown — bind $WILDCARD_BIND_HOST")
+        }
+        sock.bind(InetSocketAddress(Inet4Address.getByName(bindHost), 0))
         runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
-        Log.i(
-            TAG,
-            "datalink: UDP ${if (sock.isConnected) "connected" else "unconnected"} " +
-                "$CAMERA_HOST:$port local=${sock.localSocketAddress}",
-        )
+        val label = if (sock.isConnected) "bound" else "unconnected"
+        Log.i(TAG, "datalink: UDP $label $CAMERA_HOST:$port local=${localIPv4 ?: "-"}")
         socket = sock
         running.set(true)
         receiver =
@@ -485,6 +488,12 @@ class DatalinkDriver(
     companion object {
         private const val TAG = "DatalinkDriver"
         private const val CAMERA_HOST = "192.168.2.1"
+        internal const val WILDCARD_BIND_HOST = "0.0.0.0"
+
+        /** iOS `requiredLocalEndpoint`; wildcard only when DHCP is not yet known. */
+        internal fun udpBindHost(localIPv4: String?): String =
+            if (localIPv4.isNullOrEmpty()) WILDCARD_BIND_HOST else localIPv4
+
         private const val HANDSHAKE_SENDS_PER_BIND = 20
         private const val HANDSHAKE_SEND_INTERVAL_MS = 350L
         private const val HANDSHAKE_POLL_MS = 20L

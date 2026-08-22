@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.Socket
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
@@ -68,6 +69,20 @@ class CameraApJoiner(context: Context) {
 
     fun isProcessBound(): Boolean =
         synchronized(lock) { boundNetwork != null }
+
+    /**
+     * Phone IPv4 on the camera AP (`192.168.2.2…254`). iOS
+     * `WiFiJoiner.cameraLocalIPv4` / `CameraSoftAP.isAssociatedIPv4`.
+     */
+    fun cameraLocalIPv4(): String? {
+        val network = synchronized(lock) { boundNetwork } ?: return null
+        val props = connectivity.getLinkProperties(network) ?: return null
+        return cameraLocalIPv4(
+            props.linkAddresses.mapNotNull { addr ->
+                (addr.address as? Inet4Address)?.hostAddress
+            },
+        )
+    }
 
     fun release() {
         val toUnregister: ConnectivityManager.NetworkCallback?
@@ -267,11 +282,26 @@ class CameraApJoiner(context: Context) {
         reassociationGrace = null
     }
 
-    private companion object {
-        const val TAG = "CameraApJoiner"
-        const val PRE_JOIN_SCAN_WAIT_MILLIS: Long = 3_000L
+    companion object {
+        private const val TAG = "CameraApJoiner"
+        private const val PRE_JOIN_SCAN_WAIT_MILLIS: Long = 3_000L
         /** Samsung often replaces the SoftAP Network a few seconds after join. */
-        const val REASSOCIATION_GRACE_MS: Long = 8_000L
+        private const val REASSOCIATION_GRACE_MS: Long = 8_000L
+
+        /**
+         * Phone address on the camera AP. `.1` is the camera; `.0` / `.255` are
+         * not hosts. Matches `CameraSoftAP.isAssociatedIPv4` exactly.
+         */
+        fun isAssociatedIPv4(ip: String): Boolean {
+            val parts = ip.split('.')
+            if (parts.size != 4) return false
+            if (parts[0] != "192" || parts[1] != "168" || parts[2] != "2") return false
+            val host = parts[3].toIntOrNull() ?: return false
+            return host in 2..254
+        }
+
+        fun cameraLocalIPv4(ipv4s: Iterable<String>): String? =
+            ipv4s.firstOrNull { isAssociatedIPv4(it) }
     }
 }
 
