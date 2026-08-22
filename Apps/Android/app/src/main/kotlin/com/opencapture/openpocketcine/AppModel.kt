@@ -211,6 +211,8 @@ class AppModel(context: Context) {
 
     fun setIsoLimit(raw: Int) = session.setIsoLimit(raw)
 
+    fun refreshIsoLimit() = session.getIsoLimit()
+
     fun setShootingMode(raw: Int) = session.setShootingMode(raw)
 
     fun setZoom(factor: Double) = session.setZoom(factor)

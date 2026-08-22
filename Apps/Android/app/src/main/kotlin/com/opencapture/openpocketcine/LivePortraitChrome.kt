@@ -51,7 +51,6 @@ import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 data class PortraitZones(
     val topBar: ChromeRect,
@@ -247,6 +246,7 @@ fun LivePortraitChrome(
     chromeInteractive: Boolean,
     onZoomCycle: () -> Unit,
     controlBusy: Boolean,
+    onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
 ) {
     val fill = model.portraitFeedAspect == PortraitFeedAspect.FILL
     val editing = model.chromeEditorMode
@@ -349,10 +349,13 @@ fun LivePortraitChrome(
                     status = status,
                     active = sheet,
                     enabled = !uiLocked && !controlBusy && chromeInteractive,
-                    showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
+                    showFocus =
+                        CaptureLists.supportsFocusMode(model.session.connectedCamera?.model?.name) &&
+                            model.session.connectedCamera?.model?.supportsFocusMode != false,
                     facePriority = model.facePriorityExposureEnabled,
                     shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
+                    onTileFrame = onTileFrame,
                 )
             }
         }
@@ -562,6 +565,7 @@ fun LiveCaptureStrip(
     facePriority: Boolean = false,
     shutterUsesAngle: Boolean = false,
     onOpen: (LiveSheet) -> Unit,
+    onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
@@ -571,8 +575,16 @@ fun LiveCaptureStrip(
         } else {
             status.shutterLabel
         }
+    val wbAuto = CaptureLists.wbIsAuto(status)
     CaptureStripShell(modifier) {
-        CaptureSettingCell("ISO", status.isoLabel, "25600", active == LiveSheet.ISO, enabled) { onOpen(LiveSheet.ISO) }
+        CaptureSettingCell(
+            "ISO",
+            CaptureLists.isoChipValue(status),
+            "25600",
+            active == LiveSheet.ISO,
+            enabled,
+            modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.ISO, it) },
+        ) { onOpen(LiveSheet.ISO) }
         if (auto) {
             CaptureSettingCell(
                 "EV",
@@ -580,6 +592,7 @@ fun LiveCaptureStrip(
                 "+3.0",
                 active == LiveSheet.SHUTTER,
                 enabled,
+                modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.SHUTTER, it) },
                 showFacePriorityBadge = facePriority,
             ) { onOpen(LiveSheet.SHUTTER) }
         } else {
@@ -589,18 +602,64 @@ fun LiveCaptureStrip(
                 if (shutterUsesAngle) "346°" else "1/16000",
                 active == LiveSheet.SHUTTER,
                 enabled,
+                modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.SHUTTER, it) },
             ) {
                 onOpen(LiveSheet.SHUTTER)
             }
         }
-        CaptureSettingCell("MODE", status.expoLabel, "Manual", active == LiveSheet.EXPO, enabled) { onOpen(LiveSheet.EXPO) }
-        CaptureSettingCell("WB", status.wbLabel, "10000K", active == LiveSheet.WB, enabled) { onOpen(LiveSheet.WB) }
+        CaptureSettingCell(
+            "MODE",
+            status.expoLabel,
+            "Manual",
+            active == LiveSheet.EXPO,
+            enabled,
+            modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.EXPO, it) },
+        ) { onOpen(LiveSheet.EXPO) }
+        CaptureSettingCell(
+            "WB",
+            CaptureLists.wbChipValue(status),
+            "10000K",
+            active == LiveSheet.WB,
+            enabled,
+            modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.WB, it) },
+            valueIcon = if (wbAuto) { { tint -> WbAutoGlyph(tint) } } else null,
+        ) { onOpen(LiveSheet.WB) }
         if (showFocus) {
-            CaptureSettingCell("FOCUS", status.focusLabel, "Showcase", active == LiveSheet.FOCUS, enabled) {
+            CaptureSettingCell(
+                "FOCUS",
+                status.focusLabel,
+                "Showcase",
+                active == LiveSheet.FOCUS,
+                enabled,
+                modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.FOCUS, it) },
+            ) {
                 onOpen(LiveSheet.FOCUS)
             }
         }
-        CaptureSettingCell("AUDIO", status.audioLabel, "Spatial", active == LiveSheet.AUDIO, enabled) { onOpen(LiveSheet.AUDIO) }
+        CaptureSettingCell(
+            "AUDIO",
+            status.audioLabel,
+            "Spatial",
+            active == LiveSheet.AUDIO,
+            enabled,
+            modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.AUDIO, it) },
+        ) { onOpen(LiveSheet.AUDIO) }
+    }
+}
+
+/** iOS `a.circle.fill` stand-in for Auto white-balance. */
+@Composable
+private fun WbAutoGlyph(tint: Color, modifier: Modifier = Modifier) {
+    Box(modifier.size(18.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(tint)
+        }
+        Text(
+            "A",
+            color = LiveDesign.background,
+            style = LiveType.ui(10f, FontWeight.Bold),
+            maxLines = 1,
+        )
     }
 }
 
@@ -799,14 +858,5 @@ private fun ChevronLeftGlyph(tint: Color, modifier: Modifier = Modifier) {
     }
 }
 
-private fun portraitStorageLabel(status: CameraStatus): String {
-    val free = if (status.storageFreeMb > 0) status.storageFreeMb else status.sdFreeMb
-    val total = if (status.storageTotalMb > 0) status.storageTotalMb else status.sdTotalMb
-    if (total > 0) {
-        val gb = max(0, free) / 1024
-        val pct = ((max(0, free).toDouble() / total.toDouble()) * 100.0).roundToInt()
-        return "$gb GB · $pct%"
-    }
-    if (status.recordRemainingSec > 0) return "${status.recordRemainingSec / 60} Min"
-    return "—"
-}
+private fun portraitStorageLabel(status: CameraStatus): String =
+    CaptureLists.storageLabel(status, showDuration = false)

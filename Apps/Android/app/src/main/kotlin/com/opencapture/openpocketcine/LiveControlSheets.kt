@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -28,7 +31,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -62,7 +64,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -80,6 +84,7 @@ import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.FocusTrackMode
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
@@ -96,6 +101,9 @@ enum class LiveSheet {
     COLOR,
     FORMAT,
 }
+
+val LiveSheet.isTopPicker: Boolean
+    get() = this == LiveSheet.FORMAT || this == LiveSheet.COLOR
 
 @Composable
 fun LiveControlSheet(
@@ -121,6 +129,7 @@ fun LiveControlSheet(
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
     val isAngleSheet = sheet == LiveSheet.SHUTTER && !isEvSheet && selectedMode == 1
     val tabs = modeTabs(sheet, isEvSheet, offersIsoAuto)
+    val bodyFamily = model.session.connectedCamera?.model?.family ?: "pocket"
 
     fun enqueueDrumSend(send: () -> Unit) {
         if (!enabled) return
@@ -234,8 +243,8 @@ fun LiveControlSheet(
     }
 
     fun reseatColor() {
-        val labels = CaptureLists.colorWheelLabels(status)
-        val live = CameraCommands.colorLabel(status.colorMode)
+        val labels = CaptureLists.colorWheelLabels(status, bodyFamily)
+        val live = CameraCommands.colorLabel(status.colorMode, bodyFamily)
         val next = if (live in labels) live else labels.firstOrNull().orEmpty()
         drumSelection = next
         lastApplied = next
@@ -336,7 +345,13 @@ fun LiveControlSheet(
                 applyVideoFormat(selectedMode, value)
             }
             LiveSheet.COLOR -> {
-                val mode = CaptureLists.colorModeFromLabel(value) ?: return
+                val mode = CaptureLists.colorModeFromLabel(value, bodyFamily) ?: return
+                CaptureLists.nativeIsoHop(
+                    from = status.colorMode,
+                    to = mode,
+                    currentIndex = status.isoIndex,
+                    hopEnabled = model.nativeISOHopEnabled,
+                )?.let { model.setIsoIndex(it) }
                 model.setColorMode(mode)
             }
             else -> Unit
@@ -346,6 +361,7 @@ fun LiveControlSheet(
     LaunchedEffect(sheet) {
         if (sheet == LiveSheet.AUDIO) model.refreshAudio()
         if (sheet == LiveSheet.FOCUS && status.focusTrack < 0) model.refreshFocusTrack()
+        if (sheet == LiveSheet.ISO && CaptureLists.shouldGetIsoLimit(status)) model.refreshIsoLimit()
         drumJob?.cancel()
         seed()
     }
@@ -381,20 +397,15 @@ fun LiveControlSheet(
     }
     DisposableEffect(sheet) { onDispose { drumJob?.cancel() } }
 
-    Box(
-        Modifier.fillMaxWidth().padding(bottom = 10.dp),
-        contentAlignment = Alignment.BottomEnd,
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .overlayGlass(ChromeShape)
+            .border(1.dp, LiveDesign.hairlineStrong, ChromeShape)
+            .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(
-            Modifier
-                .widthIn(max = LiveDesign.CAPTURE_PICKER_WIDTH_DP.dp)
-                .fillMaxWidth()
-                .overlayGlass(ChromeShape)
-                .border(1.dp, LiveDesign.hairlineStrong, ChromeShape)
-                .pointerInput(Unit) { detectTapGestures(onTap = {}) }
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
             SheetHeader(
                 title = headerTitle(sheet, isEvSheet),
                 subtitle = headerSubtitle(sheet, isEvSheet, isAngleSheet, model.facePriorityExposureEnabled),
@@ -528,7 +539,6 @@ fun LiveControlSheet(
                 }
                 LiveSheet.EXPO -> {
                     val expoRows = listOf("Auto", "Manual")
-                    val shooting = CaptureLists.shootingModeLabels
                     CheckedRows(
                         options = expoRows,
                         selected = status.expoLabel.takeIf { it in expoRows },
@@ -536,20 +546,11 @@ fun LiveControlSheet(
                     ) { label ->
                         model.setExpoMode(label == "Manual")
                     }
-                    if (status.shootingMode >= 0) {
-                        CheckedRows(
-                            options = shooting,
-                            selected = CaptureLists.shootingModeLabel(status.shootingMode),
-                            enabled = enabled,
-                        ) { label ->
-                            CaptureLists.shootingModeRaw(label)?.let { model.setShootingMode(it) }
-                        }
-                    }
                 }
                 LiveSheet.AUDIO -> AudioBody(status, enabled, selectedMode, model)
                 LiveSheet.COLOR ->
                     CaptureDrumWheel(
-                        options = CaptureLists.colorWheelLabels(status),
+                        options = CaptureLists.colorWheelLabels(status, bodyFamily),
                         selection = drumSelection,
                         interactive = enabled,
                         onSelect = {
@@ -580,6 +581,112 @@ fun LiveControlSheet(
                         if (index == 1) reseatShutterAngle() else reseatShutter()
                     }
                 }
+            }
+    }
+}
+
+/**
+ * OpenZCine `PanelHost.topPickerBody` / `bottomPickerBody`: backdrop tap, 340dp
+ * card under a top chip or 420-capped card parked 10dp above the capture bar.
+ */
+@Composable
+fun LivePickerHost(
+    sheet: LiveSheet,
+    frames: Map<LiveSheet, ChromeRect>,
+    bar: ChromeRect,
+    topDeck: ChromeRect,
+    viewportWidth: Float,
+    viewportHeight: Float,
+    safeLeading: Float,
+    safeTrailing: Float,
+    safeTop: Float,
+    safeBottom: Float,
+    ceilingY: Float,
+    floorY: Float?,
+    model: AppModel,
+    status: CameraStatus,
+    locked: Boolean,
+    onSelect: (LiveSheet?) -> Unit,
+) {
+    val density = LocalDensity.current
+    var panelHeight by remember(sheet) { mutableFloatStateOf(LiveChromeMetrics.DRUM_PICKER_HEIGHT) }
+    val tile = frames[sheet] ?: ChromeRect(0f, 0f, 0f, 0f)
+    val fromTop = sheet.isTopPicker && !tile.isEmpty
+    val cell =
+        if (fromTop) {
+            tile
+        } else if (sheet.isTopPicker) {
+            ChromeRect(topDeck.midX - 40f, topDeck.minY, 80f, max(topDeck.height, 1f))
+        } else {
+            tile
+        }
+    val place =
+        if (fromTop || (sheet.isTopPicker && topDeck.height > 1f && bar.height <= 1f)) {
+            LivePopupPlacement.topPicker(
+                cell = cell,
+                panelHeight = panelHeight,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                safeLeading = safeLeading,
+                safeTrailing = safeTrailing,
+                safeTop = safeTop,
+                safeBottom = safeBottom,
+                floorY = floorY,
+            )
+        } else {
+            LivePopupPlacement.capturePicker(
+                tile = tile,
+                bar = bar,
+                panelHeight = panelHeight,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                safeLeading = safeLeading,
+                safeTrailing = safeTrailing,
+                safeTop = safeTop,
+                safeBottom = safeBottom,
+                ceilingY = ceilingY,
+            )
+        }
+    var shown by remember(sheet) { mutableStateOf(false) }
+    LaunchedEffect(sheet) { shown = true }
+    val revealed by
+        animateFloatAsState(
+            if (shown) 1f else 0f,
+            tween(200, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            label = "picker-reveal",
+        )
+    val slide = if (fromTop) place.y + panelHeight + 40f else place.maxHeight + 20f
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .pointerInput(sheet, frames) {
+                detectTapGestures { offset ->
+                    val d = density.density
+                    val x = offset.x / d
+                    val y = offset.y / d
+                    val hit =
+                        frames.entries.firstOrNull { (_, rect) ->
+                            rect.inset(-10f, -8f).contains(x, y)
+                        }
+                    when {
+                        hit == null -> onSelect(null)
+                        hit.key == sheet -> onSelect(null)
+                        else -> onSelect(hit.key)
+                    }
+                }
+            },
+    ) {
+        Box(
+            Modifier
+                .offset(place.x.dp, (place.y + (1f - revealed) * if (fromTop) -slide else slide).dp)
+                .width(place.width.dp)
+                .heightIn(max = place.maxHeight.dp)
+                .graphicsLayer { alpha = revealed }
+                .onSizeChanged { panelHeight = it.height / density.density },
+        ) {
+            androidx.compose.runtime.key(sheet) {
+                LiveControlSheet(sheet, model, status, locked) { onSelect(null) }
             }
         }
     }
@@ -1325,15 +1432,19 @@ object CaptureLists {
 
     val fpsDrumLabels: List<String> = listOf("24p", "25p", "30p", "48p", "50p", "60p")
 
-    val shootingModeLabels: List<String> =
-        listOf("SlowMo", "Video", "TimeLapse", "Photo", "HyperLapse", "SuperNight")
-
-    val colorWheel: List<Pair<Int, String>> =
+    val colorWheelPocket: List<Pair<Int, String>> =
         listOf(
             CameraCommands.COLOR_NORMAL to "Normal",
             CameraCommands.COLOR_HDR to "HDR",
             CameraCommands.COLOR_DLOG to "D-Log",
             CameraCommands.COLOR_DLOG2 to "D-Log2",
+        )
+
+    val colorWheelNano: List<Pair<Int, String>> =
+        listOf(
+            CameraCommands.COLOR_NORMAL to "Normal 8-bit",
+            CameraCommands.COLOR_NORMAL10 to "Normal 10-bit",
+            CameraCommands.COLOR_DLOG_M to "D-Log M 10-bit",
         )
 
     fun shutterDenoms(status: CameraStatus): List<Int> =
@@ -1373,6 +1484,9 @@ object CaptureLists {
             .firstOrNull { CameraCommands.isoLabel(it) == label }
 
     fun offersIsoAuto(status: CameraStatus): Boolean = status.colorMode != CameraCommands.COLOR_DLOG2
+
+    /** GET `0x8E` pid `0x000F` only when Auto ISO exists. Unknown color = Normal. */
+    fun shouldGetIsoLimit(status: CameraStatus): Boolean = offersIsoAuto(status)
 
     fun isoAutoBase(colorMode: Int): Int? =
         when (colorMode) {
@@ -1450,32 +1564,93 @@ object CaptureLists {
             else -> CameraCommands.fpsIndex(status.fps) ?: 1
         }
 
-    fun colorWheelLabels(@Suppress("UNUSED_PARAMETER") status: CameraStatus): List<String> =
-        colorWheel.map { it.second }
+    fun colorWheel(family: String, available: List<Int> = emptyList()): List<Pair<Int, String>> {
+        val order = if (family == "nano") colorWheelNano else colorWheelPocket
+        if (available.isEmpty()) return order
+        val have = available.toSet()
+        val ranked = order.filter { it.first in have }
+        val extras =
+            available.filter { code -> order.none { it.first == code } }.map { code ->
+                code to CameraCommands.colorLabel(code, family)
+            }
+        return ranked + extras
+    }
 
-    fun colorModeFromLabel(label: String): Int? = colorWheel.firstOrNull { it.second == label }?.first
+    fun colorWheelLabels(
+        status: CameraStatus,
+        family: String = "pocket",
+    ): List<String> = colorWheel(family, status.availableColorModes).map { it.second }
 
-    fun shootingModeLabel(code: Int): String? =
-        when (code) {
-            0x00 -> "SlowMo"
-            0x01 -> "Video"
-            0x02 -> "TimeLapse"
-            0x05, 0x17 -> "Photo"
-            0x0A -> "HyperLapse"
-            0x28 -> "SuperNight"
-            else -> null
+    fun colorModeFromLabel(label: String, family: String = "pocket"): Int? {
+        if (label == "Normal 8-bit") return CameraCommands.COLOR_NORMAL
+        return colorWheel(family).firstOrNull { it.second == label }?.first
+            ?: colorWheelPocket.firstOrNull { it.second == label }?.first
+            ?: colorWheelNano.firstOrNull { it.second == label }?.first
+    }
+
+    /**
+     * If the operator is still on [from]'s native ISO, hop to [to]'s native.
+     * Off-base or Auto stays put. Rec.709 / HDR have no native — no hop.
+     */
+    fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? {
+        if (!hopEnabled || from == to) return null
+        val fromBase = CameraCommands.baseIsoLabel(from)?.toIntOrNull() ?: return null
+        val toBase = CameraCommands.baseIsoLabel(to)?.toIntOrNull() ?: return null
+        if (currentIndex == 0) return null
+        val current = CameraCommands.isoLabel(currentIndex).toIntOrNull() ?: return null
+        if (current != fromBase) return null
+        return isoIndexFromLabel("$toBase")
+    }
+
+    /** Top-deck chip, OpenZCine `4K · 25p`. */
+    fun recFormatChipLabel(status: CameraStatus): String {
+        val fpsText = if (status.fps > 0) "${status.fps}p" else "—"
+        val res =
+            when (status.resolutionCode) {
+                CameraCommands.RES_4K -> "4K"
+                CameraCommands.RES_1080 -> "1080p"
+                else -> null
+            }
+        return if (res != null) "$res · $fpsText" else "— · $fpsText"
+    }
+
+    /** Remaining storage. Source order is `storage*` then `sd*`, matching iOS. */
+    fun storageLabel(status: CameraStatus, showDuration: Boolean): String {
+        if (showDuration) {
+            return if (status.recordRemainingSec > 0) {
+                "${status.recordRemainingSec / 60} Min"
+            } else {
+                "— Min"
+            }
+        }
+        val free = if (status.storageFreeMb > 0) status.storageFreeMb else status.sdFreeMb
+        val total = if (status.storageTotalMb > 0) status.storageTotalMb else status.sdTotalMb
+        if (total > 0) {
+            val gb = max(0, free) / 1024
+            val pct = ((max(0, free).toDouble() / total.toDouble()) * 100.0).roundToInt()
+            return "$gb GB · $pct%"
+        }
+        if (free > 0) return "${free / 1024} GB"
+        return "—"
+    }
+
+    fun isoChipValue(status: CameraStatus): String =
+        when {
+            status.isoIndex == 0 -> "Auto"
+            status.iso > 0 -> "${status.iso}"
+            status.isoIndex > 0 -> CameraCommands.isoLabel(status.isoIndex)
+            else -> "—"
         }
 
-    fun shootingModeRaw(label: String): Int? =
-        when (label) {
-            "SlowMo" -> 0x00
-            "Video" -> 0x01
-            "TimeLapse" -> 0x02
-            "Photo" -> 0x05
-            "HyperLapse" -> 0x0A
-            "SuperNight" -> 0x28
-            else -> null
+    fun wbChipValue(status: CameraStatus): String =
+        when (status.wbMode) {
+            CameraCommands.WB_CUSTOM -> if (status.wbKelvin > 0) "${status.wbKelvin}K" else "Custom"
+            CameraCommands.WB_AUTO -> "Auto"
+            else -> "—"
         }
+
+    fun wbIsAuto(status: CameraStatus): Boolean =
+        status.wbMode != CameraCommands.WB_CUSTOM
 
     /** Nano / Atto have no AF-S / AF-C. Unknown name defaults to Pocket (supported). */
     fun supportsFocusMode(modelName: String?): Boolean {

@@ -37,6 +37,10 @@ object CameraCommands {
     const val COLOR_HDR = 0x3C
     const val COLOR_DLOG = 0x17
     const val COLOR_DLOG2 = 0x41
+    /** Nano `camcap_color_mode` `3D` — Normal 10-bit. */
+    const val COLOR_NORMAL10 = 0x3D
+    /** Nano `camcap_color_mode` `00` — D-Log M 10-bit. */
+    const val COLOR_DLOG_M = 0x00
 
     const val EXPO_AUTO = 0x01
     const val EXPO_MANUAL = 0x04
@@ -337,12 +341,14 @@ object CameraCommands {
             else -> "—"
         }
 
-    fun colorLabel(mode: Int): String =
+    fun colorLabel(mode: Int, family: String = "pocket"): String =
         when (mode) {
-            COLOR_NORMAL -> "Normal"
+            COLOR_NORMAL -> if (family == "nano") "Normal 8-bit" else "Normal"
             COLOR_HDR -> "HDR"
             COLOR_DLOG -> "D-Log"
             COLOR_DLOG2 -> "D-Log2"
+            COLOR_NORMAL10 -> "Normal 10-bit"
+            COLOR_DLOG_M -> "D-Log M 10-bit"
             else -> "—"
         }
 

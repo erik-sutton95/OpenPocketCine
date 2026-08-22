@@ -1077,6 +1077,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
     }
 
+    /** GET `0x8E` pid `0x000F`. Swift core already packs the bytes. */
+    fun getIsoLimit() {
+        if (_controlBusy.value) return
+        scope.launch { sendKind(SwiftCore.CMD_GET_ISO_LIMIT, null, "ISO limit GET") }
+    }
+
+    /** True while a feed recover rebuild is in flight — FPS chip `RECOV`, not session recovery. */
+    val isFeedRecovering: Boolean
+        get() = feedRecoveryJob != null
+
     fun setShootingMode(raw: Int) {
         if (_controlBusy.value) return
         scope.launch {

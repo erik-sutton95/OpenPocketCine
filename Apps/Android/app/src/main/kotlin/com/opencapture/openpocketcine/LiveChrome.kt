@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,12 +45,17 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import com.opencapture.openpocketcine.core.ConnectionPhase
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -80,6 +87,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -197,10 +205,10 @@ fun CaptureStripShell(modifier: Modifier = Modifier, content: @Composable RowSco
         modifier =
             modifier
                 .height(LiveDesign.CONTROL_HEIGHT_DP.dp)
-                .wrapContentWidth()
+                .fillMaxWidth()
                 .monitorGlass()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(LiveChromeMetrics.CAPTURE_CELL_GAP.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
@@ -347,10 +355,16 @@ object LiveChromeMetrics {
     val FOCUS_RESET_GAP get() = 24f * scale
     val POPUP_GAP get() = 10f * scale
     val TOP_PICKER_GAP get() = 8f * scale
+    val TOP_PICKER_WIDTH get() = LiveDesign.TOP_PICKER_WIDTH_DP * scale
+    val CAPTURE_PICKER_MAX_WIDTH get() = LiveDesign.CAPTURE_PICKER_WIDTH_DP * scale
     val CONTROL_H get() = LiveDesign.CONTROL_HEIGHT_DP * scale
     val INFO_PILL_HUG get() = 800f * scale
     val CAPTURE_HUG get() = 512f * scale
     val CAPTURE_CELL_GAP get() = 16f * scale
+    /** OpenZCine `PickerPanel` hug (16+16 pad, 34 close header, 14 gap, 176 drum). */
+    const val DRUM_PICKER_HEIGHT = 256f
+    /** Extra hug when a mode-tab row sits under the drum. */
+    const val PICKER_MODE_BAR_HEIGHT = 51f
 }
 
 /** Assist takes leftover after the capture pill hugs the trailing edge. */
@@ -454,6 +468,401 @@ data class ChromeRect(val x: Float, val y: Float, val width: Float, val height: 
 
     fun intersects(other: ChromeRect): Boolean =
         minX < other.maxX && other.minX < maxX && minY < other.maxY && other.minY < maxY
+
+    fun contains(px: Float, py: Float): Boolean = px >= minX && px <= maxX && py >= minY && py <= maxY
+}
+
+/** Canvas origin in window pixels — capture / top-picker anchors are relative to this. */
+val LocalLiveCanvasOrigin = compositionLocalOf { Offset.Zero }
+
+fun Modifier.reportChromeFrame(onFrame: (ChromeRect) -> Unit): Modifier =
+    composed {
+        val density = LocalDensity.current
+        val origin = LocalLiveCanvasOrigin.current
+        onGloballyPositioned { coords ->
+            val pos = coords.positionInRoot()
+            val d = density.density
+            onFrame(
+                ChromeRect(
+                    (pos.x - origin.x) / d,
+                    (pos.y - origin.y) / d,
+                    coords.size.width / d,
+                    coords.size.height / d,
+                ),
+            )
+        }
+    }
+
+/**
+ * OpenZCine live-view popup geometry (`PanelHost.topPickerBody` / `bottomPickerBody`):
+ * a glass card 8dp below a top chip or 10dp above a bottom bar, clamped into the
+ * safe viewport — never a full-bleed or centred sheet.
+ */
+object LivePopupPlacement {
+    data class Box(val x: Float, val y: Float, val width: Float, val maxHeight: Float)
+
+    const val EDGE_MARGIN = 8f
+    const val ASSIST_MARGIN = 12f
+    const val CUTOUT_CLEARANCE = 4f
+    const val ASSIST_TOP_INSET = 4f
+
+    fun horizontalBand(
+        preferredWidth: Float,
+        viewportWidth: Float,
+        safeLeading: Float,
+        safeTrailing: Float,
+        margin: Float,
+    ): Triple<Float, Float, Float> {
+        val minX = max(margin, safeLeading + CUTOUT_CLEARANCE)
+        val maxX = viewportWidth - max(margin, safeTrailing + CUTOUT_CLEARANCE)
+        val width = max(0f, min(preferredWidth, maxX - minX))
+        return Triple(minX, maxX, width)
+    }
+
+    fun leadingX(desired: Float, width: Float, minX: Float, maxX: Float): Float =
+        min(max(desired, minX), max(minX, maxX - width))
+
+    /** OpenZCine `topPickerBody`: 340-wide card, centred on the cell, 8dp under `cell.maxY`. */
+    fun topPicker(
+        cell: ChromeRect,
+        panelHeight: Float,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        safeLeading: Float,
+        safeTrailing: Float,
+        safeTop: Float,
+        safeBottom: Float,
+        floorY: Float? = null,
+        preferredWidth: Float = LiveChromeMetrics.TOP_PICKER_WIDTH,
+        gap: Float = LiveChromeMetrics.TOP_PICKER_GAP,
+    ): Box {
+        val (minX, maxX, width) =
+            horizontalBand(
+                preferredWidth = preferredWidth,
+                viewportWidth = viewportWidth,
+                safeLeading = safeLeading,
+                safeTrailing = safeTrailing,
+                margin = EDGE_MARGIN,
+            )
+        val hasCell = cell.width > 1f && cell.height > 1f
+        val x =
+            leadingX(
+                desired = if (hasCell) cell.midX - width / 2f else minX,
+                width = width,
+                minX = minX,
+                maxX = maxX,
+            )
+        val minY = max(EDGE_MARGIN, safeTop + LiveChromeMetrics.CHROME_TOP + EDGE_MARGIN)
+        val floor = floorY ?: (viewportHeight - max(EDGE_MARGIN, safeBottom))
+        val desiredTop = if (hasCell) cell.maxY + gap else minY
+        val height = min(max(0f, panelHeight), max(0f, floor - minY))
+        val y = max(minY, min(desiredTop, floor - height))
+        return Box(x = x, y = y, width = width, maxHeight = max(0f, floor - y))
+    }
+
+    /**
+     * OpenZCine `bottomPickerBody`: 420 cap, 10dp above the capture bar, centred on
+     * the originating tile (or the bar when the tile frame is missing).
+     */
+    fun capturePicker(
+        tile: ChromeRect,
+        bar: ChromeRect,
+        panelHeight: Float,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        safeLeading: Float,
+        safeTrailing: Float,
+        safeTop: Float,
+        safeBottom: Float,
+        ceilingY: Float = 0f,
+        preferredWidth: Float = LiveChromeMetrics.CAPTURE_PICKER_MAX_WIDTH,
+        gap: Float = LiveChromeMetrics.POPUP_GAP,
+    ): Box {
+        val hasBar = bar.width > 1f
+        val widthPref = if (hasBar) min(bar.width, preferredWidth) else preferredWidth
+        val (minX, maxX, width) =
+            horizontalBand(
+                preferredWidth = widthPref,
+                viewportWidth = viewportWidth,
+                safeLeading = safeLeading,
+                safeTrailing = safeTrailing,
+                margin = EDGE_MARGIN,
+            )
+        val midX =
+            when {
+                tile.width > 1f -> tile.midX
+                hasBar -> bar.midX
+                else -> viewportWidth / 2f
+            }
+        val x = leadingX(desired = midX - width / 2f, width = width, minX = minX, maxX = maxX)
+        val minY = max(EDGE_MARGIN, max(safeTop + ASSIST_TOP_INSET, ceilingY))
+        val boxBottom =
+            (if (hasBar) bar.minY else viewportHeight - max(EDGE_MARGIN, safeBottom)) - gap
+        val maxHeight = max(0f, boxBottom - minY)
+        val height = min(max(0f, panelHeight), maxHeight)
+        val y = max(minY, boxBottom - height)
+        return Box(x = x, y = y, width = width, maxHeight = maxHeight)
+    }
+}
+
+/** OpenZCine `topPickerBody` convenience used by tests and the landscape host. */
+object LiveTopPickerPlacement {
+    fun leadingX(
+        cellMidX: Float,
+        width: Float,
+        viewportWidth: Float,
+        safeLeading: Float = 0f,
+        safeTrailing: Float = 0f,
+    ): Float =
+        LivePopupPlacement.topPicker(
+            cell = ChromeRect(cellMidX - 1f, 0f, 2f, 2f),
+            panelHeight = 80f,
+            viewportWidth = viewportWidth,
+            viewportHeight = 400f,
+            safeLeading = safeLeading,
+            safeTrailing = safeTrailing,
+            safeTop = 0f,
+            safeBottom = 0f,
+            preferredWidth = width,
+        ).x
+
+    fun topY(
+        cellMaxY: Float,
+        panelHeight: Float,
+        viewportHeight: Float,
+        safeTop: Float = 0f,
+        safeBottom: Float = 0f,
+        floorY: Float? = null,
+    ): Float =
+        LivePopupPlacement.topPicker(
+            cell = ChromeRect(0f, cellMaxY - 2f, 2f, 2f),
+            panelHeight = panelHeight,
+            viewportWidth = 400f,
+            viewportHeight = viewportHeight,
+            safeLeading = 0f,
+            safeTrailing = 0f,
+            safeTop = safeTop,
+            safeBottom = safeBottom,
+            floorY = floorY,
+        ).y
+}
+
+/** Hold a numeric FPS string until it moves by [step] so hundredths do not tick the chip. */
+object LiveChromeReadout {
+    fun holdFPS(incoming: String, displayed: String, step: Double = 0.4): String {
+        val next = incoming.toDoubleOrNull()
+        val current = displayed.toDoubleOrNull()
+        if (next == null || current == null) return incoming
+        return if (abs(next - current) >= step) incoming else displayed
+    }
+}
+
+/**
+ * Pocket mapping onto OpenZCine's FPS chip labels. SoftAP live view is ~25 fps —
+ * that is the delivery target for bars, not `CameraStatus.fps` (record format).
+ */
+object LiveViewLink {
+    const val TARGET_FPS = 25.0
+
+    fun cameraLinkPhase(
+        connection: ConnectionPhase,
+        recovering: Boolean,
+        measuredFPS: Double,
+    ): CameraLinkPhase {
+        if (connection == ConnectionPhase.FAILED) return CameraLinkPhase.DISCONNECTED
+        if (measuredFPS > 0) {
+            return if (recovering) CameraLinkPhase.RECOVERING else CameraLinkPhase.STREAMING
+        }
+        return when (connection) {
+            ConnectionPhase.IDLE -> CameraLinkPhase.DISCONNECTED
+            ConnectionPhase.LIVE -> CameraLinkPhase.CONNECTED_IDLE
+            else -> CameraLinkPhase.CONNECTING
+        }
+    }
+
+    fun fpsChipLabel(
+        connection: ConnectionPhase,
+        recovering: Boolean,
+        formattedFPS: String,
+        measuredFPS: Double,
+    ): String {
+        if (connection == ConnectionPhase.FAILED) return "FAIL"
+        if (recovering) return "RECOV"
+        if (measuredFPS > 0) return formattedFPS
+        return if (connection == ConnectionPhase.IDLE) "—" else "LINK"
+    }
+}
+
+enum class CameraLinkPhase {
+    DISCONNECTED,
+    CONNECTING,
+    CONNECTED_IDLE,
+    STREAMING,
+    RECOVERING,
+    DEMO,
+}
+
+data class CameraLinkHealthInputs(
+    val phase: CameraLinkPhase = CameraLinkPhase.DISCONNECTED,
+    val ptpRoundTripMilliseconds: Double? = null,
+    val liveViewFPS: Double? = null,
+    val targetLiveViewFPS: Double = 30.0,
+    val secondsSinceLastGoodFrame: Double? = null,
+    val consecutiveBadFrames: Int = 0,
+    val recentCommandFailures: Int = 0,
+    val isRecoveringStream: Boolean = false,
+)
+
+data class CameraLinkHealthSnapshot(val linkHealthScore: Int, val detailCaption: String)
+
+object CameraLinkHealthScorer {
+    fun latencyScore(milliseconds: Double): Double =
+        when {
+            milliseconds < 30 -> 100.0
+            milliseconds < 60 -> 92.0
+            milliseconds < 100 -> 82.0
+            milliseconds < 150 -> 68.0
+            milliseconds < 250 -> 48.0
+            milliseconds < 500 -> 28.0
+            else -> 10.0
+        }
+
+    fun frameDeliveryScore(actualFPS: Double, targetFPS: Double): Double {
+        if (actualFPS <= 0 || targetFPS <= 0) return 0.0
+        return min(1.0, actualFPS / targetFPS) * 100.0
+    }
+
+    fun frameFreshnessPenalty(secondsSinceLastGoodFrame: Double?): Double {
+        val s = secondsSinceLastGoodFrame ?: return 0.0
+        return when {
+            s < 0.5 -> 0.0
+            s < 1.5 -> 8.0
+            s < 3.0 -> 20.0
+            s < 5.0 -> 35.0
+            else -> 55.0
+        }
+    }
+
+    fun badFramePenalty(consecutiveBadFrames: Int): Double =
+        when {
+            consecutiveBadFrames <= 0 -> 0.0
+            consecutiveBadFrames <= 2 -> 6.0
+            consecutiveBadFrames <= 5 -> 18.0
+            consecutiveBadFrames <= 8 -> 32.0
+            else -> 50.0
+        }
+
+    fun commandFailurePenalty(recentFailures: Int): Double =
+        when {
+            recentFailures <= 0 -> 0.0
+            recentFailures == 1 -> 15.0
+            recentFailures == 2 -> 30.0
+            else -> 50.0
+        }
+
+    fun score(inputs: CameraLinkHealthInputs): CameraLinkHealthSnapshot {
+        when (inputs.phase) {
+            CameraLinkPhase.DISCONNECTED ->
+                return CameraLinkHealthSnapshot(0, "Not connected")
+            CameraLinkPhase.DEMO ->
+                return CameraLinkHealthSnapshot(85, "Demo session")
+            CameraLinkPhase.CONNECTING ->
+                return CameraLinkHealthSnapshot(20, "Connecting…")
+            else -> Unit
+        }
+        val latency = inputs.ptpRoundTripMilliseconds?.let(::latencyScore) ?: 0.0
+        val fps = inputs.liveViewFPS
+        val streaming =
+            inputs.phase == CameraLinkPhase.STREAMING || inputs.phase == CameraLinkPhase.RECOVERING
+        val frameScore =
+            if (fps != null && streaming) {
+                frameDeliveryScore(fps, inputs.targetLiveViewFPS)
+            } else {
+                0.0
+            }
+        val linkHealthRaw =
+            if (streaming) {
+                val lc = if (latency > 0) latency else 70.0
+                frameScore * 0.55 + lc * 0.25 + 20.0 -
+                    frameFreshnessPenalty(inputs.secondsSinceLastGoodFrame) -
+                    badFramePenalty(inputs.consecutiveBadFrames) -
+                    commandFailurePenalty(inputs.recentCommandFailures) -
+                    if (inputs.isRecoveringStream) 25.0 else 0.0
+            } else {
+                val lc = if (latency > 0) latency else 60.0
+                lc * 0.75 + 25.0 -
+                    commandFailurePenalty(inputs.recentCommandFailures) -
+                    if (inputs.isRecoveringStream) 25.0 else 0.0
+            }
+        return CameraLinkHealthSnapshot(
+            linkHealthScore = linkHealthRaw.roundToInt().coerceIn(0, 100),
+            detailCaption = "Command channel warm",
+        )
+    }
+}
+
+/** Rolling live-view delivery rate. Displayed rate throttles to ~1 Hz. */
+class FrameRateSampler(
+    windowSize: Int = 30,
+    displayRefreshInterval: Double = 1.0,
+) {
+    private val windowSize = max(1, windowSize)
+    private val displayInterval = max(0.0, displayRefreshInterval)
+    private val intervals = ArrayList<Double>()
+    private var lastTimestamp: Double? = null
+    private var lastDisplayTimestamp: Double? = null
+    var displayFPS: Double = 0.0
+        private set
+
+    fun recordFrame(at: Double) {
+        val previous = lastTimestamp
+        lastTimestamp = at
+        if (previous == null || at <= previous) return
+        intervals.add(at - previous)
+        if (intervals.size > windowSize) intervals.removeAt(0)
+        val last = lastDisplayTimestamp
+        if (last != null && at - last < displayInterval) return
+        displayFPS = currentFPS
+        lastDisplayTimestamp = at
+    }
+
+    val intervalCount: Int get() = intervals.size
+
+    val currentFPS: Double
+        get() {
+            if (intervals.isEmpty()) return 0.0
+            val average = intervals.sum() / intervals.size
+            return 1.0 / average
+        }
+
+    val formatted: String get() = String.format("%.2f", displayFPS)
+}
+
+/** 0–4 bars from the 0–100 link-health score, with hysteresis. */
+class LinkSignalBars(hysteresisMargin: Int = 6) {
+    var bars: Int = 0
+        private set
+    private val margin = max(0, hysteresisMargin)
+
+    fun update(score: Int): Int {
+        val raw = rawBars(score)
+        when {
+            raw == bars -> Unit
+            bars == 0 || raw == 0 -> bars = raw
+            raw > bars -> if (score >= floorScore(raw) + margin) bars = raw
+            else -> if (score < floorScore(bars) - margin) bars = raw
+        }
+        return bars
+    }
+
+    companion object {
+        private fun floorScore(of: Int): Int = 25 * (of - 1) + 1
+
+        private fun rawBars(score: Int): Int {
+            if (score <= 0) return 0
+            return min(4, max(1, kotlin.math.ceil(score / 25.0).toInt()))
+        }
+    }
 }
 
 data class LiveMonitorLayout(
@@ -1195,7 +1604,10 @@ fun FpsChip(fps: String, bars: Int) {
             Modifier
                 .wrapContentWidth(unbounded = true)
                 .chipGlass(CircleShape)
-                .padding(horizontal = 11.dp, vertical = 7.dp),
+                .padding(horizontal = 11.dp, vertical = 7.dp)
+                .semantics {
+                    contentDescription = "Live view $fps frames per second, $bars of 4 signal bars"
+                },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1222,6 +1634,7 @@ fun ReadoutPill(
     value: String,
     active: Boolean = false,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     icon: @Composable (Color) -> Unit,
@@ -1234,7 +1647,8 @@ fun ReadoutPill(
         }
     Row(
         modifier =
-            surface
+            modifier
+                .then(surface)
                 .wrapContentWidth(unbounded = true)
                 .then(
                     if (onClick != null) {
@@ -1265,22 +1679,23 @@ fun CaptureSettingCell(
     widest: String,
     active: Boolean,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     showFacePriorityBadge: Boolean = false,
+    valueIcon: (@Composable (Color) -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val labelColor = if (active) LiveDesign.accent.copy(alpha = 0.85f) else LiveDesign.muted
     val valueColor = if (active) LiveDesign.accent else LiveDesign.text
     Column(
         modifier =
-            Modifier
-                .wrapContentWidth()
+            modifier
                 .clip(ChromeShape)
                 .background(if (active) LiveDesign.accentDim else Color.Transparent)
                 .then(
                     if (active) Modifier.border(1.dp, LiveDesign.accentDim, ChromeShape) else Modifier,
                 )
                 .chromeClickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .padding(horizontal = 4.dp, vertical = 5.dp)
                 .then(
                     if (showFacePriorityBadge) {
                         Modifier.semantics {
@@ -1307,7 +1722,11 @@ fun CaptureSettingCell(
                 style = LiveType.ui(17f, FontWeight.Medium),
                 maxLines = 1,
             )
-            Text(value, color = valueColor, style = LiveType.ui(17f, FontWeight.Medium), maxLines = 1)
+            if (valueIcon != null) {
+                valueIcon(valueColor)
+            } else {
+                Text(value, color = valueColor, style = LiveType.ui(17f, FontWeight.Medium), maxLines = 1)
+            }
         }
     }
 }

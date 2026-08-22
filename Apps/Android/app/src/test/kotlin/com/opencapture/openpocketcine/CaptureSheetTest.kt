@@ -252,6 +252,191 @@ class CaptureSheetTest {
         assertEquals(CameraCommands.COLOR_DLOG2, CaptureLists.colorModeFromLabel("D-Log2"))
     }
 
+    @Test
+    fun nanoColorWheelUsesCamcapFamily() {
+        assertEquals(
+            listOf("Normal 8-bit", "Normal 10-bit", "D-Log M 10-bit"),
+            CaptureLists.colorWheelLabels(CameraStatus(), family = "nano"),
+        )
+        assertEquals(CameraCommands.COLOR_NORMAL, CaptureLists.colorModeFromLabel("Normal 8-bit", "nano"))
+        assertEquals(CameraCommands.COLOR_NORMAL10, CaptureLists.colorModeFromLabel("Normal 10-bit", "nano"))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CaptureLists.colorModeFromLabel("D-Log M 10-bit", "nano"))
+        assertEquals("Normal 8-bit", CameraCommands.colorLabel(CameraCommands.COLOR_NORMAL, "nano"))
+        assertEquals("Normal", CameraCommands.colorLabel(CameraCommands.COLOR_NORMAL, "pocket"))
+    }
+
+    @Test
+    fun expoModeSheetIsAutoManualOnly() {
+        assertEquals("MODE", LiveSheet.EXPO.headerLabel)
+        assertEquals("Exposure", LiveSheet.EXPO.subtitle)
+        assertEquals("Auto", CameraStatus(expoMode = CameraCommands.EXPO_AUTO).expoLabel)
+        assertEquals("Manual", CameraStatus(expoMode = CameraCommands.EXPO_MANUAL).expoLabel)
+    }
+
+    @Test
+    fun isoAutoChipAndLimitGetMatchIos() {
+        assertEquals("Auto", CaptureLists.isoChipValue(CameraStatus(isoIndex = 0, iso = 400)))
+        assertEquals("1600", CaptureLists.isoChipValue(CameraStatus(isoIndex = 0x07, iso = 1600)))
+        assertTrue(CaptureLists.shouldGetIsoLimit(CameraStatus(colorMode = CameraCommands.COLOR_NORMAL)))
+        assertTrue(CaptureLists.shouldGetIsoLimit(CameraStatus(colorMode = CameraCommands.COLOR_DLOG)))
+        assertTrue(CaptureLists.shouldGetIsoLimit(CameraStatus(colorMode = -1)))
+        assertTrue(!CaptureLists.shouldGetIsoLimit(CameraStatus(colorMode = CameraCommands.COLOR_DLOG2)))
+    }
+
+    @Test
+    fun nativeIsoHopOnlyWhenStillOnBase() {
+        assertEquals(
+            0x05,
+            CaptureLists.nativeIsoHop(
+                from = CameraCommands.COLOR_DLOG2,
+                to = CameraCommands.COLOR_DLOG,
+                currentIndex = 0x07,
+                hopEnabled = true,
+            ),
+        )
+        assertEquals(
+            0x07,
+            CaptureLists.nativeIsoHop(
+                from = CameraCommands.COLOR_DLOG,
+                to = CameraCommands.COLOR_DLOG2,
+                currentIndex = 0x05,
+                hopEnabled = true,
+            ),
+        )
+        assertEquals(
+            null,
+            CaptureLists.nativeIsoHop(
+                from = CameraCommands.COLOR_DLOG2,
+                to = CameraCommands.COLOR_DLOG,
+                currentIndex = 0x06,
+                hopEnabled = true,
+            ),
+        )
+        assertEquals(
+            null,
+            CaptureLists.nativeIsoHop(
+                from = CameraCommands.COLOR_DLOG,
+                to = CameraCommands.COLOR_DLOG2,
+                currentIndex = 0,
+                hopEnabled = true,
+            ),
+        )
+        assertEquals(
+            null,
+            CaptureLists.nativeIsoHop(
+                from = CameraCommands.COLOR_DLOG2,
+                to = CameraCommands.COLOR_DLOG,
+                currentIndex = 0x07,
+                hopEnabled = false,
+            ),
+        )
+    }
+
+    @Test
+    fun recFormatChipMatchesIosChipLabel() {
+        assertEquals(
+            "4K · 25p",
+            CaptureLists.recFormatChipLabel(
+                CameraStatus(resolutionCode = CameraCommands.RES_4K, fps = 25),
+            ),
+        )
+        assertEquals(
+            "1080p · 24p",
+            CaptureLists.recFormatChipLabel(
+                CameraStatus(resolutionCode = CameraCommands.RES_1080, fps = 24),
+            ),
+        )
+        assertEquals("— · —", CaptureLists.recFormatChipLabel(CameraStatus()))
+    }
+
+    @Test
+    fun storagePrefersStorageThenSdLikeIos() {
+        val mixed =
+            CameraStatus(
+                storageFreeMb = 2048,
+                storageTotalMb = 4096,
+                sdFreeMb = 512,
+                sdTotalMb = 1024,
+            )
+        assertEquals("2 GB · 50%", CaptureLists.storageLabel(mixed, showDuration = false))
+        val sdOnly = CameraStatus(sdFreeMb = 1024, sdTotalMb = 2048)
+        assertEquals("1 GB · 50%", CaptureLists.storageLabel(sdOnly, showDuration = false))
+        val duration = CameraStatus(recordRemainingSec = 180)
+        assertEquals("3 Min", CaptureLists.storageLabel(duration, showDuration = true))
+        assertEquals("— Min", CaptureLists.storageLabel(CameraStatus(), showDuration = true))
+    }
+
+    @Test
+    fun wbChipShowsCustomKelvinAndAuto() {
+        assertEquals("Auto", CaptureLists.wbChipValue(CameraStatus(wbMode = CameraCommands.WB_AUTO)))
+        assertEquals(
+            "5600K",
+            CaptureLists.wbChipValue(CameraStatus(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = 5600)),
+        )
+        assertEquals("Custom", CaptureLists.wbChipValue(CameraStatus(wbMode = CameraCommands.WB_CUSTOM)))
+        assertTrue(CaptureLists.wbIsAuto(CameraStatus(wbMode = CameraCommands.WB_AUTO)))
+        assertTrue(!CaptureLists.wbIsAuto(CameraStatus(wbMode = CameraCommands.WB_CUSTOM)))
+    }
+
+    @Test
+    fun holdFpsIgnoresHundredthTick() {
+        assertEquals("25.00", LiveChromeReadout.holdFPS("25.13", "25.00"))
+        assertEquals("25.00", LiveChromeReadout.holdFPS("24.70", "25.00"))
+        assertEquals("25.50", LiveChromeReadout.holdFPS("25.50", "25.00"))
+        assertEquals("RECOV", LiveChromeReadout.holdFPS("RECOV", "25.00"))
+        assertEquals("25.00", LiveChromeReadout.holdFPS("25.00", "LINK"))
+        assertEquals("—", LiveChromeReadout.holdFPS("—", "25.00"))
+    }
+
+    @Test
+    fun fpsChipLabelIsLiveViewHealthNotRecordFps() {
+        assertEquals(
+            "—",
+            LiveViewLink.fpsChipLabel(
+                connection = com.opencapture.openpocketcine.core.ConnectionPhase.IDLE,
+                recovering = false,
+                formattedFPS = "25.00",
+                measuredFPS = 0.0,
+            ),
+        )
+        assertEquals(
+            "LINK",
+            LiveViewLink.fpsChipLabel(
+                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
+                recovering = false,
+                formattedFPS = "25.00",
+                measuredFPS = 0.0,
+            ),
+        )
+        assertEquals(
+            "RECOV",
+            LiveViewLink.fpsChipLabel(
+                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
+                recovering = true,
+                formattedFPS = "25.00",
+                measuredFPS = 12.0,
+            ),
+        )
+        assertEquals(
+            "FAIL",
+            LiveViewLink.fpsChipLabel(
+                connection = com.opencapture.openpocketcine.core.ConnectionPhase.FAILED,
+                recovering = false,
+                formattedFPS = "25.00",
+                measuredFPS = 25.0,
+            ),
+        )
+        assertEquals(
+            "25.00",
+            LiveViewLink.fpsChipLabel(
+                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
+                recovering = false,
+                formattedFPS = "25.00",
+                measuredFPS = 25.0,
+            ),
+        )
+    }
+
     companion object {
         private const val SHUTTER_25P =
             "016d000002000101001e00052180be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280002880001e80001980000c80000a8000088000068000058000048000"
