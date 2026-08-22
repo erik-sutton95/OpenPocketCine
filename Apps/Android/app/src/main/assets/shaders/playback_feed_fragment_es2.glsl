@@ -135,9 +135,8 @@ vec3 sampleSourceReconstructed(vec2 coordinate, vec2 sourceSize) {
         + sampleSourceAt(vec2(centre3.x, centre3.y), sourceSize) * w3.x;
 
     vec3 reconstructed = row0 * w0.y + row12 * w12.y + row3 * w3.y;
-    // The cubic overshoots at hard edges. Clamping the undershoot keeps a dark ring from going
-    // negative and poisoning the luma the grade and scopes read downstream.
-    return max(reconstructed, vec3(0.0));
+    // RGB cubic overshoot is colour fringing. Clamp both ends.
+    return clamp(reconstructed, 0.0, 1.0);
 }
 
 // The displayed sample. Reconstruction is for magnification only: below 1:1 the feed is being

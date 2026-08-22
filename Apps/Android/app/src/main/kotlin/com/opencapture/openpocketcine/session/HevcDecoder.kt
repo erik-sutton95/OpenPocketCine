@@ -191,9 +191,9 @@ class HevcDecoder {
             val format = MediaFormat.createVideoFormat(mime, LIVE_WIDTH, LIVE_HEIGHT)
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
             format.setInteger(MediaFormat.KEY_FRAME_RATE, 30)
-            format.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
-            format.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
-            format.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
+            // Do not stamp KEY_COLOR_* — Pocket VUI is unspecified (transfer=255).
+            // Forcing BT.709 limited made C2 apply a matrix the bitstream did not
+            // ask for (posterized shadows / colour shifts vs iOS VT).
             if (detected == LiveCodec.AVC) {
                 val (sps, pps) = splitAvcCsd(csd)
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))

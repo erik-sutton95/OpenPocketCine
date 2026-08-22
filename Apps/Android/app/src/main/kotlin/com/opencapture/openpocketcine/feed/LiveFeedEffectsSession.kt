@@ -379,17 +379,17 @@ internal class LiveFeedEffectsSession(
         val texture = textures[0]
         check(texture != 0) { "no OES texture" }
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texture)
-        // 1:1 blit into the 720p FBO. LINEAR here was a free blur before
-        // Catmull-Rom / the panel present.
+        // Pocket live is HEVC 4:2:0. samplerExternalOES converts YUV→RGB in
+        // this fetch — NEAREST snaps chroma to 2×2 blocks (blotchy colour).
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
             GLES20.GL_TEXTURE_MIN_FILTER,
-            GLES20.GL_NEAREST,
+            GLES20.GL_LINEAR,
         )
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
             GLES20.GL_TEXTURE_MAG_FILTER,
-            GLES20.GL_NEAREST,
+            GLES20.GL_LINEAR,
         )
         GLES20.glTexParameteri(
             GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
