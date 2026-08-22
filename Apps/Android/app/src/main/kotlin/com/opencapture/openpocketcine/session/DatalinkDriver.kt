@@ -49,6 +49,7 @@ class DatalinkDriver(
     @Volatile private var handshakeAcked = false
     @Volatile private var liveViewEnabled = false
     private var depacketizer = 0L
+    private val inboundLogs = AtomicInteger(0)
     private val rawVideoPackets = AtomicInteger(0)
     private val loggedLeftoverGop = AtomicBoolean(false)
     private val lastVideoElapsed = AtomicLong(0)
@@ -84,6 +85,7 @@ class DatalinkDriver(
         if (tcpPoke) ensurePoke()
         liveViewEnabled = false
         loggedLeftoverGop.set(false)
+        inboundLogs.set(0)
         rawVideoPackets.set(0)
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
@@ -150,6 +152,11 @@ class DatalinkDriver(
         } else {
             armLiveVideo()
         }
+        Log.i(
+            TAG,
+            "datalink: sent 0x09/0xa8 rcv=0x${receiver.toString(16)} " +
+                "videoPkts=$videoPackets tcp=${if (isTcpPokeReady) 1 else 0}",
+        )
     }
 
     /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. */
@@ -248,25 +255,25 @@ class DatalinkDriver(
     }
 
     private fun startUdpReceiver() {
-        // Handbook + iOS: one UDP 9004 5-tuple, pinned to the camera AP
-        // (`requiredLocalEndpoint` = DHCP `192.168.2.2…254`, then connect
-        // `192.168.2.1:9004`). `DatagramSocket()` binds the wildcard first, so
-        // Network.bindSocket no-ops. Unbound → pin → bind local IPv4 → connect
-        // is the Android equivalent.
+        // Handbook: unbound → Network.bindSocket → bind 0.0.0.0:0 → connect
+        // 192.168.2.1:9004. iOS binds DHCP because `.wifi` is home en0.
+        // Android already pinned the process; DHCP bind on Samsung accepted
+        // handshake ACKs and dropped HEVC (pkts=0 after local=192.168.2.71).
         val sock = DatagramSocket(null)
         sock.reuseAddress = true
         sock.soTimeout = 250
+        runCatching { sock.receiveBufferSize = 512 * 1024 }
         joiner.bindSocket(sock)
-        val localIPv4 = joiner.cameraLocalIPv4()
-        val bindHost = udpBindHost(localIPv4)
-        if (localIPv4 == null) {
-            Log.i(TAG, "datalink: camera local IPv4 unknown — bind $WILDCARD_BIND_HOST")
-        }
-        sock.bind(InetSocketAddress(Inet4Address.getByName(bindHost), 0))
+        sock.bind(InetSocketAddress(Inet4Address.getByName(WILDCARD_BIND_HOST), 0))
         runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
-        val label = if (sock.isConnected) "bound" else "unconnected"
-        Log.i(TAG, "datalink: UDP $label $CAMERA_HOST:$port local=${localIPv4 ?: "-"}")
+        val dhcp = joiner.cameraLocalIPv4() ?: "-"
+        val label = if (sock.isConnected) "connected" else "unconnected"
+        Log.i(
+            TAG,
+            "datalink: UDP $label $CAMERA_HOST:$port dhcp=$dhcp " +
+                "local=${sock.localSocketAddress} rcvbuf=${sock.receiveBufferSize}",
+        )
         socket = sock
         running.set(true)
         receiver =
@@ -317,6 +324,8 @@ class DatalinkDriver(
             return
         }
         runCatching { poke7001() }
+            .onSuccess { Log.i(TAG, "datalink: TCP 7001 poke ready") }
+            .onFailure { Log.w(TAG, "datalink: TCP 7001 poke failed — trying UDP", it) }
     }
 
     private fun register() {
@@ -435,6 +444,11 @@ class DatalinkDriver(
     }
 
     private fun ingest(datagram: ByteArray) {
+        val nIn = inboundLogs.incrementAndGet()
+        if (nIn <= 16) {
+            val pktType = if (datagram.size > 6) datagram[6].toInt() and 0xFF else -1
+            Log.i(TAG, "datalink: inbound #$nIn bytes=${datagram.size} pktType=0x${pktType.toString(16)}")
+        }
         if (datagram.size >= 10) {
             val ch = (datagram[8].toInt() and 0xFF) or ((datagram[9].toInt() and 0xFF) shl 8)
             if (ch != 0) camChannel = ch
@@ -490,9 +504,13 @@ class DatalinkDriver(
         private const val CAMERA_HOST = "192.168.2.1"
         internal const val WILDCARD_BIND_HOST = "0.0.0.0"
 
-        /** iOS `requiredLocalEndpoint`; wildcard only when DHCP is not yet known. */
-        internal fun udpBindHost(localIPv4: String?): String =
-            if (localIPv4.isNullOrEmpty()) WILDCARD_BIND_HOST else localIPv4
+        /**
+         * Android UDP bind host after `Network.bindSocket`. Always the wildcard —
+         * the SoftAP Network pin is the path, not a DHCP bind. [localIPv4] is
+         * logged as `dhcp=` only.
+         */
+        internal fun udpBindHost(@Suppress("UNUSED_PARAMETER") localIPv4: String?): String =
+            WILDCARD_BIND_HOST
 
         private const val HANDSHAKE_SENDS_PER_BIND = 20
         private const val HANDSHAKE_SEND_INTERVAL_MS = 350L

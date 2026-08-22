@@ -23,9 +23,11 @@ The iOS Xcode project is generated: `cd ios && xcodegen generate`.
 2. Read camera Wi-Fi credentials.
 3. Join the camera SoftAP (`192.168.2.1`). The phone is on-path only after DHCP
    gives it `192.168.2.2…254` (`CameraSoftAP.isAssociatedIPv4`).
-4. UDP DUML datalink on that LAN, **bound to the camera-local IPv4**, then
-   connected to `192.168.2.1:9004`. Fall back to `0.0.0.0` only when DHCP is not
-   yet known. Keep TCP 7001 poke across UDP rebuilds.
+4. UDP DUML datalink on that LAN, connected to `192.168.2.1:9004`. iOS binds
+   the DHCP IPv4 (`NWParameters.requiredLocalEndpoint`). Android pins the
+   process with `bindProcessToNetwork` and binds UDP `0.0.0.0` after
+   `Network.bindSocket` — binding the DHCP address on Samsung accepted
+   handshake ACKs and dropped HEVC. Keep TCP 7001 poke across UDP rebuilds.
 5. Enable live view once (`0x09/0xa8`) after path + display are ready. Never 1 Hz.
    Media is pktType `0x02`; ACK is pktType `0x04` at 40 Hz echoing the video seq.
 6. Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p.

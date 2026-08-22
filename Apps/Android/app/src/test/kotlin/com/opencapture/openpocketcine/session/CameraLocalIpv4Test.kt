@@ -34,8 +34,8 @@ class CameraLocalIpv4Test {
     }
 
     @Test
-    fun udpBindFallsBackToWildcardOnlyWhenLocalIpv4Unknown() {
-        assertEquals("192.168.2.15", DatalinkDriver.udpBindHost("192.168.2.15"))
+    fun udpBindStaysWildcardAfterNetworkPin() {
+        assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost("192.168.2.15"))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(null))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(""))
     }
