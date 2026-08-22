@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class HevcDecoder {
     internal enum class LiveCodec { HEVC, AVC }
+    private val lock = Any()
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
     private var configured = false
@@ -59,6 +60,10 @@ class HevcDecoder {
     }
 
     fun attachSurface(next: Surface?) {
+        synchronized(lock) { attachSurfaceLocked(next) }
+    }
+
+    private fun attachSurfaceLocked(next: Surface?) {
         if (next == null) {
             // TextureView is tearing down; keep the codec so the next surface can
             // adopt it. iOS keeps VT across layout. A full reset blacks the GOP.
@@ -70,14 +75,10 @@ class HevcDecoder {
             val decoder = codec
             if (decoder != null) {
                 val swapped = runCatching { decoder.setOutputSurface(next) }
-                if (swapped.isSuccess) return
-                Log.w(TAG, "setOutputSurface failed, reconfiguring", swapped.exceptionOrNull())
-                val csd = pendingCsd
-                val types = pendingTypes
-                reset()
-                surface = next
-                pendingCsd = csd
-                pendingTypes = types
+                if (swapped.isFailure) {
+                    Log.w(TAG, "setOutputSurface failed — keep decoder", swapped.exceptionOrNull())
+                }
+                return
             }
         }
         val csd = pendingCsd ?: return
@@ -91,6 +92,10 @@ class HevcDecoder {
 
     fun decode(accessUnit: ByteArray): Boolean {
         if (!SwiftCore.isAvailable) return false
+        synchronized(lock) { return decodeLocked(accessUnit) }
+    }
+
+    private fun decodeLocked(accessUnit: ByteArray): Boolean {
         val types = SwiftCore.hevcNalTypes(accessUnit).orEmpty()
         if (types.isNotEmpty()) nalTypesSeen = mergeTypes(nalTypesSeen, types)
         val keyframe = SwiftCore.hevcIsKeyframe(accessUnit)
@@ -137,7 +142,7 @@ class HevcDecoder {
 
     /** After a GOP-reset enable, ignore P-frames until the next IDR. Keeps the last picture. */
     fun beginIDRHold() {
-        awaitingIdr = true
+        synchronized(lock) { awaitingIdr = true }
     }
 
     /**
@@ -155,6 +160,10 @@ class HevcDecoder {
     }
 
     fun reset() {
+        synchronized(lock) { resetLocked() }
+    }
+
+    private fun resetLocked() {
         running = false
         outputThread?.interrupt()
         outputThread = null
@@ -179,6 +188,7 @@ class HevcDecoder {
     }
 
     private fun configure(csd: ByteArray, nalTypes: String): Boolean {
+        if (configured && codec != null) return true
         val target = surface ?: return false
         if (!target.isValid) return false
         val detected = detectCodec(csd, nalTypes) ?: return false
@@ -241,11 +251,11 @@ class HevcDecoder {
         } catch (e: Exception) {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
-            codec = null
-            configured = false
-            liveCodec = null
-            pendingCsd = null
-            pendingTypes = ""
+            if (codec === decoder) {
+                codec = null
+                configured = false
+                liveCodec = null
+            }
             decoderErrors.incrementAndGet()
             Log.w(TAG, "${detected.name} configure failed", e)
             false
