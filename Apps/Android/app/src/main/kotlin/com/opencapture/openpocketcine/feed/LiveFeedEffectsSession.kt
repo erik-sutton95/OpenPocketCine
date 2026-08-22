@@ -16,6 +16,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.Surface
 import androidx.media3.common.util.GlUtil
+import com.opencapture.openpocketcine.OperatorPrefs
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -36,6 +37,10 @@ internal class LiveFeedEffectsSession(
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    init {
+        FeedUpscaleSwitch.rendererReads = OperatorPrefs.feedUpscaler(appContext)
+    }
     private val plan = AtomicReference(FeedEffectsRenderPlan.IDENTITY)
     private val running = AtomicBoolean(false)
     private val frameLock = java.lang.Object()

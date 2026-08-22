@@ -118,6 +118,49 @@ class LutLookResolverTest {
     }
 
     @Test
+    fun `status label matches iOS Auto cube copy`() {
+        val autoDlog2 =
+            LutLookResolver.resolve(
+                LutCatalog.AUTO,
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG2,
+                family = "pocket",
+                cameraName = null,
+            )
+        assertEquals(
+            "Auto · D-Log2 → Rec.709",
+            LutLookResolver.statusLabel(enabled = true, selection = LutCatalog.AUTO, source = autoDlog2),
+        )
+        assertEquals(
+            "Auto · Off",
+            LutLookResolver.statusLabel(
+                enabled = true,
+                selection = LutCatalog.AUTO,
+                source = LutLookSource.Off,
+            ),
+        )
+        assertEquals(
+            "Off · Auto",
+            LutLookResolver.statusLabel(enabled = false, selection = LutCatalog.AUTO, source = autoDlog2),
+        )
+        assertEquals(
+            "DJI Auto · D-Log2 → Rec.709",
+            LutLookResolver.statusLabel(
+                enabled = true,
+                selection = LutCatalog.DJI_AUTO,
+                source =
+                    LutLookResolver.resolve(
+                        LutCatalog.DJI_AUTO,
+                        lutOn = true,
+                        colorMode = CameraCommands.COLOR_DLOG2,
+                        family = "pocket",
+                        cameraName = "Pocket 4 Pro",
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun `identity plan does not split`() {
         assertEquals(false, FeedEffectsRenderPlan.IDENTITY.splitComparison)
         assertEquals(null, FeedEffectsRenderPlan.IDENTITY.lutCube)

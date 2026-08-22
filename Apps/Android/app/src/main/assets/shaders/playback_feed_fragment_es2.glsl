@@ -20,6 +20,8 @@ uniform float uLimitsWeightSize;
 uniform float uLimitsOn;
 uniform vec2 uSourceSize;
 uniform vec2 uDisplaySize;
+// 1 = Fast (Catmull-Rom), 0 = Off (plain bilinear). Matches iOS Off / Fast.
+uniform float uFeedUpscale;
 
 uniform float uPeakingOn;
 uniform vec3 uPeakingColor;
@@ -144,7 +146,8 @@ vec3 sampleSourceReconstructed(vec2 coordinate, vec2 sourceSize) {
 // floor device pays nothing for this.
 vec3 sampleSourceForDisplay(vec2 coordinate) {
     vec2 sourceSize = max(uSourceSize, vec2(1.0));
-    if (uDisplaySize.x <= sourceSize.x && uDisplaySize.y <= sourceSize.y) {
+    if (uFeedUpscale < 0.5 ||
+        (uDisplaySize.x <= sourceSize.x && uDisplaySize.y <= sourceSize.y)) {
         return sampleSource(coordinate);
     }
     return sampleSourceReconstructed(coordinate, sourceSize);

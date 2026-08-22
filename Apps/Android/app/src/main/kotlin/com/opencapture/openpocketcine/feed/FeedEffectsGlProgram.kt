@@ -97,6 +97,10 @@ internal class FeedEffectsGlProgram(
             "uDisplaySize",
             floatArrayOf(displayWidth.coerceAtLeast(1f), displayHeight.coerceAtLeast(1f)),
         )
+        program.setFloatsUniform(
+            "uFeedUpscale",
+            flag(FeedUpscaleSwitch.rendererReads == FeedUpscaler.FAST),
+        )
         program.setFloatsUniform("uMirror", flag(mirrored))
         program.bindAttributesAndUniforms()
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)

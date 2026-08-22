@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.compose.BackHandler
@@ -15,8 +16,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,17 +63,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.opencapture.openpocketcine.assists.AudioAssist
-import com.opencapture.openpocketcine.assists.CrosshairAssist
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.assists.FalseColorScale
-import com.opencapture.openpocketcine.assists.GridAssist
-import com.opencapture.openpocketcine.assists.GuideAspect
-import com.opencapture.openpocketcine.assists.GuideFamily
 import com.opencapture.openpocketcine.assists.HistogramAssist
 import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.LiveZebra
-import com.opencapture.openpocketcine.assists.MirrorAssist
 import com.opencapture.openpocketcine.assists.ParadeMode
 import com.opencapture.openpocketcine.assists.PeakingColor
 import com.opencapture.openpocketcine.assists.PeakingSense
@@ -84,8 +78,9 @@ import com.opencapture.openpocketcine.assists.WaveformMode
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.lut.LUTPicker
-import com.opencapture.openpocketcine.lut.LutCatalog
 import com.opencapture.openpocketcine.settings.DisplayToggleItem
 import com.opencapture.openpocketcine.settings.GlassPillSlider
 import com.opencapture.openpocketcine.settings.PanelCloseButton
@@ -141,6 +136,35 @@ object SettingsHelpCopy {
         "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required."
     const val APP_VERSION = "Current OpenPocketCine build from the native project metadata."
     const val LOCAL_CACHE = "Originals and playback proxies downloaded from the camera."
+    const val FEED_UPSCALER =
+        "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented — plausible rather than real — so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
+    const val FALSE_COLOR_SCALE =
+        "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
+            "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
+            "highlight levels over luminance grayscale. IRE uses RED Video Mode-style monitor " +
+            "ranges on the WAVE axis: paper black at 0, D-Log2 18% grey at 30.50, live-tap EI " +
+            "ceiling at 100. Limits paints only shadow and highlight warnings, leaving other " +
+            "colors untouched."
+    const val FALSE_COLOR_REFERENCE =
+        "Show a compact color key over live view while False Color is active."
+    const val PEAKING_SENSITIVITY =
+        "Higher sensitivity catches finer edges but can get noisy on detailed scenes."
+    const val PEAKING_COLOR = "Choose the edge color that stays readable over your typical scene."
+    const val ZEBRA_UNITS =
+        "Switch between native 0-255 encoded codes and a 0-100 monitoring IRE scale."
+    const val ZEBRA_HIGHLIGHT =
+        "High zebra warns when bright detail approaches clipping after the active log curve is compensated."
+    const val ZEBRA_MIDTONE =
+        "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure."
+    const val WAVEFORM_BRIGHTNESS =
+        "Raise trace intensity when the waveform is hard to read in bright light."
+    const val PARADE_BRIGHTNESS = "Raise trace intensity when channel separation is hard to see."
+    const val VECTORSCOPE_ZOOM =
+        "Magnifies only the chroma trace; the graticule stays at unity. The vectorscope reads the monitor image (your active LUT, or the built-in display tone map), where chroma is meaningful."
+    const val VECTORSCOPE_BRIGHTNESS =
+        "Raise trace intensity when the chroma plot is hard to read."
+    const val TRAFFIC_LIGHTS_COMPENSATION =
+        "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."
 }
 
 object OpenPocketCineLinks {
@@ -155,8 +179,21 @@ object OpenPocketCineLinks {
 }
 
 internal object OperatorLinkHealth {
-    fun bars(isLive: Boolean, videoPackets: Int, hasVideoFormat: Boolean): Int {
+    const val TARGET_FPS = 25.0
+
+    fun bars(
+        isLive: Boolean,
+        videoPackets: Int,
+        hasVideoFormat: Boolean,
+        measuredFps: Double = -1.0,
+    ): Int {
         if (!isLive) return 0
+        if (measuredFps > 0.0) {
+            val score = ((measuredFps / TARGET_FPS) * 100.0).coerceIn(0.0, 100.0)
+            val rounded = kotlin.math.round(score).toInt()
+            if (rounded <= 0) return 1
+            return ((rounded + 24) / 25).coerceIn(1, 4)
+        }
         return when {
             hasVideoFormat && videoPackets > 0 -> 4
             videoPackets >= 400 -> 4
@@ -177,6 +214,40 @@ internal object OperatorLinkHealth {
             else -> "Waiting for the link."
         }
     }
+
+    fun compactFps(incoming: String): String {
+        val compact = if (incoming.endsWith(".00")) incoming.dropLast(3) else incoming
+        return compact.ifEmpty { "—" }
+    }
+
+    fun formatMeasuredFps(fps: Double): String {
+        if (fps <= 0.0) return ""
+        val rounded = kotlin.math.round(fps)
+        return if (kotlin.math.abs(fps - rounded) < 0.05) {
+            rounded.toInt().toString()
+        } else {
+            String.format(Locale.US, "%.2f", fps)
+        }
+    }
+
+    fun fpsChipLabel(
+        isLive: Boolean,
+        recovering: Boolean,
+        measuredFps: Double,
+        phase: ConnectionPhase,
+    ): String {
+        if (phase == ConnectionPhase.FAILED) return "FAIL"
+        if (recovering) return "RECOV"
+        if (measuredFps > 0.0) return compactFps(formatMeasuredFps(measuredFps))
+        return if (!isLive && phase == ConnectionPhase.IDLE) "—" else "LINK"
+    }
+
+    fun liveTileDetail(
+        isLive: Boolean,
+        cameraName: String,
+        fpsLabel: String,
+        phaseLabel: String,
+    ): String = if (isLive) "$cameraName · BLE + Wi-Fi · $fpsLabel FPS" else phaseLabel
 }
 
 internal object OperatorMediaCache {
@@ -223,7 +294,29 @@ internal fun formatCacheSize(bytes: Long): String {
 
 internal fun formatAppVersion(versionName: String, versionCode: Long): String = "$versionName ($versionCode)"
 
-internal fun lutLookLabel(selection: String): String = LutCatalog.titleFor(selection)
+internal fun lutLookLabel(
+    selection: String,
+    enabled: Boolean = true,
+    colorMode: Int = -1,
+    family: String = "pocket",
+    cameraName: String? = null,
+): String {
+    val source =
+        LutLookResolver.resolve(
+            selection = selection,
+            lutOn = true,
+            colorMode = colorMode,
+            family = family,
+            cameraName = cameraName,
+        )
+    return LutLookResolver.statusLabel(enabled, selection, source)
+}
+
+internal fun toggledCleanPins(current: Set<String>, toolKey: String): Set<String> {
+    val next = current.toMutableSet()
+    if (!next.add(toolKey)) next.remove(toolKey)
+    return OperatorPrefs.resolvedCleanPins(next)
+}
 
 internal fun lutPickerAvailable(): Boolean = true
 
@@ -245,20 +338,14 @@ internal enum class CleanPinTool(val key: String, val title: String) {
 }
 
 internal enum class AssistCard(val title: String) {
-    LUT("LUT"),
-    PEAKING("Peaking"),
     FALSE_COLOR("False Color"),
-    ZEBRA("Zebra"),
     WAVEFORM("Waveform"),
-    PARADE("Parade"),
     HISTOGRAM("Histogram"),
+    PEAKING("Peaking"),
+    ZEBRA("Zebra"),
+    PARADE("Parade"),
     VECTORSCOPE("Vectorscope"),
     TRAFFIC_LIGHTS("Traffic Lights"),
-    AUDIO_LEVELS("Audio Levels"),
-    GUIDES("Guides"),
-    GRID("Grid"),
-    CROSSHAIR("Crosshair"),
-    MIRROR("Mirror"),
 }
 
 internal fun connectionPhaseLabel(phase: ConnectionPhase, failure: String?): String =
@@ -291,16 +378,48 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val phase by model.session.phaseFlow.collectAsState()
     val failure by model.session.failure.collectAsState()
+    val recovery by model.session.recoveryState.collectAsState()
+    val status by model.session.status.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
+    var lastFrames by remember { mutableIntStateOf(0) }
+    var lastTickAt by remember { mutableStateOf(0L) }
+    var measuredFps by remember { mutableStateOf(0.0) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
             tick += 1
+            val now = SystemClock.elapsedRealtime()
+            val frames = model.session.decoder.framesEnqueued.get()
+            if (lastTickAt != 0L) {
+                val dt = (now - lastTickAt) / 1000.0
+                val presentedAge = model.session.decoder.lastPresentedAt?.let { now - it }
+                measuredFps =
+                    if (dt > 0 && presentedAge != null && presentedAge < 1_500) {
+                        ((frames - lastFrames) / dt).coerceAtLeast(0.0)
+                    } else {
+                        0.0
+                    }
+            }
+            lastFrames = frames
+            lastTickAt = now
         }
     }
     tick
     val isLive = phase == ConnectionPhase.LIVE
-    val bars = OperatorLinkHealth.bars(isLive, model.session.videoPackets, model.session.hasVideoFormat)
+    val bars =
+        OperatorLinkHealth.bars(
+            isLive,
+            model.session.videoPackets,
+            model.session.hasVideoFormat,
+            measuredFps,
+        )
+    val fpsLabel =
+        OperatorLinkHealth.fpsChipLabel(
+            isLive = isLive,
+            recovering = recovery.isRecovering,
+            measuredFps = measuredFps,
+            phase = phase,
+        )
     val phaseLabel = connectionPhaseLabel(phase, failure)
     val view = LocalView.current
     val hapticsEnabled = model.hapticsEnabled
@@ -348,6 +467,8 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                         phaseLabel = phaseLabel,
                         bars = bars,
                         cameraName = liveCameraName(model),
+                        fpsLabel = fpsLabel,
+                        hasVideoFormat = model.session.hasVideoFormat,
                         onDisconnect = model::disconnect,
                     )
                     SettingsContentPane(
@@ -355,6 +476,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                         isLive = isLive,
                         phaseLabel = phaseLabel,
                         bars = bars,
+                        statusColorMode = status.colorMode,
                         expandedDisp = expandedDisp,
                         onExpandDisp = { expandedDisp = it },
                         onLegal = { legalKind = it },
@@ -369,6 +491,8 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                         phaseLabel = phaseLabel,
                         bars = bars,
                         cameraName = liveCameraName(model),
+                        fpsLabel = fpsLabel,
+                        hasVideoFormat = model.session.hasVideoFormat,
                         onDisconnect = model::disconnect,
                         modifier = Modifier.padding(start = 45.dp),
                     )
@@ -382,6 +506,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                             isLive = isLive,
                             phaseLabel = phaseLabel,
                             bars = bars,
+                            statusColorMode = status.colorMode,
                             expandedDisp = expandedDisp,
                             onExpandDisp = { expandedDisp = it },
                             onLegal = { legalKind = it },
@@ -461,6 +586,8 @@ private fun SettingsTopBar(
     phaseLabel: String,
     bars: Int,
     cameraName: String,
+    fpsLabel: String,
+    hasVideoFormat: Boolean,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -480,11 +607,11 @@ private fun SettingsTopBar(
                 )
             }
             if (!stacked) {
-                SessionControls(isLive, phaseLabel, bars, cameraName, onDisconnect)
+                SessionControls(isLive, phaseLabel, bars, cameraName, fpsLabel, hasVideoFormat, onDisconnect)
             }
         }
         if (stacked) {
-            SessionControls(isLive, phaseLabel, bars, cameraName, onDisconnect)
+            SessionControls(isLive, phaseLabel, bars, cameraName, fpsLabel, hasVideoFormat, onDisconnect)
         }
     }
 }
@@ -495,6 +622,8 @@ private fun SessionControls(
     phaseLabel: String,
     bars: Int,
     cameraName: String,
+    fpsLabel: String,
+    hasVideoFormat: Boolean,
     onDisconnect: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -507,7 +636,14 @@ private fun SessionControls(
                 onClick = onDisconnect,
             )
         }
-        SettingsLiveTile(isLive = isLive, phaseLabel = phaseLabel, bars = bars, cameraName = cameraName)
+        SettingsLiveTile(
+            isLive = isLive,
+            phaseLabel = phaseLabel,
+            bars = bars,
+            cameraName = cameraName,
+            fpsLabel = fpsLabel,
+            hasVideoFormat = hasVideoFormat,
+        )
     }
 }
 
@@ -602,6 +738,7 @@ private fun SettingsContentPane(
     isLive: Boolean,
     phaseLabel: String,
     bars: Int,
+    statusColorMode: Int,
     expandedDisp: PocketDispMode?,
     onExpandDisp: (PocketDispMode?) -> Unit,
     onLegal: (LegalKind) -> Unit,
@@ -647,7 +784,7 @@ private fun SettingsContentPane(
                         OperatorSettingsTab.LINK ->
                             LinkRows(model, isLive, phaseLabel, bars)
                         OperatorSettingsTab.SHARING -> SharingRows()
-                        OperatorSettingsTab.ASSIST -> AssistRows(model, onOpenLut)
+                        OperatorSettingsTab.ASSIST -> AssistRows(model, statusColorMode, onOpenLut)
                         OperatorSettingsTab.CONTROLS -> ControlsRows(model)
                         OperatorSettingsTab.DISPLAY ->
                             DisplayRows(model, isLive, expandedDisp, onExpandDisp)
@@ -684,6 +821,23 @@ private fun LinkRows(model: AppModel, isLive: Boolean, phaseLabel: String, bars:
             }
         }
     }
+    if (FeedUpscaler.supported.size > 1) {
+        val context = LocalContext.current
+        var upscaler by remember { mutableStateOf(OperatorPrefs.feedUpscaler(context)) }
+        SettingsRowCard(title = "Processing") {
+            SettingsInlineRow("Feed Upscaler", SettingsHelpCopy.FEED_UPSCALER, showTopDivider = false) {
+                SettingsSegmented(
+                    options = FeedUpscaler.supported.map { it.label },
+                    selected = upscaler.label,
+                    compact = true,
+                ) { label ->
+                    val next = FeedUpscaler.fromStored(label)
+                    upscaler = next
+                    OperatorPrefs.setFeedUpscaler(context, next)
+                }
+            }
+        }
+    }
     SettingsRowCard(title = "Your cameras") {
         if (model.savedCameras.isEmpty()) {
             SettingsInlineRow("Saved", SettingsHelpCopy.SAVED_CAMERAS, showTopDivider = false) {
@@ -713,7 +867,7 @@ private fun SharingRows() {
 }
 
 @Composable
-private fun AssistRows(model: AppModel, onOpenLut: () -> Unit) {
+private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> Unit) {
     val assist = model.assist
     val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
 
@@ -751,24 +905,18 @@ private fun AssistRows(model: AppModel, onOpenLut: () -> Unit) {
 
     SettingsRowCard(title = "LUT") {
         SettingsInlineRow("Look", SettingsHelpCopy.LUT_LOOK, showTopDivider = false) {
-            SettingsValueText(lutLookLabel(model.lutSelection))
+            SettingsValueText(
+                lutLookLabel(
+                    selection = model.lutSelection,
+                    enabled = assist.lutOn,
+                    colorMode = statusColorMode,
+                    family = model.session.connectedCamera?.model?.family ?: "pocket",
+                    cameraName = model.session.connectedCamera?.name,
+                ),
+            )
         }
         SettingsInlineRow("Choose look") {
             SettingsActionPill(title = "Open", onClick = onOpenLut)
-        }
-    }
-
-    AudioAssistCard()
-    GuidesAssistCard(assist)
-    GridAssistCard(assist)
-    SettingsRowCard(title = "Crosshair") {
-        SettingsInlineRow("Crosshair", CrosshairAssist.HELP, showTopDivider = false) {
-            SettingsValueText("Toolbar")
-        }
-    }
-    SettingsRowCard(title = "Mirror") {
-        SettingsInlineRow("Mirror", MirrorAssist.EXPLANATION, showTopDivider = false) {
-            SettingsValueText("Toolbar")
         }
     }
 }
@@ -781,7 +929,12 @@ private fun FalseColorAssistCard(assist: LiveAssistState) {
             assist.setFalseColor(scale = FalseColorScale.STOPS, reference = true)
         },
     ) {
-        SettingsInlineRow("Scale", showTopDivider = false, stacked = true) {
+        SettingsInlineRow(
+            "Scale",
+            SettingsHelpCopy.FALSE_COLOR_SCALE,
+            showTopDivider = false,
+            stacked = true,
+        ) {
             SettingsSegmented(
                 options = listOf("PStops", "IRE", "Limits"),
                 selected = assist.falseColorScale.menuLabel,
@@ -792,6 +945,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState) {
         SettingsSwitchRow(
             title = "Reference Display",
             isOn = assist.falseColorReference,
+            help = SettingsHelpCopy.FALSE_COLOR_REFERENCE,
             stacked = true,
         ) {
             assist.setFalseColor(reference = !assist.falseColorReference)
@@ -805,7 +959,12 @@ private fun PeakingAssistCard(assist: LiveAssistState) {
         title = "Peaking",
         onReset = { assist.setPeaking(color = PeakingColor.RED, sense = PeakingSense.MED) },
     ) {
-        SettingsInlineRow("Sensitivity", showTopDivider = false, stacked = true) {
+        SettingsInlineRow(
+            "Sensitivity",
+            SettingsHelpCopy.PEAKING_SENSITIVITY,
+            showTopDivider = false,
+            stacked = true,
+        ) {
             SettingsSegmented(
                 options = PeakingSense.entries.map { it.label },
                 selected = assist.peakingSensitivity.label,
@@ -813,7 +972,7 @@ private fun PeakingAssistCard(assist: LiveAssistState) {
                 assist.setPeaking(sense = PeakingSense.fromPersisted(label))
             }
         }
-        SettingsInlineRow("Color", stacked = true) {
+        SettingsInlineRow("Color", SettingsHelpCopy.PEAKING_COLOR, stacked = true) {
             SettingsColorDots(
                 dots = SettingsPalette.peaking,
                 selectedName = assist.peakingColor.label,
@@ -834,7 +993,12 @@ private fun ZebraAssistCard(assist: LiveAssistState) {
             assist.setZebraMidtone(enabled = true, ire = LiveZebra.MIDTONE_IRE, color = ZebraPaint.AMBER)
         },
     ) {
-        SettingsInlineRow("Units", showTopDivider = false, stacked = true) {
+        SettingsInlineRow(
+            "Units",
+            SettingsHelpCopy.ZEBRA_UNITS,
+            showTopDivider = false,
+            stacked = true,
+        ) {
             SettingsSegmented(
                 options = listOf("0-255", "IRE"),
                 selected = assist.zebraUnit.editorLabel,
@@ -844,6 +1008,7 @@ private fun ZebraAssistCard(assist: LiveAssistState) {
         }
         ZebraZoneRow(
             title = "Highlight",
+            help = SettingsHelpCopy.ZEBRA_HIGHLIGHT,
             enabled = assist.zebraHighlight,
             value = assist.zebraHighlightIRE.toInt(),
             selectedColor = assist.zebraHighlightColor.label,
@@ -854,6 +1019,7 @@ private fun ZebraAssistCard(assist: LiveAssistState) {
         )
         ZebraZoneRow(
             title = "Midtone",
+            help = SettingsHelpCopy.ZEBRA_MIDTONE,
             enabled = assist.zebraMidtone,
             value = assist.zebraMidtoneIRE.toInt(),
             selectedColor = assist.zebraMidtoneColor.label,
@@ -868,6 +1034,7 @@ private fun ZebraAssistCard(assist: LiveAssistState) {
 @Composable
 private fun ZebraZoneRow(
     title: String,
+    help: String,
     enabled: Boolean,
     value: Int,
     selectedColor: String,
@@ -876,7 +1043,7 @@ private fun ZebraZoneRow(
     onValue: (Int) -> Unit,
     onColor: (String) -> Unit,
 ) {
-    SettingsInlineRow(title = title, stacked = true) {
+    SettingsInlineRow(title = title, help = help, stacked = true) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -906,7 +1073,7 @@ private fun WaveformAssistCard(assist: LiveAssistState) {
                 assist.setWaveform(mode = WaveformMode.fromPersisted(label))
             }
         }
-        SettingsInlineRow("Brightness", stacked = true) {
+        SettingsInlineRow("Brightness", SettingsHelpCopy.WAVEFORM_BRIGHTNESS, stacked = true) {
             SettingsPercentSlider(value = assist.waveBrightness, range = 0..200) {
                 assist.setWaveform(brightness = it)
             }
@@ -929,7 +1096,7 @@ private fun ParadeAssistCard(assist: LiveAssistState) {
                 assist.setParade(mode = ParadeMode.fromPersisted(label))
             }
         }
-        SettingsInlineRow("Brightness", stacked = true) {
+        SettingsInlineRow("Brightness", SettingsHelpCopy.PARADE_BRIGHTNESS, stacked = true) {
             SettingsPercentSlider(value = assist.paradeBrightness, range = 0..200) {
                 assist.setParade(brightness = it)
             }
@@ -955,7 +1122,11 @@ private fun HistogramAssistCard(assist: LiveAssistState) {
         ) {
             assist.setHistogram(traffic = !assist.histoTrafficLights)
         }
-        SettingsInlineRow(title = HistogramAssist.COMPENSATION_TITLE, stacked = true) {
+        SettingsInlineRow(
+            title = HistogramAssist.COMPENSATION_TITLE,
+            help = HistogramAssist.COMPENSATION_HELP,
+            stacked = true,
+        ) {
             CrushClipControl(assist.crushClipCompensation) { assist.setHistogram(compensation = it) }
         }
     }
@@ -967,7 +1138,12 @@ private fun VectorscopeAssistCard(assist: LiveAssistState) {
         title = "Vectorscope",
         onReset = { assist.setVectorscope(zoom = VectorscopeZoom.X1, brightness = 100) },
     ) {
-        SettingsInlineRow("Trace Zoom", showTopDivider = false, stacked = true) {
+        SettingsInlineRow(
+            "Trace Zoom",
+            SettingsHelpCopy.VECTORSCOPE_ZOOM,
+            showTopDivider = false,
+            stacked = true,
+        ) {
             SettingsSegmented(
                 options = VectorscopeZoom.entries.map { it.label },
                 selected = assist.vectorZoom.label,
@@ -975,7 +1151,7 @@ private fun VectorscopeAssistCard(assist: LiveAssistState) {
                 assist.setVectorscope(zoom = VectorscopeZoom.fromPersisted(label))
             }
         }
-        SettingsInlineRow("Brightness", stacked = true) {
+        SettingsInlineRow("Brightness", SettingsHelpCopy.VECTORSCOPE_BRIGHTNESS, stacked = true) {
             SettingsPercentSlider(value = assist.vectorBrightness, range = 0..200) {
                 assist.setVectorscope(brightness = it)
             }
@@ -991,6 +1167,7 @@ private fun TrafficLightsAssistCard(assist: LiveAssistState) {
     ) {
         SettingsInlineRow(
             title = HistogramAssist.COMPENSATION_TITLE,
+            help = SettingsHelpCopy.TRAFFIC_LIGHTS_COMPENSATION,
             showTopDivider = false,
             stacked = true,
         ) {
@@ -1019,80 +1196,6 @@ private fun ScopeGuideRows(guides: ScopeGuides, onChange: (ScopeGuides) -> Unit)
     }
     SettingsSwitchRow("Middle Gray", isOn = guides.middle, stacked = true) {
         onChange(guides.copy(middle = !guides.middle))
-    }
-}
-
-@Composable
-private fun AudioAssistCard() {
-    SettingsRowCard(title = "Audio Levels") {
-        SettingsInlineRow("Audio Levels", AudioAssist.HELP, showTopDivider = false) {
-            SettingsValueText("Live")
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun GuidesAssistCard(assist: LiveAssistState) {
-    SettingsRowCard(
-        title = "Guides",
-        onReset = {
-            assist.updateGuideFamily(GuideFamily.FILM)
-            assist.updateGuideMask(false)
-            assist.guideAspect = GuideAspect.CINEMA
-            assist.selectedGuides = setOf(GuideAspect.CINEMA)
-            assist.persist()
-        },
-    ) {
-        SettingsInlineRow("Family", showTopDivider = false, stacked = true) {
-            SettingsSegmented(
-                options = GuideFamily.entries.map { it.label },
-                selected = assist.guideFamily.label,
-            ) { label ->
-                assist.updateGuideFamily(GuideFamily.fromPersisted(label))
-            }
-        }
-        SettingsInlineRow("Ratios", stacked = true) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                GuideAspect.ratios(assist.guideFamily).forEach { aspect ->
-                    DisplayToggleItem(
-                        title = aspect.label,
-                        isOn = aspect in assist.selectedGuides,
-                        onToggle = { assist.toggleGuide(aspect) },
-                    )
-                }
-            }
-        }
-        SettingsSwitchRow("Mask outside frame", isOn = assist.guideMask, stacked = true) {
-            assist.updateGuideMask(!assist.guideMask)
-        }
-    }
-}
-
-@Composable
-private fun GridAssistCard(assist: LiveAssistState) {
-    SettingsRowCard(
-        title = "Grid",
-        onReset = { assist.setGridOption(thirds = true, phi = false, diagonal = false) },
-    ) {
-        GridAssist.optionLabels.forEachIndexed { index, label ->
-            val on =
-                when (label) {
-                    "Thirds" -> assist.gridThirds
-                    "Phi Grid" -> assist.gridPhi
-                    else -> assist.gridDiagonal
-                }
-            SettingsSwitchRow(title = label, isOn = on, showTopDivider = index > 0, stacked = true) {
-                when (label) {
-                    "Thirds" -> assist.setGridOption(thirds = !assist.gridThirds)
-                    "Phi Grid" -> assist.setGridOption(phi = !assist.gridPhi)
-                    else -> assist.setGridOption(diagonal = !assist.gridDiagonal)
-                }
-            }
-        }
     }
 }
 
@@ -1191,17 +1294,12 @@ private fun DispSectionBody(model: AppModel, mode: PocketDispMode, isLive: Boole
     if (isLive) {
         SettingsActionPill(
             title = "Edit view",
+            modifier = Modifier.padding(vertical = 8.dp),
             onClick = {
                 operatorHaptic(view, model.hapticsEnabled)
                 model.homePanel = null
                 model.beginChromeEditing(mode)
             },
-        )
-        Text(
-            SettingsHelpCopy.EDIT_VIEW,
-            style = LiveType.ui(11f),
-            color = LiveDesign.faint,
-            modifier = Modifier.padding(vertical = 8.dp),
         )
     } else {
         Text(
@@ -1276,19 +1374,21 @@ private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
 
 @Composable
 private fun CleanViewPinStrip(model: AppModel, view: View) {
+    val assist = model.assist
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         CleanPinTool.entries.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 row.forEach { tool ->
-                    val on = tool.key in model.cleanViewPinnedTools
+                    val on = assist.pinned.any { it.name == tool.key }
                     DisplayToggleItem(
                         title = tool.title,
                         isOn = on,
                         modifier = Modifier.weight(1f),
                         onToggle = {
                             operatorHaptic(view, model.hapticsEnabled)
-                            val next = model.cleanViewPinnedTools.toMutableSet()
-                            if (!next.add(tool.key)) next.remove(tool.key)
+                            val next = toggledCleanPins(assist.pinned.map { it.name }.toSet(), tool.key)
+                            assist.pinned =
+                                next.mapNotNull(LiveAssistTool::fromPersisted).toSet()
                             model.updateCleanViewPinnedTools(next)
                         },
                     )
@@ -1384,17 +1484,31 @@ fun OperatorCloseButton(onClose: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SettingsLiveTile(isLive: Boolean, phaseLabel: String, bars: Int, cameraName: String) {
+private fun SettingsLiveTile(
+    isLive: Boolean,
+    phaseLabel: String,
+    bars: Int,
+    cameraName: String,
+    fpsLabel: String,
+    hasVideoFormat: Boolean,
+) {
     val tint =
         when {
             !isLive -> LiveDesign.faint
             bars >= 3 -> LiveDesign.good
             bars == 2 -> LiveDesign.accent
             bars == 1 -> LiveDesign.rec
+            hasVideoFormat -> LiveDesign.accent
             else -> LiveDesign.faint
         }
-    val lit = if (isLive) bars.coerceIn(0, 4) else 0
-    val detail = if (isLive) "$cameraName · BLE + Wi-Fi" else phaseLabel
+    val lit =
+        when {
+            !isLive -> 0
+            bars > 0 -> bars.coerceIn(0, 4)
+            hasVideoFormat -> 2
+            else -> 1
+        }
+    val detail = OperatorLinkHealth.liveTileDetail(isLive, cameraName, fpsLabel, phaseLabel)
     Row(
         Modifier
             .background(LiveDesign.surface, ChromeShape)

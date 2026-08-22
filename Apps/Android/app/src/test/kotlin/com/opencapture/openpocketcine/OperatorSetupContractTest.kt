@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.openpocketcine.session.CameraCommands
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -147,26 +149,25 @@ class OperatorSetupContractTest {
             CleanPinTool.entries.map { it.key },
         )
         assertTrue(OperatorPrefs.DEFAULT_CLEAN_PINS.containsAll(setOf("LUT", "PEAK", "MIRROR")))
+        assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, OperatorPrefs.resolvedCleanPins(null))
+        assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, OperatorPrefs.resolvedCleanPins(emptySet()))
+        assertEquals(setOf("WAVE"), OperatorPrefs.resolvedCleanPins(setOf("WAVE")))
+        assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, toggledCleanPins(setOf("LUT"), "LUT"))
+        assertEquals(setOf("LUT", "PEAK"), toggledCleanPins(setOf("LUT"), "PEAK"))
     }
 
     @Test
     fun assistCardsCoverIosCinemaSet() {
         assertEquals(
             listOf(
-                "LUT",
-                "Peaking",
                 "False Color",
-                "Zebra",
                 "Waveform",
-                "Parade",
                 "Histogram",
+                "Peaking",
+                "Zebra",
+                "Parade",
                 "Vectorscope",
                 "Traffic Lights",
-                "Audio Levels",
-                "Guides",
-                "Grid",
-                "Crosshair",
-                "Mirror",
             ),
             AssistCard.entries.map { it.title },
         )
@@ -196,7 +197,12 @@ class OperatorSetupContractTest {
     fun cacheSizeLabelAndLutLook() {
         assertEquals("Empty", formatCacheSize(0))
         assertEquals("512 B", formatCacheSize(512))
-        assertEquals("Auto", lutLookLabel("auto"))
+        assertEquals("Auto · Off", lutLookLabel("auto"))
+        assertEquals(
+            "Auto · D-Log2 → Rec.709",
+            lutLookLabel("auto", colorMode = CameraCommands.COLOR_DLOG2),
+        )
+        assertEquals("Off · Auto", lutLookLabel("auto", enabled = false, colorMode = CameraCommands.COLOR_DLOG2))
         assertEquals("D-Log2 → Rec.709", lutLookLabel("officialDLog2"))
         assertEquals("Off", lutLookLabel("off"))
         assertEquals("Look", lutLookLabel("custom:Look.cube"))
@@ -224,5 +230,46 @@ class OperatorSetupContractTest {
         assertEquals("Failed", connectionPhaseLabel(ConnectionPhase.FAILED, null))
         assertEquals("Failed: timed out", connectionPhaseLabel(ConnectionPhase.FAILED, "timed out"))
         assertEquals("Approve on the camera screen", connectionPhaseLabel(ConnectionPhase.AWAITING_APPROVAL, null))
+    }
+
+    @Test
+    fun feedUpscalerOffersOffAndFastOnly() {
+        assertEquals(listOf("Off", "Fast"), FeedUpscaler.supported.map { it.label })
+        assertEquals(FeedUpscaler.FAST, FeedUpscaler.fromStored(null))
+        assertEquals(FeedUpscaler.OFF, FeedUpscaler.fromStored("Off"))
+        assertEquals(FeedUpscaler.FAST, FeedUpscaler.fromStored("Lanczos"))
+        assertTrue(SettingsHelpCopy.FEED_UPSCALER.contains("plain sample"))
+        assertTrue(SettingsHelpCopy.FEED_UPSCALER.contains("INFERS"))
+        assertFalse(SettingsHelpCopy.FEED_UPSCALER.contains("OpenZCine"))
+    }
+
+    @Test
+    fun liveTileFpsAndLinkHealthMatchIosCopy() {
+        assertEquals("—", OperatorLinkHealth.compactFps(""))
+        assertEquals("24", OperatorLinkHealth.compactFps("24.00"))
+        assertEquals("24.50", OperatorLinkHealth.compactFps("24.50"))
+        assertEquals("LINK", OperatorLinkHealth.fpsChipLabel(true, false, 0.0, ConnectionPhase.LIVE))
+        assertEquals("FAIL", OperatorLinkHealth.fpsChipLabel(false, false, 0.0, ConnectionPhase.FAILED))
+        assertEquals("RECOV", OperatorLinkHealth.fpsChipLabel(true, true, 12.0, ConnectionPhase.LIVE))
+        assertEquals("25", OperatorLinkHealth.fpsChipLabel(true, false, 25.0, ConnectionPhase.LIVE))
+        assertEquals(
+            "Pocket · BLE + Wi-Fi · 25 FPS",
+            OperatorLinkHealth.liveTileDetail(true, "Pocket", "25", "Connected"),
+        )
+        assertEquals("Idle", OperatorLinkHealth.liveTileDetail(false, "Pocket", "—", "Idle"))
+        assertEquals(4, OperatorLinkHealth.bars(true, 0, false, measuredFps = 25.0))
+        assertEquals(2, OperatorLinkHealth.bars(true, 0, false, measuredFps = 12.5))
+        assertEquals("No live path.", OperatorLinkHealth.caption(false, 0))
+    }
+
+    @Test
+    fun assistHelpCopyMatchesIos() {
+        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("PStops"))
+        assertEquals("Show a compact color key over live view while False Color is active.", SettingsHelpCopy.FALSE_COLOR_REFERENCE)
+        assertTrue(SettingsHelpCopy.PEAKING_SENSITIVITY.contains("finer edges"))
+        assertTrue(SettingsHelpCopy.ZEBRA_UNITS.contains("0-255"))
+        assertTrue(SettingsHelpCopy.WAVEFORM_BRIGHTNESS.contains("waveform"))
+        assertTrue(SettingsHelpCopy.VECTORSCOPE_ZOOM.contains("graticule stays at unity"))
+        assertTrue(SettingsHelpCopy.TRAFFIC_LIGHTS_COMPENSATION.contains("histogram traffic lights"))
     }
 }

@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import android.content.Context
+import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
+import com.opencapture.openpocketcine.feed.FeedUpscaler
 import org.json.JSONObject
 
 enum class PocketDispMode(val title: String, val settingsTitle: String, val settingsCaption: String) {
@@ -213,9 +215,14 @@ object OperatorPrefs {
     private const val LUT_SELECTION = "OpenPocketCine.LUTSelection"
     private const val ASSIST_V1 = "OpenPocketCine.Assist.v1"
     private const val PLAYBACK_ASSISTS = "OpenPocketCine.PlaybackAssists.v1"
+    private const val FEED_UPSCALER = "OpenPocketCine.feedUpscaler"
 
     const val DEFAULT_GIMBAL_SENSITIVITY = 4
     val DEFAULT_CLEAN_PINS = setOf("LUT", "PEAK", "MIRROR")
+
+    /** Absent or empty pin set → stock LUT / PEAK / MIRROR, matching iOS load. */
+    fun resolvedCleanPins(raw: Set<String>?): Set<String> =
+        if (raw.isNullOrEmpty()) DEFAULT_CLEAN_PINS else raw
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -269,12 +276,23 @@ object OperatorPrefs {
     }
 
     fun cleanViewPinnedTools(context: Context): Set<String> {
-        val raw = prefs(context).getStringSet(CLEAN_PINS, null) ?: return DEFAULT_CLEAN_PINS
-        return raw
+        val raw = prefs(context).getStringSet(CLEAN_PINS, null)
+        return resolvedCleanPins(raw)
     }
 
     fun setCleanViewPinnedTools(context: Context, value: Set<String>) {
-        prefs(context).edit().putStringSet(CLEAN_PINS, value).apply()
+        prefs(context).edit().putStringSet(CLEAN_PINS, HashSet(resolvedCleanPins(value))).apply()
+    }
+
+    fun feedUpscaler(context: Context): FeedUpscaler {
+        val value = FeedUpscaler.fromStored(prefs(context).getString(FEED_UPSCALER, null))
+        FeedUpscaleSwitch.rendererReads = value
+        return value
+    }
+
+    fun setFeedUpscaler(context: Context, value: FeedUpscaler) {
+        FeedUpscaleSwitch.rendererReads = value
+        prefs(context).edit().putString(FEED_UPSCALER, value.label).apply()
     }
 
     fun portraitFeedAspect(context: Context): PortraitFeedAspect =

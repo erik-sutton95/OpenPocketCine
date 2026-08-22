@@ -45,6 +45,29 @@ internal object LutLookResolver {
         }
     }
 
+    /** iOS `LUTResolver.statusLabel` — Auto / DJI Auto show the resolved cube title. */
+    fun statusLabel(
+        enabled: Boolean,
+        selection: String,
+        source: LutLookSource,
+    ): String {
+        val title = LutCatalog.titleFor(selection)
+        if (!enabled) return "Off · $title"
+        if (selection == LutCatalog.AUTO) return "Auto · ${sourceTitle(source)}"
+        if (selection == LutCatalog.DJI_AUTO) return "DJI Auto · ${sourceTitle(source)}"
+        return title
+    }
+
+    fun sourceTitle(source: LutLookSource): String =
+        when (source) {
+            LutLookSource.Off -> "Off"
+            is LutLookSource.Asset ->
+                LutCatalog.officialBuiltInLooks.firstOrNull { it.fileName == source.fileName }?.title
+                    ?: LutCatalog.officialDji.firstOrNull { it.fileName == source.fileName }?.title
+                    ?: LutCatalog.displayName(source.fileName)
+            is LutLookSource.Custom -> LutCatalog.displayName(source.fileName)
+        }
+
     private fun builtInAuto(colorMode: Int, family: String): LutLookSource {
         if (family.equals("nano", ignoreCase = true)) return LutLookSource.Off
         return when (colorMode) {
