@@ -122,12 +122,16 @@ internal fun chromeEditBoxes(
     uiLocked: Boolean,
     zoom: ChromeRect,
     stick: ChromeRect,
+    statusChips: Map<PocketDispSection, ChromeRect> = emptyMap(),
 ): List<Pair<PocketDispSection, ChromeRect>> {
     val out = mutableListOf<Pair<PocketDispSection, ChromeRect>>()
     fun add(section: PocketDispSection, rect: ChromeRect) {
         if (!rect.isEmpty) out += section to rect
     }
     if (model.chromeSectionMounts(PocketDispSection.STATUS_BAR)) add(PocketDispSection.STATUS_BAR, layout.topDeck)
+    for (section in TOP_STATUS_CHIPS) {
+        if (model.chromeSectionMounts(section)) statusChips[section]?.let { add(section, it) }
+    }
     if (model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON) || uiLocked) add(PocketDispSection.LOCK_BUTTON, layout.lock)
     if (model.chromeSectionMounts(PocketDispSection.BATTERIES)) add(PocketDispSection.BATTERIES, layout.battery)
     if (model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS)) add(PocketDispSection.RAIL_SETTINGS, layout.settings)
@@ -139,6 +143,16 @@ internal fun chromeEditBoxes(
     if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)) add(PocketDispSection.GIMBAL_STICK, stick)
     return out
 }
+
+internal val TOP_STATUS_CHIPS =
+    listOf(
+        PocketDispSection.REC_READOUT,
+        PocketDispSection.TIMECODE,
+        PocketDispSection.FORMAT,
+        PocketDispSection.COLOR,
+        PocketDispSection.STORAGE,
+        PocketDispSection.FPS,
+    )
 
 private enum class BadgeAnchor {
     TOP_LEADING,

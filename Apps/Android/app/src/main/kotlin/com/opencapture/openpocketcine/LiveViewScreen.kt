@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -41,16 +42,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
+import android.os.SystemClock
+import com.opencapture.openpocketcine.session.SessionRecoveryCopy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -65,6 +71,7 @@ import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
+import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.hypot
 import kotlinx.coroutines.delay
@@ -124,18 +131,52 @@ fun LiveViewScreen(model: AppModel) {
     val showsBottomBars =
         model.chromeSectionMounts(PocketDispSection.TOOL_BAR) ||
             model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES)
-    val bars =
-        when {
-            model.session.hasVideoFormat -> 4
-            model.session.videoPackets > 0 -> 2
-            else -> 1
+    val pickerFrames = remember { mutableStateMapOf<LiveSheet, ChromeRect>() }
+    val statusChipFrames = remember { mutableStateMapOf<PocketDispSection, ChromeRect>() }
+    var fpsLabel by remember { mutableStateOf("—") }
+    var bars by remember { mutableIntStateOf(0) }
+    val fpsSampler = remember { FrameRateSampler() }
+    val signalBars = remember { LinkSignalBars() }
+    LaunchedEffect(model.session) {
+        var lastSeen: Long? = null
+        var held = "—"
+        while (true) {
+            val presented = model.session.decoder.lastPresentedAt
+            if (presented != null && presented != lastSeen) {
+                fpsSampler.recordFrame(presented / 1000.0)
+                lastSeen = presented
+            }
+            val recovering = model.session.isFeedRecovering
+            val phase = model.session.phaseFlow.value
+            val label =
+                if (model.session.recoveryState.value.isRecovering) {
+                    SessionRecoveryCopy.HELD_FRAME_BADGE
+                } else {
+                    LiveViewLink.fpsChipLabel(
+                        connection = phase,
+                        recovering = recovering,
+                        formattedFPS = fpsSampler.formatted,
+                        measuredFPS = fpsSampler.displayFPS,
+                    )
+                }
+            held = LiveChromeReadout.holdFPS(label, held)
+            fpsLabel = held
+            val now = SystemClock.elapsedRealtime()
+            val measured = fpsSampler.displayFPS
+            val snapshot =
+                CameraLinkHealthScorer.score(
+                    CameraLinkHealthInputs(
+                        phase = LiveViewLink.cameraLinkPhase(phase, recovering, measured),
+                        liveViewFPS = measured.takeIf { it > 0 },
+                        targetLiveViewFPS = LiveViewLink.TARGET_FPS,
+                        secondsSinceLastGoodFrame = presented?.let { (now - it) / 1000.0 },
+                        isRecoveringStream = recovering,
+                    ),
+                )
+            bars = signalBars.update(snapshot.linkHealthScore)
+            delay(40)
         }
-    val fpsLabel =
-        when {
-            status.fps > 0 -> String.format("%.2f", status.fps.toFloat())
-            model.session.hasVideoFormat -> "—"
-            else -> "—"
-        }
+    }
     tick
 
     val feedBackdrop = rememberLayerBackdrop()
@@ -284,10 +325,17 @@ fun LiveViewScreen(model: AppModel) {
             } else {
                 Modifier
             }
+        var canvasOrigin by remember { mutableStateOf(Offset.Zero) }
         CompositionLocalProvider(
             LocalDensity provides Density(density.density, density.fontScale * chromeScale),
+            LocalLiveCanvasOrigin provides canvasOrigin,
         ) {
-        Box(Modifier.fillMaxSize().then(sceneLayer)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(sceneLayer)
+                .onGloballyPositioned { canvasOrigin = it.positionInRoot() },
+        ) {
             // TextureView lives *inside* the recorded well so Kyant samples the
             // picture. A SurfaceView is a separate SurfaceFlinger buffer and
             // reads as black under HUD glass (OpenZCine LiveFeedView / Kyant #82).
@@ -374,6 +422,7 @@ fun LiveViewScreen(model: AppModel) {
                         if (!LiveZoom.setZoom(model.session, next)) chromeNote = "Zoom not available"
                     },
                     controlBusy = controlBusy,
+                    onTileFrame = { key, rect -> pickerFrames[key] = rect },
                 )
             } else {
                 LandscapeChrome(
@@ -397,6 +446,8 @@ fun LiveViewScreen(model: AppModel) {
                     focusOffCenter = focusOffCenter,
                     onFocusReset = { model.tapFocus(0.5f, 0.5f) },
                     onZoomMissing = { chromeNote = "Zoom not available" },
+                    onTileFrame = { key, rect -> pickerFrames[key] = rect },
+                    onStatusChipFrame = { section, rect -> statusChipFrames[section] = rect },
                 )
             }
 
@@ -426,27 +477,34 @@ fun LiveViewScreen(model: AppModel) {
         }
 
             if (chromeInteractive && sheet != null && !uiLocked) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .chromeClickable(onClick = { sheet = null }),
-                ) {
-                    val bottomPad =
-                        if (showsBottomBars) {
-                            (vh - minOf(layout.assist.minY, layout.capture.minY) + LiveChromeMetrics.POPUP_GAP)
-                                .coerceAtLeast(8f)
-                        } else {
-                            24f
-                        }
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(start = 16.dp, end = 16.dp, bottom = bottomPad.dp)
-                            .fillMaxWidth(),
-                    ) {
-                        LiveControlSheet(sheet!!, model, status, uiLocked) { sheet = null }
+                val floorY =
+                    if (showsBottomBars) {
+                        minOf(layout.assist.minY, layout.capture.minY) - LiveChromeMetrics.POPUP_GAP
+                    } else {
+                        null
                     }
-                }
+                LivePickerHost(
+                    sheet = sheet!!,
+                    frames = pickerFrames.toMap(),
+                    bar = layout.capture,
+                    topDeck = layout.topDeck,
+                    viewportWidth = vw,
+                    viewportHeight = vh,
+                    safeLeading = safeLeading,
+                    safeTrailing = safeTrailing,
+                    safeTop = safeTop,
+                    safeBottom = safeBottom,
+                    ceilingY =
+                        maxOf(
+                            safeTop + LivePopupPlacement.ASSIST_TOP_INSET,
+                            LivePopupPlacement.EDGE_MARGIN,
+                        ),
+                    floorY = floorY,
+                    model = model,
+                    status = status,
+                    locked = uiLocked,
+                    onSelect = { sheet = it },
+                )
             }
 
             val configure = assist.configureTool
@@ -513,6 +571,7 @@ fun LiveViewScreen(model: AppModel) {
                                 else zones.systemBar.minY,
                             ).first
                         } else stick,
+                        statusChips = statusChipFrames.toMap(),
                     )
                 ChromeEditBadgeLayer(
                     mode = editing,
@@ -724,6 +783,8 @@ private fun LandscapeChrome(
     focusOffCenter: Boolean,
     onFocusReset: () -> Unit,
     onZoomMissing: () -> Unit,
+    onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
+    onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
 ) {
     val editing = model.chromeEditorMode
     val showsStatus = model.chromeSectionMounts(PocketDispSection.STATUS_BAR)
@@ -739,7 +800,12 @@ private fun LandscapeChrome(
     Box(Modifier.fillMaxSize()) {
         if (showsStatus) {
             Box(
-                Modifier.liveModuleFrame(layout.topDeck).chromeEditStroke(editing != null, true),
+                Modifier
+                    .liveModuleFrame(layout.topDeck)
+                    .chromeEditStroke(
+                        editing != null,
+                        model.chrome(editing ?: model.currentDispMode).isVisible(PocketDispSection.STATUS_BAR),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 LiveTopDeck(
@@ -753,6 +819,9 @@ private fun LandscapeChrome(
                     onToggleStorage = onToggleStorage,
                     onOpen = { if (!uiLocked && hits) onSheet(if (sheet == it) null else it) },
                     maxWidth = layout.topDeck.width,
+                    editing = editing,
+                    onChipFrame = onStatusChipFrame,
+                    onPickerFrame = onTileFrame,
                 )
             }
         }
@@ -875,10 +944,13 @@ private fun LandscapeChrome(
                             status = status,
                             active = sheet,
                             enabled = !uiLocked && !controlBusy && hits,
-                            showFocus = model.session.connectedCamera?.model?.supportsFocusMode != false,
+                            showFocus =
+                                CaptureLists.supportsFocusMode(model.session.connectedCamera?.model?.name) &&
+                                    model.session.connectedCamera?.model?.supportsFocusMode != false,
                             facePriority = model.facePriorityExposureEnabled,
                             shutterUsesAngle = model.shutterUsesAngle,
                             onOpen = { onSheet(if (sheet == it) null else it) },
+                            onTileFrame = onTileFrame,
                         )
                     }
                 },
@@ -899,43 +971,57 @@ private fun LiveTopDeck(
     onToggleStorage: () -> Unit,
     onOpen: (LiveSheet) -> Unit,
     maxWidth: Float,
+    editing: PocketDispMode? = null,
+    onChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
+    onPickerFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
 ) {
+    val family = model.session.connectedCamera?.model?.family ?: "pocket"
+    fun chipMod(section: PocketDispSection, picker: LiveSheet? = null): Modifier {
+        val visible = editing == null || model.chrome(editing).isVisible(section)
+        return Modifier
+            .then(if (editing != null) Modifier.graphicsLayer { alpha = if (visible) 1f else 0.3f } else Modifier)
+            .chromeEditStroke(editing != null, visible)
+            .reportChromeFrame { rect ->
+                onChipFrame(section, rect)
+                if (picker != null) onPickerFrame(picker, rect)
+            }
+    }
     FitScale(maxWidth.dp) {
     InfoPill {
-        if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) RecChip(status.isRecording)
-        if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) TimecodeReadout(status.timecode)
+        if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
+            Box(chipMod(PocketDispSection.REC_READOUT)) { RecChip(status.isRecording) }
+        }
+        if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
+            Box(chipMod(PocketDispSection.TIMECODE)) { TimecodeReadout(status.timecode) }
+        }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
-            val label =
-                buildString {
-                    append(status.resolutionLabel.replace("—", "—"))
-                    append("·")
-                    append(if (status.fps > 0) "${status.fps}" else "—")
-                }
             ReadoutPill(
-                label,
+                CaptureLists.recFormatChipLabel(status),
                 active = active == LiveSheet.FORMAT,
                 enabled = enabled,
                 onClick = { onOpen(LiveSheet.FORMAT) },
+                modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT),
             ) { VideoGlyph(it) }
         }
         if (model.chromeSectionMounts(PocketDispSection.COLOR)) {
             ReadoutPill(
-                status.colorLabel,
+                CameraCommands.colorLabel(status.colorMode, family),
                 active = active == LiveSheet.COLOR,
                 enabled = enabled,
                 onClick = { onOpen(LiveSheet.COLOR) },
+                modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR),
             ) { ColorGlyph(it) }
         }
         if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
-            val storage =
-                if (showStorageDuration) {
-                    if (status.recordRemainingSec > 0) "${status.recordRemainingSec / 60} Min" else "— Min"
-                } else {
-                    status.storageLabel
-                }
-            ReadoutPill(storage, onClick = onToggleStorage) { SdCardGlyph(it) }
+            ReadoutPill(
+                CaptureLists.storageLabel(status, showStorageDuration),
+                onClick = onToggleStorage,
+                modifier = chipMod(PocketDispSection.STORAGE),
+            ) { SdCardGlyph(it) }
         }
-        if (model.chromeSectionMounts(PocketDispSection.FPS)) FpsChip(fps, bars)
+        if (model.chromeSectionMounts(PocketDispSection.FPS)) {
+            Box(chipMod(PocketDispSection.FPS)) { FpsChip(fps, bars) }
+        }
     }
     }
 }
