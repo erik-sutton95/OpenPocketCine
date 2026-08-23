@@ -755,18 +755,21 @@ final class LiveFrameSampleTests: XCTestCase {
     /// Prefers legal-scaled 10-bit x420 (black → grey edge), falls back to
     /// IOSurface BGRA, then 8-bit 420v.
     private static func makeLiveLikeBuffer(width: Int, height: Int) -> CVPixelBuffer? {
+        func usable(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
+            PocketScopeSampler.copyBGRA(buffer, maxWidth: 200) == nil ? nil : buffer
+        }
         if let ten = ScopeTestBuffers.makeX420(
             width: width, height: height,
             luma10: { x, _ in
                 x < width / 2 ? ScopeTestBuffers.dlog2Black10 : ScopeTestBuffers.dlog2Grey10
             })
         {
-            return ten
+            if let ten = usable(ten) { return ten }
         }
         let metal = ScopeTestBuffers.makeIOSurfaceBGRA(
             width: width, height: height, left: 40, right: 210)
-        if metal.filled { return metal.buffer }
-        return ScopeTestBuffers.make420v(width: width, height: height, leftY: 48, rightY: 200)
+        if metal.filled, let filled = usable(metal.buffer) { return filled }
+        return usable(ScopeTestBuffers.make420v(width: width, height: height, leftY: 48, rightY: 200))
     }
 
     private static func maxChannelDelta(output: CIImage, source: CIImage, context: CIContext)
