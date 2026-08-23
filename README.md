@@ -163,6 +163,7 @@ filmmakers and developers can inspect, improve, and adapt the tool they rely on.
 - [`docs/PARITY.md`](docs/PARITY.md) — operator-visible iOS / Android contract
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — live-path SLOs (frame rate, ACK, HUD)
 - [`docs/UX.md`](docs/UX.md) — FTUE, operator copy, help, failure states
+- [`docs/RELEASE.md`](docs/RELEASE.md) — `main` + PRs + `v*` tags (no Git Flow)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, GitHub workflow, and how to report bugs
 - [`AGENTS.md`](AGENTS.md) — always-loaded index for coding agents
 

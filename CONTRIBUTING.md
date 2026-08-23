@@ -40,6 +40,7 @@ Frame.io upload is **disabled unless you configure it**. Copy
 ## Workflow
 
 Branching, Conventional Commits, and `just check` follow [`AGENTS.md`](AGENTS.md).
+Git and version trains: [`docs/RELEASE.md`](docs/RELEASE.md) (`main` + short PRs + `v*` tags; no `develop`).
 Agent task graphs (split, verify, loops) live in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
 
 GitHub-specific:

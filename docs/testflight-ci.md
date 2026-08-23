@@ -86,7 +86,9 @@ just testflight-notes
 | **Build number** (TestFlight “Build”) | Xcode Cloud counter | `1`, `2`, … |
 
 Keep the marketing version stable so uploads stay in the same TestFlight version train. Bump
-`MARKETING_VERSION` only when starting a new train (`0.1.0` → `0.2.0`). The first external build
+`MARKETING_VERSION` only when starting a new train (`0.1.0` → `0.2.0`), and keep Android
+`openpocketcine.versionName` equal. Product tags are `v0.2.0` on `main`, not a tag per
+cloud build. See [`RELEASE.md`](RELEASE.md). The first external build
 of a version needs [TestFlight App Review](https://developer.apple.com/help/glossary/testflight-app-review/);
 later builds of that version often do not.
 

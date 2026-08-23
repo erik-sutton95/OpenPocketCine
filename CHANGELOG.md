@@ -53,7 +53,8 @@ All notable changes to this project are documented here. The format is based on
   Live-path SLOs: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md). Operator UX /
   FTUE: [`docs/UX.md`](docs/UX.md). Agent task graphs:
   [`docs/WORKFLOW.md`](docs/WORKFLOW.md). Runtime trust boundaries:
-  [`SECURITY.md`](SECURITY.md).
+  [`SECURITY.md`](SECURITY.md). Git and version trains:
+  [`docs/RELEASE.md`](docs/RELEASE.md).
 
 - Android live scopes match iOS `ScopeMiniChrome` / `WaveformMovablePanel`:
   DJI-black 72% plates (`LiveDesign.scopePlate`). WAVE / PARADE / VECTOR /

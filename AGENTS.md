@@ -29,7 +29,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - Keep the Swift core **portable**: Foundation-only protocol and business logic.
 - Live view is **enable-once**: `0x09/0xa8` starts the stream and is the only PLI. After picture, further enables follow the **watchdog** only.
 - **Hygiene:** secrets, camera Wi-Fi passwords, PII, unofficial LUT dumps, and `captures/`, `Osmo LUTS/`, `vendor/`, `ref/`, `.local/` stay out of git. Official Rec.709 cubes under `ios/OpenPocketCine/Resources/` and `Apps/Android/app/src/main/assets/luts/` are tracked.
-- Work on a branch and open a PR. Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`).
+- Work on a branch (`feat/`, `fix/`, `docs/`, …) and open a PR into `main`. Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`). Tags and version trains: [`docs/RELEASE.md`](docs/RELEASE.md).
 - `AGENTS.md` is canonical for every agent. Client stubs (`CLAUDE.md`, `CODEX.md`, `GROK.md`) are pointers only — do not copy these rules into a second instruction file. Do not add Cursor, Copilot, Gemini, or Windsurf instruction dumps.
 
 ## Before you edit
@@ -53,6 +53,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **security** — vulnerability, SoftAP password, Keychain, advisory: [`SECURITY.md`](SECURITY.md)
 - **ux** — FTUE, first-run, wizard, operator copy, help, empty/error: [`docs/UX.md`](docs/UX.md)
 - **workflow** — parallel, subagent, loop, verify in a fresh context, graphify: [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
+- **release** — tag, version bump, TestFlight train, `develop` / Git Flow: [`docs/RELEASE.md`](docs/RELEASE.md)
 
 ## Verification
 

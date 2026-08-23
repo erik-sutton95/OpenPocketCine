@@ -14,6 +14,8 @@ changes through the API or
 - Admin enforcement is off so the solo maintainer can merge their own PRs
   after CI. Do not give anyone else write access without turning admin
   enforcement on.
+- No `develop` branch. Feature work is PRs into `main`; product trains are
+  annotated `v*` tags. See [`RELEASE.md`](RELEASE.md).
 
 ## Actions
 
