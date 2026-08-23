@@ -65,5 +65,6 @@ reads true, or UDP rebuilds on home Wi-Fi.
 
 - Stall / recover: [`feed-watchdog.md`](feed-watchdog.md)
 - Operator-visible match: [`PARITY.md`](PARITY.md)
+- Live-path SLOs: [`PERFORMANCE.md`](PERFORMANCE.md)
 - Wire format: [protocol handbook live view](https://openpocketcine.app/docs/protocol/live-view/)
   (Markdown source: `handbook/src/content/docs/protocol/live-view.md`)

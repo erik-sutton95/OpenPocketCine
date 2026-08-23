@@ -160,7 +160,11 @@ filmmakers and developers can inspect, improve, and adapt the tool they rely on.
 - **[Protocol handbook](https://openpocketcine.app/docs/)** — BLE pairing, camera Wi-Fi, DUML
   frames, commands, and live view. Preview locally with `just handbook`.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — shared Swift core and platform shells
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, workflow, and how to report bugs
+- [`docs/PARITY.md`](docs/PARITY.md) — operator-visible iOS / Android contract
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — live-path SLOs (frame rate, ACK, HUD)
+- [`docs/UX.md`](docs/UX.md) — FTUE, operator copy, help, failure states
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, GitHub workflow, and how to report bugs
+- [`AGENTS.md`](AGENTS.md) — always-loaded index for coding agents
 
 ## Architecture
 

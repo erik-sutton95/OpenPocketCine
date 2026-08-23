@@ -60,3 +60,11 @@ _Avoid_: cleanliness
 **Portable**:
 Foundation-only core: no SwiftUI, UIKit, Android, Compose, or filesystem I/O.
 _Avoid_: cross-platform, shared
+
+**Budget**:
+A living SLO for the live path (frame rate, ACK, HUD Hz, scope tap).
+_Avoid_: perf tweak, optimization (alone)
+
+**FTUE**:
+The first-run pairing wizard: BLE → approve → SoftAP → live picture.
+_Avoid_: onboarding, tutorial, splash (the splash is not the wizard)

@@ -22,7 +22,8 @@ write the exception in the table in the same PR.
 
 Datalink bind, ACK, enable-write, and decoder latch facts live in
 [`live-session.md`](live-session.md). Android I/O that implements these rows
-lives in [`ANDROID.md`](../ANDROID.md).
+lives in [`ANDROID.md`](../ANDROID.md). First-run copy and operator voice:
+[`UX.md`](UX.md). Live-path SLOs: [`PERFORMANCE.md`](PERFORMANCE.md).
 
 ## Chrome metrics
 

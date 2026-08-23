@@ -40,7 +40,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
 ## Read when
 
-- **naming** — fuzzy term, new name, operator-visible copy: [`CONTEXT.md`](CONTEXT.md)
+- **naming** — fuzzy term, new name: [`CONTEXT.md`](CONTEXT.md)
 - **seams** — new module, core vs shell, spine order: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **parity** — chrome, assist, connection UX, one-platform feature: [`docs/PARITY.md`](docs/PARITY.md)
 - **JNI** — Gradle, Swift-for-Android, `.so`, facade, OpenZCine pattern: [`ANDROID.md`](ANDROID.md)
@@ -49,6 +49,10 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **protocol** — DUML, BLE, opcode, pktType, HEVC/AVC payload: `handbook/src/content/docs/`
 - **hygiene** — commit/PR that might touch secrets, LUTs, captures, identity: [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
 - **contributing** — issues vs discussions, labels, human setup: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **budget** — smoothness, fps, jank, HUD Hz, scope tap, ACK rate, thermal: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
+- **security** — vulnerability, SoftAP password, Keychain, advisory: [`SECURITY.md`](SECURITY.md)
+- **ux** — FTUE, first-run, wizard, operator copy, help, empty/error: [`docs/UX.md`](docs/UX.md)
+- **workflow** — parallel, subagent, loop, verify in a fresh context, graphify: [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 
 ## Verification
 
@@ -59,7 +63,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
 ## Completion
 
-A task is not done until `just check` is green for the paths touched, docs that describe the behavior are updated, **parity** is held or an exception is recorded in `docs/PARITY.md`, no forbidden paths are staged, and operator-visible work is **physical** for the platform changed.
+A task is not done until `just check` is green for the paths touched, docs that describe the behavior are updated, **parity** is held or an exception is recorded in `docs/PARITY.md`, no forbidden paths are staged, and operator-visible work is **physical** for the platform changed. A live-path change also still meets **budget**.
 
 ## Sediment
 

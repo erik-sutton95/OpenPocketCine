@@ -47,7 +47,8 @@ Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering
 storage, and UI. Do not import SwiftUI, UIKit, Android, or Compose into the core.
 
 See [`live-session.md`](live-session.md), [`feed-watchdog.md`](feed-watchdog.md),
-[`PARITY.md`](PARITY.md), and [`ANDROID.md`](../ANDROID.md).
+[`PARITY.md`](PARITY.md), [`PERFORMANCE.md`](PERFORMANCE.md), [`UX.md`](UX.md),
+and [`ANDROID.md`](../ANDROID.md).
 
 See the [protocol handbook](https://openpocketcine.app/docs/) for wire-level detail
 (Markdown source in `handbook/src/content/docs/`; stub at [`protocol-notes.md`](protocol-notes.md)).

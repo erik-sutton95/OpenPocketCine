@@ -13,10 +13,9 @@ engineering. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT
 No vendor SDK is included or required — the camera protocol is reverse-engineered from public
 behavior (see [`docs/protocol-notes.md`](docs/protocol-notes.md) and
 [openpocketcine.app/docs](https://openpocketcine.app/docs/); `just handbook` locally).
-**Never commit packet captures,
-Wi-Fi passwords, or unofficial LUT dumps.** Official Rec.709 cubes in
-`ios/OpenPocketCine/Resources/` are part of the app. See
-[`docs/commit-hygiene.md`](docs/commit-hygiene.md).
+**Hygiene** (secrets, captures, unofficial LUTs): [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
+and [`AGENTS.md`](AGENTS.md). Official Rec.709 cubes in
+`ios/OpenPocketCine/Resources/` are part of the app.
 
 ### Running the app
 
@@ -40,10 +39,11 @@ Frame.io upload is **disabled unless you configure it**. Copy
 
 ## Workflow
 
-- Branch off `main` (e.g. `feat/live-view`, `fix/wifi-join`, `chore/...`).
-- Make focused commits using **[Conventional Commits](https://www.conventionalcommits.org/)**:
-  `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`, `refactor:`.
-- Run `just check` before pushing. For native iOS changes, run `just native-check`.
+Branching, Conventional Commits, and `just check` follow [`AGENTS.md`](AGENTS.md).
+Agent task graphs (split, verify, loops) live in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
+GitHub-specific:
+
 - Open a pull request into `main`. Actions runs on the PR, not a second time
   on the branch push. The required check is **CI gate** (Meta checks, Native
   Swift/iOS, Android, and the protocol handbook feed that gate and skip when
@@ -56,16 +56,12 @@ Frame.io upload is **disabled unless you configure it**. Copy
 ## Code standards
 
 - Agent instructions live in [`AGENTS.md`](AGENTS.md). Do not copy them here.
-- The production target is a shared Swift business/protocol core with native UI shells: SwiftUI on
-  iOS and Jetpack Compose on Android.
+  Seams: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). **Parity:** [`docs/PARITY.md`](docs/PARITY.md).
 - Composition over inheritance; prefer small pure functions and immutable data.
 - Keep functions short (~20 statements) and nesting shallow (≤3 levels) — extract helpers, use early returns.
 - Throw descriptive exceptions for errors; don't return `null` to signal failure.
 - Explicit types on all public signatures; avoid dynamic or loosely typed boundaries.
 - Use platform-native doc comments on public API members.
-- Keep the shared Swift core portable: no SwiftUI, UIKit, Android, Compose, or filesystem/UI
-  dependencies in protocol/business logic. Platform adapters own sockets, permissions, lifecycle,
-  rendering, storage, and UI.
 
 ## Reporting bugs & requesting features
 
