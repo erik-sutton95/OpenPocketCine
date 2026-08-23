@@ -305,6 +305,49 @@
     });
   }
 
+  // ---- Android closed-beta waitlist: native dialog, Tally iframe, no widget JS ----
+  function initAndroidBeta() {
+    const dialog = document.getElementById("android-beta");
+    if (!dialog || typeof dialog.showModal !== "function") return;
+
+    const frame = dialog.querySelector(".beta-dialog__form");
+    const embedSrc = frame ? frame.getAttribute("src") : "";
+    let lastOpener = null;
+
+    const open = (opener) => {
+      lastOpener = opener;
+      if (frame && embedSrc) frame.src = embedSrc;
+      dialog.showModal();
+      const title = document.getElementById("android-beta-title");
+      if (title) title.focus();
+    };
+    const close = () => {
+      if (dialog.open) dialog.close();
+    };
+
+    document.addEventListener("click", (e) => {
+      const opener = e.target.closest("[data-android-beta]");
+      if (opener) {
+        e.preventDefault();
+        open(opener);
+        return;
+      }
+      if (e.target.closest("[data-android-beta-close]")) close();
+    });
+
+    dialog.addEventListener("click", (e) => {
+      const r = dialog.getBoundingClientRect();
+      const inside =
+        e.clientX >= r.left && e.clientX <= r.right &&
+        e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) close();
+    });
+
+    dialog.addEventListener("close", () => {
+      if (lastOpener && typeof lastOpener.focus === "function") lastOpener.focus();
+    });
+  }
+
   function init() {
     initAnchors();
     initNavMorph();
@@ -313,6 +356,7 @@
     initHero();
     initJourney();
     initRows();
+    initAndroidBeta();
   }
 
   if (document.readyState === "loading") {

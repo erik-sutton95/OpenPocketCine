@@ -8,7 +8,7 @@
   <meta name="description" content="OpenPocketCine is a free, open-source field-monitor app for DJI Osmo. Tested on Pocket 4P. Pocket 4 and 3 are untested; Action 6 and Nano are planned.">
   <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://tally.so; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 
   <link rel="canonical" href="https://openpocketcine.app/">
   <meta property="og:type" content="website">
@@ -62,9 +62,7 @@
         <div class="hero__cta" data-intro>
           <a class="btn btn--primary btn--magnetic" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join TestFlight</a>
           <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">★ Star on GitHub</a>
-          <span class="btn btn--disabled" data-coming-soon="android" aria-disabled="true">
-            Android <span class="btn__status">Coming soon</span>
-          </span>
+          <a class="btn btn--ghost btn--magnetic" href="https://tally.so/r/xX8eek" data-android-beta>Join Android beta</a>
         </div>
       </div>
       <div class="hero__stage" data-intro>
@@ -247,7 +245,7 @@
           </article>
         </div>
         <div class="lineup__meta">
-          <p>iPhone and iPad today. Android soon.</p>
+          <p>iPhone and iPad today. Android is a closed beta waitlist.</p>
         </div>
       </div>
     </section>
@@ -255,13 +253,11 @@
     <section class="section band band--dark" id="download" data-band="dark">
       <div class="container cta-final">
         <h2>Source is on GitHub.</h2>
-        <p class="lead">Issues and pull requests are welcome. iOS is on TestFlight. Android is not out yet.</p>
+        <p class="lead">Issues and pull requests are welcome. iOS is on TestFlight. Android is a closed beta waitlist.</p>
         <div class="hero__cta">
           <a class="btn btn--primary btn--magnetic" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join TestFlight</a>
           <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">★ Star on GitHub</a>
-          <span class="btn btn--disabled" data-coming-soon="android" aria-disabled="true">
-            Android <span class="btn__status">Coming soon</span>
-          </span>
+          <a class="btn btn--ghost btn--magnetic" href="https://tally.so/r/xX8eek" data-android-beta>Join Android beta</a>
         </div>
       </div>
     </section>
@@ -289,6 +285,23 @@
       </p>
     </div>
   </footer>
+
+  <dialog class="beta-dialog" id="android-beta" aria-labelledby="android-beta-title">
+    <div class="beta-dialog__panel">
+      <button type="button" class="beta-dialog__close" data-android-beta-close aria-label="Close">
+        <span aria-hidden="true">×</span>
+      </button>
+      <span class="kicker">Android</span>
+      <h2 id="android-beta-title" tabindex="-1">Join the closed beta</h2>
+      <p class="lead">Use the Google account email you&rsquo;ll install from Play. Osmo and phone are optional. Android is 64-bit (arm64) only.</p>
+      <iframe class="beta-dialog__form"
+        title="Android closed beta signup"
+        src="https://tally.so/embed/xX8eek?alignLeft=1&amp;hideTitle=1&amp;transparentBackground=1"
+        loading="lazy"
+        referrerpolicy="no-referrer"></iframe>
+      <p class="beta-dialog__legal">Used only to add testers in Play Console. <a href="/privacy/">Privacy</a>.</p>
+    </div>
+  </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"
     integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt"

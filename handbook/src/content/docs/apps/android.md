@@ -1,11 +1,12 @@
 ---
 title: Android app
-description: Jetpack Compose phone shell on a cross-compiled Swift core. Not on Google Play yet. arm64-v8a only.
+description: Jetpack Compose phone shell on a cross-compiled Swift core. Closed beta waitlist on the site. arm64-v8a only.
 ---
 
 The Android app lives in `Apps/Android/`. It is an early phone shell: pairing,
 HEVC live view, GPU looks, scopes, camera writes, and media. It is **not on
-Google Play**. iOS is the daily driver.
+Google Play yet**. Join the closed-beta waitlist on
+[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver.
 
 ## How Swift reaches Android
 

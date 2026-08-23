@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Android closed-beta waitlist on the landing page. The Android CTA opens a dialog
+  with the Tally signup (email required; Osmo and phone optional). Submissions stay
+  in Tally, not git.
+
 - Android playback LUT / PEAK / FALSE / ZEBRA grade in GLES on the 720p proxy
   (ExoPlayer → OES surface → `FeedEffectsGlProgram` → TextureView), same order
   as live. WAVE / HISTO tap that GL copy, not a TextureView `getBitmap`. Export

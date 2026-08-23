@@ -33,7 +33,8 @@ captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (
 bodies can show up in Bluetooth scan; Action and 360 live view is not captured yet.
 
 iOS (iPhone and iPad) is the daily driver. Android lives in this repository as an early phone shell
-and is not on Google Play.
+and is not on Google Play yet. The closed-beta waitlist is on
+[openpocketcine.app](https://openpocketcine.app/).
 
 - **Read the image like a colorist.** Waveform, RGB parade, histogram, and vectorscope run live on
   the iOS monitor.
@@ -134,7 +135,8 @@ when Camera to Cloud is configured.
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
 The native Android implementation lives in this repository as a phone shell with live pairing,
-HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. It is not on Google Play.
+HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. It is not on Google Play
+yet; the closed-beta waitlist is on [openpocketcine.app](https://openpocketcine.app/).
 Clip export LUT bake and GPU scopes are iOS today.
 
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may
