@@ -21,7 +21,7 @@
   &nbsp;·&nbsp;
   <a href="https://openpocketcine.app/">Visit openpocketcine.app</a>
   &nbsp;·&nbsp;
-  <a href="https://openpocketcine.app/docs/">Protocol handbook</a>
+  <a href="https://openpocketcine.app/docs/">Docs</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/29">Explore the roadmap</a>
 </p>
@@ -157,8 +157,9 @@ filmmakers and developers can inspect, improve, and adapt the tool they rely on.
 
 ## Documentation
 
-- **[Protocol handbook](https://openpocketcine.app/docs/)** — BLE pairing, camera Wi-Fi, DUML
-  frames, commands, and live view. Preview locally with `just handbook`.
+- **[Docs](https://openpocketcine.app/docs/)** — protocol, iOS and Android apps, and how to
+  build. Preview locally with `just handbook`. Keep them current in the same PR
+  ([standard](https://openpocketcine.app/docs/contribute/documentation/)).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — shared Swift core and platform shells
 - [`docs/PARITY.md`](docs/PARITY.md) — operator-visible iOS / Android contract
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — live-path SLOs (frame rate, ACK, HUD)
@@ -216,7 +217,7 @@ Tooling is managed through [`just`](https://github.com/casey/just):
 ```bash
 just setup         # install meta-check tools (macOS / Homebrew)
 just               # list all recipes
-just handbook      # protocol handbook at http://127.0.0.1:4321/ (live: https://openpocketcine.app/docs/)
+just handbook      # docs at http://127.0.0.1:4321/ (live: https://openpocketcine.app/docs/)
 just check         # run repository quality checks
 just format        # format Swift sources
 just test          # run Swift package tests

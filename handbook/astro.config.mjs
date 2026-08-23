@@ -14,7 +14,7 @@ export default defineConfig({
     starlight({
       title: 'OpenPocketCine',
       description:
-        'Protocol handbook: BLE pairing, camera Wi-Fi, and DUML as implemented in OpenPocketCine.',
+        'OpenPocketCine docs: protocol, iOS and Android apps, and how to build.',
       logo: {
         src: './src/assets/icon.png',
         alt: 'OpenPocketCine',
@@ -29,9 +29,24 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Protocol',
+          label: 'Start',
           items: [
             { label: 'Overview', slug: '' },
+            { label: 'Setup and build', slug: 'guides/setup' },
+            { label: 'Keeping docs current', slug: 'contribute/documentation' },
+          ],
+        },
+        {
+          label: 'Apps',
+          items: [
+            { label: 'Architecture', slug: 'apps/architecture' },
+            { label: 'iOS', slug: 'apps/ios' },
+            { label: 'Android', slug: 'apps/android' },
+          ],
+        },
+        {
+          label: 'Protocol',
+          items: [
             { label: 'Connection spine', slug: 'protocol/connection' },
             { label: 'BLE pairing', slug: 'protocol/ble' },
             { label: 'Camera Wi-Fi', slug: 'protocol/wifi' },

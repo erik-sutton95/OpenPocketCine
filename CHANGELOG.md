@@ -54,6 +54,9 @@ All notable changes to this project are documented here. The format is based on
   FTUE: [`docs/UX.md`](docs/UX.md). Agent task graphs:
   [`docs/WORKFLOW.md`](docs/WORKFLOW.md). Runtime trust boundaries:
   [`SECURITY.md`](SECURITY.md).
+- Public handbook at [openpocketcine.app/docs](https://openpocketcine.app/docs/)
+  covers protocol, iOS and Android apps, and setup — not protocol only. Same-PR
+  update rule: `handbook/src/content/docs/contribute/documentation.md`.
 
 - Android live scopes match iOS `ScopeMiniChrome` / `WaveformMovablePanel`:
   DJI-black 72% plates (`LiveDesign.scopePlate`). WAVE / PARADE / VECTOR /

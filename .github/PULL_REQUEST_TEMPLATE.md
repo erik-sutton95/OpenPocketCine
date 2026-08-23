@@ -19,6 +19,6 @@ Write for camera operators. For a build with no tester-facing app behavior, say 
 - [ ] Native production changes: `just native-check` passes, or the relevant platform check is noted.
 - [ ] Commits follow Conventional Commits.
 - [ ] No captures, Wi-Fi passwords, unofficial LUT dumps, signing material, or other secrets.
-- [ ] Docs/CHANGELOG updated if behavior or setup changed.
+- [ ] Docs/CHANGELOG updated if behavior or setup changed. Public handbook pages updated when protocol, app, or setup visitors read has changed.
 - [ ] TestFlight-triggering changes include reviewed `ios/TestFlight/WhatToTest.en-US.txt` copy.
 - [ ] iOS release PRs: bump `MARKETING_VERSION` in `ios/Config/Version.xcconfig` when starting a new version train.
