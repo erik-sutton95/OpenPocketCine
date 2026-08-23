@@ -155,7 +155,9 @@ struct AssistLongPressPanel<Content: View, Footer: View>: View {
         .frame(width: width, alignment: .leading)
         .frame(maxHeight: maxHeight, alignment: .top)
         .fixedSize(horizontal: false, vertical: maxHeight == nil || !shouldScroll)
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+        .liveChromeGlass(
+            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+        )
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {})
     }

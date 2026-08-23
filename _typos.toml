@@ -26,6 +26,15 @@ DA = "DA"
 # Simulator device identifier (not a UUID misspelling).
 UDID = "UDID"
 Lucide = "Lucide"
+ND = "ND"
+
+[default.extend-identifiers]
+ue = "ue"
+iy = "iy"
+ded = "ded"
+pickerNd = "pickerNd"
+extraNd = "extraNd"
+HudNd = "HudNd"
 
 [default]
 extend-ignore-re = [

@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.session
 
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
@@ -48,11 +49,34 @@ class HevcDecoder {
     val hasPicture: StateFlow<Boolean> = _hasPicture.asStateFlow()
     val decoderErrors = AtomicInteger(0)
     val framesEnqueued = AtomicInteger(0)
+    val framesPresented = AtomicInteger(0)
+    @Volatile var pictureWidth = LIVE_WIDTH
+        private set
+    @Volatile var pictureHeight = LIVE_HEIGHT
+        private set
+    private val _isVerticalPicture = MutableStateFlow(false)
+    val isVerticalPicture: StateFlow<Boolean> = _isVerticalPicture.asStateFlow()
+    val pictureAspect: Double
+        get() =
+            EncoderPresentPath.feedAspect(
+                pictureWidth,
+                pictureHeight,
+                fallback = if (_isVerticalPicture.value) 9.0 / 16.0 else 16.0 / 9.0,
+            )
+    /** Pocket screen flip — request a new GOP when this AU did not already carry the IDR. */
+    var onParameterSetsChanged: (() -> Unit)? = null
+    /** Coded raster changed — recreate the ImageReader / OES buffer. */
+    var onOutputSizeChanged: ((Int, Int) -> Unit)? = null
+    private var builtCsd: ByteArray? = null
+    private var pendingParameterChangeEnable = false
+    private var configuredWidth = 0
+    private var configuredHeight = 0
 
     /** TextureView / GLES presented a frame. C2 surface output may never
      *  surface through [dequeueOutputBuffer], which left WAITING FOR LIVE VIEW up. */
     fun notePresented() {
         lastPresentedAt = SystemClock.elapsedRealtime()
+        framesPresented.incrementAndGet()
         if (!_hasPicture.value) {
             _hasPicture.value = true
             Log.i(TAG, "presented first picture")
@@ -65,11 +89,25 @@ class HevcDecoder {
 
     private fun attachSurfaceLocked(next: Surface?) {
         if (next == null) {
-            // TextureView is tearing down; keep the codec so the next surface can
-            // adopt it. iOS keeps VT across layout. A full reset blacks the GOP.
+            // Drop the producer without releasing the codec — LiveViewScreen
+            // unmounts the ImageReader while PocketCameraSession still owns
+            // HEVC. Leaving the dead Surface bound wedged MediaCodec so the
+            // next connect sat on WAITING FOR LIVE VIEW until process death.
+            surface = null
             return
         }
-        if (surface === next) return
+        if (surface === next) {
+            if (!configured) {
+                val csd = pendingCsd ?: return
+                if (configure(csd, pendingTypes)) {
+                    awaitingIdr = true
+                    pendingIdr?.let { au ->
+                        if (queue(au, keyframe = true)) awaitingIdr = false
+                    }
+                }
+            }
+            return
+        }
         surface = next
         if (configured) {
             val decoder = codec
@@ -92,7 +130,20 @@ class HevcDecoder {
 
     fun decode(accessUnit: ByteArray): Boolean {
         if (!SwiftCore.isAvailable) return false
-        synchronized(lock) { return decodeLocked(accessUnit) }
+        var size: Pair<Int, Int>? = null
+        var requestEnable = false
+        val ok =
+            synchronized(lock) {
+                val result = decodeLocked(accessUnit)
+                size = lastSizeCallback
+                lastSizeCallback = null
+                requestEnable = lastEnableCallback
+                lastEnableCallback = false
+                result
+            }
+        size?.let { onOutputSizeChanged?.invoke(it.first, it.second) }
+        if (requestEnable) onParameterSetsChanged?.invoke()
+        return ok
     }
 
     private fun decodeLocked(accessUnit: ByteArray): Boolean {
@@ -102,9 +153,28 @@ class HevcDecoder {
         if (keyframe) lastKeyframeAt = System.currentTimeMillis()
         val idr = isIdrPicture(types, accessUnit)
         val csd = SwiftCore.hevcCsd(accessUnit)
+        var sizeCallback: Pair<Int, Int>? = null
         if (csd != null && detectCodec(csd, types) != null) {
+            val changing =
+                EncoderPresentPath.parameterSetsChanged(
+                    hadFormat = configured || builtCsd != null,
+                    previousCsd = builtCsd,
+                    nextCsd = csd,
+                )
             pendingCsd = csd
             pendingTypes = types
+            adoptPictureSizeLocked(csd, types)?.let { parsed ->
+                if (changing || parsed.first != configuredWidth || parsed.second != configuredHeight) {
+                    sizeCallback = parsed
+                }
+            }
+            if (changing) handleEncoderFormatChangeLocked(idr)
+            if (sizeCallback != null &&
+                (pictureWidth != configuredWidth || pictureHeight != configuredHeight)
+            ) {
+                surface = null
+            }
+            lastSizeCallback = sizeCallback
         }
         if (idr) pendingIdr = accessUnit.copyOf()
         val notable =
@@ -118,6 +188,11 @@ class HevcDecoder {
                 TAG,
                 "au nals=$types idr=$idr await=$awaitingIdr cfg=$configured bytes=${accessUnit.size}",
             )
+        }
+        if (pendingParameterChangeEnable) {
+            pendingParameterChangeEnable = false
+            lastEnableCallback =
+                EncoderPresentPath.shouldRequestEnableAfterParameterChange(idr)
         }
         if (!configured) {
             val haveCsd = pendingCsd ?: return false
@@ -138,6 +213,44 @@ class HevcDecoder {
         val queued = queue(accessUnit, keyframe)
         if (queued && idr) awaitingIdr = false
         return queued
+    }
+
+    private var lastSizeCallback: Pair<Int, Int>? = null
+    private var lastEnableCallback = false
+
+    private fun adoptPictureSizeLocked(csd: ByteArray, types: String): Pair<Int, Int>? {
+        val codecKind = detectCodec(csd, types) ?: return null
+        val parsed = LivePictureSps.size(csd, codecKind) ?: return null
+        pictureWidth = parsed.width
+        pictureHeight = parsed.height
+        _isVerticalPicture.value = EncoderPresentPath.isVertical(parsed.width, parsed.height)
+        return parsed.width to parsed.height
+    }
+
+    /**
+     * Pocket screen flip / vertical mode restarts the camera encoder. The old
+     * MediaCodec session cannot decode the new GOP.
+     */
+    private fun handleEncoderFormatChangeLocked(auHasIdr: Boolean) {
+        Log.i(TAG, "feed: encoder parameter sets changed ${pictureWidth}x$pictureHeight")
+        releaseCodecLocked()
+        configured = false
+        builtCsd = pendingCsd
+        awaitingIdr = true
+        pendingIdr = null
+        pendingParameterChangeEnable = !auHasIdr
+    }
+
+    private fun releaseCodecLocked() {
+        running = false
+        val out = outputThread
+        outputThread = null
+        val decoder = codec
+        codec = null
+        runCatching { decoder?.stop() }
+        out?.interrupt()
+        runCatching { out?.join(400) }
+        runCatching { decoder?.release() }
     }
 
     /** After a GOP-reset enable, ignore P-frames until the next IDR. Keeps the last picture. */
@@ -165,11 +278,18 @@ class HevcDecoder {
 
     private fun resetLocked() {
         running = false
-        outputThread?.interrupt()
+        val out = outputThread
         outputThread = null
         configured = false
         liveCodec = null
         hasFormat = false
+        builtCsd = null
+        pendingParameterChangeEnable = false
+        pictureWidth = LIVE_WIDTH
+        pictureHeight = LIVE_HEIGHT
+        _isVerticalPicture.value = false
+        configuredWidth = 0
+        configuredHeight = 0
         awaitingIdr = false
         nalTypesSeen = ""
         lastKeyframeAt = null
@@ -180,11 +300,15 @@ class HevcDecoder {
         pendingIdr = null
         ptsUs = 0L
         framesEnqueued.set(0)
+        framesPresented.set(0)
         decoderErrors.set(0)
-        runCatching { codec?.stop() }
-        runCatching { codec?.release() }
+        val decoder = codec
         codec = null
         surface = null
+        runCatching { decoder?.stop() }
+        out?.interrupt()
+        runCatching { out?.join(500) }
+        runCatching { decoder?.release() }
     }
 
     private fun configure(csd: ByteArray, nalTypes: String): Boolean {
@@ -198,9 +322,14 @@ class HevcDecoder {
             val mime =
                 if (detected == LiveCodec.AVC) MediaFormat.MIMETYPE_VIDEO_AVC
                 else MediaFormat.MIMETYPE_VIDEO_HEVC
-            val format = MediaFormat.createVideoFormat(mime, LIVE_WIDTH, LIVE_HEIGHT)
+            val format = MediaFormat.createVideoFormat(mime, pictureWidth, pictureHeight)
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30)
+            format.setInteger(MediaFormat.KEY_FRAME_RATE, LiveViewPresentTiming.FRAME_RATE_HINT)
+            format.setInteger(MediaFormat.KEY_OPERATING_RATE, LiveViewPresentTiming.OPERATING_RATE)
+            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+            if (Build.VERSION.SDK_INT >= 30) {
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+            }
             // Do not stamp KEY_COLOR_* — Pocket VUI is unspecified (transfer=255).
             // Forcing BT.709 limited made C2 apply a matrix the bitstream did not
             // ask for (posterized shadows / colour shifts vs iOS VT).
@@ -211,13 +340,21 @@ class HevcDecoder {
             } else {
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(csd))
             }
-            val created = MediaCodec.createDecoderByType(mime)
+            val created = LiveHevcCodec.createDecoder(mime)
             decoder = created
+            Log.i(
+                TAG,
+                "decoder ${created.name} software=${LiveHevcCodec.isSoftwareName(created.name)} " +
+                    "${pictureWidth}x$pictureHeight",
+            )
             created.configure(format, target, null, 0)
             created.start()
             codec = created
             configured = true
             hasFormat = true
+            builtCsd = pendingCsd
+            configuredWidth = pictureWidth
+            configuredHeight = pictureHeight
             running = true
             val started = created
             outputThread =
@@ -233,7 +370,9 @@ class HevcDecoder {
                                 }
                             when {
                                 index >= 0 -> {
-                                    runCatching { started.releaseOutputBuffer(index, true) }
+                                    runCatching {
+                                        started.releaseOutputBuffer(index, System.nanoTime())
+                                    }
                                     lastPresentedAt = SystemClock.elapsedRealtime()
                                     if (!_hasPicture.value) {
                                         _hasPicture.value = true
@@ -241,7 +380,10 @@ class HevcDecoder {
                                     }
                                     hasFormat = true
                                 }
-                                index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> hasFormat = true
+                                index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                                    hasFormat = true
+                                    Log.i(TAG, "output ${started.outputFormat}")
+                                }
                             }
                         }
                     },
@@ -265,7 +407,7 @@ class HevcDecoder {
     private fun queue(accessUnit: ByteArray, keyframe: Boolean): Boolean {
         val decoder = codec ?: return false
         return try {
-            val index = decoder.dequeueInputBuffer(50_000)
+            val index = decoder.dequeueInputBuffer(LiveViewPresentTiming.inputWaitUs(keyframe))
             if (index < 0) {
                 Log.w(TAG, "no input buffer (nals=$nalTypesSeen)")
                 return false
@@ -274,8 +416,8 @@ class HevcDecoder {
             buffer.clear()
             buffer.put(accessUnit)
             val flags = if (keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
-            val pts = ptsUs
-            ptsUs += 33_333
+            val pts = LiveViewPresentTiming.ptsUs(SystemClock.elapsedRealtimeNanos(), ptsUs)
+            ptsUs = pts
             decoder.queueInputBuffer(index, 0, accessUnit.size, pts, flags)
             framesEnqueued.incrementAndGet()
             true

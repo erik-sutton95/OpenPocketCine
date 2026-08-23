@@ -25,66 +25,92 @@ public enum Commands {
     // ---- BLE session sequence (written to fff5, paced) ----------------------------------------
 
     /// `0x00/0x2b` -> session (0xF0). `04 00` wakes before pairing; `01 01` repeats as keepalive.
-    public static func sessionWake(id: UInt16 = 0x802B) -> Duml.Frame { ping([0x04, 0x00], id: id) }
-    public static func sessionKeepalive(id: UInt16 = 0x802B) -> Duml.Frame { ping([0x01, 0x01], id: id) }
+    public static func sessionWake(id: UInt16 = 0x802B) -> Duml.Frame {
+        ping([0x04, 0x00], id: id)
+    }
+    public static func sessionKeepalive(id: UInt16 = 0x802B) -> Duml.Frame {
+        ping([0x01, 0x01], id: id)
+    }
     private static func ping(_ payload: [UInt8], id: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxSession, seq: id,
-                   flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x2B, payload: payload)
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxSession, seq: id,
+            flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x2B, payload: payload)
     }
 
     /// `0x07/0x45` SetPairingPIN. Reply `[00 01]`=already paired, `[00 02]`=approve on the camera.
-    public static func setPairingPin(pin: String, identifier: String = defaultIdentifier, id: UInt16 = 0x8092) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxWifi, seq: id, flags: Duml.flagRequest,
-                   cmdSet: 0x07, cmdId: 0x45, payload: Duml.packString(identifier) + Duml.packString(pin))
+    public static func setPairingPin(
+        pin: String, identifier: String = defaultIdentifier, id: UInt16 = 0x8092
+    ) -> Duml.Frame {
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxWifi, seq: id, flags: Duml.flagRequest,
+            cmdSet: 0x07, cmdId: 0x45, payload: Duml.packString(identifier) + Duml.packString(pin))
     }
 
     /// The camera's first-time approval arrives as a `0x07/0x46` *request*; answer it with this response.
     public static func pairApprovalAck(seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxWifi, seq: seq, flags: Duml.flagResponse,
-                   cmdSet: 0x07, cmdId: 0x46, payload: [0x00])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxWifi, seq: seq, flags: Duml.flagResponse,
+            cmdSet: 0x07, cmdId: 0x46, payload: [0x00])
     }
 
     /// `0x53/0x10` -> type 0x1C. The camera answers `01 00 00 00` and wakes its AP.
     public static func session5310(id: UInt16 = 0x8053) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rx1C, seq: id, flags: Duml.flagRequest,
-                   cmdSet: 0x53, cmdId: 0x10, payload: [0, 0, 0, 0])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rx1C, seq: id, flags: Duml.flagRequest,
+            cmdSet: 0x53, cmdId: 0x10, payload: [0, 0, 0, 0])
     }
 
     public static func getWifiSsid(id: UInt16 = 0x8007) -> Duml.Frame { wifiQuery(0x07, id: id) }
-    public static func getWifiPassword(id: UInt16 = 0x800E) -> Duml.Frame { wifiQuery(0x0E, id: id) }
+    public static func getWifiPassword(id: UInt16 = 0x800E) -> Duml.Frame {
+        wifiQuery(0x0E, id: id)
+    }
     private static func wifiQuery(_ cmd: UInt8, id: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxWifi, seq: id, flags: Duml.flagRequest,
-                   cmdSet: 0x07, cmdId: cmd, payload: [])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxWifi, seq: id, flags: Duml.flagRequest,
+            cmdSet: 0x07, cmdId: cmd, payload: [])
     }
 
     // ---- Datalink registration (seq = dumlSeq, assigned by the driver) -------------------------
 
     /// `0x00/0x81` device-info, cmdType 4 (flags 0x80) -> DM368 (type 0x08, id 2).
     public static func appDeviceInfo(seq: UInt16) -> Duml.Frame {
-        var b = [UInt8](repeating: 0, count: 62)   // "\0APP" + 37*00 + 02 + 8*00 + 02 08 + 10*00
-        b[1] = 0x41; b[2] = 0x50; b[3] = 0x50; b[41] = 0x02; b[50] = 0x02; b[51] = 0x08
-        return Duml.Frame(sender: Duml.senderApp, receiver: rx(type: 0x08, id: 2), seq: seq,
-                          flags: 0x80, cmdSet: 0x00, cmdId: 0x81, payload: b)
+        var b = [UInt8](repeating: 0, count: 62)  // "\0APP" + 37*00 + 02 + 8*00 + 02 08 + 10*00
+        b[1] = 0x41
+        b[2] = 0x50
+        b[3] = 0x50
+        b[41] = 0x02
+        b[50] = 0x02
+        b[51] = 0x08
+        return Duml.Frame(
+            sender: Duml.senderApp, receiver: rx(type: 0x08, id: 2), seq: seq,
+            flags: 0x80, cmdSet: 0x00, cmdId: 0x81, payload: b)
     }
 
-    static let appPresence: [UInt8] = [0x17, 0x00, 0x46, 0x23, 0x7C, 0x41, 0x50, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02]
+    static let appPresence: [UInt8] = [
+        0x17, 0x00, 0x46, 0x23, 0x7C, 0x41, 0x50, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+    ]
 
     /// `0x00/0x88` app-presence, re-sent ~1 Hz to hold the session/playback -> DM368 (type 0x08, id 1).
     public static func appPresenceFrame(seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: rx(type: 0x08, id: 1), seq: seq,
-                   flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x88, payload: appPresence)
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: rx(type: 0x08, id: 1), seq: seq,
+            flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x88, payload: appPresence)
     }
 
     /// `0x03/0xDA` gimbal init -> Gimbal (type 0x03, id 0).
     public static func gimbalInit(seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: rx(type: 0x03, id: 0), seq: seq,
-                   flags: Duml.flagRequest, cmdSet: 0x03, cmdId: 0xDA, payload: [0x05, 0xFF, 0xFF, 0xFF, 0xFF])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: rx(type: 0x03, id: 0), seq: seq,
+            flags: Duml.flagRequest, cmdSet: 0x03, cmdId: 0xDA,
+            payload: [0x05, 0xFF, 0xFF, 0xFF, 0xFF])
     }
 
     /// `0x00/0x99` status subscription -> DM368 (type 0x08, id 1). Payload is Mimo's exact layout.
     public static func subscribe(key: String, subId: UInt32, seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: rx(type: 0x08, id: 1), seq: seq,
-                   flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x99, payload: subscriptionPayload(key, subId))
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: rx(type: 0x08, id: 1), seq: seq,
+            flags: Duml.flagRequest, cmdSet: 0x00, cmdId: 0x99,
+            payload: subscriptionPayload(key, subId))
     }
 
     /// `[02 02 00 00][subId u32-LE][00 00 00][innerLen u16-LE][nameLen u16-LE][name][00 00 00 00]`,
@@ -94,7 +120,7 @@ public enum Commands {
         var p: [UInt8] = [0x02, 0x02, 0x00, 0x00]
         p += le32(subId)
         p += [0, 0, 0]
-        p += le16(nb.count + 6)     // innerLen
+        p += le16(nb.count + 6)  // innerLen
         p += le16(nb.count)
         p += nb
         p += [0, 0, 0, 0]
@@ -103,14 +129,16 @@ public enum Commands {
 
     /// `0x02/0x0c` enter playback -> Camera. `01 01 00 01` enter, `01 01 00 00` exit.
     public static func enterPlayback(seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq, flags: Duml.flagRequest,
-                   cmdSet: 0x02, cmdId: 0x0C, payload: [0x01, 0x01, 0x00, 0x01])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq, flags: Duml.flagRequest,
+            cmdSet: 0x02, cmdId: 0x0C, payload: [0x01, 0x01, 0x00, 0x01])
     }
 
     /// `0x02/0x0c` leave playback. Same opcode as enter; payload `01 01 00 00`.
     public static func exitPlayback(seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq, flags: Duml.flagRequest,
-                   cmdSet: 0x02, cmdId: 0x0C, payload: [0x01, 0x01, 0x00, 0x00])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq, flags: Duml.flagRequest,
+            cmdSet: 0x02, cmdId: 0x0C, payload: [0x01, 0x01, 0x00, 0x00])
     }
 
     /// `0x00/0x26` media list. Cursor at bytes 10–13; counter at byte 4.
@@ -165,9 +193,10 @@ public enum Commands {
     public static func liveViewEnable(
         seq: UInt16, receiver: UInt8 = liveViewEnableReceiverPocket
     ) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: receiver, seq: seq,
-                   flags: Duml.flagRequest, cmdSet: 0x09, cmdId: 0xA8,
-                   payload: [0x00, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: receiver, seq: seq,
+            flags: Duml.flagRequest, cmdSet: 0x09, cmdId: 0xA8,
+            payload: [0x00, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
     }
 
     /// Nano `0x02/0x09` sent with every Mimo enable (`…03`) and with feed stop (`…04`).
@@ -199,7 +228,8 @@ public enum Commands {
     }
 
     /// `0x02/0x8E` SET = `01 01 <pid:u16-LE> <len:u8> <value…>`.
-    public static func paramSet(_ param: CameraParam, value: [UInt8], seq: UInt16 = 0) -> Duml.Frame {
+    public static func paramSet(_ param: CameraParam, value: [UInt8], seq: UInt16 = 0) -> Duml.Frame
+    {
         let pid = param.rawValue
         var p: [UInt8] = [0x01, 0x01, UInt8(pid & 0xFF), UInt8(pid >> 8), UInt8(value.count)]
         p += value
@@ -227,7 +257,9 @@ public enum Commands {
 
     /// Classic DUML `0x22` = AE Meter Set. Mimo tap sends `[02]` (spot).
     /// `/tmp/mimo-tap-focus-20260818.pcapng` — first of the four-write burst.
-    public static func tapFocusPrepare(seq: UInt16 = 0) -> Duml.Frame { camera(0x22, [0x02], seq: seq) }
+    public static func tapFocusPrepare(seq: UInt16 = 0) -> Duml.Frame {
+        camera(0x22, [0x02], seq: seq)
+    }
 
     /// Classic DUML `0x30` = Focus Region Set. Normalized 0…1 float32 LE + 13× `00`
     /// (21 B). `mimo-tap-focus-20260818` — 20 B is ACK `E3`.
@@ -237,12 +269,26 @@ public enum Commands {
 
     /// Classic DUML `0x32` = AE Meter Region Set. `00 02 01 00` + xy + 8× `00`.
     public static func tapFocusCommit(_ x: Float, _ y: Float, seq: UInt16 = 0) -> Duml.Frame {
-        camera(0x32, [0x00, 0x02, 0x01, 0x00] + floatLE(x) + floatLE(y) + [UInt8](repeating: 0, count: 8), seq: seq)
+        camera(
+            0x32,
+            [0x00, 0x02, 0x01, 0x00] + floatLE(x) + floatLE(y) + [UInt8](repeating: 0, count: 8),
+            seq: seq)
     }
 
     /// Classic DUML `0x68` = AE Lock Status Set. Mimo tap sends `[08]`.
-    /// Not App Glamour (`0x8E` pid `0x0039`).
-    public static func tapFocusLiveHint(seq: UInt16 = 0) -> Duml.Frame { camera(0x68, [0x08], seq: seq) }
+    /// Not App Glamour (`0x8E` pid `0x0039`). Same bytes as `liveViewPrepare`.
+    public static func tapFocusLiveHint(seq: UInt16 = 0) -> Duml.Frame {
+        camera(0x68, [0x08], seq: seq)
+    }
+
+    /// Mimo live-entry (`mimo-disconnect-20260822-105228`): `0x02/0x68` payload
+    /// `08` immediately before the first `0x09/0xa8` after a SoftAP join. Same
+    /// bytes as `tapFocusLiveHint`. First live after gallery is 0x68 then an
+    /// `0xa8` burst then a 137 B VPS. Return-from-gallery can skip 0x68 when
+    /// the 5-tuple is already live. Do not send on Nano (no captured pair).
+    public static func liveViewPrepare(seq: UInt16 = 0) -> Duml.Frame {
+        tapFocusLiveHint(seq: seq)
+    }
 
     /// Mimo tap burst (`mimo-tap-focus-20260818`). AF-S and AF-C are the same
     /// four writes; each ACK is `00`. `0x32` alone times out.
@@ -282,7 +328,9 @@ public enum Commands {
     /// Denom is the N in 1/N (4…16000). Prefer `Int` — `UInt8` cannot encode 1/256 and above.
     public static func setShutter(denom: Int, seq: UInt16 = 0) -> Duml.Frame {
         let encoded = UInt16(clamping: denom) | 0x8000
-        return camera(0x28, [0x01, UInt8(encoded & 0xFF), UInt8(encoded >> 8), 0x00, 0x00, 0x00, 0x40], seq: seq)
+        return camera(
+            0x28, [0x01, UInt8(encoded & 0xFF), UInt8(encoded >> 8), 0x00, 0x00, 0x00, 0x40],
+            seq: seq)
     }
 
     public static func setShutter(denom: UInt8, seq: UInt16 = 0) -> Duml.Frame {
@@ -323,7 +371,8 @@ public enum Commands {
         setWhiteBalance(.auto, seq: seq)
     }
 
-    public static func setWhiteBalanceCustom(kelvin: Int, tint: Int, seq: UInt16 = 0) -> Duml.Frame {
+    public static func setWhiteBalanceCustom(kelvin: Int, tint: Int, seq: UInt16 = 0) -> Duml.Frame
+    {
         setWhiteBalance(.custom(kelvin: kelvin, tint: tint), seq: seq)
     }
 
@@ -470,14 +519,18 @@ public enum Commands {
     }
 
     private static func camera(_ cmd: UInt8, _ payload: [UInt8], seq: UInt16) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq,
-                   flags: Duml.flagRequest, cmdSet: 0x02, cmdId: cmd, payload: payload)
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: Duml.rxCamera, seq: seq,
+            flags: Duml.flagRequest, cmdSet: 0x02, cmdId: cmd, payload: payload)
     }
 
-    private static func gimbal(_ cmd: UInt8, _ payload: [UInt8], seq: UInt16,
-                               flags: UInt8 = Duml.flagRequest) -> Duml.Frame {
-        Duml.Frame(sender: Duml.senderApp, receiver: rx(type: 0x04, id: 0), seq: seq,
-                   flags: flags, cmdSet: 0x04, cmdId: cmd, payload: payload)
+    private static func gimbal(
+        _ cmd: UInt8, _ payload: [UInt8], seq: UInt16,
+        flags: UInt8 = Duml.flagRequest
+    ) -> Duml.Frame {
+        Duml.Frame(
+            sender: Duml.senderApp, receiver: rx(type: 0x04, id: 0), seq: seq,
+            flags: flags, cmdSet: 0x04, cmdId: cmd, payload: payload)
     }
 
     static func le16(_ v: Int) -> [UInt8] { [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)] }

@@ -93,10 +93,12 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
     private static let sequenceRegex = try! NSRegularExpression(pattern: #"_(\d{4})_D"#)
     private static let burstRegex = try! NSRegularExpression(pattern: #"^(.+)_(\d{3})\.\w+$"#)
 
-    private static func group(_ regex: NSRegularExpression, in string: String, at index: Int) -> String? {
+    private static func group(_ regex: NSRegularExpression, in string: String, at index: Int)
+        -> String?
+    {
         let range = NSRange(string.startIndex..., in: string)
         guard let match = regex.firstMatch(in: string, options: [], range: range),
-              let captured = Range(match.range(at: index), in: string)
+            let captured = Range(match.range(at: index), in: string)
         else { return nil }
         return String(string[captured])
     }
@@ -149,6 +151,9 @@ public enum MediaHTTP {
 
     public static func originalPath(_ file: MediaFile) -> String { file.path }
 
+    /// Clip delivery / export: the original camera file, never the LRF/XRF 720p proxy.
+    public static func deliveryPath(_ file: MediaFile) -> String { originalPath(file) }
+
     public static func thumbnailPath(_ file: MediaFile) -> String { file.thumbPath }
 
     /// Preview chain: listed proxy, derived `.LRF` (DJI) / `.XRF` (CAM_), then original.
@@ -163,6 +168,11 @@ public enum MediaHTTP {
         if let derived = derivedProxyPath(for: file) { add(derived) }
         add(file.path)
         return paths
+    }
+
+    /// LRF/XRF sidecars only. Empty for photos and clips with no DJI proxy.
+    public static func proxyPaths(_ file: MediaFile) -> [String] {
+        previewPaths(file).filter { isProxyPath($0) }
     }
 
     public static func derivedProxyPath(for file: MediaFile) -> String? {
@@ -180,7 +190,9 @@ public enum MediaHTTP {
     /// Ordered `(storage, path)` pairs to try when opening a clip. Winner storage first, then
     /// the other mount; listed/derived proxy first, original last. `/v2` itself has no
     /// extension, so the player must carry [playbackMIMEType] separately.
-    public static func playbackCandidates(file: MediaFile, firstStorage: Int) -> [(storage: Int, path: String)] {
+    public static func playbackCandidates(file: MediaFile, firstStorage: Int) -> [(
+        storage: Int, path: String
+    )] {
         let stores = firstStorage == 0 ? [0, 1] : [1, 0]
         var out: [(storage: Int, path: String)] = []
         var seen = Set<String>()
@@ -228,10 +240,10 @@ public enum MediaHTTP {
 /// `0x00/0x26` list payloads. Byte-identical to Osmosis / Mimo.
 public enum MediaListCommand {
     public static let pageSize = 45
-    public static let newestSD: UInt32 = 0x00000001
-    public static let newestInternal: UInt32 = 0x40000001
-    public static let videoHandleBase: UInt32 = 0x40000000
-    public static let internalBit: UInt32 = 0x40000000
+    public static let newestSD: UInt32 = 0x0000_0001
+    public static let newestInternal: UInt32 = 0x4000_0001
+    public static let videoHandleBase: UInt32 = 0x4000_0000
+    public static let internalBit: UInt32 = 0x4000_0000
     public static let sdCounter: UInt8 = 1
     public static let internalCounter: UInt8 = 2
 
@@ -424,7 +436,7 @@ public enum MediaManifest {
         guard bytes[i + 5] == sub else { return nil }
         let slen = Int(bytes[i + 1]) - 6
         guard slen >= prefix.utf8.count, i + 6 + slen <= bytes.count else { return nil }
-        let raw = bytes[i + 6 ..< i + 6 + slen]
+        let raw = bytes[i + 6..<i + 6 + slen]
         guard raw.allSatisfy({ (0x20...0x7E).contains($0) }) else { return nil }
         let value = String(bytes: raw, encoding: .isoLatin1) ?? ""
         guard value.hasPrefix(prefix) else { return nil }
@@ -445,7 +457,7 @@ public enum MediaManifest {
         var t = lo
         while t < hi {
             if let field = readPath(bytes, t, sub: 2, prefix: "MISC/"),
-               field.value.hasSuffix(base)
+                field.value.hasSuffix(base)
             {
                 thumb = field.value
                 break
@@ -460,11 +472,11 @@ public enum MediaManifest {
             if bytes[n] == 0x0D {
                 let len = Int(bytes[n + 1])
                 if len > base.utf8.count, n + 2 + len <= bytes.count {
-                    let raw = bytes[n + 2 ..< n + 2 + len]
+                    let raw = bytes[n + 2..<n + 2 + len]
                     if let value = String(bytes: raw, encoding: .isoLatin1),
-                       value.utf8.count > base.utf8.count + 1,
-                       value.hasPrefix(base),
-                       value.dropFirst(base.count).first == "."
+                        value.utf8.count > base.utf8.count + 1,
+                        value.hasPrefix(base),
+                        value.dropFirst(base.count).first == "."
                     {
                         let e = String(value.dropFirst(base.count + 1)).uppercased()
                         if videoExtensions.contains(e) || photoExtensions.contains(e) {
@@ -483,9 +495,9 @@ public enum MediaManifest {
         while m < hi - 4 {
             let kind = bytes[m]
             let star = bytes[m + 1]
-            if (kind == 0x03 || kind == 0x00),
-               (star == 0xFF || star == 0xFE),
-               bytes[m + 2] == 0x19, bytes[m + 3] == 0x06, m >= 8
+            if kind == 0x03 || kind == 0x00,
+                star == 0xFF || star == 0xFE,
+                bytes[m + 2] == 0x19, bytes[m + 3] == 0x06, m >= 8
             {
                 head = m - 8
                 break
@@ -500,8 +512,8 @@ public enum MediaManifest {
         if !isVideo {
             var q = lo
             while q < hi - 3 {
-                if (bytes[q] == 0xFF || bytes[q] == 0xFE),
-                   bytes[q + 1] == 0x19, bytes[q + 2] == 0x06
+                if bytes[q] == 0xFF || bytes[q] == 0xFE,
+                    bytes[q + 1] == 0x19, bytes[q + 2] == 0x06
                 {
                     let mk = q + 1
                     if mk >= 14 { photoSize = UInt64(u32(bytes, mk - 14)) }
@@ -519,7 +531,10 @@ public enum MediaManifest {
         }
 
         let path = ext.isEmpty ? mediaDir : "\(mediaDir).\(ext)"
-        let thumbPath = (thumb ?? mediaDir.replacingOccurrences(of: "DCIM/", with: "MISC/THM/", options: .anchored)) + ".scr"
+        let thumbPath =
+            (thumb
+                ?? mediaDir.replacingOccurrences(of: "DCIM/", with: "MISC/THM/", options: .anchored))
+            + ".scr"
         let handle: UInt32 = hasMarker ? u32(bytes, head) : 0
         let size: UInt64 = {
             if isVideo, hasMarker, head >= 4 { return UInt64(u32(bytes, head - 4)) }
@@ -553,8 +568,8 @@ public enum MediaManifest {
     private static func starFlag(_ bytes: [UInt8], lo: Int, hi: Int) -> Bool {
         var q = lo
         while q < hi - 9 {
-            if (bytes[q] == 0xFF || bytes[q] == 0xFE),
-               bytes[q + 1] == 0x19, bytes[q + 2] == 0x06
+            if bytes[q] == 0xFF || bytes[q] == 0xFE,
+                bytes[q + 1] == 0x19, bytes[q + 2] == 0x06
             {
                 return bytes[q + 9] == 1
             }
@@ -596,7 +611,8 @@ public enum MediaManifest {
         var fits: [Int: (base: UInt32, step: UInt32)] = [:]
         let groups = Dictionary(grouping: files, by: \.group)
         for (group, list) in groups {
-            let pts = list
+            let pts =
+                list
                 .filter { $0.handle != 0 && $0.sequenceNumber > 0 }
                 .map { ($0.sequenceNumber, $0.handle) }
             let unique = Dictionary(pts, uniquingKeysWith: { a, _ in a })
@@ -649,7 +665,8 @@ public enum MediaManifest {
         files.map { file in
             var next = file
             if fallback {
-                next.storage = MediaHTTP.storageGuess(handle: file.handle != 0 ? file.handle : file.cmdHandle, singleSdStorage: false)
+                next.storage = MediaHTTP.storageGuess(
+                    handle: file.handle != 0 ? file.handle : file.cmdHandle, singleSdStorage: false)
             }
             return next
         }
@@ -716,7 +733,9 @@ public enum MediaLibraryQuery {
                 (lhs.filenameTimestamp ?? "") < (rhs.filenameTimestamp ?? "")
             }
         case .name:
-            return files.sorted { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
+            return files.sorted {
+                $0.filename.localizedStandardCompare($1.filename) == .orderedAscending
+            }
         case .rating:
             return files.sorted { lhs, rhs in
                 if lhs.isStarred != rhs.isStarred { return lhs.isStarred && !rhs.isStarred }

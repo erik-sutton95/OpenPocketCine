@@ -5,7 +5,7 @@ package com.opencapture.openpocketcine.session
  * subscribe pushes / GET replies the camera already sends.
  *
  * `cam_expo_param` uses the labeled Mimo offsets: shutter `@2–3` (`denom|0x8000`),
- * ISO index `@5`, expo mode `@7`, ISO number `@16`.
+ * ISO index `@5`, EV `@6`, expo mode `@7`, ISO number `@16`.
  */
 object StatusExtras {
     fun apply(frame: DumlFrame, status: CameraStatus): CameraStatus {
@@ -28,6 +28,7 @@ object StatusExtras {
             "cam_fov" -> applyFov(item.value, status)
             "camcap_shutter" -> applyShutterCap(item.value, status)
             "camcap_iso" -> applyIsoCap(item.value, status)
+            "camcap_color_mode" -> applyColorCap(item.value, status)
             else -> status
         }
     }
@@ -51,27 +52,49 @@ object StatusExtras {
         }
         val iso = u16(value, 16)
         if (iso in 50..102_400) next = next.copy(iso = iso)
+        if (value.size > 6) {
+            val ev = value[6].toInt() and 0xFF
+            next = next.copy(evComp = if (ev in 0x07..0x19) ev else -1)
+        }
         return next
     }
 
     fun applyVideo(value: ByteArray, status: CameraStatus): CameraStatus {
         if (value.size < 2) return status
-        val res = value[0].toInt() and 0xFF
+        val resRaw = value[0].toInt() and 0xFF
         val fpsIdx = value[1].toInt() and 0xFF
-        val fps = CameraCommands.fpsFromIndex(fpsIdx) ?: status.fps
-        return status.copy(resolutionCode = res, fpsIndex = fpsIdx, fps = fps)
+        var next = status
+        CameraCommands.fpsFromSubscribeIndex(fpsIdx)?.let { fps ->
+            next = next.copy(fps = fps, fpsIndex = fpsIdx)
+        }
+        VideoResolution.fromRaw(resRaw)?.let { res ->
+            next = next.copy(resolutionCode = res.rawValue)
+        }
+        VideoFormat.parse(resRaw, fpsIdx)?.let { format ->
+            next =
+                next.copy(
+                    resolutionCode = format.resolution.rawValue,
+                    fpsIndex = format.frameRate.rawValue,
+                    fps = format.frameRate.fps,
+                )
+        }
+        return next
     }
 
     fun applyImageEffect(value: ByteArray, status: CameraStatus): CameraStatus {
         if (value.size < 5) return status
         var next = status.copy(colorMode = value[2].toInt() and 0xFF)
         if (value.size >= 9) {
-            next =
-                next.copy(
-                    wbMode = value[4].toInt() and 0xFF,
-                    wbKelvin = u16(value, 5) * 100,
-                    wbTint = i16(value, 7),
-                )
+            val mode = value[4].toInt() and 0xFF
+            if (mode == CameraCommands.WB_AUTO || mode == CameraCommands.WB_CUSTOM) {
+                val kelvin = u16(value, 5) * 100
+                next =
+                    next.copy(
+                        wbMode = mode,
+                        wbKelvin = if (kelvin > 0) kelvin else -1,
+                        wbTint = i16(value, 7),
+                    )
+            }
         }
         return next
     }
@@ -86,25 +109,25 @@ object StatusExtras {
         return if (indices.isEmpty()) status else status.copy(availableIsoIndices = indices)
     }
 
+    fun applyColorCap(value: ByteArray, status: CameraStatus): CameraStatus {
+        val modes = CameraCommands.parseColorModes(value)
+        return if (modes.isEmpty()) status else status.copy(availableColorModes = modes)
+    }
+
     fun applyFov(value: ByteArray, status: CameraStatus): CameraStatus {
-        if (value.size < 4) return status
-        val raw =
-            (value[0].toInt() and 0xFF) or
-                ((value[1].toInt() and 0xFF) shl 8) or
-                ((value[2].toInt() and 0xFF) shl 16) or
-                ((value[3].toInt() and 0xFF) shl 24)
-        return status.copy(zoomFactorRaw = raw)
+        val raw = CamFov.rawAt0(value) ?: return status
+        return CamFov.absorb(status.copy(zoomFactorRaw = raw))
     }
 
     fun applyLens(value: ByteArray, status: CameraStatus): CameraStatus {
         if (value.isEmpty()) return status
-        val mode =
-            when (value[0].toInt() and 0xFF) {
-                0xB1 -> CameraCommands.FOCUS_SINGLE
-                0xB2 -> CameraCommands.FOCUS_CONTINUOUS
-                else -> return status
-            }
-        return status.copy(focusMode = mode)
+        var next = status
+        when (value[0].toInt() and 0xFF) {
+            0xB1 -> next = next.copy(focusMode = CameraCommands.FOCUS_SINGLE)
+            0xB2 -> next = next.copy(focusMode = CameraCommands.FOCUS_CONTINUOUS)
+        }
+        CamFov.lensAt14(value)?.let { lens -> next = next.copy(zoomLens = lens) }
+        return CamFov.absorb(next)
     }
 
     fun applyParamReply(payload: ByteArray, status: CameraStatus): CameraStatus {
@@ -115,6 +138,8 @@ object StatusExtras {
         return when (pid) {
             CameraCommands.PID_AUDIO_CHANNEL -> status.copy(audioChannel = value)
             CameraCommands.PID_VOCAL_BOOST -> status.copy(vocalBoost = value)
+            CameraCommands.PID_ISO_LIMIT ->
+                if (value in 0x02..0x09) status.copy(isoLimit = value) else status
             else -> status
         }
     }
@@ -129,28 +154,7 @@ object StatusExtras {
 
     fun applyAudioBlob(blob: ByteArray, status: CameraStatus): CameraStatus {
         if (blob.size < 3) return status
-        val at2 = blob[2].toInt() and 0xFF
-        val wind =
-            when (at2) {
-                CameraCommands.WIND_ON -> 1
-                CameraCommands.WIND_OFF -> 0
-                else -> status.windNr
-            }
-        val directional =
-            when (at2) {
-                CameraCommands.DIR_ALL -> 0
-                CameraCommands.DIR_FRONT -> 1
-                CameraCommands.DIR_FRONT_BACK -> 2
-                else -> status.directionalAudio
-            }
-        return status
-            .copy(
-                audioDspBlob = blob.joinToString("") { "%02x".format(it.toInt() and 0xFF) },
-                audioDspAt2 = at2,
-                windNr = wind,
-                directionalAudio = directional,
-            )
-            .withAudioDspAt2()
+        return status.applyingAudioBlob(blob)
     }
 
     fun parseSubscribe(payload: ByteArray): SubscribeItem? {

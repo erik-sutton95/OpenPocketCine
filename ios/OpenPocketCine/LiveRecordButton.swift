@@ -32,13 +32,15 @@ struct LiveRecordButton: View {
                 model.session.pressShutter()
             }
         } label: {
-            RecordLamp(diameter: LiveChromeMetrics.recordButtonSize, recording: state.isRecordingLook)
+            RecordLamp(
+                diameter: LiveChromeMetrics.recordButtonSize, recording: state.isRecordingLook)
         }
         .buttonStyle(.zcTapTarget)
         .disabled(model.session.controlBusy)
         .opacity(state == .stopping ? 0.72 : 1)
         .sensoryFeedback(
-            model.hapticsEnabled ? .impact(weight: .heavy) : .impact(flexibility: .solid, intensity: 0),
+            model.hapticsEnabled
+                ? .impact(weight: .heavy) : .impact(flexibility: .solid, intensity: 0),
             trigger: model.session.status.isRecording
         )
         .confirmationDialog(
@@ -46,7 +48,10 @@ struct LiveRecordButton: View {
             isPresented: $confirmRecord,
             titleVisibility: .visible
         ) {
-            Button(state.isRecordingLook ? "Stop" : "Start", role: state.isRecordingLook ? .destructive : nil) {
+            Button(
+                state.isRecordingLook ? "Stop" : "Start",
+                role: state.isRecordingLook ? .destructive : nil
+            ) {
                 model.session.pressShutter()
             }
             Button("Cancel", role: .cancel) {}

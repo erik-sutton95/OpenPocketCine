@@ -1,6 +1,7 @@
 import CoreImage
 import OpenPocketViewCore
 import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins OpenZCine `AssistConfiguration.Zebra` + `AssistQuickSettingsContent.zebraRows`
@@ -103,11 +104,13 @@ final class ZebraAssistTests: XCTestCase {
         XCTAssertEqual(ZebraAssist.highlightTitle, "Highlight")
         XCTAssertEqual(
             ZebraAssist.highlightHelp,
-            "High zebra warns when bright detail approaches clipping after the active log curve is compensated.")
+            "High zebra warns when bright detail approaches clipping after the active log curve is compensated."
+        )
         XCTAssertEqual(ZebraAssist.midtoneTitle, "Midtone")
         XCTAssertEqual(
             ZebraAssist.midtoneHelp,
-            "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure.")
+            "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure."
+        )
     }
 
     func testStripeLookMatchesOpenZCineCompositor() {

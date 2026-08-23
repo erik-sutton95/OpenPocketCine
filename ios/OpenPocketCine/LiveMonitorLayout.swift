@@ -1,6 +1,6 @@
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 /// OpenZCine `MonitorLiveViewModuleLayout.fit` + `MonitorSideRailControlLayout.fit` for Pocket.
 /// Chrome uses **fixed** insets (`MonitorChromeLayout.insets` with zero safe area): 14 / 16 / 12 / 18.
@@ -64,7 +64,8 @@ struct LiveMonitorLayout: Equatable {
         let lock = lockRect(chrome: chrome)
         let battery = batteryRect(chrome: chrome, lock: lock, constrained: constrained)
         let rail = rightRailRect(viewport: viewport, chrome: chrome, feed: feed)
-        let slots = constrained
+        let slots =
+            constrained
             ? constrainedSlots(viewport: viewport, chrome: chrome, lock: lock)
             : railSlots(rail: rail, bottomBarHeight: bottomBarHeight)
         let bars = bottomBand(viewport: viewport, chrome: chrome, constrained: constrained)
@@ -266,8 +267,11 @@ extension LiveMonitorLayout {
         CGRect(
             x: LiveChromeMetrics.chromeLeading,
             y: LiveChromeMetrics.chromeTop,
-            width: max(0, viewport.width - LiveChromeMetrics.chromeLeading - LiveChromeMetrics.chromeTrailing),
-            height: max(0, viewport.height - LiveChromeMetrics.chromeTop - LiveChromeMetrics.chromeBottom)
+            width: max(
+                0,
+                viewport.width - LiveChromeMetrics.chromeLeading - LiveChromeMetrics.chromeTrailing),
+            height: max(
+                0, viewport.height - LiveChromeMetrics.chromeTop - LiveChromeMetrics.chromeBottom)
         )
     }
 
@@ -352,7 +356,8 @@ extension LiveMonitorLayout {
     private static func batteryRect(chrome: CGRect, lock: CGRect, constrained: Bool) -> CGRect {
         if constrained {
             return CGRect(
-                x: chrome.minX + LiveChromeMetrics.lockButtonSize + LiveChromeMetrics.batteryInlineGap,
+                x: chrome.minX + LiveChromeMetrics.lockButtonSize
+                    + LiveChromeMetrics.batteryInlineGap,
                 y: lock.minY,
                 width: LiveChromeMetrics.batteryInlineWidth,
                 height: LiveChromeMetrics.lockButtonSize
@@ -420,10 +425,12 @@ extension LiveMonitorLayout {
             )
         }
         return RailSlots(
-            settings: slot(centerX: recordCenterX, centerY: settingsCenterY, width: aux, height: aux),
+            settings: slot(
+                centerX: recordCenterX, centerY: settingsCenterY, width: aux, height: aux),
             media: slot(centerX: recordCenterX, centerY: mediaCenterY, width: aux, height: aux),
             record: slot(centerX: recordCenterX, centerY: recordCenterY, width: rec, height: rec),
-            disp: slot(centerX: recordCenterX, centerY: displayCenterY, width: dispW, height: dispH),
+            disp: slot(
+                centerX: recordCenterX, centerY: displayCenterY, width: dispW, height: dispH),
             railClearance: rail
         )
     }
@@ -462,7 +469,8 @@ extension LiveMonitorLayout {
             width: LiveChromeMetrics.displayButtonWidth,
             height: LiveChromeMetrics.displayButtonHeight
         )
-        return RailSlots(settings: settings, media: media, record: record, disp: disp, railClearance: record)
+        return RailSlots(
+            settings: settings, media: media, record: record, disp: disp, railClearance: record)
     }
 
     private static func topDeckRect(
@@ -486,7 +494,8 @@ extension LiveMonitorLayout {
         }
         if constrained {
             let reserved =
-                2 * LiveChromeMetrics.auxiliaryButtonSize + 2 * LiveChromeMetrics.bottomModuleSpacing
+                2 * LiveChromeMetrics.auxiliaryButtonSize + 2
+                * LiveChromeMetrics.bottomModuleSpacing
             let inset = side + reserved + gap
             left = max(left, feed.minX + inset)
             right = min(right, feed.maxX - inset)
@@ -688,7 +697,8 @@ enum LivePopupPlacement {
         return (minX, maxX, width)
     }
 
-    static func leadingX(desired: CGFloat, width: CGFloat, minX: CGFloat, maxX: CGFloat) -> CGFloat {
+    static func leadingX(desired: CGFloat, width: CGFloat, minX: CGFloat, maxX: CGFloat) -> CGFloat
+    {
         min(max(desired, minX), max(minX, maxX - width))
     }
 
@@ -790,7 +800,8 @@ enum LivePopupPlacement {
         )
         let maxX =
             viewport.width
-            - max(LiveChromeMetrics.chromeTrailing, safeArea.trailing + cutoutClearance, assistMargin)
+            - max(
+                LiveChromeMetrics.chromeTrailing, safeArea.trailing + cutoutClearance, assistMargin)
         let width = max(0, min(preferredWidth, maxX - minX))
         let hasIcon = icon.width > 1 && icon.height > 1
         let hasToolbar = toolbar.width > 1 && toolbar.height > 1

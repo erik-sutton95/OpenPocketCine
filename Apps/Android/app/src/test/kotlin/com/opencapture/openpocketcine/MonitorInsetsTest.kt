@@ -79,6 +79,74 @@ class MonitorInsetsTest {
 /** Golden pins from iOS `LiveMonitorLayoutTests.testAuditorPhonePinsLeadingIsland`. */
 class LiveMonitorLayoutTest {
     @Test
+    fun portraitFillCropsSixteenNineToTheWellCenter() {
+        val well = ChromeRect(0f, 95f, 390f, 390f * 16f / 9f)
+        val content = portraitFillCropContent(well)
+        assertEquals(well.height, content.height, 0.05f)
+        assertEquals(well.height * 16f / 9f, content.width, 0.05f)
+        assertEquals(well.midX, content.midX, 0.05f)
+        assertEquals(well.minY, content.minY, 0.05f)
+        assertTrue(content.minX < well.minX)
+        assertTrue(content.maxX > well.maxX)
+        assertEquals(16f / 9f, content.width / content.height, 0.001f)
+    }
+
+    @Test
+    fun portraitFillWellOnAPhoneIsTallerThanCinema() {
+        val zones =
+            portraitZones(
+                viewportWidth = 390f,
+                viewportHeight = 844f,
+                safeTop = 59f,
+                safeBottom = 34f,
+                clean = false,
+                fill = true,
+                assistToolbarHeight = 0f,
+            )
+        assertTrue(zones.feed.height > zones.feed.width * 9f / 16f - 0.5f)
+        val content = portraitFillCropContent(zones.feed)
+        assertEquals(16f / 9f, content.width / content.height, 0.001f)
+        assertEquals(zones.feed.midX, content.midX, 0.05f)
+        assertTrue(content.width - zones.feed.width > 1f)
+    }
+
+    @Test
+    fun verticalPocketPicturePillarsInTheCinemaWell() {
+        val cinema =
+            LiveMonitorLayout.fit(
+                viewportWidth = 874f,
+                viewportHeight = 402f,
+                safeLeading = 59f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+            )
+        val vertical =
+            LiveMonitorLayout.fit(
+                viewportWidth = 874f,
+                viewportHeight = 402f,
+                safeLeading = 59f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+                pictureAspect = 9f / 16f,
+            )
+        assertEquals(cinema.feed.minX, vertical.feed.minX, 0.05f)
+        assertEquals(cinema.feed.width, vertical.feed.width, 0.05f)
+        assertEquals(cinema.record.midX, vertical.record.midX, 0.05f)
+        assertEquals(402f, vertical.picture.height, 0.05f)
+        assertEquals(402f * 9f / 16f, vertical.picture.width, 0.5f)
+        assertEquals(874f / 2f, vertical.picture.midX, 2f)
+        assertTrue(vertical.picture.minX > vertical.feed.minX)
+        assertTrue(vertical.picture.maxX < vertical.feed.maxX)
+        assertEquals(cinema.zoomButton.minX, vertical.zoomButton.minX, 0.05f)
+        assertTrue(vertical.zoomButton.maxX > vertical.picture.maxX)
+        assertTrue(vertical.gimbalStick.maxX > vertical.picture.maxX)
+    }
+
+    @Test
     fun auditorPhonePinsLeadingIsland() {
         val layout =
             LiveMonitorLayout.fit(

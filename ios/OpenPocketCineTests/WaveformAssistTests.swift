@@ -1,6 +1,7 @@
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+
 @testable import OpenPocketCine
 
 final class WaveformAssistTests: XCTestCase {
@@ -157,7 +158,8 @@ final class WaveformAssistTests: XCTestCase {
         let black = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: blackByte, green: blackByte, blue: blackByte,
             luma: blackByte)
-        let mid = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: grey, green: grey, blue: grey, luma: grey)
+        let mid = ScopePoint(
+            xRatio: 0.5, yRatio: 0.5, red: grey, green: grey, blue: grey, luma: grey)
         let clip = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 247, green: 247, blue: 247, luma: 247)
         var vertices = [ScopeTraceMetal.Vertex](
             repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),

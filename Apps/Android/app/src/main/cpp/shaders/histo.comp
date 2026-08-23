@@ -1,0 +1,25 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D uFeed;
+layout(std430, set = 0, binding = 1) buffer Histo {
+    uint bins[1024];
+};
+
+layout(push_constant) uniform PC {
+    ivec2 tapSize;
+    int stride;
+    vec3 lumaW;
+} pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy) * pc.stride;
+    if (p.x >= pc.tapSize.x || p.y >= pc.tapSize.y) return;
+    vec3 c = texelFetch(uFeed, p, 0).rgb;
+    uvec3 rgb = uvec3(clamp(c * 255.0 + 0.5, 0.0, 255.0));
+    uint y = uint(clamp(dot(c, pc.lumaW) * 255.0 + 0.5, 0.0, 255.0));
+    atomicAdd(bins[y], 1u);
+    atomicAdd(bins[256u + rgb.r], 1u);
+    atomicAdd(bins[512u + rgb.g], 1u);
+    atomicAdd(bins[768u + rgb.b], 1u);
+}

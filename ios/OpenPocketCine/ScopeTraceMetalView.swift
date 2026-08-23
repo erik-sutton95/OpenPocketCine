@@ -97,7 +97,8 @@ enum ScopeTraceMetal {
                     if offset % 4 == 0 {
                         append(
                             Vertex(
-                                position: SIMD2(x, waveY(point.luma, size: 1)), size: 1, color: hot))
+                                position: SIMD2(x, waveY(point.luma, size: 1)), size: 1, color: hot)
+                        )
                     }
                 }
             case .rgb:
@@ -305,7 +306,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         let trail = trail
         let ring = ring
         buildQueue.async { [weak self, weak view] in
-            let built = Self.build(inputs, samples: samples, trail: trail, ring: ring, device: device)
+            let built = Self.build(
+                inputs, samples: samples, trail: trail, ring: ring, device: device)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.buildGeneration == generation else { return }
@@ -582,7 +584,8 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
             let command = queue.makeCommandBuffer()
         else { return }
         if blurredMain == nil, let mainTexture {
-            blurredMain = Self.blurred(mainTexture, device: device, command: command, pool: blurPool)
+            blurredMain = Self.blurred(
+                mainTexture, device: device, command: command, pool: blurPool)
         }
         if blurredTrail == nil, let trailTexture {
             blurredTrail = Self.blurred(

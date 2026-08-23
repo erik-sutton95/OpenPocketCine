@@ -41,6 +41,10 @@ import Testing
         #expect(!CameraSoftAP.shouldIngestLiveVideo(liveViewEnabled: false),
             "0x02 during handshake is the previous session's GOP")
         #expect(CameraSoftAP.shouldIngestLiveVideo(liveViewEnabled: true))
+        #expect(CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: false),
+            "Pocket live-entry sends 0x02/0x68 08 before 0x09/0xa8")
+        #expect(!CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: true),
+            "Nano has no captured 0x68 pair")
     }
 
     /// First connect: join callback fires before DHCP. Enable here is the black feed.
@@ -275,6 +279,15 @@ import Testing
         #expect(CameraSoftAP.canSendHandshake(receiveArmed: true, connectionReady: true))
     }
 
+    @Test func firstPictureDoesNotExitPlaybackUnlessCameraIsInGallery() {
+        #expect(!CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: false))
+        #expect(CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: true))
+        #expect(CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: true))
+        #expect(!CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: false))
+        #expect(CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: false))
+        #expect(!CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: true))
+    }
+
     @Test func firstPictureWaitsAfterUDPRebuild() {
         #expect(CameraSoftAP.firstPictureStep(
             videoPackets: 220, enableSends: 3, secondsSinceLastEnable: 2,
@@ -354,6 +367,28 @@ import Testing
         #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 0))
         #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 5))
         #expect(CameraSoftAP.shouldGiveUpOpenRetry(attempts: 6))
+    }
+
+    /// Disconnect must not leave a closed driver for the next connect, and a
+    /// cancelled `open()` must not publish LIVE after the operator already left.
+    @Test func closedDatalinkMustNotCommitLive() {
+        #expect(CameraSoftAP.shouldReuseDatalink(isClosed: false))
+        #expect(!CameraSoftAP.shouldReuseDatalink(isClosed: true))
+        #expect(
+            CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: false, isCancelled: false))
+        #expect(
+            !CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: false, isClosed: false, isCancelled: false),
+            "session already replaced this driver")
+        #expect(
+            !CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: true, isCancelled: false),
+            "close() already ran — leftover handshake is not LIVE")
+        #expect(
+            !CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: false, isCancelled: true),
+            "cancelled open() must not publish LIVE after Disconnect")
     }
 
     @Test func savedCamerasPersistHotspot() {

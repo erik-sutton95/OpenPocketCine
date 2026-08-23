@@ -29,9 +29,9 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -96,6 +96,30 @@ val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 @Composable
 fun Modifier.monitorGlass(shape: Shape = ChromeShape): Modifier = liveChromeGlass(shape)
+
+/** iOS `CloseButton` on live picker / assist cards — 34dp glass circle. */
+@Composable
+fun LivePopupCloseButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 34.dp,
+) {
+    Box(
+        modifier
+            .size(size)
+            .glass(CircleShape)
+            .chromeClickable(onClick = onClick)
+            .semantics { contentDescription = "Close" },
+        contentAlignment = Alignment.Center,
+    ) {
+        OpcIcon(
+            icon = OpcIcon.X,
+            contentDescription = null,
+            tint = LiveDesign.text,
+            modifier = Modifier.size(size * 0.38f),
+        )
+    }
+}
 
 @Composable
 fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
@@ -555,8 +579,9 @@ object LivePopupPlacement {
         val minY = max(EDGE_MARGIN, safeTop + LiveChromeMetrics.CHROME_TOP + EDGE_MARGIN)
         val floor = floorY ?: (viewportHeight - max(EDGE_MARGIN, safeBottom))
         val desiredTop = if (hasCell) cell.maxY + gap else minY
-        val height = min(max(0f, panelHeight), max(0f, floor - minY))
-        val y = max(minY, min(desiredTop, floor - height))
+        // Pin under the chip. A too-tall first measure must shrink into
+        // maxHeight — not slide up over STBY / the originating chip.
+        val y = max(minY, desiredTop)
         return Box(x = x, y = y, width = width, maxHeight = max(0f, floor - y))
     }
 
@@ -598,6 +623,57 @@ object LivePopupPlacement {
         val minY = max(EDGE_MARGIN, max(safeTop + ASSIST_TOP_INSET, ceilingY))
         val boxBottom =
             (if (hasBar) bar.minY else viewportHeight - max(EDGE_MARGIN, safeBottom)) - gap
+        val maxHeight = max(0f, boxBottom - minY)
+        val height = min(max(0f, panelHeight), maxHeight)
+        val y = max(minY, boxBottom - height)
+        return Box(x = x, y = y, width = width, maxHeight = maxHeight)
+    }
+
+    /**
+     * OpenZCine `AssistOptionsPopupAnchor`: card above the toolbar, trailing-aligned
+     * to the pressed chip, island clearance. Never a bottom-start sheet over the rail.
+     */
+    fun assistOptions(
+        icon: ChromeRect,
+        toolbar: ChromeRect,
+        preferredWidth: Float,
+        panelHeight: Float,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        safeLeading: Float,
+        safeTrailing: Float,
+        safeTop: Float,
+        safeBottom: Float,
+        ceilingY: Float = 0f,
+        gap: Float = LiveChromeMetrics.POPUP_GAP,
+    ): Box {
+        val minX =
+            maxOf(
+                LiveChromeMetrics.CHROME_LEADING,
+                safeLeading + CUTOUT_CLEARANCE,
+                ASSIST_MARGIN,
+            )
+        val maxX =
+            viewportWidth -
+                maxOf(LiveChromeMetrics.CHROME_TRAILING, safeTrailing + CUTOUT_CLEARANCE, ASSIST_MARGIN)
+        val width = max(0f, min(preferredWidth, maxX - minX))
+        val hasIcon = icon.width > 1f && icon.height > 1f
+        val hasToolbar = toolbar.width > 1f && toolbar.height > 1f
+        val desiredX =
+            when {
+                hasIcon -> icon.maxX - width
+                hasToolbar -> toolbar.maxX - width
+                else -> minX
+            }
+        val x = leadingX(desired = desiredX, width = width, minX = minX, maxX = maxX)
+        val barTop =
+            when {
+                hasToolbar -> toolbar.minY
+                hasIcon -> icon.minY
+                else -> viewportHeight - max(EDGE_MARGIN, safeBottom)
+            }
+        val minY = maxOf(ASSIST_MARGIN, safeTop + ASSIST_TOP_INSET, ceilingY)
+        val boxBottom = barTop - gap
         val maxHeight = max(0f, boxBottom - minY)
         val height = min(max(0f, panelHeight), maxHeight)
         val y = max(minY, boxBottom - height)
@@ -826,6 +902,11 @@ class FrameRateSampler(
         lastDisplayTimestamp = at
     }
 
+    /** Instantaneous Hz from a present counter over a wall-clock window. */
+    fun recordFrameRate(fps: Double) {
+        displayFPS = fps.coerceAtLeast(0.0)
+    }
+
     val intervalCount: Int get() = intervals.size
 
     val currentFPS: Double
@@ -959,6 +1040,7 @@ data class LiveMonitorLayout(
             safeBottom: Float,
             showsBottomBars: Boolean,
             chromeScale: Float = 1f,
+            pictureAspect: Float? = null,
         ): LiveMonitorLayout {
             LiveChromeMetrics.scale = chromeScale
             val vw = max(0f, viewportWidth)
@@ -966,7 +1048,15 @@ data class LiveMonitorLayout(
             val constrained = isWidthConstrained(vw, vh)
             val chrome = chromeRect(vw, vh)
             val feed = feedFrame(vw, vh, safeLeading, safeTrailing)
-            val picture = feed
+            val picture =
+                pictureFrame(
+                    aspect = pictureAspect ?: LiveChromeMetrics.FEED_ASPECT,
+                    well = feed,
+                    viewportWidth = vw,
+                    viewportHeight = vh,
+                    safeLeading = safeLeading,
+                    safeTrailing = safeTrailing,
+                )
             val lock = lockRect(chrome)
             val battery = batteryRect(chrome, lock, constrained)
             val rail = rightRailRect(vw, chrome, feed)
@@ -1015,6 +1105,39 @@ data class LiveMonitorLayout(
                 max(0f, vw - LiveChromeMetrics.CHROME_LEADING - LiveChromeMetrics.CHROME_TRAILING),
                 max(0f, vh - LiveChromeMetrics.CHROME_TOP - LiveChromeMetrics.CHROME_BOTTOM),
             )
+
+        /**
+         * Center the displayed raster in the cinema well. A 9:16 Pocket flip
+         * pillarboxes here so the rail — keyed off the 16:9 well — never moves.
+         */
+        fun pictureFrame(
+            aspect: Float,
+            well: ChromeRect,
+            viewportWidth: Float,
+            viewportHeight: Float,
+            safeLeading: Float,
+            safeTrailing: Float,
+        ): ChromeRect {
+            val ratio = if (aspect > 0.2f) aspect else LiveChromeMetrics.FEED_ASPECT
+            if (well.width < 1f || well.height < 1f) return well
+            if (abs(ratio - LiveChromeMetrics.FEED_ASPECT) < 0.02f) return well
+            val vw = max(0f, viewportWidth)
+            val vh = max(0f, viewportHeight)
+            if (vh > vw || vh <= 0f) return well
+            var width = vh * ratio
+            var height = vh
+            if (width > vw + 0.5f) {
+                width = vw
+                height = vw / ratio
+            }
+            val lead = if (safeLeading >= LiveChromeMetrics.CUTOUT_MIN) safeLeading else 0f
+            val trail = if (safeTrailing >= LiveChromeMetrics.CUTOUT_MIN) safeTrailing else 0f
+            val minX = lead
+            val maxX = max(minX, vw - trail - width)
+            val x = min(max((vw - width) / 2f, minX), maxX)
+            val y = (vh - height) / 2f
+            return ChromeRect(x, y, width, height)
+        }
 
         private fun feedFrame(vw: Float, vh: Float, safeLeading: Float, safeTrailing: Float): ChromeRect {
             val aspect = LiveChromeMetrics.FEED_ASPECT
@@ -1327,39 +1450,63 @@ fun RecordButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     confirm: Boolean = false,
+    photo: Boolean = false,
     onClick: () -> Unit,
 ) {
     var confirmOpen by remember { mutableStateOf(false) }
     if (confirmOpen) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { confirmOpen = false },
-            title = {
-                Text(
-                    if (recording) "Stop recording?" else "Start recording?",
-                    color = LiveDesign.text,
-                    style = LiveType.ui(16f, FontWeight.SemiBold),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmOpen = false
-                        onClick()
-                    },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .chromeClickable(onClick = { confirmOpen = false }),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .pickerPanelGlass(ChromeShape)
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    Text(
+                        if (recording) "Stop recording?" else "Start recording?",
+                        color = LiveDesign.text,
+                        style = LiveType.ui(16f, FontWeight.SemiBold),
+                    )
                     Text(
                         if (recording) "Stop" else "Start",
                         color = if (recording) LiveDesign.rec else LiveDesign.accent,
+                        style = LiveType.ui(16f, FontWeight.SemiBold),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .chromeClickable(onClick = {
+                                    confirmOpen = false
+                                    onClick()
+                                })
+                                .padding(vertical = 14.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    Text(
+                        "Cancel",
+                        color = LiveDesign.muted,
+                        style = LiveType.ui(15f, FontWeight.Medium),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .chromeClickable(onClick = { confirmOpen = false })
+                                .padding(vertical = 12.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmOpen = false }) {
-                    Text("Cancel", color = LiveDesign.muted)
-                }
-            },
-            containerColor = LiveDesign.surface,
-        )
+            }
+        }
     }
     Box(
         modifier
@@ -1368,7 +1515,12 @@ fun RecordButton(
             .shadow(2.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.40f))
             .chromeClickable(enabled = enabled, onClick = { if (confirm) confirmOpen = true else onClick() })
             .semantics {
-                contentDescription = if (recording) "Stop recording" else "Start recording"
+                contentDescription =
+                    when {
+                        photo -> "Take photo"
+                        recording -> "Stop recording"
+                        else -> "Start recording"
+                    }
                 role = Role.Button
             },
         contentAlignment = Alignment.Center,
@@ -1637,6 +1789,7 @@ fun ReadoutPill(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    accessibilityLabel: String? = null,
     icon: @Composable (Color) -> Unit,
 ) {
     val surface =
@@ -1644,6 +1797,10 @@ fun ReadoutPill(
             Modifier.background(LiveDesign.accentDim, CircleShape).border(1.dp, LiveDesign.accentDim, CircleShape)
         } else {
             Modifier.chipGlass(CircleShape)
+        }
+    val spoken =
+        accessibilityLabel?.let { label ->
+            "$label ${value.replace(" · ", "·")}"
         }
     Row(
         modifier =
@@ -1653,6 +1810,13 @@ fun ReadoutPill(
                 .then(
                     if (onClick != null) {
                         Modifier.chromeClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(
+                    if (spoken != null) {
+                        Modifier.semantics(mergeDescendants = true) { contentDescription = spoken }
                     } else {
                         Modifier
                     },

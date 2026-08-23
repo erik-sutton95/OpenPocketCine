@@ -8,20 +8,20 @@ import Foundation
 /// everything downstream speaks **curve fractions** (`byte/255` = the papers'
 /// own encoded axis).
 ///
-    /// Shared IRE mapping for HISTO / PARADE / ZEBRA / FALSE / LIGHTS / WAVE
-    /// (``ScopeDisplayScale``). WAVE draws 0 / 100 on the plot edges and
-    /// keeps 18% gray at paper IRE (not remapped to 50):
-    /// * 0 line = paper / legal black (`encode(0)`)
-    /// * 18% grey = published paper IRE (`encode(0.18) × 100`; D-Log2 = 30.50)
-    /// * 100 line = **live-tap EI ceiling**, not code 255 and not the 10-bit
-    ///   recording top. SoftAP x420 at ISO 1600 measures D-Log2 `max=247`
-    ///   (typical 243–247) and D-Log `max=223` (typical 219–223). 255 is a
-    ///   full-range leak and is ignored. An earlier 188 calibration sat ~50
-    ///   codes below that shelf, so zebra / traffic-clip / FALSE Maximum
-    ///   fired while the LUT-off log still had highlight detail. Below each
-    ///   curve's native EI the DJI paper scales the code; at/above native an
-    ///   S-curve holds the preview at the measured ceiling (D-Log2 native
-    ///   1600, D-Log native 400). Rec.709 / HLG still clip at encoded 1.0.
+/// Shared IRE mapping for HISTO / PARADE / ZEBRA / FALSE / LIGHTS / WAVE
+/// (``ScopeDisplayScale``). WAVE draws 0 / 100 on the plot edges and
+/// keeps 18% gray at paper IRE (not remapped to 50):
+/// * 0 line = paper / legal black (`encode(0)`)
+/// * 18% grey = published paper IRE (`encode(0.18) × 100`; D-Log2 = 30.50)
+/// * 100 line = **live-tap EI ceiling**, not code 255 and not the 10-bit
+///   recording top. SoftAP x420 at ISO 1600 measures D-Log2 `max=247`
+///   (typical 243–247) and D-Log `max=223` (typical 219–223). 255 is a
+///   full-range leak and is ignored. An earlier 188 calibration sat ~50
+///   codes below that shelf, so zebra / traffic-clip / FALSE Maximum
+///   fired while the LUT-off log still had highlight detail. Below each
+///   curve's native EI the DJI paper scales the code; at/above native an
+///   S-curve holds the preview at the measured ceiling (D-Log2 native
+///   1600, D-Log native 400). Rec.709 / HLG still clip at encoded 1.0.
 public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
     /// `ColorMode.normal` `0x3F`. ITU-R BT.709-6 inverse OETF.
     case rec709
@@ -189,7 +189,7 @@ public enum ScopeExposureCeiling: Sendable {
                 s.refined1600 = byte
             }
             if transfer == .dlog,
-                (s.iso == 0 || s.iso >= dlogReferenceEI),
+                s.iso == 0 || s.iso >= dlogReferenceEI,
                 byte > s.refinedDlog,
                 byte <= dlogLiveTapByteAtNativeHigh
             {
@@ -197,9 +197,10 @@ public enum ScopeExposureCeiling: Sendable {
             }
             let ei = s.iso
             let key = ExposureCeilingStore.Key(transfer: transfer, ei: ei)
-            let table = UInt8(tableByte(
-                transfer: transfer, iso: ei,
-                refined1600: s.refined1600, refinedDlog: s.refinedDlog))
+            let table = UInt8(
+                tableByte(
+                    transfer: transfer, iso: ei,
+                    refined1600: s.refined1600, refinedDlog: s.refinedDlog))
             let previous = s.observedByEI[key] ?? 0
             // Allow a couple of codes of preview noise; never 255 (full-range leak).
             let raised = min(max(previous, byte), UInt8(min(254, Int(table) + 2)))
@@ -231,7 +232,8 @@ public enum ScopeExposureCeiling: Sendable {
             // Paper: below 1600 the code cannot reach saturation (scale linear
             // by EI/1600). At/above 1600 the S-curve holds the preview at the
             // measured live-tap saturation — not encoded 1.0.
-            let linear = ei >= referenceEI
+            let linear =
+                ei >= referenceEI
                 ? refLinear
                 : refLinear * Double(ei) / Double(referenceEI)
             let encoded = LiveColorScience.encode(linear, transfer: .dlog2)
@@ -242,7 +244,8 @@ public enum ScopeExposureCeiling: Sendable {
                 Double(refinedDlog) / 255.0, transfer: .dlog)
             // Pocket native EI is 400. Hold the measured *code* ceiling from
             // 400 up. Independent of the D-Log2 247 point.
-            let linear = ei >= dlogReferenceEI
+            let linear =
+                ei >= dlogReferenceEI
                 ? refLinear
                 : refLinear * Double(ei) / Double(dlogReferenceEI)
             let encoded = LiveColorScience.encode(linear, transfer: .dlog)
@@ -305,7 +308,8 @@ public struct ScopeAnchors: Equatable, Sendable {
         let black = LiveColorScience.encode(0, transfer: transfer)
         let mid = LiveColorScience.encode(0.18, transfer: transfer)
         let clip = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: iso)
-        let midLevel = ScopeDisplayScale.crushLevel
+        let midLevel =
+            ScopeDisplayScale.crushLevel
             + LiveColorScience.paperIRE(mid) / 100.0
             * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
         let clipEdge = ScopeExposureCeiling.clipByte(transfer: transfer, iso: iso)
@@ -317,17 +321,20 @@ public struct ScopeAnchors: Equatable, Sendable {
         // 243–246 has luma a few codes under maxRGB; 2% (byte 242) missed
         // it. 188 is ~76 IRE and stays out. Computed here (not via
         // signalNative) so make() cannot recurse.
-        let target95 = ScopeDisplayScale.crushLevel
+        let target95 =
+            ScopeDisplayScale.crushLevel
             + 0.95 * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
         let encoded95: Double
         if clip <= mid || mid <= black {
             encoded95 = black + 0.95 * (clip - black)
         } else if target95 <= midLevel {
-            let t = (target95 - ScopeDisplayScale.crushLevel)
+            let t =
+                (target95 - ScopeDisplayScale.crushLevel)
                 / max(midLevel - ScopeDisplayScale.crushLevel, 1e-9)
             encoded95 = black + t * (mid - black)
         } else {
-            let t = (target95 - midLevel)
+            let t =
+                (target95 - midLevel)
                 / max(ScopeDisplayScale.clipLevel - midLevel, 1e-9)
             encoded95 = mid + t * (clip - mid)
         }
@@ -775,7 +782,9 @@ public enum LiveColorScience {
         stops(linear: linearize(encoded, transfer: transfer))
     }
 
-    public static func zebraHighlight(_ monitorPercent: Double, threshold: Double = LiveZebra.highlightIRE) -> Bool {
+    public static func zebraHighlight(
+        _ monitorPercent: Double, threshold: Double = LiveZebra.highlightIRE
+    ) -> Bool {
         monitorPercent >= threshold
     }
 
@@ -1025,9 +1034,15 @@ public struct ColorMatrix3: Equatable, Sendable {
         _ m10: Double, _ m11: Double, _ m12: Double,
         _ m20: Double, _ m21: Double, _ m22: Double
     ) {
-        self.m00 = m00; self.m01 = m01; self.m02 = m02
-        self.m10 = m10; self.m11 = m11; self.m12 = m12
-        self.m20 = m20; self.m21 = m21; self.m22 = m22
+        self.m00 = m00
+        self.m01 = m01
+        self.m02 = m02
+        self.m10 = m10
+        self.m11 = m11
+        self.m12 = m12
+        self.m20 = m20
+        self.m21 = m21
+        self.m22 = m22
     }
 
     public func apply(r: Double, g: Double, b: Double) -> (r: Double, g: Double, b: Double) {

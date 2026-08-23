@@ -4,9 +4,13 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
+import com.opencapture.openpocketcine.CaptureLists
+import com.opencapture.openpocketcine.EvComp
+import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.feed.FacePriorityExposure
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
@@ -18,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
@@ -27,6 +32,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.math.abs
 
 /**
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
@@ -37,7 +43,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
-    val decoder = HevcDecoder()
+    val decoder = HevcDecoder().also { dec ->
+        dec.onParameterSetsChanged = {
+            scope.launch { sendRecoverEnable(force = true, reason = "encoder format change") }
+        }
+    }
     private val wifiCache = CameraWifiCredentialStore(appContext)
     private val wifiLock = WifiLowLatencyLock(appContext)
 
@@ -57,9 +67,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val controlNote: StateFlow<String?> = _controlNote.asStateFlow()
     private val _controlBusy = MutableStateFlow(false)
     val controlBusy: StateFlow<Boolean> = _controlBusy.asStateFlow()
-    private val _focusPoint = MutableStateFlow<Pair<Float, Float>?>(null)
-    val focusPoint: StateFlow<Pair<Float, Float>?> = _focusPoint.asStateFlow()
+    private val _focusPoint = MutableStateFlow(0.5f to 0.5f)
+    val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
     private var audioDspBlob: ByteArray? = null
+    private var audioTail: Job? = null
+    private var audioPin: AudioPin? = null
     private var gimbalStickJob: Job? = null
     @Volatile private var pendingGimbalAxes: Pair<Int, Int> =
         CameraCommands.GIMBAL_STICK_CENTER to CameraCommands.GIMBAL_STICK_CENTER
@@ -68,6 +80,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         private set
     var joinedSSID: String? = null
         private set
+
+    /** iOS `CameraSession.supportsFocusMode`. Unknown camera defaults on. */
+    val supportsFocusMode: Boolean
+        get() {
+            val model = connectedCamera?.model ?: return true
+            if (!model.supportsFocusMode) return false
+            if (model.family.equals("nano", ignoreCase = true)) return false
+            val n = model.name.lowercase().replace(" ", "")
+            return n.isEmpty() || (!n.contains("nano") && !n.contains("atto"))
+        }
 
     var videoPackets = 0
     var accessUnits = 0
@@ -92,7 +114,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastFocusTrackAt: Long? = null
     private var streamStartedAt: Long? = null
     private var lastBleNotifyAt: Long? = null
-    private var isBrowsingMedia = false
+    @Volatile private var isBrowsingMedia = false
+    @Volatile private var operatorOverlayHeld = false
+    private var evBeforeFacePriority: EvComp? = null
+    private var lastFacePriorityEVAt = 0L
+    private var facePriorityAcquireAt: Long? = null
     private var needsForegroundRecover = false
     private var nextTrackingId = 1
     private var mediaListCounter = 1
@@ -108,9 +134,58 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var frameJob: Job? = null
     private val waiters = ConcurrentHashMap<Int, FrameWaiter>()
     private val pairingHold = ConcurrentHashMap<Int, DumlFrame>()
+    private val inflight = ConcurrentHashMap<Int, InflightSend>()
+    private val inflightPending = ConcurrentHashMap<Int, InflightSend>()
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
     private var feedRecoveryJob: Job? = null
+    private var lastFirstPictureLogAt = 0L
+    private var lastFirstPictureSignature = ""
+    private var lastRecoverSkipAt = 0L
+    private var lastRecoverSkipReason = ""
+    private var formatPin: FormatPin? = null
+    private var colorPin: ColorPin? = null
+    private var teleColorSent = false
+    private var restoreDLog2OnWide = false
+    private var zoomStop = 1.0
+    private var zoomStopTouched = false
+    var zoomPinchPreview: Double? = null
+        private set
+    var zoomOptimistic: Double? = null
+        private set
+    private var zoomPinchAnchor = 1.0
+    private var lastPinchLens: Int? = null
+    private var lastPinchLogTenths: Double? = null
+    private var lastZoomWireAt = 0L
+    private var pendingZoomPayload: ByteArray? = null
+    private var zoomFlushJob: Job? = null
+    private val faceDetector = LiveFaceDetector()
+    private val _faceAFArmed = MutableStateFlow(false)
+    val faceAFArmed: StateFlow<Boolean> = _faceAFArmed.asStateFlow()
+    private val _wantsFaceDetect = MutableStateFlow(false)
+    val wantsFaceDetect: StateFlow<Boolean> = _wantsFaceDetect.asStateFlow()
+    private var faceAFArmJob: Job? = null
+    private var faceTickJob: Job? = null
+    private var lastFaceHitAt: Long? = null
+    private var lastFaceAt: Long? = null
+    private val _zoomReadout = MutableStateFlow(1.0)
+    val zoomReadout: StateFlow<Double> = _zoomReadout.asStateFlow()
+    private val _zoomPinching = MutableStateFlow(false)
+    val zoomPinching: StateFlow<Boolean> = _zoomPinching.asStateFlow()
+    private var searchBox: TrackingBox? = null
+    private var subjectBox: TrackingBox? = null
+    private var isTracking = false
+    private var trackingSawLock = false
+    private var faceBox: TrackingBox? = null
+    private var sceneFaces: List<TrackingBox> = emptyList()
+    private var lastTapFocusAt: Long? = null
+    private var lastOperatorClearAt: Long? = null
+    private var lastSubjectPushAt: Long? = null
+    private var lastLiveTrackingAt: Long? = null
+    private var lastGimbalStickAt: Long? = null
+    private var trackingPollJob: Job? = null
+    private val _trackingHud = MutableStateFlow(TrackingHud())
+    val trackingHud: StateFlow<TrackingHud> = _trackingHud.asStateFlow()
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
@@ -132,7 +207,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         joiner.onReassociated = {
             Log.i(TAG, "wifi: SoftAP reassociated — rebuild UDP, keep LIVE")
             startFeedRecovery {
-                datalink?.rebuildUdpKeepingSession()
+                withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
                 sendRecoverEnable(force = true, reason = "wifi reassociated")
             }
         }
@@ -226,8 +301,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         endGimbalStick()
         failAllWaiters(IllegalStateException("the camera disconnected"))
         pairingHold.clear()
-        datalink?.close()
-        datalink = null
+        inflight.clear()
+        inflightPending.clear()
+        disposeDatalink()
         ble.disconnect()
         decoder.reset()
         joiner.release()
@@ -241,7 +317,27 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _failure.value = null
         _controlNote.value = null
         _controlBusy.value = false
-        _focusPoint.value = null
+        formatPin = null
+        colorPin = null
+        teleColorSent = false
+        restoreDLog2OnWide = false
+        resetZoomHud()
+        clearLocalTracking()
+        clearFaceAF()
+        _faceAFArmed.value = false
+        faceAFArmJob?.cancel()
+        faceAFArmJob = null
+        faceTickJob?.cancel()
+        faceTickJob = null
+        pendingZoomPayload = null
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        lastTapFocusAt = null
+        _focusPoint.value = 0.5f to 0.5f
+        refreshTrackingHud()
+        audioTail?.cancel()
+        audioTail = null
+        audioPin = null
         audioDspBlob = null
         videoPackets = 0
         accessUnits = 0
@@ -290,6 +386,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         ble.connect(camera)
 
         pairingHold.clear()
+        inflight.clear()
+        inflightPending.clear()
         publishPhase(ConnectionPhase.PAIRING)
         ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_WAKE, 0x802B))
         ble.send(SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, 0x8092, camera.model.pairingToken))
@@ -347,7 +445,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun openDatalinkKeepingLive(camera: FoundCamera) {
         val existing = datalink
         val dl =
-            existing
+            existing?.takeUnless { it.isClosed }
                 ?: DatalinkDriver(
                     joiner,
                     camera.model.datalinkPort,
@@ -356,8 +454,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 ).also { created ->
                     created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
                     created.onAccessUnit = { au ->
-                        rawAccessUnits += 1
-                        decoder.decode(au)
+                        if (!isBrowsingMedia && !operatorOverlayHeld) {
+                            rawAccessUnits += 1
+                            decoder.decode(au)
+                        }
                     }
                     datalink = created
                 }
@@ -368,6 +468,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     kotlinx.coroutines.withContext(Dispatchers.IO) {
                         dl.open(
                             afterHandshake = {
+                                if (datalink !== dl || dl.isClosed) {
+                                    Log.i(TAG, "live: ignore stale datalink open")
+                                    return@open
+                                }
                                 publishPhase(ConnectionPhase.LIVE)
                                 decoder.beginIDRHold()
                                 sendCapturedLiveView("first picture")
@@ -535,10 +639,34 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
     private fun recoverLiveViewIfNeeded() {
-        if (isBrowsingMedia || holdsMonitor) return
-        if (needsForegroundRecover) return
-        if (!joiner.isProcessBound()) return
-        if (feedRecoveryJob != null) return
+        if (isBrowsingMedia || holdsMonitor) {
+            logRecoverSkip(if (isBrowsingMedia) "browsing" else "holdsMonitor")
+            return
+        }
+        if (needsForegroundRecover) {
+            logRecoverSkip("foreground")
+            return
+        }
+        if (!joiner.isProcessBound()) {
+            logRecoverSkip("unbound")
+            return
+        }
+        if (feedRecoveryJob != null) {
+            logRecoverSkip("recoveryJob")
+            return
+        }
+        if (com.opencapture.openpocketcine.media.MediaLiveResume.strayPlaybackAction(
+                browsing = isBrowsingMedia,
+                inPlayback = _status.value.inPlayback,
+            ) != null
+        ) {
+            datalink?.exitPlayback()
+            Log.i(TAG, "media: stray playback — sent exit")
+            val hasPicture = decoder.lastPresentedAt != null
+            if (!LiveViewEnablePolicy.shouldContinueFirstPictureAfterStrayPlayback(hasPicture)) {
+                return
+            }
+        }
         val packets = datalink?.videoPackets ?: 0
         val now = SystemClock.elapsedRealtime()
         if (packets > 0 && streamStartedAt == null) streamStartedAt = now
@@ -594,17 +722,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sinceRebuildMs = datalink?.lastRebuildAt?.let { now - it },
             )
         ) {
-            LiveViewEnablePolicy.FirstPictureStep.WAIT -> Unit
+            LiveViewEnablePolicy.FirstPictureStep.WAIT ->
+                logFirstPicture(now, packets)
             LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE -> {
-                if (liveViewEnableSends == 0) {
-                    sendCapturedLiveView("first picture")
-                } else {
-                    sendRecoverEnable(force = true, reason = "first-picture resend")
-                }
+                // Do not route through sendRecoverEnable — inPlayback / decoder-ready
+                // holds skipped the only PLI and sat on WAITING FOR LIVE VIEW.
+                sendCapturedLiveView(
+                    if (liveViewEnableSends == 0) "first picture" else "first-picture resend",
+                )
             }
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
-                val statusAge = datalink?.lastStatusAt?.let { now - it }
-                val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
                 val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
                 val noPicture = decoder.lastPresentedAt == null && !decoder.hasFormat
                 if (LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
@@ -618,23 +745,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         "live: leftover GOP without picture pkts=$packets " +
                             "lastVideo=${videoAge}ms — resend enable, keep UDP",
                     )
-                    sendRecoverEnable(force = true, reason = "first-picture leftover GOP")
-                    return
-                }
-                if (statusAge != null && statusAge < LiveViewEnablePolicy.STALL_MS &&
-                    sinceEnable < LiveViewEnablePolicy.GOP_GRACE_MS
-                ) {
-                    Log.i(
-                        TAG,
-                        "live: hold first-picture UDP rebuild — telemetry alive " +
-                            "lastStatus=${statusAge}ms pkts=$packets",
-                    )
+                    sendCapturedLiveView("first-picture leftover GOP")
                     return
                 }
                 Log.i(TAG, "live: first-picture rebuild UDP (receive died pkts=$packets)")
                 startFeedRecovery {
-                    datalink?.rebuildUdpKeepingSession()
-                    sendRecoverEnable(force = true, reason = "first-picture after UDP rebuild")
+                    withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
+                    sendCapturedLiveView("first-picture after UDP rebuild")
                 }
             }
             LiveViewEnablePolicy.FirstPictureStep.REJOIN -> {
@@ -703,7 +820,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 "fullSessionRejoin",
                 ->
                     startFeedRecovery {
-                        datalink?.rebuildUdpKeepingSession()
+                        withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
                         sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                     }
                 else -> logWatchdogHold(snap)
@@ -716,10 +833,41 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sendRecoverEnable(force = true, reason = "watchdog")
             LiveViewEnablePolicy.Action.REBUILD_UDP ->
                 startFeedRecovery {
-                    datalink?.rebuildUdpKeepingSession()
+                    withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
                     sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                 }
         }
+    }
+
+    private fun logRecoverSkip(reason: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (reason == lastRecoverSkipReason && now - lastRecoverSkipAt < 3_000L) return
+        lastRecoverSkipReason = reason
+        lastRecoverSkipAt = now
+        Log.i(
+            TAG,
+            "live: skip recover ($reason) pkts=${datalink?.videoPackets ?: 0} " +
+                "enables=$liveViewEnableSends",
+        )
+    }
+
+    private fun logFirstPicture(now: Long, packets: Int) {
+        val signature = "$packets.$rawAccessUnits.${decoder.hasFormat}.$liveViewEnableSends"
+        if (signature == lastFirstPictureSignature && now - lastFirstPictureLogAt < 3_000L) return
+        lastFirstPictureSignature = signature
+        lastFirstPictureLogAt = now
+        val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
+        val statusAge = datalink?.lastStatusAt?.let { now - it }
+        Log.i(
+            TAG,
+            "live: first-picture videoPkts=$packets aus=$rawAccessUnits " +
+                "lastVideo=${videoAge ?: -1}ms lastStatus=${statusAge ?: -1}ms " +
+                "enables=$liveViewEnableSends format=${if (decoder.hasFormat) 1 else 0} " +
+                "idrHold=${if (decoder.awaitingIdr) 1 else 0} " +
+                "bound=${if (joiner.isProcessBound()) 1 else 0} " +
+                "fg=${if (needsForegroundRecover) 1 else 0} " +
+                "hold=${if (holdsMonitor) 1 else 0}",
+        )
     }
 
     private fun logWatchdogHold(snap: LiveViewEnablePolicy.Snapshot) {
@@ -788,8 +936,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             needsForegroundRecover = false
             return
         }
-        if (holdsMonitor) return
         if (!needsForegroundRecover) return
+        if (LiveViewEnablePolicy.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor)) {
+            needsForegroundRecover = false
+            return
+        }
         needsForegroundRecover = false
         if (_phase.value == ConnectionPhase.LIVE) {
             recoverAfterForeground()
@@ -841,8 +992,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun rejoinDatalinkKeepingLive() {
         val camera = connectedCamera ?: return
         Log.i(TAG, "feed: full datalink rejoin (SoftAP bind kept)")
-        datalink?.close()
-        datalink = null
+        disposeDatalink()
         decoder.flushForRecovery()
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
@@ -856,8 +1006,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (isBrowsingMedia && reason != "media browse ended") return false
         val camera = connectedCamera
         val receiver = liveViewEnableReceiver(camera)
-        if (_status.value.inPlayback) datalink?.exitPlayback()
-        if (usesNanoLiveViewGate(camera)) datalink?.sendNanoGate(start = true)
+        // Handbook: do not send `0x02/0x0c` to start live view. Gallery leftover
+        // is stray-playback's job. Unconditional exit sat on videoPkts=0.
+        if (LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(_status.value.inPlayback)) {
+            datalink?.exitPlayback()
+        }
+        val nanoGate = usesNanoLiveViewGate(camera)
+        if (nanoGate) datalink?.sendNanoGate(start = true)
+        val prepare = LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
+        if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
         datalink?.startLiveView(receiver)
         val now = SystemClock.elapsedRealtime()
         lastIdrRequest = now
@@ -865,7 +1022,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (!decoder.awaitingIdr) idrHoldEnableCount = 0
         decoder.beginIDRHold()
         idrHoldEnableCount += 1
-        Log.i(TAG, "live: 0x09/0xa8 rcv=0x${receiver.toString(16)} ($reason) #$liveViewEnableSends")
+        Log.i(
+            TAG,
+            "live: ${if (prepare) "0x02/0x68 08 then " else ""}" +
+                "0x09/0xa8 rcv=0x${receiver.toString(16)} ($reason) #$liveViewEnableSends",
+        )
         return true
     }
 
@@ -917,13 +1078,22 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _phase.value = ConnectionPhase.FAILED
     }
 
+    /** Drop the live UDP session so the next connect cannot inherit a half-closed driver. */
+    private fun disposeDatalink() {
+        val link = datalink
+        datalink = null
+        if (link == null) return
+        link.onAccessUnit = null
+        link.onStatusFrame = null
+        link.close()
+    }
+
     private fun stopLivePipeline(preserveDecoder: Boolean, preserveSoftAP: Boolean = false) {
         keepaliveJob?.cancel()
         keepaliveJob = null
         endGimbalStick()
         failAllWaiters(IllegalStateException("the camera disconnected"))
-        datalink?.close()
-        datalink = null
+        disposeDatalink()
         if (preserveDecoder) decoder.flushForRecovery() else decoder.reset()
         if (!preserveSoftAP) {
             joiner.release()
@@ -1052,8 +1222,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (waiter != null) {
             waiter.keys.forEach { waiters.remove(it) }
             waiter.resume(frame)
-        } else if (shouldHold(frame)) {
-            pairingHold[frame.key] = frame
+        } else {
+            val send = inflight[frame.key]
+            if (send != null) {
+                finishInflight(send, frame)
+            } else if (shouldHold(frame)) {
+                pairingHold[frame.key] = frame
+            }
         }
         val prev = _status.value
         val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
@@ -1065,66 +1240,133 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (next.availableIsoIndices.isEmpty()) {
             next = next.copy(availableIsoIndices = prev.availableIsoIndices)
         }
+        if (next.availableColorModes.isEmpty()) {
+            next = next.copy(availableColorModes = prev.availableColorModes)
+        }
         next = StatusExtras.apply(frame, next)
+        next = CamFov.absorb(next)
+        next = absorbStaleFormat(next)
+        next = absorbStaleColor(next)
+        noteZoomIfChanged(prev, next)
+        if (frame.cmdSet == 0x02 && frame.cmdId == 0x89) {
+            applyLiveTrackingPush(frame.payload)
+        }
+        if (frame.cmdSet == 0x02 && frame.cmdId == 0xA5) {
+            applyTrackingPoll(frame.payload)
+        }
+        if (lastTapFocusAt != null) refreshTrackingHud()
         if (frame.cmdSet == 0x02 && frame.cmdId == 0xA0) {
             val (updated, blob) = StatusExtras.applyAudioDsp(frame.payload, next)
             next = updated
             if (blob != null) {
                 audioDspBlob = blob
-                next =
-                    next.copy(audioDspBlob = blob.joinToString("") { "%02x".format(it.toInt() and 0xFF) })
-                        .withAudioDspAt2()
+                next = next.applyingAudioBlob(blob)
             }
+        }
+        audioPin?.let { pin ->
+            val (held, nextPin) = pin.absorb(next, _status.value, SystemClock.elapsedRealtime())
+            next = held
+            audioPin = nextPin
         }
         if (next != prev) {
             if (next.inPlayback != prev.inPlayback) {
                 Log.i(TAG, "live: inPlayback=${if (next.inPlayback) 1 else 0}")
             }
             _status.value = next
+            publishFaceDetectWanted()
         }
     }
 
     fun pressRecord() {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (_status.value.isRecording) {
-                sendKind(SwiftCore.CMD_RECORD_STOP, null, "Stop")
-            } else {
-                sendKind(SwiftCore.CMD_RECORD_START, null, "Record")
-            }
-        }
+        val starting = !_status.value.isRecording
+        _controlBusy.value = true
+        fireKind(
+            if (starting) SwiftCore.CMD_RECORD_START else SwiftCore.CMD_RECORD_STOP,
+            null,
+            if (starting) "Record" else "Stop",
+            onSettle = { _controlBusy.value = false },
+        )
     }
 
     /** Rec lamp: still in Photo / SuperNight, else start/stop video. */
     fun pressShutter() {
-        if (_controlBusy.value) return
         if (CameraCommands.isPhotoMode(_status.value.shootingMode)) {
-            scope.launch {
-                sendDumlWait(0x02, CameraCommands.CMD_PHOTO, CameraCommands.shootPhoto(), "Photo")
-            }
+            _controlBusy.value = true
+            fireKind(
+                SwiftCore.CMD_SHOOT_PHOTO,
+                null,
+                "Photo",
+                retransmits = false,
+                onSettle = { _controlBusy.value = false },
+            )
             return
         }
         pressRecord()
     }
 
     fun setEv(thirds: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_EV, CameraCommands.ev(thirds), "EV")
+        val ev = EvComp.fromThirds(thirds)
+        val previous = _status.value.evComp
+        _status.value = _status.value.copy(evComp = ev.rawValue)
+        fireKind(
+            SwiftCore.CMD_SET_EV,
+            "${ev.rawValue}",
+            "EV",
+            coalesce = true,
+            onFail = {
+                if (_status.value.evComp == ev.rawValue) {
+                    _status.value = _status.value.copy(evComp = previous)
+                }
+            },
+        )
+    }
+
+    /** Snapshot EV on enable; restore it (or 0.0) on disable. Matches iOS. */
+    fun setFacePriorityEnabled(on: Boolean) {
+        if (on) {
+            evBeforeFacePriority = EvComp.fromRaw(_status.value.evComp) ?: EvComp.ZERO
+            publishFaceDetectWanted()
+            return
         }
+        val restore =
+            FacePriorityExposure.restoreWrite(
+                evBeforeFacePriority,
+                expoIsAuto = _status.value.expoMode == CameraCommands.EXPO_AUTO,
+                current = EvComp.fromRaw(_status.value.evComp),
+            )
+        evBeforeFacePriority = null
+        lastFacePriorityEVAt = 0L
+        facePriorityAcquireAt = null
+        publishFaceDetectWanted()
+        if (restore != null) setEv(restore.thirds)
     }
 
     fun setIsoLimit(raw: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_PARAM, CameraCommands.isoLimit(raw), "ISO limit")
-        }
+        val previous = _status.value.isoLimit
+        _status.value = _status.value.copy(isoLimit = raw)
+        fireKind(
+            SwiftCore.CMD_SET_ISO_LIMIT,
+            "$raw",
+            "ISO limit",
+            coalesce = true,
+            onFail = {
+                if (_status.value.isoLimit == raw) {
+                    _status.value = _status.value.copy(isoLimit = previous)
+                }
+            },
+        )
     }
 
     /** GET `0x8E` pid `0x000F`. Swift core already packs the bytes. */
     fun getIsoLimit() {
         if (_controlBusy.value) return
-        scope.launch { sendKind(SwiftCore.CMD_GET_ISO_LIMIT, null, "ISO limit GET") }
+        scope.launch { refreshIsoLimit() }
+    }
+
+    /** GET only when Auto ISO exists. D-Log2 has no ceiling. */
+    suspend fun refreshIsoLimit(): Boolean {
+        if (!CameraCommands.shouldGetIsoLimit(_status.value.colorMode)) return false
+        return sendKind(SwiftCore.CMD_GET_ISO_LIMIT, null, "ISO limit GET")
     }
 
     /** True while a feed recover rebuild is in flight — FPS chip `RECOV`, not session recovery. */
@@ -1132,35 +1374,103 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         get() = feedRecoveryJob != null
 
     fun setShootingMode(raw: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendKind(SwiftCore.CMD_SET_SHOOTING_MODE, "$raw", "Mode")
-        }
+        val previous = _status.value.shootingMode
+        _status.value = _status.value.copy(shootingMode = raw)
+        fireKind(
+            SwiftCore.CMD_SET_SHOOTING_MODE,
+            "$raw",
+            "Mode",
+            onFail = {
+                if (_status.value.shootingMode == raw) {
+                    _status.value = _status.value.copy(shootingMode = previous)
+                }
+            },
+        )
     }
 
+    /** Unsnapped live / preview so 2.89× (shown 2.9×) still cycles to 3×. */
+    fun zoomCycleFrom(): Double =
+        zoomPinchPreview ?: zoomOptimistic ?: _status.value.zoomFactor ?: zoomStop
+
     fun setZoomLens(position: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomLens(position), "Zoom")
-        }
+        fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
     }
 
     fun setZoom(factor: Double) {
-        setZoomLens(CameraCommands.lensForZoomFactor(factor))
+        val from = CamFov.displayLabel(_zoomReadout.value)
+        val to = CamFov.displayLabel(factor)
+        Log.i(TAG, "zoom: setZoom $from → $to live=${datalink != null}")
+        val write = CamFov.chipWrite(factor)
+        if (write == null) {
+            _controlNote.value = "Zoom $to — no command"
+            Log.i(TAG, "zoom: tap ignored — no write for $to")
+            return
+        }
+        zoomPinchPreview = null
+        dropDLog2ForZoom(factor)
+        zoomOptimistic = factor
+        markZoomStop(factor)
+        val name = "Zoom $to"
+        _controlNote.value = name
+        when (write) {
+            is CamFov.ChipWrite.Lens ->
+                fireZoom(CameraCommands.zoomLens(write.position), announce = true, name = name)
+            is CamFov.ChipWrite.Slew ->
+                fireZoom(CameraCommands.zoomSlew(write.value), announce = true, name = name)
+        }
+        refreshZoomHud()
+    }
+
+    fun setZoomSlider(factor: Double) {
+        val position = CamFov.pinchLens(factor)
+        val tenths = CamFov.displayTenths(factor)
+        if (lastPinchLogTenths != tenths) {
+            lastPinchLogTenths = tenths
+            Log.i(TAG, "zoom: setZoomSlider ${CamFov.displayLabel(factor)} lens=$position")
+        }
+        fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
     }
 
     fun setZoomSlew(value: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomSlew(value), "Zoom slew")
-        }
+        fireZoom(CameraCommands.zoomSlew(value), announce = false, name = "Zoom slew")
     }
 
     fun setZoomStop() {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomStop(), "Zoom stop")
+        fireZoom(CameraCommands.zoomStop(), announce = false, name = "Zoom stop")
+    }
+
+    fun updateZoomPinch(magnification: Double) {
+        if (zoomPinchPreview == null) {
+            zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
+            zoomOptimistic = null
+            lastPinchLens = null
+            lastPinchLogTenths = null
         }
+        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification)
+        val first = zoomPinchPreview == null
+        // iOS `dropDLog2ForZoom` before every 0xB8. D-Log2 rejects zoom; any
+        // step off 1× hops to D-Log first. Do not gate on `first` — the pinch
+        // begin event is magnification 1.0, so the hop must run on later ticks.
+        dropDLog2ForZoom(factor)
+        zoomPinchPreview = factor
+        val lens = CamFov.pinchLens(factor)
+        refreshZoomHud()
+        if (lastPinchLens == lens) return
+        lastPinchLens = lens
+        if (first && abs(factor - zoomPinchAnchor) < 0.01) return
+        setZoomSlider(factor)
+    }
+
+    fun endZoomPinch() {
+        flushPendingZoom()
+        val preview = zoomPinchPreview
+        if (preview != null) {
+            markZoomStop(preview)
+            restoreDLog2IfNeeded(preview)
+        }
+        zoomPinchPreview = null
+        lastPinchLens = null
+        refreshZoomHud()
     }
 
     fun recenterGimbal() {
@@ -1185,29 +1495,223 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlNote.value = "Gimbal flipped"
     }
 
-    fun startTracking(x: Float, y: Float, width: Float = 0.2f, height: Float = 0.2f) {
-        if (_controlBusy.value) return
-        val id = nextTrackingId
-        nextTrackingId = if (nextTrackingId == 0xFFFF) 1 else nextTrackingId + 1
-        scope.launch {
-            sendDumlWait(
-                0x02,
-                CameraCommands.CMD_TRACK_SET,
-                CameraCommands.trackingBox(id, x, y, width, height),
-                "Track",
+    val supportsTapFocus: Boolean
+        get() = connectedCamera?.model?.supportsTapFocus ?: true
+
+    val isTrackingActive: Boolean
+        get() = isTracking || searchBox != null || subjectBox != null
+
+    val isFocusResetAvailable: Boolean
+        get() {
+            val point = _focusPoint.value
+            return FocusResetPolicy.isAvailable(
+                point.first.toDouble(),
+                point.second.toDouble(),
+                isTrackingActive,
             )
         }
+
+    fun handleFeedTap(x: Float, y: Float) {
+        val nx = x.coerceIn(0f, 1f).toDouble()
+        val ny = y.coerceIn(0f, 1f).toDouble()
+        val hud = _trackingHud.value
+        val box = FaceTrackTap.boxIfTapped(hud.overlay, nx, ny, hud.dimmedFaces)
+        if (box != null) {
+            startTracking(box)
+            return
+        }
+        when (LiveFeedTapPolicy.action(supportsTapFocus, tappedFace = false)) {
+            LiveFeedTapPolicy.Action.TAP_FOCUS -> markFocus(x, y)
+            LiveFeedTapPolicy.Action.TRACK_FACE, LiveFeedTapPolicy.Action.IGNORE -> Unit
+        }
+    }
+
+    fun startTracking(x: Float, y: Float, width: Float = 0.2f, height: Float = 0.2f) {
+        startTracking(TrackingBox.fromCenter(x.toDouble(), y.toDouble(), width.toDouble(), height.toDouble()))
+    }
+
+    fun startTracking(box: TrackingBox) {
+        if (box.isTooSmall) {
+            noteFrameTooSmall()
+            return
+        }
+        stopTrackingPoll()
+        lastOperatorClearAt = null
+        lastLiveTrackingAt = null
+        lastSubjectPushAt = null
+        searchBox = box
+        subjectBox = null
+        isTracking = false
+        trackingSawLock = false
+        faceBox = null
+        refreshTrackingHud()
+        val id = nextTrackingId
+        nextTrackingId = if (nextTrackingId == 0xFFFF) 1 else nextTrackingId + 1
+        val extra =
+            "$id\u001f${box.centerX}\u001f${box.centerY}\u001f${box.width}\u001f${box.height}"
+        fireKind(
+            SwiftCore.CMD_SET_TRACKING_BOX,
+            extra,
+            "Track",
+            onSettle = { ok -> if (ok) beginTrackingPoll() },
+        )
+    }
+
+    fun cancelSubjectTracking() {
+        cancelTracking(sendClear = true)
     }
 
     fun cancelTracking() {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendDumlWait(0x02, CameraCommands.CMD_TRACK_SET, CameraCommands.clearTracking(), "Track clear")
-        }
+        cancelTracking(sendClear = true)
     }
 
     fun resetFocusPoint() {
-        tapFocus(0.5f, 0.5f)
+        markFocus(0.5f, 0.5f)
+    }
+
+    fun applyDetectedFaces(faces: List<TrackingBox>) {
+        if (!_wantsFaceDetect.value) {
+            clearFaceAF()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val dt = lastFaceAt?.let { (now - it) / 1000.0 } ?: 0.04
+        lastFaceAt = now
+        val moving = isFaceSceneMoving(now)
+        sceneFaces = faces.take(SceneFacePolicy.MAX_FACES)
+        if (isTrackingActive) {
+            faceBox = null
+            lastFaceHitAt = null
+            refreshTrackingHud()
+            return
+        }
+        if (!FaceAFPolicy.wantsFaceAF(_status.value.focusMode, _faceAFArmed.value)) {
+            faceBox = null
+            lastFaceHitAt = null
+            refreshTrackingHud()
+            return
+        }
+        val sinceHit = FaceTrackHold.secondsSinceHit(lastFaceHitAt, now)
+        val hit =
+            sceneFaces
+                .filter {
+                    FaceTrackHold.shouldAccept(
+                        detected = it,
+                        last = faceBox,
+                        secondsSinceHit = sinceHit,
+                        sceneMoving = moving,
+                    )
+                }
+                .maxByOrNull { it.area }
+        if (hit != null) {
+            lastFaceHitAt = now
+            faceBox =
+                FaceTrackHold.follow(
+                    faceBox,
+                    hit,
+                    dt.coerceIn(1.0 / 120.0, 0.08),
+                    moving,
+                )
+        } else {
+            tickFaceHold(now, moving)
+        }
+        refreshTrackingHud()
+    }
+
+    private fun isFaceSceneMoving(now: Long = SystemClock.elapsedRealtime()): Boolean =
+        FaceTrackHold.isSceneMoving(lastGimbalStickAt?.let { (now - it) / 1000.0 })
+
+    /** iOS `tickFaceBoxes` — drop the painted face after miss timeout. */
+    private fun tickFaceHold(now: Long = SystemClock.elapsedRealtime(), moving: Boolean = isFaceSceneMoving(now)) {
+        val sinceHit = FaceTrackHold.secondsSinceHit(lastFaceHitAt, now)
+        if (!FaceTrackHold.shouldDrop(sinceHit, moving)) return
+        if (faceBox == null && sceneFaces.isEmpty()) return
+        faceBox = null
+        sceneFaces = emptyList()
+        lastFaceHitAt = null
+        refreshTrackingHud()
+    }
+
+    /** iOS `decoder.onSourceFrame` → `considerFaceAF`. */
+    fun considerFaceFrame(bitmap: android.graphics.Bitmap) {
+        if (!_wantsFaceDetect.value) {
+            bitmap.recycle()
+            clearFaceAF()
+            return
+        }
+        faceDetector.consider(bitmap) { hits -> applyDetectedFaces(hits) }
+    }
+
+    fun noteLiveFrame() {
+        decoder.notePresented()
+        armFaceAFAfterFirstPicture()
+    }
+
+    private fun armFaceAFAfterFirstPicture() {
+        if (_faceAFArmed.value || faceAFArmJob != null) return
+        faceAFArmJob =
+            scope.launch {
+                while (isActive && !_faceAFArmed.value) {
+                    delay(100)
+                    if (decoder.lastPresentedAt != null) {
+                        _faceAFArmed.value = true
+                        publishFaceDetectWanted()
+                    }
+                }
+                faceAFArmJob = null
+            }
+    }
+
+    private fun publishFaceDetectWanted() {
+        val live = _status.value
+        val next =
+            FaceAFPolicy.wantsFaceDetect(
+                focusMode = live.focusMode,
+                armed = _faceAFArmed.value,
+                facePriority = evBeforeFacePriority != null,
+                expoAuto = live.expoMode == CameraCommands.EXPO_AUTO,
+            )
+        if (_wantsFaceDetect.value == next) {
+            if (next) ensureFaceTick()
+            return
+        }
+        _wantsFaceDetect.value = next
+        if (!next) {
+            faceTickJob?.cancel()
+            faceTickJob = null
+            clearFaceAF()
+        } else {
+            ensureFaceTick()
+        }
+    }
+
+    private fun ensureFaceTick() {
+        if (faceTickJob != null) return
+        faceTickJob =
+            scope.launch {
+                while (isActive && _wantsFaceDetect.value) {
+                    delay(50)
+                    tickFaceHold()
+                }
+                faceTickJob = null
+            }
+    }
+
+    private fun clearFaceAF() {
+        faceBox = null
+        sceneFaces = emptyList()
+        lastFaceAt = null
+        lastFaceHitAt = null
+        refreshTrackingHud()
+    }
+
+    fun markBrowsingMedia(browsing: Boolean) {
+        isBrowsingMedia = browsing
+    }
+
+    /** Drop live HEVC while Settings / Media cover the monitor so 4K playback is not fighting the decoder. */
+    fun setOperatorOverlayHeld(held: Boolean) {
+        operatorOverlayHeld = held
     }
 
     fun beginMediaBrowse() {
@@ -1262,162 +1766,469 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setIsoIndex(index: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_ISO_INDEX, "$index", "ISO")) {
-                _status.value = _status.value.copy(isoIndex = index)
-            }
-        }
+        val previous = _status.value.isoIndex
+        _status.value = _status.value.copy(isoIndex = index)
+        fireKind(
+            SwiftCore.CMD_SET_ISO_INDEX,
+            "$index",
+            "ISO",
+            coalesce = true,
+            onFail = {
+                if (_status.value.isoIndex == index) {
+                    _status.value = _status.value.copy(isoIndex = previous)
+                }
+            },
+        )
     }
 
     fun setShutterDenom(denom: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendKind(SwiftCore.CMD_SET_EXPO_MODE, "manual", "Manual expo")
-            if (sendKind(SwiftCore.CMD_SET_SHUTTER, "$denom", "1/$denom")) {
-                _status.value = _status.value.copy(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
-            }
+        if (_status.value.expoMode != CameraCommands.EXPO_MANUAL) {
+            val previousExpo = _status.value.expoMode
+            _status.value = _status.value.copy(expoMode = CameraCommands.EXPO_MANUAL)
+            fireKind(
+                SwiftCore.CMD_SET_EXPO_MODE,
+                "manual",
+                "Manual expo",
+                onFail = {
+                    if (_status.value.expoMode == CameraCommands.EXPO_MANUAL) {
+                        _status.value = _status.value.copy(expoMode = previousExpo)
+                    }
+                },
+            )
         }
+        val previous = _status.value.shutterDenom
+        _status.value = _status.value.copy(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
+        fireKind(
+            SwiftCore.CMD_SET_SHUTTER,
+            "$denom",
+            "1/$denom",
+            coalesce = true,
+            onFail = {
+                if (_status.value.shutterDenom == denom) {
+                    _status.value = _status.value.copy(shutterDenom = previous)
+                }
+            },
+        )
     }
 
-    fun setExpoMode(manual: Boolean) {
-        if (_controlBusy.value) return
-        scope.launch {
-            val extra = if (manual) "manual" else "auto"
-            if (sendKind(SwiftCore.CMD_SET_EXPO_MODE, extra, "Expo")) {
-                _status.value =
-                    _status.value.copy(
-                        expoMode = if (manual) CameraCommands.EXPO_MANUAL else CameraCommands.EXPO_AUTO,
-                    )
-            }
-        }
+    fun setExpoMode(mode: Int) {
+        val extra = CameraCommands.expoWireExtra(mode) ?: return
+        val previous = _status.value.expoMode
+        _status.value = _status.value.copy(expoMode = mode)
+        fireKind(
+            SwiftCore.CMD_SET_EXPO_MODE,
+            extra,
+            "ExpoMode",
+            onFail = {
+                if (_status.value.expoMode == mode) {
+                    _status.value = _status.value.copy(expoMode = previous)
+                }
+            },
+        )
     }
 
     fun setWhiteBalanceAuto() {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_WB_AUTO, null, "WB Auto")) {
-                _status.value = _status.value.copy(wbMode = CameraCommands.WB_AUTO)
-            }
-        }
+        val previous = _status.value
+        _status.value = previous.copy(wbMode = CameraCommands.WB_AUTO, wbKelvin = -1, wbTint = 0)
+        fireKind(
+            SwiftCore.CMD_SET_WB_AUTO,
+            null,
+            "WB Auto",
+            onFail = {
+                val cur = _status.value
+                if (cur.wbMode == CameraCommands.WB_AUTO && cur.wbKelvin == -1) {
+                    _status.value = previous
+                }
+            },
+        )
     }
 
     fun setWhiteBalance(kelvin: Int, tint: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_WB_CUSTOM, "$kelvin\u001f$tint", "WB")) {
-                _status.value =
-                    _status.value.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = kelvin, wbTint = tint)
-            }
-        }
+        val (k, t) = CameraCommands.clampWhiteBalanceCustom(kelvin, tint)
+        val previous = _status.value
+        _status.value = previous.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = k, wbTint = t)
+        fireKind(
+            SwiftCore.CMD_SET_WB_CUSTOM,
+            "$k\u001f$t",
+            "WB ${k}K tint $t",
+            onFail = {
+                val cur = _status.value
+                if (cur.wbMode == CameraCommands.WB_CUSTOM && cur.wbKelvin == k && cur.wbTint == t) {
+                    _status.value = previous
+                }
+            },
+        )
     }
 
     fun setFocusMode(continuous: Boolean) {
-        if (connectedCamera?.model?.supportsFocusMode == false) return
-        if (_controlBusy.value) return
-        scope.launch {
-            val extra = if (continuous) "2" else "1"
-            if (sendKind(SwiftCore.CMD_SET_FOCUS_MODE, extra, "Focus")) {
-                _status.value =
-                    _status.value.copy(
-                        focusMode =
-                            if (continuous) CameraCommands.FOCUS_CONTINUOUS else CameraCommands.FOCUS_SINGLE,
-                    )
-            }
-        }
+        if (!supportsFocusMode) return
+        val next =
+            if (continuous) CameraCommands.FOCUS_CONTINUOUS else CameraCommands.FOCUS_SINGLE
+        val previous = _status.value.focusMode
+        _status.value = _status.value.copy(focusMode = next)
+        fireKind(
+            SwiftCore.CMD_SET_FOCUS_MODE,
+            if (continuous) "2" else "1",
+            "Focus",
+            onFail = {
+                if (_status.value.focusMode == next) {
+                    _status.value = _status.value.copy(focusMode = previous)
+                }
+            },
+        )
     }
 
     fun setFocusTrack(mode: Int) {
-        if (connectedCamera?.model?.supportsFocusMode == false) return
+        if (!supportsFocusMode) return
         val track = FocusTrackMode.fromRaw(mode) ?: return
-        if (_controlBusy.value) return
-        scope.launch {
-            val previous = _status.value.focusTrack
-            lastFocusTrackAt = SystemClock.elapsedRealtime()
-            _status.value = _status.value.copy(focusTrack = mode)
-            val ok = sendKind(SwiftCore.CMD_SET_FOCUS_TRACK, "$mode", "AF-C ${track.label}")
-            if (!ok && _status.value.focusTrack == mode) {
-                _status.value = _status.value.copy(focusTrack = previous)
-            }
-        }
+        val previous = _status.value.focusTrack
+        lastFocusTrackAt = SystemClock.elapsedRealtime()
+        _status.value = _status.value.copy(focusTrack = mode)
+        fireKind(
+            SwiftCore.CMD_SET_FOCUS_TRACK,
+            "$mode",
+            "AF-C ${track.label}",
+            onFail = {
+                if (_status.value.focusTrack == mode) {
+                    _status.value = _status.value.copy(focusTrack = previous)
+                }
+            },
+        )
     }
 
     fun refreshFocusTrack() {
-        if (connectedCamera?.model?.supportsFocusMode == false) return
+        if (!supportsFocusMode) return
         if (_controlBusy.value) return
         scope.launch {
             sendKind(SwiftCore.CMD_GET_FOCUS_TRACK, null, "Focus track GET")
         }
     }
 
-    fun setColorMode(mode: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_COLOR_MODE, "$mode", "Color")) {
-                _status.value = _status.value.copy(colorMode = mode)
-            }
-        }
+    /**
+     * `0x02/0x42` then optional native ISO hop — iOS `CameraSession.setColorMode`.
+     * Optimistic HUD + pin until subscribe matches. Hop only when still on native
+     * and [hopEnabled].
+     */
+    fun setColorMode(
+        mode: Int,
+        hopEnabled: Boolean = OperatorPrefs.nativeISOHopEnabled(appContext),
+    ) {
+        val live = _status.value
+        val family = connectedCamera?.model?.family ?: "pocket"
+        val allowed = CaptureLists.colorWheel(family, live.availableColorModes).map { it.first }
+        if (mode !in allowed) return
+        val from = live.colorMode
+        pinColor(mode)
+        fireKind(
+            SwiftCore.CMD_SET_COLOR_MODE,
+            "$mode",
+            CameraCommands.colorLabel(mode, family),
+            onFail = { colorPin = null },
+        )
+        hopNativeISO(from, mode, hopEnabled)
     }
 
-    fun setResolutionFps(res: Int, fpsIndex: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_VIDEO_FORMAT, "$res\u001f$fpsIndex", "Format")) {
-                _status.value =
-                    _status.value.copy(
-                        resolutionCode = res,
-                        fpsIndex = fpsIndex,
-                        fps = CameraCommands.fpsFromIndex(fpsIndex) ?: _status.value.fps,
-                    )
-            }
+    /**
+     * `0x02/0x18` via Swift `Commands.setVideoFormat`. Optimistic HUD, pin until
+     * `cam_video_param_v2` matches, revert on ACK fail. Unlabeled res/fps do not SET.
+     */
+    fun setVideoFormat(format: VideoFormat): Boolean {
+        val previous = _status.value
+        _status.value =
+            previous.copy(
+                resolutionCode = format.resolution.rawValue,
+                fpsIndex = format.frameRate.rawValue,
+                fps = format.frameRate.fps,
+            )
+        formatPin =
+            FormatPin(
+                expected = format,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
+        val rematch =
+            CaptureLists.rematchShutterDenomAfterFps(
+                usesAngle = OperatorPrefs.shutterUsesAngle(appContext),
+                degrees = OperatorPrefs.shutterAngleDegrees(appContext),
+                previousFps = previous.fps,
+                nextFps = format.frameRate.fps,
+                expoMode = previous.expoMode,
+                currentDenom = previous.shutterDenom,
+                available = previous.availableShutterDenoms,
+            )
+        fireKind(
+            SwiftCore.CMD_SET_VIDEO_FORMAT,
+            "${format.resolution.rawValue}\u001f${format.frameRate.rawValue}",
+            format.chipLabel,
+            onFail = {
+                val live = _status.value
+                if (live.resolutionCode == format.resolution.rawValue &&
+                    live.fpsIndex == format.frameRate.rawValue
+                ) {
+                    _status.value =
+                        live.copy(
+                            resolutionCode = previous.resolutionCode,
+                            fpsIndex = previous.fpsIndex,
+                            fps = previous.fps,
+                        )
+                }
+                formatPin = null
+            },
+        )
+        if (rematch != null) setShutterDenom(rematch)
+        return true
+    }
+
+    fun setResolutionFps(res: Int, fpsIndex: Int): Boolean {
+        val format = VideoFormat.parse(res, fpsIndex) ?: return false
+        return setVideoFormat(format)
+    }
+
+    private fun absorbStaleFormat(incoming: CameraStatus): CameraStatus {
+        val (next, remaining) =
+            VideoFormat.absorbStale(incoming, formatPin, SystemClock.elapsedRealtime())
+        formatPin = remaining
+        return next
+    }
+
+    private fun absorbStaleColor(incoming: CameraStatus): CameraStatus {
+        val (next, remaining) =
+            ColorPin.absorbStale(incoming, colorPin, SystemClock.elapsedRealtime())
+        colorPin = remaining
+        return next
+    }
+
+    private fun pinColor(mode: Int) {
+        _status.value = _status.value.copy(colorMode = mode)
+        colorPin =
+            ColorPin(
+                expected = mode,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
+    }
+
+    /** iOS `hopNativeISO` — fires immediately, does not wait for the color ACK. */
+    private fun hopNativeISO(from: Int, to: Int, hopEnabled: Boolean) {
+        val hop =
+            CameraCommands.nativeIsoHop(from, to, _status.value.isoIndex, hopEnabled) ?: return
+        Log.i(
+            TAG,
+            "iso: native hop $from → $to ${_status.value.isoIndex} → $hop",
+        )
+        setIsoIndex(hop)
+    }
+
+    private fun dropDLog2ForZoom(factor: Double) {
+        val next = CamFov.colorModeForZoom(factor, _status.value.colorMode)
+        if (next == null) {
+            restoreDLog2IfNeeded(factor)
+            return
         }
+        sendZoomColorOnce(next)
+    }
+
+    private fun sendZoomColorOnce(next: Int) {
+        if (teleColorSent) return
+        teleColorSent = true
+        restoreDLog2OnWide = true
+        val from = _status.value.colorMode
+        pinColor(next)
+        _controlNote.value = "D-Log — D-Log2 cannot zoom"
+        fireKind(
+            SwiftCore.CMD_SET_COLOR_MODE,
+            "$next",
+            "D-Log (zoom)",
+            onFail = {
+                colorPin = null
+                restoreDLog2OnWide = false
+                teleColorSent = false
+            },
+        )
+        hopNativeISO(from, next, OperatorPrefs.nativeISOHopEnabled(appContext))
+        Log.i(TAG, "zoom: D-Log2 → D-Log (from $from)")
+    }
+
+    private fun restoreDLog2IfNeeded(factor: Double) {
+        if (!restoreDLog2OnWide || !CamFov.shouldRestoreDLog2(factor)) return
+        restoreDLog2OnWide = false
+        teleColorSent = false
+        val from = _status.value.colorMode
+        pinColor(CameraCommands.COLOR_DLOG2)
+        fireKind(
+            SwiftCore.CMD_SET_COLOR_MODE,
+            "${CameraCommands.COLOR_DLOG2}",
+            "D-Log2",
+            onFail = { colorPin = null },
+            onSettle = { ok -> if (ok) _controlNote.value = "Zoom 1× · D-Log2" },
+        )
+        hopNativeISO(from, CameraCommands.COLOR_DLOG2, OperatorPrefs.nativeISOHopEnabled(appContext))
+        Log.i(TAG, "zoom: restore D-Log2 on 1× (from $from)")
+    }
+
+    /** iOS `CameraSetMailbox.zoomCoalesceHold` — 20 Hz latest-wins slider. */
+    private fun fireZoom(payload: ByteArray, announce: Boolean, name: String) {
+        val dl = datalink
+        if (dl == null) {
+            _controlNote.value = "Zoom not available"
+            return
+        }
+        if (announce) {
+            pendingZoomPayload = null
+            zoomFlushJob?.cancel()
+            zoomFlushJob = null
+            dl.sendDuml(0x02, CameraCommands.CMD_ZOOM, payload)
+            _controlNote.value = name
+            lastZoomWireAt = SystemClock.elapsedRealtime()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val wait = CamFov.SLIDER_COALESCE_MS - (now - lastZoomWireAt)
+        if (wait <= 0L) {
+            pendingZoomPayload = null
+            zoomFlushJob?.cancel()
+            zoomFlushJob = null
+            lastZoomWireAt = now
+            dl.sendDuml(0x02, CameraCommands.CMD_ZOOM, payload)
+            return
+        }
+        pendingZoomPayload = payload
+        if (zoomFlushJob != null) return
+        zoomFlushJob =
+            scope.launch {
+                delay(wait.coerceAtLeast(1L))
+                val bytes = pendingZoomPayload
+                pendingZoomPayload = null
+                zoomFlushJob = null
+                if (bytes != null) {
+                    datalink?.sendDuml(0x02, CameraCommands.CMD_ZOOM, bytes)
+                    lastZoomWireAt = SystemClock.elapsedRealtime()
+                }
+            }
+    }
+
+    private fun flushPendingZoom() {
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        val bytes = pendingZoomPayload ?: return
+        pendingZoomPayload = null
+        datalink?.sendDuml(0x02, CameraCommands.CMD_ZOOM, bytes)
+        lastZoomWireAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun markZoomStop(factor: Double) {
+        zoomStop = factor
+        zoomStopTouched = true
+    }
+
+    private fun refreshZoomHud() {
+        _zoomReadout.value =
+            CamFov.readout(
+                live = _status.value.zoomFactor,
+                preview = zoomPinchPreview,
+                fallback = zoomStop,
+                optimistic = zoomOptimistic,
+            )
+        _zoomPinching.value = zoomPinchPreview != null
+    }
+
+    private fun resetZoomHud() {
+        zoomStop = 1.0
+        zoomStopTouched = false
+        zoomPinchPreview = null
+        zoomOptimistic = null
+        zoomPinchAnchor = 1.0
+        lastPinchLens = null
+        lastPinchLogTenths = null
+        refreshZoomHud()
+    }
+
+    private fun noteZoomIfChanged(prev: CameraStatus, incoming: CameraStatus) {
+        if (incoming.zoomFactorRaw == prev.zoomFactorRaw && incoming.zoomLens == prev.zoomLens) {
+            return
+        }
+        val factor = incoming.zoomFactor
+        val optimistic = zoomOptimistic
+        if (factor != null && optimistic != null && CamFov.matches(factor, optimistic)) {
+            zoomOptimistic = null
+        }
+        if (!zoomStopTouched && factor != null) {
+            zoomStop =
+                when {
+                    abs(factor - CamFov.MAX_FACTOR) < 0.15 -> 12.0
+                    abs(factor - 6) < 0.2 -> 6.0
+                    abs(factor - 3) < 0.2 -> 3.0
+                    factor < 2.5 -> 1.0
+                    else -> zoomStop
+                }
+        }
+        refreshZoomHud()
     }
 
     fun setAudioChannel(value: Int) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_AUDIO_CHANNEL, "$value", "Audio")) {
-                _status.value = _status.value.copy(audioChannel = value)
+        pinAudio(channel = value)
+        val previous = _status.value.audioChannel
+        _status.value = _status.value.copy(audioChannel = value)
+        val label = CameraCommands.audioChannelLabel(value) ?: value.toString()
+        enqueueAudio {
+            val ok = sendKind(SwiftCore.CMD_SET_AUDIO_CHANNEL, "$value", "Audio $label")
+            if (!ok) {
+                if (_status.value.audioChannel == value) {
+                    _status.value = _status.value.copy(audioChannel = previous)
+                }
+                clearAudioPin(channel = true)
             }
         }
     }
 
     fun setVocalBoost(on: Boolean) {
-        if (_controlBusy.value) return
-        scope.launch {
-            if (sendKind(SwiftCore.CMD_SET_VOCAL_BOOST, if (on) "1" else "0", "Vocal Boost")) {
-                _status.value = _status.value.copy(vocalBoost = if (on) 1 else 0)
+        val boost = if (on) 1 else 0
+        pinAudio(vocal = boost)
+        val previous = _status.value.vocalBoost
+        _status.value = _status.value.copy(vocalBoost = boost)
+        val label = if (on) "On" else "Off"
+        enqueueAudio {
+            val ok = sendKind(SwiftCore.CMD_SET_VOCAL_BOOST, if (on) "1" else "0", "Vocal $label")
+            if (!ok) {
+                if (_status.value.vocalBoost == boost) {
+                    _status.value = _status.value.copy(vocalBoost = previous)
+                }
+                clearAudioPin(vocal = true)
             }
         }
     }
 
     fun setWindNr(on: Boolean) {
-        if (_controlBusy.value) return
-        scope.launch { patchAudioDsp(SwiftCore.CMD_AUDIO_DSP_PATCH_WIND, if (on) "1" else "0", "Wind NR") }
-    }
-
-    fun setDirectionalAudio(mode: Int) {
-        if (_controlBusy.value) return
-        val extra =
-            when (mode) {
-                1 -> "1"
-                2 -> "2"
-                else -> "0"
-            }
-        scope.launch { patchAudioDsp(SwiftCore.CMD_AUDIO_DSP_PATCH_DIRECTIONAL, extra, "Directional") }
-    }
-
-    fun refreshAudio() {
-        if (_controlBusy.value) return
-        scope.launch {
-            sendKind(SwiftCore.CMD_GET_AUDIO_CHANNEL, null, "Audio GET")
-            sendKind(SwiftCore.CMD_GET_VOCAL_BOOST, null, "Vocal GET")
-            sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "DSP GET")
+        val value = if (on) 1 else 0
+        pinAudio(wind = value)
+        _status.value = _status.value.copy(windNr = value)
+        enqueueAudio {
+            patchAudioDsp("Wind ${if (on) "On" else "Off"}") { CameraCommands.patchWind(it, on) }
         }
     }
 
-    fun updateGimbalStick(x: Float, y: Float) {
-        pendingGimbalAxes = CameraCommands.gimbalAxes(x, y)
+    fun setDirectionalAudio(mode: Int) {
+        pinAudio(directional = mode)
+        _status.value = _status.value.copy(directionalAudio = mode, windNr = 1)
+        val label = CameraCommands.audioDirLabel(mode) ?: mode.toString()
+        enqueueAudio {
+            patchAudioDsp("Dir $label") { CameraCommands.patchDirectional(it, mode) }
+        }
+    }
+
+    fun refreshAudio() {
+        enqueueAudio {
+            sendKind(SwiftCore.CMD_GET_AUDIO_CHANNEL, null, "Audio ch GET")
+            sendKind(SwiftCore.CMD_GET_VOCAL_BOOST, null, "Vocal GET")
+            sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
+        }
+    }
+
+    fun updateGimbalStick(
+        x: Float,
+        y: Float,
+        sensitivity: Int = CameraCommands.GIMBAL_STICK_DEFAULT_SENSITIVITY,
+    ) {
+        lastGimbalStickAt = SystemClock.elapsedRealtime()
+        pendingGimbalAxes = encodedGimbalAxes(x, y, sensitivity)
         if (gimbalStickJob != null) return
         datalink?.sendGimbalStick(pendingGimbalAxes.first, pendingGimbalAxes.second)
         gimbalStickJob =
@@ -1444,33 +2255,278 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
     }
 
+    /** Prefer the Swift `GimbalStick.encode` wire; Kotlin copies the same gain/deadzone. */
+    private fun encodedGimbalAxes(x: Float, y: Float, sensitivity: Int): Pair<Int, Int> {
+        if (SwiftCore.isAvailable) {
+            val packed = SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), sensitivity)
+            if (packed != null) {
+                val parts = packed.split(',')
+                if (parts.size == 2) {
+                    val axis0 = parts[0].toIntOrNull()
+                    val axis1 = parts[1].toIntOrNull()
+                    if (axis0 != null && axis1 != null) return axis0 to axis1
+                }
+            }
+        }
+        return CameraCommands.gimbalAxes(x, y, sensitivity = sensitivity)
+    }
+
     fun tapFocus(x: Float, y: Float) {
+        markFocus(x, y)
+    }
+
+    private fun markFocus(x: Float, y: Float) {
+        if (!supportsTapFocus) return
+        cancelTracking(sendClear = isTrackingActive)
+        lastTapFocusAt = SystemClock.elapsedRealtime()
+        faceBox = null
         val nx = x.coerceIn(0f, 1f)
         val ny = y.coerceIn(0f, 1f)
         _focusPoint.value = nx to ny
-        if (_controlBusy.value) return
+        refreshTrackingHud()
+        val dl = datalink ?: return
+        dl.sendDuml(0x02, 0x22, byteArrayOf(0x02))
         val xy = "$nx\u001f$ny"
         scope.launch {
-            // mimo-tap-focus-20260818: 0x22 02, 0x30 xy, 0x68 08, 0x32 region.
-            // Glamour is 0x8E pid 0x0039, not 0x68.
-            sendKind(SwiftCore.CMD_TAP_FOCUS_PREPARE, null, "AE spot")
-            sendKind(SwiftCore.CMD_TAP_FOCUS_POINT, xy, "Focus region")
-            sendKind(SwiftCore.CMD_TAP_FOCUS_HINT, null, "AE hint")
-            sendKind(SwiftCore.CMD_TAP_FOCUS_COMMIT, xy, "Focus")
+            val focused =
+                sendKind(SwiftCore.CMD_TAP_FOCUS_POINT, xy, "Focus region", timeoutMs = 800)
+            if (!focused) return@launch
+            sendKind(SwiftCore.CMD_TAP_FOCUS_HINT, null, "AE hint", timeoutMs = 800)
+            sendKind(SwiftCore.CMD_TAP_FOCUS_COMMIT, xy, "Focus", timeoutMs = 800)
         }
     }
 
-    private suspend fun patchAudioDsp(kind: Int, extra: String, name: String) {
-        var blob = _status.value.audioDspBlob.ifEmpty { null }
-        if (blob == null) {
-            sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "DSP GET")
-            blob = _status.value.audioDspBlob.ifEmpty { audioDspBlob?.joinToString("") { "%02x".format(it.toInt() and 0xFF) } }
+    private fun noteFrameTooSmall() {
+        searchBox = null
+        subjectBox = null
+        isTracking = false
+        refreshTrackingHud()
+        _controlNote.value = "Frame Too Small"
+        scope.launch {
+            delay(2_000)
+            if (_controlNote.value == "Frame Too Small") _controlNote.value = null
         }
-        if (blob.isNullOrEmpty()) {
-            _controlNote.value = "$name: no audio DSP blob yet"
+    }
+
+    private fun cancelTracking(sendClear: Boolean) {
+        val had = isTrackingActive
+        stopTrackingPoll()
+        searchBox = null
+        subjectBox = null
+        isTracking = false
+        trackingSawLock = false
+        if (sendClear) lastOperatorClearAt = SystemClock.elapsedRealtime()
+        lastLiveTrackingAt = null
+        lastSubjectPushAt = null
+        refreshTrackingHud()
+        if (!sendClear || !had || datalink == null) return
+        fireKind(SwiftCore.CMD_CLEAR_TRACKING_BOX, null, "Track clear")
+    }
+
+    private fun beginTrackingPoll() {
+        stopTrackingPoll()
+        trackingPollJob =
+            scope.launch {
+                var idleTicks = 0
+                while (isActive && isTrackingActive) {
+                    datalink?.sendDuml(0x02, CameraCommands.CMD_TRACK_POLL, CameraCommands.pollTracking())
+                    delay(500)
+                    val now = SystemClock.elapsedRealtime()
+                    if (trackingSawLock &&
+                        TrackingClearPolicy.shouldDropForSilence(lastSubjectPushAt, now)
+                    ) {
+                        clearLocalTracking()
+                        return@launch
+                    }
+                    if (isTracking) {
+                        idleTicks = 0
+                    } else if (trackingSawLock) {
+                        clearLocalTracking()
+                        return@launch
+                    } else {
+                        idleTicks += 1
+                        if (idleTicks >= 6) {
+                            clearLocalTracking()
+                            return@launch
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun stopTrackingPoll() {
+        trackingPollJob?.cancel()
+        trackingPollJob = null
+    }
+
+    private fun clearLocalTracking() {
+        searchBox = null
+        subjectBox = null
+        isTracking = false
+        lastLiveTrackingAt = null
+        lastSubjectPushAt = null
+        stopTrackingPoll()
+        refreshTrackingHud()
+    }
+
+    private fun applyLiveTrackingPush(payload: ByteArray) {
+        val now = SystemClock.elapsedRealtime()
+        if (!TrackingClearPolicy.shouldApplyLivePush(lastOperatorClearAt, now)) return
+        val box = TrackingBox.parseLivePush(payload) ?: return
+        lastSubjectPushAt = now
+        subjectBox = smoothedSubject(box)
+        isTracking = true
+        trackingSawLock = true
+        searchBox = null
+        adoptCameraFocus(box.centerX, box.centerY, fromTrackingBox = true)
+        refreshTrackingHud()
+        if (trackingPollJob == null) beginTrackingPoll()
+    }
+
+    private fun applyTrackingPoll(payload: ByteArray) {
+        val now = SystemClock.elapsedRealtime()
+        if (!TrackingClearPolicy.shouldApplyLivePush(lastOperatorClearAt, now)) return
+        when (val poll = TrackingPoll.parse(payload)) {
+            is TrackingPoll.Locked -> {
+                isTracking = true
+                trackingSawLock = true
+                val cameraBox = poll.box
+                if (cameraBox != null) {
+                    subjectBox = smoothedSubject(cameraBox)
+                } else if (subjectBox == null) {
+                    searchBox?.let { subjectBox = TrackingBox.subject(it) }
+                }
+                searchBox = null
+                refreshTrackingHud()
+            }
+            TrackingPoll.Idle -> {
+                isTracking = false
+                if (trackingSawLock) clearLocalTracking()
+                else refreshTrackingHud()
+            }
+            null -> Unit
+        }
+    }
+
+    private fun smoothedSubject(toward: TrackingBox): TrackingBox {
+        val now = SystemClock.elapsedRealtime()
+        val dt = lastLiveTrackingAt?.let { (now - it) / 1000.0 } ?: Double.POSITIVE_INFINITY
+        lastLiveTrackingAt = now
+        return TrackingBoxSmoothing.blend(subjectBox, toward, dt)
+    }
+
+    private fun adoptCameraFocus(x: Double, y: Double, fromTrackingBox: Boolean) {
+        val cur = _focusPoint.value
+        if (!CameraFocusPolicy.shouldAdopt(cur.first.toDouble(), cur.second.toDouble(), x, y)) return
+        _focusPoint.value = x.toFloat() to y.toFloat()
+        if (fromTrackingBox) return
+        lastTapFocusAt = SystemClock.elapsedRealtime()
+        faceBox = null
+    }
+
+    private fun refreshTrackingHud() {
+        val now = SystemClock.elapsedRealtime()
+        val sinceTap = lastTapFocusAt?.let { (now - it) / 1000.0 }
+        val overlay =
+            if (FaceAFPolicy.shouldHoldTapBox(sinceTap)) {
+                val base = FocusOverlayPolicy.resolve(isTracking, searchBox, subjectBox)
+                when (base) {
+                    is FocusOverlay.Search, is FocusOverlay.Subject -> base
+                    is FocusOverlay.Focus, is FocusOverlay.Face -> FocusOverlay.Focus
+                }
+            } else {
+                FaceAFPolicy.resolve(
+                    _status.value.focusMode,
+                    isTracking,
+                    searchBox,
+                    subjectBox,
+                    faceBox,
+                )
+            }
+        val hiding = (overlay as? FocusOverlay.Face)?.box
+        val occluder =
+            when (overlay) {
+                is FocusOverlay.Subject -> overlay.box
+                is FocusOverlay.Search -> overlay.box
+                else -> subjectBox
+            }
+        _trackingHud.value =
+            TrackingHud(
+                overlay = overlay,
+                sceneFaces = sceneFaces,
+                dimmedFaces = SceneFacePolicy.dimmed(sceneFaces, hiding, occluder),
+                isTracking = isTrackingActive,
+            )
+    }
+
+    /** GET `0xA0` blob, patch `@2`, SET `0x9F`. Never invent the blob. */
+    private suspend fun patchAudioDsp(name: String, patch: (ByteArray) -> ByteArray) {
+        val got = sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
+        val blob = CameraCommands.audioDspBytes(_status.value.audioDspBlob) ?: audioDspBlob
+        if (!got || blob == null || blob.size <= 2) {
+            _controlNote.value = "$name: no DSP blob"
             return
         }
-        sendKind(kind, "$blob\u001f$extra", name)
+        val next = patch(blob)
+        val previousBlob = _status.value.audioDspBlob
+        val previousAt2 = _status.value.audioDspAt2
+        val previousWind = _status.value.windNr
+        val previousDir = _status.value.directionalAudio
+        _status.value = _status.value.applyingAudioBlob(next)
+        val ok = sendKind(SwiftCore.CMD_AUDIO_DSP_SET, CameraCommands.audioDspHex(next), name)
+        if (!ok) {
+            _status.value =
+                _status.value.copy(
+                    audioDspBlob = previousBlob,
+                    audioDspAt2 = previousAt2,
+                    windNr = previousWind,
+                    directionalAudio = previousDir,
+                )
+            clearAudioPin(wind = true, directional = true)
+        }
+    }
+
+    private fun pinAudio(
+        channel: Int? = null,
+        vocal: Int? = null,
+        wind: Int? = null,
+        directional: Int? = null,
+    ) {
+        val previous = audioPin
+        audioPin =
+            AudioPin(
+                channel = channel ?: previous?.channel,
+                vocal = vocal ?: previous?.vocal,
+                wind = wind ?: previous?.wind,
+                directional = directional ?: previous?.directional,
+                deadlineElapsedMs = SystemClock.elapsedRealtime() + AudioPin.TTL_MS,
+            )
+    }
+
+    private fun clearAudioPin(
+        channel: Boolean = false,
+        vocal: Boolean = false,
+        wind: Boolean = false,
+        directional: Boolean = false,
+    ) {
+        val pin = audioPin ?: return
+        val next =
+            pin.copy(
+                channel = if (channel) null else pin.channel,
+                vocal = if (vocal) null else pin.vocal,
+                wind = if (wind) null else pin.wind,
+                directional = if (directional) null else pin.directional,
+            )
+        audioPin = next.takeUnless { it.isEmpty() }
+    }
+
+    private fun enqueueAudio(work: suspend () -> Unit) {
+        val previous = audioTail
+        audioTail =
+            scope.launch {
+                previous?.join()
+                work()
+            }
     }
 
     private suspend fun sendDumlWait(
@@ -1486,7 +2542,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _controlNote.value = "not live"
             return false
         }
-        _controlBusy.value = true
         _controlNote.value = null
         val key = opcodeKey(set, cmd)
         pairingHold.remove(key)
@@ -1499,76 +2554,167 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                             waiters[key] = waiter
                             cont.invokeOnCancellation { waiters.remove(key) }
                             dl.sendDuml(set, cmd, payload, flags, receiver)
+                            pairingHold.remove(key)?.let { held -> waiter.resume(held) }
                         }
                     }
-                } catch (_: Exception) {
-                    _controlNote.value = "$name timed out"
+                } catch (_: TimeoutCancellationException) {
+                    ControlHud.timeoutNote(name, announce = false)?.let { _controlNote.value = it }
+                    Log.i(TAG, "control: timeout $name — waiter saw no ACK")
                     return false
                 }
-            val ok = reply.payload.isEmpty() || reply.payload[0] == 0.toByte()
-            if (!ok) {
-                _controlNote.value = "$name: camera reply 0x%02X".format(reply.payload[0].toInt() and 0xFF)
+            val parsed = CameraReply.parse(reply.payload)
+            if (!parsed.isSuccess) {
+                _controlNote.value = "$name: ${parsed.message}"
             }
-            return ok
+            return parsed.isSuccess
         } finally {
             waiters.remove(key)
-            _controlBusy.value = false
         }
     }
 
     private fun opcodeKey(set: Int, cmd: Int): Int = ((set and 0xFF) shl 8) or (cmd and 0xFF)
 
-    private suspend fun sendKind(kind: Int, extra: String?, name: String): Boolean {
+    /**
+     * iOS `fireCamera`: latest-wins SET mailbox. Do not block [controlBusy], do
+     * not toast a timeout — subscribe/pin is the HUD, a missed ACK is not a
+     * revert. Retransmit at 300 ms, settle at 2 s.
+     */
+    private fun fireKind(
+        kind: Int,
+        extra: String?,
+        name: String,
+        coalesce: Boolean = false,
+        retransmits: Boolean = true,
+        onFail: (() -> Unit)? = null,
+        onSettle: ((Boolean) -> Unit)? = null,
+    ) {
+        val dl = datalink
+        if (dl == null) {
+            _controlNote.value = "not live"
+            onFail?.invoke()
+            onSettle?.invoke(false)
+            return
+        }
+        _controlNote.value = null
+        val key = SwiftCore.waitKey(kind)
+        pairingHold.remove(key)
+        val send =
+            InflightSend(
+                kind = kind,
+                extra = extra,
+                name = name,
+                onFail = onFail,
+                onSettle = onSettle,
+                retransmits = retransmits,
+            )
+        if (coalesce && inflight.containsKey(key)) {
+            inflightPending[key] = send
+            return
+        }
+        launchInflight(key, send)
+    }
+
+    private fun launchInflight(key: Int, send: InflightSend) {
+        inflight[key] = send
+        inflightPending.remove(key)
+        transmit(send)
+        if (send.retransmits) {
+            scope.launch {
+                delay(300)
+                if (inflight[key] === send && !send.retransmitted) {
+                    send.retransmitted = true
+                    transmit(send)
+                }
+            }
+        }
+        scope.launch {
+            delay(2_000)
+            if (inflight[key] === send) settleInflightTimeout(key, send)
+        }
+    }
+
+    private fun transmit(send: InflightSend) {
+        val dl = datalink ?: return
+        pairingHold.remove(SwiftCore.waitKey(send.kind))
+        try {
+            dl.sendCommand(send.kind, send.extra)
+            Log.i(TAG, "control: send ${send.name}")
+        } catch (e: Exception) {
+            Log.w(TAG, "control: send ${send.name} failed", e)
+        }
+    }
+
+    private fun finishInflight(send: InflightSend, reply: DumlFrame) {
+        val key = reply.key
+        if (inflight[key] !== send) return
+        inflight.remove(key)
+        val parsed = CameraReply.parse(reply.payload)
+        val ok = parsed.isSuccess
+        if (!ok) {
+            send.onFail?.invoke()
+            _controlNote.value = "${send.name}: ${parsed.message}"
+        }
+        send.onSettle?.invoke(ok)
+        Log.i(TAG, "control: ${send.name} ack=${if (ok) "ok" else parsed.message}")
+        inflightPending.remove(key)?.let { launchInflight(key, it) }
+    }
+
+    private fun settleInflightTimeout(key: Int, send: InflightSend) {
+        if (inflight[key] !== send) return
+        inflight.remove(key)
+        // iOS `ControlHud.timeoutNote(announce: false)` — never toast a SET timeout.
+        Log.i(TAG, "control: ${send.name} — SET timeout, leave HUD")
+        send.onSettle?.invoke(true)
+        inflightPending.remove(key)?.let { launchInflight(key, it) }
+    }
+
+    /**
+     * iOS `requestCamera`: true GET/SET round-trip (audio blobs, tap-focus burst).
+     * Never [controlBusy], never toast a timeout.
+     */
+    private suspend fun sendKind(
+        kind: Int,
+        extra: String?,
+        name: String,
+        timeoutMs: Long = 3_000,
+    ): Boolean {
         val dl = datalink
         if (dl == null) {
             _controlNote.value = "not live"
             return false
         }
-        _controlBusy.value = true
         _controlNote.value = null
         val key = SwiftCore.waitKey(kind)
         pairingHold.remove(key)
         try {
             val reply =
                 try {
-                    withTimeout(3_000) {
+                    withTimeout(timeoutMs) {
                         suspendCancellableCoroutine<DumlFrame> { cont ->
                             val waiter = FrameWaiter(setOf(key), cont)
                             waiters[key] = waiter
                             cont.invokeOnCancellation { waiters.remove(key) }
                             dl.sendCommand(kind, extra)
+                            pairingHold.remove(key)?.let { held -> waiter.resume(held) }
                         }
                     }
-                } catch (_: Exception) {
-                    if (name == "Record" || name == "Stop") {
-                        delay(900)
-                        val rec = _status.value.isRecording
-                        if (name == "Record" && rec) return true
-                        if (name == "Stop" && !rec) return true
-                    }
-                    _controlNote.value = "$name timed out"
+                } catch (_: TimeoutCancellationException) {
+                    ControlHud.timeoutNote(name, announce = false)?.let { _controlNote.value = it }
+                    Log.i(TAG, "control: timeout $name — waiter saw no ACK")
                     return false
                 }
-            val ok = reply.payload.isEmpty() || reply.payload[0] == 0.toByte()
-            if (!ok) {
-                _controlNote.value = "$name: camera reply 0x%02X".format(reply.payload[0].toInt() and 0xFF)
+            val parsed = CameraReply.parse(reply.payload)
+            if (!parsed.isSuccess) {
+                _controlNote.value = "$name: ${parsed.message}"
             }
-            return ok
+            return parsed.isSuccess
         } finally {
             waiters.remove(key)
-            _controlBusy.value = false
         }
     }
 
     private fun shouldHold(frame: DumlFrame): Boolean =
-        when (frame.key) {
-            0x0745, 0x0746, 0x0707, 0x070E, 0x5310 -> true
-            0x0201, 0x0202, 0x0209, 0x020C, 0x021E, 0x0222, 0x0224, 0x0228, 0x022A, 0x022C,
-            0x0218, 0x022E, 0x0230, 0x0232, 0x0242, 0x028E, 0x029F, 0x02A0,
-            0x02A5, 0x02A6, 0x02B8, 0x02BF, 0x044C, 0x0026, 0x0028, 0x09A8,
-            -> true
-            else -> false
-        }
+        DumlHold.shouldHoldReply(frame.cmdSet, frame.cmdId)
 
     private suspend fun readWifiString(name: String, set: Int, cmd: Int, send: () -> Unit): String {
         val deadline = SystemClock.elapsedRealtime() + 30_000
@@ -1590,6 +2736,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         error(last)
     }
+
+    private class InflightSend(
+        val kind: Int,
+        val extra: String?,
+        val name: String,
+        val onFail: (() -> Unit)?,
+        val onSettle: ((Boolean) -> Unit)?,
+        val retransmits: Boolean,
+        var retransmitted: Boolean = false,
+    )
 
     private class FrameWaiter(
         val keys: Set<Int>,
@@ -1826,6 +2982,23 @@ internal object LiveViewEnablePolicy {
         val age = videoAgeMs ?: return false
         return age < STALL_MS
     }
+
+    /** Pocket: `0x02/0x68` `08` immediately before `0x09/0xa8`. Not Nano. */
+    fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean = !usesNanoLiveViewGate
+
+    /** `0x02/0x0c` is gallery enter/exit — not live-start. Matches iOS / handbook. */
+    fun shouldExitPlaybackBeforeLiveEnable(inPlayback: Boolean): Boolean = inPlayback
+
+    fun shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: Boolean): Boolean = holdsMonitor
+
+    fun shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Boolean): Boolean = !hasPicture
+
+    /**
+     * Mimo / iOS: arm pktType 0x02 ingest on the enable write. A DUML ACK wait
+     * (Android used 200 ms) drops the 25–167 ms VPS and the HUD never leaves
+     * WAITING FOR LIVE VIEW.
+     */
+    fun shouldWaitForLiveViewAckBeforeArm(): Boolean = false
 
     fun shouldKeepaliveRebuildUDP(
         flowNeedsRebuild: Boolean,

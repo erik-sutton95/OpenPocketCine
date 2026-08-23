@@ -16,6 +16,10 @@ indent_size = 2
 [*.{kt,kts,java,gradle,swift}]
 indent_size = 4
 
+# C / GLSL hang continuation lines on the parameter list, not a 2-space grid.
+[*.{c,h,cc,cpp,hpp,vert,frag,comp,glsl,cmake}]
+indent_size = unset
+
 # Recipe bodies are 4-space indented, but bash continuation lines inside recipes
 # intentionally hang at +2 — don't enforce a single indent size.
 [{justfile,*.just}]

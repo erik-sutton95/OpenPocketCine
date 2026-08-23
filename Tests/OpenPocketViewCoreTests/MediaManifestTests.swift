@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct MediaManifestTests {
@@ -25,7 +26,7 @@ import Testing
         let first = files[0]
         #expect(first.path == "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4")
         #expect(first.thumbPath == "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr")
-        #expect(first.handle == 0x40100880)
+        #expect(first.handle == 0x4010_0880)
         #expect(first.durationSeconds == 209)
         #expect(first.fps == 25)
         #expect(first.resolution == "3840x2160")
@@ -35,7 +36,7 @@ import Testing
         let second = files[1]
         #expect(second.filename == "DJI_20260814122657_0033_D.MP4")
         #expect(second.thumbPath.hasSuffix("DJI_20260814122657_0033_D.scr"))
-        #expect(second.handle == 0x40100840)
+        #expect(second.handle == 0x4010_0840)
         #expect(second.durationSeconds == 1551)
     }
 
@@ -44,7 +45,7 @@ import Testing
         let withCmd = files.filter { $0.cmdHandle != 0 }
         #expect(withCmd.count == 34)
         // Nano internal: base 0x40100000, step 0x40. File 0034 → 0x40100000 + 34*0x40 = 0x40100880.
-        #expect(files[0].cmdHandle == 0x40100880)
+        #expect(files[0].cmdHandle == 0x4010_0880)
         #expect(files[0].cmdHandle == files[0].handle)
         let steps = zip(files.dropLast(), files.dropFirst()).map { $0.handle &- $1.handle }
         #expect(steps.allSatisfy { $0 == 0x40 })
@@ -56,9 +57,13 @@ import Testing
         let storage = MediaHTTP.storageGuess(handle: file.handle, singleSdStorage: false)
         #expect(storage == 1)
         let thumb = MediaHTTP.pathURL(storage: storage, path: file.thumbPath)
-        #expect(thumb?.absoluteString == "http://192.168.2.1/v2?storage=1&path=MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr")
+        #expect(
+            thumb?.absoluteString
+                == "http://192.168.2.1/v2?storage=1&path=MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr"
+        )
         let original = MediaHTTP.pathURL(storage: storage, path: file.path)
-        #expect(original?.absoluteString.contains("DCIM/DJI_001/DJI_20260814125250_0034_D.MP4") == true)
+        #expect(
+            original?.absoluteString.contains("DCIM/DJI_001/DJI_20260814125250_0034_D.MP4") == true)
         #expect(MediaHTTP.previewPaths(file).contains { $0.hasSuffix(".LRF") })
         let play = MediaHTTP.playbackCandidates(file: file, firstStorage: 1)
         #expect(play.map(\.storage) == [1, 0, 1, 0])
@@ -67,6 +72,12 @@ import Testing
         #expect(play.last?.path.hasSuffix(".MP4") == true)
         #expect(MediaHTTP.isProxyPath(play[0].path))
         #expect(!MediaHTTP.isProxyPath(file.path))
+        #expect(MediaHTTP.deliveryPath(file) == file.path)
+        #expect(!MediaHTTP.isProxyPath(MediaHTTP.deliveryPath(file)))
+        #expect(MediaHTTP.previewPaths(file).first != MediaHTTP.deliveryPath(file))
+        #expect(MediaHTTP.proxyPaths(file).allSatisfy { MediaHTTP.isProxyPath($0) })
+        #expect(!MediaHTTP.proxyPaths(file).contains(file.path))
+        #expect(!MediaHTTP.proxyPaths(file).isEmpty)
         #expect(MediaHTTP.playbackMIMEType(for: play[0].path) == "video/mp4")
         #expect(MediaHTTP.playbackMIMEType(for: file.path) == "video/mp4")
         #expect(MediaHTTP.playbackCacheFileName(play[0].path).hasSuffix(".mp4"))
@@ -80,7 +91,8 @@ import Testing
         #expect(newest[4] == 1)
         #expect(Array(newest[10...13]) == [0x01, 0x00, 0x00, 0x00])
         #expect(newest[14] == 0x2D)
-        let onboard = MediaListCommand.listPayload(counter: 2, cursor: MediaListCommand.newestInternal)
+        let onboard = MediaListCommand.listPayload(
+            counter: 2, cursor: MediaListCommand.newestInternal)
         #expect(onboard[4] == 2)
         #expect(Array(onboard[10...13]) == [0x01, 0x00, 0x00, 0x40])
         #expect(Commands.mediaListTrigger().payload == MediaListCommand.triggerPayload)
@@ -90,26 +102,28 @@ import Testing
 
     @Test func deleteAndFavoritePayloadsMatchCapture() {
         // Osmosis: handle 0x40104480, first delete of a session (counter 1).
-        let del = Commands.deleteMedia(handle: 0x40104480, counter: 1)
+        let del = Commands.deleteMedia(handle: 0x4010_4480, counter: 1)
         #expect(del.cmdSet == 0x00)
         #expect(del.cmdId == 0x28)
-        #expect(del.payload == [
-            0x01,
-            0x80, 0x44, 0x10, 0x40,
-            0x01, 0x00, 0x00, 0x00,
-            0x00,
-            0x01, 0x00, 0x00, 0x00,
-            0x01, 0x01, 0x00, 0x00,
-        ])
-        let fav = Commands.setMediaFavorite(handle: 0x40104040, on: true, counter: 1)
+        #expect(
+            del.payload == [
+                0x01,
+                0x80, 0x44, 0x10, 0x40,
+                0x01, 0x00, 0x00, 0x00,
+                0x00,
+                0x01, 0x00, 0x00, 0x00,
+                0x01, 0x01, 0x00, 0x00,
+            ])
+        let fav = Commands.setMediaFavorite(handle: 0x4010_4040, on: true, counter: 1)
         #expect(fav.cmdSet == 0x02)
         #expect(fav.cmdId == 0xBF)
-        #expect(fav.payload == [
-            0x01, 0x01,
-            0x40, 0x40, 0x10, 0x40,
-            0x01, 0x00, 0x00, 0x00,
-            0x00, 0x01, 0x00, 0x00, 0x00,
-        ])
+        #expect(
+            fav.payload == [
+                0x01, 0x01,
+                0x40, 0x40, 0x10, 0x40,
+                0x01, 0x00, 0x00, 0x00,
+                0x00, 0x01, 0x00, 0x00, 0x00,
+            ])
     }
 
     @Test func chunkAssemblerStripsSubheader() {
@@ -122,10 +136,11 @@ import Testing
         let accepted = assembler.ingest(frame)
         #expect(accepted)
         #expect(assembler.assembled(counter: 2) == [0xDE, 0xAD])
-        let ended = assembler.ingest(Duml.Frame(
-            sender: 0, receiver: 0, seq: 0, flags: 0,
-            cmdSet: 0x00, cmdId: 0x27,
-            payload: [0x4A, 0x03, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        let ended = assembler.ingest(
+            Duml.Frame(
+                sender: 0, receiver: 0, seq: 0, flags: 0,
+                cmdSet: 0x00, cmdId: 0x27,
+                payload: [0x4A, 0x03, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]))
         #expect(ended)
         #expect(assembler.sawEnd)
     }

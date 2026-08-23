@@ -86,12 +86,29 @@ object LiveType {
 object LiveDesign {
     val background = Color(20 / 255f, 20 / 255f, 20 / 255f)
     val backgroundDeep = Color(14 / 255f, 14 / 255f, 14 / 255f)
+    /**
+     * Scope plate — DJI black at 72%. Compose frame and Vulkan plot fill
+     * use this exact RGBA so WAVE / PARADE / VECTOR don't read as a cutout.
+     */
+    val scopePlate = Color(20 / 255f, 20 / 255f, 20 / 255f, 0.72f)
     val surface = Color(28 / 255f, 28 / 255f, 28 / 255f)
     val tile = Color(36 / 255f, 36 / 255f, 36 / 255f)
     val glass = Color(0f, 0f, 0f, 0.24f)
     val glassOpaque = Color(0f, 0f, 0f, 0.38f)
-    val chromePlate = Color(0f, 0f, 0f, 0.52f)
-    val chromeTint = Color(94 / 255f, 98 / 255f, 98 / 255f, 0.26f)
+    val chromePlate = Color(0f, 0f, 0f, 0.34f)
+    val chromeTint = Color(0f, 0f, 0f, 0.42f)
+    /** Playback transport plate — dense DJI black so type reads over the clip. */
+    val playbackPanel = Color(0f, 0f, 0f, 0.82f)
+    /** Playback transport bar — 50% of HUD ND so the clip reads through. */
+    val playbackBarPlate = Color(0f, 0f, 0f, 0.17f)
+    val playbackBarTint = Color(0f, 0f, 0f, 0.21f)
+    /** FLAT playback fallback — darkened bars so chrome reads over a bright clip. */
+    val playbackScrim = Color(0f, 0f, 0f, 0.72f)
+    /** Extra ND on picker / assist cards — a tad denser than HUD bars. */
+    val pickerNd = Color(0f, 0f, 0f, 0.20f)
+    /** Share / confirm sheets — DJI black, nearly opaque so type reads over a clip. */
+    val sheetPlate = Color(20 / 255f, 20 / 255f, 20 / 255f, 0.94f)
+    val sheetScrim = Color(0f, 0f, 0f, 0.48f)
     val glassBright = Color(94 / 255f, 98 / 255f, 98 / 255f, 0.18f)
     val text = Color.White
     val muted = Color(160 / 255f, 165 / 255f, 165 / 255f)

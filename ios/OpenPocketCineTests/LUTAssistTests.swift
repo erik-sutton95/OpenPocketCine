@@ -123,7 +123,8 @@ final class LUTAssistTests: XCTestCase {
         XCTAssertEqual(assist.lutSelection, .officialDLog2)
         XCTAssertEqual(assist.lutStatusLabel, "Off · D-Log2 → Rec.709")
         XCTAssertEqual(assist.effects.lutDimension, 0)
-        XCTAssertFalse(assist.effects.needsGPUFeed, "LUT off with no other GPU assist uses the HEVC layer")
+        XCTAssertFalse(
+            assist.effects.needsGPUFeed, "LUT off with no other GPU assist uses the HEVC layer")
         assist.toggle(.lut)
         XCTAssertTrue(assist.lutEnabled)
         XCTAssertEqual(assist.lutSelection, .officialDLog2)
@@ -254,7 +255,8 @@ final class LUTAssistTests: XCTestCase {
         }
         defer { baker.releaseBakedTexture(texture) }
         guard
-            let wrapped = CIImage(mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
+            let wrapped = CIImage(
+                mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
         else {
             XCTFail("CIImage(mtlTexture:) must wrap the bake")
             return

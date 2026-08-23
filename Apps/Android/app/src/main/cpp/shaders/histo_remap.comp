@@ -1,0 +1,27 @@
+#version 450
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Histo {
+    uint bins[1024];
+};
+layout(std430, set = 0, binding = 1) buffer Display {
+    uint display[1024];
+};
+layout(std140, set = 0, binding = 2) uniform Ire {
+    vec4 ire[64];
+};
+
+float ireOf(int code) {
+    int i = clamp(code, 0, 255);
+    return ire[i >> 2][i & 3];
+}
+
+void main() {
+    uint ch = gl_WorkGroupID.x;
+    uint code = gl_LocalInvocationID.x;
+    if (ch >= 4u || code >= 256u) return;
+    uint count = bins[ch * 256u + code];
+    if (count == 0u) return;
+    uint bucket = uint(clamp(ireOf(int(code)) / 100.0 * 255.0 + 0.5, 0.0, 255.0));
+    atomicAdd(display[ch * 256u + bucket], count);
+}

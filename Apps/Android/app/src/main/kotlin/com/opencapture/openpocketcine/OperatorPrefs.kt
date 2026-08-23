@@ -325,11 +325,12 @@ object OperatorPrefs {
 
     fun shutterAngleDegrees(context: Context): Double {
         val stored = prefs(context).getFloat(SHUTTER_DEGREES, 0f).toDouble()
-        return if (stored > 0) stored else 180.0
+        return if (stored > 0) ShutterAngle.nearestDegrees(stored) else ShutterAngle.DEFAULT_DEGREES
     }
 
     fun setShutterAngleDegrees(context: Context, value: Double) {
-        prefs(context).edit().putFloat(SHUTTER_DEGREES, value.toFloat()).apply()
+        val snapped = ShutterAngle.nearestDegrees(value)
+        prefs(context).edit().putFloat(SHUTTER_DEGREES, snapped.toFloat()).apply()
     }
 
     fun lutSelection(context: Context): String =

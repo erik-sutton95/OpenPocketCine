@@ -269,6 +269,24 @@ object ScopeDisplayScale {
         return minOf(100.0, maxOf(0.0, (level - CRUSH_LEVEL) / (CLIP_LEVEL - CRUSH_LEVEL) * 100))
     }
 
+    /** Normalized tap code whose [monitorPercent] equals `percent`. iOS `ScopeDisplayScale.signalNative`. */
+    fun signalNative(monitorPercent: Double, transfer: MonitorTransfer, iso: Int? = null): Double {
+        val a = ScopeAnchors.make(transfer, iso)
+        val p = minOf(100.0, maxOf(0.0, monitorPercent))
+        if (p <= 0.0) return a.black
+        if (p >= 100.0) return a.clip
+        val target = CRUSH_LEVEL + p / 100.0 * (CLIP_LEVEL - CRUSH_LEVEL)
+        if (a.clip <= a.mid || a.mid <= a.black) {
+            return a.black + p / 100.0 * (a.clip - a.black)
+        }
+        if (target <= a.midLevel) {
+            val t = (target - CRUSH_LEVEL) / maxOf(a.midLevel - CRUSH_LEVEL, 1e-9)
+            return a.black + t * (a.mid - a.black)
+        }
+        val t = (target - a.midLevel) / maxOf(CLIP_LEVEL - a.midLevel, 1e-9)
+        return a.mid + t * (a.clip - a.mid)
+    }
+
     fun remapHistogram(bins: IntArray, transfer: MonitorTransfer, iso: Int? = null): IntArray {
         val out = IntArray(256)
         val table = levelTable(transfer, iso)
@@ -482,6 +500,15 @@ object LiveColorScience {
     }
 
     fun paperIRE(encoded: Double): Double = encoded * 100
+
+    /** Stops relative to 18% grey. Zero light is −∞, never NaN. */
+    fun stops(linear: Double): Double {
+        val y = maxOf(0.0, linear)
+        if (y <= 0.0 || !y.isFinite()) return Double.NEGATIVE_INFINITY
+        return log2(y / 0.18)
+    }
+
+    fun stops(encoded: Double, transfer: MonitorTransfer): Double = stops(linearize(encoded, transfer))
 
     fun lumaWeights(transfer: MonitorTransfer): Triple<Double, Double, Double> =
         when (transfer) {

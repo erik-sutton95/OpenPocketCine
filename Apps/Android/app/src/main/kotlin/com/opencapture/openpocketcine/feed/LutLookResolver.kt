@@ -58,6 +58,19 @@ internal object LutLookResolver {
         return title
     }
 
+    /** iOS `LUTResolver.autoCaption`. */
+    fun autoCaption(source: LutLookSource): String =
+        when (source) {
+            LutLookSource.Off -> "No matching look for this color / camera"
+            is LutLookSource.Asset -> {
+                val title = sourceTitle(source)
+                val official =
+                    LutCatalog.officialDji.any { it.fileName == source.fileName }
+                if (official) "Applying official $title" else "Applying $title"
+            }
+            is LutLookSource.Custom -> "Applying ${LutCatalog.displayName(source.fileName)}"
+        }
+
     fun sourceTitle(source: LutLookSource): String =
         when (source) {
             LutLookSource.Off -> "Off"

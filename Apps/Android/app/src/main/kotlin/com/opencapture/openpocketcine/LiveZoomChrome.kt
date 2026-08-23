@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -10,58 +14,54 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.LiveFeedFocusGesture
 import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.openpocketcine.session.TrackingBox
 import kotlin.math.abs
-import kotlin.math.roundToInt
+import kotlin.math.hypot
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object LiveZoom {
     fun factor(status: CameraStatus): Double =
-        if (status.zoomFactorRaw > 0) status.zoomFactorRaw / 1024.0 else 1.0
+        CamFov.readout(live = status.zoomFactor, preview = null, fallback = 1.0)
 
-    fun label(factor: Double): String {
-        val shown = (factor * 10.0).roundToInt() / 10.0
-        if (abs(shown - 12.0) < 0.05) return "12×"
-        val nearest = shown.roundToInt()
-        if (abs(shown - nearest) < 0.05 && nearest in 1..12) return "${nearest}×"
-        return String.format("%.1f×", shown)
+    fun label(factor: Double): String = CamFov.displayLabel(factor)
+
+    fun nextJump(from: Double): Double = CamFov.nextJump(from)
+
+    fun setZoom(session: PocketCameraSession, factor: Double) {
+        session.setZoom(factor)
     }
 
-    fun nextJump(from: Double): Double =
-        when {
-            from < 3.0 -> 3.0
-            from < 5.5 -> 6.0
-            from < 11.5 -> 12.0
-            else -> 1.0
-        }
-
-    fun setZoom(session: PocketCameraSession, factor: Double): Boolean =
-        LiveSessionBridge.call(session, "setZoom", factor)
-
-    fun updatePinch(session: PocketCameraSession, magnification: Double): Boolean {
-        if (LiveSessionBridge.call(session, "updateZoomPinch", magnification)) return true
-        return LiveSessionBridge.call(session, "setZoomSlider", factorFromPinch(magnification))
+    fun updatePinch(session: PocketCameraSession, magnification: Double) {
+        session.updateZoomPinch(magnification)
     }
 
     fun endPinch(session: PocketCameraSession) {
-        LiveSessionBridge.call(session, "endZoomPinch")
+        session.endZoomPinch()
     }
-
-    private fun factorFromPinch(magnification: Double): Double =
-        (1.0 * magnification).coerceIn(1.0, 12.0)
 }
 
 /** Ignore sub-tenth `cam_fov` jitter on the chip unless the operator is pinching. */
@@ -96,7 +96,9 @@ fun LiveZoomChip(
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
             .monitorGlass(CircleShape)
             .chromeClickable(enabled = !locked, onClick = onCycle)
-            .semantics { contentDescription = "Zoom ${LiveZoom.label(held)}" },
+            .semantics {
+                contentDescription = "Zoom ${LiveZoom.label(held)}. Cycles 1×, 3×, 6×, and 12×"
+            },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -108,64 +110,208 @@ fun LiveZoomChip(
     }
 }
 
+/**
+ * iOS `LiveZoomPinchWell` + `MagnifyGesture.simultaneously(DragGesture)`.
+ * Pinch is Android `ScaleGestureDetector` (cumulative magnification from 1)
+ * so two fingers stay on one MotionEvent stream over the Vulkan SurfaceView.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LiveFeedGestureWell(
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    feed: ChromeRect? = null,
     onTap: (normalized: Offset) -> Unit,
     onSwipeClean: (clean: Boolean) -> Unit,
     onPinch: (magnification: Float) -> Unit,
     onPinchEnd: () -> Unit,
+    onTrack: (TrackingBox) -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val latestOnPinch = rememberUpdatedState(onPinch)
+    val latestOnPinchEnd = rememberUpdatedState(onPinchEnd)
+    val latestOnTap = rememberUpdatedState(onTap)
+    val latestOnSwipe = rememberUpdatedState(onSwipeClean)
+    val latestOnTrack = rememberUpdatedState(onTrack)
+    var draft by remember { mutableStateOf<TrackingBox?>(null) }
+    val swipeFloor = with(density) { 44.dp.toPx() }
+    val holdSlop = with(density) { LiveFeedFocusGesture.TRACK_HOLD_SLOP.dp.toPx() }
+    val feedLeft = with(density) { (feed?.x ?: 0f).dp.toPx() }
+    val feedTop = with(density) { (feed?.y ?: 0f).dp.toPx() }
+    val feedW = with(density) { (feed?.width ?: 0f).dp.toPx() }.coerceAtLeast(1f)
+    val feedH = with(density) { (feed?.height ?: 0f).dp.toPx() }.coerceAtLeast(1f)
+
+    val gesture = rememberFeedGestureState()
+    fun feedNorm(x: Float, y: Float): Offset? {
+        if (feed == null) {
+            return Offset(x, y)
+        }
+        val nx = ((x - feedLeft) / feedW).coerceIn(0f, 1f)
+        val ny = ((y - feedTop) / feedH).coerceIn(0f, 1f)
+        if (x < feedLeft || y < feedTop || x > feedLeft + feedW || y > feedTop + feedH) return null
+        return Offset(nx, ny)
+    }
+    fun feedBox(ax: Float, ay: Float, bx: Float, by: Float): TrackingBox {
+        if (feed == null) {
+            return TrackingBox.normalized(ax.toDouble(), ay.toDouble(), bx.toDouble(), by.toDouble())
+        }
+        fun nx(v: Float) = ((v - feedLeft) / feedW).toDouble().coerceIn(0.0, 1.0)
+        fun ny(v: Float) = ((v - feedTop) / feedH).toDouble().coerceIn(0.0, 1.0)
+        return TrackingBox.normalized(nx(ax), ny(ay), nx(bx), ny(by))
+    }
+    val pinch =
+        remember {
+            object {
+                var total = 1f
+                var active = false
+                var ended = false
+            }
+        }
+    val detector =
+        remember {
+            ScaleGestureDetector(
+                context,
+                object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    override fun onScaleBegin(d: ScaleGestureDetector): Boolean {
+                        pinch.total = 1f
+                        pinch.active = true
+                        pinch.ended = false
+                        return true
+                    }
+
+                    override fun onScale(d: ScaleGestureDetector): Boolean {
+                        pinch.total = (pinch.total * d.scaleFactor).coerceIn(1f / 12f, 12f)
+                        latestOnPinch.value(pinch.total)
+                        return true
+                    }
+
+                    override fun onScaleEnd(d: ScaleGestureDetector) {
+                        if (pinch.active && !pinch.ended) {
+                            pinch.ended = true
+                            latestOnPinchEnd.value()
+                        }
+                        pinch.active = false
+                    }
+                },
+            ).also { it.isQuickScaleEnabled = false }
+        }
+
     Box(
         modifier
             .fillMaxSize()
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                val swipeFloor = with(density) { 44.dp.toPx() }
-                val tapSlop = with(density) { 24.dp.toPx() }
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val start = down.position
-                    var last = start
-                    var initialSpan = 0f
-                    var pinched = false
-                    var maxPointers = 1
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val pressed = event.changes.filter { it.pressed }
-                        maxPointers = maxOf(maxPointers, pressed.size)
-                        if (pressed.size >= 2) {
-                            val span = (pressed[0].position - pressed[1].position).getDistance()
-                            if (initialSpan <= 1f) initialSpan = span
-                            if (initialSpan > 1f) {
-                                pinched = true
-                                onPinch(span / initialSpan)
-                            }
-                            pressed.forEach { if (it.positionChanged()) it.consume() }
-                        } else if (pressed.size == 1) {
-                            last = pressed[0].position
-                        }
-                        if (pressed.isEmpty()) {
-                            if (pinched) {
-                                onPinchEnd()
-                            } else {
-                                val translation = last - start
-                                val dy = translation.y
-                                val dx = translation.x
-                                if (abs(dy) > abs(dx) + 8f && abs(dy) > swipeFloor) {
-                                    onSwipeClean(dy > 0f)
-                                } else if (translation.getDistance() < tapSlop) {
-                                    val nx = (last.x / size.width.toFloat()).coerceIn(0f, 1f)
-                                    val ny = (last.y / size.height.toFloat()).coerceIn(0f, 1f)
-                                    onTap(Offset(nx, ny))
-                                }
-                            }
-                            break
+            .background(Color.White.copy(alpha = 0.001f))
+            .pointerInteropFilter { event ->
+                if (!enabled) return@pointerInteropFilter false
+                detector.onTouchEvent(event)
+                val count = event.pointerCount
+                val action = event.actionMasked
+                if (pinch.active || count >= 2) {
+                    draft = null
+                    if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        if (pinch.active && !pinch.ended) {
+                            pinch.ended = true
+                            pinch.active = false
+                            latestOnPinchEnd.value()
                         }
                     }
+                    return@pointerInteropFilter true
                 }
+                when (action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        gesture.startX = event.x
+                        gesture.startY = event.y
+                        gesture.lastX = event.x
+                        gesture.lastY = event.y
+                        gesture.armed = false
+                        gesture.hold?.cancel()
+                        gesture.hold =
+                            scope.launch {
+                                delay((LiveFeedFocusGesture.TRACK_HOLD_SEC * 1000).toLong())
+                                val slop =
+                                    hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY)
+                                if (!pinch.active && slop <= holdSlop) {
+                                    gesture.armed = true
+                                    draft = feedBox(gesture.startX, gesture.startY, gesture.lastX, gesture.lastY)
+                                }
+                            }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        gesture.lastX = event.x
+                        gesture.lastY = event.y
+                        val slop = hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY)
+                        if (!gesture.armed && slop > holdSlop) {
+                            gesture.hold?.cancel()
+                            gesture.hold = null
+                        }
+                        if (gesture.armed) {
+                            draft = feedBox(gesture.startX, gesture.startY, gesture.lastX, gesture.lastY)
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        gesture.hold?.cancel()
+                        gesture.hold = null
+                        val kind =
+                            LiveFeedFocusGesture.classify(
+                                gesture.lastX - gesture.startX,
+                                gesture.lastY - gesture.startY,
+                                pinched = false,
+                                armed = gesture.armed,
+                                swipeFloor = swipeFloor,
+                            )
+                        when (kind) {
+                            LiveFeedFocusGesture.Kind.DISP_CLEAN -> latestOnSwipe.value(true)
+                            LiveFeedFocusGesture.Kind.DISP_LIVE -> latestOnSwipe.value(false)
+                            LiveFeedFocusGesture.Kind.TAP ->
+                                feedNorm(gesture.lastX, gesture.lastY)?.let { latestOnTap.value(it) }
+                            LiveFeedFocusGesture.Kind.TRACK ->
+                                latestOnTrack.value(
+                                    feedBox(gesture.startX, gesture.startY, gesture.lastX, gesture.lastY),
+                                )
+                            null -> Unit
+                        }
+                        gesture.armed = false
+                        draft = null
+                    }
+                }
+                true
             },
-    )
+    ) {
+        val box = draft
+        if (box != null) {
+            Canvas(Modifier.fillMaxSize()) {
+                val originX = if (feed == null) 0f else feedLeft
+                val originY = if (feed == null) 0f else feedTop
+                val w = if (feed == null) size.width else feedW
+                val h = if (feed == null) size.height else feedH
+                val rect =
+                    androidx.compose.ui.geometry.Rect(
+                        originX + (box.x * w).toFloat(),
+                        originY + (box.y * h).toFloat(),
+                        originX + ((box.x + box.width) * w).toFloat(),
+                        originY + ((box.y + box.height) * h).toFloat(),
+                    )
+                drawRoundRect(
+                    LiveDesign.text.copy(alpha = 0.88f),
+                    topLeft = Offset(rect.left, rect.top),
+                    size = Size(rect.width, rect.height),
+                    cornerRadius = CornerRadius(8f, 8f),
+                    style = Stroke(1.5.dp.toPx()),
+                )
+            }
+        }
+    }
 }
+
+private class FeedGestureState {
+    var startX = 0f
+    var startY = 0f
+    var lastX = 0f
+    var lastY = 0f
+    var armed = false
+    var hold: Job? = null
+}
+
+@Composable
+private fun rememberFeedGestureState(): FeedGestureState = remember { FeedGestureState() }

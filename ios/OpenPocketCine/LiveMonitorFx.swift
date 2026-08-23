@@ -184,7 +184,9 @@ enum LiveMonitorCompositor {
     ///
     /// `source` is encoded camera codes (NSNull). `display` is the Rec.709 / HLG
     /// identity with buffer attachments — used only when no LUT is armed.
-    static func apply(to source: CIImage, effects: LiveImageEffects, display: CIImage? = nil) -> CIImage {
+    static func apply(to source: CIImage, effects: LiveImageEffects, display: CIImage? = nil)
+        -> CIImage
+    {
         applyProduct(to: source, effects: effects, display: display).image
     }
 
@@ -211,8 +213,10 @@ enum LiveMonitorCompositor {
         let hasLUT = effects.lutDimension >= 2 && !effects.lutRGBA.isEmpty
         var graded = input
         if hasLUT {
-            let lut = applyLUT(to: input, dimension: effects.lutDimension, rgba: effects.lutRGBA) ?? input
-            graded = effects.splitComparison
+            let lut =
+                applyLUT(to: input, dimension: effects.lutDimension, rgba: effects.lutRGBA) ?? input
+            graded =
+                effects.splitComparison
                 ? split(lut, over: input, extent: extent, vertical: effects.splitVertical)
                 : lut
         }
@@ -230,7 +234,8 @@ enum LiveMonitorCompositor {
             output = applyPeaking(
                 over: output, source: input, extent: extent,
                 color: effects.peakingColor, sense: effects.peakingSensitivity,
-                gateScale: LiveColorScience.peakingGateScale(for: MonitorTransfer(effects.colorMode)))
+                gateScale: LiveColorScience.peakingGateScale(
+                    for: MonitorTransfer(effects.colorMode)))
         }
         if effects.zebra {
             output = applyZebra(
@@ -239,7 +244,8 @@ enum LiveMonitorCompositor {
                 colorMode: effects.colorMode)
         }
         if effects.desqueezeFactor > 1.001 {
-            output = desqueeze(output, factor: effects.desqueezeFactor, horizontal: effects.desqueezeHorizontal)
+            output = desqueeze(
+                output, factor: effects.desqueezeFactor, horizontal: effects.desqueezeHorizontal)
         }
         return (output, cubeProduct)
     }
@@ -265,7 +271,8 @@ enum LiveMonitorCompositor {
             output = applyPeaking(
                 over: output, source: input, extent: extent,
                 color: effects.peakingColor, sense: effects.peakingSensitivity,
-                gateScale: LiveColorScience.peakingGateScale(for: MonitorTransfer(effects.colorMode)))
+                gateScale: LiveColorScience.peakingGateScale(
+                    for: MonitorTransfer(effects.colorMode)))
         }
         if effects.zebra {
             output = applyZebra(
@@ -310,8 +317,9 @@ enum LiveMonitorCompositor {
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects
     ) -> CIImage {
-        guard let paintInfo = PocketFalseColorMap.overlayPaintData(
-            scale: effects.falseColorScale, mode: effects.colorMode),
+        guard
+            let paintInfo = PocketFalseColorMap.overlayPaintData(
+                scale: effects.falseColorScale, mode: effects.colorMode),
             let paint = applyColorCube(
                 to: codes, dimension: paintInfo.0, rgba: paintInfo.1),
             let weightInfo = PocketFalseColorMap.overlayWeightData(
@@ -335,22 +343,26 @@ enum LiveMonitorCompositor {
         // A fresh CIFilter per apply is graph description only — the cube Data is CoW and
         // the GPU cost lives in the render. The old shared filter + global NSLock made
         // every look serialize through one mutable `setValue`.
-        guard let filter = CIFilter(
-            name: "CIColorCube",
-            parameters: [
-                "inputCubeDimension": dimension,
-                "inputCubeData": rgba,
-                kCIInputImageKey: source.clampedToExtent(),
-            ])
+        guard
+            let filter = CIFilter(
+                name: "CIColorCube",
+                parameters: [
+                    "inputCubeDimension": dimension,
+                    "inputCubeData": rgba,
+                    kCIInputImageKey: source.clampedToExtent(),
+                ])
         else { return nil }
         return filter.outputImage?.cropped(to: source.extent)
     }
 
     /// OpenZCine 50/50 Log-vs-LUT: graded half composited over the clean source.
     /// Core Image y is up, so the operator's top half is the high-y half.
-    private static func split(_ graded: CIImage, over source: CIImage, extent: CGRect, vertical: Bool) -> CIImage {
+    private static func split(
+        _ graded: CIImage, over source: CIImage, extent: CGRect, vertical: Bool
+    ) -> CIImage {
         guard extent.width > 0, extent.height > 0 else { return graded }
-        let half = vertical
+        let half =
+            vertical
             ? CGRect(x: extent.midX, y: extent.minY, width: extent.width / 2, height: extent.height)
             : CGRect(x: extent.minX, y: extent.minY, width: extent.width, height: extent.height / 2)
         return graded.cropped(to: half).composited(over: source.cropped(to: extent))
@@ -520,7 +532,8 @@ enum LiveMonitorCompositor {
 
         var coreMask = mask
         if Peak.maskClosingRadius > 0 {
-            coreMask = mask
+            coreMask =
+                mask
                 .applyingFilter(
                     "CIMorphologyMaximum",
                     parameters: [kCIInputRadiusKey: Peak.maskClosingRadius]
@@ -559,8 +572,10 @@ enum LiveMonitorCompositor {
     ) -> CIImage {
         let grey = greyscale(source).clampedToExtent()
         let cropped = extent.insetBy(dx: Peak.edgeInset, dy: Peak.edgeInset)
-        let fine = grey.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 1.0]).cropped(to: cropped)
-        let coarse = grey
+        let fine = grey.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 1.0]).cropped(
+            to: cropped)
+        let coarse =
+            grey
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: Peak.reblurRadius])
             .applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 1.0])
             .cropped(to: cropped)
@@ -595,22 +610,30 @@ enum LiveMonitorCompositor {
             let gain = 1.0 / max(Peak.antialiasWidth * Peak.ratioScale, 1e-6)
             let masked = scale(ratio, by: gain, bias: -(start * Peak.ratioScale) * gain)
                 .applyingFilter("CIColorClamp")
-            return (CIFilter(
-                name: "CIMultiplyCompositing",
-                parameters: [kCIInputImageKey: masked, kCIInputBackgroundImageKey: gateMask]
-            )?.outputImage ?? masked)
-            .cropped(to: cropped)
+            return
+                (CIFilter(
+                    name: "CIMultiplyCompositing",
+                    parameters: [kCIInputImageKey: masked, kCIInputBackgroundImageKey: gateMask]
+                )?.outputImage ?? masked)
+                .cropped(to: cropped)
         }
 
         var coreMask = ramp(from: sense.ratioThreshold)
         if Peak.maskClosingRadius > 0 {
-            coreMask = coreMask
-                .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: Peak.maskClosingRadius])
-                .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: Peak.maskClosingRadius])
+            coreMask =
+                coreMask
+                .applyingFilter(
+                    "CIMorphologyMaximum", parameters: [kCIInputRadiusKey: Peak.maskClosingRadius]
+                )
+                .applyingFilter(
+                    "CIMorphologyMinimum", parameters: [kCIInputRadiusKey: Peak.maskClosingRadius]
+                )
                 .cropped(to: cropped)
         }
-        let underMask = ramp(from: sense.ratioThreshold - Peak.antialiasWidth * Peak.underRampOffset)
-        return composite(over: base, coreMask: coreMask, underMask: underMask, color: color, extent: extent)
+        let underMask = ramp(
+            from: sense.ratioThreshold - Peak.antialiasWidth * Peak.underRampOffset)
+        return composite(
+            over: base, coreMask: coreMask, underMask: underMask, color: color, extent: extent)
     }
 
     private static func greyscale(_ source: CIImage) -> CIImage {
@@ -627,12 +650,16 @@ enum LiveMonitorCompositor {
     }
 
     private static func composite(
-        over base: CIImage, coreMask: CIImage, underMask: CIImage, color: PeakingPaint, extent: CGRect
+        over base: CIImage, coreMask: CIImage, underMask: CIImage, color: PeakingPaint,
+        extent: CGRect
     ) -> CIImage {
-        let dark = CIImage(color: CIColor(red: Peak.under.red, green: Peak.under.green, blue: Peak.under.blue))
-            .cropped(to: extent)
+        let dark = CIImage(
+            color: CIColor(red: Peak.under.red, green: Peak.under.green, blue: Peak.under.blue)
+        )
+        .cropped(to: extent)
         let rgb = color.rgb
-        let tint = CIImage(color: CIColor(red: rgb.0, green: rgb.1, blue: rgb.2)).cropped(to: extent)
+        let tint = CIImage(color: CIColor(red: rgb.0, green: rgb.1, blue: rgb.2)).cropped(
+            to: extent)
         let withUnder =
             (CIFilter(
                 name: "CIBlendWithMask",
@@ -641,12 +668,13 @@ enum LiveMonitorCompositor {
                     kCIInputMaskImageKey: underMask,
                 ])?.outputImage ?? base)
             .cropped(to: extent)
-        return (CIFilter(
-            name: "CIBlendWithMask",
-            parameters: [
-                kCIInputImageKey: tint, kCIInputBackgroundImageKey: withUnder,
-                kCIInputMaskImageKey: coreMask,
-            ])?.outputImage ?? withUnder)
+        return
+            (CIFilter(
+                name: "CIBlendWithMask",
+                parameters: [
+                    kCIInputImageKey: tint, kCIInputBackgroundImageKey: withUnder,
+                    kCIInputMaskImageKey: coreMask,
+                ])?.outputImage ?? withUnder)
             .cropped(to: extent)
     }
 
@@ -706,7 +734,8 @@ enum LiveMonitorCompositor {
                 "inputBVector": CIVector(x: gain, y: 0, z: 0, w: 0),
                 "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
                 "inputBiasVector": CIVector(
-                    x: -threshold * gain + 1, y: -threshold * gain + 1, z: -threshold * gain + 1, w: 1),
+                    x: -threshold * gain + 1, y: -threshold * gain + 1, z: -threshold * gain + 1,
+                    w: 1),
             ]
         ).applyingFilter("CIColorClamp")
     }
@@ -728,7 +757,8 @@ enum LiveMonitorCompositor {
                 ]
             }()
         ).applyingFilter("CIColorClamp")
-        return low.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: high])
+        return low.applyingFilter(
+            "CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: high])
     }
 
     private static func blendStripedZebra(
@@ -749,13 +779,14 @@ enum LiveMonitorCompositor {
         let stripedMask = stripes.applyingFilter(
             "CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: mask])
         let tint = CIImage(color: color).cropped(to: extent)
-        return (CIFilter(
-            name: "CIBlendWithMask",
-            parameters: [
-                kCIInputImageKey: tint,
-                kCIInputBackgroundImageKey: base,
-                kCIInputMaskImageKey: stripedMask,
-            ])?.outputImage ?? base)
+        return
+            (CIFilter(
+                name: "CIBlendWithMask",
+                parameters: [
+                    kCIInputImageKey: tint,
+                    kCIInputBackgroundImageKey: base,
+                    kCIInputMaskImageKey: stripedMask,
+                ])?.outputImage ?? base)
             .cropped(to: extent)
     }
 }
@@ -770,7 +801,10 @@ final class FeedFrameBaker: @unchecked Sendable {
     private let workQueue = DispatchQueue(label: "opv.metal-feed-bake", qos: .userInitiated)
     private let lock = NSLock()
     private var pending:
-        (image: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat, unmanaged: Bool, overlay: Bool)?
+        (
+            image: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat, unmanaged: Bool,
+            overlay: Bool
+        )?
     private var pendingDone: (@Sendable () -> Void)?
     private var busy = false
     private var textures: [MTLTexture] = []
@@ -831,7 +865,9 @@ final class FeedFrameBaker: @unchecked Sendable {
     }
 
     /// CI bottom-left → Metal/MPS origin. Same four multiplies as OpenZCine's baker.
-    static func metalOriginTransform(extent: CGRect, bakeWidth: Int, bakeHeight: Int) -> CGAffineTransform {
+    static func metalOriginTransform(extent: CGRect, bakeWidth: Int, bakeHeight: Int)
+        -> CGAffineTransform
+    {
         let sx = CGFloat(bakeWidth) / max(extent.width, 1)
         let sy = CGFloat(bakeHeight) / max(extent.height, 1)
         var transform = CGAffineTransform(translationX: -extent.origin.x, y: -extent.origin.y)
@@ -889,16 +925,20 @@ final class FeedFrameBaker: @unchecked Sendable {
             // MPS / Metal treat y=0 as the bottom of the picture. CAMetalLayer blit
             // of an unflipped bake is upright; Fast/Quality go through MPS, so the
             // bake must match that kernel or the picture lands upside down.
-            let prepared = source
+            let prepared =
+                source
                 .transformed(
-                    by: CGAffineTransform(translationX: -extent.origin.x, y: -extent.origin.y))
+                    by: CGAffineTransform(translationX: -extent.origin.x, y: -extent.origin.y)
+                )
                 .transformed(
                     by: CGAffineTransform(
                         scaleX: CGFloat(width) / max(extent.width, 1),
-                        y: CGFloat(height) / max(extent.height, 1)))
+                        y: CGFloat(height) / max(extent.height, 1))
+                )
                 .transformed(by: CGAffineTransform(scaleX: 1, y: -1))
                 .transformed(by: CGAffineTransform(translationX: 0, y: CGFloat(height)))
-            guard let target = renderTexture(width: width, height: height, pixelFormat: pixelFormat),
+            guard
+                let target = renderTexture(width: width, height: height, pixelFormat: pixelFormat),
                 let commandBuffer = commandQueue.makeCommandBuffer()
             else {
                 finished()
@@ -921,7 +961,8 @@ final class FeedFrameBaker: @unchecked Sendable {
         }
     }
 
-    private func renderTexture(width: Int, height: Int, pixelFormat: MTLPixelFormat) -> MTLTexture? {
+    private func renderTexture(width: Int, height: Int, pixelFormat: MTLPixelFormat) -> MTLTexture?
+    {
         lock.lock()
         defer { lock.unlock() }
         let matches =
@@ -934,7 +975,9 @@ final class FeedFrameBaker: @unchecked Sendable {
                 pixelFormat: pixelFormat, width: width, height: height, mipmapped: false)
             descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
             descriptor.storageMode = .private
-            let built = (0..<Self.depth).compactMap { _ in device.makeTexture(descriptor: descriptor) }
+            let built = (0..<Self.depth).compactMap { _ in
+                device.makeTexture(descriptor: descriptor)
+            }
             guard built.count == Self.depth else { return nil }
             textures = built
             nextTexture = 0
@@ -974,9 +1017,11 @@ final class CIFeedView: UIView {
         self.device = device
         let lutOptions = LiveMonitorWorkingSpace.contextOptions
         let displayOptions = LiveMonitorWorkingSpace.displayContextOptions
-        self.lutContext = device.map { CIContext(mtlDevice: $0, options: lutOptions) }
+        self.lutContext =
+            device.map { CIContext(mtlDevice: $0, options: lutOptions) }
             ?? CIContext(options: lutOptions)
-        self.displayContext = device.map { CIContext(mtlDevice: $0, options: displayOptions) }
+        self.displayContext =
+            device.map { CIContext(mtlDevice: $0, options: displayOptions) }
             ?? CIContext(options: displayOptions)
         self.baker = device.map { FeedFrameBaker(device: $0) }
         self.presentQueue = device?.makeCommandQueue()
@@ -1101,7 +1146,8 @@ final class CIFeedView: UIView {
             return true
         }
         let unmanaged = baker?.lastBakeUnmanaged ?? true
-        let options = unmanaged
+        let options =
+            unmanaged
             ? LiveMonitorWorkingSpace.imageOptions
             : LiveMonitorWorkingSpace.displayImageOptions
         guard let image = CIImage(mtlTexture: baked, options: options) else { return false }

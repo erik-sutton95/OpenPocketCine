@@ -29,7 +29,9 @@ struct LiveChromeThrottleTests {
         next.isoIndex = .iso800
         next.shutterDenom = 50
         #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next) == false)
-        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0) == false)
+        #expect(
+            LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0)
+                == false)
         #expect(
             LiveChromeThrottle.shouldNotify(
                 previous: CameraStatus(), next: next, elapsed: LiveChromeThrottle.statusInterval))
@@ -45,7 +47,9 @@ struct LiveChromeThrottleTests {
         next.batteryMilliAmps = -1200
         next.batteryPercent = 80
         #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next) == false)
-        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0) == false)
+        #expect(
+            LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0)
+                == false)
         #expect(
             LiveChromeThrottle.shouldNotify(
                 previous: CameraStatus(), next: next, elapsed: LiveChromeThrottle.statusInterval))

@@ -45,12 +45,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -162,31 +167,39 @@ fun MediaDeliveryPopup(
     var step by remember { mutableStateOf(DeliveryStep.DESTINATION) }
     var destination by remember { mutableStateOf<MediaDeliveryDestination?>(null) }
     var shareAction by remember { mutableStateOf(MediaDeliveryPostExportAction.SYSTEM_SHARE) }
-    val cachedCount = files.count { controller.isDownloaded(it) || controller.isAvailableOffline(it) }
+    val cachedCount = files.count { controller.isDownloaded(it) }
     val hasDeliverable = cachedCount > 0 || (controller.isLive && files.isNotEmpty())
     val canContinue = destination == MediaDeliveryDestination.NATIVE_SHARE && hasDeliverable && !busy
 
+    Dialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        properties =
+            DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+    ) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.18f))
+            .background(LiveDesign.sheetScrim)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) {
                 if (!busy) onDismiss()
             },
-        contentAlignment = Alignment.BottomCenter,
+        contentAlignment = Alignment.TopCenter,
     ) {
         Column(
             Modifier
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 28.dp)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 16.dp)
                 .fillMaxWidth()
                 .widthIn(max = 420.dp)
                 .heightIn(max = 520.dp)
                 .clip(MediaCornerShape)
-                .panelGlass(MediaCornerShape)
+                .mediaSheetPlate(MediaCornerShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -277,6 +290,7 @@ fun MediaDeliveryPopup(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -291,7 +305,7 @@ fun MediaDeliveryProgressOverlay(
             .fillMaxWidth()
             .shadow(12.dp, MediaCapsuleShape, ambientColor = Color.Black.copy(alpha = 0.35f))
             .clip(MediaCapsuleShape)
-            .panelGlass(MediaCapsuleShape)
+            .mediaSheetPlate(MediaCapsuleShape)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -345,7 +359,7 @@ fun MediaDeliveryCompletionToast(message: String, modifier: Modifier = Modifier)
                 .navigationBarsPadding()
                 .padding(bottom = 28.dp)
                 .clip(MediaCapsuleShape)
-                .panelGlass(MediaCapsuleShape)
+                .mediaSheetPlate(MediaCapsuleShape)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
@@ -357,22 +371,14 @@ private fun DestinationHeader(onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        OpcIcon(OpcIcon.SHARE, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(13.dp))
         Text(
             "SHARE",
             style = LiveType.mono(14f, FontWeight.Bold),
             color = LiveDesign.text,
         )
         Spacer(Modifier.weight(1f))
-        Box(
-            Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .panelGlass(CircleShape)
-                .chromeClickable(onClick = onClose),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("×", style = LiveType.ui(16f, FontWeight.SemiBold), color = LiveDesign.text)
-        }
+        MediaCloseButton(onClick = onClose, size = 30.dp)
     }
 }
 
@@ -408,7 +414,12 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("⇧", style = LiveType.ui(18f, FontWeight.SemiBold), color = if (enabled) LiveDesign.text else LiveDesign.faint)
+        OpcIcon(
+            OpcIcon.SHARE,
+            contentDescription = null,
+            tint = if (enabled) LiveDesign.text else LiveDesign.faint,
+            modifier = Modifier.size(18.dp),
+        )
         Column(Modifier.weight(1f)) {
             Text(
                 MediaDeliveryDestination.NATIVE_SHARE.title,
@@ -421,7 +432,12 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
                 color = LiveDesign.muted,
             )
         }
-        Text("›", style = LiveType.ui(14f, FontWeight.SemiBold), color = LiveDesign.faint)
+        OpcIcon(
+            OpcIcon.CHEVRON_RIGHT,
+            contentDescription = null,
+            tint = LiveDesign.faint,
+            modifier = Modifier.size(12.dp),
+        )
     }
 }
 
@@ -496,24 +512,42 @@ private suspend fun runDelivery(
     action: MediaDeliveryPostExportAction,
     onProgress: (MediaDeliveryOverlayState) -> Unit,
 ): String {
-    val toCache = files.filter { !controller.isDownloaded(it) && !controller.isAvailableOffline(it) }
+    // Original camera file only — never the LRF/XRF 720p playback proxy.
+    val toCache = files.filter { !controller.isDownloaded(it) }
     if (toCache.isNotEmpty()) {
-        for ((index, file) in toCache.withIndex()) {
-            onProgress(
-                MediaDeliveryOverlayState(
-                    statusLine = if (controller.downloadProgress[file.path] != null) "Caching from camera" else "Caching from camera…",
-                    batchLine = if (toCache.size > 1) "Clip ${index + 1} of ${toCache.size}" else null,
-                    overallFraction = controller.downloadProgress[file.path] ?: 0.0,
-                    isPreparing = (controller.downloadProgress[file.path] ?: 0.0) <= 0.0,
-                    filename = file.filename,
-                ),
-            )
-            controller.cacheForPlayback(file)
+        coroutineScope {
+            for ((index, file) in toCache.withIndex()) {
+                fun emit(fraction: Double) {
+                    onProgress(
+                        MediaDeliveryOverlayState(
+                            statusLine =
+                                if (fraction > 0.0) "Caching from camera" else "Caching from camera…",
+                            batchLine = if (toCache.size > 1) "Clip ${index + 1} of ${toCache.size}" else null,
+                            overallFraction = fraction,
+                            isPreparing = fraction <= 0.0,
+                            filename = file.filename,
+                        ),
+                    )
+                }
+                emit(controller.downloadProgress[file.path] ?: 0.0)
+                val poll =
+                    launch {
+                        while (isActive) {
+                            delay(200)
+                            emit(controller.downloadProgress[file.path] ?: 0.0)
+                        }
+                    }
+                try {
+                    controller.download(file)
+                } finally {
+                    poll.cancel()
+                }
+            }
         }
     }
     val ready =
         files.mapNotNull { file ->
-            controller.localPlaybackFile(file) ?: controller.cacheForPlayback(file) ?: controller.localFile(file)
+            if (controller.isDownloaded(file)) controller.localFile(file) else null
         }
     if (ready.isEmpty()) {
         return if (toCache.isNotEmpty()) {

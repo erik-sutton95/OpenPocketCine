@@ -1,5 +1,6 @@
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 @MainActor

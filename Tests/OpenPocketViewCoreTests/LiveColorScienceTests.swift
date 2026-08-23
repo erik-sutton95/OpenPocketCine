@@ -1,4 +1,5 @@
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite(.serialized)
@@ -47,8 +48,9 @@ struct LiveColorScienceTests {
             for linear in [0.0, 0.18, transfer.peakLinear] {
                 let encoded = LiveColorScience.encode(linear, transfer: transfer)
                 let back = LiveColorScience.linearize(encoded, transfer: transfer)
-                #expect(abs(back - linear) <= max(1e-6, linear * 1e-4),
-                        "\(transfer) round trip at \(linear)")
+                #expect(
+                    abs(back - linear) <= max(1e-6, linear * 1e-4),
+                    "\(transfer) round trip at \(linear)")
             }
         }
     }
@@ -64,7 +66,9 @@ struct LiveColorScienceTests {
         #expect(abs(e(18) - 0.710090) < 1e-6)
         #expect(abs(e(475) - 1.0) < 1e-9)
         // 10-bit full-range code table from the paper.
-        for (linear, code) in [(0.0, 64.0), (0.18, 312.0), (1.0, 465.0), (18.0, 726.0), (475.0, 1023.0)] {
+        for (linear, code) in [
+            (0.0, 64.0), (0.18, 312.0), (1.0, 465.0), (18.0, 726.0), (475.0, 1023.0),
+        ] {
             #expect(abs(e(linear) * 1023 - code) < 0.5, "code for linear \(linear)")
         }
         #expect(MonitorTransfer.dlog2.peakLinear == 475.0)
@@ -125,12 +129,16 @@ struct LiveColorScienceTests {
     @Test func waveformLevelPinsAnchors() {
         for transfer in transfers {
             let a = transfer.scopeAnchors
-            #expect(abs(ScopeDisplayScale.waveformLevel(a.black, transfer: transfer) - 0.05) < 1e-12,
-                    "\(transfer) black on the 0 line")
-            #expect(abs(ScopeDisplayScale.waveformLevel(a.clip, transfer: transfer) - 0.95) < 1e-12,
-                    "\(transfer) clip on the 100 line")
-            #expect(abs(ScopeDisplayScale.waveformLevel(a.mid, transfer: transfer) - a.midLevel) < 1e-12,
-                    "\(transfer) grey pinned")
+            #expect(
+                abs(ScopeDisplayScale.waveformLevel(a.black, transfer: transfer) - 0.05) < 1e-12,
+                "\(transfer) black on the 0 line")
+            #expect(
+                abs(ScopeDisplayScale.waveformLevel(a.clip, transfer: transfer) - 0.95) < 1e-12,
+                "\(transfer) clip on the 100 line")
+            #expect(
+                abs(ScopeDisplayScale.waveformLevel(a.mid, transfer: transfer) - a.midLevel)
+                    < 1e-12,
+                "\(transfer) grey pinned")
             // Log toes keep a live sub-black margin; zero-black transfers sit on the line.
             let zero = ScopeDisplayScale.waveformLevel(0, transfer: transfer)
             #expect(a.black > 0 ? zero == 0 : zero == 0.05, "\(transfer) at code 0")
@@ -159,8 +167,9 @@ struct LiveColorScienceTests {
         ]
         for (transfer, greyIRE) in expected {
             let a = ScopeAnchors.make(transfer: transfer, iso: 1600)
-            #expect(abs(a.midLevel - ScopeDisplayScale.level(scaleIRE: greyIRE)) < 1e-3,
-                    "\(transfer) midLevel")
+            #expect(
+                abs(a.midLevel - ScopeDisplayScale.level(scaleIRE: greyIRE)) < 1e-3,
+                "\(transfer) midLevel")
             #expect(abs(transfer.scopeGreyScaleIRE - greyIRE) < 0.05, "\(transfer) grey scale IRE")
             #expect(abs(LiveColorScience.paperIRE(a.mid) - greyIRE) < 0.05)
         }
@@ -170,10 +179,12 @@ struct LiveColorScienceTests {
         // The user-facing contract: log black → the 0 line, clip → the 100 line.
         for transfer in [MonitorTransfer.dlog, .dlog2] {
             let a = transfer.scopeAnchors
-            let blackIRE = (ScopeDisplayScale.waveformLevel(a.black, transfer: transfer)
-                - ScopeDisplayScale.crushLevel) / 0.9 * 100
-            let clipIRE = (ScopeDisplayScale.waveformLevel(a.clip, transfer: transfer)
-                - ScopeDisplayScale.crushLevel) / 0.9 * 100
+            let blackIRE =
+                (ScopeDisplayScale.waveformLevel(a.black, transfer: transfer)
+                    - ScopeDisplayScale.crushLevel) / 0.9 * 100
+            let clipIRE =
+                (ScopeDisplayScale.waveformLevel(a.clip, transfer: transfer)
+                    - ScopeDisplayScale.crushLevel) / 0.9 * 100
             #expect(abs(blackIRE - 0) < 1e-9)
             #expect(abs(clipIRE - 100) < 1e-9)
         }
@@ -190,8 +201,11 @@ struct LiveColorScienceTests {
             #expect(abs(mid - transfer.scopeGreyScaleIRE) < 1e-9, "grey agrees across axes")
             // signalNative inverts it.
             for percent in [0.0, 2, 55, 100] {
-                let native = ScopeDisplayScale.signalNative(monitorPercent: percent, transfer: transfer)
-                #expect(abs(ScopeDisplayScale.monitorPercent(native, transfer: transfer) - percent) < 1e-9)
+                let native = ScopeDisplayScale.signalNative(
+                    monitorPercent: percent, transfer: transfer)
+                #expect(
+                    abs(ScopeDisplayScale.monitorPercent(native, transfer: transfer) - percent)
+                        < 1e-9)
             }
         }
     }
@@ -201,7 +215,8 @@ struct LiveColorScienceTests {
             let table = ScopeDisplayScale.levelTable(for: transfer)
             #expect(table.count == 256)
             for code in stride(from: 0, through: 255, by: 5) {
-                let reference = ScopeDisplayScale.waveformLevel(Double(code) / 255, transfer: transfer)
+                let reference = ScopeDisplayScale.waveformLevel(
+                    Double(code) / 255, transfer: transfer)
                 #expect(abs(Double(table[code]) - reference) < 1e-6)
             }
         }
@@ -209,9 +224,9 @@ struct LiveColorScienceTests {
 
     @Test func histogramRemapConservesAndAnchors() {
         var bins = [Int](repeating: 0, count: 256)
-        bins[5] = 15    // sub-black noise
+        bins[5] = 15  // sub-black noise
         bins[16] = 100  // D-Log2 paper black
-        bins[78] = 50   // 18% grey
+        bins[78] = 50  // 18% grey
         bins[247] = 25  // live-tap EI ceiling
         bins[255] = 10  // above the ceiling — margin, not the 100 line
         let out = ScopeDisplayScale.remapHistogram(bins, transfer: .dlog2)
@@ -226,7 +241,7 @@ struct LiveColorScienceTests {
         #expect(subBlack == 15)
 
         var dlogBins = [Int](repeating: 0, count: 256)
-        dlogBins[18] = 15   // sub-black
+        dlogBins[18] = 15  // sub-black
         dlogBins[24] = 100  // D-Log paper black
         dlogBins[102] = 50  // 18% grey
         dlogBins[223] = 25  // live-tap ceiling
@@ -242,9 +257,11 @@ struct LiveColorScienceTests {
     @Test func trafficEdgesFollowTheAnchors() {
         for transfer in transfers {
             let a = ScopeAnchors.make(transfer: transfer, iso: 1600)
-            #expect(a.clipEdgeByte == ScopeExposureCeiling.clipByte(transfer: transfer, iso: 1600),
-                    "\(transfer) clip edge")
-            #expect(a.crushFloorByte == Int((a.black * 255).rounded(.down)), "\(transfer) crush floor")
+            #expect(
+                a.clipEdgeByte == ScopeExposureCeiling.clipByte(transfer: transfer, iso: 1600),
+                "\(transfer) clip edge")
+            #expect(
+                a.crushFloorByte == Int((a.black * 255).rounded(.down)), "\(transfer) crush floor")
             #expect(a.crushEdgeByte >= a.crushFloorByte, "\(transfer) crush edge")
         }
         let dlog2 = ScopeAnchors.make(transfer: .dlog2, iso: 1600)
@@ -269,7 +286,8 @@ struct LiveColorScienceTests {
         let cases: [(MonitorTransfer, Int)] = [(.dlog2, 10), (.dlog, 18)]
         for (transfer, code) in cases {
             let bins = histogram(spikeAt: code)
-            let reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: transfer)
+            let reading = ScopeTrafficLights.reading(
+                red: bins, green: bins, blue: bins, transfer: transfer)
             #expect(!reading.anyCrush, "\(transfer) sub-black")
             #expect(!reading.anyClip)
         }
@@ -279,7 +297,8 @@ struct LiveColorScienceTests {
         for transfer in transfers {
             let floor = transfer.scopeAnchors.crushFloorByte
             let bins = histogram(spikeAt: floor + 1)
-            let reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: transfer)
+            let reading = ScopeTrafficLights.reading(
+                red: bins, green: bins, blue: bins, transfer: transfer)
             #expect(reading.anyCrush, "\(transfer) toe pile-up")
             #expect(!reading.anyClip)
         }
@@ -288,7 +307,8 @@ struct LiveColorScienceTests {
     @Test func curveTopClips() {
         for transfer in transfers {
             let bins = histogram(spikeAt: 255)
-            let reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: transfer)
+            let reading = ScopeTrafficLights.reading(
+                red: bins, green: bins, blue: bins, transfer: transfer)
             #expect(reading.anyClip, "\(transfer) clip at the curve top")
             #expect(!reading.anyCrush)
         }
@@ -350,7 +370,8 @@ struct LiveColorScienceTests {
         let reading = ScopeTrafficLights.reading(
             red: red, green: green, blue: blue, luma: luma, transfer: .dlog2)
         #expect(reading.red.clip && reading.green.clip && reading.blue.clip)
-        #expect(abs(reading.green.level - 0.5) < 0.25, "bars still follow the subject, not the door")
+        #expect(
+            abs(reading.green.level - 0.5) < 0.25, "bars still follow the subject, not the door")
     }
 
     @Test func clipLampsHoldThroughThresholdChatter() {
@@ -379,7 +400,8 @@ struct LiveColorScienceTests {
         for transfer in transfers {
             let grey = Int((transfer.scopeAnchors.mid * 255).rounded())
             let bins = histogram(spikeAt: grey)
-            let reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: transfer)
+            let reading = ScopeTrafficLights.reading(
+                red: bins, green: bins, blue: bins, transfer: transfer)
             #expect(abs(reading.green.level - 0.5) < 0.02, "\(transfer) grey at centre")
             #expect(reading.green.isNeutral)
         }
@@ -410,7 +432,8 @@ struct LiveColorScienceTests {
 
     @Test func emptyHistogramReadsNeutral() {
         let bins = [Int](repeating: 0, count: 256)
-        let reading = ScopeTrafficLights.reading(red: bins, green: bins, blue: bins, transfer: .dlog2)
+        let reading = ScopeTrafficLights.reading(
+            red: bins, green: bins, blue: bins, transfer: .dlog2)
         #expect(reading == .none)
     }
 
@@ -422,7 +445,8 @@ struct LiveColorScienceTests {
         for transfer in transfers {
             let clip = ScopeDisplayScale.signalNative(monitorPercent: 100, transfer: transfer)
             let expected = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: 1600)
-            #expect(abs(clip - expected) < 1e-12, "\(transfer) highlight zebra at the live-tap ceiling")
+            #expect(
+                abs(clip - expected) < 1e-12, "\(transfer) highlight zebra at the live-tap ceiling")
             let black = ScopeDisplayScale.signalNative(monitorPercent: 0, transfer: transfer)
             #expect(abs(black - transfer.scopeAnchors.black) < 1e-12)
         }
@@ -436,7 +460,8 @@ struct LiveColorScienceTests {
 
     @Test func falseColorIREBandsMatchOpenZCine() {
         let labels = LiveColorScience.falseColorBands(.ire, transfer: .dlog2).map(\.label)
-        #expect(labels == ["0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95", "96–98", "99–100"])
+        #expect(
+            labels == ["0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95", "96–98", "99–100"])
         let limits = LiveColorScience.falseColorBands(.limits, transfer: .dlog2).map(\.label)
         #expect(limits == ["0–4", "5–9", "94–98", "99–100"])
     }
@@ -458,11 +483,13 @@ struct LiveColorScienceTests {
                 abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: transfer) - paper) < 0.5,
                 "\(transfer) 18% is paper IRE on the WAVE axis, not Reinhard 42")
             let clip = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: 1600)
-            #expect(abs(LiveColorScience.monitorIRE(encoded: clip, transfer: transfer) - 100) < 0.05)
+            #expect(
+                abs(LiveColorScience.monitorIRE(encoded: clip, transfer: transfer) - 100) < 0.05)
         }
         #expect(abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: .dlog2) - 30.50) < 0.5)
         #expect(abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: .dlog) - 39.88) < 0.5)
-        #expect(abs(LiveColorScience.monitorIRE(encoded: 223.0 / 255, transfer: .dlog) - 100) < 0.05)
+        #expect(
+            abs(LiveColorScience.monitorIRE(encoded: 223.0 / 255, transfer: .dlog) - 100) < 0.05)
         // 188 is recoverable D-Log2 highlight, not clip (journal max is 247).
         let early = LiveColorScience.monitorIRE(encoded: 188.0 / 255, transfer: .dlog2)
         #expect(early < 90)
@@ -488,12 +515,17 @@ struct LiveColorScienceTests {
         // 255 is not the 100 line. 188 is below the 100 line (the early-zebra bug).
         let y255 = ScopeDisplayScale.waveformLevel(1, transfer: .dlog2, iso: 1600)
         #expect(y255 > ScopeDisplayScale.clipLevel + 0.01)
-        #expect(abs(ScopeDisplayScale.waveformLevel(247.0 / 255, transfer: .dlog2, iso: 1600)
-            - ScopeDisplayScale.clipLevel) < 1e-9)
-        #expect(abs(ScopeDisplayScale.waveformLevel(223.0 / 255, transfer: .dlog, iso: 1600)
-            - ScopeDisplayScale.clipLevel) < 1e-9)
-        #expect(ScopeDisplayScale.waveformLevel(188.0 / 255, transfer: .dlog2, iso: 1600)
-            < ScopeDisplayScale.clipLevel - 0.05)
+        #expect(
+            abs(
+                ScopeDisplayScale.waveformLevel(247.0 / 255, transfer: .dlog2, iso: 1600)
+                    - ScopeDisplayScale.clipLevel) < 1e-9)
+        #expect(
+            abs(
+                ScopeDisplayScale.waveformLevel(223.0 / 255, transfer: .dlog, iso: 1600)
+                    - ScopeDisplayScale.clipLevel) < 1e-9)
+        #expect(
+            ScopeDisplayScale.waveformLevel(188.0 / 255, transfer: .dlog2, iso: 1600)
+                < ScopeDisplayScale.clipLevel - 0.05)
         // observe ignores 255 and can refine 247 → 248.
         let ignored = ScopeExposureCeiling.observeTapMax(255, transfer: .dlog2)
         #expect(ignored.clip == 247)
@@ -513,7 +545,8 @@ struct LiveColorScienceTests {
         let black = LiveColorScience.encode(0, transfer: .dlog2)
         #expect(abs(ScopeDisplayScale.monitorPercent(black, transfer: .dlog2, iso: 1600)) < 1e-9)
         let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        #expect(abs(ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600) - 30.50) < 0.5)
+        #expect(
+            abs(ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600) - 30.50) < 0.5)
         let band = LiveColorScience.falseColorBand(
             value: 30.50, scale: .ire, transfer: .dlog2)
         #expect(band?.label == "18%")
@@ -521,20 +554,28 @@ struct LiveColorScienceTests {
             value: 100, scale: .ire, transfer: .dlog2)
         #expect(clip?.label == "99–100")
         #expect(LiveColorScience.zebraHighlight(100))
-        #expect(!LiveColorScience.zebraHighlight(
-            ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600)))
+        #expect(
+            !LiveColorScience.zebraHighlight(
+                ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600)))
 
         let dlogBlack = LiveColorScience.encode(0, transfer: .dlog)
         #expect(abs(ScopeDisplayScale.monitorPercent(dlogBlack, transfer: .dlog, iso: 400)) < 1e-9)
         let dlogGrey = LiveColorScience.encode(0.18, transfer: .dlog)
-        #expect(abs(ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400) - 39.88) < 0.5)
-        #expect(abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 400) - 100) < 0.05)
-        #expect(abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 1600) - 100) < 0.05)
+        #expect(
+            abs(ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400) - 39.88) < 0.5
+        )
+        #expect(
+            abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 400) - 100)
+                < 0.05)
+        #expect(
+            abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 1600) - 100)
+                < 0.05)
         let dlogClip = LiveColorScience.falseColorBand(
             value: 100, scale: .ire, transfer: .dlog)
         #expect(dlogClip?.label == "99–100")
-        #expect(!LiveColorScience.zebraHighlight(
-            ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400)))
+        #expect(
+            !LiveColorScience.zebraHighlight(
+                ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400)))
     }
 
     // MARK: - Gamut matrices (papers)

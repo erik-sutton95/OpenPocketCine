@@ -32,7 +32,9 @@ enum PocketFalseColorMap {
     private struct CubeKey: Hashable, Sendable {
         /// `overlayPaintDisplay` = paint pre-compensated for the color-managed
         /// (no-LUT) bake, whose output DeviceRGB-encodes untagged cube results.
-        enum Kind: Hashable, Sendable { case full, overlayPaint, overlayPaintDisplay, overlayWeight }
+        enum Kind: Hashable, Sendable {
+            case full, overlayPaint, overlayPaintDisplay, overlayWeight
+        }
         var kind: Kind
         var scale: FalseColorScaleKind
         var transfer: MonitorTransfer
@@ -110,7 +112,8 @@ enum PocketFalseColorMap {
     }
 
     /// Coverage mask for the same overlay. 0 = show the displayed look (LUT or identity).
-    static func overlayWeightCube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT {
+    static func overlayWeightCube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT
+    {
         cachedCube(key(.overlayWeight, scale: scale, transfer: transfer))
     }
 
@@ -125,9 +128,10 @@ enum PocketFalseColorMap {
     static func overlayPaintData(
         scale: FalseColorScaleKind, mode: ColorMode, managedRender: Bool = false
     ) -> (Int, Data)? {
-        warmedData(key(
-            managedRender ? .overlayPaintDisplay : .overlayPaint,
-            scale: scale, transfer: MonitorTransfer(mode)))
+        warmedData(
+            key(
+                managedRender ? .overlayPaintDisplay : .overlayPaint,
+                scale: scale, transfer: MonitorTransfer(mode)))
     }
 
     /// IRE / PStops full lattice: WAVE-axis grayscale with the painted zones.
@@ -165,7 +169,8 @@ enum PocketFalseColorMap {
         overlayWeightCube(scale: .limits, mode: mode)
     }
 
-    static func bands(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> [LiveFalseColorBand] {
+    static func bands(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> [LiveFalseColorBand]
+    {
         LiveColorScience.falseColorBands(scale.liveScale, transfer: transfer)
     }
 
@@ -236,7 +241,9 @@ enum PocketFalseColorMap {
             }
         case .overlayWeight:
             // Mask values are consumed in working space, never output-converted.
-            overlayCube(scale: key.scale, transfer: key.transfer) { ($0.weight, $0.weight, $0.weight) }
+            overlayCube(scale: key.scale, transfer: key.transfer) {
+                ($0.weight, $0.weight, $0.weight)
+            }
         }
     }
 
@@ -246,7 +253,8 @@ enum PocketFalseColorMap {
         return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
     }
 
-    private static func buildCube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT {
+    private static func buildCube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT
+    {
         let size = cubeSize
         let denom = Double(size - 1)
         // Hoisted: `falseColorBands` per lattice point rebuilt the band table
@@ -262,7 +270,8 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
-                    let value = scale == .stops
+                    let value =
+                        scale == .stops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let color = renderedColor(
                         value: value, scale: scale, bands: bandList,
@@ -298,7 +307,8 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
-                    let value = scale == .stops
+                    let value =
+                        scale == .stops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
@@ -377,7 +387,10 @@ enum PocketFalseColorMap {
         let normalization = max(1, total)
         let baseWeight = max(0, 1 - total)
         let painted = weighted.reduce(
-            (red: base.red * baseWeight, green: base.green * baseWeight, blue: base.blue * baseWeight)
+            (
+                red: base.red * baseWeight, green: base.green * baseWeight,
+                blue: base.blue * baseWeight
+            )
         ) { result, item in
             let color = renderedBandColor(item.0, scale: scale, detailGray: monitorGray)
             return (
@@ -411,12 +424,14 @@ enum PocketFalseColorMap {
     ) -> Double {
         let rising =
             band.lowerBound.isFinite && band.lowerBound != 0
-            ? smoothStep(edge0: band.lowerBound - width, edge1: band.lowerBound + width, value: value)
+            ? smoothStep(
+                edge0: band.lowerBound - width, edge1: band.lowerBound + width, value: value)
             : 1
         let falling =
             band.upperBound.isFinite
-            ? 1 - smoothStep(
-                edge0: band.upperBound - width, edge1: band.upperBound + width, value: value)
+            ? 1
+                - smoothStep(
+                    edge0: band.upperBound - width, edge1: band.upperBound + width, value: value)
             : 1
         return rising * falling
     }

@@ -87,6 +87,22 @@ class LiveAssistStateTest {
     }
 
     @Test
+    fun bringToFrontPutsTheScopeLastAndRoundTrips() {
+        var saved: String? = null
+        val state = LiveAssistState(onPersist = { saved = it })
+        assertEquals(LiveAssistState.defaultScopeStack, state.scopeStack)
+        state.toggle(LiveAssistTool.WAVE)
+        state.toggle(LiveAssistTool.PARADE)
+        assertEquals(LiveAssistTool.PARADE, state.scopeStack.last())
+        state.bringToFront(LiveAssistTool.WAVE)
+        assertEquals(LiveAssistTool.WAVE, state.scopeStack.last())
+        assertTrue(state.scopeStack.toSet() == LiveAssistState.stackableScopeTools.toSet())
+        val restored = LiveAssistState(encoded = saved)
+        assertEquals(LiveAssistTool.WAVE, restored.scopeStack.last())
+        assertEquals(state.scopeStack, restored.scopeStack)
+    }
+
+    @Test
     fun encodedRoundTripsOnToolsAndLut() {
         var saved: String? = null
         val state = LiveAssistState(onPersist = { saved = it })
@@ -179,5 +195,19 @@ class LiveAssistStateTest {
         state.togglePlayback(LiveAssistTool.FALSE)
         assertFalse(state.isPlaybackVisible(LiveAssistTool.FALSE))
         assertEquals(setOf("ZEBRA"), playbackSaved)
+        assertTrue(state.playbackNeedsProcessedFeed())
+        state.togglePlayback(LiveAssistTool.ZEBRA)
+        assertFalse(state.playbackNeedsProcessedFeed())
+        state.togglePlayback(LiveAssistTool.GRID)
+        assertFalse(state.playbackNeedsProcessedFeed())
+        state.togglePlayback(LiveAssistTool.LUT)
+        assertTrue(state.playbackNeedsProcessedFeed())
+        assertTrue(state.playbackNeedsLookOverlay())
+        state.togglePlayback(LiveAssistTool.LUT)
+        assertFalse(state.playbackNeedsLookOverlay())
+        assertFalse(state.playbackNeedsScopeTap())
+        state.togglePlayback(LiveAssistTool.WAVE)
+        assertTrue(state.playbackNeedsScopeTap())
+        assertFalse(state.playbackNeedsLookOverlay())
     }
 }

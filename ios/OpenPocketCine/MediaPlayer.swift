@@ -1122,7 +1122,7 @@ struct MediaPlayerView: View {
         return Button {
             withAnimation(.spring(duration: 0.32)) { assistMode.toggle() }
         } label: {
-            OpcIcon.scan
+            OpcIcon.monitor
                 .frame(
                     width: PlaybackChrome.actionIconSize,
                     height: PlaybackChrome.actionIconSize
@@ -1427,6 +1427,33 @@ struct MediaPlayerView: View {
         // camera often parks `moov` at the end, and SoftAP has no internet —
         // the item stays `.unknown` and this overlay never clears. Pull the
         // sidecar (same GET as thumbs) and play the local file.
+        // Prefer the 720p sidecar even when the 4K original is already cached
+        // for export. LUT / false colour grade that proxy, not the raw clip.
+        if let proxy = session.localProxySource(for: active) {
+            isRemoteStream = false
+            if await playSource(proxy, timeout: .seconds(8)) { return }
+        }
+
+        if session.canReachCameraMedia {
+            for path in MediaHTTP.proxyPaths(active) {
+                if Task.isCancelled { return }
+                isRemoteStream = true
+                do {
+                    let local = try await session.cachePlaybackFile(file: active, path: path)
+                    let source = MediaPlaybackSource(
+                        url: local,
+                        mimeType: MediaHTTP.playbackMIMEType(for: path),
+                        isRemote: false,
+                        path: path)
+                    isRemoteStream = false
+                    if await playSource(source, timeout: .seconds(8)) { return }
+                } catch {
+                    ControlLiveLog.line(
+                        "media: play download failed \(path) \(error.localizedDescription)")
+                }
+            }
+        }
+
         if let cached = session.localPlaybackSource(for: active) {
             isRemoteStream = false
             if await playSource(cached, timeout: .seconds(8)) { return }
@@ -1437,22 +1464,20 @@ struct MediaPlayerView: View {
             return
         }
 
-        for path in MediaHTTP.previewPaths(active) {
-            if Task.isCancelled { return }
-            isRemoteStream = true
-            do {
-                let local = try await session.cachePlaybackFile(file: active, path: path)
-                let source = MediaPlaybackSource(
-                    url: local,
-                    mimeType: MediaHTTP.playbackMIMEType(for: path),
-                    isRemote: false,
-                    path: path)
-                isRemoteStream = false
-                if await playSource(source, timeout: .seconds(8)) { return }
-            } catch {
-                ControlLiveLog.line(
-                    "media: play download failed \(path) \(error.localizedDescription)")
-            }
+        let original = MediaHTTP.deliveryPath(active)
+        isRemoteStream = true
+        do {
+            let local = try await session.cachePlaybackFile(file: active, path: original)
+            let source = MediaPlaybackSource(
+                url: local,
+                mimeType: MediaHTTP.playbackMIMEType(for: original),
+                isRemote: false,
+                path: original)
+            isRemoteStream = false
+            if await playSource(source, timeout: .seconds(8)) { return }
+        } catch {
+            ControlLiveLog.line(
+                "media: play download failed \(original) \(error.localizedDescription)")
         }
 
         isRemoteStream = false

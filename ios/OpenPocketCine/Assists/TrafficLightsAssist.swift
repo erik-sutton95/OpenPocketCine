@@ -405,13 +405,17 @@ private struct TrafficLightsCrushClipSegmented: View {
                     onSelect(option)
                 } label: {
                     Text(option.compactLabel)
-                        .font(LiveType.ui(size: compact ? 12 : 11, weight: active ? .semibold : .medium))
+                        .font(
+                            LiveType.ui(
+                                size: compact ? 12 : 11, weight: active ? .semibold : .medium)
+                        )
                         .foregroundStyle(active ? LiveDesign.text : LiveDesign.muted)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .frame(
                             minWidth: TrafficLightsAssist.segmentMinWidth,
-                            minHeight: TrafficLightsAssist.segmentMinHeight)
+                            minHeight: TrafficLightsAssist.segmentMinHeight
+                        )
                         .background(
                             active ? LiveDesign.surface : Color.clear,
                             in: RoundedRectangle(

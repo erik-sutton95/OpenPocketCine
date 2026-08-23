@@ -20,6 +20,7 @@ internal fun rememberLiveFeedEffectsPlan(
     status: CameraStatus,
     family: String,
     cameraName: String?,
+    playback: Boolean = false,
 ): FeedEffectsRenderPlan {
     val context = LocalContext.current
     var plan by remember { mutableStateOf(FeedEffectsRenderPlan.IDENTITY) }
@@ -46,7 +47,10 @@ internal fun rememberLiveFeedEffectsPlan(
     val vectorscope = assist.vectorscope
     val trafficLights = assist.trafficLights
     val crushClip = assist.crushClipCompensation
+    val playbackTools = assist.playbackVisibleTools
     LaunchedEffect(
+        playback,
+        playbackTools,
         lutOn,
         lutSelection,
         peaking,
@@ -87,6 +91,7 @@ internal fun rememberLiveFeedEffectsPlan(
                     iso = status.iso,
                     family = family,
                     cameraName = cameraName,
+                    playback = playback,
                 )
             }
     }

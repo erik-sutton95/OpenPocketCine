@@ -5,13 +5,13 @@ import Foundation
 public enum ConnectionPhase: Equatable, Sendable {
     case idle
     case scanning
-    case connectingGatt         // GATT connect + notifications + arm pairing
-    case pairing                // SetPairingPIN sent
-    case awaitingApproval       // camera showed a prompt — user must tap it
-    case readingWifiCreds       // asking the camera for its SSID + passphrase
-    case joiningWifi            // NEHotspotConfiguration
-    case openingDatalink        // UDP handshake + register + subscribe
-    case live                   // registered; status pushes flowing
+    case connectingGatt  // GATT connect + notifications + arm pairing
+    case pairing  // SetPairingPIN sent
+    case awaitingApproval  // camera showed a prompt — user must tap it
+    case readingWifiCreds  // asking the camera for its SSID + passphrase
+    case joiningWifi  // NEHotspotConfiguration
+    case openingDatalink  // UDP handshake + register + subscribe
+    case live  // registered; status pushes flowing
     case failed(String)
 
     public var label: String {

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins OpenZCine `AssistConfiguration.Guides` + `rectForRatio` onto PocketCine.

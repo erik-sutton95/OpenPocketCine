@@ -59,7 +59,9 @@ extension AppModel {
     }
 
     func loadFrameioUserIfNeeded() async {
-        guard isFrameioConnected, frameioUser == nil, let config = frameioConfiguration else { return }
+        guard isFrameioConnected, frameioUser == nil, let config = frameioConfiguration else {
+            return
+        }
         frameioUser = try? await FrameioService(config: config).currentUser()
     }
 
@@ -113,7 +115,8 @@ extension AppModel {
         let service = FrameioService(config: config)
         if frameioUser == nil { frameioUser = try? await service.currentUser() }
         let destination = try await resolveFrameioDestination(using: service)
-        let size = (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size]
+        let size =
+            (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size]
             as? NSNumber)?.intValue ?? 0
         let mediaType = FrameioMediaType.forFilename(filename)
         _ = try await service.upload(

@@ -51,6 +51,17 @@ private let PPS = hex("4401c17312240890")
         #expect(f.payload == [0x00, 0x04, 0x02, 0, 0, 0, 0, 0, 0, 0])
     }
 
+    @Test func liveViewPrepareIsTapFocusHint() throws {
+        let prepare = Commands.liveViewPrepare()
+        let hint = Commands.tapFocusLiveHint()
+        #expect(prepare.cmdSet == 0x02 && prepare.cmdId == 0x68)
+        #expect(prepare.payload == [0x08])
+        #expect(prepare.receiver == hint.receiver)
+        #expect(prepare.payload == hint.payload)
+        #expect(CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: false))
+        #expect(!CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: true))
+    }
+
     @Test func nanoLiveViewEnableUsesCapturedReceiver() throws {
         let f = Commands.liveViewEnable(seq: 0, receiver: Commands.liveViewEnableReceiverNano)
         #expect(f.receiver == 0x41)

@@ -18,7 +18,8 @@ public enum EncoderPresentPath {
     }
 
     /// Aspect for the feed well. Unknown / degenerate rasters keep landscape 16:9.
-    public static func feedAspect(width: Int, height: Int, fallback: Double = 16.0 / 9.0) -> Double {
+    public static func feedAspect(width: Int, height: Int, fallback: Double = 16.0 / 9.0) -> Double
+    {
         guard width > 1, height > 1 else { return fallback }
         return Double(width) / Double(height)
     }

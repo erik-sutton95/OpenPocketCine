@@ -1,27 +1,25 @@
 New and changed
 
-- Live lock, settings, media, close, focus-reset, and assist chevrons use simple line icons instead of iPhone-only symbols.
-- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second. The EV tile keeps the number and a small face mark.
+- Opening a clip plays the camera's small preview file so the monitor stays snappy. Share and Save still use the original camera file.
+- View Assist on a clip uses a monitor icon. LUT, false colour, peaking, and zebra grade the picture itself.
+- In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second.
 - Saved cameras remember the camera Wi-Fi on this phone, so reconnect should not re-prompt every time.
-- A look that was already on should grade the first picture instead of popping in seconds later.
 - ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
 - The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
 
 Fixes
 
-- This build has no new app behavior — keep testing Face Priority, shutter angle, reconnect, and that the live picture stays upright with false colour or LUT on.
+- Sharing a selected clip no longer exports a 720p stand-in of the original file.
 - Traffic Lights crush/clip compensation starts at 0 stops. Long-press LIGHTS if you want the old ¼-stop tolerance.
 - First connect no longer sits on Waiting for live-view when a few video packets arrive and then freeze.
-- While a subject is tracked, stick left/right matches the free gimbal instead of reversing.
-- Turn Face Priority off and EV returns to the value from before it was on, or 0.0.
 - After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
 - The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
 - If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
 
 What to test
 
-- On the live monitor, confirm lock, settings, media, and the close X are simple line icons. Set MODE to Auto, open EV, turn Face Priority on. Confirm the EV number is readable, the face mark sits on the EV label, and a face in a dark or bright frame moves EV quickly for a couple of seconds, then about one third-stop a second.
-- Put a face in frame, then turn Face Priority off — EV should return to the value from before it was on (or 0.0).
-- Open a clip, leave it, and confirm live view returns in a couple of seconds — not a long black well.
-- On ISO, turn Auto Native ISO off, switch D-Log ↔ D-Log2, and confirm ISO stays put.
+- Open a clip, turn on LUT or false colour, and confirm the picture changes. WAVE should look like the live scopes.
+- Share that clip and confirm the file is the original camera clip, not a small preview.
+- Leave the clip and confirm live view returns in a couple of seconds — not a long black well.
+- Set MODE to Auto, open EV, turn Face Priority on, then off — EV should return to the value from before it was on (or 0.0).
 - In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.

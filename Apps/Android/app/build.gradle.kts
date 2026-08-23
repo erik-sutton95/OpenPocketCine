@@ -28,6 +28,20 @@ android {
         ndk {
             abiFilters += supportedAndroidAbi
         }
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=c++_static"
+            }
+        }
+    }
+
+    ndkVersion = "28.2.13676358"
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -114,6 +128,7 @@ dependencies {
     implementation(libs.kyant.shapes)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.common)
+    implementation(libs.media3.effect)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.okhttp)

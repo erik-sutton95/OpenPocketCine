@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct FeedWatchdogTests {
@@ -11,7 +12,8 @@ import Testing
 
     @Test func waitsForFirstPictureWhileVideoFlows() {
         var dog = FeedWatchdog()
-        #expect(dog.tick(Self.snap(now: 10, frameAge: 8, videoAge: 0.3, sawPicture: false)) == .none)
+        #expect(
+            dog.tick(Self.snap(now: 10, frameAge: 8, videoAge: 0.3, sawPicture: false)) == .none)
         #expect(dog.stage == .idle)
     }
 
@@ -152,19 +154,24 @@ import Testing
 
         snap.secondsSinceFocusTrackSet = 4.1
         snap.lastStatusAge = 4.1
-        #expect(dog.tick(snap) == .reopenDatalink, "past AF-C grace and still silent — then rebuild")
+        #expect(
+            dog.tick(snap) == .reopenDatalink, "past AF-C grace and still silent — then rebuild")
     }
 
     @Test func assistDecoderStartRequestsIDROnlyOnce() {
-        #expect(FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
-            startingHardwareDecoder: true, hasFormat: true, hasPicture: true))
-        #expect(!FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
-            startingHardwareDecoder: false, hasFormat: true, hasPicture: true),
+        #expect(
+            FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
+                startingHardwareDecoder: true, hasFormat: true, hasPicture: true))
+        #expect(
+            !FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
+                startingHardwareDecoder: false, hasFormat: true, hasPicture: true),
             "LUT/PEAK/WAVE off is not a GOP reset")
-        #expect(!FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
-            startingHardwareDecoder: true, hasFormat: true, hasPicture: false))
-        #expect(!FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
-            startingHardwareDecoder: true, hasFormat: false, hasPicture: true))
+        #expect(
+            !FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
+                startingHardwareDecoder: true, hasFormat: true, hasPicture: false))
+        #expect(
+            !FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
+                startingHardwareDecoder: true, hasFormat: false, hasPicture: true))
     }
 
     @Test func udpSilentDoesNotTearVTOrFullRejoin() {
@@ -188,25 +195,29 @@ import Testing
     @Test func firstConnectFrozenVideoRebuildsUDP() {
         var dog = FeedWatchdog()
         #expect(
-            dog.tick(Self.snap(
-                now: 10, frameAge: 10, videoAge: 2.1, statusAge: 2.1,
-                sawPicture: false, bleAge: 0.3, hadVideo: true))
-            == .reopenDatalink)
+            dog.tick(
+                Self.snap(
+                    now: 10, frameAge: 10, videoAge: 2.1, statusAge: 2.1,
+                    sawPicture: false, bleAge: 0.3, hadVideo: true))
+                == .reopenDatalink)
         #expect(dog.stage == .reopenDatalink)
     }
 
     /// First picture: no 0x02 yet. A leftover rebuild / nil receive clock is
     /// not a live flap — resend `0x09/0xa8`, do not hold or fullRejoin.
     @Test func neverGotVideoResendsEnableEvenAfterRebuild() {
-        #expect(!FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: 0.4, pathReady: true, lastBleNotifyAge: 0.2,
-            hadVideo: false))
-        #expect(FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 2, secondsSinceLastRebuild: 0.4,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: false))
-        #expect(!FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 1, secondsSinceLastRebuild: 0.4,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: false))
+        #expect(
+            !FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: 0.4, pathReady: true, lastBleNotifyAge: 0.2,
+                hadVideo: false))
+        #expect(
+            FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 2, secondsSinceLastRebuild: 0.4,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: false))
+        #expect(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 1, secondsSinceLastRebuild: 0.4,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: false))
 
         var dog = FeedWatchdog()
         var snap = Self.snap(
@@ -237,7 +248,7 @@ import Testing
 
         #expect(
             dog.tick(Self.snap(now: now, frameAge: 2.1, statusAge: 2.1, bleAge: 0.2))
-            == .reopenDatalink)
+                == .reopenDatalink)
         #expect(dog.stage == .reopenDatalink)
         #expect(dog.isRecovering)
 
@@ -268,7 +279,7 @@ import Testing
         var now: TimeInterval = 10
         #expect(
             dog.tick(Self.snap(now: now, frameAge: 2.6, statusAge: 2.6, bleAge: 0.2))
-            == .reopenDatalink)
+                == .reopenDatalink)
 
         now += 0.1
         var fakeFresh = Self.snap(now: now, frameAge: 2.7, videoAge: 0.1, bleAge: 0.2)
@@ -285,37 +296,45 @@ import Testing
     }
 
     @Test func recentRebuildWithBleAndPathHoldsBind() {
-        #expect(FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
-            hadVideo: true))
-        #expect(!FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: nil, pathReady: true, lastBleNotifyAge: 0.2,
-            hadVideo: true))
-        #expect(!FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 8,
-            hadVideo: true))
-        #expect(!FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
-            hadVideo: false),
+        #expect(
+            FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
+                hadVideo: true))
+        #expect(
+            !FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: nil, pathReady: true, lastBleNotifyAge: 0.2,
+                hadVideo: true))
+        #expect(
+            !FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 8,
+                hadVideo: true))
+        #expect(
+            !FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
+                hadVideo: false),
             "neverGotVideo must not inherit the post-video 60s hold")
-        #expect(!FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 5, secondsSinceLastRebuild: 2.6,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true),
+        #expect(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 5, secondsSinceLastRebuild: 2.6,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true),
             "one recover 0x09/0xa8 is enough after a rebuild")
-        #expect(FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
-            holdEnableCount: 1),
+        #expect(
+            FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
+                holdEnableCount: 1),
             "missed IDR while UDP is alive — one extra enable at 5s")
-        #expect(!FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
-            holdEnableCount: 2),
+        #expect(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
+                holdEnableCount: 2),
             "already retried this hold — do not 1 Hz loop")
-        #expect(FeedWatchdog.shouldRepeatRecoverEnable(
-            secondsSinceLastEnable: 60, secondsSinceLastRebuild: nil,
-            pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
-            holdEnableCount: 2),
+        #expect(
+            FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 60, secondsSinceLastRebuild: nil,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
+                holdEnableCount: 2),
             "dead camera after the one retry — 60s backoff")
     }
 
@@ -323,7 +342,7 @@ import Testing
         var dog = FeedWatchdog()
         #expect(
             dog.tick(Self.snap(now: 10, frameAge: 3, statusAge: 3, bleAge: 0.2))
-            == .reopenDatalink)
+                == .reopenDatalink)
         #expect(dog.tick(Self.snap(now: 11, frameAge: 0.2, videoAge: 0.1)) == .none)
         #expect(dog.stage == .idle)
         #expect(!dog.isRecovering)
@@ -331,16 +350,18 @@ import Testing
 
     @Test func deadFlowSkipsToReopenDatalink() {
         var dog = FeedWatchdog()
-        #expect(dog.tick(Self.snap(now: 10, frameAge: 3, statusAge: 3, flowHealthy: false, bleAge: 0.2))
-            == .reopenDatalink)
+        #expect(
+            dog.tick(Self.snap(now: 10, frameAge: 3, statusAge: 3, flowHealthy: false, bleAge: 0.2))
+                == .reopenDatalink)
         #expect(dog.stage == .reopenDatalink)
     }
 
     @Test func wedgedDecoderDoesNotTearVTWhileUDPPaused() {
         var dog = FeedWatchdog()
         #expect(
-            dog.tick(Self.snap(now: 10, frameAge: 3, statusAge: 3, decoderFailed: true, bleAge: 0.2))
-            == .reopenDatalink,
+            dog.tick(
+                Self.snap(now: 10, frameAge: 3, statusAge: 3, decoderFailed: true, bleAge: 0.2))
+                == .reopenDatalink,
             "UDP pause + BLE up ⇒ rebuild UDP, do not rebuild VT")
         #expect(dog.stage == .reopenDatalink)
     }
@@ -374,14 +395,18 @@ import Testing
     @Test func recoverDoesNotFlushToBlackBeforeNextFrame() {
         #expect(!FeedWatchdog.shouldFlushDisplayedImage(nextFrameReady: false))
         #expect(FeedWatchdog.shouldFlushDisplayedImage(nextFrameReady: true))
-        #expect(!FeedWatchdog.shouldPresentSample(
-            hasPicture: false, awaitingIDR: false, isIDR: false))
-        #expect(!FeedWatchdog.shouldPresentSample(
-            hasPicture: true, awaitingIDR: true, isIDR: false))
-        #expect(FeedWatchdog.shouldPresentSample(
-            hasPicture: true, awaitingIDR: true, isIDR: true))
-        #expect(FeedWatchdog.shouldPresentSample(
-            hasPicture: true, awaitingIDR: false, isIDR: false))
+        #expect(
+            !FeedWatchdog.shouldPresentSample(
+                hasPicture: false, awaitingIDR: false, isIDR: false))
+        #expect(
+            !FeedWatchdog.shouldPresentSample(
+                hasPicture: true, awaitingIDR: true, isIDR: false))
+        #expect(
+            FeedWatchdog.shouldPresentSample(
+                hasPicture: true, awaitingIDR: true, isIDR: true))
+        #expect(
+            FeedWatchdog.shouldPresentSample(
+                hasPicture: true, awaitingIDR: false, isIDR: false))
         #expect(!FeedWatchdog.shouldSendRecoverEnable(pathReady: true, decoderReady: false))
         #expect(!FeedWatchdog.shouldSendRecoverEnable(pathReady: false, decoderReady: true))
         #expect(FeedWatchdog.shouldSendRecoverEnable(pathReady: true, decoderReady: true))

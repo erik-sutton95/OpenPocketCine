@@ -17,8 +17,10 @@ Port **9004** for the Pocket family. First a TCP `:7001` “poke”:
 
 Then a 40-byte UDP handshake, then register + subscribe. One UDP 9004
 5-tuple stays for control and live view. Pin that socket to the camera
-SoftAP (iOS `NWConnection` to `192.168.2.1:9004`; Android
-`Network.bindSocket` on an unbound datagram socket, then `connect`).
+SoftAP (iOS `NWConnection` to `192.168.2.1:9004` with an ephemeral local
+port; Android `Network.bindSocket` on an unbound datagram, bind `0.0.0.0:0`,
+then `connect`). Camera 9004 is the remote — do not bind the client to
+`:9004` (Samsung then keeps telemetry and drops HEVC).
 
 | Command | Meaning |
 | --- | --- |

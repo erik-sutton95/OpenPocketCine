@@ -115,7 +115,8 @@ public enum FeedEffectsWire {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
-                    let value = scale == .stops
+                    let value =
+                        scale == .stops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
@@ -192,7 +193,10 @@ public enum FeedEffectsWire {
         let normalization = max(1, total)
         let baseWeight = max(0, 1 - total)
         let painted = weighted.reduce(
-            (red: base.red * baseWeight, green: base.green * baseWeight, blue: base.blue * baseWeight)
+            (
+                red: base.red * baseWeight, green: base.green * baseWeight,
+                blue: base.blue * baseWeight
+            )
         ) { result, item in
             let color = renderedBandColor(item.0, scale: scale, detailGray: monitorGray)
             return (
@@ -226,12 +230,14 @@ public enum FeedEffectsWire {
     ) -> Double {
         let rising =
             band.lowerBound.isFinite && band.lowerBound != 0
-            ? smoothStep(edge0: band.lowerBound - width, edge1: band.lowerBound + width, value: value)
+            ? smoothStep(
+                edge0: band.lowerBound - width, edge1: band.lowerBound + width, value: value)
             : 1
         let falling =
             band.upperBound.isFinite
-            ? 1 - smoothStep(
-                edge0: band.upperBound - width, edge1: band.upperBound + width, value: value)
+            ? 1
+                - smoothStep(
+                    edge0: band.upperBound - width, edge1: band.upperBound + width, value: value)
             : 1
         return rising * falling
     }

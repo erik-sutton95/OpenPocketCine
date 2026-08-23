@@ -1,6 +1,7 @@
 import Foundation
 import Metal
 import Observation
+
 #if canImport(MetalFX)
     import MetalFX
 #endif
@@ -78,7 +79,8 @@ enum FeedUpscaler: String, CaseIterable, Sendable {
         )
     }
 
-    static func superResolutionScale(offered: [Float], ratio: Double, held: Float? = nil) -> Float? {
+    static func superResolutionScale(offered: [Float], ratio: Double, held: Float? = nil) -> Float?
+    {
         if let held, Double(held) >= ratio { return held }
         let ordered = offered.sorted()
         return ordered.first { Double($0) >= ratio } ?? ordered.last
@@ -100,7 +102,8 @@ final class FeedUpscaleSwitch {
         }
     }
 
-    nonisolated(unsafe) static var rendererReadsUpscaler: FeedUpscaler = .supported(or: storedChoice)
+    nonisolated(unsafe) static var rendererReadsUpscaler: FeedUpscaler = .supported(
+        or: storedChoice)
     nonisolated(unsafe) static var presentsSuperResolutionInput = false
 
     private nonisolated static var storedChoice: FeedUpscaler? {

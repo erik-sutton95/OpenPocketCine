@@ -1,11 +1,11 @@
-import Foundation
 import CoreBluetooth
-import os
+import Foundation
 import OpenPocketViewCore
+import os
 
 /// A camera seen in a BLE scan.
 struct FoundCamera: Identifiable, Sendable {
-    let id: UUID            // peripheral identifier (CoreBluetooth hides the MAC)
+    let id: UUID  // peripheral identifier (CoreBluetooth hides the MAC)
     let name: String
     let model: CameraModel
     let modelId: Int?
@@ -75,7 +75,7 @@ final class BleLink: NSObject {
 
     override init() {
         super.init()
-        central = CBCentralManager(delegate: self, queue: nil)   // delegate on the main queue
+        central = CBCentralManager(delegate: self, queue: nil)  // delegate on the main queue
     }
 
     func waitUntilPoweredOn() async {
@@ -102,8 +102,9 @@ final class BleLink: NSObject {
             self.foundStream?.finish()
             self.foundStream = cont
             self.yieldAlreadyConnected()
-            self.central.scanForPeripherals(withServices: nil,
-                                            options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+            self.central.scanForPeripherals(
+                withServices: nil,
+                options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
         }
     }
 
@@ -119,7 +120,8 @@ final class BleLink: NSObject {
         pairingArmed = false
         fff4NotifySettled = false
         fff5NotifySettled = false
-        fff4 = nil; fff5 = nil
+        fff4 = nil
+        fff5 = nil
         p.delegate = self
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             // A second connect (or disconnect mid-handshake) used to overwrite readyCont and leak
@@ -135,7 +137,9 @@ final class BleLink: NSObject {
     /// back-to-back writes to fff5 drop (same constraint Osmosis hit on Android).
     func send(_ frame: Duml.Frame) {
         if !Self.isSessionPing(frame) {
-            log.debug("fff5 write 0x\(String(format: "%02x/%02x", frame.cmdSet, frame.cmdId), privacy: .public) \(frame.payload.count)B")
+            log.debug(
+                "fff5 write 0x\(String(format: "%02x/%02x", frame.cmdSet, frame.cmdId), privacy: .public) \(frame.payload.count)B"
+            )
         }
         writeQueue.append(Data(Duml.encode(frame)))
         pumpWrites()
@@ -161,8 +165,13 @@ final class BleLink: NSObject {
     func disconnect() {
         finishConnect(BleError.gone)
         if let p = connected { central.cancelPeripheralConnection(p) }
-        connected = nil; selectedId = nil; fff4 = nil; fff5 = nil
-        pairingArmed = false; fff4NotifySettled = false; fff5NotifySettled = false
+        connected = nil
+        selectedId = nil
+        fff4 = nil
+        fff5 = nil
+        pairingArmed = false
+        fff4NotifySettled = false
+        fff5NotifySettled = false
         disconnectForeignDJI(keeping: nil)
     }
 
@@ -208,7 +217,8 @@ final class BleLink: NSObject {
     /// Resume `readyCont` exactly once. Every connect path (success, fail, disconnect, timeout)
     /// goes through here so the continuation cannot leak.
     private func finishConnect(_ error: Error?) {
-        connectTimeout?.cancel(); connectTimeout = nil
+        connectTimeout?.cancel()
+        connectTimeout = nil
         guard let c = readyCont else { return }
         readyCont = nil
         if let error { c.resume(throwing: error) } else { c.resume() }
@@ -253,11 +263,16 @@ final class BleLink: NSObject {
 
 extension BleLink: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn { poweredOn?.resume(); poweredOn = nil }
+        if central.state == .poweredOn {
+            poweredOn?.resume()
+            poweredOn = nil
+        }
     }
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
-                        advertisementData: [String: Any], rssi RSSI: NSNumber) {
+    func centralManager(
+        _ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
+        advertisementData: [String: Any], rssi RSSI: NSNumber
+    ) {
         guard let camera = classify(peripheral, advertisementData) else { return }
         let first = peripherals[peripheral.identifier] == nil
         peripherals[peripheral.identifier] = peripheral
@@ -279,16 +294,21 @@ extension BleLink: CBCentralManagerDelegate {
         peripheral.discoverServices([serviceUUID])
     }
 
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+    func centralManager(
+        _ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?
+    ) {
         guard isSelected(peripheral) else { return }
         stopScan()
         finishConnect(error ?? BleError.gone)
     }
 
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+    func centralManager(
+        _ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?
+    ) {
         // Cancelling a leftover Pocket must not abort the Nano scan / handshake.
         guard isSelected(peripheral) else {
-            log.info("ble: ignore disconnect from foreign \(peripheral.identifier, privacy: .public)")
+            log.info(
+                "ble: ignore disconnect from foreign \(peripheral.identifier, privacy: .public)")
             return
         }
         stopScan()
@@ -303,69 +323,100 @@ extension BleLink: CBCentralManagerDelegate {
         var modelId: Int?
         var isDji = false
         if let mfr = adv[CBAdvertisementDataManufacturerDataKey] as? Data, mfr.count >= 2 {
-            let companyId = Int(mfr[0]) | (Int(mfr[1]) << 8)   // little-endian
+            let companyId = Int(mfr[0]) | (Int(mfr[1]) << 8)  // little-endian
             if BleConstants.isDjiCompanyId(companyId) {
                 isDji = true
-                modelId = BleAdvert.modelId([UInt8](mfr.dropFirst(2)))   // strip company id
+                modelId = BleAdvert.modelId([UInt8](mfr.dropFirst(2)))  // strip company id
             }
         }
         // The Pocket 3 often sends no manufacturer data — fall back to the name.
-        let nameLooksDji = (advName?.lowercased()).map { n in
-            ["osmo", "pocket", "nano", "dji", "action", "xtra", "edge"].contains { n.contains($0) }
-        } ?? false
+        let nameLooksDji =
+            (advName?.lowercased()).map { n in
+                ["osmo", "pocket", "nano", "dji", "action", "xtra", "edge"].contains {
+                    n.contains($0)
+                }
+            } ?? false
         guard isDji || nameLooksDji else { return nil }
-        return FoundCamera(id: peripheral.identifier,
-                           name: advName ?? "DJI camera",
-                           model: CameraModel.resolve(modelId: modelId, name: advName),
-                           modelId: modelId)
+        return FoundCamera(
+            id: peripheral.identifier,
+            name: advName ?? "DJI camera",
+            model: CameraModel.resolve(modelId: modelId, name: advName),
+            modelId: modelId)
     }
 }
 
 extension BleLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard isSelected(peripheral) else { return }
-        if let error { finishConnect(error); return }
+        if let error {
+            finishConnect(error)
+            return
+        }
         guard let svc = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
-            finishConnect(BleError.noService); return
+            finishConnect(BleError.noService)
+            return
         }
         peripheral.discoverCharacteristics([fff4UUID, fff5UUID], for: svc)
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    func peripheral(
+        _ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?
+    ) {
         guard isSelected(peripheral) else { return }
-        if let error { finishConnect(error); return }
+        if let error {
+            finishConnect(error)
+            return
+        }
         for c in service.characteristics ?? [] {
-            if c.uuid == fff4UUID { fff4 = c; requestNotify(c, on: peripheral) }
-            if c.uuid == fff5UUID { fff5 = c; requestNotify(c, on: peripheral) }
+            if c.uuid == fff4UUID {
+                fff4 = c
+                requestNotify(c, on: peripheral)
+            }
+            if c.uuid == fff5UUID {
+                fff5 = c
+                requestNotify(c, on: peripheral)
+            }
         }
         if fff4 == nil || fff5 == nil { finishConnect(BleError.noService) }
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(
+        _ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
         guard isSelected(peripheral) else { return }
         // Wait for both CCCD callbacks (success or fail) so the arm-pairing write does not
         // collide with an in-flight ATT request. Do not require fff5.isNotifying — Osmosis
         // skips a missing CCCD, and requiring it hung "Connecting (Bluetooth)…" forever.
         if characteristic.uuid == fff4UUID { fff4NotifySettled = true }
         if characteristic.uuid == fff5UUID { fff5NotifySettled = true }
-        guard !pairingArmed, fff4NotifySettled, fff5NotifySettled, let fff4, fff4.isNotifying else { return }
+        guard !pairingArmed, fff4NotifySettled, fff5NotifySettled, let fff4, fff4.isNotifying else {
+            return
+        }
         pairingArmed = true
         peripheral.writeValue(Data([0x01, 0x00]), for: fff4, type: .withResponse)
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(
+        _ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?
+    ) {
         guard isSelected(peripheral) else { return }
-        if characteristic.uuid == fff4UUID {   // the arm-pairing write completed -> ready
+        if characteristic.uuid == fff4UUID {  // the arm-pairing write completed -> ready
             finishConnect(error)
         }
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(
+        _ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
         guard isSelected(peripheral) else { return }
         guard let value = characteristic.value else { return }
         for frame in DumlTransport.scanFrames([UInt8](value)) {
             if !Self.isSessionPing(frame) {
-                log.debug("notify 0x\(String(format: "%02x/%02x", frame.cmdSet, frame.cmdId), privacy: .public) flags=\(frame.flags) \(frame.payload.count)B")
+                log.debug(
+                    "notify 0x\(String(format: "%02x/%02x", frame.cmdSet, frame.cmdId), privacy: .public) flags=\(frame.flags) \(frame.payload.count)B"
+                )
             }
             frameStream?.yield(frame)
         }

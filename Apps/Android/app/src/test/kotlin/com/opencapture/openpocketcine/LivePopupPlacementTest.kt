@@ -63,6 +63,47 @@ class LivePopupPlacementTest {
         assertEquals(cell.maxY + 8f, rec.y, 0.05f)
         assertEquals(cell.maxY + 8f, color.y, 0.05f)
         assertTrue(rec.maxHeight > LiveChromeMetrics.DRUM_PICKER_HEIGHT + LiveChromeMetrics.PICKER_MODE_BAR_HEIGHT)
+        assertTrue(LiveSheet.FORMAT.isTopPicker)
+        assertTrue(LiveSheet.COLOR.isTopPicker)
+        assertTrue(!LiveSheet.ISO.isTopPicker)
+        assertEquals(340f, rec.width, 0.05f)
+
+        val withBarFloor =
+            LivePopupPlacement.topPicker(
+                cell = cell,
+                panelHeight = LiveChromeMetrics.DRUM_PICKER_HEIGHT,
+                viewportWidth = viewportW,
+                viewportHeight = viewportH,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                floorY = 330f,
+            )
+        assertEquals(cell.maxY + 8f, withBarFloor.y, 0.05f)
+        assertEquals(340f, withBarFloor.width, 0.05f)
+    }
+
+    @Test
+    fun topPickerStaysUnderChipWhenPanelTallerThanWell() {
+        LiveChromeMetrics.scale = 1f
+        val cell = ChromeRect(220f, 14f, 90f, 34f)
+        val box =
+            LivePopupPlacement.topPicker(
+                cell = cell,
+                panelHeight = 400f,
+                viewportWidth = 874f,
+                viewportHeight = 360f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                floorY = 300f,
+            )
+        assertEquals(cell.maxY + 8f, box.y, 0.05f)
+        assertEquals(300f - (cell.maxY + 8f), box.maxHeight, 0.05f)
+        assertTrue(CaptureLists.topPickerDrumHeight(box.maxHeight, hasTabs = true) <= 176f)
+        assertTrue(CaptureLists.topPickerDrumHeight(box.maxHeight, hasTabs = true) >= 104f)
     }
 
     @Test
@@ -170,6 +211,78 @@ class LivePopupPlacementTest {
         assertTrue(box.width < 390f)
         assertTrue(box.y >= 59f + 4f)
         assertTrue(box.y + minOf(500f, box.maxHeight) <= 700f - 10f + 0.05f)
+    }
+
+    @Test
+    fun assistOptionsParksAboveToolbarTrailingToIcon() {
+        LiveChromeMetrics.scale = 1f
+        val toolbar = ChromeRect(12f, 720f, 360f, 58f)
+        val icon = ChromeRect(280f, 724f, 48f, 50f)
+        val box =
+            LivePopupPlacement.assistOptions(
+                icon = icon,
+                toolbar = toolbar,
+                preferredWidth = 400f,
+                panelHeight = 280f,
+                viewportWidth = 390f,
+                viewportHeight = 844f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 59f,
+                safeBottom = 34f,
+            )
+        assertTrue(box.width <= 400f)
+        assertTrue(box.y + minOf(280f, box.maxHeight) <= toolbar.minY - 10f + 0.05f)
+        assertTrue(box.y >= 12f)
+        assertTrue(box.x + box.width <= icon.maxX + 0.5f || box.x >= 16f)
+    }
+
+    @Test
+    fun assistOptionsStaysBelowTopDeckCeiling() {
+        LiveChromeMetrics.scale = 1f
+        val toolbar = ChromeRect(12f, 320f, 360f, 58f)
+        val icon = ChromeRect(12f, 324f, 48f, 50f)
+        val topDeckBottom = 92f
+        val box =
+            LivePopupPlacement.assistOptions(
+                icon = icon,
+                toolbar = toolbar,
+                preferredWidth = 400f,
+                panelHeight = 400f,
+                viewportWidth = 844f,
+                viewportHeight = 390f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                ceilingY = topDeckBottom + 8f,
+            )
+        assertTrue(box.y >= topDeckBottom + 8f - 0.05f, "capture pickers stay under STBY / TC")
+        assertTrue(box.y + box.maxHeight <= toolbar.minY - 10f + 0.05f)
+    }
+
+    @Test
+    fun assistOptionsMayReachTopMargin() {
+        LiveChromeMetrics.scale = 1f
+        val toolbar = ChromeRect(12f, 320f, 360f, 58f)
+        val icon = ChromeRect(12f, 324f, 48f, 50f)
+        val box =
+            LivePopupPlacement.assistOptions(
+                icon = icon,
+                toolbar = toolbar,
+                preferredWidth = 400f,
+                panelHeight = 400f,
+                viewportWidth = 844f,
+                viewportHeight = 390f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                ceilingY = 0f,
+            )
+        assertEquals(LivePopupPlacement.ASSIST_MARGIN, box.y, 0.05f)
+        assertTrue(box.maxHeight > 200f)
+        assertTrue(box.y + box.maxHeight <= toolbar.minY - 10f + 0.05f)
     }
 
     @Test

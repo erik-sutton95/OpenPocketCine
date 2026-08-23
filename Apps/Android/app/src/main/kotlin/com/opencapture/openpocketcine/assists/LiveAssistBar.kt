@@ -11,8 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.opencapture.openpocketcine.ChromeRect
+import com.opencapture.openpocketcine.reportChromeFrame
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -52,16 +56,19 @@ fun LiveAssistBar(
     onLongPress: (LiveAssistTool) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val frames = remember { mutableStateMapOf<LiveAssistTool, ChromeRect>() }
     LiveAssistBarRow(
         locked = locked,
         isOn = { state.isOn(it) },
         onClick = { state.toggle(it) },
         onLongPress = { tool ->
             if (tool.hasConfiguration) {
+                frames[tool]?.let { state.longPressAnchor = it }
                 state.configureTool = tool
                 onLongPress(tool)
             }
         },
+        onToolFrame = { tool, rect -> frames[tool] = rect },
         modifier = modifier,
     )
 }
@@ -109,6 +116,7 @@ private fun LiveAssistBarRow(
     onClick: (LiveAssistTool) -> Unit,
     onLongPress: (LiveAssistTool) -> Unit,
     modifier: Modifier = Modifier,
+    onToolFrame: (LiveAssistTool, ChromeRect) -> Unit = { _, _ -> },
 ) {
     val scroll = rememberScrollState()
     val leadingFade = scroll.canScrollBackward
@@ -169,6 +177,7 @@ private fun LiveAssistBarRow(
                             null
                         },
                     onClick = { onClick(tool) },
+                    modifier = Modifier.reportChromeFrame { onToolFrame(tool, it) },
                 )
             }
             AssistDivider()

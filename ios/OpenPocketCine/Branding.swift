@@ -30,7 +30,8 @@ struct OPCMonogramMark: View {
                     .fill(BrandColors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(BrandColors.accent.opacity(0.55), lineWidth: max(1, size * 0.018))
+                            .stroke(
+                                BrandColors.accent.opacity(0.55), lineWidth: max(1, size * 0.018))
                     )
                     .overlay {
                         Text("OPC")

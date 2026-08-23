@@ -36,9 +36,14 @@ class MediaCache(
     }
 
     fun localPlaybackFile(file: MediaFile, cameraId: String): File? {
+        localProxyFile(file, cameraId)?.let { return it }
         if (isDownloaded(file, cameraId)) return fileCache(cameraId, file)
-        for (path in MediaHTTP.previewPaths(file)) {
-            if (path == file.path) continue
+        return null
+    }
+
+    /** 720p LRF/XRF sidecar, never the 4K original. */
+    fun localProxyFile(file: MediaFile, cameraId: String): File? {
+        for (path in MediaHTTP.proxyPaths(file)) {
             existingFile(playbackCache(cameraId, file, path))?.let { return it }
         }
         return null

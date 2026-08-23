@@ -73,6 +73,7 @@ class MediaLibraryController(
         loadFavorites()
         loadCachedCatalogIfNeeded()
         browsing = true
+        session.markBrowsingMedia(true)
         if (!isLive) {
             fetchInProgress = false
             note = if (files.isEmpty()) MediaOperatorCopy.NOT_CONNECTED else null
@@ -92,6 +93,7 @@ class MediaLibraryController(
         fetchInProgress = false
         assembler.reset()
         browsing = false
+        session.markBrowsingMedia(false)
         note = null
         unhookFrames?.invoke()
         unhookFrames = null
@@ -216,7 +218,7 @@ class MediaLibraryController(
             withContext(Dispatchers.IO) {
                 MediaTransfer.downloadFile(
                     storage = storage,
-                    path = MediaHTTP.originalPath(file),
+                    path = MediaHTTP.deliveryPath(file),
                     dest = dest,
                     expectedSize = file.sizeBytes,
                     onProgress = { p -> setProgress(file.path, p) },
@@ -234,45 +236,58 @@ class MediaLibraryController(
     }
 
     /**
-     * Pull a playable local copy. Never returns a `/v2` URL — ExoPlayer must
-     * only see files under the app cache.
+     * Pull a playable local copy. Prefers the 720p LRF/XRF sidecar even when the
+     * 4K original is already cached for export. Never returns a `/v2` URL.
      */
     suspend fun cacheForPlayback(file: MediaFile): File? {
-        localPlaybackFile(file)?.let { return it }
-        if (!isLive) return null
-        setProgress(file.path, 0.0)
-        for (path in MediaHTTP.previewPaths(file)) {
-            val dest = cache.playbackCache(cameraId, file, path)
-            cache.existingFile(dest)?.let {
-                clearProgress(file.path)
-                return it
-            }
-            try {
-                val storage = resolvedStorage(file)
-                withContext(Dispatchers.IO) {
-                    if (MediaHTTP.isProxyPath(path)) {
+        cache.localProxyFile(file, cameraId)?.let { return it }
+        if (isLive) {
+            setProgress(file.path, 0.0)
+            for (path in MediaHTTP.proxyPaths(file)) {
+                val dest = cache.playbackCache(cameraId, file, path)
+                cache.existingFile(dest)?.let {
+                    clearProgress(file.path)
+                    return it
+                }
+                try {
+                    val storage = resolvedStorage(file)
+                    withContext(Dispatchers.IO) {
                         val data = MediaTransfer.fetchBytes(storage, path).first
                         if (data.isEmpty()) throw MediaTransferError.BadResponse
                         cache.writeAtomically(data, dest)
-                    } else {
-                        MediaTransfer.downloadFile(
-                            storage = storage,
-                            path = path,
-                            dest = dest,
-                            expectedSize = file.sizeBytes,
-                            onProgress = { p -> setProgress(file.path, p) },
-                        )
                     }
+                    rememberStorage(storage, file.path)
+                    clearProgress(file.path)
+                    cache.existingFile(dest)?.let { return it }
+                } catch (_: Exception) {
+                    continue
                 }
-                rememberStorage(storage, file.path)
-                if (path == file.path) finishProgress(file.path) else clearProgress(file.path)
-                return cache.existingFile(dest)
-            } catch (_: Exception) {
-                continue
             }
+            clearProgress(file.path)
         }
-        clearProgress(file.path)
-        return null
+        cache.existingFile(cache.fileCache(cameraId, file))?.let { return it }
+        if (!isLive) return null
+        setProgress(file.path, 0.0)
+        val original = file.path
+        val dest = cache.playbackCache(cameraId, file, original)
+        return try {
+            val storage = resolvedStorage(file)
+            withContext(Dispatchers.IO) {
+                MediaTransfer.downloadFile(
+                    storage = storage,
+                    path = original,
+                    dest = dest,
+                    expectedSize = file.sizeBytes,
+                    onProgress = { p -> setProgress(file.path, p) },
+                )
+            }
+            rememberStorage(storage, original)
+            finishProgress(file.path)
+            cache.existingFile(dest)
+        } catch (_: Exception) {
+            clearProgress(file.path)
+            null
+        }
     }
 
     private suspend fun runBrowse(id: Int) {
@@ -283,6 +298,7 @@ class MediaLibraryController(
             fetchInProgress = false
             note = MediaOperatorCopy.PLAYBACK_FAILED
             browsing = false
+            session.markBrowsingMedia(false)
             return
         }
         listAllPages(id)

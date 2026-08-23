@@ -2,8 +2,11 @@ package com.opencapture.openpocketcine.assists
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -11,22 +14,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.LiveDesign
+
+import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
+import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.roundToInt
 
@@ -48,10 +60,18 @@ fun LiveAssistLayer(
     modifier: Modifier = Modifier,
     status: CameraStatus = CameraStatus(),
     locked: Boolean = false,
+    onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
 ) {
     val state = remember { LiveAssistState() }
     state.syncVisible(tools, guideRatio)
-    LiveAssistLayer(state = state, status = status, focus = focus, modifier = modifier, locked = locked)
+    LiveAssistLayer(
+        state = state,
+        status = status,
+        focus = focus,
+        modifier = modifier,
+        locked = locked,
+        onOpenOptions = onOpenOptions,
+    )
 }
 
 @Composable
@@ -62,6 +82,12 @@ fun LiveAssistLayer(
     modifier: Modifier = Modifier,
     locked: Boolean = false,
     playback: Boolean = false,
+    tracking: com.opencapture.openpocketcine.session.TrackingHud =
+        com.opencapture.openpocketcine.session.TrackingHud(),
+    showTapFocusBox: Boolean = true,
+    /** Picture well in the same space as [modifier]; defaults to the layer box. */
+    feedFrame: ChromeRect? = null,
+    onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val shown: (LiveAssistTool) -> Boolean =
@@ -70,13 +96,27 @@ fun LiveAssistLayer(
         } else {
             { state.isVisible(it) }
         }
-    if (!playback) {
-        state.acceptScopeBundle(LiveScopeSampleBus.bundle)
-    }
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    state.acceptScopeBundle(LiveScopeSampleBus.bundle)
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .onGloballyPositioned { GpuOverlayBus.layerRoot = it.positionInRoot() },
+    ) {
         val canvas =
             AssistRect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
-        val feed = canvas
+        val feed =
+            if (feedFrame == null) {
+                canvas
+            } else {
+                with(density) {
+                    AssistRect(
+                        feedFrame.x.dp.toPx(),
+                        feedFrame.y.dp.toPx(),
+                        feedFrame.width.dp.toPx(),
+                        feedFrame.height.dp.toPx(),
+                    )
+                }
+            }
         if (shown(LiveAssistTool.GUIDES)) {
             GuidesOverlay(state, feed)
         }
@@ -89,79 +129,43 @@ fun LiveAssistLayer(
         if (shown(LiveAssistTool.FALSE) && state.falseColorReference) {
             FalseColorReferenceRuler(state, status.colorMode, Modifier.align(Alignment.BottomStart).padding(14.dp, 0.dp, 0.dp, 86.dp))
         }
-        if (shown(LiveAssistTool.WAVE)) {
-            val sizePx = panelPx(ScopePanelSize.waveform, state.waveScale, density)
-            MovableAssistPanel(
-                tool = LiveAssistTool.WAVE,
-                base = ScopePanelSize.waveform,
-                scale = state.waveScale,
-                stored = state.waveCenter,
-                canvas = canvas,
-                defaultCenter = MovablePanelMath.defaultCenterTopLeading(feed, sizePx, canvas, topClearance = 8f),
-                enabled = !locked,
-                onStore = { state.storeCenter(LiveAssistTool.WAVE, it) },
+        if (!playback) {
+            Box(
+                Modifier
+                    .offset { IntOffset(feed.minX.roundToInt(), feed.minY.roundToInt()) }
+                    .size(
+                        with(density) { feed.width.toDp() },
+                        with(density) { feed.height.toDp() },
+                    )
+                    .zIndex(0f),
             ) {
-                WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())
+                com.opencapture.openpocketcine.LiveFocusTrackingLayer(
+                    hud = tracking,
+                    focus = focus,
+                    mirrored = shown(LiveAssistTool.MIRROR),
+                    showTapFocusBox = showTapFocusBox && focus != null,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
-        if (shown(LiveAssistTool.PARADE)) {
-            val sizePx = panelPx(ScopePanelSize.parade, state.paradeScale, density)
-            MovableAssistPanel(
-                tool = LiveAssistTool.PARADE,
-                base = ScopePanelSize.parade,
-                scale = state.paradeScale,
-                stored = state.paradeCenter,
-                canvas = canvas,
-                defaultCenter = MovablePanelMath.defaultCenterTopTrailing(feed, sizePx, canvas, topClearance = 8f),
-                enabled = !locked,
-                onStore = { state.storeCenter(LiveAssistTool.PARADE, it) },
-            ) {
-                ParadePanel(state, status.colorMode, Modifier.fillMaxSize())
-            }
-        }
-        if (shown(LiveAssistTool.VECTOR)) {
-            val sizePx = panelPx(ScopePanelSize.vectorscope, state.vectorScale, density)
-            MovableAssistPanel(
-                tool = LiveAssistTool.VECTOR,
-                base = ScopePanelSize.vectorscope,
-                scale = state.vectorScale,
-                stored = state.vectorCenter,
-                canvas = canvas,
-                defaultCenter = MovablePanelMath.defaultCenterTopTrailing(feed, sizePx, canvas, topClearance = 8f),
-                enabled = !locked,
-                onStore = { state.storeCenter(LiveAssistTool.VECTOR, it) },
-            ) {
-                VectorscopePanel(state, Modifier.fillMaxSize())
-            }
-        }
-        if (shown(LiveAssistTool.HISTO)) {
-            val sizePx = panelPx(ScopePanelSize.histogram, state.histoScale, density)
-            MovableAssistPanel(
-                tool = LiveAssistTool.HISTO,
-                base = ScopePanelSize.histogram,
-                scale = state.histoScale,
-                stored = state.histoCenter,
-                canvas = canvas,
-                defaultCenter = MovablePanelMath.defaultCenterBottomTrailing(feed, sizePx, canvas, bottomClearance = 80f),
-                enabled = !locked,
-                onStore = { state.storeCenter(LiveAssistTool.HISTO, it) },
-            ) {
-                HistogramPanel(state, Modifier.fillMaxSize())
-            }
-        }
-        if (shown(LiveAssistTool.LIGHTS)) {
-            val sizePx = panelPx(ScopePanelSize.trafficLights, state.lightsScale, density)
-            MovableAssistPanel(
-                tool = LiveAssistTool.LIGHTS,
-                base = ScopePanelSize.trafficLights,
-                scale = state.lightsScale,
-                stored = state.lightsCenter,
-                canvas = canvas,
-                defaultCenter = MovablePanelMath.defaultCenterBottomLeading(feed, sizePx, canvas, bottomClearance = 80f),
-                enabled = !locked,
-                onStore = { state.storeCenter(LiveAssistTool.LIGHTS, it) },
-            ) {
-                TrafficLightsPanel(state, Modifier.fillMaxSize())
+        val stack = state.scopeStack
+        LaunchedEffect(stack) { GpuOverlayBus.onSlotsMoved?.invoke() }
+        val zRanks = stack.withIndex().associate { it.value to it.index + 1f }
+        LiveAssistState.stackableScopeTools.forEach { tool ->
+            if (!shown(tool)) return@forEach
+            key(tool) {
+                Box(Modifier.fillMaxSize().zIndex(zRanks[tool] ?: 1f)) {
+                    StackedScopePanel(
+                        tool = tool,
+                        state = state,
+                        status = status,
+                        canvas = canvas,
+                        feed = feed,
+                        density = density,
+                        locked = locked,
+                        onOpenOptions = onOpenOptions,
+                    )
+                }
             }
         }
         if (!playback && shown(LiveAssistTool.AUDIO)) {
@@ -173,7 +177,10 @@ fun LiveAssistLayer(
                         .align(Alignment.BottomStart)
                         .padding(start = 14.dp, bottom = 86.dp)
                         .size(AudioAssist.PANEL_WIDTH_DP.dp, AudioAssist.PANEL_HEIGHT_DP.dp)
-                        .scopePanelChrome(),
+                        .clip(scopePanelShape())
+                        .background(LiveDesign.scopePlate)
+                        .border(1.dp, LiveDesign.hairline, scopePanelShape())
+                        .zIndex(0.5f),
                 ) {
                     AudioMetersPanel(
                         left = channels.first,
@@ -183,12 +190,141 @@ fun LiveAssistLayer(
                 }
             }
         }
-        if (!playback && focus != null) {
-            val fx = if (shown(LiveAssistTool.MIRROR)) 1f - focus.first else focus.first
-            FocusBox(fx, focus.second)
-        }
     }
 }
+
+@Composable
+private fun StackedScopePanel(
+    tool: LiveAssistTool,
+    state: LiveAssistState,
+    status: CameraStatus,
+    canvas: AssistRect,
+    feed: AssistRect,
+    density: androidx.compose.ui.unit.Density,
+    locked: Boolean,
+    onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)?,
+) {
+    val (base, scale, stored, defaultCenter, onScale) =
+        when (tool) {
+            LiveAssistTool.WAVE ->
+                ScopePanelSpec(
+                    ScopePanelSize.waveform,
+                    state.waveScale,
+                    state.waveCenter,
+                    MovablePanelMath.defaultCenterTopLeading(
+                        feed,
+                        panelPx(ScopePanelSize.waveform, state.waveScale, density),
+                        canvas,
+                        topClearance = 8f,
+                    ),
+                    { state.setScale(LiveAssistTool.WAVE, it) },
+                )
+            LiveAssistTool.PARADE ->
+                ScopePanelSpec(
+                    ScopePanelSize.parade,
+                    state.paradeScale,
+                    state.paradeCenter,
+                    MovablePanelMath.defaultCenterTopTrailing(
+                        feed,
+                        panelPx(ScopePanelSize.parade, state.paradeScale, density),
+                        canvas,
+                        topClearance = 8f,
+                    ),
+                    { state.setScale(LiveAssistTool.PARADE, it) },
+                )
+            LiveAssistTool.VECTOR ->
+                ScopePanelSpec(
+                    ScopePanelSize.vectorscope,
+                    state.vectorScale,
+                    state.vectorCenter,
+                    MovablePanelMath.defaultCenterTopTrailing(
+                        feed,
+                        panelPx(ScopePanelSize.vectorscope, state.vectorScale, density),
+                        canvas,
+                        topClearance = 8f,
+                    ),
+                    { state.setScale(LiveAssistTool.VECTOR, it) },
+                )
+            LiveAssistTool.HISTO ->
+                ScopePanelSpec(
+                    ScopePanelSize.histogram,
+                    state.histoScale,
+                    state.histoCenter,
+                    MovablePanelMath.defaultCenterBottomTrailing(
+                        feed,
+                        panelPx(ScopePanelSize.histogram, state.histoScale, density),
+                        canvas,
+                        bottomClearance = 80f,
+                    ),
+                    { state.setScale(LiveAssistTool.HISTO, it) },
+                )
+            LiveAssistTool.LIGHTS ->
+                ScopePanelSpec(
+                    ScopePanelSize.trafficLights,
+                    state.lightsScale,
+                    state.lightsCenter,
+                    MovablePanelMath.defaultCenterBottomLeading(
+                        feed,
+                        panelPx(ScopePanelSize.trafficLights, state.lightsScale, density),
+                        canvas,
+                        bottomClearance = 80f,
+                    ),
+                    { state.setScale(LiveAssistTool.LIGHTS, it) },
+                )
+            LiveAssistTool.LUT,
+            LiveAssistTool.PEAK,
+            LiveAssistTool.FALSE,
+            LiveAssistTool.ZEBRA,
+            LiveAssistTool.AUDIO,
+            LiveAssistTool.GUIDES,
+            LiveAssistTool.GRID,
+            LiveAssistTool.CROSS,
+            LiveAssistTool.MIRROR,
+            -> return
+        }
+    MovableAssistPanel(
+            tool = tool,
+            base = base,
+            scale = scale,
+            stored = stored,
+            canvas = canvas,
+            defaultCenter = defaultCenter,
+            enabled = !locked,
+            onStore = { state.storeCenter(tool, it) },
+            onScale = onScale,
+            onOpenOptions = onOpenOptions?.let { present -> { frame -> present(tool, frame) } },
+            onActivate = { state.bringToFront(tool) },
+            fillPlate = tool == LiveAssistTool.LIGHTS,
+        ) {
+            when (tool) {
+                LiveAssistTool.WAVE -> WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())
+                LiveAssistTool.PARADE -> ParadePanel(state, status.colorMode, Modifier.fillMaxSize())
+                LiveAssistTool.VECTOR -> VectorscopePanel(state, Modifier.fillMaxSize())
+                LiveAssistTool.HISTO -> HistogramPanel(state, Modifier.fillMaxSize())
+                LiveAssistTool.LIGHTS -> TrafficLightsPanel(state, Modifier.fillMaxSize())
+                LiveAssistTool.LUT,
+                LiveAssistTool.PEAK,
+                LiveAssistTool.FALSE,
+                LiveAssistTool.ZEBRA,
+                LiveAssistTool.AUDIO,
+                LiveAssistTool.GUIDES,
+                LiveAssistTool.GRID,
+                LiveAssistTool.CROSS,
+                LiveAssistTool.MIRROR,
+                -> {}
+            }
+        }
+}
+
+private data class ScopePanelSpec(
+    val base: AssistSize,
+    val scale: Double,
+    val stored: StoredCenter?,
+    val defaultCenter: AssistPoint,
+    val onScale: (Double) -> Unit,
+)
+
+private fun scopePanelShape() = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 @Composable
 private fun GuidesOverlay(state: LiveAssistState, feed: AssistRect) {
@@ -277,19 +413,16 @@ private fun FocusBox(nx: Float, ny: Float) {
 
 @Composable
 private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
-    val bands =
-        when (state.falseColorScale) {
-            FalseColorScale.IRE -> FalseColorBands.ireBands()
-            FalseColorScale.LIMITS -> FalseColorBands.limitBands()
-            FalseColorScale.STOPS -> FalseColorBands.ireBands()
+    val transfer = MonitorTransfer.fromColorMode(colorMode)
+    val segments = FalseColorReference.segments(state.falseColorScale, transfer)
+    val markers =
+        if (state.falseColorScale == FalseColorScale.STOPS) {
+            FalseColorReference.stopAxisMarkers(transfer)
+        } else {
+            emptyList()
         }
-    val curve =
-        when (colorMode) {
-            com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG2 -> "D-Log2"
-            com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG -> "D-Log"
-            com.opencapture.openpocketcine.session.CameraCommands.COLOR_HDR -> "HLG"
-            else -> "709"
-        }
+    val axis = FalseColorReference.axisLabels(state.falseColorScale)
+    val curve = FalseColorReference.curveKeyLabel(colorMode)
     Box(
         modifier
             .size(ScopePanelSize.falseColorReference.width.dp, ScopePanelSize.falseColorReference.height.dp)
@@ -302,16 +435,15 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
             val barY = 14.dp.toPx()
             val barW = size.width
             drawRect(Color.White.copy(alpha = 0.12f), Offset(0f, barY), Size(barW, barH))
-            for (band in bands) {
-                val lo = (band.lowerBound / 100.0).toFloat().coerceIn(0f, 1f)
-                val hi =
-                    if (band.upperBound.isFinite()) {
-                        (band.upperBound / 100.0).toFloat().coerceIn(0f, 1f)
-                    } else {
-                        1f
-                    }
+            for (segment in segments) {
+                val lo = segment.lowerFraction.toFloat()
+                val hi = segment.upperFraction.toFloat()
                 drawRect(
-                    Color(band.red.toFloat(), band.green.toFloat(), band.blue.toFloat()),
+                    Color(
+                        segment.band.red.toFloat(),
+                        segment.band.green.toFloat(),
+                        segment.band.blue.toFloat(),
+                    ),
                     Offset(barW * lo, barY),
                     Size(maxOf(1f, barW * (hi - lo)), barH),
                 )
@@ -332,6 +464,37 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.align(Alignment.TopEnd),
         )
+        if (markers.isNotEmpty()) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxSize().padding(top = 26.dp)) {
+                markers.forEach { marker ->
+                    Text(
+                        marker.label,
+                        color = LiveDesign.muted,
+                        fontSize = 5.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier =
+                            Modifier.offset(
+                                x = (ScopePanelSize.falseColorReference.width * marker.fraction.toFloat() - 10f).dp,
+                                y = 0.dp,
+                            ),
+                    )
+                }
+            }
+        } else if (axis.isNotEmpty()) {
+            Row(
+                Modifier.align(Alignment.BottomStart).fillMaxSize().padding(top = 26.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                axis.forEach { label ->
+                    Text(
+                        label,
+                        color = LiveDesign.muted,
+                        fontSize = 5.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        }
     }
 }
 

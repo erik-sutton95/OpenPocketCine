@@ -305,12 +305,14 @@ struct FalseColorReference: View {
                                 Color(
                                     red: segment.band.red,
                                     green: segment.band.green,
-                                    blue: segment.band.blue))
+                                    blue: segment.band.blue)
+                            )
                             .frame(
                                 width: max(
                                     1,
                                     geometry.size.width
-                                        * (segment.upperFraction - segment.lowerFraction)))
+                                        * (segment.upperFraction - segment.lowerFraction))
+                            )
                             .offset(x: geometry.size.width * segment.lowerFraction)
                     }
                 }

@@ -2,8 +2,8 @@ import AVFoundation
 import CoreImage
 import Foundation
 import OpenPocketViewCore
-import os
 import UIKit
+import os
 
 /// LUT bake + live playback composition. OpenZCine `MediaLUT` / `PlaybackEffectsBox`,
 /// using Pocket's `LiveMonitorCompositor` instead of the Nikon compositor.
@@ -69,11 +69,13 @@ enum MediaLUT {
         let metadataURL: URL?
     }
 
-    static func videoComposition(for asset: AVAsset, cube: CubeLUT) -> AVVideoComposition {
+    static func videoComposition(
+        for asset: AVAsset, cube: CubeLUT, renderSize: CGSize? = nil
+    ) -> AVVideoComposition {
         let prepared = cube.colorCube
         let dimension = prepared.size
         let cubeData = prepared.rgbaComponents.withUnsafeBytes { Data($0) }
-        return AVVideoComposition(asset: asset) { request in
+        let built = AVVideoComposition(asset: asset) { request in
             let source = request.sourceImage
             let extent = source.extent
             guard
@@ -91,6 +93,14 @@ enum MediaLUT {
             let output = (filter.outputImage ?? source).cropped(to: extent)
             request.finish(with: output, context: exportContext)
         }
+        guard let renderSize, renderSize.width > 1, renderSize.height > 1,
+            let mutable = built.mutableCopy() as? AVMutableVideoComposition
+        else {
+            return built
+        }
+        mutable.renderSize = renderSize
+        mutable.renderScale = 1
+        return mutable
     }
 
     final class PlaybackEffectsBox: @unchecked Sendable {
@@ -223,6 +233,21 @@ enum MediaLUT {
         0.05 + Double(max(0, min(1, sessionProgress))) * 0.85
     }
 
+    /// LUT bake must stay at the source raster. `HighestQuality` is an H.264
+    /// preset that caps at 720p/1080p; HEVC highest keeps 4K.
+    static func exportPreset(bakingLUT: Bool, compatible: [String]) -> String {
+        if !bakingLUT { return AVAssetExportPresetPassthrough }
+        let preferred = [
+            AVAssetExportPresetHEVCHighestQuality,
+            AVAssetExportPresetHEVC3840x2160,
+            AVAssetExportPreset3840x2160,
+            AVAssetExportPresetHEVC1920x1080,
+            AVAssetExportPreset1920x1080,
+            AVAssetExportPresetHighestQuality,
+        ]
+        return preferred.first { compatible.contains($0) } ?? AVAssetExportPresetHighestQuality
+    }
+
     private static func transcode(
         sourceURL: URL,
         outputURL: URL,
@@ -230,36 +255,51 @@ enum MediaLUT {
         cube: CubeLUT?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
-        // No LUT: remux when the container just changes (MP4 → MOV). Re-encode only
-        // if passthrough is refused, or when a cube has to be baked in.
-        let preferred =
-            cube == nil ? AVAssetExportPresetPassthrough : AVAssetExportPresetHighestQuality
+        let asset = AVURLAsset(url: sourceURL)
+        _ = try? await asset.loadTracks(withMediaType: .video)
+        let compatible = AVAssetExportSession.exportPresets(compatibleWith: asset)
+        let preferred = exportPreset(bakingLUT: cube != nil, compatible: compatible)
+        let renderSize = await videoDisplaySize(of: asset)
         do {
             try await runExport(
-                sourceURL: sourceURL, outputURL: outputURL, format: format, cube: cube,
-                presetName: preferred, progress: progress)
+                asset: asset, outputURL: outputURL, format: format, cube: cube,
+                presetName: preferred, renderSize: renderSize, progress: progress)
         } catch {
             guard cube == nil, preferred == AVAssetExportPresetPassthrough else { throw error }
+            let fallback = exportPreset(bakingLUT: true, compatible: compatible)
             try await runExport(
-                sourceURL: sourceURL, outputURL: outputURL, format: format, cube: cube,
-                presetName: AVAssetExportPresetHighestQuality, progress: progress)
+                asset: asset, outputURL: outputURL, format: format, cube: cube,
+                presetName: fallback, renderSize: renderSize, progress: progress)
         }
     }
 
+    private static func videoDisplaySize(of asset: AVAsset) async -> CGSize? {
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
+            return nil
+        }
+        guard let size = try? await track.load(.naturalSize) else { return nil }
+        let transform = (try? await track.load(.preferredTransform)) ?? .identity
+        let rect = CGRect(origin: .zero, size: size).applying(transform)
+        let fitted = CGSize(width: abs(rect.width), height: abs(rect.height))
+        guard fitted.width > 1, fitted.height > 1 else { return nil }
+        return fitted
+    }
+
     private static func runExport(
-        sourceURL: URL,
+        asset: AVAsset,
         outputURL: URL,
         format: MediaExportFormat,
         cube: CubeLUT?,
         presetName: String,
+        renderSize: CGSize?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
-        let asset = AVURLAsset(url: sourceURL)
         guard let session = AVAssetExportSession(asset: asset, presetName: presetName) else {
             throw ExportError.sessionSetupFailed
         }
         if let cube {
-            session.videoComposition = videoComposition(for: asset, cube: cube)
+            session.videoComposition = videoComposition(
+                for: asset, cube: cube, renderSize: renderSize)
         }
         progress(0.05)
         if FileManager.default.fileExists(atPath: outputURL.path) {

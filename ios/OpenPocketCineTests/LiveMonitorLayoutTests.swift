@@ -1,6 +1,7 @@
+import OpenPocketViewCore
 import SwiftUI
 import XCTest
-import OpenPocketViewCore
+
 @testable import OpenPocketCine
 
 /// Golden pins from OpenZCine `MonitorLiveViewModuleLayout` on the auditor's 874×402 phone.
@@ -35,12 +36,15 @@ final class LiveMonitorLayoutTests: XCTestCase {
         XCTAssertEqual(layout.rail.width, 82.8, accuracy: 0.05)
         XCTAssertEqual(layout.record.midX, 823.8, accuracy: 0.3)
         XCTAssertEqual(layout.record.midY, 202, accuracy: 0.3)
-        XCTAssertGreaterThan(layout.record.minX, layout.feed.maxX - 0.5, "record sits in the black lane")
+        XCTAssertGreaterThan(
+            layout.record.minX, layout.feed.maxX - 0.5, "record sits in the black lane")
 
         let tally = LiveRecordingTally.borderRect(in: layout)
         XCTAssertEqual(tally.origin, .zero)
-        XCTAssertEqual(tally.size, layout.viewport, "tally is the physical screen, not the feed well")
-        XCTAssertGreaterThan(tally.maxX, layout.rail.maxX, "tally wraps the rail, not the 16:9 well")
+        XCTAssertEqual(
+            tally.size, layout.viewport, "tally is the physical screen, not the feed well")
+        XCTAssertGreaterThan(
+            tally.maxX, layout.rail.maxX, "tally wraps the rail, not the 16:9 well")
         XCTAssertEqual(LiveRecordingTally.lineWidth, 4, accuracy: 0.05)
         XCTAssertEqual(LiveRecordingTally.displayCornerRadius, 52, accuracy: 0.05)
 
@@ -342,7 +346,8 @@ final class LiveMonitorLayoutTests: XCTestCase {
         let reset = layout.focusReset
         XCTAssertEqual(reset.width, LiveChromeMetrics.focusResetSize, accuracy: 0.05)
         XCTAssertEqual(reset.height, LiveChromeMetrics.focusResetSize, accuracy: 0.05)
-        XCTAssertEqual(reset.midX, layout.battery.maxX + LiveChromeMetrics.focusResetGap, accuracy: 0.2)
+        XCTAssertEqual(
+            reset.midX, layout.battery.maxX + LiveChromeMetrics.focusResetGap, accuracy: 0.2)
         XCTAssertEqual(reset.midY, layout.assist.minY - 30, accuracy: 0.2)
         XCTAssertGreaterThan(reset.midX, layout.battery.maxX)
         XCTAssertLessThan(reset.maxY, layout.assist.minY)
@@ -519,12 +524,14 @@ final class LiveMonitorLayoutTests: XCTestCase {
     func testMediaBrowserPaddingMatchesOpenZCine() {
         let landscape = EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 0)
         XCTAssertEqual(OperatorPanelMetrics.mediaTopPadding(safeArea: landscape), 16)
-        XCTAssertEqual(OperatorPanelMetrics.mediaLeadingPadding(safeArea: landscape, portrait: false), 65)
+        XCTAssertEqual(
+            OperatorPanelMetrics.mediaLeadingPadding(safeArea: landscape, portrait: false), 65)
         XCTAssertEqual(OperatorPanelMetrics.mediaTrailingPadding(safeArea: landscape), 20)
         XCTAssertEqual(OperatorPanelMetrics.mediaBottomPadding(safeArea: landscape), 25)
 
         let portrait = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
-        XCTAssertEqual(OperatorPanelMetrics.mediaLeadingPadding(safeArea: portrait, portrait: true), 16)
+        XCTAssertEqual(
+            OperatorPanelMetrics.mediaLeadingPadding(safeArea: portrait, portrait: true), 16)
         XCTAssertEqual(OperatorPanelMetrics.mediaTrailingPadding(safeArea: portrait), 20)
         XCTAssertEqual(OperatorPanelMetrics.closeTopPadding(safeArea: portrait), 65)
     }

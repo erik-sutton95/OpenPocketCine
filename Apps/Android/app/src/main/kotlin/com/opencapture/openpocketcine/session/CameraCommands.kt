@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.session
 
+import kotlin.math.roundToInt
+
 /**
  * Documented Pocket 4 payloads only (`docs/protocol-notes.md`).
  * No invented `0xE1` values. No 1 Hz `0x09/0xa8`.
@@ -65,8 +67,22 @@ object CameraCommands {
 
     fun recordStop(): ByteArray = byteArrayOf(0x00)
 
-    fun expoMode(manual: Boolean): ByteArray =
-        byteArrayOf(if (manual) EXPO_MANUAL.toByte() else EXPO_AUTO.toByte(), 0x00)
+    /** JNI extra for `CommandKind.setExpoMode`. */
+    fun expoWireExtra(mode: Int): String? =
+        when (mode) {
+            EXPO_AUTO -> "auto"
+            EXPO_MANUAL -> "manual"
+            else -> null
+        }
+
+    /** SET `0x02/0x1E` — iOS `ExpoMode.setPayload` (`01 00` auto, `04 00` manual). */
+    fun expoMode(mode: Int): ByteArray =
+        when (mode) {
+            EXPO_AUTO, EXPO_MANUAL -> byteArrayOf(mode.toByte(), 0x00)
+            else -> byteArrayOf()
+        }
+
+    fun expoMode(manual: Boolean): ByteArray = expoMode(if (manual) EXPO_MANUAL else EXPO_AUTO)
 
     fun isoIndex(index: Int): ByteArray = byteArrayOf(index.toByte())
 
@@ -84,25 +100,46 @@ object CameraCommands {
         )
     }
 
-    /** `[mode][kelvin/100 u16-LE][tint i16-LE]`. */
+    /** `[mode][kelvin/100 u16-LE][tint i16-LE]`. Matches iOS `WhiteBalance.setPayload`. */
     fun whiteBalance(mode: Int, kelvin: Int, tint: Int): ByteArray {
-        val k = (kelvin / 100).coerceIn(0, 0xFFFF)
+        val k = (kelvin.coerceAtLeast(0) / 100).coerceIn(0, 0xFFFF)
         val t = tint.coerceIn(-100, 100)
+        val tu = t and 0xFFFF
         return byteArrayOf(
             mode.toByte(),
             (k and 0xFF).toByte(),
             ((k shr 8) and 0xFF).toByte(),
-            (t and 0xFF).toByte(),
-            ((t shr 8) and 0xFF).toByte(),
+            (tu and 0xFF).toByte(),
+            ((tu shr 8) and 0xFF).toByte(),
         )
     }
 
-    fun whiteBalanceAuto(): ByteArray = byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)
+    fun whiteBalanceAuto(): ByteArray = whiteBalance(WB_AUTO, 0, 0)
+
+    fun whiteBalanceCustom(kelvin: Int, tint: Int): ByteArray {
+        val (k, t) = clampWhiteBalanceCustom(kelvin, tint)
+        return whiteBalance(WB_CUSTOM, k, t)
+    }
+
+    /** iOS `CameraSession.setWhiteBalanceCustom` clamp. */
+    fun clampWhiteBalanceCustom(kelvin: Int, tint: Int): Pair<Int, Int> =
+        kelvin.coerceIn(2_000, 10_000) to tint.coerceIn(-100, 100)
 
     fun focusMode(continuous: Boolean): ByteArray =
         byteArrayOf(if (continuous) FOCUS_CONTINUOUS.toByte() else FOCUS_SINGLE.toByte())
 
     fun colorMode(mode: Int): ByteArray = byteArrayOf(mode.toByte())
+
+    /**
+     * D-Log2 cannot zoom. Any step off 1× hops the body to D-Log.
+     * ISO star still follows `status.colorMode` after the body reports — this
+     * guess must not flip the wheel marker while `@2` is still D-Log2.
+     */
+    fun colorModeForZoom(factor: Double, current: Int): Int? =
+        CamFov.colorModeForZoom(factor, current)
+
+    /** iOS `CamFov.shouldRestoreDLog2` — only park back at 1×, not 2.9×. */
+    fun shouldRestoreDLog2(factor: Double): Boolean = CamFov.shouldRestoreDLog2(factor)
 
     /** `[res][fps_idx] 00 00 00`. */
     fun resolutionFps(res: Int, fpsIndex: Int): ByteArray =
@@ -121,13 +158,82 @@ object CameraCommands {
             value.toByte(),
         )
 
+    const val AUDIO_DSP_SIZE = 26
+
     fun audioDspGet(): ByteArray = ByteArray(0)
 
+    /** SET payload is the GET blob with only `@2` rewritten. Do not invent other bytes. */
     fun audioDspSet(blob: ByteArray, at2: Int): ByteArray {
         val out = blob.copyOf()
         if (out.size > 2) out[2] = at2.toByte()
         return out
     }
+
+    /** Wind off is only `18`. Captured directional bytes already include wind-on. */
+    fun patchWind(blob: ByteArray, on: Boolean): ByteArray {
+        if (!on) return audioDspSet(blob, WIND_OFF)
+        val raw = if (blob.size > 2) blob[2].toInt() and 0xFF else -1
+        if (directionalFrom(raw) >= 0) return audioDspSet(blob, raw)
+        return audioDspSet(blob, WIND_ON)
+    }
+
+    fun patchDirectional(blob: ByteArray, mode: Int): ByteArray =
+        audioDspSet(
+            blob,
+            when (mode) {
+                1 -> DIR_FRONT
+                2 -> DIR_FRONT_BACK
+                else -> DIR_ALL
+            },
+        )
+
+    /** `0` off, `1` on, `-1` leave. Directional bytes count as on. */
+    fun windFrom(raw: Int): Int =
+        when (raw) {
+            WIND_OFF -> 0
+            WIND_ON, DIR_ALL, DIR_FRONT, DIR_FRONT_BACK -> 1
+            else -> -1
+        }
+
+    /** `0` All / `1` Front / `2` Front+back / `-1` not a directional byte. */
+    fun directionalFrom(raw: Int): Int =
+        when (raw) {
+            DIR_ALL -> 0
+            DIR_FRONT -> 1
+            DIR_FRONT_BACK -> 2
+            else -> -1
+        }
+
+    fun audioDspHex(blob: ByteArray): String =
+        buildString(blob.size * 2) {
+            for (b in blob) append("%02x".format(b.toInt() and 0xFF))
+        }
+
+    fun audioDspBytes(hex: String): ByteArray? {
+        if (hex.length < 6 || hex.length % 2 != 0) return null
+        val out = ByteArray(hex.length / 2)
+        for (i in out.indices) {
+            val b = hex.substring(i * 2, i * 2 + 2).toIntOrNull(16) ?: return null
+            out[i] = b.toByte()
+        }
+        return out
+    }
+
+    fun audioChannelLabel(value: Int): String? =
+        when (value) {
+            AUDIO_MONO -> "Mono"
+            AUDIO_STEREO -> "Stereo"
+            AUDIO_SPATIAL -> "Spatial"
+            else -> null
+        }
+
+    fun audioDirLabel(mode: Int): String? =
+        when (mode) {
+            0 -> "All"
+            1 -> "Front"
+            2 -> "Front+back"
+            else -> null
+        }
 
     fun tapPrepare(): ByteArray = byteArrayOf(0x02)
 
@@ -196,23 +302,11 @@ object CameraCommands {
     fun zoomStop(): ByteArray = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00)
 
     /** Chip 1× / 3× / 6× / 12× land on 217 / 651 / 1302 / 2604. */
-    fun lensForZoomFactor(factor: Double): Int {
-        val f = factor
-        return when {
-            kotlin.math.abs(f - 1.0) < 0.1 -> ZOOM_LENS_1X
-            kotlin.math.abs(f - 3.0) < 0.1 -> ZOOM_LENS_3X
-            kotlin.math.abs(f - 6.0) < 0.1 -> ZOOM_LENS_6X
-            kotlin.math.abs(f - 12.0) < 0.1 -> ZOOM_LENS_12X
-            else -> {
-                val c = f.coerceIn(1.0, 12.0)
-                if (c <= 3.0) {
-                    lerpLens(ZOOM_LENS_1X, ZOOM_LENS_3X, (c - 1.0) / 2.0)
-                } else {
-                    lerpLens(ZOOM_LENS_3X, ZOOM_LENS_12X, (c - 3.0) / 9.0)
-                }
-            }
+    fun lensForZoomFactor(factor: Double): Int =
+        when (val write = CamFov.chipWrite(factor)) {
+            is CamFov.ChipWrite.Lens -> write.position
+            else -> CamFov.lensPosition(factor)
         }
-    }
 
     fun zoomForFactor(factor: Double): ByteArray = zoomLens(lensForZoomFactor(factor))
 
@@ -282,17 +376,29 @@ object CameraCommands {
     const val GIMBAL_STICK_MAX = 1574
     const val GIMBAL_STICK_DEADZONE = 0.08f
 
+    const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
+
+    /** 4 = 1.0 (captured ±550 throw). 5 saturates earlier; 1–3 never reach full throw. */
+    fun gimbalSensitivityGain(sensitivity: Int): Float =
+        sensitivity.coerceIn(1, 5) / GIMBAL_STICK_DEFAULT_SENSITIVITY.toFloat()
+
     /** `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0). */
-    fun gimbalAxis(normalized: Float): Int {
+    fun gimbalAxis(normalized: Float, sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY): Int {
         val n = normalized.coerceIn(-1f, 1f)
         if (kotlin.math.abs(n) < GIMBAL_STICK_DEADZONE) return GIMBAL_STICK_CENTER
-        return (GIMBAL_STICK_CENTER + n * GIMBAL_STICK_TRAVEL)
-            .toInt()
+        val scaled = (n * gimbalSensitivityGain(sensitivity)).coerceIn(-1f, 1f)
+        return (GIMBAL_STICK_CENTER + scaled * GIMBAL_STICK_TRAVEL)
+            .roundToInt()
             .coerceIn(GIMBAL_STICK_MIN, GIMBAL_STICK_MAX)
     }
 
-    fun gimbalAxes(x: Float, y: Float, invertPan: Boolean = false): Pair<Int, Int> =
-        gimbalAxis(y) to gimbalAxis(if (invertPan) -x else x)
+    fun gimbalAxes(
+        x: Float,
+        y: Float,
+        invertPan: Boolean = false,
+        sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY,
+    ): Pair<Int, Int> =
+        gimbalAxis(y, sensitivity) to gimbalAxis(if (invertPan) -x else x, sensitivity)
 
     /** `0x04/0x01` payload: two u16-LE axes + trailer `00 80 22 00`. */
     fun gimbalStickPayload(axis0: Int, axis1: Int): ByteArray {
@@ -312,18 +418,15 @@ object CameraCommands {
         )
     }
 
-    fun fpsIndex(fps: Int): Int? =
-        when (fps) {
-            24 -> 1
-            25 -> 2
-            30 -> 3
-            48 -> 4
-            50 -> 5
-            60 -> 6
-            else -> null
-        }
+    fun fpsIndex(fps: Int): Int? = VideoFrameRate.fromFps(fps)?.rawValue
 
-    fun fpsFromIndex(index: Int): Int? =
+    fun fpsFromIndex(index: Int): Int? = VideoFrameRate.fromRaw(index)?.fps
+
+    /**
+     * iOS `CameraStatusDecoder.fps(index:)` — subscribe display table.
+     * SET still uses [VideoFrameRate] only (no 120 / 240 / 100 / 96 / 15).
+     */
+    fun fpsFromSubscribeIndex(index: Int): Int? =
         when (index) {
             1 -> 24
             2 -> 25
@@ -331,15 +434,15 @@ object CameraCommands {
             4 -> 48
             5 -> 50
             6 -> 60
+            7 -> 120
+            8 -> 240
+            10 -> 100
+            11 -> 96
+            29 -> 15
             else -> null
         }
 
-    fun resolutionLabel(code: Int): String =
-        when (code) {
-            RES_1080 -> "1080p"
-            RES_4K -> "4K"
-            else -> "—"
-        }
+    fun resolutionLabel(code: Int): String = VideoResolution.fromRaw(code)?.label ?: "—"
 
     fun colorLabel(mode: Int, family: String = "pocket"): String =
         when (mode) {
@@ -351,6 +454,9 @@ object CameraCommands {
             COLOR_DLOG_M -> "D-Log M 10-bit"
             else -> "—"
         }
+
+    /** `IsoIndex.allCases` raw bytes. Unknown camcap entries are dropped. */
+    val ISO_INDEX_BYTES = setOf(0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B)
 
     fun isoLabel(index: Int): String =
         when (index) {
@@ -367,11 +473,47 @@ object CameraCommands {
             else -> "—"
         }
 
+    /** nil for Auto / unknown — matches Swift `IsoIndex.isoValue`. */
+    fun isoValue(index: Int): Int? =
+        when (index) {
+            0x03 -> 100
+            0x04 -> 200
+            0x05 -> 400
+            0x06 -> 800
+            0x07 -> 1600
+            0x08 -> 3200
+            0x09 -> 6400
+            0x0A -> 12800
+            0x0B -> 25600
+            else -> null
+        }
+
+    fun isoIndexFromValue(iso: Int): Int? =
+        when (iso) {
+            100 -> 0x03
+            200 -> 0x04
+            400 -> 0x05
+            800 -> 0x06
+            1600 -> 0x07
+            3200 -> 0x08
+            6400 -> 0x09
+            12800 -> 0x0A
+            25600 -> 0x0B
+            else -> null
+        }
+
+    /** D-Log2 has no Auto ISO. Unknown color is treated as Normal. */
+    fun offersIsoAuto(colorMode: Int): Boolean = colorMode != COLOR_DLOG2
+
+    /** GET `0x8E` pid `0x000F` only when Auto ISO exists. */
+    fun shouldGetIsoLimit(colorMode: Int): Boolean = offersIsoAuto(colorMode)
+
+    fun isoWheelIndices(available: List<Int>, fallback: List<Int>): List<Int> =
+        if (available.isEmpty()) fallback else available
+
     /**
-     * Native base ISO for the operator's current color / transfer.
-     * Decoration only — the chip list stays `camcap_iso`.
-     * D-Log = 400, D-Log2 = 1600. Rec.709 / HLG / unknown: none.
-     * Uses `cam_image_effect` `@2`, not a tele hop SET.
+     * Native base ISO for D-Log ↔ D-Log2 hops. Rec.709 / HLG / D-Log M / unknown:
+     * none. Hop uses this, not [markedIsoLabel] (D-Log M stars 400 but does not hop).
      */
     fun baseIsoLabel(colorMode: Int): String? =
         when (colorMode) {
@@ -380,9 +522,34 @@ object CameraCommands {
             else -> null
         }
 
+    /**
+     * If the operator is still on [from]'s native ISO, hop to [to]'s native.
+     * Off-base or Auto stays put. Rec.709 / HDR / D-Log M have no native — no hop.
+     */
+    fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? {
+        if (!hopEnabled || from == to) return null
+        val fromBase = baseIsoLabel(from)?.toIntOrNull() ?: return null
+        val toBase = baseIsoLabel(to)?.toIntOrNull() ?: return null
+        val current = isoValue(currentIndex) ?: return null
+        if (current != fromBase) return null
+        return isoIndexFromValue(toBase)
+    }
+
+    /**
+     * Star on the ISO wheel. Follows `cam_image_effect` `@2` after the body
+     * reports, mapped like iOS `MonitorTransfer` — D-Log / D-Log M = 400,
+     * D-Log2 = 1600. Rec.709 / HLG / unknown: none. Not a tele hop SET.
+     */
+    fun markedIsoLabel(colorMode: Int): String? =
+        when (colorMode) {
+            COLOR_DLOG, COLOR_DLOG_M -> "400"
+            COLOR_DLOG2 -> "1600"
+            else -> null
+        }
+
     /** OpenZCine drum: `" ★"` after the native base, same color as the number. */
     fun isoChipLabel(label: String, colorMode: Int): String {
-        val base = baseIsoLabel(colorMode)
+        val base = markedIsoLabel(colorMode)
         return if (base != null && label == base) "$label ★" else label
     }
 
@@ -431,6 +598,22 @@ object CameraCommands {
         return out
     }
 
+    /**
+     * Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D`.
+     * Pocket never published this table in our takes. Unknown bytes dropped.
+     */
+    fun parseColorModes(value: ByteArray): List<Int> {
+        if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
+        val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
+        if (inner < 2 || 3 + inner > value.size) return emptyList()
+        val body = value.copyOfRange(3, 3 + inner)
+        val count = body[0].toInt() and 0xFF
+        if (count < 1 || body.size < 1 + count) return emptyList()
+        val known =
+            setOf(COLOR_NORMAL, COLOR_HDR, COLOR_DLOG, COLOR_DLOG2, COLOR_NORMAL10, COLOR_DLOG_M)
+        return body.copyOfRange(1, 1 + count).map { it.toInt() and 0xFF }.filter { it in known }
+    }
+
     fun parseIsoIndices(value: ByteArray): List<Int> {
         if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
         val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
@@ -438,7 +621,7 @@ object CameraCommands {
         val body = value.copyOfRange(3, 3 + inner)
         val count = body[1].toInt() and 0xFF
         if (body[0].toInt() != 0 || count < 1 || body.size < 2 + count) return emptyList()
-        return body.copyOfRange(2, 2 + count).map { it.toInt() and 0xFF }
+        return body.copyOfRange(2, 2 + count).map { it.toInt() and 0xFF }.filter { it in ISO_INDEX_BYTES }
     }
 
     fun shutterWheelDenoms(available: List<Int>, current: Int): List<Int> {
@@ -459,11 +642,6 @@ object CameraCommands {
             0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00,
         )
-
-    private fun lerpLens(a: Int, b: Int, t: Double): Int {
-        val clamped = t.coerceIn(0.0, 1.0)
-        return (a + (clamped * (b - a))).toInt()
-    }
 
     private fun u16LE(value: Int): ByteArray =
         byteArrayOf((value and 0xFF).toByte(), ((value shr 8) and 0xFF).toByte())
@@ -543,5 +721,71 @@ enum class FocusOption(val chip: String) {
                     }
                 else -> null
             }
+    }
+}
+
+/**
+ * Drop GET / subscribe snapshots that still show the pre-SET audio row.
+ * Mirrors iOS `CameraSession.AudioPin` (2 s).
+ */
+data class AudioPin(
+    val channel: Int? = null,
+    val vocal: Int? = null,
+    val wind: Int? = null,
+    val directional: Int? = null,
+    val deadlineElapsedMs: Long,
+) {
+    fun isEmpty(): Boolean =
+        channel == null && vocal == null && wind == null && directional == null
+
+    fun absorb(
+        incoming: CameraStatus,
+        current: CameraStatus,
+        nowElapsedMs: Long,
+    ): Pair<CameraStatus, AudioPin?> {
+        if (nowElapsedMs >= deadlineElapsedMs) return incoming to null
+        var next = incoming
+        var channel = this.channel
+        var vocal = this.vocal
+        var wind = this.wind
+        var directional = this.directional
+        if (channel != null) {
+            when {
+                incoming.audioChannel == channel -> channel = null
+                incoming.audioChannel >= 0 -> next = next.copy(audioChannel = current.audioChannel)
+            }
+        }
+        if (vocal != null) {
+            when {
+                incoming.vocalBoost == vocal -> vocal = null
+                incoming.vocalBoost >= 0 -> next = next.copy(vocalBoost = current.vocalBoost)
+            }
+        }
+        if (wind != null) {
+            when {
+                incoming.windNr == wind -> wind = null
+                incoming.windNr >= 0 -> next = next.copy(windNr = current.windNr)
+            }
+        }
+        if (directional != null) {
+            when {
+                incoming.directionalAudio == directional -> directional = null
+                incoming.directionalAudio >= 0 ->
+                    next = next.copy(directionalAudio = current.directionalAudio)
+            }
+        }
+        val pin =
+            AudioPin(
+                channel = channel,
+                vocal = vocal,
+                wind = wind,
+                directional = directional,
+                deadlineElapsedMs = deadlineElapsedMs,
+            )
+        return next to pin.takeUnless { it.isEmpty() }
+    }
+
+    companion object {
+        const val TTL_MS = 2_000L
     }
 }

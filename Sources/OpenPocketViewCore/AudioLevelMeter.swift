@@ -173,7 +173,10 @@ public enum CamAudioStatus {
 
     public static func fromU8Window(_ bytes: [UInt8]) -> AudioMeterLevels {
         precondition(bytes.count >= 4)
-        let a = Int(bytes[0]), b = Int(bytes[1]), c = Int(bytes[2]), d = Int(bytes[3])
+        let a = Int(bytes[0])
+        let b = Int(bytes[1])
+        let c = Int(bytes[2])
+        let d = Int(bytes[3])
         let currentFirst = (c >= a && d >= b) || !(a >= c && b >= d)
         let currentLeft = currentFirst ? a : c
         let currentRight = currentFirst ? b : d

@@ -1,6 +1,6 @@
-import SwiftUI
 import AVFoundation
 import OpenPocketViewCore
+import SwiftUI
 
 /// Hosts the HEVC display layer and the Core Image feed (used only while GPU assists are on).
 /// `effects` and `sampleBus` are read here so toggling PEAK/LUT/WAVE refreshes this representable
@@ -53,10 +53,11 @@ private struct VideoDisplayRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: DisplayLayerView, context: Context) {
         uiView.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = uiView.ciFeed
-        guard decoder.sampleBus !== sampleBus
-            || decoder.effects != effects
-            || decoder.feedUpscaler != feedUpscaler
-            || (transfer != nil && decoder.incomingTransfer != transfer)
+        guard
+            decoder.sampleBus !== sampleBus
+                || decoder.effects != effects
+                || decoder.feedUpscaler != feedUpscaler
+                || (transfer != nil && decoder.incomingTransfer != transfer)
         else { return }
         wire(decoder)
     }

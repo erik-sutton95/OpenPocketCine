@@ -1,6 +1,7 @@
-import XCTest
-@testable import OpenPocketCine
 import OpenPocketViewCore
+import XCTest
+
+@testable import OpenPocketCine
 
 final class CaptureListTests: XCTestCase {
     func testShutterWheelUsesCameraListNotHardcoded24pTable() {
@@ -39,14 +40,17 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(
             CaptureLists.isoDrumLabels(from: dlog2),
             ["100", "200", "400", "800", "1600", "3200"])
-        XCTAssertEqual(CaptureLists.isoDrumLabels(from: dlog2), dlog2.availableIsoIndices.map(\.label))
+        XCTAssertEqual(
+            CaptureLists.isoDrumLabels(from: dlog2), dlog2.availableIsoIndices.map(\.label))
         XCTAssertEqual(CaptureLists.isoMarkedLabels(from: dlog2), ["1600"])
         XCTAssertEqual(dlog2.monitorTransfer, .dlog2)
 
         var dlog = CameraStatus()
         dlog.colorMode = .dLog
         dlog.availableIsoIndices = CamCapIso.parseIndices(Self.isoDLog)
-        XCTAssertEqual(CaptureLists.isoDrumLabels(from: dlog), dlog.availableIsoIndices.filter { $0 != .auto }.map(\.label))
+        XCTAssertEqual(
+            CaptureLists.isoDrumLabels(from: dlog),
+            dlog.availableIsoIndices.filter { $0 != .auto }.map(\.label))
         XCTAssertEqual(CaptureLists.isoMarkedLabels(from: dlog), ["400"])
         XCTAssertFalse(CaptureLists.isoMarkedLabels(from: dlog).contains("1600"))
 
@@ -54,7 +58,8 @@ final class CaptureListTests: XCTestCase {
         rec709.colorMode = .normal
         rec709.availableIsoIndices = dlog2.availableIsoIndices
         XCTAssertTrue(CaptureLists.isoMarkedLabels(from: rec709).isEmpty)
-        XCTAssertEqual(CaptureLists.isoDrumLabels(from: rec709), CaptureLists.isoDrumLabels(from: dlog2))
+        XCTAssertEqual(
+            CaptureLists.isoDrumLabels(from: rec709), CaptureLists.isoDrumLabels(from: dlog2))
     }
 
     func testIsoStarFollowsStatusTransferNotTeleHopGuess() {
@@ -74,7 +79,7 @@ final class CaptureListTests: XCTestCase {
 
     func testFacePriorityCopy() {
         XCTAssertEqual(CaptureLists.facePriorityTitle, "Face Priority")
-        XCTAssertEqual(CaptureLists.facePriorityBadgeSymbol, "face.smiling.fill")
+        XCTAssertEqual(CaptureLists.facePriorityBadgeIcon, .scan)
         XCTAssertFalse(CaptureLists.facePriorityHelp.isEmpty)
     }
 
@@ -137,13 +142,15 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(EvComp(label: "\(EvComp.minusSign)3.0")?.rawValue, 0x07)
         XCTAssertEqual(EvComp(label: "0.0")?.rawValue, 0x10)
         XCTAssertEqual(EvComp(label: "+3.0")?.rawValue, 0x19)
-        XCTAssertEqual(labels, [
-            "\(EvComp.minusSign)3.0", "\(EvComp.minusSign)2.7", "\(EvComp.minusSign)2.3",
-            "\(EvComp.minusSign)2.0", "\(EvComp.minusSign)1.7", "\(EvComp.minusSign)1.3",
-            "\(EvComp.minusSign)1.0", "\(EvComp.minusSign)0.7", "\(EvComp.minusSign)0.3",
-            "0.0",
-            "+0.3", "+0.7", "+1.0", "+1.3", "+1.7", "+2.0", "+2.3", "+2.7", "+3.0",
-        ])
+        XCTAssertEqual(
+            labels,
+            [
+                "\(EvComp.minusSign)3.0", "\(EvComp.minusSign)2.7", "\(EvComp.minusSign)2.3",
+                "\(EvComp.minusSign)2.0", "\(EvComp.minusSign)1.7", "\(EvComp.minusSign)1.3",
+                "\(EvComp.minusSign)1.0", "\(EvComp.minusSign)0.7", "\(EvComp.minusSign)0.3",
+                "0.0",
+                "+0.3", "+0.7", "+1.0", "+1.3", "+1.7", "+2.0", "+2.3", "+2.7", "+3.0",
+            ])
     }
 
     func testShutterAngleLadderIsCalculatedNotCaptured() {
@@ -167,8 +174,12 @@ final class CaptureListTests: XCTestCase {
     private static let shutter60p = hex(
         "0164000002000101001e00051e80be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280000c80000a8000088000068000058000048000"
     )
-    private static let isoDLog2: [UInt8] = [0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]
-    private static let isoDLog: [UInt8] = [0x01, 0x08, 0x00, 0x00, 0x06, 0x00, 0x05, 0x06, 0x07, 0x08, 0x09]
+    private static let isoDLog2: [UInt8] = [
+        0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    ]
+    private static let isoDLog: [UInt8] = [
+        0x01, 0x08, 0x00, 0x00, 0x06, 0x00, 0x05, 0x06, 0x07, 0x08, 0x09,
+    ]
 
     private static func hex(_ s: String) -> [UInt8] {
         stride(from: 0, to: s.count, by: 2).map {

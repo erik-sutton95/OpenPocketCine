@@ -168,6 +168,18 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun resetClearsIdrHoldAndPicture() {
+        val decoder = HevcDecoder()
+        decoder.beginIDRHold()
+        assertTrue(decoder.awaitingIdr)
+        decoder.reset()
+        assertTrue(!decoder.awaitingIdr)
+        assertTrue(!decoder.hasFormat)
+        assertTrue(!decoder.hasPicture.value)
+        assertTrue(!decoder.isPresentationReady)
+    }
+
+    @Test
     fun afcGraceHoldsWatchdog() {
         val state = LiveViewEnablePolicy.State()
         val now = 20_000L
@@ -308,6 +320,21 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun neverGotVideoRebuildsEvenWhenStatusIsFresh() {
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 2,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+            "fresh status must not skip the iOS rebuild — that sat on WAITING FOR LIVE VIEW",
+        )
+    }
+
+    @Test
     fun leftoverGopKeepsUdpOnlyWhileVideoIsFresh() {
         assertTrue(
             LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
@@ -340,6 +367,16 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun firstPictureDoesNotExitPlaybackUnlessCameraIsInGallery() {
+        assertTrue(!LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(inPlayback = false))
+        assertTrue(LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(inPlayback = true))
+        assertTrue(LiveViewEnablePolicy.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor = true))
+        assertTrue(!LiveViewEnablePolicy.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor = false))
+        assertTrue(LiveViewEnablePolicy.shouldContinueFirstPictureAfterStrayPlayback(hasPicture = false))
+        assertTrue(!LiveViewEnablePolicy.shouldContinueFirstPictureAfterStrayPlayback(hasPicture = true))
+    }
+
+    @Test
     fun keepaliveDoesNotTearUdpDuringFirstPicture() {
         assertTrue(
             !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
@@ -362,6 +399,12 @@ class LiveViewEnablePolicyTest {
         assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = false))
         assertTrue(!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = false))
         assertTrue(LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = true))
+        assertTrue(LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = false))
+        assertTrue(!LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = true))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldWaitForLiveViewAckBeforeArm(),
+            "Mimo VPS is 25–167 ms after 0xa8 — do not block ingest on a DUML ACK",
+        )
     }
 
     @Test

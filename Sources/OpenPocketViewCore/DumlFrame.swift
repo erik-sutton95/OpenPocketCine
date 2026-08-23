@@ -11,15 +11,15 @@ public enum Duml {
     public static let senderApp: UInt8 = 0x02
 
     /// Receivers, packed as (id<<5)|type. See Osmosis OsmoCommands / DumlTransport.
-    public static let rxCamera:  UInt8 = 0x01   // id 0, type 1
-    public static let rxWifi:    UInt8 = 0x07   // id 0, type 7
-    public static let rxSession: UInt8 = 0xF0   // id 7, type 0x10 — session/heartbeat (0x00/0x2b)
-    public static let rx1C:      UInt8 = 0x1C   // id 0, type 0x1C — wake (0x53/0x10)
+    public static let rxCamera: UInt8 = 0x01  // id 0, type 1
+    public static let rxWifi: UInt8 = 0x07  // id 0, type 7
+    public static let rxSession: UInt8 = 0xF0  // id 7, type 0x10 — session/heartbeat (0x00/0x2b)
+    public static let rx1C: UInt8 = 0x1C  // id 0, type 0x1C — wake (0x53/0x10)
 
     /// Command flags (byte 8): request / response / unsolicited notify.
-    public static let flagRequest:  UInt8 = 0x40
+    public static let flagRequest: UInt8 = 0x40
     public static let flagResponse: UInt8 = 0xC0
-    public static let flagNotify:   UInt8 = 0x00
+    public static let flagNotify: UInt8 = 0x00
     /// Gimbal / cmdType-4 ACK (not the usual 0x02/* `0xC0`).
     public static let flagAck80: UInt8 = 0x80
 
@@ -39,7 +39,7 @@ public enum Duml {
         guard set == 0x02 else { return false }
         switch cmd {
         case 0x01, 0x02, 0x0C, 0x1E, 0x18, 0x22, 0x24, 0x28, 0x2A, 0x2C, 0x2E,
-             0x30, 0x32, 0x42, 0x68, 0x8E, 0x9F, 0xA0, 0xA5, 0xA6, 0xB8, 0xBF, 0xE1:
+            0x30, 0x32, 0x42, 0x68, 0x8E, 0x9F, 0xA0, 0xA5, 0xA6, 0xB8, 0xBF, 0xE1:
             return true
         default:
             return false
@@ -71,10 +71,17 @@ public enum Duml {
         public var cmdId: UInt8
         public var payload: [UInt8]
 
-        public init(sender: UInt8, receiver: UInt8, seq: UInt16, flags: UInt8,
-                    cmdSet: UInt8, cmdId: UInt8, payload: [UInt8]) {
-            self.sender = sender; self.receiver = receiver; self.seq = seq
-            self.flags = flags; self.cmdSet = cmdSet; self.cmdId = cmdId; self.payload = payload
+        public init(
+            sender: UInt8, receiver: UInt8, seq: UInt16, flags: UInt8,
+            cmdSet: UInt8, cmdId: UInt8, payload: [UInt8]
+        ) {
+            self.sender = sender
+            self.receiver = receiver
+            self.seq = seq
+            self.flags = flags
+            self.cmdSet = cmdSet
+            self.cmdId = cmdId
+            self.payload = payload
         }
     }
 
@@ -84,7 +91,7 @@ public enum Duml {
         b.reserveCapacity(total)
         b.append(0x55)
         b.append(UInt8(total & 0xFF))
-        b.append(UInt8((1 << 2) | ((total >> 8) & 0x03)))   // ver 1 + high length bits
+        b.append(UInt8((1 << 2) | ((total >> 8) & 0x03)))  // ver 1 + high length bits
         b.append(crc8(Array(b[0..<3])))
         b.append(f.sender)
         b.append(f.receiver)
@@ -110,10 +117,13 @@ public enum Duml {
         guard crc8(Array(f[0..<3])) == f[3] else { return nil }
         let got = UInt16(f[total - 2]) | (UInt16(f[total - 1]) << 8)
         guard crc16(Array(f[0..<(total - 2)])) == got else { return nil }
-        return (Frame(sender: f[4], receiver: f[5],
-                      seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
-                      flags: f[8], cmdSet: f[9], cmdId: f[10],
-                      payload: Array(f[11..<(total - 2)])), total)
+        return (
+            Frame(
+                sender: f[4], receiver: f[5],
+                seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
+                flags: f[8], cmdSet: f[9], cmdId: f[10],
+                payload: Array(f[11..<(total - 2)])), total
+        )
     }
 
     /// `[len:u8][utf8]` — how the WiFi subsystem packs strings (SSID, pass, PIN).

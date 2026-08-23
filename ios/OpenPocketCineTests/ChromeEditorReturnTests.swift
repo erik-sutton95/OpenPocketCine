@@ -1,5 +1,6 @@
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// OpenZCine `ChromeEditorReturnTests` — Edit view entry, exit, and force-mount.
@@ -121,8 +122,10 @@ final class ChromeEditorReturnTests: XCTestCase {
         XCTAssertEqual(PocketDispMode.allCases.map(\.rawValue), ["live", "clean"])
         XCTAssertFalse(PocketDispMode.live.settingsTitle.contains("DISP 3"))
         XCTAssertFalse(PocketDispMode.clean.settingsTitle.contains("DISP 3"))
-        XCTAssertFalse(PocketDispMode.live.settingsCaption.localizedCaseInsensitiveContains("command"))
-        XCTAssertFalse(PocketDispMode.clean.settingsCaption.localizedCaseInsensitiveContains("command"))
+        XCTAssertFalse(
+            PocketDispMode.live.settingsCaption.localizedCaseInsensitiveContains("command"))
+        XCTAssertFalse(
+            PocketDispMode.clean.settingsCaption.localizedCaseInsensitiveContains("command"))
     }
 
     func testBadgeFramesSitOnTopBarAndAvoidOverlap() throws {
@@ -149,8 +152,9 @@ final class ChromeEditorReturnTests: XCTestCase {
         XCTAssertGreaterThan(abs(status.midX - rec.midX) + abs(status.midY - rec.midY), 20)
         XCTAssertFalse(
             status.insetBy(
-                dx: -PocketChromeEditLayout.badgeGap, dy: -PocketChromeEditLayout.badgeGap)
-                .intersects(rec)
+                dx: -PocketChromeEditLayout.badgeGap, dy: -PocketChromeEditLayout.badgeGap
+            )
+            .intersects(rec)
         )
     }
 
@@ -164,7 +168,8 @@ final class ChromeEditorReturnTests: XCTestCase {
         let badge = try XCTUnwrap(frames[.railSettings])
         let playable = PocketChromeEditLayout.playableRect(in: viewport)
         XCTAssertTrue(playable.contains(badge))
-        XCTAssertLessThanOrEqual(badge.maxX, viewport.width - PocketChromeEditLayout.edgeInset + 0.5)
+        XCTAssertLessThanOrEqual(
+            badge.maxX, viewport.width - PocketChromeEditLayout.edgeInset + 0.5)
         XCTAssertTrue(settings.intersects(badge))
         // Right-rail control: eye on the leading (inward) side.
         XCTAssertLessThan(badge.midX, settings.midX)

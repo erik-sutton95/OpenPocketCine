@@ -102,7 +102,8 @@ public struct TrackingBox: Equatable, Sendable {
         guard bytes.count >= 16 else { return nil }
         func f32(_ offset: Int) -> Double? {
             let slice = Array(bytes[offset..<(offset + 4)])
-            let bits = UInt32(slice[0])
+            let bits =
+                UInt32(slice[0])
                 | (UInt32(slice[1]) << 8)
                 | (UInt32(slice[2]) << 16)
                 | (UInt32(slice[3]) << 24)
@@ -124,8 +125,9 @@ public struct TrackingBox: Equatable, Sendable {
             payload[0] == 0, payload[1] == 0, payload[2] == 0,
             payload[3] == 0, payload[4] == 0
         else { return nil }
-        guard let raw = parseNormalized(
-            Array(payload[7...]), minimum: 0.02, requireOriginFits: false)
+        guard
+            let raw = parseNormalized(
+                Array(payload[7...]), minimum: 0.02, requireOriginFits: false)
         else { return nil }
         return fromCenter(x: raw.x, y: raw.y, width: raw.width, height: raw.height)
     }
@@ -607,15 +609,15 @@ public enum FaceBodyFallback {
             headFromFace($0, prior: prior, pictureAspect: pictureAspect)
         }
         switch (grownFace, head) {
-        case let (f?, h?):
+        case (let f?, let h?):
             let cover = f.union(h)
             return squareHead(
                 centerX: cover.centerX, centerY: cover.centerY,
                 width: cover.width, height: cover.height,
                 prior: prior, pictureAspect: pictureAspect)
-        case let (f?, nil):
+        case (let f?, nil):
             return f
-        case let (nil, h?):
+        case (nil, let h?):
             return squareHead(
                 centerX: h.centerX, centerY: h.centerY,
                 width: h.width, height: h.height,
@@ -675,7 +677,10 @@ public enum FaceBodyFallback {
         var xs: [Double] = []
         var ys: [Double] = []
         func add(_ x: Double?, _ y: Double?) {
-            if let x, let y { xs.append(x); ys.append(y) }
+            if let x, let y {
+                xs.append(x)
+                ys.append(y)
+            }
         }
         add(leftEarX, leftEarY)
         add(rightEarX, rightEarY)
@@ -758,7 +763,7 @@ public enum FaceStructurePolicy {
         if leftOk, rightOk, let leftEyeX, let rightEyeX {
             return abs(rightEyeX - leftEyeX) >= minimumEyeSeparation
         }
-        if (leftOk || rightOk), nosePoints >= 3 { return true }
+        if leftOk || rightOk, nosePoints >= 3 { return true }
         return false
     }
 
@@ -980,9 +985,10 @@ public enum HeadLock {
 
         for cluster in clusters {
             let isPrimary = matchesPrimary(cluster.face?.box, cluster.head, last: last)
-            let enteringFace = cluster.face.map {
-                FaceHeadHandoff.isUsableFace($0, entering: true, sceneMoving: sceneMoving)
-            } ?? false
+            let enteringFace =
+                cluster.face.map {
+                    FaceHeadHandoff.isUsableFace($0, entering: true, sceneMoving: sceneMoving)
+                } ?? false
             let holdingFace = cluster.face != nil
             let mode: FaceHeadHandoff.Mode
             if isPrimary || (last == nil && !assignedPrimary) {
@@ -990,7 +996,8 @@ public enum HeadLock {
                 let missing = isPrimary ? faceMissingFor : (holdingFace ? 0 : .infinity)
                 mode = FaceHeadHandoff.nextMode(
                     current: last == nil ? .face : lastMode,
-                    hasUsableFace: isPrimary ? (lastMode == .head ? enteringFace : holdingFace) : enteringFace,
+                    hasUsableFace: isPrimary
+                        ? (lastMode == .head ? enteringFace : holdingFace) : enteringFace,
                     hasHead: cluster.head != nil,
                     faceVisibleFor: visible,
                     faceMissingFor: missing)

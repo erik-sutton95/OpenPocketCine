@@ -86,6 +86,9 @@ object MediaHTTP {
 
     fun originalPath(file: MediaFile): String = file.path
 
+    /** Clip delivery / export: the original camera file, never the LRF/XRF 720p proxy. */
+    fun deliveryPath(file: MediaFile): String = originalPath(file)
+
     fun thumbnailPath(file: MediaFile): String = file.thumbPath
 
     /** Preview chain: listed proxy, derived `.LRF` (DJI) / `.XRF` (CAM_), then original. */
@@ -96,6 +99,9 @@ object MediaHTTP {
         seen.add(file.path)
         return seen.toList()
     }
+
+    /** LRF/XRF sidecars only. Empty for photos and clips with no DJI proxy. */
+    fun proxyPaths(file: MediaFile): List<String> = previewPaths(file).filter(::isProxyPath)
 
     fun derivedProxyPath(file: MediaFile): String? {
         val ext = derivedProxyExtension(file.filename) ?: return null

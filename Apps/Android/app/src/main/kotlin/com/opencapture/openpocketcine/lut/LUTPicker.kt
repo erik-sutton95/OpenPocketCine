@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
@@ -20,17 +19,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +38,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -49,26 +50,31 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.pairing.StartupColors
+import com.opencapture.openpocketcine.session.CameraCommands
 import java.io.File
 import kotlin.math.abs
 
@@ -78,10 +84,31 @@ private enum class LutTab(val label: String) {
     CUSTOM("Custom"),
 }
 
-/** iOS `LUTPickerContent.contentHeight` — landscape has no headroom for a taller drum. */
-private val LutContentHeight = 146.dp
-private val LutCaptionHeight = 28.dp
-private val LutDrumRowHeight = 52.dp
+/** iOS `LUTPicker` landscape metrics — caption + drum, not a stretched well.
+ * Catalog is ~15% taller than iOS 146 so the fade well can show neighbours. */
+internal object LutPickerMetrics {
+    const val CONTENT_DP = 168f
+    const val CAPTION_DP = 28f
+    const val ROW_DP = 52f
+    const val WHEEL_GAP_DP = 4f
+    const val WHEEL_DP = CONTENT_DP - CAPTION_DP - WHEEL_GAP_DP
+    /** Softer than iOS 0.22 / 0.78 so the extra fade well still reads as a list. */
+    const val FADE_IN = 0.12f
+    const val FADE_OUT = 0.88f
+    /** Centered / neighbour drum faces — 3 pt under iOS 30 / 23 so S25 matches the baseline photo. */
+    const val CENTER_PT = 27f
+    const val NEIGHBOR_PT = 20f
+    const val SPLIT_TYPE_PT = 11f
+    const val SPLIT_ICON_DP = 13f
+    const val SPLIT_PAD_H_DP = 10f
+    const val SPLIT_PAD_V_DP = 6f
+    const val CLOSE_DP = 27f
+}
+
+private val LutContentHeight = LutPickerMetrics.CONTENT_DP.dp
+private val LutCaptionHeight = LutPickerMetrics.CAPTION_DP.dp
+private val LutDrumRowHeight = LutPickerMetrics.ROW_DP.dp
+private val LutDrumWheelHeight = LutPickerMetrics.WHEEL_DP.dp
 
 private const val DRUM_NOT_LAID_OUT = -1
 
@@ -89,6 +116,7 @@ private const val DRUM_NOT_LAID_OUT = -1
 @Composable
 fun LUTPicker(model: AppModel, onClose: () -> Unit) {
     val assist = model.assist
+    val status by model.session.status.collectAsState()
     LUTPicker(
         selection = model.lutSelection,
         onSelect = model::updateLutSelection,
@@ -99,6 +127,9 @@ fun LUTPicker(model: AppModel, onClose: () -> Unit) {
         onToggleSplit = { assist.setSplitComparison(!assist.splitComparison) },
         onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
         onArmLut = { assist.armLut() },
+        colorMode = status.colorMode,
+        family = model.session.connectedCamera?.model?.family ?: "pocket",
+        cameraName = model.session.connectedCamera?.name,
     )
 }
 
@@ -117,6 +148,10 @@ internal fun LUTPicker(
     onSplitVertical: (Boolean) -> Unit,
     onArmLut: () -> Unit = {},
     onClose: (() -> Unit)? = null,
+    colorMode: Int = CameraCommands.COLOR_NORMAL,
+    family: String = "pocket",
+    cameraName: String? = null,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val djiEntries =
@@ -187,6 +222,7 @@ internal fun LUTPicker(
     val body =
         @Composable {
             LUTPickerBody(
+                modifier = modifier,
                 tab = tab,
                 onTab = onTab,
                 selection = selection,
@@ -202,6 +238,9 @@ internal fun LUTPicker(
                 splitVertical = splitVertical,
                 onToggleSplit = onToggleSplit,
                 onSplitVertical = onSplitVertical,
+                colorMode = colorMode,
+                family = family,
+                cameraName = cameraName,
             )
         }
 
@@ -275,6 +314,7 @@ internal fun LUTPicker(
 
 @Composable
 private fun LUTPickerBody(
+    modifier: Modifier = Modifier,
     tab: LutTab,
     onTab: (LutTab) -> Unit,
     selection: String,
@@ -290,34 +330,52 @@ private fun LUTPickerBody(
     splitVertical: Boolean,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
+    colorMode: Int,
+    family: String,
+    cameraName: String?,
 ) {
-    Column(
-        Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    BoxWithConstraints(
+        modifier
+            .fillMaxWidth()
+            .then(if (embedded) Modifier.fillMaxHeight() else Modifier),
     ) {
+        val tabBlock = 36.dp
+        val tabGap = 8.dp
+        val contentH =
+            if (constraints.hasBoundedHeight) {
+                (maxHeight - tabBlock - tabGap).coerceAtLeast(LutDrumRowHeight)
+            } else {
+                LutContentHeight
+            }
+        Column(
+            Modifier.fillMaxWidth().wrapContentHeight(),
+            verticalArrangement = Arrangement.spacedBy(tabGap),
+        ) {
         LutSegmentedButtons(
             items = LutTab.entries.map { it.label },
             selected = tab.label,
         ) { label ->
             LutTab.entries.firstOrNull { it.label == label }?.let(onTab)
         }
-        Box(Modifier.fillMaxWidth().height(LutContentHeight)) {
+        Box(Modifier.fillMaxWidth().height(contentH)) {
             when (tab) {
                 LutTab.BUILT_IN ->
                     CatalogTab(
-                        caption = builtInCaption(selection),
+                        caption = builtInCaption(selection, colorMode, family, cameraName),
                         entries = builtInEntries,
                         selection = selection,
                         fallbackId = LutCatalog.AUTO,
                         onSelect = onSelect,
+                        contentHeight = contentH,
                     )
                 LutTab.DJI ->
                     CatalogTab(
-                        caption = djiCaption(selection),
+                        caption = djiCaption(selection, colorMode, family, cameraName),
                         entries = djiEntries,
                         selection = selection,
                         fallbackId = LutCatalog.DJI_AUTO,
                         onSelect = onSelect,
+                        contentHeight = contentH,
                     )
                 LutTab.CUSTOM ->
                     CustomTab(
@@ -344,6 +402,7 @@ private fun LUTPickerBody(
                 fontSize = 12.sp,
             )
         }
+        }
     }
 }
 
@@ -354,25 +413,44 @@ private fun CatalogTab(
     selection: String,
     fallbackId: String,
     onSelect: (String) -> Unit,
+    contentHeight: Dp = LutContentHeight,
 ) {
     val inCatalog = entries.any { LutCatalog.matches(it, selection) }
     val wheelSelection = if (inCatalog) selection else fallbackId
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            caption,
-            color = LiveDesign.muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(LutCaptionHeight)
-                    .padding(bottom = 4.dp),
-        )
+    val gap = LutPickerMetrics.WHEEL_GAP_DP.dp
+    val captionH = if (contentHeight >= LutContentHeight) LutCaptionHeight else 18.dp
+    val minCaptioned = captionH + LutDrumRowHeight
+    val showCaption = contentHeight >= minCaptioned
+    val captionGap = if (showCaption && contentHeight >= minCaptioned + gap) gap else 0.dp
+    val drumH =
+        if (showCaption) {
+            (contentHeight - captionH - captionGap).coerceAtLeast(LutDrumRowHeight)
+        } else {
+            contentHeight.coerceAtLeast(LutDrumRowHeight)
+        }
+    Column(
+        Modifier.fillMaxWidth().height(contentHeight),
+        verticalArrangement = Arrangement.spacedBy(captionGap),
+    ) {
+        if (showCaption) {
+            Box(
+                Modifier.fillMaxWidth().height(captionH),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    caption,
+                    style = LiveType.ui(11f, FontWeight.Medium, LiveTypeDesign.Rounded),
+                    color = LiveDesign.muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
         LutDrumWheel(
             entries = entries,
             selection = wheelSelection,
             onSelect = onSelect,
-            modifier = Modifier.fillMaxWidth().height(LutContentHeight - LutCaptionHeight - 4.dp),
+            wheelHeight = drumH,
         )
     }
 }
@@ -464,18 +542,25 @@ internal fun LUTSplitComparisonBar(
         Row(
             Modifier.clip(RoundedCornerShape(50))
                 .background(if (splitComparison) LiveDesign.accentDim else LiveDesign.glassBright)
-                .clickable(onClick = onToggleSplit)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .chromeClickable(onClick = onToggleSplit)
+                .padding(
+                    horizontal = LutPickerMetrics.SPLIT_PAD_H_DP.dp,
+                    vertical = LutPickerMetrics.SPLIT_PAD_V_DP.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             OpcIcon(
                 icon = if (splitComparison) OpcIcon.CIRCLE_CHECK else OpcIcon.CIRCLE,
                 contentDescription = null,
                 tint = if (splitComparison) LiveDesign.accent else LiveDesign.muted,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(LutPickerMetrics.SPLIT_ICON_DP.dp),
             )
-            Text("50/50", color = LiveDesign.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "50/50",
+                style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                color = LiveDesign.text,
+            )
         }
         if (splitComparison) {
             LutSegmentedButtons(
@@ -505,15 +590,14 @@ private fun LutSegmentedButtons(
                 Modifier.weight(1f)
                     .clip(RoundedCornerShape(50))
                     .background(if (on) LiveDesign.accentDim else LiveDesign.glassBright)
-                    .clickable { onSelect(item) }
+                    .chromeClickable { onSelect(item) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     item,
+                    style = LiveType.ui(13f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
                     color = if (on) LiveDesign.accent else LiveDesign.muted,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
             }
@@ -523,7 +607,7 @@ private fun LutSegmentedButtons(
 
 /**
  * iOS `AccentDrumWheel`: snapping wheel — the settled row renders large in
- * accent between two hairlines; neighbours dim above and below.
+ * accent between two hairlines; neighbours sit in the 0.22 / 0.78 fade.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -531,11 +615,13 @@ private fun LutDrumWheel(
     entries: List<LutEntry>,
     selection: String,
     onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
+    wheelHeight: Dp = LutDrumWheelHeight,
 ) {
     if (entries.isEmpty()) return
+    val optionKey = entries.joinToString { it.id }
     val selectedIndex = entries.indexOfFirst { LutCatalog.matches(it, selection) }.coerceAtLeast(0)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    val listState = remember(optionKey) { LazyListState(firstVisibleItemIndex = selectedIndex) }
+    var seated by remember { mutableStateOf(false) }
     val fling =
         rememberSnapFlingBehavior(
             lazyListState = listState,
@@ -551,113 +637,136 @@ private fun LutDrumWheel(
         }
     }
     LaunchedEffect(entries, selection) {
-        val index = entries.indexOfFirst { LutCatalog.matches(it, selection) }.coerceAtLeast(0)
-        if (listState.isScrollInProgress) return@LaunchedEffect
-        if (centeredIndex == index) return@LaunchedEffect
-        listState.scrollToItem(index)
+        seated = false
+        val index = entries.indexOfFirst { LutCatalog.matches(it, selection) }
+        if (index >= 0) {
+            listState.scrollToItem(index)
+        }
     }
-    LaunchedEffect(listState, entries) {
+    LaunchedEffect(listState, entries, selection) {
         snapshotFlow { listState.isScrollInProgress to centeredIndex }
             .collect { (scrolling, index) ->
-                if (scrolling) return@collect
+                if (scrolling || index == DRUM_NOT_LAID_OUT) return@collect
                 val entry = entries.getOrNull(index) ?: return@collect
-                if (!LutCatalog.matches(entry, selection)) onSelect(entry.id)
+                if (LutCatalog.matches(entry, selection)) {
+                    seated = true
+                    return@collect
+                }
+                if (!seated) return@collect
+                onSelect(entry.id)
             }
     }
-    BoxWithConstraints(
-        modifier
+    val rowPx = with(LocalDensity.current) { LutDrumRowHeight.toPx() }
+    val hairlinePx = with(LocalDensity.current) { 1.dp.toPx() }
+    val edgePadding = ((wheelHeight - LutDrumRowHeight) / 2).coerceAtLeast(0.dp)
+    Box(
+        Modifier
             .fillMaxWidth()
-            .heightIn(min = LutDrumRowHeight * 2, max = LutDrumRowHeight * 3)
-            .height(LutContentHeight - LutCaptionHeight - 4.dp),
+            .height(wheelHeight)
+            .clipToBounds()
+            .drawWithContent {
+                drawContent()
+                val y0 = size.height / 2f - rowPx / 2f
+                val y1 = size.height / 2f + rowPx / 2f
+                drawLine(
+                    LiveDesign.hairlineStrong,
+                    Offset(0f, y0),
+                    Offset(size.width, y0),
+                    hairlinePx,
+                )
+                drawLine(
+                    LiveDesign.hairlineStrong,
+                    Offset(0f, y1),
+                    Offset(size.width, y1),
+                    hairlinePx,
+                )
+            },
         contentAlignment = Alignment.Center,
     ) {
-        val actualHeight = maxHeight
-        val edgePadding = ((actualHeight - LutDrumRowHeight) / 2).coerceAtLeast(0.dp)
-        LazyColumn(
-            state = listState,
-            flingBehavior = fling,
-            contentPadding = PaddingValues(vertical = edgePadding),
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(actualHeight)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        val fade = size.height * 0.22f
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                1f to Color.Black,
-                                endY = fade,
-                            ),
-                            size = Size(size.width, fade),
-                            blendMode = BlendMode.DstIn,
-                        )
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.Black,
-                                1f to Color.Transparent,
-                                startY = size.height - fade,
-                                endY = size.height,
-                            ),
-                            topLeft = Offset(0f, size.height - fade),
-                            size = Size(size.width, fade),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
-        ) {
-            items(entries.size, key = { entries[it].id }) { index ->
-                val entry = entries[index]
-                val centered = index == centeredIndex
-                Box(
-                    Modifier.fillMaxWidth()
-                        .height(LutDrumRowHeight)
-                        .pointerInput(entry.id) {
-                            detectTapGestures(onTap = { onSelect(entry.id) })
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        entry.title,
-                        style =
-                            LiveType.mono(
-                                if (centered) 30f else 23f,
-                                if (centered) FontWeight.SemiBold else FontWeight.Normal,
-                            ),
-                        color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(wheelHeight)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        Brush.verticalGradient(
+                            colorStops =
+                                arrayOf(
+                                    0f to Color.Transparent,
+                                    LutPickerMetrics.FADE_IN to Color.Black,
+                                    LutPickerMetrics.FADE_OUT to Color.Black,
+                                    1f to Color.Transparent,
+                                ),
+                        ),
+                        blendMode = BlendMode.DstIn,
                     )
+                },
+        ) {
+            LazyColumn(
+                state = listState,
+                flingBehavior = fling,
+                contentPadding = PaddingValues(vertical = edgePadding),
+                modifier = Modifier.fillMaxWidth().height(wheelHeight),
+            ) {
+                items(entries.size, key = { entries[it].id }) { index ->
+                    val entry = entries[index]
+                    val centered = index == centeredIndex
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .requiredHeight(LutDrumRowHeight)
+                            .chromeClickable(onClick = { onSelect(entry.id) }),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            entry.title,
+                            style =
+                                LiveType.mono(
+                                    if (centered) LutPickerMetrics.CENTER_PT else LutPickerMetrics.NEIGHBOR_PT,
+                                    if (centered) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                            color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                    }
                 }
             }
         }
-        Box(
-            Modifier.fillMaxWidth()
-                .height(1.dp)
-                .offset(y = -LutDrumRowHeight / 2)
-                .background(LiveDesign.hairlineStrong),
-        )
-        Box(
-            Modifier.fillMaxWidth()
-                .height(1.dp)
-                .offset(y = LutDrumRowHeight / 2)
-                .background(LiveDesign.hairlineStrong),
-        )
     }
 }
 
-private fun builtInCaption(selection: String): String =
+private fun builtInCaption(
+    selection: String,
+    colorMode: Int,
+    family: String,
+    cameraName: String?,
+): String =
     when (selection) {
-        LutCatalog.AUTO -> "App looks for this color / camera"
+        LutCatalog.AUTO ->
+            LutLookResolver.autoCaption(
+                LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
+            )
         LutCatalog.OFF -> "No matching look for this color / camera"
         "officialDLog" -> "Built-in D-Log look"
         "officialDLog2" -> "Built-in D-Log2 look"
         else -> "App looks for this color / camera"
     }
 
-private fun djiCaption(selection: String): String =
+private fun djiCaption(
+    selection: String,
+    colorMode: Int,
+    family: String,
+    cameraName: String?,
+): String =
     when (selection) {
-        LutCatalog.DJI_AUTO -> "Official DJI looks for this color / camera"
+        LutCatalog.DJI_AUTO ->
+            LutLookResolver.autoCaption(
+                LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
+            )
         else ->
             if (LutCatalog.categoryOf(selection) == LutCategory.DJI) {
                 "Official DJI Rec.709 cube"

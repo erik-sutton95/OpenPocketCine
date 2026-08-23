@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import OpenPocketCine
 
 final class VectorscopeAssistTests: XCTestCase {
@@ -231,7 +232,8 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testGraticuleTargetsUse75PercentBoxes() {
-        XCTAssertEqual(VectorscopeGraticule.targets.map(\.label), ["R", "Mg", "B", "Cy", "G", "Yl"])
+        XCTAssertEqual(
+            VectorscopeGraticule.targets.map(\.label), ["R", "Mg", "B", "Cy", "G", "Yl"])
         XCTAssertEqual(VectorscopeGraticule.boxSide, 7)
         let rect = CGRect(x: 0, y: 0, width: 200, height: 200)
         let red = VectorscopeGraticule.targetCenter(red: 191, green: 0, blue: 0, in: rect)

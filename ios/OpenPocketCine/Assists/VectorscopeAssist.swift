@@ -475,11 +475,13 @@ struct VectorscopeMovablePanel<Content: View>: View {
             .frame(
                 width: VectorscopeAssist.gripVisualSize,
                 height: VectorscopeAssist.gripVisualSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .frame(
                 width: VectorscopeAssist.gripHitSize,
                 height: VectorscopeAssist.gripHitSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .contentShape(Rectangle())
             .gesture(interfaceLocked ? nil : resizeGesture)
             .accessibilityLabel("Resize vectorscope")

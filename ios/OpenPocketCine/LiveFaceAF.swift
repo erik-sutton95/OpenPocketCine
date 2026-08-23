@@ -88,12 +88,14 @@ final class LiveFaceDetector: @unchecked Sendable {
     private static func boxHit(
         from rect: CGRect, confidence: Double, structured: Bool
     ) -> FaceHit? {
-        guard let box = VisionFaceBox.fromVision(
-            minX: Double(rect.minX),
-            minY: Double(rect.minY),
-            width: Double(rect.width),
-            height: Double(rect.height)
-        ) else { return nil }
+        guard
+            let box = VisionFaceBox.fromVision(
+                minX: Double(rect.minX),
+                minY: Double(rect.minY),
+                width: Double(rect.width),
+                height: Double(rect.height)
+            )
+        else { return nil }
         return FaceHit(box: box, confidence: confidence, structured: structured)
     }
 

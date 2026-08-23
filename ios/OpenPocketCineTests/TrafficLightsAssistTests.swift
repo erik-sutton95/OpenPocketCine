@@ -1,6 +1,7 @@
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins OpenZCine Traffic Lights — popup rows, RGB goal-post chrome, crush/clip
@@ -32,7 +33,8 @@ final class TrafficLightsAssistTests: XCTestCase {
         XCTAssertEqual(TrafficLightsAssist.compensationTitle, "Crush/Clip Compensation")
         XCTAssertEqual(
             TrafficLightsAssist.compensationHelp,
-            "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights.")
+            "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."
+        )
         XCTAssertEqual(TrafficLightsAssist.baseSize, CGSize(width: 74, height: 168))
         XCTAssertEqual(TrafficLightsAssist.baseSize, ScopePanelSize.trafficLights)
         XCTAssertEqual(TrafficLightsAssist.scaleRange, 0.6...1.6)

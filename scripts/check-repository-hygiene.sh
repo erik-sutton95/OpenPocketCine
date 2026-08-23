@@ -19,7 +19,7 @@ is_forbidden_path() {
   esac
 
   case "$path" in
-    vendor|vendor/*|ref|ref/*|captures|captures/*|.local|.local/*|.codex|.codex/*)
+    vendor|vendor/*|ref|ref/*|captures|captures/*|.local|.local/*|.codex|.codex/*|images|images/*)
       return 0
       ;;
     "Osmo LUTS"|"Osmo LUTS"/*)

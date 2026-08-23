@@ -34,6 +34,9 @@
     <uses-feature
         android:name="android.hardware.wifi"
         android:required="true" />
+    <uses-feature
+        android:name="android.hardware.vulkan.level"
+        android:required="false" />
 
     <application
         android:icon="@mipmap/ic_launcher"

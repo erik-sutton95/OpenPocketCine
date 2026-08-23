@@ -26,20 +26,26 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 private const val TAG = "OpcFeedFx"
-private const val SOURCE_WIDTH = 1280
-private const val SOURCE_HEIGHT = 720
+private const val DEFAULT_SOURCE_WIDTH = 1280
+private const val DEFAULT_SOURCE_HEIGHT = 720
 
 /**
  * HEVC → `GL_TEXTURE_EXTERNAL_OES` → 2D FBO → [FeedEffectsGlProgram] → TextureView.
  *
- * MediaCodec never owns the TextureView surface. The GPU path stays mounted so
+ * The decoder never owns the TextureView surface. The GPU path stays mounted so
  * toggling LUT / PEAK / FALSE / ZEBRA does not swap the decoder output surface.
+ *
+ * [letterboxSource] is the live cinema well. Playback already aspect-fits the
+ * TextureView, so it passes false and fills the view.
+ * [notifySurfaceOnMain] posts [onDecoderSurface] to the app thread (ExoPlayer).
  */
 internal class LiveFeedEffectsSession(
     context: Context,
     private val onDecoderSurface: (Surface) -> Unit,
     private val onGpuFailed: () -> Unit,
     private val onFirstFrame: () -> Unit = {},
+    private val letterboxSource: Boolean = true,
+    private val notifySurfaceOnMain: Boolean = false,
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -56,6 +62,8 @@ internal class LiveFeedEffectsSession(
     @Volatile private var displayTexture: SurfaceTexture? = null
     @Volatile private var displayWidth = 0
     @Volatile private var displayHeight = 0
+    @Volatile private var sourceWidth = DEFAULT_SOURCE_WIDTH
+    @Volatile private var sourceHeight = DEFAULT_SOURCE_HEIGHT
     private var renderThread: Thread? = null
     private val sampleExecutor =
         Executors.newSingleThreadExecutor { runnable ->
@@ -87,6 +95,15 @@ internal class LiveFeedEffectsSession(
     fun updatePlan(next: FeedEffectsRenderPlan) {
         plan.set(next)
         planDirty = true
+        requestRender()
+    }
+
+    fun setSourceSize(width: Int, height: Int) {
+        val w = width.coerceAtLeast(16)
+        val h = height.coerceAtLeast(16)
+        if (w == sourceWidth && h == sourceHeight) return
+        sourceWidth = w
+        sourceHeight = h
         requestRender()
     }
 
@@ -199,7 +216,9 @@ internal class LiveFeedEffectsSession(
         var tapScratch: ByteArray? = null
         var activePlan: FeedEffectsRenderPlan? = null
         val texMatrix = FloatArray(16)
-        val tapSize = PocketScopeSampler.tapSize(SOURCE_WIDTH, SOURCE_HEIGHT)
+        var srcW = sourceWidth
+        var srcH = sourceHeight
+        val tapSize = PocketScopeSampler.tapSize(srcW, srcH)
         try {
             val egl = eglSetup(window)
             eglDisplay = egl.display
@@ -209,7 +228,7 @@ internal class LiveFeedEffectsSession(
             oesTexture = createOesTexture()
             oesSurfaceTexture =
                 SurfaceTexture(oesTexture).apply {
-                    setDefaultBufferSize(SOURCE_WIDTH, SOURCE_HEIGHT)
+                    setDefaultBufferSize(srcW, srcH)
                     setOnFrameAvailableListener(
                         {
                             synchronized(frameLock) {
@@ -222,8 +241,14 @@ internal class LiveFeedEffectsSession(
                     )
                 }
             decoderSurface = Surface(oesSurfaceTexture)
-            if (running.get()) onDecoderSurface(decoderSurface)
-            sourceTarget = SourceTarget.create(SOURCE_WIDTH, SOURCE_HEIGHT)
+            if (running.get()) {
+                if (notifySurfaceOnMain) {
+                    mainHandler.post { onDecoderSurface(checkNotNull(decoderSurface)) }
+                } else {
+                    onDecoderSurface(decoderSurface)
+                }
+            }
+            sourceTarget = SourceTarget.create(srcW, srcH)
             tapTarget = SourceTarget.create(tapSize.first, tapSize.second)
             val tapBytes = tapSize.first * tapSize.second * 4
             tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
@@ -249,6 +274,19 @@ internal class LiveFeedEffectsSession(
                     activePlan = nextPlan
                     planDirty = false
                 }
+                if (sourceWidth != srcW || sourceHeight != srcH) {
+                    srcW = sourceWidth
+                    srcH = sourceHeight
+                    oesSurfaceTexture.setDefaultBufferSize(srcW, srcH)
+                    sourceTarget?.release()
+                    sourceTarget = SourceTarget.create(srcW, srcH)
+                    val nextTap = PocketScopeSampler.tapSize(srcW, srcH)
+                    tapTarget?.release()
+                    tapTarget = SourceTarget.create(nextTap.first, nextTap.second)
+                    val tapBytes = nextTap.first * nextTap.second * 4
+                    tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
+                    tapScratch = ByteArray(tapBytes)
+                }
                 if (pullOes) {
                     oesSurfaceTexture.updateTexImage()
                     oesSurfaceTexture.getTransformMatrix(texMatrix)
@@ -257,18 +295,24 @@ internal class LiveFeedEffectsSession(
                 if (!hasOesFrame) continue
                 val width = displayWidth
                 val height = displayHeight
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, sourceTarget.framebufferId)
-                GLES20.glViewport(0, 0, sourceTarget.width, sourceTarget.height)
-                oesCopy.draw(oesTexture, texMatrix)
+                val source = checkNotNull(sourceTarget)
+                val copy = oesCopy ?: continue
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)
+                GLES20.glViewport(0, 0, source.width, source.height)
+                copy.draw(oesTexture, texMatrix)
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 val content =
-                    liveFeedContentRect(
-                        width.toFloat(),
-                        height.toFloat(),
-                        sourceTarget.width,
-                        sourceTarget.height,
-                    )
+                    if (letterboxSource) {
+                        liveFeedContentRect(
+                            width.toFloat(),
+                            height.toFloat(),
+                            source.width,
+                            source.height,
+                        )
+                    } else {
+                        null
+                    }
                 val presentWidth = content?.width ?: width
                 val presentHeight = content?.height ?: height
                 if (content != null) {
@@ -277,9 +321,9 @@ internal class LiveFeedEffectsSession(
                     GLES20.glViewport(0, 0, width, height)
                 }
                 effects.draw(
-                    sourceTarget.textureId,
-                    sourceTarget.width.toFloat(),
-                    sourceTarget.height.toFloat(),
+                    source.textureId,
+                    source.width.toFloat(),
+                    source.height.toFloat(),
                     presentWidth.toFloat(),
                     presentHeight.toFloat(),
                 )
@@ -290,7 +334,7 @@ internal class LiveFeedEffectsSession(
                 }
                 maybeTapScopes(
                     policy = nextPlan.scopeTap,
-                    oesCopy = oesCopy,
+                    oesCopy = copy,
                     oesTexture = oesTexture,
                     texMatrix = texMatrix,
                     tapTarget = tapTarget,

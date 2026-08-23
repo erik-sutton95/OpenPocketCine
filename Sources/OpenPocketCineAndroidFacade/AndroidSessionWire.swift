@@ -767,7 +767,8 @@ public enum AndroidSessionWire {
                 dict["label"] = ConformPreview.label(captureRate: capture, targetRate: target)
                 if let seconds = jsonOptionalNumber(request, key: "sourceSeconds") {
                     dict["conformedDuration"] = NSNumber(
-                        value: ConformPreview.conformedDuration(sourceSeconds: seconds, speed: speed))
+                        value: ConformPreview.conformedDuration(
+                            sourceSeconds: seconds, speed: speed))
                 }
             }
         }

@@ -1,6 +1,6 @@
 import CoreImage
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// On-feed analog stick. Streams `0x04/0x01` while held, center on lift.
 /// Light chrome on a dark picture, dark chrome on a bright picture.
@@ -83,7 +83,8 @@ struct LiveGimbalStick: View {
                     hapticPress()
                 }
                 let limited = clamp(value.translation)
-                let mag = hypot(Double(limited.width), Double(limited.height))
+                let mag =
+                    hypot(Double(limited.width), Double(limited.height))
                     / Double(max(travel, 1))
                 if !GimbalStick.isTap(normalizedMagnitude: mag) {
                     cancelTaps()
@@ -131,13 +132,14 @@ struct LiveGimbalStick: View {
     }
 
     private func refreshChrome() {
-        guard let region = GimbalStick.chromeSampleRegion(
-            stick: MonitorLayoutRegion(
-                x: Double(frame.minX), y: Double(frame.minY),
-                width: Double(frame.width), height: Double(frame.height)),
-            feed: MonitorLayoutRegion(
-                x: Double(feed.minX), y: Double(feed.minY),
-                width: Double(feed.width), height: Double(feed.height)))
+        guard
+            let region = GimbalStick.chromeSampleRegion(
+                stick: MonitorLayoutRegion(
+                    x: Double(frame.minX), y: Double(frame.minY),
+                    width: Double(frame.width), height: Double(frame.height)),
+                feed: MonitorLayoutRegion(
+                    x: Double(feed.minX), y: Double(feed.minY),
+                    width: Double(feed.width), height: Double(feed.height)))
         else {
             darkChrome = false
             return

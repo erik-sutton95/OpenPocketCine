@@ -29,7 +29,7 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
     case slowMo = 0x00
     case video = 0x01
     case timeLapse = 0x02
-    case photo = 0x17   // Pocket 4 (Mimo mimo-settings-1). Nano used 0x05 → 0xEE here.
+    case photo = 0x17  // Pocket 4 (Mimo mimo-settings-1). Nano used 0x05 → 0xEE here.
     case hyperLapse = 0x0A
     case superNight = 0x28
 
@@ -60,8 +60,9 @@ public enum CameraParam: UInt16, Sendable {
     /// GET reply `00 00 01 <pid u16-LE> 01 <value>`. SET ACK is a lone `00` — not this.
     public static func parseGetReply(_ payload: [UInt8]) -> (pid: UInt16, value: UInt8)? {
         guard payload.count >= 7,
-              payload[0] == 0x00, payload[1] == 0x00, payload[2] == 0x01,
-              payload[5] == 0x01 else { return nil }
+            payload[0] == 0x00, payload[1] == 0x00, payload[2] == 0x01,
+            payload[5] == 0x01
+        else { return nil }
         let pid = UInt16(payload[3]) | (UInt16(payload[4]) << 8)
         return (pid, payload[6])
     }
@@ -276,7 +277,9 @@ public struct EvComp: Hashable, Sendable, Comparable {
         guard negative || positive else { return nil }
         let body = String(label.dropFirst())
         let parts = body.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 2, let whole = Int(parts[0]), let frac = Int(parts[1]) else { return nil }
+        guard parts.count == 2, let whole = Int(parts[0]), let frac = Int(parts[1]) else {
+            return nil
+        }
         let fracThirds: Int
         switch frac {
         case 0: fracThirds = 0
@@ -410,9 +413,11 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         switch self {
         case .dLog2: [.iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200]
         case .dLog: [.auto, .iso400, .iso800, .iso1600, .iso3200, .iso6400]
-        case .normal, .hdr, .normal10, .dLogM: [
-            .auto, .iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200, .iso6400, .iso12800, .iso25600,
-        ]
+        case .normal, .hdr, .normal10, .dLogM:
+            [
+                .auto, .iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200, .iso6400, .iso12800,
+                .iso25600,
+            ]
         }
     }
 
@@ -433,9 +438,10 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         switch self {
         case .dLog2: []
         case .dLog: [.max800, .max1600, .max3200, .max6400]
-        case .normal, .hdr, .normal10, .dLogM: [
-            .max200, .max400, .max800, .max1600, .max3200, .max6400, .max12800, .max25600,
-        ]
+        case .normal, .hdr, .normal10, .dLogM:
+            [
+                .max200, .max400, .max800, .max1600, .max3200, .max6400, .max12800, .max25600,
+            ]
         }
     }
 
@@ -843,7 +849,9 @@ public enum VideoFrameRate: UInt8, CaseIterable, Sendable {
     public var drumLabel: String { "\(fps)p" }
 
     public init?(drumLabel: String) {
-        guard let match = Self.allCases.first(where: { $0.drumLabel == drumLabel }) else { return nil }
+        guard let match = Self.allCases.first(where: { $0.drumLabel == drumLabel }) else {
+            return nil
+        }
         self = match
     }
 }
@@ -869,8 +877,9 @@ public struct VideoFormat: Equatable, Sendable {
 
     public static func parseVideoParamV2(_ value: [UInt8]) -> VideoFormat? {
         guard value.count >= 2,
-              let res = VideoResolution(rawValue: value[0]),
-              let fps = VideoFrameRate(rawValue: value[1]) else { return nil }
+            let res = VideoResolution(rawValue: value[0]),
+            let fps = VideoFrameRate(rawValue: value[1])
+        else { return nil }
         return VideoFormat(resolution: res, frameRate: fps)
     }
 }
@@ -915,8 +924,9 @@ public struct GimbalParamState: Equatable, Sendable {
 
     public static func parseGetReply(_ payload: [UInt8]) -> GimbalParamState? {
         guard payload.count >= 8,
-              payload[0] == 0x00, payload[1] == 0x01, payload[2] == 0x04, payload[3] == 0x01,
-              payload[5] == 0x05, payload[6] == 0x01 else { return nil }
+            payload[0] == 0x00, payload[1] == 0x01, payload[2] == 0x04, payload[3] == 0x01,
+            payload[5] == 0x05, payload[6] == 0x01
+        else { return nil }
         let tilt = GimbalTiltLock(rawValue: payload[4]) ?? (payload[4] == 0 ? .unlocked : .locked)
         return GimbalParamState(tiltLock: tilt, speed: GimbalSpeed(rawValue: payload[7]))
     }
@@ -1303,5 +1313,3 @@ public enum CamFov {
         displayTenths(factor) <= 1.05
     }
 }
-
-

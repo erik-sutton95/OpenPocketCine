@@ -78,15 +78,15 @@ enum WiFiJoiner {
     }
 
     static func currentSSID() async -> String? {
-#if targetEnvironment(simulator)
-        return nil
-#else
-        await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
-            NEHotspotNetwork.fetchCurrent { network in
-                cont.resume(returning: network?.ssid)
+        #if targetEnvironment(simulator)
+            return nil
+        #else
+            await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+                NEHotspotNetwork.fetchCurrent { network in
+                    cont.resume(returning: network?.ssid)
+                }
             }
-        }
-#endif
+        #endif
     }
 
     static func join(
@@ -104,8 +104,10 @@ enum WiFiJoiner {
                 if let error = error as NSError? {
                     // "already associated" is success, not a failure.
                     if error.domain == NEHotspotConfigurationErrorDomain,
-                       error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue {
-                        c.resume(); return
+                        error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue
+                    {
+                        c.resume()
+                        return
                     }
                     c.resume(throwing: JoinError.failed(error.localizedDescription))
                 } else {
@@ -118,11 +120,11 @@ enum WiFiJoiner {
     /// True when this phone has a DHCP address on the camera AP.
     /// Simulator has no SoftAP — treat as ready so connect UI can still run.
     static func isCameraPathReady() -> Bool {
-#if targetEnvironment(simulator)
-        return true
-#else
-        return CameraSoftAP.isPathReady(localIPv4s: ipv4Addresses())
-#endif
+        #if targetEnvironment(simulator)
+            return true
+        #else
+            return CameraSoftAP.isPathReady(localIPv4s: ipv4Addresses())
+        #endif
     }
 
     /// Block until `192.168.2.2…254` exists. Second connect returns immediately.
@@ -135,7 +137,9 @@ enum WiFiJoiner {
             if isCameraPathReady() {
                 try await Task.sleep(for: .milliseconds(200))
                 if isCameraPathReady() {
-                    log.info("wifi: camera path ready (\(ipv4Addresses().filter(CameraSoftAP.isAssociatedIPv4).joined(separator: ","), privacy: .public))")
+                    log.info(
+                        "wifi: camera path ready (\(ipv4Addresses().filter(CameraSoftAP.isAssociatedIPv4).joined(separator: ","), privacy: .public))"
+                    )
                     return
                 }
             }
@@ -161,7 +165,9 @@ enum WiFiJoiner {
         let configured = await configuredSSIDs()
         let extras = configured.filter { $0 != keep && CameraSoftAP.isOsmoSoftAPSSID($0) }
         if !extras.isEmpty {
-            log.info("wifi: removing other Osmo SoftAPs \(extras.joined(separator: ","), privacy: .public)")
+            log.info(
+                "wifi: removing other Osmo SoftAPs \(extras.joined(separator: ","), privacy: .public)"
+            )
             leave(ssids: extras)
         }
     }
@@ -208,13 +214,18 @@ enum WiFiJoiner {
         var ptr: UnsafeMutablePointer<ifaddrs>? = first
         while let ifa = ptr {
             defer { ptr = ifa.pointee.ifa_next }
-            guard let sa = ifa.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET) else { continue }
+            guard let sa = ifa.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET) else {
+                continue
+            }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            let ok = getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count),
-                                 nil, 0, NI_NUMERICHOST)
+            let ok = getnameinfo(
+                sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count),
+                nil, 0, NI_NUMERICHOST)
             if ok == 0 {
-                addrs.append(.init(name: String(cString: ifa.pointee.ifa_name),
-                                   ipv4: String(cString: host)))
+                addrs.append(
+                    .init(
+                        name: String(cString: ifa.pointee.ifa_name),
+                        ipv4: String(cString: host)))
             }
         }
         return addrs
@@ -242,7 +253,9 @@ enum WiFiJoiner {
             }
             monitor.start(queue: q)
             q.asyncAfter(deadline: .now() + timeout) {
-                let iface = monitor.currentPath.availableInterfaces.first { names.contains($0.name) }
+                let iface = monitor.currentPath.availableInterfaces.first {
+                    names.contains($0.name)
+                }
                 finish(iface)
             }
         }

@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 struct MediaDeliveryOverlayState: Equatable {
     let destination: MediaDeliveryDestination
@@ -327,7 +327,8 @@ enum MediaDeliveryRunner {
             if failed > 0 {
                 return .failed(message: parts.joined(separator: ", "))
             }
-            return .frameio(summary: parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ", "))
+            return .frameio(
+                summary: parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ", "))
         }
     }
 
@@ -341,6 +342,7 @@ enum MediaDeliveryRunner {
         else {
             throw MediaDeliveryError.clipNotCached(file.filename)
         }
+        // `localURL` is the original camera file (`files/`), never the LRF proxy.
         let cube: CubeLUT? = {
             guard request.configuration.bakeLUT else { return nil }
             return ScopeMonitorLook.cube(from: model.assist.effects)

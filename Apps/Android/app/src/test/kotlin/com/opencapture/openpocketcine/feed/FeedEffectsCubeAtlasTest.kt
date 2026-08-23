@@ -39,6 +39,19 @@ class FeedEffectsCubeAtlasTest {
     }
 
     @Test
+    fun `official 33 cube is an 8-column 264 atlas`() {
+        val size = 33
+        val atlas =
+            feedEffectsCubeAtlas(
+                FeedEffectsCube(size, ByteArray(size * size * size * 4)),
+            )
+        assertEquals(264, atlas.width)
+        assertEquals(264, atlas.height)
+        assertEquals(264 * 264 * 4, atlas.rgba.size)
+        assertEquals(size, atlas.cubeSize)
+    }
+
+    @Test
     fun `largest supported cube fits the fixed 512 square atlas`() {
         val size = 64
         val atlas =

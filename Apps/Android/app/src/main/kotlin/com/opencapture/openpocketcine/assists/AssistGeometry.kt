@@ -1,7 +1,11 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.openpocketcine.feed.ScopeDisplayScale
+import com.opencapture.openpocketcine.feed.ScopeExposureCeiling
 import com.opencapture.openpocketcine.feed.WaveformIre
+import kotlin.math.log2
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.abs
 import kotlin.math.cos
@@ -182,22 +186,33 @@ object WaveformAxis {
     const val OPTIONS_DRAG_SLOP = 8f
     val crushClipDash = floatArrayOf(3f, 3f)
 
-    fun plotRect(width: Float, height: Float): AssistRect =
-        AssistRect(
-            SIDE_PAD,
-            TITLE_HEIGHT,
-            width - SIDE_PAD * 2f,
-            maxOf(1f, height - TITLE_HEIGHT - BOTTOM_PAD),
+    /**
+     * [width] / [height] are in the same unit as the constants (iOS points /
+     * Android dp). Pass [density] (px per dp) when the size is already pixels,
+     * so gutters stay 6/26 dp on xxhdpi instead of 6/26 px.
+     */
+    fun plotRect(width: Float, height: Float, density: Float = 1f): AssistRect {
+        val side = SIDE_PAD * density
+        val title = TITLE_HEIGHT * density
+        val bottom = BOTTOM_PAD * density
+        return AssistRect(
+            side,
+            title,
+            width - side * 2f,
+            maxOf(1f, height - title - bottom),
         )
-
-    fun plotY(ire: Double, rect: AssistRect): Float {
-        val span = rect.height - 2f * PLOT_INSET
-        return rect.maxY - PLOT_INSET - (ire / 100.0).toFloat() * span
     }
 
-    fun plotX(ire: Double, rect: AssistRect): Float {
-        val span = rect.width - 2f * PLOT_INSET
-        return rect.minX + PLOT_INSET + (ire / 100.0).toFloat() * span
+    fun plotY(ire: Double, rect: AssistRect, density: Float = 1f): Float {
+        val inset = PLOT_INSET * density
+        val span = rect.height - 2f * inset
+        return rect.maxY - inset - (ire / 100.0).toFloat() * span
+    }
+
+    fun plotX(ire: Double, rect: AssistRect, density: Float = 1f): Float {
+        val inset = PLOT_INSET * density
+        val span = rect.width - 2f * inset
+        return rect.minX + inset + (ire / 100.0).toFloat() * span
     }
 
     /** Paper IRE of 18% grey. Rec.709 ≈ 40.9, D-Log 39.88, D-Log2 30.50, HLG ≈ 37.8. */
@@ -252,17 +267,23 @@ object HistogramAssist {
     val trafficGutter: Float
         get() = TRAFFIC_OUTER_PAD + TRAFFIC_LAMP_WIDTH + TRAFFIC_LINE_GAP
 
-    fun plotRect(width: Float, height: Float): AssistRect =
-        AssistRect(
-            trafficGutter,
-            WaveformAxis.TITLE_HEIGHT,
-            maxOf(1f, width - trafficGutter * 2f),
-            maxOf(1f, height - WaveformAxis.TITLE_HEIGHT - WaveformAxis.BOTTOM_PAD),
+    fun plotRect(width: Float, height: Float, density: Float = 1f): AssistRect {
+        val gutter = trafficGutter * density
+        val title = WaveformAxis.TITLE_HEIGHT * density
+        val bottom = WaveformAxis.BOTTOM_PAD * density
+        return AssistRect(
+            gutter,
+            title,
+            maxOf(1f, width - gutter * 2f),
+            maxOf(1f, height - title - bottom),
         )
+    }
 
-    fun plotX(ire: Double, rect: AssistRect): Float = WaveformAxis.plotX(ire, rect)
+    fun plotX(ire: Double, rect: AssistRect, density: Float = 1f): Float =
+        WaveformAxis.plotX(ire, rect, density)
 
-    fun ireX(scaleIRE: Double, rect: AssistRect): Float = WaveformAxis.plotX(scaleIRE, rect)
+    fun ireX(scaleIRE: Double, rect: AssistRect, density: Float = 1f): Float =
+        WaveformAxis.plotX(scaleIRE, rect, density)
 }
 
 object WaveformAssist {
@@ -311,13 +332,16 @@ object VectorscopeGraticule {
             Target("Yl", 191, 191, 0),
         )
 
-    fun plotSquare(width: Float, height: Float): AssistRect {
+    fun plotSquare(width: Float, height: Float, density: Float = 1f): AssistRect {
+        val sidePad = 6f * density
+        val title = 26f * density
+        val bottom = 8f * density
         val plot =
             AssistRect(
-                6f,
-                26f,
-                width - 12f,
-                maxOf(1f, height - 26f - 8f),
+                sidePad,
+                title,
+                width - sidePad * 2f,
+                maxOf(1f, height - title - bottom),
             )
         val side = minOf(plot.width, plot.height)
         return AssistRect(plot.midX - side / 2f, plot.midY - side / 2f, side, side)
@@ -401,6 +425,31 @@ object MovablePanelMath {
     const val SCALE_MIN = 0.6
     const val SCALE_MAX = 1.6
     const val GAP = 10f
+    /** Thumb well for the L-corner. Larger than iOS 56 so the grip is easy to hit. */
+    const val GRIP_HIT_DP = 90f
+    /** iOS `WaveformAssist.gripVisualSize` — L-bracket stroke size. */
+    const val GRIP_VISUAL_DP = 14f
+    /** How far the L drawing sits past the clip (iOS `gripExteriorGap`). */
+    const val GRIP_EXTERIOR_GAP_DP = 2f
+    /** How much of [GRIP_HIT_DP] hangs off the panel (outside the clip). */
+    const val GRIP_EXTERIOR_DP = 40f
+    const val DRAG_HIT_PADDING_DP = 10f
+
+    val gripPadDp: Float
+        get() = GRIP_EXTERIOR_DP
+
+    /** Top-leading of the hit well: [GRIP_EXTERIOR_DP] past the clip, rest on the plate. */
+    fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint =
+        AssistPoint(
+            panelWidth - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
+            panelHeight - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
+        )
+
+    /** Top-leading of the 14 dp L inside the hit well, 2 dp outside the clip. */
+    fun gripVisualOrigin(): AssistPoint {
+        val x = GRIP_HIT_DP - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
+        return AssistPoint(x, x)
+    }
 
     fun clampedScale(value: Double): Double = value.coerceIn(SCALE_MIN, SCALE_MAX)
 
@@ -553,6 +602,29 @@ object FalseColorBands {
             FalseColorScale.LIMITS -> listOf("0–4", "5–9", "94–98", "99–100")
         }
 
+    fun bands(scale: FalseColorScale, transfer: MonitorTransfer): List<Band> =
+        when (scale) {
+            FalseColorScale.STOPS -> stopBands(transfer)
+            FalseColorScale.IRE -> ireBands()
+            FalseColorScale.LIMITS -> limitBands()
+        }
+
+    /** iOS `LiveColorScience.stopBands` — scene EV landmarks, not IRE 0–100. */
+    fun stopBands(transfer: MonitorTransfer): List<Band> {
+        val clipLinear = LiveColorScience.linearize(ScopeExposureCeiling.clipEncoded(transfer), transfer)
+        val maximum = maxOf(3.0, log2(maxOf(clipLinear, 0.18 * 8) / 0.18))
+        return listOf(
+            Band(Double.NEGATIVE_INFINITY, -35.0 / 6, 78 / 255.0, 11 / 255.0, 82 / 255.0, "Minimum"),
+            Band(-19.0 / 6, -17.0 / 6, 17 / 255.0, 149 / 255.0, 141 / 255.0, "−3"),
+            Band(-1.0 / 6, 1.0 / 6, 8 / 255.0, 203 / 255.0, 24 / 255.0, "18%"),
+            Band(5.0 / 6, 7.0 / 6, 245 / 255.0, 143 / 255.0, 148 / 255.0, "Skin +1"),
+            Band(11.0 / 6, 13.0 / 6, 212 / 255.0, 208 / 255.0, 13 / 255.0, "+2"),
+            Band(maximum - 5.0 / 6, maximum - 0.5, 255 / 255.0, 244 / 255.0, 0 / 255.0, "⅔ below max"),
+            Band(maximum - 0.5, maximum - 1.0 / 6, 255 / 255.0, 126 / 255.0, 18 / 255.0, "⅓ below max"),
+            Band(maximum - 1.0 / 6, Double.POSITIVE_INFINITY, 250 / 255.0, 60 / 255.0, 36 / 255.0, "Maximum"),
+        )
+    }
+
     fun ireBands(): List<Band> =
         listOf(
             Band(0.0, 5.0, 0.44, 0.22, 0.76, "0–4"),
@@ -580,9 +652,123 @@ object AssistLongPress {
     const val PANEL_MS = 300L
     const val GAP_DP = 10f
     const val MARGIN_DP = 12f
+    /** LUT-matched close on every assist / capture options card (iOS 34 pt reads large on S25). */
+    const val CLOSE_DP = 27f
+    const val PANEL_PAD_DP = 12f
+    const val PANEL_GAP_DP = 8f
+    const val DRUM_ROW_DP = 52f
+    const val DRUM_FADE_IN = 0.12f
+    const val DRUM_FADE_OUT = 0.88f
+    const val DRUM_CENTER_PT = 27f
+    const val DRUM_NEIGHBOR_PT = 20f
 
     fun preferredWidthDp(tool: LiveAssistTool): Float =
         if (tool == LiveAssistTool.GUIDES) 472f else 400f
+}
+
+/** iOS `ZebraAssist.Options.displayValue` / `ire(fromDisplay:)`. Thresholds stay 0–100 IRE. */
+object ZebraEditor {
+    fun displayValue(ire: Double, unit: ZebraUnit, transfer: MonitorTransfer): Int =
+        when (unit) {
+            ZebraUnit.IRE -> ire.roundToInt()
+            ZebraUnit.NATIVE ->
+                (ScopeDisplayScale.signalNative(ire, transfer) * 255.0).roundToInt()
+        }
+
+    fun ireFromDisplay(value: Int, unit: ZebraUnit, transfer: MonitorTransfer): Double =
+        when (unit) {
+            ZebraUnit.IRE -> value.toDouble().coerceIn(0.0, 100.0)
+            ZebraUnit.NATIVE ->
+                ScopeDisplayScale.monitorPercent(value.coerceIn(0, 255) / 255.0, transfer)
+        }
+
+    fun editorMaximum(unit: ZebraUnit): Int = if (unit == ZebraUnit.NATIVE) 255 else 100
+}
+
+/** iOS `FalseColorReference` — 264×52 glass ruler with proportional zone chips. */
+object FalseColorReference {
+    data class Segment(
+        val lowerFraction: Double,
+        val upperFraction: Double,
+        val band: FalseColorBands.Band,
+    )
+
+    data class AxisMarker(val label: String, val fraction: Double)
+
+    const val MINIMUM_SCENE_STOP = -6.0
+
+    fun curveKeyLabel(colorMode: Int): String =
+        when (colorMode) {
+            com.opencapture.openpocketcine.session.CameraCommands.COLOR_HDR -> "HLG"
+            com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG -> "D-Log"
+            com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG2 -> "D-Log2"
+            else -> "709"
+        }
+
+    fun axisLabels(scale: FalseColorScale): List<String> =
+        when (scale) {
+            FalseColorScale.STOPS -> emptyList()
+            FalseColorScale.IRE -> listOf("clip / shadows", "18%", "skin hi", "highlights → clip")
+            FalseColorScale.LIMITS -> listOf("crushed", "midtones untouched", "clipped")
+        }
+
+    fun maximumSceneStop(transfer: MonitorTransfer): Double {
+        val ev = LiveColorScience.stops(ScopeExposureCeiling.clipEncoded(transfer), transfer)
+        return if (ev.isFinite()) maxOf(3.0, ev) else 6.0
+    }
+
+    fun segments(scale: FalseColorScale, transfer: MonitorTransfer): List<Segment> {
+        val bands = FalseColorBands.bands(scale, transfer)
+        return when (scale) {
+            FalseColorScale.STOPS -> {
+                val domain = stopReferenceDomain(transfer)
+                bands.map { band ->
+                    Segment(
+                        lowerFraction = stopFraction(band.lowerBound, domain, 0.0),
+                        upperFraction = stopFraction(band.upperBound, domain, 1.0),
+                        band = band,
+                    )
+                }
+            }
+            FalseColorScale.IRE, FalseColorScale.LIMITS ->
+                bands.map { band ->
+                    Segment(
+                        lowerFraction = (band.lowerBound / 100.0).coerceIn(0.0, 1.0),
+                        upperFraction =
+                            if (band.upperBound.isFinite()) {
+                                (band.upperBound / 100.0).coerceIn(0.0, 1.0)
+                            } else {
+                                1.0
+                            },
+                        band = band,
+                    )
+                }
+        }
+    }
+
+    fun stopAxisMarkers(transfer: MonitorTransfer): List<AxisMarker> {
+        val domain = stopReferenceDomain(transfer)
+        val maximum = maximumSceneStop(transfer)
+        return listOf(
+            "Min" to MINIMUM_SCENE_STOP,
+            "−3" to -3.0,
+            "18%" to 0.0,
+            "Skin" to 1.0,
+            "+2" to 2.0,
+            "Max" to maximum,
+        ).map { (label, stop) -> AxisMarker(label, stopFraction(stop, domain, 0.0)) }
+    }
+
+    private fun stopReferenceDomain(transfer: MonitorTransfer): ClosedRange<Double> {
+        val lower = MINIMUM_SCENE_STOP - 1.0 / 6
+        val upper = maxOf(6.0, maximumSceneStop(transfer) + 1.0 / 6)
+        return lower..upper
+    }
+
+    private fun stopFraction(value: Double, domain: ClosedRange<Double>, infiniteFallback: Double): Double {
+        if (!value.isFinite()) return infiniteFallback
+        return ((value - domain.start) / (domain.endInclusive - domain.start)).coerceIn(0.0, 1.0)
+    }
 }
 
 /**

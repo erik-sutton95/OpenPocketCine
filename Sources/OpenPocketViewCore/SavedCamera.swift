@@ -84,9 +84,13 @@ public enum CameraWifiResolution {
         let memoryHit = memoryMatches && !(memSsid ?? "").isEmpty && !(memPass ?? "").isEmpty
         let keychainHit = !(keychainSSID ?? "").isEmpty && !(keychainPassword ?? "").isEmpty
         let source: String
-        if memoryHit { source = "memory" }
-        else if keychainHit { source = "keychain" }
-        else { source = "none" }
+        if memoryHit {
+            source = "memory"
+        } else if keychainHit {
+            source = "keychain"
+        } else {
+            source = "none"
+        }
         let skipBle =
             !(password ?? "").isEmpty && !(ssid ?? "").isEmpty && (memoryHit || keychainHit)
         return Result(ssid: ssid, password: password, source: source, skipBle: skipBle)
@@ -180,7 +184,9 @@ public enum BlePeerPolicy {
 public enum SavedCameras {
     /// Newest-first, one row per peripheral id. Keeps a prior custom name when a reconnect
     /// upserts the same body.
-    public static func upserting(_ camera: SavedCamera, into records: [SavedCamera]) -> [SavedCamera] {
+    public static func upserting(_ camera: SavedCamera, into records: [SavedCamera])
+        -> [SavedCamera]
+    {
         var merged = camera
         if let existing = records.first(where: { $0.id == camera.id }) {
             if merged.customName == nil { merged.customName = existing.customName }
@@ -196,15 +202,18 @@ public enum SavedCameras {
         canonicalized(records.filter { $0.id != id })
     }
 
-    public static func renaming(_ id: UUID, to name: String?, in records: [SavedCamera]) -> [SavedCamera] {
+    public static func renaming(_ id: UUID, to name: String?, in records: [SavedCamera])
+        -> [SavedCamera]
+    {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let custom = (trimmed?.isEmpty == false) ? trimmed : nil
-        return canonicalized(records.map { record in
-            guard record.id == id else { return record }
-            var updated = record
-            updated.customName = custom
-            return updated
-        })
+        return canonicalized(
+            records.map { record in
+                guard record.id == id else { return record }
+                var updated = record
+                updated.customName = custom
+                return updated
+            })
     }
 
     public static func canonicalized(_ records: [SavedCamera]) -> [SavedCamera] {

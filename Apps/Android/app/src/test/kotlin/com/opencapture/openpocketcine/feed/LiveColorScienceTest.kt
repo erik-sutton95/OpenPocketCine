@@ -106,6 +106,21 @@ class LiveColorScienceTest {
     }
 
     @Test
+    fun signalNativeInvertsMonitorPercent() {
+        for (transfer in transfers) {
+            for (percent in listOf(0.0, 18.0, 55.0, 100.0)) {
+                val native = ScopeDisplayScale.signalNative(percent, transfer)
+                assertEquals(
+                    percent,
+                    ScopeDisplayScale.monitorPercent(native, transfer),
+                    1e-6,
+                    "$transfer $percent",
+                )
+            }
+        }
+    }
+
+    @Test
     fun histogramRemapConservesAndAnchors() {
         val bins = IntArray(256)
         bins[5] = 15

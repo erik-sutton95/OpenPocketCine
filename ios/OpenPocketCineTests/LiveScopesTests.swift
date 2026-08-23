@@ -1,7 +1,8 @@
 import CoreVideo
 import Metal
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// Scope plot geometry + tap→sampler behavior on live-like iOS buffers.
@@ -75,7 +76,8 @@ final class LiveScopesTests: XCTestCase {
         XCTAssertEqual(minLevel, 0.05, accuracy: 0.02, "legal black sits on the 0 line")
         XCTAssertEqual(maxLevel, 0.95, accuracy: 0.02, "live-tap EI ceiling sits on the 100 line")
         let overshoot = Double(table[255])
-        XCTAssertGreaterThan(overshoot, 0.96, "code 255 is above the 100 line, not stretched onto it")
+        XCTAssertGreaterThan(
+            overshoot, 0.96, "code 255 is above the 100 line, not stretched onto it")
 
         // Flat grey (wire 331) pins at the transfer's midLevel.
         let greyBuffer = try XCTUnwrap(

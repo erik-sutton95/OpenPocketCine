@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.session
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CameraControlTest {
@@ -14,29 +15,319 @@ class CameraControlTest {
         val coded = (p[1].toInt() and 0xFF) or ((p[2].toInt() and 0xFF) shl 8)
         assertEquals(1600 or 0x8000, coded)
         assertEquals(0x40, p[6].toInt() and 0xFF)
+        fun codedOf(denom: Int): Int {
+            val bytes = CameraCommands.shutter(denom)
+            return (bytes[1].toInt() and 0xFF) or ((bytes[2].toInt() and 0xFF) shl 8)
+        }
+        assertEquals(4 or 0x8000, codedOf(4))
+        assertEquals(50 or 0x8000, codedOf(50))
+        assertEquals(16_000 or 0x8000, codedOf(16_000))
+        assertEquals(0x10, CameraCommands.ev(0)[0].toInt() and 0xFF)
+        assertEquals(0x11, CameraCommands.ev(1)[0].toInt() and 0xFF)
+        assertEquals(0x0F, CameraCommands.ev(-1)[0].toInt() and 0xFF)
+        assertEquals(0x07, CameraCommands.ev(-9)[0].toInt() and 0xFF)
+        assertEquals(0x19, CameraCommands.ev(9)[0].toInt() and 0xFF)
     }
 
     @Test
     fun isoIsIndexNotNumber() {
         assertEquals(1, CameraCommands.isoIndex(0x07).size)
         assertEquals(0x07, CameraCommands.isoIndex(0x07)[0].toInt() and 0xFF)
+        assertEquals(1, CameraCommands.isoIndex(0).size)
+        assertEquals(0x00, CameraCommands.isoIndex(0)[0].toInt() and 0xFF)
+        assertTrue(
+            CameraCommands.isoLimit(0x05).contentEquals(
+                byteArrayOf(0x01, 0x01, 0x0F, 0x00, 0x01, 0x05),
+            ),
+        )
+        assertTrue(
+            CameraCommands.isoLimit(0x09).contentEquals(
+                byteArrayOf(0x01, 0x01, 0x0F, 0x00, 0x01, 0x09),
+            ),
+        )
+        assertTrue(
+            CameraCommands.paramGet(CameraCommands.PID_ISO_LIMIT).contentEquals(
+                byteArrayOf(0x00, 0x01, 0x0F, 0x00),
+            ),
+        )
+    }
+
+    @Test
+    fun whiteBalancePackMatchesIosBytes() {
+        assertEquals(0x2C, CameraCommands.CMD_WB)
+        assertEquals(0x00, CameraCommands.WB_AUTO)
+        assertEquals(0x06, CameraCommands.WB_CUSTOM)
+        assertTrue(CameraCommands.whiteBalanceAuto().contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)))
+        assertTrue(
+            CameraCommands.whiteBalanceCustom(3000, 0)
+                .contentEquals(byteArrayOf(0x06, 0x1E, 0x00, 0x00, 0x00)),
+        )
+        assertTrue(
+            CameraCommands.whiteBalanceCustom(2000, -5)
+                .contentEquals(byteArrayOf(0x06, 0x14, 0x00, 0xFB.toByte(), 0xFF.toByte())),
+        )
+        assertTrue(
+            CameraCommands.whiteBalanceCustom(10_000, 100)
+                .contentEquals(byteArrayOf(0x06, 0x64, 0x00, 0x64, 0x00)),
+        )
+        assertTrue(
+            CameraCommands.whiteBalanceCustom(10_000, -100)
+                .contentEquals(byteArrayOf(0x06, 0x64, 0x00, 0x9C.toByte(), 0xFF.toByte())),
+        )
+        assertEquals(2_000 to 0, CameraCommands.clampWhiteBalanceCustom(1999, 0))
+        assertEquals(10_000 to 100, CameraCommands.clampWhiteBalanceCustom(12_000, 140))
+        assertEquals(5_600 to -100, CameraCommands.clampWhiteBalanceCustom(5_600, -140))
+        val extra = CameraCommands.clampWhiteBalanceCustom(3200, -5)
+        assertEquals("3200\u001f-5", "${extra.first}\u001f${extra.second}")
+    }
+
+    @Test
+    fun imageEffectParsesWhiteBalanceLikeIos() {
+        val effect = ByteArray(16)
+        effect[2] = 0x3F
+        effect[4] = CameraCommands.WB_CUSTOM.toByte()
+        effect[5] = 0x1E
+        effect[6] = 0x00
+        effect[7] = 0xFB.toByte()
+        effect[8] = 0xFF.toByte()
+        val custom = StatusExtras.applyImageEffect(effect, CameraStatus())
+        assertEquals(CameraCommands.COLOR_NORMAL, custom.colorMode)
+        assertEquals(CameraCommands.WB_CUSTOM, custom.wbMode)
+        assertEquals(3000, custom.wbKelvin)
+        assertEquals(-5, custom.wbTint)
+
+        val autoBytes = ByteArray(16)
+        autoBytes[2] = 0x3F
+        autoBytes[4] = CameraCommands.WB_AUTO.toByte()
+        val auto = StatusExtras.applyImageEffect(autoBytes, custom)
+        assertEquals(CameraCommands.WB_AUTO, auto.wbMode)
+        assertEquals(-1, auto.wbKelvin)
+        assertEquals(0, auto.wbTint)
+
+        val unknown = ByteArray(16)
+        unknown[2] = 0x3F
+        unknown[4] = 0x01
+        unknown[5] = 0x1E
+        val kept = StatusExtras.applyImageEffect(unknown, custom)
+        assertEquals(CameraCommands.WB_CUSTOM, kept.wbMode)
+        assertEquals(3000, kept.wbKelvin)
+        assertEquals(-5, kept.wbTint)
+
+        val packed = StatusExtras.packSubscribe("cam_image_effect", effect)
+        val fromPush = StatusExtras.applySubscribe(packed, CameraStatus())
+        assertEquals(3000, fromPush.wbKelvin)
+        assertEquals(-5, fromPush.wbTint)
     }
 
     @Test
     fun resFpsIsOneBlob() {
         val p = CameraCommands.resolutionFps(CameraCommands.RES_4K, 6)
         assertTrue(p.contentEquals(byteArrayOf(0x10, 0x06, 0x00, 0x00, 0x00)))
+        assertTrue(
+            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60).setPayload
+                .contentEquals(p),
+        )
+    }
+
+    @Test
+    fun videoFormatOffersOnlyAcceptedPairs() {
+        val expected =
+            listOf(
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS24, byteArrayOf(0x0A, 0x01, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS25, byteArrayOf(0x0A, 0x02, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS30, byteArrayOf(0x0A, 0x03, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS48, byteArrayOf(0x0A, 0x04, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS50, byteArrayOf(0x0A, 0x05, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P1080, VideoFrameRate.FPS60, byteArrayOf(0x0A, 0x06, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS24, byteArrayOf(0x10, 0x01, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS25, byteArrayOf(0x10, 0x02, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS30, byteArrayOf(0x10, 0x03, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS48, byteArrayOf(0x10, 0x04, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS50, byteArrayOf(0x10, 0x05, 0x00, 0x00, 0x00)),
+                Triple(VideoResolution.P4K, VideoFrameRate.FPS60, byteArrayOf(0x10, 0x06, 0x00, 0x00, 0x00)),
+            )
+        for ((res, rate, payload) in expected) {
+            assertTrue(
+                CameraCommands.resolutionFps(res.rawValue, rate.rawValue).contentEquals(payload),
+                "${res.label} ${rate.drumLabel}",
+            )
+        }
+        assertEquals(2, VideoResolution.entries.size)
+        assertEquals(6, VideoFrameRate.entries.size)
+        assertNull(VideoFormat.parse(CameraCommands.RES_4K, 7))
+        assertNull(VideoResolution.fromRaw(0x0C))
+        assertNull(VideoFrameRate.fromDrumLabel("120p"))
+    }
+
+    @Test
+    fun videoFormatPackAndParse() {
+        val value = byteArrayOf(0x0A, 0x05, 0x00, 0x00, 0x00, 0x02, 0x01, 0x00, 0x11, 0x01)
+        val packed = StatusExtras.packSubscribe("cam_video_param_v2", value)
+        val next = StatusExtras.applySubscribe(packed, CameraStatus())
+        assertEquals(CameraCommands.RES_1080, next.resolutionCode)
+        assertEquals(50, next.fps)
+        assertEquals(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS50), next.videoFormat)
+        assertEquals(120, CameraCommands.fpsFromSubscribeIndex(7))
+        assertNull(CameraCommands.fpsFromIndex(7))
+    }
+
+    @Test
+    fun applyVideoKeepsLabeledResWhenPushIsUnlabeled() {
+        val live =
+            CameraStatus(
+                fps = 25,
+                resolutionCode = CameraCommands.RES_4K,
+                fpsIndex = 2,
+            )
+        val unlabeled = StatusExtras.applyVideo(byteArrayOf(0x0C, 0x02), live)
+        assertEquals(CameraCommands.RES_4K, unlabeled.resolutionCode)
+        assertEquals(25, unlabeled.fps)
+        assertEquals(2, unlabeled.fpsIndex)
+        val highRate = StatusExtras.applyVideo(byteArrayOf(0x10, 0x07), CameraStatus())
+        assertEquals(CameraCommands.RES_4K, highRate.resolutionCode)
+        assertEquals(120, highRate.fps)
+        assertEquals(7, highRate.fpsIndex)
+        assertNull(highRate.videoFormat)
+    }
+
+    @Test
+    fun formatPinHoldsOptimisticUntilSubscribeMatches() {
+        val expected = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25)
+        val pin = FormatPin(expected, deadlineElapsedRealtime = 2_000L)
+        val stale =
+            CameraStatus(
+                fps = 24,
+                resolutionCode = CameraCommands.RES_1080,
+                fpsIndex = 1,
+            )
+        val held = VideoFormat.absorbStale(stale, pin, nowElapsedRealtime = 500L)
+        assertEquals(CameraCommands.RES_4K, held.first.resolutionCode)
+        assertEquals(2, held.first.fpsIndex)
+        assertEquals(25, held.first.fps)
+        assertEquals(pin, held.second)
+        val matched =
+            VideoFormat.absorbStale(
+                CameraStatus(fps = 25, resolutionCode = CameraCommands.RES_4K, fpsIndex = 2),
+                pin,
+                nowElapsedRealtime = 500L,
+            )
+        assertNull(matched.second)
+        assertEquals(25, matched.first.fps)
+        val expired = VideoFormat.absorbStale(stale, pin, nowElapsedRealtime = 2_000L)
+        assertNull(expired.second)
+        assertEquals(CameraCommands.RES_1080, expired.first.resolutionCode)
+    }
+
+    @Test
+    fun colorPinHoldsOptimisticUntilSubscribeMatches() {
+        val pin = ColorPin(CameraCommands.COLOR_DLOG, deadlineElapsedRealtime = 2_000L)
+        val stale = CameraStatus(colorMode = CameraCommands.COLOR_DLOG2)
+        val held = ColorPin.absorbStale(stale, pin, nowElapsedRealtime = 500L)
+        assertEquals(CameraCommands.COLOR_DLOG, held.first.colorMode)
+        assertEquals(pin, held.second)
+        val matched =
+            ColorPin.absorbStale(
+                CameraStatus(colorMode = CameraCommands.COLOR_DLOG),
+                pin,
+                nowElapsedRealtime = 500L,
+            )
+        assertNull(matched.second)
+        assertEquals(CameraCommands.COLOR_DLOG, matched.first.colorMode)
+        val expired = ColorPin.absorbStale(stale, pin, nowElapsedRealtime = 2_000L)
+        assertNull(expired.second)
+        assertEquals(CameraCommands.COLOR_DLOG2, expired.first.colorMode)
     }
 
     @Test
     fun audioDspPatchesOnlyByte2() {
-        val blob = ByteArray(26) { 0 }
+        val blob = ByteArray(CameraCommands.AUDIO_DSP_SIZE) { 0 }
         blob[0] = 0xC0.toByte()
+        blob[1] = 0x04
         blob[2] = CameraCommands.DIR_ALL.toByte()
-        val patched = CameraCommands.audioDspSet(blob, CameraCommands.WIND_ON)
-        assertEquals(0xC0, patched[0].toInt() and 0xFF)
-        assertEquals(CameraCommands.WIND_ON, patched[2].toInt() and 0xFF)
-        assertEquals(26, patched.size)
+        blob[3] = 0x05
+
+        val windOnDir = CameraCommands.patchWind(blob, on = true)
+        assertEquals(CameraCommands.DIR_ALL, windOnDir[2].toInt() and 0xFF)
+        assertEquals(0xC0, windOnDir[0].toInt() and 0xFF)
+        assertTrue(windOnDir.copyOfRange(3, windOnDir.size).contentEquals(blob.copyOfRange(3, blob.size)))
+        assertEquals(CameraCommands.AUDIO_DSP_SIZE, windOnDir.size)
+
+        val windOff = blob.copyOf()
+        windOff[2] = CameraCommands.WIND_OFF.toByte()
+        val windOn = CameraCommands.patchWind(windOff, on = true)
+        assertEquals(CameraCommands.WIND_ON, windOn[2].toInt() and 0xFF)
+        assertEquals(0xC0, windOn[0].toInt() and 0xFF)
+        assertTrue(windOn.copyOfRange(3, windOn.size).contentEquals(windOff.copyOfRange(3, windOff.size)))
+
+        val front = CameraCommands.patchDirectional(blob, 1)
+        assertEquals(CameraCommands.DIR_FRONT, front[2].toInt() and 0xFF)
+        assertEquals(0xC0, front[0].toInt() and 0xFF)
+        assertEquals(CameraCommands.DIR_FRONT_BACK, CameraCommands.patchDirectional(blob, 2)[2].toInt() and 0xFF)
+        assertEquals(CameraCommands.DIR_ALL, CameraCommands.patchDirectional(blob, 0)[2].toInt() and 0xFF)
+        assertEquals(CameraCommands.WIND_OFF, CameraCommands.patchWind(blob, on = false)[2].toInt() and 0xFF)
+
+        val set = CameraCommands.audioDspSet(blob, CameraCommands.WIND_ON)
+        assertEquals(CameraCommands.WIND_ON, set[2].toInt() and 0xFF)
+        assertEquals(0xC0, set[0].toInt() and 0xFF)
+        assertEquals(CameraCommands.AUDIO_DSP_SIZE, set.size)
+
+        val reply = byteArrayOf(0) + blob
+        val (applied, parsed) = StatusExtras.applyAudioDsp(reply, CameraStatus())
+        assertTrue(parsed != null && parsed.contentEquals(blob))
+        assertEquals(CameraCommands.DIR_ALL, applied.audioDspAt2)
+        assertEquals(1, applied.windNr)
+        assertEquals(0, applied.directionalAudio)
+
+        val windOnly = StatusExtras.applyAudioDsp(byteArrayOf(0) + windOff, CameraStatus()).first
+        assertEquals(0, windOnly.windNr)
+        assertEquals(-1, windOnly.directionalAudio)
+        assertEquals(1, CameraCommands.windFrom(CameraCommands.DIR_FRONT))
+        assertEquals(-1, CameraCommands.directionalFrom(CameraCommands.WIND_ON))
+        assertEquals(-1, CameraCommands.directionalFrom(CameraCommands.WIND_OFF))
+    }
+
+    @Test
+    fun audioPinHoldsUntilMatchingSnapshot() {
+        val current =
+            CameraStatus(
+                audioChannel = CameraCommands.AUDIO_SPATIAL,
+                vocalBoost = 1,
+                windNr = 1,
+                directionalAudio = 1,
+            )
+        val stale =
+            CameraStatus(
+                audioChannel = CameraCommands.AUDIO_STEREO,
+                vocalBoost = 0,
+                windNr = 0,
+                directionalAudio = 0,
+            )
+        val pin =
+            AudioPin(
+                channel = CameraCommands.AUDIO_SPATIAL,
+                vocal = 1,
+                wind = 1,
+                directional = 1,
+                deadlineElapsedMs = 2_000,
+            )
+        val (held, pending) = pin.absorb(stale, current, nowElapsedMs = 0)
+        assertEquals(CameraCommands.AUDIO_SPATIAL, held.audioChannel)
+        assertEquals(1, held.vocalBoost)
+        assertEquals(1, held.windNr)
+        assertEquals(1, held.directionalAudio)
+        assertEquals(CameraCommands.AUDIO_SPATIAL, pending?.channel)
+        assertEquals(1, pending?.vocal)
+        assertEquals(1, pending?.wind)
+        assertEquals(1, pending?.directional)
+
+        val (caught, cleared) = pin.absorb(current, current, nowElapsedMs = 0)
+        assertEquals(CameraCommands.AUDIO_SPATIAL, caught.audioChannel)
+        assertNull(cleared)
+
+        val (expired, dropped) = pin.absorb(stale, current, nowElapsedMs = AudioPin.TTL_MS)
+        assertEquals(CameraCommands.AUDIO_STEREO, expired.audioChannel)
+        assertEquals(0, expired.windNr)
+        assertNull(dropped)
     }
 
     @Test
@@ -98,6 +389,9 @@ class CameraControlTest {
         val up = CameraCommands.gimbalAxes(0f, 1f)
         assertEquals(CameraCommands.GIMBAL_STICK_MAX, up.first)
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, up.second)
+        val slow = CameraCommands.gimbalAxes(1f, 0f, sensitivity = 1)
+        assertTrue(slow.second < CameraCommands.GIMBAL_STICK_MAX)
+        assertEquals(CameraCommands.GIMBAL_STICK_CENTER, slow.first)
     }
 
     @Test
@@ -106,6 +400,7 @@ class CameraControlTest {
         expo[2] = 0x32
         expo[3] = 0x80.toByte()
         expo[5] = 0x05
+        expo[6] = 0x10
         expo[7] = CameraCommands.EXPO_AUTO.toByte()
         expo[16] = 0x90.toByte()
         expo[17] = 0x01
@@ -113,7 +408,23 @@ class CameraControlTest {
         assertEquals(50, next.shutterDenom)
         assertEquals(0x05, next.isoIndex)
         assertEquals(CameraCommands.EXPO_AUTO, next.expoMode)
+        assertEquals(0x10, next.evComp)
         assertEquals(400, next.iso)
+        val manual = expo.copyOf()
+        manual[7] = CameraCommands.EXPO_MANUAL.toByte()
+        manual[6] = 0x0F
+        val fromManual = StatusExtras.applyExpo(manual, CameraStatus())
+        assertEquals(CameraCommands.EXPO_MANUAL, fromManual.expoMode)
+        assertEquals(0x0F, fromManual.evComp)
+    }
+
+    @Test
+    fun expoModeSetPayloadMatchesIos() {
+        assertTrue(CameraCommands.expoMode(false).contentEquals(byteArrayOf(0x01, 0x00)))
+        assertTrue(CameraCommands.expoMode(true).contentEquals(byteArrayOf(0x04, 0x00)))
+        assertEquals(0x021E, SwiftCore.waitKey(SwiftCore.CMD_SET_EXPO_MODE))
+        assertEquals("auto", CameraCommands.expoWireExtra(CameraCommands.EXPO_AUTO))
+        assertEquals("manual", CameraCommands.expoWireExtra(CameraCommands.EXPO_MANUAL))
     }
 
     @Test
@@ -125,6 +436,7 @@ class CameraControlTest {
         )
         val next = StatusExtras.applyFov(value, CameraStatus())
         assertEquals(12287, next.zoomFactorRaw)
+        assertEquals(1.0, next.zoomFactor ?: 0.0, 0.01)
         val packed = StatusExtras.packSubscribe("cam_fov", value)
         val fromPush = StatusExtras.applySubscribe(packed, CameraStatus())
         assertEquals(12287, fromPush.zoomFactorRaw)
@@ -166,6 +478,63 @@ class CameraControlTest {
         assertTrue(dlog2.contains(0x07))
         assertEquals("400", CameraCommands.isoLabel(0x05))
         assertEquals("1600", CameraCommands.isoLabel(0x07))
+        val withJunk = CameraCommands.parseIsoIndices(hex("0109000007030405060708ff"))
+        assertEquals(listOf(0x03, 0x04, 0x05, 0x06, 0x07, 0x08), withJunk)
+        assertTrue(!withJunk.contains(0xFF))
+        val autoOnly = CameraCommands.parseIsoIndices(hex("010300000100"))
+        assertEquals(listOf(0x00), autoOnly)
+        assertEquals("400", CameraCommands.markedIsoLabel(CameraCommands.COLOR_DLOG_M))
+        assertEquals(null, CameraCommands.baseIsoLabel(CameraCommands.COLOR_DLOG_M))
+        assertEquals("400 ★", CameraCommands.isoChipLabel("400", CameraCommands.COLOR_DLOG_M))
+        assertEquals(
+            CameraCommands.COLOR_DLOG,
+            CameraCommands.colorModeForZoom(3.0, CameraCommands.COLOR_DLOG2),
+        )
+        assertEquals(
+            CameraCommands.COLOR_DLOG,
+            CameraCommands.colorModeForZoom(1.1, CameraCommands.COLOR_DLOG2),
+        )
+        assertEquals(null, CameraCommands.colorModeForZoom(1.0, CameraCommands.COLOR_DLOG2))
+        assertEquals(null, CameraCommands.colorModeForZoom(3.0, CameraCommands.COLOR_DLOG))
+        assertTrue(CameraCommands.shouldRestoreDLog2(1.0))
+        assertTrue(!CameraCommands.shouldRestoreDLog2(2.9))
+        assertTrue(!CameraCommands.shouldRestoreDLog2(3.0))
+    }
+
+    @Test
+    fun colorModePayloadMatchesIosBytes() {
+        assertEquals(0x42, CameraCommands.CMD_COLOR)
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL).contentEquals(byteArrayOf(0x3F)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_HDR).contentEquals(byteArrayOf(0x3C)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG).contentEquals(byteArrayOf(0x17)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG2).contentEquals(byteArrayOf(0x41)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL10).contentEquals(byteArrayOf(0x3D)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M).contentEquals(byteArrayOf(0x00)))
+        assertEquals(0x0242, SwiftCore.waitKey(SwiftCore.CMD_SET_COLOR_MODE))
+    }
+
+    @Test
+    fun camcapColorModeListsNanoModes() {
+        val value = hex("01040003003F3D")
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_DLOG_M,
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_NORMAL10,
+            ),
+            CameraCommands.parseColorModes(value),
+        )
+        val packed = StatusExtras.packSubscribe("camcap_color_mode", value)
+        val next = StatusExtras.applySubscribe(packed, CameraStatus())
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_DLOG_M,
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_NORMAL10,
+            ),
+            next.availableColorModes,
+        )
+        assertTrue(CameraCommands.parseColorModes(byteArrayOf(0x00)).isEmpty())
     }
 
     @Test
@@ -262,6 +631,19 @@ class CameraControlTest {
     }
 
     @Test
+    fun isoLimitGetReplyUpdatesStatus() {
+        val reply = hex("0000010f000107")
+        val next = StatusExtras.applyParamReply(reply, CameraStatus())
+        assertEquals(0x07, next.isoLimit)
+        val max25600 = StatusExtras.applyParamReply(hex("0000010f000109"), next)
+        assertEquals(0x09, max25600.isoLimit)
+        val ack = StatusExtras.applyParamReply(byteArrayOf(0x00), CameraStatus(isoLimit = 0x05))
+        assertEquals(0x05, ack.isoLimit)
+        val junk = StatusExtras.applyParamReply(hex("0000010f0001ff"), CameraStatus())
+        assertEquals(-1, junk.isoLimit)
+    }
+
+    @Test
     fun focusTrackReplyIsPid3B() {
         val reply = hex("0000013b00020102")
         assertEquals(FocusTrackMode.SUBJECT_LOCK, FocusTrackMode.parseReply(reply))
@@ -274,6 +656,45 @@ class CameraControlTest {
         assertTrue(FocusTrackMode.shouldHoldWatchdog(2.2))
         assertTrue(!FocusTrackMode.shouldHoldWatchdog(4.0))
         assertTrue(!FocusTrackMode.shouldHoldWatchdog(null))
+    }
+
+    @Test
+    fun controlHudTimeoutStaysOffTheHudLikeIos() {
+        assertEquals(null, ControlHud.timeoutNote("Color", announce = false))
+        assertEquals(null, ControlHud.timeoutNote("ISO limit GET", announce = false))
+        assertEquals(null, ControlHud.timeoutNote("Audio ch GET", announce = false))
+        assertEquals("Color timed out", ControlHud.timeoutNote("Color", announce = true))
+        assertEquals("ISO limit GET timed out", ControlHud.timeoutNote("ISO limit GET", announce = true))
+        assertEquals(2.0, ControlHud.TOAST_HOLD_SECONDS)
+        assertEquals(222.0, ControlHud.toastCenterY(200.0))
+    }
+
+    @Test
+    fun cameraReplyParseMatchesIos() {
+        assertEquals(CameraReply.Ok, CameraReply.parse(byteArrayOf(0x00)))
+        assertTrue(CameraReply.parse(byteArrayOf(0x00)).isSuccess)
+        assertEquals(CameraReply.WrongState, CameraReply.parse(byteArrayOf(0xD9.toByte())))
+        assertEquals(CameraReply.BadParameter, CameraReply.parse(byteArrayOf(0xEE.toByte())))
+        assertEquals(CameraReply.Unsupported, CameraReply.parse(byteArrayOf(0xE0.toByte())))
+        assertEquals("camera rejected that value", CameraReply.parse(byteArrayOf(0xEE.toByte())).message)
+        assertTrue(!CameraReply.parse(byteArrayOf()).isSuccess)
+        assertEquals("camera reply 0xFF", CameraReply.parse(byteArrayOf()).message)
+        assertEquals("camera reply 0x42", CameraReply.parse(byteArrayOf(0x42)).message)
+    }
+
+    @Test
+    fun dumlHoldMatchesIosLiveCameraControl() {
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0x42))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0x2A))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0x18))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0xE1))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0x68))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0xB8))
+        assertTrue(DumlHold.shouldHoldReply(0x02, 0xA6))
+        assertTrue(DumlHold.shouldHoldReply(0x07, 0x45))
+        assertTrue(DumlHold.isLiveCameraControl(0x02, 0x42))
+        assertTrue(!DumlHold.isLiveCameraControl(0x04, 0x4C))
+        assertTrue(DumlHold.shouldHoldReply(0x04, 0x4C))
     }
 
     @Test
@@ -291,6 +712,7 @@ class CameraControlTest {
         assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
         assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_ISO_LIMIT))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))
         assertEquals(0x0209, SwiftCore.waitKey(SwiftCore.CMD_NANO_LIVE_VIEW_GATE))

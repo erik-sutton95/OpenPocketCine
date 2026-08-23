@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OpenZCine `ScopePalette` — additive trace colours shared by WAVE / PARADE / HISTO / VECTOR.
 enum ScopePalette {
@@ -58,7 +58,9 @@ enum ScopeCanvasSlot: String, Sendable {
         }
     }
 
-    static func assign<T>(_ landscape: inout T?, _ portrait: inout T?, in bounds: CGRect, _ value: T?) {
+    static func assign<T>(
+        _ landscape: inout T?, _ portrait: inout T?, in bounds: CGRect, _ value: T?
+    ) {
         switch forBounds(bounds) {
         case .portrait: portrait = value
         case .landscape: landscape = value
@@ -248,7 +250,8 @@ func scopeScaleLineY(_ scaleIRE: Double, _ rect: CGRect) -> CGFloat {
 /// WAVE / PARADE tick Y for one native tap byte (`byte/255` = encoded curve
 /// fraction) — placed through the transfer's anchored level table. Hot loops
 /// hoist `ScopeDisplayScale.levelTable(for:)` once and call ``scopeLevelY``.
-func scopeTraceLevelY(_ byte: UInt8, transfer: MonitorTransfer = .rec709, _ rect: CGRect) -> CGFloat {
+func scopeTraceLevelY(_ byte: UInt8, transfer: MonitorTransfer = .rec709, _ rect: CGRect) -> CGFloat
+{
     scopeLevelY(Double(ScopeDisplayScale.levelTable(for: transfer)[Int(byte)]), rect)
 }
 
@@ -381,18 +384,21 @@ struct WaveformOverlay: View {
                         samples: assist.samples, trail: assist.trailSamples,
                         mode: .waveform(options.mode), transfer: transfer,
                         revision: assist.revision, opacity: intensity,
-                        layoutSize: plot.size)
+                        layoutSize: plot.size
+                    )
                     .frame(width: plot.width, height: plot.height)
                     .offset(x: plot.minX, y: plot.minY)
                 } else {
                     WaveformScopePlot(
                         samples: assist.samples, trail: assist.trailSamples,
-                        mode: options.mode, transfer: transfer, opacity: intensity)
+                        mode: options.mode, transfer: transfer, opacity: intensity
+                    )
                     .frame(width: size.width, height: size.height)
                 }
                 WaveformGuideOverlay(
                     clip: options.guides.clip, crush: options.guides.crush,
-                    middle: options.guides.middle, transfer: transfer)
+                    middle: options.guides.middle, transfer: transfer
+                )
                 .frame(width: size.width, height: size.height)
             }
         }
@@ -504,7 +510,8 @@ private struct WaveformGuideOverlay: View {
                     stroke.usesCrushClipColor
                     ? ScopePalette.clip
                     : (isGray ? ScopePalette.middle : ScopePalette.boundary)
-                let style = stroke.dashed
+                let style =
+                    stroke.dashed
                     ? StrokeStyle(lineWidth: 1.25, dash: WaveformAxis.crushClipDash)
                     : StrokeStyle(lineWidth: isGray ? 1 : 1.25)
                 line(y, color, style)
@@ -540,18 +547,21 @@ struct ParadeOverlay: View {
                         samples: assist.samples, trail: assist.trailSamples,
                         mode: .parade(options.mode), transfer: transfer,
                         revision: assist.revision, opacity: intensity,
-                        layoutSize: plotRect.size)
+                        layoutSize: plotRect.size
+                    )
                     .frame(width: plotRect.width, height: plotRect.height)
                     .offset(x: plotRect.minX, y: plotRect.minY)
                 } else {
                     ParadeScopePlot(
                         samples: assist.samples, trail: assist.trailSamples,
-                        mode: options.mode, transfer: transfer, opacity: intensity)
+                        mode: options.mode, transfer: transfer, opacity: intensity
+                    )
                     .frame(width: size.width, height: size.height)
                 }
                 WaveformGuideOverlay(
                     clip: options.guides.clip, crush: options.guides.crush,
-                    middle: options.guides.middle, transfer: transfer)
+                    middle: options.guides.middle, transfer: transfer
+                )
                 .frame(width: size.width, height: size.height)
             }
         }
@@ -672,9 +682,10 @@ private struct HistogramScopePlot: View, Equatable {
                     let clipStart = HistogramAssist.ireX(HistogramAssist.clipZoneIRE, in: rect)
                     let clipEnd = HistogramAssist.ireX(100, in: rect)
                     context.fill(
-                        Path(CGRect(
-                            x: clipStart, y: rect.minY,
-                            width: max(0, clipEnd - clipStart), height: rect.height)),
+                        Path(
+                            CGRect(
+                                x: clipStart, y: rect.minY,
+                                width: max(0, clipEnd - clipStart), height: rect.height)),
                         with: .color(ScopePalette.clip.opacity(0.14)))
                 }
                 // Traces first, clipped to 0…100; min/max strokes sit on top.
@@ -731,7 +742,8 @@ private struct HistogramScopePlot: View, Equatable {
             .fill(hot ? color : Color.clear)
             .frame(
                 width: HistogramAssist.trafficLampWidth,
-                height: HistogramAssist.trafficLampHeight)
+                height: HistogramAssist.trafficLampHeight
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .strokeBorder(color.opacity(hot ? 1 : 0.8), lineWidth: 1.5)
@@ -866,8 +878,9 @@ enum VectorscopeRaster {
         var sumGreen = [UInt32](repeating: 0, count: n * n)
         var sumBlue = [UInt32](repeating: 0, count: n * n)
         for point in points {
-            guard let bin = binIndex(
-                red: point.red, green: point.green, blue: point.blue, gain: gain)
+            guard
+                let bin = binIndex(
+                    red: point.red, green: point.green, blue: point.blue, gain: gain)
             else { continue }
             let idx = bin.row * n + bin.column
             counts[idx] &+= 1
@@ -1148,7 +1161,8 @@ private func histogramSignalRect(in rect: CGRect) -> CGRect {
     return CGRect(x: x0, y: rect.minY, width: max(1, x100 - x0), height: rect.height)
 }
 
-private func histogramPaths(bins: [Float], rect: CGRect, peak: Float) -> (fill: Path, stroke: Path) {
+private func histogramPaths(bins: [Float], rect: CGRect, peak: Float) -> (fill: Path, stroke: Path)
+{
     guard bins.count > 1, peak > 0, bins.contains(where: { $0 > 0 }) else {
         return (Path(), Path())
     }
@@ -1176,7 +1190,8 @@ private func histogramPaths(bins: [Float], rect: CGRect, peak: Float) -> (fill: 
 }
 
 private func drawHistogramChannel(
-    in context: GraphicsContext, bins: [Float], rect: CGRect, peak: Float, fill: Color, stroke: Color
+    in context: GraphicsContext, bins: [Float], rect: CGRect, peak: Float, fill: Color,
+    stroke: Color
 ) {
     let paths = histogramPaths(bins: bins, rect: rect, peak: peak)
     context.fill(paths.fill, with: .color(fill))

@@ -74,15 +74,18 @@ struct CameraLinkHealthTests {
     }
 
     @Test func feedWarmupCoversFrozenFirstFrame() {
-        #expect(LiveFeedWarmup.isWarming(
-            hasPresentedPicture: false, measuredFPS: 0, recovering: false),
+        #expect(
+            LiveFeedWarmup.isWarming(
+                hasPresentedPicture: false, measuredFPS: 0, recovering: false),
             "no picture yet")
-        #expect(LiveFeedWarmup.isWarming(
-            hasPresentedPicture: true, measuredFPS: 0, recovering: false),
+        #expect(
+            LiveFeedWarmup.isWarming(
+                hasPresentedPicture: true, measuredFPS: 0, recovering: false),
             "one IDR with no rate is still warming")
-        #expect(LiveFeedWarmup.isWarming(
-            hasPresentedPicture: true, measuredFPS: 25, rollingIntervals: 1,
-            recovering: false, secondsSinceLastPresented: 0.05),
+        #expect(
+            LiveFeedWarmup.isWarming(
+                hasPresentedPicture: true, measuredFPS: 25, rollingIntervals: 1,
+                recovering: false, secondsSinceLastPresented: 0.05),
             "two leftover GOP frames must not lift the plate")
         #expect(
             !LiveFeedWarmup.isWarming(

@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 enum CaptureSheet: String, Identifiable {
     case iso, shutter, wb, focus, exposure, audio
@@ -155,7 +155,9 @@ struct CapturePickerPanel: View {
         // Picker cards float over the picture — pinned dark like the rest of the
         // HUD (`liveChromeGlass`), never adaptive `liquidGlass` that flips light
         // over a bright feed.
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
+        .liveChromeGlass(
+            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
+        )
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {})
         .onAppear { seed() }
@@ -246,7 +248,8 @@ struct CapturePickerPanel: View {
                 VStack(alignment: .leading, spacing: 12) {
                     CaptureDrumWheel(
                         options: evLabels, selection: $drumSelection,
-                        isInteractive: !model.facePriorityExposureEnabled)
+                        isInteractive: !model.facePriorityExposureEnabled
+                    )
                     .id(evLabels)
                     facePriorityToggle
                 }
@@ -266,7 +269,8 @@ struct CapturePickerPanel: View {
                     if label == WhiteBalanceMode.auto.label {
                         model.session.setWhiteBalanceAuto()
                     } else {
-                        model.session.setWhiteBalanceCustom(kelvin: currentKelvin, tint: currentTint)
+                        model.session.setWhiteBalanceCustom(
+                            kelvin: currentKelvin, tint: currentTint)
                     }
                 }
             } else if selectedMode == 1 {
@@ -279,7 +283,9 @@ struct CapturePickerPanel: View {
                 focusRows
             }
         case .exposure:
-            checkedRows(ExpoMode.allCases.map(\.label), selected: model.session.status.expoMode?.label) { label in
+            checkedRows(
+                ExpoMode.allCases.map(\.label), selected: model.session.status.expoMode?.label
+            ) { label in
                 if let mode = ExpoMode.allCases.first(where: { $0.label == label }) {
                     model.session.setExpoMode(mode)
                 }
@@ -287,14 +293,19 @@ struct CapturePickerPanel: View {
         case .audio:
             audioBody
         case .mode:
-            checkedRows(ShootingMode.allCases.map(\.label), selected: model.session.currentShootingMode?.label) { label in
+            checkedRows(
+                ShootingMode.allCases.map(\.label),
+                selected: model.session.currentShootingMode?.label
+            ) { label in
                 if let mode = ShootingMode.allCases.first(where: { $0.label == label }) {
                     model.session.setShootingMode(mode)
                 }
             }
         case .resolution:
-            CaptureDrumWheel(options: VideoFrameRate.allCases.map(\.drumLabel), selection: $drumSelection)
-                .id(selectedMode)
+            CaptureDrumWheel(
+                options: VideoFrameRate.allCases.map(\.drumLabel), selection: $drumSelection
+            )
+            .id(selectedMode)
         case .color:
             CaptureDrumWheel(options: colorWheelLabels, selection: $drumSelection)
         }
@@ -328,12 +339,16 @@ struct CapturePickerPanel: View {
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
                                     .background(
-                                        on ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
+                                        on
+                                            ? LiveDesign.accentDim
+                                            : LiveDesign.background.opacity(0.28),
                                         in: Capsule()
                                     )
                                     .overlay {
                                         Capsule()
-                                            .stroke(on ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
+                                            .stroke(
+                                                on ? LiveDesign.accent : LiveDesign.hairline,
+                                                lineWidth: 1.5)
                                     }
                             }
                             .buttonStyle(.zcTapTarget)
@@ -346,7 +361,8 @@ struct CapturePickerPanel: View {
         .animation(.easeInOut(duration: 0.16), value: continuous)
     }
 
-    private func focusTab(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func focusTab(_ title: String, active: Bool, action: @escaping () -> Void) -> some View
+    {
         Button(action: action) {
             Text(title)
                 .font(LiveType.ui(size: 13, weight: .bold, design: .default))
@@ -370,7 +386,10 @@ struct CapturePickerPanel: View {
     @ViewBuilder private var audioBody: some View {
         switch selectedMode {
         case 0:
-            checkedRows(AudioChannel.allCases.map(\.label), selected: model.session.status.audioChannel?.label) { label in
+            checkedRows(
+                AudioChannel.allCases.map(\.label),
+                selected: model.session.status.audioChannel?.label
+            ) { label in
                 if let ch = AudioChannel.allCases.first(where: { $0.label == label }) {
                     model.session.setAudioChannel(ch)
                 }
@@ -394,7 +413,9 @@ struct CapturePickerPanel: View {
                 }
             }
         default:
-            checkedRows(VocalBoost.allCases.map(\.label), selected: model.session.status.vocalBoost?.label) { label in
+            checkedRows(
+                VocalBoost.allCases.map(\.label), selected: model.session.status.vocalBoost?.label
+            ) { label in
                 if let value = VocalBoost.allCases.first(where: { $0.label == label }) {
                     model.session.setVocalBoost(value)
                 }
@@ -406,7 +427,8 @@ struct CapturePickerPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(tintLabel)
                 .font(LiveType.ui(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(Int(tintDraft.rounded()) == 0 ? LiveDesign.muted : LiveDesign.accent)
+                .foregroundStyle(
+                    Int(tintDraft.rounded()) == 0 ? LiveDesign.muted : LiveDesign.accent)
             HStack(spacing: 12) {
                 Button {
                     nudgeTint(-10)
@@ -415,7 +437,9 @@ struct CapturePickerPanel: View {
                         .font(LiveType.ui(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(LiveDesign.accent)
                         .frame(width: 56, height: 40)
-                        .background(LiveDesign.accentDim, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(
+                            LiveDesign.accentDim,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.zcTapTarget)
                 Slider(value: $tintDraft, in: -100...100, step: 1) { editing in
@@ -433,12 +457,15 @@ struct CapturePickerPanel: View {
                         .font(LiveType.ui(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(LiveDesign.accent)
                         .frame(width: 56, height: 40)
-                        .background(LiveDesign.accentDim, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(
+                            LiveDesign.accentDim,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.zcTapTarget)
             }
             Button("Apply tint \(Int(tintDraft.rounded()))") {
-                model.session.setWhiteBalanceCustom(kelvin: currentKelvin, tint: Int(tintDraft.rounded()))
+                model.session.setWhiteBalanceCustom(
+                    kelvin: currentKelvin, tint: Int(tintDraft.rounded()))
             }
             .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(LiveDesign.accent)
@@ -457,10 +484,13 @@ struct CapturePickerPanel: View {
                 .minimumScaleFactor(0.7)
             HelpBadge(text: CaptureLists.facePriorityHelp)
             Spacer(minLength: 8)
-            Toggle("", isOn: Binding(
-                get: { model.facePriorityExposureEnabled },
-                set: { model.facePriorityExposureEnabled = $0 }
-            ))
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { model.facePriorityExposureEnabled },
+                    set: { model.facePriorityExposureEnabled = $0 }
+                )
+            )
             .labelsHidden()
             .tint(LiveDesign.accent)
             .accessibilityLabel(CaptureLists.facePriorityTitle)
@@ -479,10 +509,13 @@ struct CapturePickerPanel: View {
                 .minimumScaleFactor(0.7)
             HelpBadge(text: CaptureLists.nativeIsoHopHelp)
             Spacer(minLength: 8)
-            Toggle("", isOn: Binding(
-                get: { model.nativeISOHopEnabled },
-                set: { model.nativeISOHopEnabled = $0 }
-            ))
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { model.nativeISOHopEnabled },
+                    set: { model.nativeISOHopEnabled = $0 }
+                )
+            )
             .labelsHidden()
             .tint(LiveDesign.accent)
             .accessibilityLabel(CaptureLists.nativeIsoHopTitle)
@@ -507,11 +540,15 @@ struct CapturePickerPanel: View {
                         .padding(.vertical, 12)
                         .background(
                             active ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
-                            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
+                            in: RoundedRectangle(
+                                cornerRadius: LiveDesign.cornerRadius, style: .continuous)
                         )
                         .overlay {
-                            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                                .stroke(active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
+                            RoundedRectangle(
+                                cornerRadius: LiveDesign.cornerRadius, style: .continuous
+                            )
+                            .stroke(
+                                active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
                         }
                 }
                 .buttonStyle(.zcTapTarget)
@@ -519,7 +556,9 @@ struct CapturePickerPanel: View {
         }
     }
 
-    private func checkedRows(_ options: [String], selected: String?, action: @escaping (String) -> Void) -> some View {
+    private func checkedRows(
+        _ options: [String], selected: String?, action: @escaping (String) -> Void
+    ) -> some View {
         VStack(spacing: 0) {
             ForEach(options, id: \.self) { option in
                 let isOn = option == selected
@@ -673,7 +712,8 @@ struct CapturePickerPanel: View {
         case .color:
             selectedMode = 0
             let family = model.session.bodyFamily
-            let live = model.session.status.colorMode?.label(for: family)
+            let live =
+                model.session.status.colorMode?.label(for: family)
                 ?? ColorMode.normal.label(for: family)
             drumSelection = colorWheelLabels.contains(live) ? live : colorWheelLabels[0]
             lastApplied = drumSelection
@@ -691,7 +731,7 @@ struct CapturePickerPanel: View {
             } else {
                 reseatIsoDiscrete()
                 if let idx = IsoIndex.allCases.first(where: { $0.label == drumSelection }),
-                   isoIndices.contains(idx)
+                    isoIndices.contains(idx)
                 {
                     model.session.setISO(idx)
                 }
@@ -725,7 +765,8 @@ struct CapturePickerPanel: View {
                 return
             }
             guard let idx = IsoIndex.allCases.first(where: { $0.label == value }),
-                  isoIndices.contains(idx) else { return }
+                isoIndices.contains(idx)
+            else { return }
             enqueueDrumSend { model.session.setISO(idx) }
         case .shutter:
             if isEvSheet {
@@ -745,7 +786,8 @@ struct CapturePickerPanel: View {
                 return
             }
             guard let denom = CamCapShutter.denom(from: value),
-                  shutterDenoms.contains(denom) else { return }
+                shutterDenoms.contains(denom)
+            else { return }
             enqueueDrumSend { model.session.setShutterDenom(denom) }
         case .wb:
             guard selectedMode == 1, let kelvin = CaptureLists.kelvin(from: value) else { return }
@@ -848,7 +890,8 @@ struct CapturePickerPanel: View {
             return
         }
         let labels = shutterLabels
-        let live = model.session.status.shutterDenom > 0
+        let live =
+            model.session.status.shutterDenom > 0
             ? CamCapShutter.label(model.session.status.shutterDenom) : labels.first ?? ""
         let next = labels.contains(live) ? live : nearestShutter(live)
         lastApplied = next
@@ -880,7 +923,7 @@ struct CapturePickerPanel: View {
 
     private func nearestShutter(_ label: String) -> String {
         guard let denom = CamCapShutter.denom(from: label),
-              let near = CamCapShutter.nearestDenom(denom, in: shutterDenoms)
+            let near = CamCapShutter.nearestDenom(denom, in: shutterDenoms)
         else {
             return shutterLabels.first ?? ""
         }
@@ -906,7 +949,12 @@ struct CaptureDrumWheel: View {
                         let centered = option == selection
                         HStack(spacing: 6) {
                             Text(option)
-                                .font(.system(size: centered ? 30 : 23, weight: centered ? .semibold : .regular, design: .monospaced))
+                                .font(
+                                    .system(
+                                        size: centered ? 30 : 23,
+                                        weight: centered ? .semibold : .regular, design: .monospaced
+                                    )
+                                )
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                             if markedValues.contains(option) {
@@ -915,7 +963,9 @@ struct CaptureDrumWheel: View {
                                     .opacity(0.85)
                             }
                         }
-                        .foregroundStyle(centered ? LiveDesign.accent : LiveDesign.muted.opacity(0.7))
+                        .foregroundStyle(
+                            centered ? LiveDesign.accent : LiveDesign.muted.opacity(0.7)
+                        )
                         .frame(maxWidth: .infinity)
                         .frame(height: rowHeight)
                         .contentShape(Rectangle())
@@ -929,10 +979,12 @@ struct CaptureDrumWheel: View {
                 .scrollTargetLayout()
             }
             .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: Binding(
-                get: { selection },
-                set: { if let value = $0 { selection = value } }
-            ))
+            .scrollPosition(
+                id: Binding(
+                    get: { selection },
+                    set: { if let value = $0 { selection = value } }
+                )
+            )
             .scrollDisabled(!isInteractive)
             .opacity(isInteractive ? 1 : 0.55)
             .contentMargins(.vertical, (wheelHeight - rowHeight) / 2, for: .scrollContent)
@@ -951,8 +1003,10 @@ struct CaptureDrumWheel: View {
                 )
             }
             .overlay {
-                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(y: -rowHeight / 2)
-                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(y: rowHeight / 2)
+                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(
+                    y: -rowHeight / 2)
+                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(
+                    y: rowHeight / 2)
             }
             .onAppear {
                 DispatchQueue.main.async { proxy.scrollTo(selection, anchor: .center) }
@@ -992,7 +1046,8 @@ enum CaptureLists {
 
     static func isoAutoLabel(from status: CameraStatus) -> String {
         guard let base = (status.colorMode ?? .normal).isoAutoBase,
-              let limit = status.isoLimit else { return "" }
+            let limit = status.isoLimit
+        else { return "" }
         return limit.label(base: base)
     }
 
@@ -1010,7 +1065,7 @@ enum CaptureLists {
     }
 
     static let facePriorityTitle = "Face Priority"
-    static let facePriorityBadgeSymbol = "face.smiling.fill"
+    static let facePriorityBadgeIcon = OpcIcon.scan
     static let facePriorityHelp =
         "On: EV follows faces to middle gray. Several faces use the median. First couple of seconds after a face appears are faster, then about 1 s. Off: put EV back to what it was, or 0.0."
 

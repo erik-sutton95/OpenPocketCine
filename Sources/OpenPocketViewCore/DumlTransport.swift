@@ -10,12 +10,12 @@ import Foundation
 /// wrong, and exactly the part a test can pin without a socket).
 public enum DumlTransport {
     public enum PktType: UInt8 {
-        case handshake = 0x00   // session open
-        case telemetry = 0x01   // peer status push
-        case video     = 0x02   // HEVC live-view fragments (best-effort; not in Osmosis)
+        case handshake = 0x00  // session open
+        case telemetry = 0x01  // peer status push
+        case video = 0x02  // HEVC live-view fragments (best-effort; not in Osmosis)
         case ackedData = 0x03
-        case ack       = 0x04   // window acknowledgement
-        case command   = 0x05   // carries a routing header + DUML frame
+        case ack = 0x04  // window acknowledgement
+        case command = 0x05  // carries a routing header + DUML frame
     }
 
     /// Transport sequence (bytes 4–5). Mimo echoes the latest video packet's seq as the ACK cursor.
@@ -32,7 +32,9 @@ public enum DumlTransport {
 
     /// 8-byte transport header: `[u16le 0x8000|total][u16le session][u16le seq][u8 pktType][u8 xor]`,
     /// where the trailing byte is the XOR of the other seven and `total = 8 + payloadLen`.
-    public static func transportHeader(pktType: UInt8, payloadLen: Int, sessionId: UInt16, seq: UInt16) -> [UInt8] {
+    public static func transportHeader(
+        pktType: UInt8, payloadLen: Int, sessionId: UInt16, seq: UInt16
+    ) -> [UInt8] {
         let total = 8 + payloadLen
         let w0 = 0x8000 | (total & 0x3FFF)
         var b: [UInt8] = [
@@ -48,7 +50,8 @@ public enum DumlTransport {
     /// 12-byte routing header (pkt `0x05`): `[u16le ack=seq-8][u16le seq][00 00 00 00][u8 counter][01][drone?60:00][00]`.
     /// Both seq fields are in OUR OWN command-seq space (r2-3 = this seq, r0-1 = previous). Getting this
     /// wrong silently drops writes while reads keep flowing — see the Osmosis notes.
-    public static func routingHeader(seq: UInt16, cmdCounter: UInt8, drone: Bool = false) -> [UInt8] {
+    public static func routingHeader(seq: UInt16, cmdCounter: UInt8, drone: Bool = false) -> [UInt8]
+    {
         let ack = seq &- 8
         return [
             UInt8(ack & 0xFF), UInt8((ack >> 8) & 0xFF),
@@ -59,7 +62,8 @@ public enum DumlTransport {
     }
 
     /// Full 48-byte session-open datagram: transport header + `handshakePayload`.
-    public static func handshakeDatagram(sessionId: UInt16, seq: UInt16, baseSeq: UInt16) -> [UInt8] {
+    public static func handshakeDatagram(sessionId: UInt16, seq: UInt16, baseSeq: UInt16) -> [UInt8]
+    {
         let payload = handshakePayload(baseSeq: baseSeq)
         return transportHeader(
             pktType: PktType.handshake.rawValue, payloadLen: payload.count,
@@ -72,8 +76,10 @@ public enum DumlTransport {
     /// (proposed window 100, MTU 1472).
     public static func handshakePayload(baseSeq: UInt16) -> [UInt8] {
         var p: [UInt8] = [
-            0x00, 0x00, 0x64, 0x00, 0x64, 0x00, 0xC0, 0x05, 0x14, 0x00, 0x00, 0x64, 0x00, 0x00, 0x01, 0x90,
-            0x01, 0xC0, 0x05, 0x14, 0x00, 0x00, 0x64, 0x00, 0x14, 0x00, 0x64, 0x00, 0xC0, 0x05, 0x14, 0x00,
+            0x00, 0x00, 0x64, 0x00, 0x64, 0x00, 0xC0, 0x05, 0x14, 0x00, 0x00, 0x64, 0x00, 0x00,
+            0x01, 0x90,
+            0x01, 0xC0, 0x05, 0x14, 0x00, 0x00, 0x64, 0x00, 0x14, 0x00, 0x64, 0x00, 0xC0, 0x05,
+            0x14, 0x00,
             0x00, 0x64, 0x00, 0x01, 0x01, 0x04, 0x01, 0x02,
         ]
         p[0] = UInt8(baseSeq & 0xFF)
@@ -86,7 +92,10 @@ public enum DumlTransport {
     /// packet is 34 bytes. The peer holds its downlink until it sees its own cursor echoed here.
     public static func ackPayload(peerCursor: UInt16, baseSeq: UInt16) -> [UInt8] {
         func grp(_ v: UInt16) -> [UInt8] {
-            [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), 0, 0, 0, 0]
+            [
+                UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), 0,
+                0, 0, 0,
+            ]
         }
         return grp(peerCursor) + grp(baseSeq) + grp(baseSeq) + [0, 0]
     }
@@ -99,17 +108,31 @@ public enum DumlTransport {
         var i = 0
         let n = raw.count
         while i + 13 <= n {
-            guard raw[i] == 0x55 else { i += 1; continue }
+            guard raw[i] == 0x55 else {
+                i += 1
+                continue
+            }
             let total = Int(raw[i + 1]) | ((Int(raw[i + 2]) & 0x03) << 8)
-            guard raw[i + 2] >> 2 == 1, total >= 13, i + total <= n else { i += 1; continue }
+            guard raw[i + 2] >> 2 == 1, total >= 13, i + total <= n else {
+                i += 1
+                continue
+            }
             let f = Array(raw[i..<(i + total)])
-            guard Duml.crc8(Array(f[0..<3])) == f[3] else { i += 1; continue }
+            guard Duml.crc8(Array(f[0..<3])) == f[3] else {
+                i += 1
+                continue
+            }
             let got = UInt16(f[total - 2]) | (UInt16(f[total - 1]) << 8)
-            guard Duml.crc16(Array(f[0..<(total - 2)])) == got else { i += 1; continue }
-            out.append(Duml.Frame(sender: f[4], receiver: f[5],
-                                  seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
-                                  flags: f[8], cmdSet: f[9], cmdId: f[10],
-                                  payload: Array(f[11..<(total - 2)])))
+            guard Duml.crc16(Array(f[0..<(total - 2)])) == got else {
+                i += 1
+                continue
+            }
+            out.append(
+                Duml.Frame(
+                    sender: f[4], receiver: f[5],
+                    seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
+                    flags: f[8], cmdSet: f[9], cmdId: f[10],
+                    payload: Array(f[11..<(total - 2)])))
             i += 1
         }
         return out

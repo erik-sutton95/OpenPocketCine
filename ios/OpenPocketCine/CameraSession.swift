@@ -519,7 +519,7 @@ final class CameraSession {
         pendingGimbalAxes = nil
         gimbalStickHeld = false
         lastGimbalStickAt = nil
-        datalink?.close(); datalink = nil; ble.disconnect()
+        disposeDatalink(); ble.disconnect()
         liveViewEnableSent = false
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
@@ -639,16 +639,17 @@ final class CameraSession {
         timeline.mark("path", now: ProcessInfo.processInfo.systemUptime)
 
         phase = .openingDatalink
-        let dl = DatalinkDriver(port: UInt16(camera.model.datalinkPort),
+        let existing = datalink
+        let dl: DatalinkDriver
+        if let existing, CameraSoftAP.shouldReuseDatalink(isClosed: existing.isClosed) {
+            dl = existing
+        } else {
+            dl = DatalinkDriver(port: UInt16(camera.model.datalinkPort),
                                 tcpPoke: camera.model.tcpPoke,
                                 pairingToken: camera.model.pairingToken)
-        dl.onStatusFrame = { [weak self] frame in
-            self?.applyIncomingStatus(frame)
+            wireDatalink(dl)
+            datalink = dl
         }
-        dl.onAccessUnit = { [weak self] accessUnit in
-            self?.ingestAccessUnit(accessUnit)
-        }
-        datalink = dl
         // Handshake first (yesterday's working order). Mounting LiveView
         // before `open()` starved the UDP reader / ACK latch.
         try await openDatalinkKeepingLive(dl)
@@ -663,11 +664,15 @@ final class CameraSession {
     /// SoftAP still `192.168.2.x` after a handshake miss: rebind UDP and try
     /// again. Do not set `.failed` — that pops the operator back to pairing.
     private func openDatalinkKeepingLive(_ dl: DatalinkDriver) async throws {
+        if !CameraSoftAP.shouldReuseDatalink(isClosed: dl.isClosed) {
+            throw CancellationError()
+        }
         var attempt = 0
         while true {
             try Task.checkCancellation()
             do {
                 try await dl.open { [self] in
+                    guard shouldCommitLiveHandshake(dl) else { return }
                     phase = .live
                     applyLinkPresentation()
                     decoder.beginIDRHold()
@@ -2621,8 +2626,12 @@ final class CameraSession {
             }
             return false
         }
-        if connectedCamera?.model.usesNanoLiveViewGate == true {
+        let nanoGate = connectedCamera?.model.usesNanoLiveViewGate == true
+        if nanoGate {
             datalink?.send(Commands.nanoLiveViewGate(start: true))
+        }
+        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+            datalink?.send(Commands.liveViewPrepare())
         }
         datalink?.startLiveView(
             receiver: connectedCamera?.model.liveViewEnableReceiver
@@ -2748,7 +2757,10 @@ final class CameraSession {
         {
             sendExitPlayback()
             ControlLiveLog.line("media: stray playback — sent exit")
-            return
+            let hasPicture = decoder.lastPresentedAt != nil
+            if !CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: hasPicture) {
+                return
+            }
         }
         let presentedAge = decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
         if !firstPictureSettled,
@@ -2807,6 +2819,8 @@ final class CameraSession {
         case .wait:
             break
         case .resendEnable:
+            // Do not route through sendRecoverEnable — inPlayback / VT-ready
+            // holds skipped the only PLI and sat on Waiting for live view.
             if liveViewEnableSends == 0 {
                 log.info("live: first-picture enable never sent — sending now")
                 sendInitialLiveViewEnable(
@@ -2814,7 +2828,12 @@ final class CameraSession {
                 return
             }
             log.info("live: first-picture resend enable (waiting for IDR)")
-            sendRecoverEnable(force: true, reason: "first-picture resend")
+            guard startCapturedLiveView(reason: "first-picture resend") else { return }
+            liveViewEnableSends += 1
+            lastIdrRequest = Date()
+            if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
+            decoder.beginIDRHold()
+            idrHoldEnableCount += 1
             return
         case .rebuildUDP:
             log.info("live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)")
@@ -3095,8 +3114,11 @@ final class CameraSession {
             needsForegroundRecover = false
             return
         }
-        if holdsMonitor { return }
         guard needsForegroundRecover else { return }
+        if CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: holdsMonitor) {
+            needsForegroundRecover = false
+            return
+        }
         needsForegroundRecover = false
         if case .live = phase {
             recoverAfterForeground()
@@ -3349,8 +3371,7 @@ final class CameraSession {
     private func rejoinDatalinkKeepingLive() async {
         guard let camera = connectedCamera else { return }
         log.info("feed: full datalink rejoin (SoftAP bind kept)")
-        datalink?.close()
-        datalink = nil
+        disposeDatalink()
         decoder.flushForRecovery()
         liveViewEnableSent = false
         liveViewEnableSends = 0
@@ -3371,6 +3392,7 @@ final class CameraSession {
             datalink = dl
             decoder.beginIDRHold()
             try await dl.open { [self] in
+                guard shouldCommitLiveHandshake(dl) else { return }
                 if isBrowsingMedia { return }
                 sendInitialLiveViewEnable(
                     displayAttached: decoder.isDisplayReady, pathProven: true)
@@ -3380,9 +3402,29 @@ final class CameraSession {
             return
         } catch {
             log.info("feed: full rejoin failed (\(error.localizedDescription, privacy: .public))")
-            datalink?.close()
-            datalink = nil
+            disposeDatalink()
         }
+    }
+
+    /// Drop the live UDP session so the next connect cannot inherit a half-closed driver.
+    private func disposeDatalink() {
+        let link = datalink
+        datalink = nil
+        guard let link else { return }
+        link.onAccessUnit = nil
+        link.onStatusFrame = nil
+        link.close()
+    }
+
+    private func shouldCommitLiveHandshake(_ dl: DatalinkDriver) -> Bool {
+        let ok = CameraSoftAP.shouldCommitLiveHandshake(
+            driverOwned: datalink === dl,
+            isClosed: dl.isClosed,
+            isCancelled: Task.isCancelled)
+        if !ok {
+            log.info("live: ignore stale datalink open")
+        }
+        return ok
     }
 
     private func wireDatalink(_ dl: DatalinkDriver) {

@@ -5,10 +5,11 @@ package com.opencapture.openpocketcine.media
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
-import android.view.TextureView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,10 +34,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,11 +52,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import com.opencapture.openpocketcine.OpcIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -63,15 +69,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.openpocketcine.MonitorGlass
+import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.AudioAssist
 import com.opencapture.openpocketcine.assists.AudioMetersPanel
@@ -81,7 +93,8 @@ import com.opencapture.openpocketcine.assists.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.panelGlass
+import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
+import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -105,6 +118,13 @@ fun MediaPhotoViewer(
     var zoom by remember(file.id) { mutableStateOf(AnchoredPinchZoom()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val favorite = controller.isFavorite(file)
+    val glass = rememberPlaybackMonitorGlass()
+    val recorded =
+        if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
+            Modifier.layerBackdrop(glass.layerBackdrop)
+        } else {
+            Modifier
+        }
 
     LaunchedEffect(file.id) {
         loading = true
@@ -121,10 +141,11 @@ fun MediaPhotoViewer(
         loading = false
     }
 
+    CompositionLocalProvider(LocalMonitorGlass provides glass) {
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         val image = bitmap
         if (image != null) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxSize().then(recorded)) {
                 val widthPx = constraints.maxWidth.toFloat()
                 val heightPx = constraints.maxHeight.toFloat()
                 Image(
@@ -180,13 +201,17 @@ fun MediaPhotoViewer(
                 Modifier
                     .align(Alignment.Center)
                     .clip(MediaCornerShape)
-                    .panelGlass(MediaCornerShape)
+                    .mediaGlass(MediaCornerShape)
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 CircularProgressIndicator(color = LiveDesign.accent)
                 Text("Preparing image…", color = LiveDesign.muted, style = LiveType.ui(14f, FontWeight.Medium))
             }
+        }
+
+        if (PlaybackChromeMetrics.usesDarkenedBars(glass.tier)) {
+            PlaybackDarkenedBars()
         }
 
         Row(
@@ -235,6 +260,7 @@ fun MediaPhotoViewer(
                 },
             )
         }
+    }
     }
 }
 
@@ -296,6 +322,19 @@ fun MediaPlayerScreen(
     val conformAvailability = ConformPreview.availability(conformSource)
     val meterBox = remember { AudioLevelTapBox() }
     val meterSink = remember { PlaybackPcmBufferSink(meterBox) }
+    val glass = remember { MonitorGlass(GlassTier.FLAT) }
+    val status by model.session.status.collectAsState()
+    var decodeWidth by remember { mutableIntStateOf(1280) }
+    var decodeHeight by remember { mutableIntStateOf(720) }
+    val effectsPlan =
+        rememberLiveFeedEffectsPlan(
+            assist = assist,
+            lutSelection = model.lutSelection,
+            status = status,
+            family = model.session.connectedCamera?.model?.family.orEmpty(),
+            cameraName = model.session.connectedCamera?.name,
+            playback = true,
+        )
 
     fun applyListedGeometry() {
         val listed = PlaybackVideoLayout.sizeFromResolution(active.resolution)
@@ -342,6 +381,8 @@ fun MediaPlayerScreen(
                         val ratio = videoSize.pixelWidthHeightRatio.takeIf { it.isFinite() && it > 0f } ?: 1f
                         videoWidth = videoSize.width * ratio
                         videoHeight = videoSize.height.toFloat()
+                        decodeWidth = videoSize.width
+                        decodeHeight = videoSize.height
                     }
                 }
             }
@@ -362,13 +403,13 @@ fun MediaPlayerScreen(
         duration = active.durationSeconds.toFloat()
         zoom = AnchoredPinchZoom()
         frameScrubbing = false
+        decodeWidth = 1280
+        decodeHeight = 720
         applyListedGeometry()
         meterBox.readAndReset()
         player.stop()
         player.clearMediaItems()
-        val local =
-            controller.localPlaybackFile(active)
-                ?: controller.cacheForPlayback(active)
+        val local = controller.cacheForPlayback(active)
         if (local == null) {
             loadError =
                 if (controller.isLive) MediaOperatorCopy.CLIP_OPEN_FAILED
@@ -504,6 +545,7 @@ fun MediaPlayerScreen(
         active = playlist[next]
     }
 
+    CompositionLocalProvider(LocalMonitorGlass provides glass) {
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val container =
@@ -513,6 +555,9 @@ fun MediaPlayerScreen(
                     PlaybackVideoLayout.Size(videoWidth, videoHeight),
                     container,
                 )
+            val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
+            val overlayWidthPx = constraints.maxWidth
+            val overlayHeightPx = constraints.maxHeight
             Box(
                 Modifier
                     .offset { IntOffset(fitted.x.roundToInt(), fitted.y.roundToInt()) }
@@ -522,24 +567,38 @@ fun MediaPlayerScreen(
                     )
                     .clipToBounds(),
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        TextureView(ctx).also { view ->
-                            player.setVideoTextureView(view)
-                        }
-                    },
-                    update = { view -> player.setVideoTextureView(view) },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
-                                scaleX = zoom.scale * mirror
-                                scaleY = zoom.scale
-                                translationX = zoom.offsetX
-                                translationY = zoom.offsetY
-                            },
+                PlaybackFeedView(
+                    player = player,
+                    plan = effectsPlan,
+                    mirrored = mirror < 0f,
+                    zoom = zoom,
+                    sourceWidth = decodeWidth,
+                    sourceHeight = decodeHeight,
+                    modifier = Modifier.fillMaxSize(),
                 )
+            }
+            Popup(
+                alignment = Alignment.TopStart,
+                properties =
+                    PopupProperties(
+                        focusable = false,
+                        clippingEnabled = false,
+                    ),
+            ) {
+            Box(
+                Modifier.size(
+                    with(density) { overlayWidthPx.toDp() },
+                    with(density) { overlayHeightPx.toDp() },
+                ),
+            ) {
+            Box(
+                Modifier
+                    .offset { IntOffset(fitted.x.roundToInt(), fitted.y.roundToInt()) }
+                    .size(
+                        with(density) { fitted.width.toDp() },
+                        with(density) { fitted.height.toDp() },
+                    ),
+            ) {
                 val latestReady by rememberUpdatedState(ready)
                 val latestZoomed by rememberUpdatedState(zoom.isZoomed)
                 val latestOnTap by rememberUpdatedState({ handleFrameTap() })
@@ -623,14 +682,16 @@ fun MediaPlayerScreen(
                             )
                         },
                 )
-                // GPU LUT/PEAK/FALSE/ZEBRA on the clip is blocked on LiveFeedEffectsSession
-                // (live HEVC OES @ 1280×720; plan factory keys live isVisible). Chrome toggles persist.
                 LiveAssistLayer(
                     state = assist,
-                    status = CameraStatus(),
+                    status = status,
                     focus = null,
                     playback = true,
                     modifier = Modifier.fillMaxSize(),
+                    onOpenOptions = { tool, frame ->
+                        assist.longPressAnchor = frame
+                        assist.configureTool = tool
+                    },
                 )
                 if (playlist.size > 1) {
                     if (canPrev) {
@@ -660,79 +721,93 @@ fun MediaPlayerScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-            }
-            if (audioMetersOn) {
-                PlaybackAudioMetersOverlay(
-                    video = fitted,
-                    canvas = container,
-                    left = meterLeft,
-                    right = meterRight,
-                )
-            }
-        }
-
-        if (!ready || loadError != null) {
-            Box(
-                Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.72f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    Modifier
-                        .clip(MediaCornerShape)
-                        .panelGlass(MediaCornerShape)
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    if (loadError == null) {
-                        if (progress != null && progress > 0 && progress < 1) {
-                            MediaGlassTrack(fraction = progress.toFloat(), trackWidth = 120.dp)
-                        } else {
-                            CircularProgressIndicator(color = LiveDesign.accent)
-                        }
-                    }
-                    Text(
-                        loadError
-                            ?: if (progress != null) "Buffering from camera…" else "Preparing playback…",
-                        color = LiveDesign.muted,
-                        style = LiveType.ui(14f, FontWeight.Medium),
-                        modifier = Modifier.padding(top = 12.dp),
+                if (audioMetersOn) {
+                    val local =
+                        PlaybackVideoLayout.Rect(0f, 0f, fitted.width, fitted.height)
+                    PlaybackAudioMetersOverlay(
+                        video = local,
+                        canvas = local,
+                        left = meterLeft,
+                        right = meterRight,
                     )
                 }
             }
-        }
-
-        if (chromeVisible) {
-            Row(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                MediaBackButton(onClick = onClose, size = 34.dp)
-                Text(
-                    active.filename,
-                    color = LiveDesign.text,
-                    style = LiveType.ui(14f, FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                MediaFavoriteButton(favorite) { controller.toggleFavorite(active) }
+            if (!ready || loadError != null) {
+                Box(
+                    Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.72f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        Modifier
+                            .clip(MediaCornerShape)
+                            .mediaGlass(MediaCornerShape)
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (loadError == null) {
+                            if (progress != null && progress > 0 && progress < 1) {
+                                MediaGlassTrack(fraction = progress.toFloat(), trackWidth = 120.dp)
+                            } else {
+                                CircularProgressIndicator(color = LiveDesign.accent)
+                            }
+                        }
+                        Text(
+                            loadError
+                                ?: if (progress != null) "Buffering from camera…" else "Preparing playback…",
+                            color = LiveDesign.muted,
+                            style = LiveType.ui(14f, FontWeight.Medium),
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                }
             }
-            Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .clip(MediaCornerShape)
-                    .panelGlass(MediaCornerShape)
-                    .padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+            val overlayWidth = with(density) { overlayWidthPx.toDp() }
+            val panelClicks = remember { MutableInteractionSource() }
+            if (chromeVisible) {
+                Row(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    MediaBackButton(onClick = onClose, size = 34.dp)
+                    Text(
+                        active.filename,
+                        color = LiveDesign.text,
+                        style =
+                            LiveType.ui(14f, FontWeight.SemiBold).copy(
+                                shadow =
+                                    Shadow(
+                                        color = Color.Black.copy(alpha = 0.72f),
+                                        offset = Offset(0f, 1f),
+                                        blurRadius = 8f,
+                                    ),
+                            ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MediaFavoriteButton(favorite) { controller.toggleFavorite(active) }
+                }
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .width(overlayWidth)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .clip(MediaCornerShape)
+                        .playbackFrost(MediaCornerShape)
+                        .clickable(
+                            indication = null,
+                            interactionSource = panelClicks,
+                            onClick = {},
+                        )
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                 if (assistMode) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -745,7 +820,7 @@ fun MediaPlayerScreen(
                             modifier = Modifier.weight(1f),
                         )
                         MediaTransportIconButton(
-                            OpcIcon.SCAN,
+                            PlaybackChromeMetrics.viewAssistIcon,
                             "View Assist",
                             action = true,
                             highlighted = true,
@@ -861,13 +936,13 @@ fun MediaPlayerScreen(
                                 onSelect = { conformTarget = it },
                             )
                             MediaTransportIconButton(
-                                OpcIcon.MINIMIZE,
+                                PlaybackChromeMetrics.hideChromeIcon,
                                 "Hide playback controls",
                                 action = true,
                                 onClick = { chromeVisible = false },
                             )
                             MediaTransportIconButton(
-                                OpcIcon.SCAN,
+                                PlaybackChromeMetrics.viewAssistIcon,
                                 "View Assist",
                                 action = true,
                                 highlighted = assistMode || anyPlaybackAssistOn,
@@ -888,37 +963,48 @@ fun MediaPlayerScreen(
                         }
                     }
                 }
+                }
+            } else {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(16.dp),
+                ) {
+                    MediaCircleIconButton(
+                        icon = PlaybackChromeMetrics.showChromeIcon,
+                        contentDescription = "Show playback controls",
+                        onClick = { chromeVisible = true },
+                    )
+                }
             }
-        } else {
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(16.dp),
-            ) {
-                MediaCircleIconButton(
-                    icon = OpcIcon.MAXIMIZE,
-                    contentDescription = "Show playback controls",
-                    onClick = { chromeVisible = true },
-                )
+            }
             }
         }
 
+        val chromeWidth = LocalConfiguration.current.screenWidthDp.dp
         val configure = assist.configureTool
         if (configure != null) {
+            Popup(
+                alignment = Alignment.BottomCenter,
+                properties = PopupProperties(focusable = false, clippingEnabled = false),
+            ) {
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .width(chromeWidth)
                     .chromeClickable(onClick = { assist.configureTool = null }),
-                contentAlignment = Alignment.BottomStart,
+                contentAlignment = Alignment.BottomCenter,
             ) {
                 AssistOptionsPopup(
                     tool = configure,
                     state = assist,
                     onDismiss = { assist.configureTool = null },
+                    maxHeightDp = 420f,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 88.dp),
                     model = model,
+                    colorMode = CameraCommands.COLOR_NORMAL,
                 )
+            }
             }
         }
 
@@ -941,6 +1027,7 @@ fun MediaPlayerScreen(
                 },
             )
         }
+    }
     }
 }
 
@@ -970,7 +1057,7 @@ private fun PlaybackFrameScrubOverlay(
         Column(
             Modifier
                 .clip(RoundedCornerShape(percent = 50))
-                .panelGlass(RoundedCornerShape(percent = 50))
+                .mediaGlass(RoundedCornerShape(percent = 50))
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -1042,7 +1129,7 @@ private fun ClipNavButton(
         modifier
             .size(32.dp)
             .clip(CircleShape)
-            .panelGlass(CircleShape)
+            .mediaGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,

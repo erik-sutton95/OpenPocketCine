@@ -5,14 +5,14 @@ import Foundation
 public struct CameraStatus: Equatable, Sendable {
     public var batteryPercent: Int = -1
     public var batteryMilliVolts: Int = 0
-    public var batteryMilliAmps: Int = 0     // signed; negative = discharging
+    public var batteryMilliAmps: Int = 0  // signed; negative = discharging
     public var docked = false
     public var charging = false
     public var storageTotalMb = 0
     public var storageFreeMb = 0
     public var sdTotalMb = 0
     public var sdFreeMb = 0
-    public var internalTotalMb = -1          // -1 unknown, 0 confirmed absent
+    public var internalTotalMb = -1  // -1 unknown, 0 confirmed absent
     public var internalFreeMb = -1
     public var inPlayback = false
     public var firmware: String?
@@ -140,7 +140,8 @@ public enum CameraStatusDecoder {
             let flags = u32(p, 0)
             status.inPlayback = (flags & 0x4000_0000) != 0
             status.isRecording = (flags & 0x0000_0080) != 0
-            let total = Int(u32(p, 5)), free = Int(u32(p, 9))
+            let total = Int(u32(p, 5))
+            let free = Int(u32(p, 9))
             if (1...50_000_000).contains(total) { status.storageTotalMb = total }
             if (0...50_000_000).contains(free) { status.storageFreeMb = free }
             if p.count >= 21 {
@@ -155,16 +156,19 @@ public enum CameraStatusDecoder {
 
         case (0x02, 0xDC) where p.count >= 22:
             // [total][free] u32-LE MiB per store: first (SD) @6/@10, built-in @24/@28 when present.
-            let sdTotal = Int(u32(p, 6)), sdFree = Int(u32(p, 10))
+            let sdTotal = Int(u32(p, 6))
+            let sdFree = Int(u32(p, 10))
             let hasInternal = p.count >= 32
             if sane(sdTotal) { status.sdTotalMb = sdTotal }
             if sane(sdFree) { status.sdFreeMb = sdFree }
             if hasInternal {
-                let it = Int(u32(p, 24)), ifree = Int(u32(p, 28))
+                let it = Int(u32(p, 24))
+                let ifree = Int(u32(p, 28))
                 if sane(it) { status.internalTotalMb = it }
                 if sane(ifree) { status.internalFreeMb = ifree }
             } else {
-                status.internalTotalMb = 0; status.internalFreeMb = 0   // single-store: confirmed absent
+                status.internalTotalMb = 0
+                status.internalFreeMb = 0  // single-store: confirmed absent
             }
             return true
 
@@ -172,7 +176,7 @@ public enum CameraStatusDecoder {
             // u16@1 mV, i32@5 mA (signed), @20 percent, @27 dock attached, @32 charging.
             if p.count >= 34 {
                 let mv = Int(p[1]) | (Int(p[2]) << 8)
-                status.batteryMilliAmps = Int(Int32(bitPattern: u32(p, 5)))   // signed mA
+                status.batteryMilliAmps = Int(Int32(bitPattern: u32(p, 5)))  // signed mA
                 status.docked = p[27] != 0
                 status.charging = p[32] == 1
                 if (2000...5000).contains(mv) { status.batteryMilliVolts = mv }
@@ -182,7 +186,7 @@ public enum CameraStatusDecoder {
             return true
 
         case (0x04, 0x05):
-            return true   // gimbal position heartbeat — swallow, it is not a running-state signal
+            return true  // gimbal position heartbeat — swallow, it is not a running-state signal
 
         case (0x04, 0x27):
             if let face = GimbalFace.parse(p) { status.gimbalFace = face }
@@ -233,7 +237,10 @@ public enum CameraStatusDecoder {
             return false
 
         case (0x00, 0x00) where p.count >= 6:
-            if let fw = firmware(p) { status.firmware = fw; return true }
+            if let fw = firmware(p) {
+                status.firmware = fw
+                return true
+            }
             return false
 
         case (0x00, 0x99):
@@ -246,7 +253,8 @@ public enum CameraStatusDecoder {
 
     /// `0x00/0x99` camera→app push: `02 06 00 00 | idx | 00×3 | total_len | name_len | name | 00×6 | value_len | value`.
     @discardableResult
-    public static func applySubscribePush(_ payload: [UInt8], to status: inout CameraStatus) -> Bool {
+    public static func applySubscribePush(_ payload: [UInt8], to status: inout CameraStatus) -> Bool
+    {
         guard let item = SubscribePush.parse(payload) else { return false }
         switch item.name {
         case "timecode_info" where item.value.count >= 8:
@@ -274,7 +282,9 @@ public enum CameraStatusDecoder {
         case "cam_video_param_v2" where item.value.count >= 2:
             if let fps = fps(index: item.value[1]) { status.fps = fps }
             if let res = VideoResolution(rawValue: item.value[0]) { status.videoResolution = res }
-            if let format = VideoFormat.parseVideoParamV2(item.value) { status.videoFormat = format }
+            if let format = VideoFormat.parseVideoParamV2(item.value) {
+                status.videoFormat = format
+            }
             return true
         case "cam_image_effect" where item.value.count > 2:
             if let color = ColorMode.parseImageEffect(item.value) { status.colorMode = color }
@@ -314,7 +324,9 @@ public enum CameraStatusDecoder {
     /// `timecode_info` 8 B: `@3–6` = HH MM SS FF (2026-08-14 Mimo: `00 00 00 05 16 2f 12 00` → `05:22:47:18`).
     /// `@0–2` stay 0; `@7` unused. Older live1 decode used `@4–7` and showed 22:xx as hours.
     public static func timecodeString(_ value: [UInt8]) -> String {
-        let hh = Int(value[3]), mm = Int(value[4]), ss = Int(value[5])
+        let hh = Int(value[3])
+        let mm = Int(value[4])
+        let ss = Int(value[5])
         return String(format: "%02d:%02d:%02d:%02d", hh, mm, ss, Int(value[6]))
     }
 
@@ -359,7 +371,9 @@ public enum SubscribePush {
         let nameLen = Int(payload[13]) | (Int(payload[14]) << 8)
         guard nameLen > 0, nameLen < 80, 15 + nameLen + 8 <= payload.count else { return nil }
         let nameBytes = payload[15..<(15 + nameLen)]
-        guard let name = String(bytes: nameBytes, encoding: .utf8), !name.isEmpty else { return nil }
+        guard let name = String(bytes: nameBytes, encoding: .utf8), !name.isEmpty else {
+            return nil
+        }
         let valueLenAt = 15 + nameLen + 6
         guard valueLenAt + 2 <= payload.count else { return nil }
         let valueLen = Int(payload[valueLenAt]) | (Int(payload[valueLenAt + 1]) << 8)

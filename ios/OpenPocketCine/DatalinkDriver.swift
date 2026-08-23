@@ -47,6 +47,9 @@ final class DatalinkDriver {
     nonisolated private let handshakeInbound = OSAllocatedUnfairLock(initialState: 0)
     /// `receiveMessage` has been armed on the current `conn`.
     private var receiveArmed = false
+    /// `close()` is terminal. Handshake on this instance after disconnect
+    /// inherited a half-dead UDP session.
+    private var closed = false
     /// Camera still pushes the last GOP after Disconnect. Do not count or
     /// decode those 0x02 packets until `0x09/0xa8` has gone out.
     nonisolated private let videoGate = OSAllocatedUnfairLock(initialState: VideoGate())
@@ -92,6 +95,7 @@ final class DatalinkDriver {
     var lastWriteLanded: Bool? { lastCommandWriteLanded }
     var isFlowHealthy: Bool { writeHealthy && isConnectionReady }
     var isRebuilding: Bool { rebuilding }
+    var isClosed: Bool { closed }
     var secondsSinceLastRebuild: TimeInterval? {
         lastRebuildAt.map { Date().timeIntervalSince($0) }
     }
@@ -132,28 +136,33 @@ final class DatalinkDriver {
     /// `afterHandshake` runs after register + subscribe — send `0x09/0xa8`
     /// there. Enable before subscribe is ignored on first boot.
     func open(afterHandshake: (@MainActor () async -> Void)? = nil) async throws {
+        try throwIfClosed()
         // Sockets created before 192.168.2.x exist bind to the old Wi-Fi, then
         // RST when the camera AP finishes associating (first-connect black feed).
         try await WiFiJoiner.waitUntilCameraPathReady()
+        try throwIfClosed()
         try await refreshCameraPath()
+        try throwIfClosed()
         try await ensurePoke()
+        try throwIfClosed()
 
         var rebinds = 0
         var haveSocket = false
         while true {
-            try Task.checkCancellation()
+            try throwIfClosed()
             resetHandshakeSession()
             // Do not discard before the first bind — that was a no-op on a
             // fresh driver but raced the reader on session retry.
             if haveSocket { discardUDP() }
             try await openUDP()
+            try throwIfClosed()
             haveSocket = true
             syncWire()
             startPathWatch()
 
             let sends = CameraSoftAP.handshakeSendsPerBind
             for send in 1...sends {
-                try Task.checkCancellation()
+                try throwIfClosed()
                 if handshakeAcked { break }
                 if !CameraSoftAP.canSendHandshake(
                     receiveArmed: receiveArmed, connectionReady: isConnectionReady
@@ -179,7 +188,12 @@ final class DatalinkDriver {
                 register()
                 subscribe()
                 startAckPump()
+                // Disconnect can land on this await. Publishing LIVE here after
+                // `close()` is why in-app reconnect sat on Waiting for live view
+                // until process death.
+                try throwIfClosed()
                 if let afterHandshake { await afterHandshake() }
+                try throwIfClosed()
                 // Enable first, then accept 0x02. Arming earlier ingested the
                 // leftover GOP (videoPkts=125, first picture never recovered).
                 armLiveVideo()
@@ -253,6 +267,7 @@ final class DatalinkDriver {
 
     /// Re-assert app-presence + ack; call ~1 Hz to hold the session (and playback) open.
     func keepalive() {
+        if closed { return }
         sendDuml(Commands.appPresenceFrame(seq: 0))
         sendAck()
     }
@@ -263,12 +278,14 @@ final class DatalinkDriver {
     /// Send the live-view enable (`0x09/0xa8`) on **UDP 9004** only.
     /// Never writes TCP 7001 — a second enable on a dying UDP flow RST'd the poke.
     func startLiveView(receiver: UInt8 = Commands.liveViewEnableReceiverPocket) {
+        if closed { return }
         let seq = sendDuml(Commands.liveViewEnable(seq: 0, receiver: receiver), trackCommand: true)
         log.info("datalink: sent 0x09/0xa8 rcv=0x\(String(receiver, radix: 16), privacy: .public) seq=\(seq, privacy: .public) ready=\(self.isConnectionReady ? 1 : 0) videoPkts=\(self.videoPackets, privacy: .public)")
     }
 
     /// Drop leftover GOP counters and accept 0x02. Call after `0x09/0xa8`.
     func armLiveVideo() {
+        if closed { return }
         videoAssembler.reset()
         videoGate.withLock {
             $0.accepting = true
@@ -280,18 +297,29 @@ final class DatalinkDriver {
     /// Returns the `dumlSeq` stamped on the wire (the builder's `seq` is a placeholder).
     @discardableResult
     func send(_ frame: Duml.Frame) -> UInt16 {
+        if closed { return 0 }
         lastCommandWriteLanded = nil
         return sendDuml(frame, trackCommand: true)
     }
 
     func close() {
+        closed = true
+        onAccessUnit = nil
+        onStatusFrame = nil
         ackTimer?.cancel(); ackTimer = nil
         pathMonitor?.cancel(); pathMonitor = nil
-        conn?.cancel(); conn = nil
+        // Bump `udpGeneration` so in-flight receive/write completions cannot
+        // still ingest leftover GOP or mark the next session's socket dead.
+        discardUDP()
         pokeConn?.cancel(); pokeConn = nil
         videoAssembler.reset()
+        videoGate.withLock { $0 = VideoGate() }
         writeHealthy = false
         syncWire()
+    }
+
+    private func throwIfClosed() throws {
+        if closed || Task.isCancelled { throw CancellationError() }
     }
 
     /// Tear down a dead `en0` channel-flow and open a new UDP socket on the
@@ -299,7 +327,7 @@ final class DatalinkDriver {
     /// still recognizes us; live-view enable is the caller's job if video dies.
     /// Does not touch TCP 7001 — canceling the poke is the `tcp_output RST`.
     func rebuildUDP(reason: String) async throws {
-        if rebuilding { return }
+        if closed || rebuilding { return }
         rebuilding = true
         lastRebuildAt = Date()
         defer { rebuilding = false }
@@ -310,8 +338,14 @@ final class DatalinkDriver {
         lastCommandWriteLanded = nil
         videoAssembler.noteRebuild()
         try await WiFiJoiner.waitUntilCameraPathReady(timeout: 5)
+        if closed { return }
         try await refreshCameraPath()
+        if closed { return }
         try await openUDP()
+        if closed {
+            discardUDP()
+            return
+        }
         writeHealthy = true
         syncWire()
         sendAck()
@@ -381,6 +415,7 @@ final class DatalinkDriver {
     }
 
     private func write(_ bytes: [UInt8], trackCommand: Bool = false) {
+        if closed { return }
         guard let conn else {
             writeHealthy = false
             if trackCommand { lastCommandWriteLanded = false }
@@ -428,6 +463,7 @@ final class DatalinkDriver {
     /// to keep the camera's send window open once live view is flowing.
     /// Runs on the UDP queue — a MainActor Task per tick starved control ACKs.
     private func startAckPump() {
+        if closed { return }
         ackTimer?.cancel()
         let t = DispatchSource.makeTimerSource(queue: q)
         t.schedule(deadline: .now() + .milliseconds(25), repeating: .milliseconds(25))
@@ -622,6 +658,7 @@ final class DatalinkDriver {
     /// Drain AUs assembled on the UDP queue. One hop per batch so a Task-per-AU
     /// cannot stall receive or preempt control ACKs.
     private func flushPendingAccessUnits() {
+        if closed { return }
         noteInboundTraffic()
         let batch = videoAssembler.takePending()
         for accessUnit in batch {

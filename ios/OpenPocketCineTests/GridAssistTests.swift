@@ -1,5 +1,6 @@
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins GRID to OpenZCine `AssistConfiguration.Grid` + `FeedGridView` (no fourths).

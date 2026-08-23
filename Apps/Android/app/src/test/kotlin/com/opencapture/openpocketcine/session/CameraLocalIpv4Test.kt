@@ -34,10 +34,12 @@ class CameraLocalIpv4Test {
     }
 
     @Test
-    fun udpBindStaysWildcardAfterNetworkPin() {
+    fun udpBindStaysWildcardEphemeralAfterNetworkPin() {
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost("192.168.2.15"))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(null))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(""))
-        assertEquals(9004, DatalinkDriver.udpBindPort())
+        // Local :9004 accepted handshake/0x01 and dropped HEVC. iOS/Mimo use
+        // an ephemeral client port; camera 9004 is the remote only.
+        assertEquals(0, DatalinkDriver.udpBindPort())
     }
 }

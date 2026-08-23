@@ -194,7 +194,8 @@ final class FalseColorAssistTests: XCTestCase {
             abs(post.red - pre.red) + abs(post.green - pre.green) + abs(post.blue - pre.blue)
         XCTAssertGreaterThan(
             delta, 0.15,
-            "log→709 18% is a different D-Log2 code — sampling the cube look must not be how FALSE keys")
+            "log→709 18% is a different D-Log2 code — sampling the cube look must not be how FALSE keys"
+        )
     }
 
     func testIREAndStopsGapsAreGrayscaleNotBlack() {
@@ -223,7 +224,8 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertGreaterThan(overlayStops.green, overlayStops.red)
         let overlayWeight = PocketFalseColorMap.overlayWeightCube(scale: .ire, transfer: .dlog2)
             .map(red: encoded, green: encoded, blue: encoded)
-        XCTAssertGreaterThan(overlayWeight.red, 0.9, "IRE gaps must cover the picture, not punch through")
+        XCTAssertGreaterThan(
+            overlayWeight.red, 0.9, "IRE gaps must cover the picture, not punch through")
     }
 
     /// The compositor reads the async-warmed cube bytes (`overlayPaintData` /
@@ -315,10 +317,12 @@ final class FalseColorAssistTests: XCTestCase {
         let clip = Self.solidImage(code: 255)
         fx.lutDimension = 0
         fx.lutRGBA = Data()
-        let clipOff = Self.sampleRGB(LiveMonitorCompositor.apply(to: clip, effects: fx, display: clip))
+        let clipOff = Self.sampleRGB(
+            LiveMonitorCompositor.apply(to: clip, effects: fx, display: clip))
         fx.lutDimension = look.size
         fx.lutRGBA = look.rgbaComponents.withUnsafeBytes { Data($0) }
-        let clipOn = Self.sampleRGB(LiveMonitorCompositor.apply(to: clip, effects: fx, display: clip))
+        let clipOn = Self.sampleRGB(
+            LiveMonitorCompositor.apply(to: clip, effects: fx, display: clip))
         // Overlay paint is the authored band on both paths — no DeviceRGB
         // remake, so no display-compensated lattice.
         XCTAssertEqual(clipOff.0, clipOn.0, accuracy: 0.04)

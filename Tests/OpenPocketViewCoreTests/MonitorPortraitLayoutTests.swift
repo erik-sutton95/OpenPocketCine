@@ -1,4 +1,5 @@
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct MonitorPortraitLayoutTests {
@@ -177,7 +178,9 @@ import Testing
     @Test func sixteenNineFitParksStickAndZoomOutsideTheWell() {
         let feed = MonitorFeedFrame(x: 0, y: 200, width: 390, height: 220)
         let cluster = MonitorPortraitLayout.outsideTrailingCorner(feed: feed, floorY: 620)
-        #expect(cluster.zoom.y >= feed.y + feed.height + MonitorPortraitLayout.outsideControlsGap - 0.05)
+        #expect(
+            cluster.zoom.y >= feed.y + feed.height + MonitorPortraitLayout.outsideControlsGap - 0.05
+        )
         #expect(cluster.stick.y >= cluster.zoom.maxY)
         #expect(abs(cluster.stick.maxX - (feed.x + feed.width - 16)) < 0.05)
         #expect(abs(cluster.zoom.maxX - cluster.stick.maxX) < 0.05)

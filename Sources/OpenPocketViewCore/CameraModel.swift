@@ -4,9 +4,9 @@ import Foundation
 /// the app wraps them in `CBUUID`.
 public enum BleConstants {
     public static let serviceFFF0 = "0000FFF0-0000-1000-8000-00805F9B34FB"
-    public static let charFFF4    = "0000FFF4-0000-1000-8000-00805F9B34FB"   // notify + arm-pairing
-    public static let charFFF5    = "0000FFF5-0000-1000-8000-00805F9B34FB"   // command writes
-    public static let cccd        = "00002902-0000-1000-8000-00805F9B34FB"
+    public static let charFFF4 = "0000FFF4-0000-1000-8000-00805F9B34FB"  // notify + arm-pairing
+    public static let charFFF5 = "0000FFF5-0000-1000-8000-00805F9B34FB"  // command writes
+    public static let cccd = "00002902-0000-1000-8000-00805F9B34FB"
 
     // DJI BLE company ids (Android SparseArray key form; on the wire little-endian: AA 08 / AA F7).
     public static let djiCompanyIds: Set<Int> = [0x08AA, 0xF7AA, 0xE5C0]
@@ -25,10 +25,16 @@ public struct CameraModel: Equatable, Sendable {
     public let verified: Bool
     public let isDrone: Bool
 
-    public init(name: String, datalinkPort: Int = 9004, tcpPoke: Bool = true,
-                wpa3: Bool = false, verified: Bool = false, isDrone: Bool = false) {
-        self.name = name; self.datalinkPort = datalinkPort; self.tcpPoke = tcpPoke
-        self.wpa3 = wpa3; self.verified = verified; self.isDrone = isDrone
+    public init(
+        name: String, datalinkPort: Int = 9004, tcpPoke: Bool = true,
+        wpa3: Bool = false, verified: Bool = false, isDrone: Bool = false
+    ) {
+        self.name = name
+        self.datalinkPort = datalinkPort
+        self.tcpPoke = tcpPoke
+        self.wpa3 = wpa3
+        self.verified = verified
+        self.isDrone = isDrone
     }
 
     /// The SetPairingPIN token this device expects: a drone only releases WiFi creds for "DJI FLY".
@@ -65,8 +71,10 @@ public struct CameraModel: Equatable, Sendable {
     /// The other datalink config to try when `datalinkPort` never answers (9004+poke <-> 10004).
     public func alternate() -> CameraModel {
         datalinkPort == 9004
-            ? CameraModel(name: name, datalinkPort: 10004, tcpPoke: false, wpa3: wpa3, isDrone: isDrone)
-            : CameraModel(name: name, datalinkPort: 9004, tcpPoke: true, wpa3: wpa3, isDrone: isDrone)
+            ? CameraModel(
+                name: name, datalinkPort: 10004, tcpPoke: false, wpa3: wpa3, isDrone: isDrone)
+            : CameraModel(
+                name: name, datalinkPort: 9004, tcpPoke: true, wpa3: wpa3, isDrone: isDrone)
     }
 
     public static let `default` = CameraModel(name: "DJI Osmo camera")
@@ -82,7 +90,8 @@ public struct CameraModel: Equatable, Sendable {
         0x0020: CameraModel(name: "Osmo Pocket 3", verified: true),
         0x0021: CameraModel(name: "Osmo Pocket 4", verified: true),
         0x0022: CameraModel(name: "Osmo Pocket 4 Pro", verified: true),
-        0x0070: CameraModel(name: "Mavic 3", datalinkPort: 9003, tcpPoke: false, verified: true, isDrone: true),
+        0x0070: CameraModel(
+            name: "Mavic 3", datalinkPort: 9003, tcpPoke: false, verified: true, isDrone: true),
         0x007E: CameraModel(name: "DJI Neo 2", datalinkPort: 9003, tcpPoke: false, isDrone: true),
     ]
 
@@ -91,18 +100,19 @@ public struct CameraModel: Equatable, Sendable {
     public static func resolve(modelId: Int?, name: String?) -> CameraModel {
         if let id = modelId, let m = byId[id] { return m }
         if let id = modelId, id >= 0x40 {
-            return CameraModel(name: name.map { "DJI drone (\($0))" } ?? "DJI drone",
-                               datalinkPort: 9003, tcpPoke: false, isDrone: true)
+            return CameraModel(
+                name: name.map { "DJI drone (\($0))" } ?? "DJI drone",
+                datalinkPort: 9003, tcpPoke: false, isDrone: true)
         }
         let n = (name ?? "").lowercased().replacingOccurrences(of: " ", with: "")
         // "pocket4p" before "pocket4": the Pro's BLE name is OsmoPocket4P-XXXX.
         switch true {
         case n.contains("pocket3"), n.contains("muse"): return byId[0x0020]!
-        case n.contains("pocket4p"):                    return byId[0x0022]!
-        case n.contains("pocket4"):                     return byId[0x0021]!
-        case n.contains("360"):                         return byId[0x0017]!
-        case n.contains("nano"), n.contains("atto"):    return byId[0x0019]!
-        case n.contains("action6"):                     return byId[0x0018]!
+        case n.contains("pocket4p"): return byId[0x0022]!
+        case n.contains("pocket4"): return byId[0x0021]!
+        case n.contains("360"): return byId[0x0017]!
+        case n.contains("nano"), n.contains("atto"): return byId[0x0019]!
+        case n.contains("action6"): return byId[0x0018]!
         case n.contains("action5"), n.contains("edgepro"): return byId[0x0015]!
         case n.contains("action4"), n.contains("edge"): return byId[0x0014]!
         default:

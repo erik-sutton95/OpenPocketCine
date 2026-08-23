@@ -33,7 +33,8 @@ public enum BleAdvert {
                 return Decoded(modelId: mapped, newFormat: true, rawProductType: pt)
             }
         }
-        return Decoded(modelId: legacyModelId(payload), newFormat: false, rawProductType: productType(payload))
+        return Decoded(
+            modelId: legacyModelId(payload), newFormat: false, rawProductType: productType(payload))
     }
 
     public static func modelId(_ payload: [UInt8]) -> Int? { decode(payload).modelId }
@@ -43,7 +44,9 @@ public enum BleAdvert {
     private static let productTypeIndex = 10
 
     private static func productType(_ p: [UInt8]) -> Int? {
-        guard p.count > newFormatFlagIndex, (p[newFormatFlagIndex] & newFormatFlagMask) != 0 else { return nil }
+        guard p.count > newFormatFlagIndex, (p[newFormatFlagIndex] & newFormatFlagMask) != 0 else {
+            return nil
+        }
         guard p.count >= productTypeIndex + 2 else { return nil }
         return Int(p[productTypeIndex]) | (Int(p[productTypeIndex + 1]) << 8)
     }
@@ -51,6 +54,6 @@ public enum BleAdvert {
     private static func legacyModelId(_ p: [UInt8]) -> Int? {
         guard p.count >= 2 else { return nil }
         let id = Int(p[0]) | (Int(p[1]) << 8)
-        return id == 0 ? nil : id   // zero is what the new format leaves behind, not a model
+        return id == 0 ? nil : id  // zero is what the new format leaves behind, not a model
     }
 }

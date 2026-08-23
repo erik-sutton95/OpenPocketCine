@@ -41,6 +41,38 @@ internal class FeedEffectsRenderPlan(
     val falseColorOn: Boolean
         get() = falseColorPaint != null && falseColorWeight != null
 
+    /** LUT / PEAK / FALSE / ZEBRA — grade the player, not a CPU overlay. */
+    val hasPlaybackLook: Boolean
+        get() =
+            lutCube != null ||
+                falseColorOn ||
+                peaking ||
+                zebraHighlightOn ||
+                zebraMidtoneOn
+
+    /**
+     * Identity for `setVideoEffects`. WAVE / HISTO must not rebuild the
+     * Media3 graph — that was the LUT/false-colour "sometimes it doesn't".
+     */
+    val playbackLookKey: Int
+        get() {
+            var h = 17
+            h = 31 * h + System.identityHashCode(lutCube)
+            h = 31 * h + System.identityHashCode(falseColorPaint)
+            h = 31 * h + System.identityHashCode(falseColorWeight)
+            h = 31 * h + if (peaking) 1 else 0
+            h = 31 * h + peakingColor.contentHashCode()
+            h = 31 * h + if (zebraHighlightOn) 1 else 0
+            h = 31 * h + zebraHighlightCode.hashCode()
+            h = 31 * h + zebraHighlightColor.contentHashCode()
+            h = 31 * h + if (zebraMidtoneOn) 1 else 0
+            h = 31 * h + zebraMidtoneCode.hashCode()
+            h = 31 * h + zebraMidtoneColor.contentHashCode()
+            h = 31 * h + if (splitComparison) 1 else 0
+            h = 31 * h + if (splitVertical) 1 else 0
+            return h
+        }
+
     companion object {
         val IDENTITY =
             FeedEffectsRenderPlan(
@@ -73,16 +105,23 @@ internal object FeedEffectsRenderPlanFactory {
         iso: Int,
         family: String,
         cameraName: String?,
+        playback: Boolean = false,
     ): FeedEffectsRenderPlan {
-        val lutOn = assist.isVisible(LiveAssistTool.LUT)
-        val peaking = assist.isVisible(LiveAssistTool.PEAK)
-        val falseColor = assist.isVisible(LiveAssistTool.FALSE)
-        val zebra = assist.isVisible(LiveAssistTool.ZEBRA)
-        val waveform = assist.isVisible(LiveAssistTool.WAVE)
-        val parade = assist.isVisible(LiveAssistTool.PARADE)
-        val histogram = assist.isVisible(LiveAssistTool.HISTO)
-        val vectorscope = assist.isVisible(LiveAssistTool.VECTOR)
-        val trafficLights = assist.isVisible(LiveAssistTool.LIGHTS)
+        val shown: (LiveAssistTool) -> Boolean =
+            if (playback) {
+                { assist.isPlaybackVisible(it) }
+            } else {
+                { assist.isVisible(it) }
+            }
+        val lutOn = shown(LiveAssistTool.LUT)
+        val peaking = shown(LiveAssistTool.PEAK)
+        val falseColor = shown(LiveAssistTool.FALSE)
+        val zebra = shown(LiveAssistTool.ZEBRA)
+        val waveform = shown(LiveAssistTool.WAVE)
+        val parade = shown(LiveAssistTool.PARADE)
+        val histogram = shown(LiveAssistTool.HISTO)
+        val vectorscope = shown(LiveAssistTool.VECTOR)
+        val trafficLights = shown(LiveAssistTool.LIGHTS)
         val look =
             LutLookResolver.resolve(
                 selection = lutSelection,

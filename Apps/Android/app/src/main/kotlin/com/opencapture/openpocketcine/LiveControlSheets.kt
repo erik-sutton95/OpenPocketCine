@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -79,9 +80,15 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.glass.LiquidSlider
+import com.opencapture.openpocketcine.assists.AssistLongPress
 import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.openpocketcine.session.CameraModel
+import com.opencapture.openpocketcine.settings.SettingsHelpBadge
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.FocusTrackMode
+import com.opencapture.openpocketcine.session.VideoFormat
+import com.opencapture.openpocketcine.session.VideoFrameRate
+import com.opencapture.openpocketcine.session.VideoResolution
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -96,6 +103,7 @@ enum class LiveSheet {
     SHUTTER,
     WB,
     FOCUS,
+    /** Capture-bar MODE: expo Auto/Manual. Not shooting Video/Photo. */
     EXPO,
     AUDIO,
     COLOR,
@@ -112,10 +120,11 @@ fun LiveControlSheet(
     status: CameraStatus,
     locked: Boolean,
     onDismiss: () -> Unit,
+    maxHeightDp: Float? = null,
 ) {
     val context = LocalContext.current
     val enabled = !locked
-    val isEvSheet = sheet == LiveSheet.SHUTTER && status.expoMode == CameraCommands.EXPO_AUTO
+    val isEvSheet = CaptureLists.isEvSheet(sheet, status.expoMode)
     val offersIsoAuto = CaptureLists.offersIsoAuto(status)
     var selectedMode by remember(sheet) {
         mutableIntStateOf(initialSelectedMode(sheet, status, model, isEvSheet))
@@ -127,8 +136,8 @@ fun LiveControlSheet(
     val scope = rememberCoroutineScope()
     var drumJob by remember { mutableStateOf<Job?>(null) }
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
-    val isAngleSheet = sheet == LiveSheet.SHUTTER && !isEvSheet && selectedMode == 1
-    val tabs = modeTabs(sheet, isEvSheet, offersIsoAuto)
+    val isAngleSheet = CaptureLists.isAngleSheet(sheet, status.expoMode, selectedMode)
+    val tabs = CaptureLists.modeTabs(sheet, status.expoMode, offersIsoAuto)
     val bodyFamily = model.session.connectedCamera?.model?.family ?: "pocket"
 
     fun enqueueDrumSend(send: () -> Unit) {
@@ -140,88 +149,35 @@ fun LiveControlSheet(
         }
     }
 
-    fun reseatIsoAutoDrum() {
-        val labels = CaptureLists.isoAutoLabels(status)
-        val live = CaptureLists.isoAutoLabel(status)
-        val next = if (live in labels) live else labels.firstOrNull().orEmpty()
-        lastApplied = next
-        drumSelection = next
-    }
-
-    fun reseatIsoDiscrete() {
-        val labels = CaptureLists.isoDrumLabels(status)
-        val live =
-            when {
-                status.isoIndex > 0 -> CameraCommands.isoLabel(status.isoIndex)
-                status.iso > 0 -> "${status.iso}"
-                else -> labels.firstOrNull().orEmpty()
-            }
-        val next = if (live in labels) live else labels.firstOrNull().orEmpty()
-        lastApplied = next
-        drumSelection = next
+    fun applyIsoSeat(state: IsoSheetLogic.State) {
+        selectedMode = state.selectedMode
+        lastApplied = state.lastApplied
+        drumSelection = state.drumSelection
     }
 
     fun reseatIso() {
-        if (offersIsoAuto) {
-            selectedMode = if (status.isoIndex == 0) 0 else 1
-        } else {
-            selectedMode = 0
+        applyIsoSeat(IsoSheetLogic.reseat(status))
+    }
+
+    fun applySeat(seat: CaptureLists.ShutterSeat) {
+        preferredAngle = seat.preferredAngle
+        if (seat.persistAngle) {
+            OperatorPrefs.setShutterAngleDegrees(context, seat.preferredAngle)
         }
-        if (sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0) {
-            reseatIsoAutoDrum()
-        } else {
-            reseatIsoDiscrete()
-        }
+        lastApplied = seat.selection
+        drumSelection = seat.selection
     }
 
     fun reseatEv() {
-        val labels = CaptureLists.evLabels
-        val live = EvComp.fromRaw(status.evComp)?.label ?: "0.0"
-        val next = if (live in labels) live else "0.0"
-        lastApplied = next
-        drumSelection = next
+        applySeat(CaptureLists.reseatEv(status))
     }
 
     fun reseatShutterAngle() {
-        val labels = ShutterAngle.labels
-        val fps = status.fps
-        val liveDenom = status.shutterDenom
-        val preferred = ShutterAngle.label(preferredAngle)
-        if (liveDenom > 0) {
-            val mapped =
-                ShutterAngle.denom(preferredAngle, fps, CaptureLists.shutterDenoms(status))
-            if (mapped == liveDenom && preferred in labels) {
-                lastApplied = preferred
-                drumSelection = preferred
-                return
-            }
-            val next = ShutterAngle.nearestLabel(liveDenom, fps)
-            preferredAngle = ShutterAngle.parse(next) ?: ShutterAngle.DEFAULT_DEGREES
-            OperatorPrefs.setShutterAngleDegrees(context, preferredAngle)
-            lastApplied = next
-            drumSelection = next
-            return
-        }
-        lastApplied = preferred
-        drumSelection = if (preferred in labels) preferred else labels.firstOrNull().orEmpty()
+        applySeat(CaptureLists.reseatShutterAngle(status, preferredAngle))
     }
 
     fun reseatShutter() {
-        if (selectedMode == 1 && !isEvSheet) {
-            reseatShutterAngle()
-            return
-        }
-        val labels = CaptureLists.shutterLabels(status)
-        val live =
-            if (status.shutterDenom > 0) CaptureLists.shutterLabel(status.shutterDenom)
-            else labels.firstOrNull().orEmpty()
-        val next =
-            when {
-                live in labels -> live
-                else -> CaptureLists.nearestShutterLabel(live, status)
-            }
-        lastApplied = next
-        drumSelection = next
+        applySeat(CaptureLists.reseatShutter(status, selectedMode, isEvSheet, preferredAngle))
     }
 
     fun reseatShutterOrEv() {
@@ -229,15 +185,15 @@ fun LiveControlSheet(
     }
 
     fun reseatWb() {
-        val k = "${CaptureLists.currentKelvin(status)}K"
-        drumSelection = if (k in CaptureLists.kelvinLabels) k else "5600K"
+        drumSelection = CaptureLists.wbDrumSelection(status)
         lastApplied = drumSelection
         tintDraft = CaptureLists.currentTint(status).toFloat()
     }
 
     fun reseatResolution() {
-        selectedMode = if (status.resolutionCode == CameraCommands.RES_4K) 1 else 0
-        val label = CaptureLists.fpsDrumLabel(status)
+        val format = VideoFormat.current(status)
+        selectedMode = VideoResolution.entries.indexOf(format.resolution).coerceAtLeast(0)
+        val label = format.frameRate.drumLabel
         drumSelection = label
         lastApplied = label
     }
@@ -258,43 +214,44 @@ fun LiveControlSheet(
                 reseatShutterOrEv()
             }
             LiveSheet.WB -> {
-                selectedMode =
-                    if (status.wbMode == CameraCommands.WB_CUSTOM) 1 else 0
+                selectedMode = CaptureLists.wbInitialTab(status)
                 reseatWb()
             }
-            LiveSheet.AUDIO -> selectedMode = 0
+            LiveSheet.AUDIO -> selectedMode = CaptureLists.audioInitialTab()
             LiveSheet.FORMAT -> reseatResolution()
             LiveSheet.COLOR -> reseatColor()
             else -> selectedMode = 0
         }
     }
 
-    fun applyVideoFormat(tab: Int, drum: String) {
-        val rate = CaptureLists.fpsIndexFromDrum(drum) ?: CaptureLists.currentFpsIndex(status)
-        val res = if (tab == 1) CameraCommands.RES_4K else CameraCommands.RES_1080
-        if (res == status.resolutionCode && rate == status.fpsIndex) return
-        model.setResolutionFps(res, rate)
+    fun applyVideoFormat(tab: Int, drum: String, fromDrum: Boolean) {
+        val next =
+            if (fromDrum) {
+                VideoFormat.nextForDrum(status, tab, drum)
+            } else {
+                VideoFormat.nextForTab(status, tab, drum)
+            } ?: return
+        model.setVideoFormat(next)
     }
 
     fun handleModeChange(index: Int) {
         if (!enabled) return
         when {
             sheet == LiveSheet.ISO && offersIsoAuto -> {
-                if (index == 0) {
-                    model.setIsoIndex(0)
-                    reseatIsoAutoDrum()
-                } else {
-                    reseatIsoDiscrete()
-                    CaptureLists.isoIndexFromLabel(drumSelection)?.let { idx ->
-                        if (idx in CaptureLists.isoIndices(status)) model.setIsoIndex(idx)
-                    }
+                val (state, cmd) = IsoSheetLogic.handleModeChange(index, status)
+                applyIsoSeat(state)
+                when (cmd) {
+                    is IsoSheetLogic.Command.SetIndex -> model.setIsoIndex(cmd.index)
+                    is IsoSheetLogic.Command.SetLimit -> model.setIsoLimit(cmd.raw)
+                    null -> Unit
                 }
             }
             sheet == LiveSheet.SHUTTER && !isEvSheet -> {
                 model.updateShutterUsesAngle(index == 1)
                 // Tab change reseats after selectedMode is written by the caller.
             }
-            sheet == LiveSheet.FORMAT -> applyVideoFormat(index, drumSelection)
+            sheet == LiveSheet.WB -> Unit
+            sheet == LiveSheet.FORMAT -> applyVideoFormat(index, drumSelection, fromDrum = false)
         }
     }
 
@@ -303,93 +260,98 @@ fun LiveControlSheet(
         lastApplied = value
         when (sheet) {
             LiveSheet.ISO -> {
-                if (isIsoAutoTab) {
-                    val limit = CaptureLists.isoLimit(value, status) ?: return
-                    enqueueDrumSend { model.setIsoLimit(limit.rawValue) }
-                    return
+                when (val cmd = IsoSheetLogic.applyDrum(value, status, selectedMode)) {
+                    is IsoSheetLogic.Command.SetLimit ->
+                        enqueueDrumSend { model.setIsoLimit(cmd.raw) }
+                    is IsoSheetLogic.Command.SetIndex ->
+                        enqueueDrumSend { model.setIsoIndex(cmd.index) }
+                    null -> return
                 }
-                val idx = CaptureLists.isoIndexFromLabel(value) ?: return
-                if (idx !in CaptureLists.isoIndices(status) || idx == 0) return
-                enqueueDrumSend { model.setIsoIndex(idx) }
             }
             LiveSheet.SHUTTER -> {
-                if (isEvSheet) {
-                    if (model.facePriorityExposureEnabled) return
-                    val ev = EvComp.fromLabel(value) ?: return
-                    enqueueDrumSend { model.setEv(ev.thirds) }
-                    return
-                }
-                if (selectedMode == 1) {
-                    val degrees = ShutterAngle.parse(value) ?: return
-                    preferredAngle = degrees
-                    OperatorPrefs.setShutterAngleDegrees(context, degrees)
-                    val denom =
-                        ShutterAngle.denom(
-                            degrees,
-                            status.fps,
-                            CaptureLists.shutterDenoms(status),
+                when (
+                    val cmd =
+                        CaptureLists.applyShutterDrum(
+                            value = value,
+                            isEvSheet = isEvSheet,
+                            isAngleSheet = isAngleSheet,
+                            facePriority = model.facePriorityExposureEnabled,
+                            status = status,
                         )
-                    enqueueDrumSend { model.setShutterDenom(denom) }
-                    return
+                ) {
+                    is CaptureLists.ShutterDrumCommand.SetEv ->
+                        enqueueDrumSend { model.setEv(cmd.thirds) }
+                    is CaptureLists.ShutterDrumCommand.SetShutter ->
+                        enqueueDrumSend { model.setShutterDenom(cmd.denom) }
+                    is CaptureLists.ShutterDrumCommand.SetAngle -> {
+                        preferredAngle = cmd.degrees
+                        OperatorPrefs.setShutterAngleDegrees(context, cmd.degrees)
+                        enqueueDrumSend { model.setShutterDenom(cmd.denom) }
+                    }
+                    CaptureLists.ShutterDrumCommand.Ignored -> Unit
                 }
-                val denom = CaptureLists.denomFromLabel(value) ?: return
-                if (denom !in CaptureLists.shutterDenoms(status)) return
-                enqueueDrumSend { model.setShutterDenom(denom) }
             }
             LiveSheet.WB -> {
-                if (selectedMode != 1) return
-                val kelvin = CaptureLists.kelvinFromLabel(value) ?: return
-                model.setWhiteBalance(kelvin, CaptureLists.currentTint(status))
+                val custom = CaptureLists.wbKelvinDrumApply(selectedMode, value, status) ?: return
+                model.setWhiteBalance(custom.first, custom.second)
             }
             LiveSheet.FORMAT -> {
-                applyVideoFormat(selectedMode, value)
+                enqueueDrumSend { applyVideoFormat(selectedMode, value, fromDrum = true) }
             }
             LiveSheet.COLOR -> {
-                val mode = CaptureLists.colorModeFromLabel(value, bodyFamily) ?: return
-                CaptureLists.nativeIsoHop(
-                    from = status.colorMode,
-                    to = mode,
-                    currentIndex = status.isoIndex,
-                    hopEnabled = model.nativeISOHopEnabled,
-                )?.let { model.setIsoIndex(it) }
-                model.setColorMode(mode)
+                val command =
+                    CaptureLists.applyColorDrum(
+                        label = value,
+                        family = bodyFamily,
+                        status = status,
+                        hopEnabled = model.nativeISOHopEnabled,
+                    ) ?: return
+                // Session.setColorMode hops native ISO — same as iOS CameraSession.
+                enqueueDrumSend { model.setColorMode(command.colorMode) }
             }
             else -> Unit
         }
     }
 
     LaunchedEffect(sheet) {
-        if (sheet == LiveSheet.AUDIO) model.refreshAudio()
-        if (sheet == LiveSheet.FOCUS && status.focusTrack < 0) model.refreshFocusTrack()
-        if (sheet == LiveSheet.ISO && CaptureLists.shouldGetIsoLimit(status)) model.refreshIsoLimit()
+        if (CaptureLists.shouldRefreshAudio(sheet)) model.refreshAudio()
+        if (sheet == LiveSheet.FOCUS &&
+            CaptureLists.shouldRefreshFocusTrack(
+                status,
+                CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
+            )
+        ) {
+            model.refreshFocusTrack()
+        }
         drumJob?.cancel()
         seed()
+        if (sheet == LiveSheet.ISO && CaptureLists.shouldGetIsoLimit(status)) {
+            model.refreshIsoLimitNow()
+            reseatIso()
+        }
     }
-    LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode, status.isoIndex, status.isoLimit) {
+    // Match iOS CaptureControlSheets onChange keys. Do not reseat ISO/shutter drums
+    // on every live isoIndex / shutterDenom tick — that snaps Manual back to Auto
+    // and parks the wheel on the first option.
+    LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode) {
         if (sheet == LiveSheet.ISO) reseatIso()
     }
-    LaunchedEffect(
-        sheet,
-        status.availableShutterDenoms,
-        status.fps,
-        status.expoMode,
-        status.shutterDenom,
-        status.evComp,
-    ) {
+    LaunchedEffect(sheet, status.availableShutterDenoms, status.fps) {
+        if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
+    }
+    LaunchedEffect(sheet, status.expoMode) {
         if (sheet == LiveSheet.SHUTTER) {
-            if (status.expoMode != CameraCommands.EXPO_AUTO) {
-                selectedMode = if (model.shutterUsesAngle) 1 else 0
+            drumJob?.cancel()
+            CaptureLists.shutterTabAfterExpoChange(status.expoMode, model.shutterUsesAngle)?.let {
+                selectedMode = it
             }
             reseatShutterOrEv()
         }
     }
-    LaunchedEffect(sheet, model.facePriorityExposureEnabled) {
+    LaunchedEffect(sheet, status.evComp, model.facePriorityExposureEnabled) {
         if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
     }
-    LaunchedEffect(sheet, status.wbMode, status.wbKelvin, status.wbTint) {
-        if (sheet == LiveSheet.WB && selectedMode != 2) reseatWb()
-    }
-    LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.fps) {
+    LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex) {
         if (sheet == LiveSheet.FORMAT) reseatResolution()
     }
     LaunchedEffect(sheet, status.colorMode) {
@@ -397,44 +359,71 @@ fun LiveControlSheet(
     }
     DisposableEffect(sheet) { onDispose { drumJob?.cancel() } }
 
+    val cap = maxHeightDp?.dp
+    // Bottom drums fill the well. FORMAT / COLOR hang under the top chip and hug,
+    // matching iOS `LiveTopPickerHost` (not a floor-to-chip sheet).
+    val fillsWell =
+        sheet == LiveSheet.ISO ||
+            sheet == LiveSheet.SHUTTER ||
+            sheet == LiveSheet.WB
     Column(
         Modifier
             .fillMaxWidth()
-            .overlayGlass(ChromeShape)
-            .border(1.dp, LiveDesign.hairlineStrong, ChromeShape)
+            .then(
+                when {
+                    fillsWell && cap != null -> Modifier.height(cap)
+                    else ->
+                        Modifier.wrapContentHeight(align = Alignment.Top)
+                            .then(if (cap != null) Modifier.heightIn(max = cap) else Modifier)
+                },
+            )
+            .pickerPanelGlass(ChromeShape)
             .pointerInput(Unit) { detectTapGestures(onTap = {}) }
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(AssistLongPress.PANEL_PAD_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
     ) {
             SheetHeader(
-                title = headerTitle(sheet, isEvSheet),
-                subtitle = headerSubtitle(sheet, isEvSheet, isAngleSheet, model.facePriorityExposureEnabled),
+                title = CaptureLists.headerTitle(sheet, status.expoMode),
+                subtitle =
+                    CaptureLists.headerSubtitle(
+                        sheet,
+                        status.expoMode,
+                        selectedMode,
+                        model.facePriorityExposureEnabled,
+                    ),
                 onClose = onDismiss,
             )
             when (sheet) {
                 LiveSheet.ISO -> {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (isIsoAutoTab) {
-                            CaptureDrumWheel(
-                                options = CaptureLists.isoAutoLabels(status),
-                                selection = drumSelection,
-                                interactive = enabled,
-                                onSelect = {
-                                    drumSelection = it
-                                    applyDrum(it)
-                                },
-                            )
-                        } else {
-                            CaptureDrumWheel(
-                                options = CaptureLists.isoDrumLabels(status),
-                                selection = drumSelection,
-                                markedValues = CaptureLists.isoMarkedLabels(status),
-                                interactive = enabled,
-                                onSelect = {
-                                    drumSelection = it
-                                    applyDrum(it)
-                                },
-                            )
+                    Column(
+                        Modifier.weight(1f, fill = fillsWell),
+                        verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
+                    ) {
+                        Box(Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                            if (isIsoAutoTab) {
+                                CaptureDrumWheel(
+                                    options = CaptureLists.isoAutoLabels(status),
+                                    selection = drumSelection,
+                                    interactive = enabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            } else {
+                                CaptureDrumWheel(
+                                    options = CaptureLists.isoDrumLabels(status),
+                                    selection = drumSelection,
+                                    markedValues = CaptureLists.isoMarkedLabels(status),
+                                    interactive = enabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            }
                         }
                         PrefToggle(
                             title = CaptureLists.NATIVE_ISO_HOP_TITLE,
@@ -446,17 +435,47 @@ fun LiveControlSheet(
                     }
                 }
                 LiveSheet.SHUTTER -> {
-                    if (isEvSheet) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CaptureDrumWheel(
-                                options = CaptureLists.evLabels,
-                                selection = drumSelection,
-                                interactive = enabled && !model.facePriorityExposureEnabled,
-                                onSelect = {
-                                    drumSelection = it
-                                    applyDrum(it)
-                                },
-                            )
+                    Column(
+                        Modifier.weight(1f, fill = fillsWell),
+                        verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
+                    ) {
+                        Box(Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                            if (isEvSheet) {
+                                CaptureDrumWheel(
+                                    options = CaptureLists.evLabels,
+                                    selection = drumSelection,
+                                    interactive = enabled && !model.facePriorityExposureEnabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            } else if (isAngleSheet) {
+                                CaptureDrumWheel(
+                                    options = ShutterAngle.labels,
+                                    selection = drumSelection,
+                                    interactive = enabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            } else {
+                                CaptureDrumWheel(
+                                    options = CaptureLists.shutterLabels(status),
+                                    selection = drumSelection,
+                                    interactive = enabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            }
+                        }
+                        if (isEvSheet) {
                             PrefToggle(
                                 title = CaptureLists.FACE_PRIORITY_TITLE,
                                 help = CaptureLists.FACE_PRIORITY_HELP,
@@ -465,70 +484,55 @@ fun LiveControlSheet(
                                 onCheckedChange = model::updateFacePriorityExposureEnabled,
                             )
                         }
-                    } else if (isAngleSheet) {
-                        CaptureDrumWheel(
-                            options = ShutterAngle.labels,
-                            selection = drumSelection,
-                            interactive = enabled,
-                            onSelect = {
-                                drumSelection = it
-                                applyDrum(it)
-                            },
-                        )
-                    } else {
-                        CaptureDrumWheel(
-                            options = CaptureLists.shutterLabels(status),
-                            selection = drumSelection,
-                            interactive = enabled,
-                            onSelect = {
-                                drumSelection = it
-                                applyDrum(it)
-                            },
-                        )
                     }
                 }
                 LiveSheet.WB -> {
                     when (selectedMode) {
                         0 ->
                             CheckedRows(
-                                options = listOf("Auto", "Custom"),
-                                selected =
-                                    if (status.wbMode == CameraCommands.WB_CUSTOM) "Custom" else "Auto",
+                                options = CaptureLists.wbModeRows,
+                                selected = CaptureLists.wbModeRowSelected(status),
                                 enabled = enabled,
                             ) { label ->
-                                if (label == "Auto") {
+                                if (CaptureLists.wbSendsAuto(label)) {
                                     model.setWhiteBalanceAuto()
                                 } else {
-                                    model.setWhiteBalance(
-                                        CaptureLists.currentKelvin(status),
-                                        CaptureLists.currentTint(status),
-                                    )
+                                    val custom = CaptureLists.wbCustomFromStatus(status)
+                                    model.setWhiteBalance(custom.first, custom.second)
                                 }
                             }
                         1 ->
-                            CaptureDrumWheel(
-                                options = CaptureLists.kelvinLabels,
-                                selection = drumSelection,
-                                interactive = enabled,
-                                onSelect = {
-                                    drumSelection = it
-                                    applyDrum(it)
-                                },
-                            )
-                        else ->
+                            Box(Modifier.weight(1f, fill = fillsWell).fillMaxWidth()) {
+                                CaptureDrumWheel(
+                                    options = CaptureLists.kelvinLabels,
+                                    selection = drumSelection,
+                                    interactive = enabled,
+                                    fillHeight = true,
+                                    onSelect = {
+                                        drumSelection = it
+                                        applyDrum(it)
+                                    },
+                                )
+                            }
+                        else -> {
+                            LaunchedEffect(Unit) {
+                                tintDraft = CaptureLists.currentTint(status).toFloat()
+                            }
                             TintPad(
                                 tint = tintDraft,
                                 enabled = enabled,
                                 onTint = { tintDraft = it },
                                 onCommit = { value ->
-                                    val t = value.roundToInt().coerceIn(-100, 100)
-                                    model.setWhiteBalance(CaptureLists.currentKelvin(status), t)
+                                    val custom = CaptureLists.wbCustomFromTint(value, status)
+                                    tintDraft = custom.second.toFloat()
+                                    model.setWhiteBalance(custom.first, custom.second)
                                 },
                             )
+                        }
                     }
                 }
                 LiveSheet.FOCUS -> {
-                    if (CaptureLists.supportsFocusMode(model.session.connectedCamera?.model?.name)) {
+                    if (CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)) {
                         FocusBody(
                             status = status,
                             enabled = enabled,
@@ -538,13 +542,12 @@ fun LiveControlSheet(
                     }
                 }
                 LiveSheet.EXPO -> {
-                    val expoRows = listOf("Auto", "Manual")
                     CheckedRows(
-                        options = expoRows,
-                        selected = status.expoLabel.takeIf { it in expoRows },
+                        options = CaptureLists.expoLabels,
+                        selected = CaptureLists.expoSelectedLabel(status.expoMode),
                         enabled = enabled,
                     ) { label ->
-                        model.setExpoMode(label == "Manual")
+                        CaptureLists.expoModeFromLabel(label)?.let(model::setExpoMode)
                     }
                 }
                 LiveSheet.AUDIO -> AudioBody(status, enabled, selectedMode, model)
@@ -553,21 +556,25 @@ fun LiveControlSheet(
                         options = CaptureLists.colorWheelLabels(status, bodyFamily),
                         selection = drumSelection,
                         interactive = enabled,
+                        maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = false),
                         onSelect = {
                             drumSelection = it
                             applyDrum(it)
                         },
                     )
                 LiveSheet.FORMAT ->
-                    CaptureDrumWheel(
-                        options = CaptureLists.fpsDrumLabels,
-                        selection = drumSelection,
-                        interactive = enabled,
-                        onSelect = {
-                            drumSelection = it
-                            applyDrum(it)
-                        },
-                    )
+                    androidx.compose.runtime.key(selectedMode) {
+                        CaptureDrumWheel(
+                            options = CaptureLists.fpsDrumLabels,
+                            selection = drumSelection,
+                            interactive = enabled,
+                            maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = true),
+                            onSelect = {
+                                drumSelection = it
+                                applyDrum(it)
+                            },
+                        )
+                    }
             }
             if (tabs.isNotEmpty()) {
                 ModeBar(
@@ -577,9 +584,7 @@ fun LiveControlSheet(
                 ) { index ->
                     selectedMode = index
                     handleModeChange(index)
-                    if (sheet == LiveSheet.SHUTTER && !isEvSheet) {
-                        if (index == 1) reseatShutterAngle() else reseatShutter()
-                    }
+                    if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
                 }
             }
     }
@@ -611,17 +616,19 @@ fun LivePickerHost(
     val density = LocalDensity.current
     var panelHeight by remember(sheet) { mutableFloatStateOf(LiveChromeMetrics.DRUM_PICKER_HEIGHT) }
     val tile = frames[sheet] ?: ChromeRect(0f, 0f, 0f, 0f)
-    val fromTop = sheet.isTopPicker && !tile.isEmpty
+    // FORMAT / COLOR always hang under the top chip (iOS `LiveTopPickerHost`),
+    // even when the capture bar is visible. Missing chip frames fall back to
+    // the top deck — never a floor-to-bar capture sheet.
+    val fromTop = sheet.isTopPicker
     val cell =
-        if (fromTop) {
-            tile
-        } else if (sheet.isTopPicker) {
-            ChromeRect(topDeck.midX - 40f, topDeck.minY, 80f, max(topDeck.height, 1f))
-        } else {
-            tile
+        when {
+            fromTop && !tile.isEmpty -> tile
+            fromTop ->
+                ChromeRect(topDeck.midX - 40f, topDeck.minY, 80f, max(topDeck.height, 1f))
+            else -> tile
         }
     val place =
-        if (fromTop || (sheet.isTopPicker && topDeck.height > 1f && bar.height <= 1f)) {
+        if (fromTop) {
             LivePopupPlacement.topPicker(
                 cell = cell,
                 panelHeight = panelHeight,
@@ -686,7 +693,14 @@ fun LivePickerHost(
                 .onSizeChanged { panelHeight = it.height / density.density },
         ) {
             androidx.compose.runtime.key(sheet) {
-                LiveControlSheet(sheet, model, status, locked) { onSelect(null) }
+                LiveControlSheet(
+                    sheet,
+                    model,
+                    status,
+                    locked,
+                    onDismiss = { onSelect(null) },
+                    maxHeightDp = place.maxHeight,
+                )
             }
         }
     }
@@ -714,21 +728,7 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
                 modifier = Modifier.padding(bottom = 2.dp),
             )
         }
-        Box(
-            Modifier
-                .size(34.dp)
-                .glass(CircleShape)
-                .chromeClickable(onClick = onClose)
-                .semantics { contentDescription = "Close" },
-            contentAlignment = Alignment.Center,
-        ) {
-            OpcIcon(
-                icon = OpcIcon.X,
-                contentDescription = null,
-                tint = LiveDesign.text,
-                modifier = Modifier.size(13.dp),
-            )
-        }
+        LivePopupCloseButton(onClick = onClose, size = AssistLongPress.CLOSE_DP.dp)
     }
 }
 
@@ -797,14 +797,18 @@ private fun FocusBody(
     onContinuous: (Boolean) -> Unit,
     onTrack: (Int) -> Unit,
 ) {
-    val continuous = status.focusMode == CameraCommands.FOCUS_CONTINUOUS
+    val continuous = CaptureLists.focusIsContinuous(status)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FocusTab("AF-S", active = !continuous, enabled = enabled) { onContinuous(false) }
-            FocusTab("AF-C", active = continuous, enabled = enabled) { onContinuous(true) }
+            FocusTab(CaptureLists.FOCUS_TAB_SINGLE, active = !continuous, enabled = enabled) {
+                onContinuous(false)
+            }
+            FocusTab(CaptureLists.FOCUS_TAB_CONTINUOUS, active = continuous, enabled = enabled) {
+                onContinuous(true)
+            }
         }
         AnimatedVisibility(
-            visible = continuous,
+            visible = CaptureLists.focusShowsTrackChips(status),
             enter = fadeIn(tween(160)) + expandVertically(tween(160)),
             exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
         ) {
@@ -812,7 +816,7 @@ private fun FocusBody(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val selected = if (status.focusTrack < 0) FocusTrackMode.DEFAULT.raw else status.focusTrack
+                val selected = CaptureLists.selectedFocusTrack(status)
                 FocusTrackMode.entries.forEach { track ->
                     val on = selected == track.raw
                     Text(
@@ -863,64 +867,30 @@ private fun AudioBody(status: CameraStatus, enabled: Boolean, selectedMode: Int,
     when (selectedMode) {
         0 ->
             CheckedRows(
-                options = listOf("Stereo", "Mono", "Spatial"),
-                selected =
-                    when (status.audioChannel) {
-                        CameraCommands.AUDIO_STEREO -> "Stereo"
-                        CameraCommands.AUDIO_MONO -> "Mono"
-                        CameraCommands.AUDIO_SPATIAL -> "Spatial"
-                        else -> null
-                    },
+                options = CaptureLists.audioChannelLabels,
+                selected = CaptureLists.audioChannelLabel(status.audioChannel),
                 enabled = enabled,
             ) { label ->
-                val value =
-                    when (label) {
-                        "Mono" -> CameraCommands.AUDIO_MONO
-                        "Spatial" -> CameraCommands.AUDIO_SPATIAL
-                        else -> CameraCommands.AUDIO_STEREO
-                    }
-                model.setAudioChannel(value)
+                CaptureLists.audioChannelValue(label)?.let(model::setAudioChannel)
             }
         1 ->
             CheckedRows(
-                options = listOf("Off", "On"),
-                selected =
-                    when (status.windNr) {
-                        1 -> "On"
-                        0 -> "Off"
-                        else -> null
-                    },
+                options = CaptureLists.audioWindLabels,
+                selected = CaptureLists.audioWindLabel(status.windNr),
                 enabled = enabled,
             ) { label -> model.setWindNr(label == "On") }
         2 ->
             CheckedRows(
-                options = listOf("All", "Front", "Front+back"),
-                selected =
-                    when (status.directionalAudio) {
-                        0 -> "All"
-                        1 -> "Front"
-                        2 -> "Front+back"
-                        else -> null
-                    },
+                options = CaptureLists.audioDirLabels,
+                selected = CaptureLists.audioDirLabel(status.directionalAudio),
                 enabled = enabled,
             ) { label ->
-                val mode =
-                    when (label) {
-                        "Front" -> 1
-                        "Front+back" -> 2
-                        else -> 0
-                    }
-                model.setDirectionalAudio(mode)
+                CaptureLists.audioDirValue(label)?.let(model::setDirectionalAudio)
             }
         else ->
             CheckedRows(
-                options = listOf("Off", "On"),
-                selected =
-                    when (status.vocalBoost) {
-                        1 -> "On"
-                        0 -> "Off"
-                        else -> null
-                    },
+                options = CaptureLists.audioVocalLabels,
+                selected = CaptureLists.audioVocalLabel(status.vocalBoost),
                 enabled = enabled,
             ) { label -> model.setVocalBoost(label == "On") }
     }
@@ -933,13 +903,8 @@ private fun TintPad(
     onTint: (Float) -> Unit,
     onCommit: (Float) -> Unit,
 ) {
-    val rounded = tint.roundToInt()
-    val label =
-        when {
-            rounded == 0 -> "Neutral"
-            rounded > 0 -> "+$rounded"
-            else -> "$rounded"
-        }
+    val rounded = CaptureLists.roundedTint(tint)
+    val label = CaptureLists.tintLabel(rounded)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             label,
@@ -962,7 +927,7 @@ private fun TintPad(
                         .chromeClickable(
                             enabled = enabled,
                             onClick = {
-                                val next = (tint - 10f).coerceIn(-100f, 100f)
+                                val next = CaptureLists.nudgeTint(tint, -10)
                                 onTint(next)
                                 onCommit(next)
                             },
@@ -989,7 +954,7 @@ private fun TintPad(
                         .chromeClickable(
                             enabled = enabled,
                             onClick = {
-                                val next = (tint + 10f).coerceIn(-100f, 100f)
+                                val next = CaptureLists.nudgeTint(tint, 10)
                                 onTint(next)
                                 onCommit(next)
                             },
@@ -999,7 +964,7 @@ private fun TintPad(
             )
         }
         Text(
-            "Apply tint $rounded",
+            CaptureLists.tintApplyLabel(rounded),
             style = LiveType.ui(13f, FontWeight.SemiBold),
             color = LiveDesign.accent,
             modifier = Modifier.chromeClickable(enabled = enabled, onClick = { onCommit(tint) }).padding(vertical = 4.dp),
@@ -1050,38 +1015,23 @@ private fun PrefToggle(
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    var showingHelp by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                title.uppercase(),
-                style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.4.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Box(
-                Modifier.size(16.dp)
-                    .clip(CircleShape)
-                    .background(LiveDesign.background.copy(alpha = 0.5f))
-                    .border(1.dp, LiveDesign.hairline, CircleShape)
-                    .chromeClickable(onClick = { showingHelp = !showingHelp }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("?", color = LiveDesign.faint, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.weight(1f))
-            Box(
-                Modifier
-                    .chromeClickable(enabled = enabled, onClick = { onCheckedChange(!checked) })
-                    .semantics { role = Role.Switch }
-                    .alpha(if (enabled) 1f else 0.45f),
-            ) {
-                CaptureSwitchGraphic(checked)
-            }
-        }
-        if (showingHelp) {
-            Text(help, style = LiveType.ui(12f), color = LiveDesign.muted)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            title.uppercase(),
+            style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.4.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        SettingsHelpBadge(help)
+        Spacer(Modifier.weight(1f))
+        Box(
+            Modifier
+                .chromeClickable(enabled = enabled, onClick = { onCheckedChange(!checked) })
+                .semantics { role = Role.Switch }
+                .alpha(if (enabled) 1f else 0.45f),
+        ) {
+            CaptureSwitchGraphic(checked)
         }
     }
 }
@@ -1117,14 +1067,18 @@ private fun CaptureDrumWheel(
     selection: String,
     markedValues: Set<String> = emptySet(),
     interactive: Boolean = true,
+    fillHeight: Boolean = false,
+    maxHeightDp: Float? = null,
     onSelect: (String) -> Unit,
 ) {
     if (options.isEmpty()) return
-    val rowHeight = 52.dp
-    val wheelHeight = 176.dp
+    val rowHeight = AssistLongPress.DRUM_ROW_DP.dp
+    val wheelHeight =
+        maxHeightDp?.dp?.coerceIn(rowHeight * 2, 176.dp) ?: 176.dp
     val optionKey = options.joinToString()
     val selectedIndex = options.indexOf(selection).coerceAtLeast(0)
     val listState = remember(optionKey) { LazyListState(firstVisibleItemIndex = selectedIndex) }
+    var seated by remember(optionKey) { mutableStateOf(false) }
     val snap =
         rememberSnapFlingBehavior(
             lazyListState = listState,
@@ -1140,28 +1094,34 @@ private fun CaptureDrumWheel(
                 ?.index ?: DRUM_NOT_LAID_OUT
         }
     }
-    LaunchedEffect(options, selection) {
-        val index = options.indexOf(selection).coerceAtLeast(0)
-        if (listState.isScrollInProgress) return@LaunchedEffect
-        if (centeredIndex == index) return@LaunchedEffect
-        listState.scrollToItem(index)
+    LaunchedEffect(options, selection, optionKey) {
+        seated = false
+        val index = options.indexOf(selection)
+        if (index >= 0) {
+            listState.scrollToItem(index)
+        }
     }
-    LaunchedEffect(listState, options, interactive) {
+    LaunchedEffect(listState, options, interactive, selection) {
         snapshotFlow { listState.isScrollInProgress to centeredIndex }
             .collect { (scrolling, index) ->
-                if (scrolling || !interactive) return@collect
+                if (scrolling || !interactive || index == DRUM_NOT_LAID_OUT) return@collect
                 val value = options.getOrNull(index) ?: return@collect
-                if (value != selection) {
-                    haptics.selection()
-                    onSelect(value)
+                if (value == selection) {
+                    seated = true
+                    return@collect
                 }
+                if (!seated) return@collect
+                haptics.selection()
+                onSelect(value)
             }
     }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = rowHeight * 3, max = wheelHeight)
-            .height(wheelHeight)
+            .then(
+                if (fillHeight) Modifier.fillMaxHeight()
+                else Modifier.heightIn(min = rowHeight * 3, max = wheelHeight).height(wheelHeight),
+            )
             .alpha(if (interactive) 1f else 0.55f),
         contentAlignment = Alignment.Center,
     ) {
@@ -1178,25 +1138,13 @@ private fun CaptureDrumWheel(
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        val fade = size.height * 0.22f
                         drawRect(
                             Brush.verticalGradient(
                                 0f to Color.Transparent,
-                                1f to Color.Black,
-                                endY = fade,
-                            ),
-                            size = Size(size.width, fade),
-                            blendMode = BlendMode.DstIn,
-                        )
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.Black,
+                                AssistLongPress.DRUM_FADE_IN to Color.Black,
+                                AssistLongPress.DRUM_FADE_OUT to Color.Black,
                                 1f to Color.Transparent,
-                                startY = size.height - fade,
-                                endY = size.height,
                             ),
-                            topLeft = Offset(0f, size.height - fade),
-                            size = Size(size.width, fade),
                             blendMode = BlendMode.DstIn,
                         )
                     },
@@ -1215,7 +1163,8 @@ private fun CaptureDrumWheel(
                         option,
                         style =
                             LiveType.mono(
-                                if (centered) 30f else 23f,
+                                if (centered) AssistLongPress.DRUM_CENTER_PT
+                                else AssistLongPress.DRUM_NEIGHBOR_PT,
                                 if (centered) FontWeight.SemiBold else FontWeight.Normal,
                             ),
                         color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
@@ -1252,34 +1201,10 @@ private fun initialSelectedMode(
         LiveSheet.ISO ->
             if (CaptureLists.offersIsoAuto(status) && status.isoIndex != 0) 1 else 0
         LiveSheet.SHUTTER -> if (!isEvSheet && model.shutterUsesAngle) 1 else 0
-        LiveSheet.WB -> if (status.wbMode == CameraCommands.WB_CUSTOM) 1 else 0
-        LiveSheet.FORMAT -> if (status.resolutionCode == CameraCommands.RES_4K) 1 else 0
+        LiveSheet.WB -> CaptureLists.wbInitialTab(status)
+        LiveSheet.FORMAT ->
+            VideoResolution.entries.indexOf(VideoFormat.current(status).resolution).coerceAtLeast(0)
         else -> 0
-    }
-
-private fun modeTabs(sheet: LiveSheet, isEvSheet: Boolean, offersIsoAuto: Boolean): List<String> =
-    when {
-        sheet == LiveSheet.ISO && offersIsoAuto -> listOf("Auto", "Manual")
-        sheet == LiveSheet.SHUTTER && !isEvSheet -> listOf("Speed", "Angle")
-        sheet == LiveSheet.WB -> listOf("Mode", "Kelvin", "Tint")
-        sheet == LiveSheet.AUDIO -> listOf("Channel", "Wind", "Dir", "Vocal")
-        sheet == LiveSheet.FORMAT -> listOf("1080", "4K")
-        else -> emptyList()
-    }
-
-private fun headerTitle(sheet: LiveSheet, isEvSheet: Boolean): String =
-    if (isEvSheet) "EV" else sheet.headerLabel
-
-private fun headerSubtitle(
-    sheet: LiveSheet,
-    isEvSheet: Boolean,
-    isAngleSheet: Boolean,
-    facePriority: Boolean,
-): String =
-    when {
-        isEvSheet -> if (facePriority) "Face priority" else "Compensation"
-        sheet == LiveSheet.SHUTTER -> if (isAngleSheet) "Angle" else "Speed"
-        else -> sheet.subtitle
     }
 
 val LiveSheet.headerLabel: String
@@ -1370,11 +1295,16 @@ data class EvComp(val thirds: Int) {
 
     companion object {
         const val MINUS = "\u2212"
-        val allCases: List<EvComp> = (-9..9).map { EvComp(it) }
+        const val MIN_THIRDS = -9
+        const val MAX_THIRDS = 9
+        val ZERO = EvComp(0)
+        val allCases: List<EvComp> = (MIN_THIRDS..MAX_THIRDS).map { EvComp(it) }
+
+        fun fromThirds(thirds: Int): EvComp = EvComp(thirds.coerceIn(MIN_THIRDS, MAX_THIRDS))
 
         fun fromRaw(raw: Int): EvComp? {
             val t = raw - 0x10
-            return if (t in -9..9) EvComp(t) else null
+            return if (t in MIN_THIRDS..MAX_THIRDS) EvComp(t) else null
         }
 
         fun fromLabel(label: String): EvComp? {
@@ -1417,7 +1347,197 @@ enum class IsoLimit(val rawValue: Int) {
     fun label(base: Int): String = "$base\u2013$ceiling"
 }
 
+/** COLOR drum write: `0x02/0x42` then optional native ISO hop. */
+data class ColorDrumCommand(val colorMode: Int, val hopIsoIndex: Int?)
+
+/**
+ * ISO sheet reseat / apply — mirrors iOS `CapturePickerPanel` ISO seed,
+ * `onChange(availableIsoIndices, colorMode)`, `applyDrum`, and Auto/Manual tabs.
+ */
+object IsoSheetLogic {
+    data class State(
+        val selectedMode: Int,
+        val drumSelection: String,
+        val lastApplied: String,
+    )
+
+    sealed class Command {
+        data class SetIndex(val index: Int) : Command()
+        data class SetLimit(val raw: Int) : Command()
+    }
+
+    fun isAutoTab(status: CameraStatus, selectedMode: Int): Boolean =
+        CaptureLists.offersIsoAuto(status) && selectedMode == 0
+
+    fun reseat(status: CameraStatus): State {
+        val selectedMode =
+            if (CaptureLists.offersIsoAuto(status)) {
+                if (status.isoIndex == 0) 0 else 1
+            } else {
+                0
+            }
+        return reseatDrum(status, selectedMode)
+    }
+
+    fun reseatDrum(status: CameraStatus, selectedMode: Int): State {
+        val autoTab = isAutoTab(status, selectedMode)
+        val labels =
+            if (autoTab) CaptureLists.isoAutoLabels(status) else CaptureLists.isoDrumLabels(status)
+        val live =
+            if (autoTab) {
+                CaptureLists.isoAutoLabel(status)
+            } else {
+                when {
+                    status.isoIndex > 0 -> CameraCommands.isoLabel(status.isoIndex)
+                    status.iso > 0 -> "${status.iso}"
+                    else -> labels.firstOrNull().orEmpty()
+                }
+            }
+        val next = if (live in labels) live else labels.firstOrNull().orEmpty()
+        return State(selectedMode, next, next)
+    }
+
+    fun applyDrum(value: String, status: CameraStatus, selectedMode: Int): Command? {
+        if (value.isEmpty()) return null
+        if (isAutoTab(status, selectedMode)) {
+            val limit = CaptureLists.isoLimit(value, status) ?: return null
+            return Command.SetLimit(limit.rawValue)
+        }
+        val idx = CaptureLists.isoIndexFromLabel(value) ?: return null
+        if (idx !in CaptureLists.isoIndices(status) || idx == 0) return null
+        return Command.SetIndex(idx)
+    }
+
+    fun handleModeChange(index: Int, status: CameraStatus): Pair<State, Command?> {
+        if (!CaptureLists.offersIsoAuto(status)) return reseatDrum(status, 0) to null
+        return if (index == 0) {
+            reseatDrum(status, 0) to Command.SetIndex(0)
+        } else {
+            val state = reseatDrum(status, 1)
+            val cmd =
+                CaptureLists.isoIndexFromLabel(state.drumSelection)?.let { idx ->
+                    if (idx in CaptureLists.isoIndices(status)) Command.SetIndex(idx) else null
+                }
+            state to cmd
+        }
+    }
+
+    /** iOS `onChange` keys: `availableIsoIndices`, `colorMode` — not live `isoIndex`. */
+    fun shouldReseat(previous: CameraStatus, next: CameraStatus): Boolean =
+        previous.availableIsoIndices != next.availableIsoIndices ||
+            previous.colorMode != next.colorMode
+}
+
 object CaptureLists {
+    /** iOS `ExpoMode.allCases.map(\.label)` — MODE sheet rows. */
+    val expoLabels: List<String> = listOf("Auto", "Manual")
+
+    fun expoLabel(mode: Int): String =
+        when (mode) {
+            CameraCommands.EXPO_AUTO -> "Auto"
+            CameraCommands.EXPO_MANUAL -> "Manual"
+            else -> "—"
+        }
+
+    fun expoSelectedLabel(mode: Int): String? = expoLabel(mode).takeIf { it in expoLabels }
+
+    fun expoModeFromLabel(label: String): Int? =
+        when (label) {
+            "Auto" -> CameraCommands.EXPO_AUTO
+            "Manual" -> CameraCommands.EXPO_MANUAL
+            else -> null
+        }
+
+    /** iOS `isEvSheet`: shutter sheet becomes EV while expo is Auto. */
+    fun isEvSheet(sheet: LiveSheet, expoMode: Int): Boolean =
+        sheet == LiveSheet.SHUTTER && expoMode == CameraCommands.EXPO_AUTO
+
+    fun isAngleSheet(sheet: LiveSheet, expoMode: Int, selectedMode: Int): Boolean =
+        sheet == LiveSheet.SHUTTER && !isEvSheet(sheet, expoMode) && selectedMode == 1
+
+    /** iOS onChange expoMode: restore Speed/Angle from prefs when leaving Auto. */
+    fun shutterTabAfterExpoChange(expoMode: Int, shutterUsesAngle: Boolean): Int? =
+        if (expoMode != CameraCommands.EXPO_AUTO) {
+            if (shutterUsesAngle) 1 else 0
+        } else {
+            null
+        }
+
+    fun headerTitle(sheet: LiveSheet, expoMode: Int): String =
+        if (sheet == LiveSheet.SHUTTER) shutterHeaderTitle(isEvSheet(sheet, expoMode))
+        else sheet.headerLabel
+
+    fun headerSubtitle(
+        sheet: LiveSheet,
+        expoMode: Int,
+        selectedMode: Int,
+        facePriority: Boolean,
+    ): String =
+        if (sheet == LiveSheet.SHUTTER) {
+            shutterHeaderSubtitle(
+                isEvSheet(sheet, expoMode),
+                isAngleSheet(sheet, expoMode, selectedMode),
+                facePriority,
+            )
+        } else {
+            sheet.subtitle
+        }
+
+    fun modeTabs(sheet: LiveSheet, expoMode: Int, offersIsoAuto: Boolean): List<String> =
+        when {
+            sheet == LiveSheet.ISO && offersIsoAuto -> listOf("Auto", "Manual")
+            sheet == LiveSheet.SHUTTER -> shutterModeTabs(isEvSheet(sheet, expoMode))
+            sheet == LiveSheet.WB -> CaptureLists.wbTabs
+            sheet == LiveSheet.AUDIO -> CaptureLists.audioTabs
+            sheet == LiveSheet.FORMAT -> VideoResolution.tabTitles
+            else -> emptyList()
+        }
+
+    val audioTabs: List<String> = listOf("Channel", "Wind", "Dir", "Vocal")
+    val audioChannelLabels: List<String> = listOf("Stereo", "Mono", "Spatial")
+    val audioWindLabels: List<String> = listOf("Off", "On")
+    val audioDirLabels: List<String> = listOf("All", "Front", "Front+back")
+    val audioVocalLabels: List<String> = listOf("Off", "On")
+
+    fun audioChannelLabel(value: Int): String? = CameraCommands.audioChannelLabel(value)
+
+    fun audioChannelValue(label: String): Int? =
+        when (label) {
+            "Mono" -> CameraCommands.AUDIO_MONO
+            "Stereo" -> CameraCommands.AUDIO_STEREO
+            "Spatial" -> CameraCommands.AUDIO_SPATIAL
+            else -> null
+        }
+
+    fun audioWindLabel(value: Int): String? =
+        when (value) {
+            0 -> "Off"
+            1 -> "On"
+            else -> null
+        }
+
+    fun audioDirLabel(value: Int): String? = CameraCommands.audioDirLabel(value)
+
+    fun audioDirValue(label: String): Int? =
+        when (label) {
+            "All" -> 0
+            "Front" -> 1
+            "Front+back" -> 2
+            else -> null
+        }
+
+    fun audioVocalLabel(value: Int): String? =
+        when (value) {
+            0 -> "Off"
+            1 -> "On"
+            else -> null
+        }
+
+    /** iOS `seed` AUDIO: Channel tab + `refreshAudioState`. */
+    fun audioInitialTab(): Int = 0
+
+    fun shouldRefreshAudio(sheet: LiveSheet): Boolean = sheet == LiveSheet.AUDIO
+
     const val FACE_PRIORITY_TITLE = "Face Priority"
     const val FACE_PRIORITY_HELP =
         "On: EV follows faces to middle gray. Several faces use the median. First couple of seconds after a face appears are faster, then about 1 s. Off: put EV back to what it was, or 0.0."
@@ -1429,8 +1549,15 @@ object CaptureLists {
 
     val kelvinValues: List<Int> = (2_000..10_000 step 100).toList()
     val kelvinLabels: List<String> = kelvinValues.map { "${it}K" }
+    val wbTabs: List<String> = listOf("Mode", "Kelvin", "Tint")
+    val wbModeRows: List<String> = listOf("Auto", "Custom")
+    const val WB_TAB_MODE = 0
+    const val WB_TAB_KELVIN = 1
+    const val WB_TAB_TINT = 2
 
-    val fpsDrumLabels: List<String> = listOf("24p", "25p", "30p", "48p", "50p", "60p")
+    val fpsDrumLabels: List<String> get() = VideoFrameRate.drumLabels
+
+    val resolutionTabTitles: List<String> get() = VideoResolution.tabTitles
 
     val colorWheelPocket: List<Pair<Int, String>> =
         listOf(
@@ -1466,12 +1593,156 @@ object CaptureLists {
         return if (near != null) shutterLabel(near) else denoms.firstOrNull()?.let(::shutterLabel).orEmpty()
     }
 
+    fun isEvSheet(expoMode: Int): Boolean = expoMode == CameraCommands.EXPO_AUTO
+
+    fun isAngleSheet(expoMode: Int, selectedMode: Int): Boolean =
+        !isEvSheet(expoMode) && selectedMode == 1
+
+    fun shutterModeTabs(isEvSheet: Boolean): List<String> =
+        if (isEvSheet) emptyList() else listOf("Speed", "Angle")
+
+    fun shutterHeaderTitle(isEvSheet: Boolean): String = if (isEvSheet) "EV" else "SHUTTER"
+
+    fun shutterHeaderSubtitle(
+        isEvSheet: Boolean,
+        isAngleSheet: Boolean,
+        facePriority: Boolean,
+    ): String =
+        when {
+            isEvSheet -> if (facePriority) "Face priority" else "Compensation"
+            isAngleSheet -> "Angle"
+            else -> "Speed"
+        }
+
+    fun shutterWheelOptions(
+        status: CameraStatus,
+        isEvSheet: Boolean,
+        isAngleSheet: Boolean,
+    ): List<String> =
+        when {
+            isEvSheet -> evLabels
+            isAngleSheet -> ShutterAngle.labels
+            else -> shutterLabels(status)
+        }
+
+    data class ShutterSeat(
+        val selection: String,
+        val preferredAngle: Double = ShutterAngle.DEFAULT_DEGREES,
+        val persistAngle: Boolean = false,
+    )
+
+    sealed class ShutterDrumCommand {
+        data class SetEv(val thirds: Int) : ShutterDrumCommand()
+        data class SetShutter(val denom: Int) : ShutterDrumCommand()
+        data class SetAngle(val degrees: Double, val denom: Int) : ShutterDrumCommand()
+        data object Ignored : ShutterDrumCommand()
+    }
+
+    enum class ShutterReseatKey {
+        AVAILABLE_DENOMS,
+        FPS,
+        EXPO_MODE,
+        EV_COMP,
+        FACE_PRIORITY,
+        SHUTTER_DENOM,
+    }
+
+    /** iOS `CapturePickerPanel` onChange keys. Never reseat on live 1/N ticks. */
+    fun shouldReseatShutter(key: ShutterReseatKey, isEvSheet: Boolean): Boolean =
+        when (key) {
+            ShutterReseatKey.AVAILABLE_DENOMS, ShutterReseatKey.FPS -> !isEvSheet
+            ShutterReseatKey.EXPO_MODE -> true
+            ShutterReseatKey.EV_COMP, ShutterReseatKey.FACE_PRIORITY -> isEvSheet
+            ShutterReseatKey.SHUTTER_DENOM -> false
+        }
+
+    fun reseatEv(status: CameraStatus): ShutterSeat {
+        val labels = evLabels
+        val live = EvComp.fromRaw(status.evComp)?.label ?: "0.0"
+        val next = if (live in labels) live else "0.0"
+        return ShutterSeat(next)
+    }
+
+    fun reseatShutterSpeed(status: CameraStatus): ShutterSeat {
+        val labels = shutterLabels(status)
+        val live =
+            if (status.shutterDenom > 0) shutterLabel(status.shutterDenom)
+            else labels.firstOrNull().orEmpty()
+        val next = if (live in labels) live else nearestShutterLabel(live, status)
+        return ShutterSeat(next)
+    }
+
+    fun reseatShutterAngle(status: CameraStatus, preferredAngle: Double): ShutterSeat {
+        val labels = ShutterAngle.labels
+        val fps = status.fps
+        val liveDenom = status.shutterDenom
+        val preferred = ShutterAngle.label(preferredAngle)
+        if (liveDenom > 0) {
+            val mapped = ShutterAngle.denom(preferredAngle, fps, shutterDenoms(status))
+            if (mapped == liveDenom && preferred in labels) {
+                return ShutterSeat(preferred, preferredAngle, persistAngle = false)
+            }
+            val next = ShutterAngle.nearestLabel(liveDenom, fps)
+            val degrees = ShutterAngle.parse(next) ?: ShutterAngle.DEFAULT_DEGREES
+            return ShutterSeat(next, degrees, persistAngle = true)
+        }
+        return ShutterSeat(preferred, preferredAngle, persistAngle = false)
+    }
+
+    fun reseatShutter(
+        status: CameraStatus,
+        selectedMode: Int,
+        isEvSheet: Boolean,
+        preferredAngle: Double,
+    ): ShutterSeat =
+        if (selectedMode == 1 && !isEvSheet) {
+            reseatShutterAngle(status, preferredAngle)
+        } else {
+            reseatShutterSpeed(status)
+        }
+
+    fun applyShutterDrum(
+        value: String,
+        isEvSheet: Boolean,
+        isAngleSheet: Boolean,
+        facePriority: Boolean,
+        status: CameraStatus,
+    ): ShutterDrumCommand {
+        if (value.isEmpty()) return ShutterDrumCommand.Ignored
+        if (isEvSheet) {
+            if (facePriority) return ShutterDrumCommand.Ignored
+            val ev = EvComp.fromLabel(value) ?: return ShutterDrumCommand.Ignored
+            return ShutterDrumCommand.SetEv(ev.thirds)
+        }
+        if (isAngleSheet) {
+            val degrees = ShutterAngle.parse(value) ?: return ShutterDrumCommand.Ignored
+            val denom = ShutterAngle.denom(degrees, status.fps, shutterDenoms(status))
+            return ShutterDrumCommand.SetAngle(degrees, denom)
+        }
+        val denom = denomFromLabel(value) ?: return ShutterDrumCommand.Ignored
+        if (denom !in shutterDenoms(status)) return ShutterDrumCommand.Ignored
+        return ShutterDrumCommand.SetShutter(denom)
+    }
+
+    /** iOS `CameraSession.setVideoFormat` angle rematch. Null = no shutter write. */
+    fun rematchShutterDenomAfterFps(
+        usesAngle: Boolean,
+        degrees: Double,
+        previousFps: Int,
+        nextFps: Int,
+        expoMode: Int,
+        currentDenom: Int,
+        available: List<Int>,
+    ): Int? {
+        if (!usesAngle || expoMode == CameraCommands.EXPO_AUTO || previousFps == nextFps) return null
+        val denom = ShutterAngle.denom(degrees, nextFps, available)
+        return denom.takeIf { it != currentDenom }
+    }
+
     fun isoFallback(colorMode: Int): List<Int> = CameraCommands.isoChoices(colorMode).map { it.first }
 
-    fun isoIndices(status: CameraStatus): List<Int> {
-        val available = status.availableIsoIndices
-        return if (available.isNotEmpty()) available else isoFallback(status.colorMode)
-    }
+    fun isoIndices(status: CameraStatus): List<Int> =
+        CameraCommands.isoWheelIndices(status.availableIsoIndices, isoFallback(status.colorMode))
 
     fun isoDrumLabels(status: CameraStatus): List<String> =
         isoIndices(status)
@@ -1480,13 +1751,13 @@ object CaptureLists {
             .filter { it != "—" }
 
     fun isoIndexFromLabel(label: String): Int? =
-        listOf(0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B)
-            .firstOrNull { CameraCommands.isoLabel(it) == label }
+        CameraCommands.ISO_INDEX_BYTES.firstOrNull { CameraCommands.isoLabel(it) == label }
 
-    fun offersIsoAuto(status: CameraStatus): Boolean = status.colorMode != CameraCommands.COLOR_DLOG2
+    fun offersIsoAuto(status: CameraStatus): Boolean = CameraCommands.offersIsoAuto(status.colorMode)
 
     /** GET `0x8E` pid `0x000F` only when Auto ISO exists. Unknown color = Normal. */
-    fun shouldGetIsoLimit(status: CameraStatus): Boolean = offersIsoAuto(status)
+    fun shouldGetIsoLimit(status: CameraStatus): Boolean =
+        CameraCommands.shouldGetIsoLimit(status.colorMode)
 
     fun isoAutoBase(colorMode: Int): Int? =
         when (colorMode) {
@@ -1530,7 +1801,7 @@ object CaptureLists {
     }
 
     fun isoMarkedLabels(status: CameraStatus): Set<String> {
-        val base = CameraCommands.baseIsoLabel(status.colorMode) ?: return emptySet()
+        val base = CameraCommands.markedIsoLabel(status.colorMode) ?: return emptySet()
         return setOf(base)
     }
 
@@ -1543,26 +1814,72 @@ object CaptureLists {
 
     fun kelvinFromLabel(label: String): Int? = label.removeSuffix("K").toIntOrNull()
 
-    fun fpsDrumLabel(status: CameraStatus): String {
-        val fps =
-            when {
-                status.fps > 0 -> status.fps
-                else -> CameraCommands.fpsFromIndex(status.fpsIndex)
-            } ?: 24
-        val label = "${fps}p"
-        return if (label in fpsDrumLabels) label else "24p"
+    fun wbInitialTab(status: CameraStatus): Int =
+        if (status.wbMode == CameraCommands.WB_CUSTOM) WB_TAB_KELVIN else WB_TAB_MODE
+
+    fun wbModeRowSelected(status: CameraStatus): String =
+        if (status.wbMode == CameraCommands.WB_CUSTOM) "Custom" else "Auto"
+
+    fun wbSendsAuto(label: String): Boolean = label == "Auto"
+
+    fun wbDrumSelection(status: CameraStatus): String {
+        val k = "${currentKelvin(status)}K"
+        return if (k in kelvinLabels) k else "5600K"
     }
 
-    fun fpsIndexFromDrum(label: String): Int? {
-        val fps = label.removeSuffix("p").toIntOrNull() ?: return null
-        return CameraCommands.fpsIndex(fps)
+    fun wbCustomFromStatus(status: CameraStatus): Pair<Int, Int> =
+        currentKelvin(status) to currentTint(status)
+
+    fun wbCustomFromKelvinLabel(label: String, status: CameraStatus): Pair<Int, Int>? {
+        val kelvin = kelvinFromLabel(label) ?: return null
+        return kelvin to currentTint(status)
     }
 
-    fun currentFpsIndex(status: CameraStatus): Int =
-        when {
-            status.fpsIndex > 0 -> status.fpsIndex
-            else -> CameraCommands.fpsIndex(status.fps) ?: 1
+    fun wbKelvinDrumApply(selectedMode: Int, value: String, status: CameraStatus): Pair<Int, Int>? {
+        if (selectedMode != WB_TAB_KELVIN) return null
+        return wbCustomFromKelvinLabel(value, status)
+    }
+
+    fun roundedTint(value: Float): Int = value.roundToInt().coerceIn(-100, 100)
+
+    fun nudgeTint(current: Float, delta: Int): Float = (current + delta).coerceIn(-100f, 100f)
+
+    fun tintLabel(tint: Int): String {
+        val t = tint.coerceIn(-100, 100)
+        if (t == 0) return "Neutral"
+        return if (t > 0) "+$t" else "$t"
+    }
+
+    fun tintApplyLabel(tint: Int): String = "Apply tint ${tint.coerceIn(-100, 100)}"
+
+    fun wbCustomFromTint(tint: Float, status: CameraStatus): Pair<Int, Int> =
+        currentKelvin(status) to roundedTint(tint)
+
+    fun fpsDrumLabel(status: CameraStatus): String = VideoFormat.current(status).frameRate.drumLabel
+
+    fun fpsIndexFromDrum(label: String): Int? = VideoFrameRate.fromDrumLabel(label)?.rawValue
+
+    fun currentFpsIndex(status: CameraStatus): Int = VideoFormat.current(status).frameRate.rawValue
+
+    /**
+     * Angle mode is ours: keep the chosen degrees and rewrite 1/N for the new fps.
+     * Returns the denom to SET, or null when nothing should change.
+     */
+    fun shutterDenomAfterFormatChange(
+        previousFps: Int,
+        nextFps: Int,
+        expoMode: Int,
+        shutterUsesAngle: Boolean,
+        angleDegrees: Double,
+        currentDenom: Int,
+        available: List<Int>,
+    ): Int? {
+        if (!shutterUsesAngle || previousFps == nextFps || expoMode == CameraCommands.EXPO_AUTO) {
+            return null
         }
+        val denom = ShutterAngle.denom(angleDegrees, nextFps, available)
+        return denom.takeIf { it != currentDenom }
+    }
 
     fun colorWheel(family: String, available: List<Int> = emptyList()): List<Pair<Int, String>> {
         val order = if (family == "nano") colorWheelNano else colorWheelPocket
@@ -1570,9 +1887,11 @@ object CaptureLists {
         val have = available.toSet()
         val ranked = order.filter { it.first in have }
         val extras =
-            available.filter { code -> order.none { it.first == code } }.map { code ->
-                code to CameraCommands.colorLabel(code, family)
-            }
+            available
+                .filter { code ->
+                    order.none { it.first == code } && CameraCommands.colorLabel(code, family) != "—"
+                }
+                .map { code -> code to CameraCommands.colorLabel(code, family) }
         return ranked + extras
     }
 
@@ -1589,30 +1908,52 @@ object CaptureLists {
     }
 
     /**
+     * COLOR drum: family wheel only, then hop ISO after the color SET — same
+     * order as iOS `CameraSession.setColorMode` + `CamCapIso.nativeISOHop`.
+     */
+    fun applyColorDrum(
+        label: String,
+        family: String,
+        status: CameraStatus,
+        hopEnabled: Boolean,
+    ): ColorDrumCommand? {
+        val mode = colorModeFromLabel(label, family) ?: return null
+        val allowed = colorWheel(family, status.availableColorModes).map { it.first }
+        if (mode !in allowed) return null
+        val hop =
+            nativeIsoHop(
+                from = status.colorMode,
+                to = mode,
+                currentIndex = status.isoIndex,
+                hopEnabled = hopEnabled,
+            )
+        return ColorDrumCommand(mode, hop)
+    }
+
+    /**
      * If the operator is still on [from]'s native ISO, hop to [to]'s native.
      * Off-base or Auto stays put. Rec.709 / HDR have no native — no hop.
      */
-    fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? {
-        if (!hopEnabled || from == to) return null
-        val fromBase = CameraCommands.baseIsoLabel(from)?.toIntOrNull() ?: return null
-        val toBase = CameraCommands.baseIsoLabel(to)?.toIntOrNull() ?: return null
-        if (currentIndex == 0) return null
-        val current = CameraCommands.isoLabel(currentIndex).toIntOrNull() ?: return null
-        if (current != fromBase) return null
-        return isoIndexFromLabel("$toBase")
+    fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? =
+        CameraCommands.nativeIsoHop(from, to, currentIndex, hopEnabled)
+
+    /**
+     * FORMAT / COLOR drums shrink into the well under the chip so the card
+     * stays 8 dp below STBY instead of covering it on short landscape.
+     * Chrome: 12+12 pad, 27 header, 8 gap(s), optional 51 mode bar.
+     */
+    fun topPickerDrumHeight(maxSheetDp: Float?, hasTabs: Boolean): Float {
+        val chrome =
+            AssistLongPress.PANEL_PAD_DP * 2 +
+                AssistLongPress.CLOSE_DP +
+                AssistLongPress.PANEL_GAP_DP * (if (hasTabs) 2 else 1) +
+                if (hasTabs) LiveChromeMetrics.PICKER_MODE_BAR_HEIGHT else 0f
+        val available = (maxSheetDp ?: 400f) - chrome
+        return available.coerceIn(AssistLongPress.DRUM_ROW_DP * 2, 176f)
     }
 
     /** Top-deck chip, OpenZCine `4K · 25p`. */
-    fun recFormatChipLabel(status: CameraStatus): String {
-        val fpsText = if (status.fps > 0) "${status.fps}p" else "—"
-        val res =
-            when (status.resolutionCode) {
-                CameraCommands.RES_4K -> "4K"
-                CameraCommands.RES_1080 -> "1080p"
-                else -> null
-            }
-        return if (res != null) "$res · $fpsText" else "— · $fpsText"
-    }
+    fun recFormatChipLabel(status: CameraStatus): String = VideoFormat.chipLabel(status)
 
     /** Remaining storage. Source order is `storage*` then `sd*`, matching iOS. */
     fun storageLabel(status: CameraStatus, showDuration: Boolean): String {
@@ -1649,13 +1990,46 @@ object CaptureLists {
             else -> "—"
         }
 
+    /** iOS aperture glyph when mode is not custom (Auto and unknown). */
     fun wbIsAuto(status: CameraStatus): Boolean =
         status.wbMode != CameraCommands.WB_CUSTOM
 
-    /** Nano / Atto have no AF-S / AF-C. Unknown name defaults to Pocket (supported). */
-    fun supportsFocusMode(modelName: String?): Boolean {
+    fun wbChipWidest(): String = "10000K"
+
+    const val FOCUS_TAB_SINGLE = "AF-S"
+    const val FOCUS_TAB_CONTINUOUS = "AF-C"
+
+    /**
+     * Nano / Atto have no AF-S / AF-C. Unknown camera defaults to Pocket (supported),
+     * matching iOS `CameraSession.supportsFocusMode`.
+     */
+    fun supportsFocusMode(modelName: String?, family: String? = null, flag: Boolean? = null): Boolean {
+        if (flag == false) return false
+        if (family.equals("nano", ignoreCase = true)) return false
         val n = (modelName ?: "").lowercase().replace(" ", "")
         if (n.isEmpty()) return true
         return !n.contains("nano") && !n.contains("atto")
     }
+
+    /** iOS `connectedCamera?.model.supportsFocusMode ?? true` when [model] is present. */
+    fun supportsFocusMode(model: CameraModel): Boolean =
+        supportsFocusMode(model.name, model.family, model.supportsFocusMode)
+
+    fun supportsFocusModeOrDefault(model: CameraModel?): Boolean =
+        supportsFocusMode(model?.name, model?.family, model?.supportsFocusMode)
+
+    /** iOS `focusMode == .continuous`. Unknown / AF-S is the AF-S tab. */
+    fun focusIsContinuous(status: CameraStatus): Boolean =
+        status.focusMode == CameraCommands.FOCUS_CONTINUOUS
+
+    /** Horizontal AF-C chips only while continuous, matching iOS `if continuous`. */
+    fun focusShowsTrackChips(status: CameraStatus): Boolean = focusIsContinuous(status)
+
+    /** Unknown track paints Default, matching iOS `focusTrack ?? .default`. */
+    fun selectedFocusTrack(status: CameraStatus): Int =
+        if (status.focusTrack < 0) FocusTrackMode.DEFAULT.raw else status.focusTrack
+
+    /** GET `0x8E` pid `0x003B` when FOCUS opens without a track. Nano never GETs. */
+    fun shouldRefreshFocusTrack(status: CameraStatus, supportsFocus: Boolean): Boolean =
+        supportsFocus && status.focusTrack < 0
 }

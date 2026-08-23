@@ -299,6 +299,31 @@ extension CameraSoftAP {
         !alreadySent
     }
 
+    /// Pocket live-entry: `0x02/0x68` `08` immediately before `0x09/0xa8`
+    /// (`mimo-disconnect-20260822-105228`). That pair starts a clean GOP
+    /// (137 B VPS) instead of leftover TRAIL P-frames. Nano has no captured
+    /// 0x68 pair — skip it when the Nano gate is in use.
+    public static func shouldSendLiveViewPrepare(usesNanoLiveViewGate: Bool) -> Bool {
+        !usesNanoLiveViewGate
+    }
+
+    /// `0x02/0x0c` is gallery enter/exit, not live-start. Unconditional exit
+    /// before every `0x09/0xa8` left Pocket on WAITING FOR LIVE VIEW (`videoPkts=0`).
+    public static func shouldExitPlaybackBeforeLiveEnable(inPlayback: Bool) -> Bool {
+        inPlayback
+    }
+
+    /// `onPause` during bounded session recovery must not latch first-picture
+    /// skip forever after `holdsMonitor` clears.
+    public static func shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: Bool) -> Bool {
+        holdsMonitor
+    }
+
+    /// Stray gallery on a black feed: send exit, then still `0x09/0xa8` this tick.
+    public static func shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Bool) -> Bool {
+        !hasPicture
+    }
+
     /// A presented sample inside the stall window. One IDR then silence is not this.
     public static func isPresentedPictureFresh(
         secondsSinceLastPresented: TimeInterval?,
@@ -376,5 +401,21 @@ extension CameraSoftAP {
     /// A handshake miss is not a pairing-screen kick while the camera AP is up.
     public static func shouldKickAfterHandshakeTimeout(pathReady: Bool) -> Bool {
         !pathReady
+    }
+
+    /// `close()` is terminal. Handshake again on that driver inherited a
+    /// half-dead UDP session; reconnect then sat on Waiting for live view
+    /// until process death.
+    public static func shouldReuseDatalink(isClosed: Bool) -> Bool {
+        !isClosed
+    }
+
+    /// In-app disconnect is not process death. A cancelled `open()` can still
+    /// finish handshake and publish LIVE unless the session still owns this
+    /// driver, it is not closed, and the task is not cancelled.
+    public static func shouldCommitLiveHandshake(
+        driverOwned: Bool, isClosed: Bool, isCancelled: Bool
+    ) -> Bool {
+        driverOwned && !isClosed && !isCancelled
     }
 }

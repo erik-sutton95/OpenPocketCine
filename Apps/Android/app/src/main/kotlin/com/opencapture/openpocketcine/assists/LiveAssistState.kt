@@ -118,7 +118,14 @@ class LiveAssistState(
     var lightsScale by mutableDoubleStateOf(1.0)
     var lightsCenter by mutableStateOf<StoredCenter?>(null)
 
+    /** Last-moved / last-selected is last. Compose and Vulkan draw in this order. */
+    var scopeStack by mutableStateOf(defaultScopeStack)
+        private set
+
     var configureTool by mutableStateOf<LiveAssistTool?>(null)
+
+    /** Pressed assist chip, viewport-absolute. iOS `LiveAssistState.longPressAnchor`. */
+    var longPressAnchor by mutableStateOf(com.opencapture.openpocketcine.ChromeRect(0f, 0f, 0f, 0f))
 
     /** OpenZCine `playbackVisibleAssistTools` — independent of the live toolbar. */
     var playbackVisibleTools by mutableStateOf(parsePlayback(playbackNames))
@@ -200,10 +207,28 @@ class LiveAssistState(
             LiveAssistTool.CROSS -> crosshair = !crosshair
             LiveAssistTool.MIRROR -> mirror = !mirror
         }
+        if (tool in stackableScopeTools && isOn(tool)) bringToFront(tool)
+        persist()
+    }
+
+    fun bringToFront(tool: LiveAssistTool) {
+        if (tool !in stackableScopeTools) return
+        if (scopeStack.lastOrNull() == tool) return
+        scopeStack = scopeStack.filter { it != tool } + tool
         persist()
     }
 
     fun isPlaybackVisible(tool: LiveAssistTool): Boolean = tool in playbackVisibleTools
+
+    /** LUT / PEAK / FALSE / ZEBRA / scopes — used to gate a processed present path. */
+    fun playbackNeedsProcessedFeed(): Boolean =
+        playbackVisibleTools.any { it in processedPlaybackTools }
+
+    fun playbackNeedsScopeTap(): Boolean =
+        playbackVisibleTools.any { it in stackableScopeTools }
+
+    fun playbackNeedsLookOverlay(): Boolean =
+        playbackVisibleTools.any { it in lookOverlayTools }
 
     fun togglePlayback(tool: LiveAssistTool) {
         playbackVisibleTools =
@@ -330,6 +355,19 @@ class LiveAssistState(
         persist()
     }
 
+    fun setScale(tool: LiveAssistTool, scale: Double) {
+        val clamped = MovablePanelMath.clampedScale(scale)
+        when (tool) {
+            LiveAssistTool.WAVE -> waveScale = clamped
+            LiveAssistTool.PARADE -> paradeScale = clamped
+            LiveAssistTool.HISTO -> histoScale = clamped
+            LiveAssistTool.VECTOR -> vectorScale = clamped
+            LiveAssistTool.LIGHTS -> lightsScale = clamped
+            else -> return
+        }
+        persist()
+    }
+
     /** Apply a visible-tool set without writing prefs (live chrome adapter). */
     fun syncVisible(tools: Set<LiveAssistTool>, guideRatio: Float? = null) {
         lutOn = LiveAssistTool.LUT in tools
@@ -406,6 +444,7 @@ class LiveAssistState(
             .put("vectorCenter", encodeCenter(vectorCenter))
             .put("lightsScale", lightsScale)
             .put("lightsCenter", encodeCenter(lightsCenter))
+            .put("scopeStack", JSONArray(scopeStack.map { it.name }))
             .toString()
     }
 
@@ -475,11 +514,45 @@ class LiveAssistState(
         vectorCenter = decodeCenter(obj.optJSONObject("vectorCenter"))
         lightsScale = MovablePanelMath.clampedScale(obj.optDouble("lightsScale", 1.0))
         lightsCenter = decodeCenter(obj.optJSONObject("lightsCenter"))
+        scopeStack = decodeScopeStack(obj.optJSONArray("scopeStack"))
     }
 
     companion object {
         val defaultPinned: Set<LiveAssistTool> =
             setOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.MIRROR)
+
+        val stackableScopeTools: List<LiveAssistTool> =
+            listOf(
+                LiveAssistTool.WAVE,
+                LiveAssistTool.PARADE,
+                LiveAssistTool.VECTOR,
+                LiveAssistTool.HISTO,
+                LiveAssistTool.LIGHTS,
+            )
+
+        val defaultScopeStack: List<LiveAssistTool>
+            get() = stackableScopeTools
+
+        val lookOverlayTools: Set<LiveAssistTool> =
+            setOf(
+                LiveAssistTool.LUT,
+                LiveAssistTool.PEAK,
+                LiveAssistTool.FALSE,
+                LiveAssistTool.ZEBRA,
+            )
+
+        val processedPlaybackTools: Set<LiveAssistTool> =
+            setOf(
+                LiveAssistTool.LUT,
+                LiveAssistTool.PEAK,
+                LiveAssistTool.FALSE,
+                LiveAssistTool.ZEBRA,
+                LiveAssistTool.WAVE,
+                LiveAssistTool.PARADE,
+                LiveAssistTool.HISTO,
+                LiveAssistTool.VECTOR,
+                LiveAssistTool.LIGHTS,
+            )
 
         fun from(context: Context): LiveAssistState {
             val app = context.applicationContext
@@ -523,6 +596,16 @@ class LiveAssistState(
         private fun decodeCenter(obj: JSONObject?): StoredCenter? {
             if (obj == null) return null
             return StoredCenter(obj.optDouble("xFraction", 0.5), obj.optDouble("yFraction", 0.5))
+        }
+
+        private fun decodeScopeStack(arr: JSONArray?): List<LiveAssistTool> {
+            if (arr == null) return defaultScopeStack
+            val seen = LinkedHashSet<LiveAssistTool>()
+            for (i in 0 until arr.length()) {
+                val tool = LiveAssistTool.fromPersisted(arr.optString(i)) ?: continue
+                if (tool in stackableScopeTools) seen += tool
+            }
+            return seen.toList() + stackableScopeTools.filter { it !in seen }
         }
     }
 }

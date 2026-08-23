@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct TrackingBoxTests {
@@ -91,7 +92,8 @@ import Testing
     @Test func overlayShowsFocusWhenIdle() {
         #expect(
             FocusOverlayPolicy.resolve(
-                tracking: false, search: Optional<TrackingBox>.none, subject: Optional<TrackingBox>.none)
+                tracking: false, search: Optional<TrackingBox>.none,
+                subject: Optional<TrackingBox>.none)
                 == .focus
         )
     }
@@ -251,8 +253,9 @@ import Testing
         #expect(
             SceneFacePolicy.assignments(
                 detections: [c], previous: [a],
-                maxCenterDistance: FaceTrackHold.motionMatchDistance)
-                .isEmpty)
+                maxCenterDistance: FaceTrackHold.motionMatchDistance
+            )
+            .isEmpty)
     }
 
     @Test func tapOnFaceBoxStartsTrackingWithThatRect() {
@@ -468,13 +471,14 @@ import Testing
                 rightShoulderX: 0.58, rightShoulderY: 0.50))
         #expect(abs(neckOnly.centerX - 0.50) < 0.02)
         #expect(neckOnly.centerY < 0.40)
-        #expect(FaceBodyFallback.headFromPose(
-            lastFace: face,
-            neckX: nil, neckY: nil,
-            leftEarX: nil, leftEarY: nil,
-            rightEarX: nil, rightEarY: nil,
-            leftShoulderX: nil, leftShoulderY: nil,
-            rightShoulderX: nil, rightShoulderY: nil) == nil)
+        #expect(
+            FaceBodyFallback.headFromPose(
+                lastFace: face,
+                neckX: nil, neckY: nil,
+                leftEarX: nil, leftEarY: nil,
+                rightEarX: nil, rightEarY: nil,
+                leftShoulderX: nil, leftShoulderY: nil,
+                rightShoulderX: nil, rightShoulderY: nil) == nil)
     }
 
     @Test func poseHeadInProfileSpansEarToNoseNotOcciput() throws {
@@ -590,7 +594,7 @@ import Testing
     @Test func visionFaceBoxFlipsOriginToTopLeft() {
         let box = VisionFaceBox.fromVision(minX: 0.20, minY: 0.30, width: 0.25, height: 0.40)
         #expect(box?.x == 0.20)
-        #expect(abs((box?.y ?? -1) - 0.30) < 0.0001) // 1 - (0.30 + 0.40)
+        #expect(abs((box?.y ?? -1) - 0.30) < 0.0001)  // 1 - (0.30 + 0.40)
         #expect(box?.width == 0.25)
         #expect(box?.height == 0.40)
         #expect(VisionFaceBox.fromVision(minX: 0.4, minY: 0.4, width: 0.02, height: 0.02) == nil)
@@ -632,7 +636,9 @@ import Testing
         #expect(abs((centre?.x ?? 0) - 0.5) < 0.002)
         #expect(abs((centre?.y ?? 0) - 0.5) < 0.002)
         #expect(CamLensState.focusPoint([0xB1]) == nil)
-        #expect(CameraFocusPolicy.shouldAdopt(currentX: 0.50, currentY: 0.50, cameraX: 0.77, cameraY: 0.48))
+        #expect(
+            CameraFocusPolicy.shouldAdopt(
+                currentX: 0.50, currentY: 0.50, cameraX: 0.77, cameraY: 0.48))
         #expect(
             !CameraFocusPolicy.shouldAdopt(
                 currentX: 0.772, currentY: 0.483, cameraX: 0.773, cameraY: 0.484))
@@ -662,8 +668,9 @@ import Testing
         let head = FaceBodyFallback.headFromFace(face)
         #expect(FaceHeadHandoff.faceBelongsToHead(face: face, head: head))
         #expect(FaceHeadHandoff.isSamePerson(face, head))
-        #expect(!FaceHeadHandoff.faceBelongsToHead(
-            face: face, head: TrackingBox(x: 0.78, y: 0.20, width: 0.16, height: 0.20)))
+        #expect(
+            !FaceHeadHandoff.faceBelongsToHead(
+                face: face, head: TrackingBox(x: 0.78, y: 0.20, width: 0.16, height: 0.20)))
 
         #expect(
             FaceHeadHandoff.nextMode(
@@ -703,7 +710,8 @@ import Testing
         let stillFace = HeadLock.fuse(
             faces: [], poses: [head], last: face, lastMode: .face,
             faceVisibleFor: 0, faceMissingFor: 0.10)
-        #expect(stillFace.isEmpty, "grace holds the last face in CameraSession, does not add a head")
+        #expect(
+            stillFace.isEmpty, "grace holds the last face in CameraSession, does not add a head")
 
         let turned = HeadLock.fuse(
             faces: [], poses: [head], last: face, lastMode: .face,
@@ -817,8 +825,9 @@ import Testing
                 leftEyeX: 0.44, leftEyeY: 0.28,
                 rightEyeX: 0.56, rightEyeY: 0.28))
         let eyeSpan = 0.12
-        #expect(box.width * FaceBodyFallback.defaultPictureAspect + 0.001
-            >= eyeSpan * FaceBodyFallback.eyeSpanToHead)
+        #expect(
+            box.width * FaceBodyFallback.defaultPictureAspect + 0.001
+                >= eyeSpan * FaceBodyFallback.eyeSpanToHead)
         #expect(isVisualSquare(box))
         #expect(box.height > 0.20)
     }

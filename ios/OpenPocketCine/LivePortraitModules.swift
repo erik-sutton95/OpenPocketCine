@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OpenZCine `PortraitScopesStack` — first ≤2 enabled scopes, 96 pt units, canonical order.
 struct LivePortraitScopesStack: View {
@@ -106,16 +106,12 @@ struct LivePortraitAspectToggle: View {
         Button {
             aspect = aspect == .fill ? .fit16x9 : .fill
         } label: {
-            Image(
-                systemName: aspect == .fill
-                    ? "arrow.down.right.and.arrow.up.left"
-                    : "arrow.up.left.and.arrow.down.right"
-            )
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(LiveDesign.text)
-            .frame(width: 40, height: 40)
-            .background(.black.opacity(0.55), in: Circle())
-            .overlay(Circle().strokeBorder(LiveDesign.hairline, lineWidth: 1))
+            (aspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
+                .frame(width: 15, height: 15)
+                .foregroundStyle(LiveDesign.text)
+                .frame(width: 40, height: 40)
+                .background(.black.opacity(0.55), in: Circle())
+                .overlay(Circle().strokeBorder(LiveDesign.hairline, lineWidth: 1))
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel(aspect == .fill ? "Fit feed in frame" : "Fill frame with feed")

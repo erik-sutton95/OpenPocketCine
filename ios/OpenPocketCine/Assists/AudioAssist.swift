@@ -110,7 +110,9 @@ struct AudioMetersPanelMini: View {
     }
 
     private func zoneColor(_ db: Double) -> Color {
-        if db >= Self.redFromDB { return Color(red: 1, green: 92 / 255, blue: 82 / 255).opacity(0.95) }
+        if db >= Self.redFromDB {
+            return Color(red: 1, green: 92 / 255, blue: 82 / 255).opacity(0.95)
+        }
         if db >= Self.yellowFromDB {
             return Color(red: 245 / 255, green: 208 / 255, blue: 82 / 255).opacity(0.95)
         }
@@ -133,7 +135,8 @@ struct AudioMetersPanelMini: View {
             line.addLine(to: CGPoint(x: barsRect.maxX, y: tickY))
             context.stroke(
                 line,
-                with: .color(Color(red: 220 / 255, green: 235 / 255, blue: 225 / 255).opacity(0.10)),
+                with: .color(
+                    Color(red: 220 / 255, green: 235 / 255, blue: 225 / 255).opacity(0.10)),
                 lineWidth: 1)
         }
 
@@ -164,7 +167,8 @@ struct AudioMetersPanelMini: View {
                     let top = y(band.to)
                     let bottom = y(band.from)
                     zones.fill(
-                        Path(CGRect(x: track.minX, y: top, width: track.width, height: bottom - top)),
+                        Path(
+                            CGRect(x: track.minX, y: top, width: track.width, height: bottom - top)),
                         with: .color(zoneColor(band.from)))
                 }
             }

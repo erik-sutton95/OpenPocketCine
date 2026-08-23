@@ -7,7 +7,8 @@ import os
 /// Journal writes ride a utility queue — `line` never does file I/O on the
 /// caller's thread (it sits on the command send path).
 enum ControlLiveLog {
-    private static let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "session")
+    private static let log = Logger(
+        subsystem: "com.opencapture.openpocketcine", category: "session")
     private static let queue = DispatchQueue(label: "opv.control-log", qos: .utility)
     private static let cap = 200
     /// Trim cadence in appends — not a size stat per line.
@@ -54,6 +55,7 @@ enum ControlLiveLog {
         var lines = existing.split(whereSeparator: \.isNewline).map(String.init)
         guard lines.count > cap else { return }
         lines = Array(lines.suffix(cap))
-        try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try? (lines.joined(separator: "\n") + "\n").write(
+            to: url, atomically: true, encoding: .utf8)
     }
 }

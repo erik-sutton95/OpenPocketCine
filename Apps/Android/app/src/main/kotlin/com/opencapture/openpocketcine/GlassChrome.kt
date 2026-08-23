@@ -6,12 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -27,13 +22,13 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 
-// Liquid glass via Kyant0/AndroidLiquidGlass — same package OpenZCine uses.
+// Liquid glass via Kyant0/AndroidLiquidGlass (`io.github.kyant0:backdrop`).
 // Pocket tokens stay DJI-black / cyan (iOS LiveDesign), not OpenZCine gold.
 //
-// HEVC still decodes into a TextureView. Kyant cannot sample that buffer,
-// so FULL glass also blits the frame into a Compose Canvas inside the
-// recorded well (OpenZCine LiveFeedView). Popups stay outside the scene
-// recording so overlay glass does not loop.
+// FULL glass is a hardware gate (API 33+ and ≥4 GB, not low-RAM). There is
+// no frame-budget demote — if FULL is selected, Kyant stays on even when
+// the HUD is expensive. Operator Setup and the media list stay solid frost.
+// Playback HUD uses the same Kyant path as live; FLAT falls back to darkened bars.
 
 private const val TAG = "OpcGlass"
 
@@ -41,6 +36,13 @@ enum class GlassTier {
     FLAT,
     FULL,
 }
+
+/**
+ * Kyant `drawBackdrop` must not be a descendant of the `layerBackdrop` it
+ * samples. That pairing overflows HWUI `RenderNode::prepareTreeImpl` (native
+ * stack overflow on opening playback).
+ */
+fun kyantWouldLoop(chromeInsideRecordedLayer: Boolean): Boolean = chromeInsideRecordedLayer
 
 fun resolveTier(
     sdkInt: Int,
@@ -68,55 +70,22 @@ fun resolveTier(
 
 const val MIN_FULL_GLASS_RAM_BYTES: Long = 4L * 1024L * 1024L * 1024L
 
-class FrameBudgetWindow(
-    private val budgetNanos: Long = 48_000_000L,
-    private val window: Int = 90,
-    private val maxOverBudget: Int = 45,
-    private val warmup: Int = 45,
-) {
-    private var skipped = 0
-    private var seen = 0
-    private var overBudget = 0
-
-    fun frame(deltaNanos: Long): Boolean {
-        if (skipped < warmup) {
-            skipped++
-            return false
-        }
-        seen++
-        if (deltaNanos > budgetNanos) overBudget++
-        if (seen < window) return false
-        val demote = overBudget > maxOverBudget
-        seen = 0
-        overBudget = 0
-        return demote
-    }
-}
-
 class MonitorGlass(
     initialTier: GlassTier,
     val layerBackdrop: LayerBackdrop? = null,
     val overlayBackdrop: LayerBackdrop? = null,
-    val allowDemote: Boolean = false,
 ) {
-    var tier: GlassTier by mutableStateOf(initialTier)
-        private set
+    val tier: GlassTier = initialTier
 
     init {
         runCatching {
             Log.i(
                 TAG,
-                "glass session tier=$initialTier allowDemote=$allowDemote " +
+                "glass session tier=$initialTier " +
                     "sdk=${Build.VERSION.SDK_INT} feedBackdrop=${layerBackdrop != null} " +
                     "overlayBackdrop=${overlayBackdrop != null}",
             )
         }
-    }
-
-    fun demote() {
-        if (!allowDemote || tier == GlassTier.FLAT) return
-        runCatching { Log.w(TAG, "sustained frame-budget overrun — FULL -> FLAT") }
-        tier = GlassTier.FLAT
     }
 }
 
@@ -139,15 +108,15 @@ private val GlassEdgeHighlight =
     )
 
 /**
- * Solid frost for Operator Setup and media. Not Kyant — those pages sit on
- * DJI-black, not the live feed, so liquid glass has nothing to sample.
+ * Solid frost for Operator Setup and the media list. Not Kyant — those pages
+ * sit on DJI-black, so liquid glass has nothing to sample.
  */
 fun Modifier.panelGlass(shape: Shape = ChromeShape): Modifier =
     background(LiveDesign.glassOpaque, shape).border(1.dp, LiveDesign.hairlineStrong, shape)
 
 /**
- * Kyant liquid glass. Live HUD only (`liveChromeGlass` / `monitorGlass`).
- * Operator Setup and media use [panelGlass].
+ * Kyant liquid glass for the live HUD and playback chrome (`liveChromeGlass`).
+ * Operator Setup and the media list use [panelGlass].
  */
 @Composable
 fun Modifier.glass(shape: Shape = ChromeShape): Modifier {
@@ -170,7 +139,7 @@ fun Modifier.overlayGlass(shape: Shape = ChromeShape): Modifier {
 }
 
 /**
- * iOS `liveChromeGlass`: frost + Titan tint over a 52% DJI-black plate so a
+ * iOS `liveChromeGlass`: frost + black ND over a DJI-black plate so a
  * bright window cannot bleach the HUD.
  */
 @Composable
@@ -182,6 +151,8 @@ fun Modifier.liveChromeGlass(shape: Shape = ChromeShape): Modifier {
         shape = shape,
     )
 }
+
+
 
 @Composable
 private fun Modifier.glassBackdrop(
@@ -217,13 +188,22 @@ private fun Modifier.liveChromeBackdrop(
     backdrop: LayerBackdrop?,
     tier: GlassTier,
     shape: Shape,
+    extraNd: Color = Color.Transparent,
+    plate: Color = LiveDesign.chromePlate,
+    tint: Color = LiveDesign.chromeTint,
 ): Modifier {
+    val flatFill =
+        if (extraNd.alpha > 0f) {
+            plate.copy(alpha = (plate.alpha + extraNd.alpha).coerceAtMost(0.72f))
+        } else {
+            plate
+        }
     if (backdrop == null || tier == GlassTier.FLAT || Build.VERSION.SDK_INT < 33) {
-        return background(LiveDesign.chromePlate, shape)
+        return background(flatFill, shape)
             .border(1.dp, LiveDesign.hairlineStrong, shape)
     }
     return this
-        .background(LiveDesign.chromePlate, shape)
+        .background(plate, shape)
         .drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
@@ -240,10 +220,41 @@ private fun Modifier.liveChromeBackdrop(
             },
             highlight = { GlassEdgeHighlight },
             onDrawSurface = {
-                drawRect(LiveDesign.chromePlate)
-                drawRect(LiveDesign.chromeTint)
+                drawRect(plate)
+                drawRect(tint)
+                if (extraNd.alpha > 0f) drawRect(extraNd)
             },
         )
+}
+
+/** Playback transport — half the HUD ND so the clip stays readable. */
+@Composable
+fun Modifier.playbackBarGlass(shape: Shape = ChromeShape): Modifier {
+    val glass = LocalMonitorGlass.current
+    return liveChromeBackdrop(
+        backdrop = glass?.layerBackdrop,
+        tier = glass?.tier ?: GlassTier.FLAT,
+        shape = shape,
+        plate = LiveDesign.playbackBarPlate,
+        tint = LiveDesign.playbackBarTint,
+    )
+}
+
+/**
+ * iOS picker / assist / capture cards: HUD glass plus extra ND. Samples the
+ * scene backdrop (feed + chrome) so liquid glass blurs UI under the sheet,
+ * not only the live well. Popups sit outside the recorded scene layer so
+ * this does not loop.
+ */
+@Composable
+fun Modifier.pickerPanelGlass(shape: Shape = ChromeShape): Modifier {
+    val glass = LocalMonitorGlass.current
+    return liveChromeBackdrop(
+        backdrop = glass?.overlayBackdrop ?: glass?.layerBackdrop,
+        tier = glass?.tier ?: GlassTier.FLAT,
+        shape = shape,
+        extraNd = LiveDesign.pickerNd,
+    )
 }
 
 fun Modifier.chipGlass(shape: Shape = ChromeShape): Modifier =
@@ -299,17 +310,4 @@ internal fun glassBackdropContentRect(
         aspectFill = aspectFill,
     )
 
-@Composable
-fun MonitorGlassBudgetLoop(glass: MonitorGlass) {
-    if (!glass.allowDemote || glass.tier == GlassTier.FLAT) return
-    LaunchedEffect(glass) {
-        val budget = FrameBudgetWindow()
-        var last = 0L
-        while (glass.tier != GlassTier.FLAT) {
-            withFrameNanos { now ->
-                if (last != 0L && budget.frame(now - last)) glass.demote()
-                last = now
-            }
-        }
-    }
-}
+

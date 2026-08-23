@@ -5,8 +5,8 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | Layer | Path | Purpose |
 | --- | --- | --- |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML framing, datalink, BLE advert decode, commands, status, LUTs, layout policy. Pure Foundation — no SwiftUI, UIKit, Android, or I/O. |
-| **iOS app** | `ios/OpenPocketCine/` | SwiftUI shell, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal |
-| **Android app** | `Apps/Android/app/` | Jetpack Compose phone shell. Kyant liquid glass (`GlassChrome.kt`) is live-HUD only (`liveChromeGlass` / `monitorGlass`). Operator Setup and media use solid `panelGlass` — they sit on DJI-black, not the feed, so Kyant has nothing to sample. Pairing and media list rows stay solid fills. HEVC live view decodes into a `GL_TEXTURE_EXTERNAL_OES` `SurfaceTexture`; `FeedEffectsGlProgram` grades LUT / PEAK / FALSE / ZEBRA into the `TextureView` (identity when those tools are off). FULL glass also blits the frame into a Compose Canvas inside the Kyant recorded well so HUD glass samples the picture. Live HUD chrome scales with shortest-side dp (`monitorChromeScale`, 0.935–1.0 vs a 424 dp Pro Max / 6.8" board). Landscape feed leading is floored at the iPhone island lane (`monitorLeadingInsetDp`); compact 16:9 phones slide the well left only enough for the record rail to clear the picture. System bars are sticky-immersive (`ImmersiveSystemBars.kt`). |
+| **iOS app** | `ios/OpenPocketCine/` | SwiftUI shell, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Disconnect bumps UDP generation, drops driver callbacks, invalidates VT, and ignores a cancelled `open()` that still wants to publish LIVE — in-app reconnect must not inherit a half-closed live session. |
+| **Android app** | `Apps/Android/app/` | Jetpack Compose phone shell. Live picture presents through Vulkan (`Apps/Android/app/src/main/cpp`, `libopc_vulkan.so`) when the device can init it: MediaCodec → `ImageReader` AHardwareBuffer → YCbCr sample at the feed well + LUT atlas. Compose paints WAVE / PARADE / VECTOR / HISTO on the 0.72 plate (a 213×120 tap at 10–15 Hz, compute histogram). Live HUD liquid glass is Kyant AndroidLiquidGlass on API 33+ / ≥4 GB devices (no runtime quality demote). Disconnect tears down the UDP driver and MediaCodec output thread so reconnect does not reuse a half-closed live session. Pairing, Operator Setup, and media list rows stay solid fills. Playback chrome is an 82% DJI-black plate (no Kyant). Playback uses the 720p LRF/XRF proxy; export caches the 4K original. LUT / PEAK / FALSE / ZEBRA grade that proxy in GLES (ExoPlayer → OES → TextureView); WAVE taps the GL copy. GLES `FeedEffectsGlProgram` on `GL_TEXTURE_EXTERNAL_OES` is the fallback when Vulkan cannot init. Live HUD chrome scales with shortest-side dp (`monitorChromeScale`, 0.935–1.0 vs a 424 dp Pro Max / 6.8" board). Landscape feed leading is floored at the iPhone island lane (`monitorLeadingInsetDp`); compact 16:9 phones slide the well left only enough for the record rail to clear the picture. Portrait Fill center-crops 16:9 into the fill well (iOS `fillCrop`). System bars are sticky-immersive (`ImmersiveSystemBars.kt`). |
 | **Android facade** | `Sources/OpenPocketCineAndroidFacade/` | Swift session and JNI boundary |
 | **Tests** | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core |
 
@@ -24,14 +24,26 @@ The iOS Xcode project is generated: `cd ios && xcodegen generate`.
 3. Join the camera SoftAP (`192.168.2.1`). The phone is on-path only after DHCP
    gives it `192.168.2.2…254` (`CameraSoftAP.isAssociatedIPv4`).
 4. UDP DUML datalink on that LAN, connected to `192.168.2.1:9004`. iOS binds
-   the DHCP IPv4 (`NWParameters.requiredLocalEndpoint`). Android pins the
-   process with `bindProcessToNetwork` and binds UDP `0.0.0.0:9004` after
-   `Network.bindSocket` — binding the DHCP address on Samsung accepted
-   handshake ACKs and dropped HEVC. A stable local port keeps the camera's
-   client 5-tuple across UDP rebuilds (ephemeral ports left HEVC on the old
-   socket). Keep TCP 7001 poke across UDP rebuilds.
-5. Enable live view once (`0x09/0xa8`) after path + display are ready. Never 1 Hz.
-   Media is pktType `0x02`; ACK is pktType `0x04` at 40 Hz echoing the video seq.
+   the DHCP IPv4 + an **ephemeral local port** (`NWParameters.requiredLocalEndpoint`
+   port 0). Android pins the process with `bindProcessToNetwork` and binds UDP
+   `0.0.0.0:0` after `Network.bindSocket`. Camera 9004 is the remote only —
+   binding local `:9004` on Samsung accepted handshake + `0x01` telemetry and
+   dropped every pktType `0x02` (`videoPkts=0`, WAITING FOR LIVE VIEW). Mimo
+   live-entry uses an ephemeral client port. Keep TCP 7001 poke across UDP
+   rebuilds.
+5. Enable live view once after path + display are ready. Pocket sends
+   `0x02/0x68` payload `08` immediately before `0x09/0xa8` (Mimo first live
+   after gallery). Arm pktType `0x02` ingest on that write — do not wait for
+   a DUML ACK (VPS is 25–167 ms; a 200 ms wait dropped it). Never 1 Hz.
+   Media is pktType `0x02`; window ACK is pktType `0x04` at 40 Hz echoing the
+   video seq. Disconnect has no live-stop — leftover GOP P-frames during
+   handshake are expected until this pair starts a clean VPS. In-app
+   Disconnect must still drop the UDP driver (`udpGeneration` / closed flag,
+   callbacks, ACK pump) and the platform decoder (VT invalidate + layer flush
+   on iOS; MediaCodec output-thread join + Surface unbind on Android). A
+   cancelled `open()` must not publish LIVE (`CameraSoftAP.shouldCommitLiveHandshake`).
+   Process death did that for free; leaving the socket live is why reconnect
+   hung on Waiting for live view until the app was killed.
 6. Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
    decoder from VPS/SPS/PPS (`0x40/0x42/0x44`) or Nano AVC SPS/PPS (`0x67/0x68`).
    Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with

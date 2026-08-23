@@ -1,6 +1,6 @@
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
-import OpenPocketViewCore
 
 /// Operator Setup rail tabs — Pocket subset of OpenZCine `OperatorSettingsTab`.
 /// Operator-facing Settings help. Never name a sister app or another camera brand.
@@ -92,8 +92,12 @@ struct SettingsRootView: View {
                         }
                     } else {
                         VStack(spacing: 8) {
-                            settingsTop(stacked: proxy.size.width < OperatorPanelMetrics.topStackWidth)
-                                .padding(.leading, OperatorPanelMetrics.closeButtonClearance(safeArea: safeArea))
+                            settingsTop(
+                                stacked: proxy.size.width < OperatorPanelMetrics.topStackWidth
+                            )
+                            .padding(
+                                .leading,
+                                OperatorPanelMetrics.closeButtonClearance(safeArea: safeArea))
                             HStack(alignment: .top, spacing: 8) {
                                 settingsRail
                                 settingsContent
@@ -220,7 +224,9 @@ struct SettingsRootView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(tab.rawValue)
                         .font(LiveType.ui(size: 13, weight: .semibold))
-                        .foregroundStyle(model.operatorSettingsTab == tab ? LiveDesign.text : LiveDesign.muted)
+                        .foregroundStyle(
+                            model.operatorSettingsTab == tab ? LiveDesign.text : LiveDesign.muted
+                        )
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                     Text(tabSubtitle(tab))
@@ -270,7 +276,8 @@ struct SettingsRootView: View {
             }
         }
         .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+            NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillChangeFrameNotification)
         ) { note in
             guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
             else { return }
@@ -365,7 +372,8 @@ struct SettingsRootView: View {
             if let ssid = model.session.joinedSSID, !ssid.isEmpty {
                 SettingsInlineRow(
                     title: "Camera Wi-Fi",
-                    help: "SSID joined for this session. The password stays in the iOS Keychain on this phone."
+                    help:
+                        "SSID joined for this session. The password stays in the iOS Keychain on this phone."
                 ) {
                     SettingsValueText(value: ssid)
                 }
@@ -395,7 +403,8 @@ struct SettingsRootView: View {
             if model.savedCameras.isEmpty {
                 SettingsInlineRow(
                     title: "Saved",
-                    help: "Pair from the home list. Settings does not start a new pair — that stays on Your cameras.",
+                    help:
+                        "Pair from the home list. Settings does not start a new pair — that stays on Your cameras.",
                     showTopDivider: false
                 ) {
                     SettingsValueText(value: "None")
@@ -903,7 +912,8 @@ struct SettingsRootView: View {
             }
             SettingsInlineRow(
                 title: "Protocol Implementation",
-                help: "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required."
+                help:
+                    "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required."
             ) {
                 SettingsValueText(value: "DUML / BLE + Wi-Fi")
             }

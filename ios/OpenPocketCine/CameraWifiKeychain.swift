@@ -1,6 +1,6 @@
 import Foundation
-import Security
 import OpenPocketViewCore
+import Security
 
 /// SoftAP SSID + password on this phone only. GetSSID after a Mimo session often
 /// returns a 1-byte `0xE4`, so reconnect cannot rely on BLE for the key.
@@ -28,7 +28,9 @@ enum CameraWifiKeychain {
         {
             return creds
         }
-        if let lastSSID, !lastSSID.isEmpty, let creds = read(account(ssid: lastSSID)) { return creds }
+        if let lastSSID, !lastSSID.isEmpty, let creds = read(account(ssid: lastSSID)) {
+            return creds
+        }
         return nil
     }
 
@@ -69,10 +71,10 @@ enum CameraWifiKeychain {
         ]
         var out: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
-              let data = out as? Data,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let ssid = obj["ssid"], !ssid.isEmpty,
-              let password = obj["password"], !password.isEmpty
+            let data = out as? Data,
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+            let ssid = obj["ssid"], !ssid.isEmpty,
+            let password = obj["password"], !password.isEmpty
         else { return nil }
         return Creds(ssid: ssid, password: password)
     }

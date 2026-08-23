@@ -427,7 +427,8 @@ private struct HistogramCrushClipSegmented: View {
                 } label: {
                     Text(option.compactLabel)
                         .font(
-                            LiveType.ui(size: compact ? 12 : 11, weight: active ? .semibold : .medium)
+                            LiveType.ui(
+                                size: compact ? 12 : 11, weight: active ? .semibold : .medium)
                         )
                         .foregroundStyle(active ? LiveDesign.text : LiveDesign.muted)
                         .lineLimit(1)
@@ -555,10 +556,12 @@ struct HistogramMovablePanel<Content: View>: View {
             .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
             .frame(
                 width: HistogramAssist.gripVisualSize, height: HistogramAssist.gripVisualSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .frame(
                 width: HistogramAssist.gripHitSize, height: HistogramAssist.gripHitSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .contentShape(Rectangle())
             .gesture(interfaceLocked ? nil : resizeGesture)
             .accessibilityLabel("Resize histogram")

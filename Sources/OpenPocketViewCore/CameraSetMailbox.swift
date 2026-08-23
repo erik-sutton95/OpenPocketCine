@@ -99,7 +99,8 @@ public struct CameraSetMailbox: Equatable, Sendable {
             pending[key] = (pending[key] ?? false) || urgent
             return .coalescePending
         }
-        let rateLimited = !urgent
+        let rateLimited =
+            !urgent
             && open[key] == nil
             && lastLaunch[key].map { now - $0 < Self.coalesceHold(for: key) } == true
         if rateLimited {
@@ -112,7 +113,8 @@ public struct CameraSetMailbox: Equatable, Sendable {
 
     /// Zoom: 20 Hz latest-wins on the wire. Do not sit on the open ACK.
     private mutating func offerPipelined(key: UInt16, urgent: Bool, now: TimeInterval) -> Offer {
-        let held = !urgent
+        let held =
+            !urgent
             && lastLaunch[key].map { now - $0 < Self.coalesceHold(for: key) } == true
         if held {
             pending[key] = (pending[key] ?? false) || urgent

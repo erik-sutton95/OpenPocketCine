@@ -101,7 +101,9 @@ enum ScopeTestBuffers {
         width: Int, height: Int, ioSurface: Bool = false, luma10: (Int, Int) -> Int
     ) -> CVPixelBuffer? {
         var attrs: [String: Any] = [:]
-        if ioSurface { attrs[kCVPixelBufferIOSurfacePropertiesKey as String] = [:] as [String: Any] }
+        if ioSurface {
+            attrs[kCVPixelBufferIOSurfacePropertiesKey as String] = [:] as [String: Any]
+        }
         var buffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(
             kCFAllocatorDefault, width, height,
@@ -147,7 +149,8 @@ enum ScopeTestBuffers {
         }
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-        let yBase = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt8.self)
+        let yBase = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(
+            to: UInt8.self)
         let yStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
         for y in 0..<height {
             for x in 0..<width {

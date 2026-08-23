@@ -529,10 +529,12 @@ struct ParadeMovablePanel<Content: View>: View {
             .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
             .frame(
                 width: ParadeAssist.gripVisualSize, height: ParadeAssist.gripVisualSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .frame(
                 width: ParadeAssist.gripHitSize, height: ParadeAssist.gripHitSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .contentShape(Rectangle())
             .gesture(interfaceLocked ? nil : resizeGesture)
             .accessibilityLabel("Resize parade")

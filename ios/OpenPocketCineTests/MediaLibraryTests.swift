@@ -1,5 +1,7 @@
-import XCTest
+import AVFoundation
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 final class MediaLibraryTests: XCTestCase {
@@ -35,13 +37,13 @@ final class MediaLibraryTests: XCTestCase {
             MediaFile(
                 path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
                 thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
-                handle: 0x40100880,
+                handle: 0x4010_0880,
                 durationSeconds: 209,
                 resolution: "3840x2160"),
             MediaFile(
                 path: "DCIM/DJI_001/DJI_20260404103742_0001_D.MP4",
                 thumbPath: "MISC/THM/DJI_001/DJI_20260404103742_0001_D.scr",
-                handle: 0x40100040,
+                handle: 0x4010_0040,
                 durationSeconds: 12,
                 isStarred: true,
                 resolution: "1920x1080"),
@@ -89,6 +91,23 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertEqual(1440 / 3840.0, 0.375, accuracy: 0.0001)
     }
 
+    func testExportPresetKeepsFourKNot720p() {
+        let compatible = [
+            AVAssetExportPresetHEVCHighestQuality,
+            AVAssetExportPreset1280x720,
+            AVAssetExportPresetHighestQuality,
+        ]
+        XCTAssertEqual(
+            MediaLUT.exportPreset(bakingLUT: true, compatible: compatible),
+            AVAssetExportPresetHEVCHighestQuality)
+        XCTAssertEqual(
+            MediaLUT.exportPreset(bakingLUT: false, compatible: compatible),
+            AVAssetExportPresetPassthrough)
+        XCTAssertNotEqual(
+            MediaLUT.exportPreset(bakingLUT: true, compatible: compatible),
+            AVAssetExportPreset1280x720)
+    }
+
     func testExportProgressMapsTheSessionBand() {
         XCTAssertEqual(MediaLUT.mappedExportProgress(0), 0.05, accuracy: 0.0001)
         XCTAssertEqual(MediaLUT.mappedExportProgress(0.5), 0.475, accuracy: 0.0001)
@@ -129,7 +148,7 @@ final class MediaLibraryTests: XCTestCase {
         let file = MediaFile(
             path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
             thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
-            handle: 0x40100880,
+            handle: 0x4010_0880,
             sizeBytes: 1_024_000,
             durationSeconds: 12,
             resolution: "3840x2160")
@@ -157,7 +176,9 @@ final class MediaLibraryTests: XCTestCase {
         var config = MediaDeliveryConfiguration()
         config.bakeLUT = true
         config.exportFormat = .mov
-        XCTAssertEqual(MediaDelivery.filename(for: file, configuration: config), "DJI_20260814125250_0034_D.mov")
+        XCTAssertEqual(
+            MediaDelivery.filename(for: file, configuration: config),
+            "DJI_20260814125250_0034_D.mov")
         config.bakeLUT = false
         XCTAssertEqual(MediaDelivery.filename(for: file, configuration: config), file.filename)
     }
@@ -166,10 +187,15 @@ final class MediaLibraryTests: XCTestCase {
         let file = MediaFile(
             path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
             thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
-            handle: 0x40100880)
+            handle: 0x4010_0880)
         let paths = MediaHTTP.previewPaths(file)
         XCTAssertEqual(paths.first?.hasSuffix(".LRF"), true)
         XCTAssertEqual(paths.last, file.path)
+        XCTAssertEqual(MediaHTTP.deliveryPath(file), file.path)
+        XCTAssertFalse(MediaHTTP.isProxyPath(MediaHTTP.deliveryPath(file)))
+        XCTAssertTrue(MediaHTTP.proxyPaths(file).allSatisfy { MediaHTTP.isProxyPath($0) })
+        XCTAssertFalse(MediaHTTP.proxyPaths(file).contains(file.path))
+        XCTAssertFalse(MediaHTTP.proxyPaths(file).isEmpty)
 
         let first = MediaHTTP.storageGuess(handle: file.handle, singleSdStorage: false)
         XCTAssertEqual(first, 1)
@@ -198,7 +224,8 @@ final class MediaLibraryTests: XCTestCase {
     }
 
     func testClipOpenCopyDoesNotNameSisterApps() {
-        XCTAssertFalse(MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("OpenZCine"))
+        XCTAssertFalse(
+            MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("OpenZCine"))
         XCTAssertFalse(MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("Nikon"))
         XCTAssertFalse(MediaOperatorCopy.clipOpenFailed.isEmpty)
         XCTAssertFalse(MediaOperatorCopy.clipLoading.localizedCaseInsensitiveContains("OpenZCine"))

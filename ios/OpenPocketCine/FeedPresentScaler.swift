@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import MetalPerformanceShaders
 import os
+
 #if canImport(MetalFX)
     import MetalFX
 #endif
@@ -24,7 +25,8 @@ final class FeedPresentScaler {
 
         private var spatialScaler: MTLFXSpatialScaler?
         private var spatialScalerKey: SpatialScalerKey?
-        private lazy var spatialScalingSupported = MTLFXSpatialScalerDescriptor.supportsDevice(device)
+        private lazy var spatialScalingSupported = MTLFXSpatialScalerDescriptor.supportsDevice(
+            device)
         private var spatialOutput: MTLTexture?
         private var supersampleTexture: MTLTexture?
     #endif

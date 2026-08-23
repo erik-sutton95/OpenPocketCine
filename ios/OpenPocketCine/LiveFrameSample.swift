@@ -243,10 +243,13 @@ enum PocketScopeSampler {
         samples: ScopeSamples, previous: ScopeHistogramDisplay, transfer: MonitorTransfer
     ) -> ScopeHistogramDisplay {
         ScopeHistogramDisplay(
-            luma: displayChannel(samples.histogramLuma, previous: previous.luma, transfer: transfer),
+            luma: displayChannel(
+                samples.histogramLuma, previous: previous.luma, transfer: transfer),
             red: displayChannel(samples.histogramRed, previous: previous.red, transfer: transfer),
-            green: displayChannel(samples.histogramGreen, previous: previous.green, transfer: transfer),
-            blue: displayChannel(samples.histogramBlue, previous: previous.blue, transfer: transfer))
+            green: displayChannel(
+                samples.histogramGreen, previous: previous.green, transfer: transfer),
+            blue: displayChannel(samples.histogramBlue, previous: previous.blue, transfer: transfer)
+        )
     }
 
     static func displayChannel(
@@ -526,7 +529,8 @@ final class LiveAssistEngine: @unchecked Sendable {
                         pendingTransfer = inferred
                         fx.colorMode = inferred.colorMode
                         ControlLiveLog.line(
-                            "scope transfer: inferred \(inferred.rawValue) min=\(tapMin) max=\(tapMax)")
+                            "scope transfer: inferred \(inferred.rawValue) min=\(tapMin) max=\(tapMax)"
+                        )
                     }
                     let sampled = PocketScopeSampler.sample(
                         bytes: packed.bytes, width: packed.width, height: packed.height,

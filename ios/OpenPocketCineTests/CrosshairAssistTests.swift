@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import OpenPocketCine
 
 final class CrosshairAssistTests: XCTestCase {

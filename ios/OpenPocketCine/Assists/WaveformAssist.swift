@@ -453,7 +453,8 @@ struct WaveformMovablePanel<Content: View>: View {
             content()
                 .overlay(alignment: .bottomTrailing) {
                     resizeHandle
-                        .offset(x: WaveformAssist.gripExteriorGap, y: WaveformAssist.gripExteriorGap)
+                        .offset(
+                            x: WaveformAssist.gripExteriorGap, y: WaveformAssist.gripExteriorGap)
                 }
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .padding(WaveformAssist.dragHitPadding)
@@ -534,10 +535,12 @@ struct WaveformMovablePanel<Content: View>: View {
             .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
             .frame(
                 width: WaveformAssist.gripVisualSize, height: WaveformAssist.gripVisualSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .frame(
                 width: WaveformAssist.gripHitSize, height: WaveformAssist.gripHitSize,
-                alignment: .bottomTrailing)
+                alignment: .bottomTrailing
+            )
             .contentShape(Rectangle())
             .gesture(interfaceLocked ? nil : resizeGesture)
             .accessibilityLabel("Resize waveform")

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins PEAK to OpenZCine `Peaking` + `AssistQuickSettingsContent.peakingRows`.

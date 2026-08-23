@@ -1,4 +1,5 @@
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct CubeLUTTests {
@@ -86,7 +87,8 @@ import Testing
 
     @Test func acceptsResolveDefaultSize65Declaration() {
         #expect(CubeLUT.supportedSizeRange.contains(65))
-        #expect(throws: CubeLUTParseError.sampleCountMismatch(expected: 65 * 65 * 65 * 3, found: 3)) {
+        #expect(throws: CubeLUTParseError.sampleCountMismatch(expected: 65 * 65 * 65 * 3, found: 3))
+        {
             try CubeLUT.parse("LUT_3D_SIZE\t65\n0 0 0\n")
         }
     }
@@ -113,7 +115,9 @@ import Testing
         #expect(abs(mid.red - 0.5) < 0.02)
         #expect(abs(mid.green - 0.5) < 0.02)
         #expect(abs(mid.blue - 0.5) < 0.02)
-        #expect(CubeLUT(size: 33, rgb: Array(repeating: 0, count: 33 * 33 * 33 * 3)).colorCube.size == 33)
+        #expect(
+            CubeLUT(size: 33, rgb: Array(repeating: 0, count: 33 * 33 * 33 * 3)).colorCube.size
+                == 33)
     }
 
     @Test func rejectsAbsurdlyLargeDeclaredSizeWithoutAllocating() {
@@ -190,16 +194,19 @@ import Testing
     @Test func expoParamDoesNotInventWhiteBalance() {
         // WB is `cam_image_effect` `@4–8`, not expo `@41`. `@6` is EV (`0x02/0x2E`). ISO is `@16`, not `@13`.
         var expo = [UInt8](repeating: 0, count: 46)
-        expo[13] = 0xE7; expo[14] = 0x03   // 999 sitting at the old wrong offset
-        expo[16] = 0xC8; expo[17] = 0x00   // ISO 200
+        expo[13] = 0xE7
+        expo[14] = 0x03  // 999 sitting at the old wrong offset
+        expo[16] = 0xC8
+        expo[17] = 0x00  // ISO 200
         expo[6] = 0x0F
         expo[7] = 0x01
         expo[41] = 0x02
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
         #expect(s.iso == 200)
-        #expect(s.expoMode == .auto)   // @7 == 0x01 is exposure auto, not WB
+        #expect(s.expoMode == .auto)  // @7 == 0x01 is exposure auto, not WB
         #expect(s.evComp == EvComp(thirds: -1))  // @6 == 0x0F
         #expect(s.whiteBalanceKelvin == -1)
         #expect(s.whiteBalance == nil)
@@ -207,7 +214,9 @@ import Testing
     }
 
     @Test func customLUTIndexKeepsOnlyCubesSortedCaseInsensitively() {
-        let stored = CustomLUTIndex.stored(fromFileNames: ["b.cube", "A.cube", "notes.txt", "C.CUBE", "sub/dir"])
+        let stored = CustomLUTIndex.stored(fromFileNames: [
+            "b.cube", "A.cube", "notes.txt", "C.CUBE", "sub/dir",
+        ])
         #expect(stored.map(\.fileName) == ["A.cube", "b.cube", "C.CUBE"])
         #expect(stored[0].displayName == "A")
         #expect(CustomLUTIndex.displayName(fileName: "Bleach.CUBE") == "Bleach")

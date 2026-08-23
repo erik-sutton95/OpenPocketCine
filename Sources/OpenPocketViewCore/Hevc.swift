@@ -8,10 +8,12 @@ public enum Hevc {
 
     // Named types we care about.
     public static let vps = 32, sps = 33, pps = 34
-    public static let idr = 20                // IDR_N_LP — the Pocket's keyframe slice
-    public static let djiMarker = 63          // DJI's private per-frame marker (`00 00 01 ff …`)
-    public static func isVCL(_ t: Int) -> Bool { t <= 31 }   // 0..31 = coded slice NALs
-    public static func isKeyframeNal(_ t: Int) -> Bool { t == vps || t == sps || t == pps || t == idr }
+    public static let idr = 20  // IDR_N_LP — the Pocket's keyframe slice
+    public static let djiMarker = 63  // DJI's private per-frame marker (`00 00 01 ff …`)
+    public static func isVCL(_ t: Int) -> Bool { t <= 31 }  // 0..31 = coded slice NALs
+    public static func isKeyframeNal(_ t: Int) -> Bool {
+        t == vps || t == sps || t == pps || t == idr
+    }
 
     /// Drop DJI's `00 00 01 ff …` frame marker (NAL type 63): return the buffer from the first
     /// standard NAL onward. If none is found, return the input unchanged.
@@ -45,7 +47,7 @@ public enum Hevc {
         var nals: [[UInt8]] = []
         for (k, s) in starts.enumerated() {
             var e = (k + 1 < starts.count) ? starts[k + 1] - 3 : annexB.count
-            while e > s && annexB[e - 1] == 0 { e -= 1 }   // ponytail: drops a genuine trailing 0x00 too; harmless for decode
+            while e > s && annexB[e - 1] == 0 { e -= 1 }  // ponytail: drops a genuine trailing 0x00 too; harmless for decode
             if e > s { nals.append(Array(annexB[s..<e])) }
         }
         return nals

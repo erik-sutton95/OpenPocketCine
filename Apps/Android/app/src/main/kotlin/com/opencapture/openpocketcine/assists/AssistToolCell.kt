@@ -37,11 +37,12 @@ internal fun AssistToolCell(
     enabled: Boolean,
     onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tint = if (isOn) LiveDesign.accent else LiveDesign.muted
     Column(
         modifier =
-            Modifier
+            modifier
                 .background(if (isOn) LiveDesign.accentDim else Color.Transparent, ChromeShape)
                 .border(1.dp, if (isOn) LiveDesign.accent else Color.Transparent, ChromeShape)
                 .chromeClickable(

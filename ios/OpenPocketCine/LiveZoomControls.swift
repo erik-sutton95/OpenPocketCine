@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OpenZCine `MonitorExperience.zoomGesturesTail` / Android `completeDrag`.
 /// Down → clean (DISP 2). Up → live (DISP 1). `nil` if too short or not vertical.
@@ -220,8 +220,9 @@ struct LiveZoomPinchModifier: ViewModifier {
                 draftStart = nil
                 draftEnd = nil
                 guard enabled else { return }
-                guard let kind = LiveFeedFocusGesture.classify(
-                    translation: value.translation, pinched: pinchUsed, armed: armed)
+                guard
+                    let kind = LiveFeedFocusGesture.classify(
+                        translation: value.translation, pinched: pinchUsed, armed: armed)
                 else { return }
                 switch kind {
                 case .dispClean:

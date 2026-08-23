@@ -40,6 +40,12 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertFalse(
             CameraSoftAP.shouldRunFirstPictureRecover(
                 secondsSinceLastPresented: 0.4, alreadySettled: false))
+        XCTAssertFalse(CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: false))
+        XCTAssertTrue(CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: true))
+        XCTAssertTrue(CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: true))
+        XCTAssertFalse(CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: false))
+        XCTAssertTrue(CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: false))
+        XCTAssertFalse(CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: true))
     }
 
     func testFirstPictureFrozenBurstRebuildsUDP() {
@@ -181,6 +187,25 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(
             CameraSoftAP.shouldRearmAfterError(isLiveConnection: true, canceled: true),
             "spurious 89 on a live fd must not kill the handshake reader")
+        XCTAssertTrue(CameraSoftAP.shouldReuseDatalink(isClosed: false))
+        XCTAssertFalse(
+            CameraSoftAP.shouldReuseDatalink(isClosed: true),
+            "close() is terminal — next connect must not inherit that UDP session")
+        XCTAssertTrue(
+            CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: false, isCancelled: false))
+        XCTAssertFalse(
+            CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: false, isClosed: false, isCancelled: false),
+            "session already replaced this driver")
+        XCTAssertFalse(
+            CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: true, isCancelled: false),
+            "cancelled open() after close() must not publish LIVE")
+        XCTAssertFalse(
+            CameraSoftAP.shouldCommitLiveHandshake(
+                driverOwned: true, isClosed: false, isCancelled: true),
+            "cancelled open() must not publish LIVE after Disconnect")
     }
 
     func testDoNotEnableUntilWifiReady() {
@@ -203,6 +228,12 @@ final class FirstConnectTests: XCTestCase {
             CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: false),
             "handshake is path proof — do not wait on getifaddrs")
         XCTAssertFalse(CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: true))
+        XCTAssertTrue(
+            CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: false),
+            "Pocket live-entry sends 0x02/0x68 08 before 0x09/0xa8")
+        XCTAssertFalse(
+            CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: true),
+            "Nano has no captured 0x68 pair")
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
                 videoPackets: 0, enableSends: 0, secondsSinceLastEnable: 8),

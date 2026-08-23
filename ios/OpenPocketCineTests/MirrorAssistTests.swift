@@ -1,5 +1,6 @@
 import CoreImage
 import XCTest
+
 @testable import OpenPocketCine
 
 final class MirrorAssistTests: XCTestCase {

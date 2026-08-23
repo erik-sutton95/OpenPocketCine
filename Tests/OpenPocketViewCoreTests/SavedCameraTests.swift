@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct SavedCameraTests {
@@ -25,7 +26,8 @@ import Testing
         let id = UUID()
         let older = camera(id: id, ssid: nil, at: Date(timeIntervalSince1970: 1), custom: "A-cam")
         let newer = camera(id: id, ssid: "OsmoPocket4P-AAAA", at: Date(timeIntervalSince1970: 9))
-        let other = camera(name: "OsmoPocket3-AAAA", model: "Osmo Pocket 3", at: Date(timeIntervalSince1970: 5))
+        let other = camera(
+            name: "OsmoPocket3-AAAA", model: "Osmo Pocket 3", at: Date(timeIntervalSince1970: 5))
 
         let result = SavedCameras.upserting(newer, into: [older, other])
         #expect(result.count == 2)
@@ -40,7 +42,8 @@ import Testing
         let first = camera(id: id, model: "Osmo Nano")
         var stored = first
         stored.modelId = 0x19
-        let reconnect = camera(id: id, name: "DJI camera", model: "DJI Osmo camera", ssid: "OsmoNano-ABCD")
+        let reconnect = camera(
+            id: id, name: "DJI camera", model: "DJI Osmo camera", ssid: "OsmoNano-ABCD")
         let result = SavedCameras.upserting(reconnect, into: [stored])
         #expect(result[0].modelId == 0x19)
     }
@@ -177,12 +180,14 @@ import Testing
                 advertisedName: "OsmoNano-BBBB", modelName: "Osmo Nano") == "OsmoNano-BBBB")
         #expect(
             FoundCameraIdentity.listSubtitle(
-                advertisedName: "DJI camera", modelName: "Osmo Pocket 4 Pro")
-                .contains("Pocket"))
+                advertisedName: "DJI camera", modelName: "Osmo Pocket 4 Pro"
+            )
+            .contains("Pocket"))
         #expect(
             FoundCameraIdentity.listSubtitle(
-                advertisedName: "OsmoNano-BBBB", modelName: "Osmo Nano")
-                .contains("Nano"))
+                advertisedName: "OsmoNano-BBBB", modelName: "Osmo Nano"
+            )
+            .contains("Nano"))
         #expect(CameraSoftAP.isOsmoSoftAPSSID("OsmoPocket4P-AAAA"))
         #expect(CameraSoftAP.isOsmoSoftAPSSID("OsmoNano-BBBB"))
         #expect(!CameraSoftAP.isOsmoSoftAPSSID("HomeWiFi"))

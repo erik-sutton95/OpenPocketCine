@@ -1,4 +1,5 @@
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct CamCapTests {
@@ -20,14 +21,17 @@ import Testing
         var status50 = CameraStatus()
         status50.fps = 50
         status50.availableShutterDenoms = p60
-        #expect(CamCapShutter.wheelDenoms(available: status50.availableShutterDenoms, current: 50).contains(50))
+        #expect(
+            CamCapShutter.wheelDenoms(available: status50.availableShutterDenoms, current: 50)
+                .contains(50))
 
         var status60 = CameraStatus()
         status60.fps = 60
         status60.availableShutterDenoms = p60
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: CamCapShutter.subscribeKey, value: Self.shutter60p),
-            to: &status60))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: CamCapShutter.subscribeKey, value: Self.shutter60p),
+                to: &status60))
         #expect(status60.availableShutterDenoms.contains(50))
         #expect(status60.fps == 60)
     }
@@ -59,25 +63,32 @@ import Testing
 
     @Test func subscribePushCachesShutterAndIso() {
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: CamCapShutter.subscribeKey, value: Self.shutter25p), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: CamCapShutter.subscribeKey, value: Self.shutter25p), to: &s
+            ))
         #expect(s.availableShutterDenoms.contains(50))
         #expect(s.availableShutterDenoms.contains(25))
 
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: CamCapIso.subscribeKey, value: Self.isoDLog2), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: CamCapIso.subscribeKey, value: Self.isoDLog2), to: &s))
         #expect(s.availableIsoIndices == [.iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200])
 
         let before = s.availableShutterDenoms
-        #expect(!CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: CamCapShutter.subscribeKey, value: [0x00]), to: &s))
+        #expect(
+            !CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: CamCapShutter.subscribeKey, value: [0x00]), to: &s))
         #expect(s.availableShutterDenoms == before)
     }
 
     @Test func isoAutoOnlyAndFallback() {
         #expect(CamCapIso.parseIndices(Self.isoAutoOnly) == [.auto])
         #expect(CamCapIso.wheelIndices(available: [.auto], fallback: IsoIndex.allCases) == [.auto])
-        #expect(CamCapIso.wheelIndices(available: [], fallback: [.iso100, .iso200]) == [.iso100, .iso200])
+        #expect(
+            CamCapIso.wheelIndices(available: [], fallback: [.iso100, .iso200]) == [
+                .iso100, .iso200,
+            ])
     }
 
     @Test func dLogStars400AndDLog2Stars1600() {
@@ -142,7 +153,8 @@ import Testing
         let wheel = CamCapIso.wheelIndices(available: fromCap, fallback: ColorMode.dLog2.isoIndices)
         #expect(wheel == fromCap)
         #expect(CamCapIso.markedLabels(transfer: .dlog2) == ["1600"])
-        #expect(wheel.map(\.label).contains("400"), "400 stays on the D-Log2 camcap list, unstarred")
+        #expect(
+            wheel.map(\.label).contains("400"), "400 stays on the D-Log2 camcap list, unstarred")
     }
 
     @Test func isoAutoMaxTablesMatchColorMode() {
@@ -206,7 +218,9 @@ import Testing
     private static let shutter24p = hex(
         "0161000002000101001e00051d80be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80000c80000a8000088000068000058000048000"
     )
-    private static let isoDLog2: [UInt8] = [0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]
+    private static let isoDLog2: [UInt8] = [
+        0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    ]
     private static let isoAutoOnly: [UInt8] = [0x01, 0x03, 0x00, 0x00, 0x01, 0x00]
 
     private static func hex(_ s: String) -> [UInt8] {

@@ -72,11 +72,13 @@ import com.opencapture.openpocketcine.assists.PeakingSense
 import com.opencapture.openpocketcine.assists.ScopeGuides
 import com.opencapture.openpocketcine.assists.VectorscopeZoom
 import com.opencapture.openpocketcine.assists.WaveformMode
+import com.opencapture.openpocketcine.assists.ZebraEditor
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.feed.LutLookResolver
+import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.settings.DisplayToggleItem
 import com.opencapture.openpocketcine.settings.GlassPillSlider
@@ -871,7 +873,7 @@ private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> U
     if (isPortrait) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FalseColorAssistCard(assist)
-            ZebraAssistCard(assist)
+            ZebraAssistCard(assist, statusColorMode)
             WaveformAssistCard(assist)
             ParadeAssistCard(assist)
             HistogramAssistCard(assist)
@@ -892,7 +894,7 @@ private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> U
                 PeakingAssistCard(assist)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ZebraAssistCard(assist)
+                ZebraAssistCard(assist, statusColorMode)
                 ParadeAssistCard(assist)
                 VectorscopeAssistCard(assist)
                 TrafficLightsAssistCard(assist)
@@ -981,7 +983,7 @@ private fun PeakingAssistCard(assist: LiveAssistState) {
 }
 
 @Composable
-private fun ZebraAssistCard(assist: LiveAssistState) {
+private fun ZebraAssistCard(assist: LiveAssistState, colorMode: Int) {
     SettingsRowCard(
         title = "Zebra",
         onReset = {
@@ -1003,26 +1005,34 @@ private fun ZebraAssistCard(assist: LiveAssistState) {
                 assist.updateZebraUnit(ZebraUnit.fromEditorLabel(label))
             }
         }
+        val transfer = MonitorTransfer.fromColorMode(colorMode)
+        val maximum = ZebraEditor.editorMaximum(assist.zebraUnit)
         ZebraZoneRow(
             title = "Highlight",
             help = SettingsHelpCopy.ZEBRA_HIGHLIGHT,
             enabled = assist.zebraHighlight,
-            value = assist.zebraHighlightIRE.toInt(),
+            value = ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer),
+            maximum = maximum,
             selectedColor = assist.zebraHighlightColor.label,
             palette = SettingsPalette.highlight,
             onEnabled = { assist.setZebraHighlight(enabled = !assist.zebraHighlight) },
-            onValue = { assist.setZebraHighlight(ire = it.toDouble()) },
+            onValue = {
+                assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer))
+            },
             onColor = { assist.setZebraHighlight(color = ZebraPaint.fromPersisted(it)) },
         )
         ZebraZoneRow(
             title = "Midtone",
             help = SettingsHelpCopy.ZEBRA_MIDTONE,
             enabled = assist.zebraMidtone,
-            value = assist.zebraMidtoneIRE.toInt(),
+            value = ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer),
+            maximum = maximum,
             selectedColor = assist.zebraMidtoneColor.label,
             palette = SettingsPalette.midtone,
             onEnabled = { assist.setZebraMidtone(enabled = !assist.zebraMidtone) },
-            onValue = { assist.setZebraMidtone(ire = it.toDouble()) },
+            onValue = {
+                assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer))
+            },
             onColor = { assist.setZebraMidtone(color = ZebraPaint.fromPersisted(it)) },
         )
     }
@@ -1034,6 +1044,7 @@ private fun ZebraZoneRow(
     help: String,
     enabled: Boolean,
     value: Int,
+    maximum: Int,
     selectedColor: String,
     palette: List<SettingsColorDot>,
     onEnabled: () -> Unit,
@@ -1049,7 +1060,7 @@ private fun ZebraZoneRow(
             Box(Modifier.settingsClickable(role = Role.Switch, onClick = onEnabled)) {
                 SettingsSwitchGraphic(isOn = enabled)
             }
-            SettingsNumberField(value = value.coerceIn(0, 100), maximum = 100, onChange = onValue)
+            SettingsNumberField(value = value.coerceIn(0, maximum), maximum = maximum, onChange = onValue)
             Spacer(Modifier.weight(1f))
             SettingsColorDots(dots = palette, selectedName = selectedColor, onSelect = onColor)
         }

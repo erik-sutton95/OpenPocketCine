@@ -12,6 +12,12 @@ class MediaLibraryTest {
         javaClass.classLoader!!.getResourceAsStream("nano-manifest.bin")!!.readBytes()
 
     @Test
+    fun portraitHeaderStacksTheItemCountUnderTheTitle() {
+        assertTrue(MediaLibraryHeaderMetrics.stacksCountUnderTitle(portrait = true))
+        assertFalse(MediaLibraryHeaderMetrics.stacksCountUnderTitle(portrait = false))
+    }
+
+    @Test
     fun thumbnailGridMatchesOpenZCineMinima() {
         assertEquals(148, MediaThumbnailSize.SMALL.gridMinimumDp)
         assertEquals(210, MediaThumbnailSize.MEDIUM.gridMinimumDp)
@@ -104,6 +110,12 @@ class MediaLibraryTest {
         assertTrue(play.last().second.endsWith(".MP4"))
         assertTrue(MediaHTTP.isProxyPath(play[0].second))
         assertFalse(MediaHTTP.isProxyPath(file.path))
+        assertEquals(file.path, MediaHTTP.deliveryPath(file))
+        assertFalse(MediaHTTP.isProxyPath(MediaHTTP.deliveryPath(file)))
+        assertTrue(MediaHTTP.previewPaths(file).first() != MediaHTTP.deliveryPath(file))
+        assertTrue(MediaHTTP.proxyPaths(file).all { MediaHTTP.isProxyPath(it) })
+        assertTrue(MediaHTTP.proxyPaths(file).none { it == file.path })
+        assertTrue(MediaHTTP.proxyPaths(file).isNotEmpty())
         assertEquals("video/mp4", MediaHTTP.playbackMIMEType(play[0].second))
         assertEquals("video/mp4", MediaHTTP.playbackMIMEType(file.path))
         assertTrue(MediaHTTP.playbackCacheFileName(play[0].second).endsWith(".mp4"))

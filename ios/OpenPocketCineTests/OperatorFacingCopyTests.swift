@@ -1,5 +1,6 @@
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// Operator-facing copy must never name a sister app or another camera brand.

@@ -1,8 +1,9 @@
 import AVFoundation
 import CoreImage
 import CoreVideo
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// App-layer pipeline: decoder → `LiveAssistEngine` → `LiveFrameSampleBus` →
@@ -19,7 +20,8 @@ final class LiveFrameSampleTests: XCTestCase {
         decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .rec709 })
         decoder.effects = fx
 
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
+        decoder.handleDecodedFrame(
+            ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
 
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline {
@@ -27,16 +29,22 @@ final class LiveFrameSampleTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(20))
         }
 
-        XCTAssertGreaterThanOrEqual(bus.decodedFrames, 1, "pixel-buffer callback must increment decodedFrames")
-        XCTAssertGreaterThanOrEqual(bus.publishedScopes, 1, "scopes must sample the ingested buffer")
+        XCTAssertGreaterThanOrEqual(
+            bus.decodedFrames, 1, "pixel-buffer callback must increment decodedFrames")
+        XCTAssertGreaterThanOrEqual(
+            bus.publishedScopes, 1, "scopes must sample the ingested buffer")
         XCTAssertGreaterThanOrEqual(bus.generation, 1, "SwiftUI scopes observe generation")
         XCTAssertNotNil(bus.sourcePixelBuffer, "bus must publish the source buffer")
         XCTAssertEqual(bus.transfer, .rec709)
         XCTAssertEqual(bus.colorMode, .normal)
-        XCTAssertEqual(bus.bundle.transfer, .rec709, "views read bundle.transfer, never session status")
+        XCTAssertEqual(
+            bus.bundle.transfer, .rec709, "views read bundle.transfer, never session status")
         XCTAssertFalse(bus.bundle.samples.points.isEmpty, "WAVE needs the shared point bundle")
-        XCTAssertFalse(bus.bundle.samples.histogramLuma.allSatisfy { $0 == 0 }, "native histogram must fill")
-        XCTAssertFalse(bus.bundle.histogramDisplay.luma.allSatisfy { $0 == 0 }, "display histogram must be precomputed")
+        XCTAssertFalse(
+            bus.bundle.samples.histogramLuma.allSatisfy { $0 == 0 }, "native histogram must fill")
+        XCTAssertFalse(
+            bus.bundle.histogramDisplay.luma.allSatisfy { $0 == 0 },
+            "display histogram must be precomputed")
         XCTAssertGreaterThan(bus.bundle.revision, 0)
     }
 
@@ -49,7 +57,8 @@ final class LiveFrameSampleTests: XCTestCase {
         decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .rec709 })
         decoder.effects = fx
 
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
+        decoder.handleDecodedFrame(
+            ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
         let firstDeadline = Date().addingTimeInterval(2)
         while Date() < firstDeadline {
             if bus.generation >= 1 { break }
@@ -68,7 +77,8 @@ final class LiveFrameSampleTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(20))
         }
 
-        XCTAssertGreaterThan(bus.generation, first, "each scoped sample past the 15 Hz gate must tick generation")
+        XCTAssertGreaterThan(
+            bus.generation, first, "each scoped sample past the 15 Hz gate must tick generation")
         XCTAssertGreaterThanOrEqual(bus.decodedFrames, 2, "sequential feed drains every frame")
     }
 
@@ -110,7 +120,8 @@ final class LiveFrameSampleTests: XCTestCase {
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .rec709 })
         decoder.effects = fx
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
+        decoder.handleDecodedFrame(
+            ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline {
             if bus.decodedFrames >= 1 { break }
@@ -119,7 +130,8 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(bus.decodedFrames, 1)
 
         decoder.effects = LiveImageEffects()
-        XCTAssertFalse(decoder.displayedImageRemoved, "LUT off after a picture must keep the last frame")
+        XCTAssertFalse(
+            decoder.displayedImageRemoved, "LUT off after a picture must keep the last frame")
         XCTAssertFalse(decoder.awaitingIDR)
         XCTAssertTrue(feed.isHidden)
         XCTAssertFalse(decoder.displayLayer.isHidden)
@@ -257,7 +269,8 @@ final class LiveFrameSampleTests: XCTestCase {
         decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .rec709 })
         decoder.effects = fx
 
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
+        decoder.handleDecodedFrame(
+            ScopeTestBuffers.makeEdgeBuffer(), effects: fx, transfer: .rec709)
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline {
             if bus.decodedFrames >= 1 { break }
@@ -400,7 +413,8 @@ final class LiveFrameSampleTests: XCTestCase {
             let points = bytes.map {
                 ScopePoint(xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
             }
-            let capacity = ScopeTraceMetal.maxVertexCount(points: points.count, mode: .waveform(.rgb))
+            let capacity = ScopeTraceMetal.maxVertexCount(
+                points: points.count, mode: .waveform(.rgb))
             var vertices = [ScopeTraceMetal.Vertex](
                 repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
                 count: capacity)
@@ -409,7 +423,8 @@ final class LiveFrameSampleTests: XCTestCase {
                     out, from: 0, points: points, mode: .waveform(.rgb), rect: plot,
                     opacity: 1, levelTable: table)
             }
-            XCTAssertEqual(written, points.count * 3, "\(transfer) rgb writes one vertex per channel")
+            XCTAssertEqual(
+                written, points.count * 3, "\(transfer) rgb writes one vertex per channel")
             for (index, point) in points.enumerated() {
                 let expected = WaveformAxis.vertexPositionY(
                     ire: Double(table[Int(point.luma)]), pointSize: 1, rect: plot)
@@ -446,7 +461,8 @@ final class LiveFrameSampleTests: XCTestCase {
             bytes: bytes, width: 16, height: 1, bytesPerRow: 64,
             transfer: .dlog2, includePoints: false, includeVectorPoints: true,
             look: nil, previous: wave)
-        XCTAssertTrue(vector.samples.points.isEmpty, "points stay out of the bundle when WAVE is off")
+        XCTAssertTrue(
+            vector.samples.points.isEmpty, "points stay out of the bundle when WAVE is off")
         XCTAssertFalse(vector.vectorscopePoints.isEmpty)
         XCTAssertEqual(vector.revision, 2)
         XCTAssertEqual(vector.trailSamples, wave.samples, "previous samples ride as the trail")
@@ -467,7 +483,8 @@ final class LiveFrameSampleTests: XCTestCase {
             transfer: .dlog2, includePoints: true, look: BuiltInLook.mono.cube(),
             previous: .empty)
         XCTAssertEqual(plain.samples, looked.samples, "the look must not leak into WAVE/HISTO")
-        let peak = plain.samples.histogramLuma.enumerated()
+        let peak =
+            plain.samples.histogramLuma.enumerated()
             .max(by: { $0.element < $1.element })?.offset ?? 0
         XCTAssertEqual(peak, 78, "grey stays the native curve byte")
         XCTAssertEqual(plain.samples.points.first?.luma, 78)
@@ -489,7 +506,8 @@ final class LiveFrameSampleTests: XCTestCase {
             bundle.samples.histogramLuma[16], bundle.samples.points.count,
             "every sampled pixel lands in native bin 16")
         XCTAssertGreaterThan(bundle.samples.histogramLuma[16], 0)
-        let displayPeak = bundle.histogramDisplay.luma.enumerated()
+        let displayPeak =
+            bundle.histogramDisplay.luma.enumerated()
             .max(by: { $0.element < $1.element })?.offset ?? 0
         XCTAssertEqual(displayPeak, 0, accuracy: 2, "black anchor sits on the WAVE 0 bucket")
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
@@ -673,8 +691,10 @@ final class LiveFrameSampleTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(20))
         }
 
-        XCTAssertGreaterThanOrEqual(bus.publishedScopes, 1, "420v live/HEVC frames must publish a scope bundle")
-        XCTAssertFalse(bus.bundle.samples.points.isEmpty, "WAVE needs scatter points from the 420v tap")
+        XCTAssertGreaterThanOrEqual(
+            bus.publishedScopes, 1, "420v live/HEVC frames must publish a scope bundle")
+        XCTAssertFalse(
+            bus.bundle.samples.points.isEmpty, "WAVE needs scatter points from the 420v tap")
         let occupied = bus.bundle.samples.histogramLuma.filter { $0 > 0 }.count
         XCTAssertGreaterThan(occupied, 1, "edge frame must not collapse to a single bin")
     }
@@ -735,9 +755,12 @@ final class LiveFrameSampleTests: XCTestCase {
     /// Prefers legal-scaled 10-bit x420 (black → grey edge), falls back to
     /// IOSurface BGRA, then 8-bit 420v.
     private static func makeLiveLikeBuffer(width: Int, height: Int) -> CVPixelBuffer? {
-        if let ten = ScopeTestBuffers.makeX420(width: width, height: height, luma10: { x, _ in
-            x < width / 2 ? ScopeTestBuffers.dlog2Black10 : ScopeTestBuffers.dlog2Grey10
-        }) {
+        if let ten = ScopeTestBuffers.makeX420(
+            width: width, height: height,
+            luma10: { x, _ in
+                x < width / 2 ? ScopeTestBuffers.dlog2Black10 : ScopeTestBuffers.dlog2Grey10
+            })
+        {
             return ten
         }
         let metal = ScopeTestBuffers.makeIOSurfaceBGRA(
@@ -746,7 +769,9 @@ final class LiveFrameSampleTests: XCTestCase {
         return ScopeTestBuffers.make420v(width: width, height: height, leftY: 48, rightY: 200)
     }
 
-    private static func maxChannelDelta(output: CIImage, source: CIImage, context: CIContext) -> Float {
+    private static func maxChannelDelta(output: CIImage, source: CIImage, context: CIContext)
+        -> Float
+    {
         let w = 80
         let h = 40
         func bytes(_ image: CIImage) -> [UInt8] {

@@ -52,6 +52,9 @@ re-run the checklist.
   notes. Public direction lives in [`ROADMAP.md`](ROADMAP.md).
 - **Raw working media.** Layered design files, unreviewed captures, and full-resolution marketing
   sources stay under `.local/`. Only reviewed, optimized runtime exports belong in `site/`.
+- **Live-view UI dumps.** Phone screenshots of a connected camera (home interiors, people,
+  private spaces) stay out of the repo. Keep them on the local Desktop review folder or
+  `/images/` (gitignored). Never commit them.
 
 ## Why a gitignore entry is not enough
 

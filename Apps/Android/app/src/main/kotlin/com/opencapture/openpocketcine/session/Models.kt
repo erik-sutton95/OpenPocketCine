@@ -132,7 +132,7 @@ data class CameraStatus(
     val audioDspBlob: String = "",
     /** Shared audio-DSP `@2`. `-1` unknown. */
     val audioDspAt2: Int = -1,
-    /** `cam_fov` u32-LE `@0`. 0 = unknown. Display factor is `@0 / 1024`. */
+    /** `cam_fov` u32-LE `@0`. 0 = unknown. 12287 is operator 1×, not 12×. */
     val zoomFactorRaw: Int = 0,
     /** Legal 1/N denoms from `camcap_shutter`, camera order. */
     val availableShutterDenoms: List<Int> = emptyList(),
@@ -201,11 +201,10 @@ data class CameraStatus(
         get() = CameraCommands.resolutionLabel(resolutionCode)
 
     val recFormatLabel: String
-        get() {
-            val res = resolutionLabel
-            val rate = if (fps > 0) "${fps}p" else "—"
-            return if (res == "—") rate else "$res $rate"
-        }
+        get() = VideoFormat.chipLabel(this)
+
+    val videoFormat: VideoFormat?
+        get() = VideoFormat.parse(resolutionCode, fpsIndex)
 
     val wbLabel: String
         get() =
@@ -219,13 +218,7 @@ data class CameraStatus(
         get() = FocusOption.resolve(focusMode, focusTrack)?.chip ?: "—"
 
     val audioLabel: String
-        get() =
-            when (audioChannel) {
-                CameraCommands.AUDIO_MONO -> "Mono"
-                CameraCommands.AUDIO_STEREO -> "Stereo"
-                CameraCommands.AUDIO_SPATIAL -> "Spatial"
-                else -> "—"
-            }
+        get() = CameraCommands.audioChannelLabel(audioChannel) ?: "—"
 
     val hasHudFields: Boolean
         get() =
@@ -257,6 +250,22 @@ data class CameraStatus(
             return "$gb GB · $pct%"
         }
 
+    fun applyingAudioByte2(raw: Int): CameraStatus {
+        val wind = CameraCommands.windFrom(raw)
+        val dir = CameraCommands.directionalFrom(raw)
+        return copy(
+            audioDspAt2 = raw,
+            windNr = if (wind >= 0) wind else windNr,
+            directionalAudio = if (dir >= 0) dir else directionalAudio,
+        )
+    }
+
+    fun applyingAudioBlob(blob: ByteArray): CameraStatus {
+        if (blob.size < 3) return this
+        return copy(audioDspBlob = CameraCommands.audioDspHex(blob))
+            .applyingAudioByte2(blob[2].toInt() and 0xFF)
+    }
+
     fun withAudioDspAt2(): CameraStatus {
         val at2 =
             when {
@@ -264,22 +273,7 @@ data class CameraStatus(
                 audioDspBlob.length >= 6 -> audioDspBlob.substring(4, 6).toIntOrNull(16) ?: -1
                 else -> -1
             }
-        return copy(
-            audioDspAt2 = at2,
-            windNr =
-                when (at2) {
-                    CameraCommands.WIND_ON -> 1
-                    CameraCommands.WIND_OFF -> 0
-                    else -> windNr
-                },
-            directionalAudio =
-                when (at2) {
-                    CameraCommands.DIR_ALL -> 0
-                    CameraCommands.DIR_FRONT -> 1
-                    CameraCommands.DIR_FRONT_BACK -> 2
-                    else -> directionalAudio
-                },
-        )
+        return if (at2 >= 0) applyingAudioByte2(at2) else copy(audioDspAt2 = at2)
     }
 
     fun preservingExtras(prev: CameraStatus): CameraStatus =

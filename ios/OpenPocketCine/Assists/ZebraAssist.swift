@@ -123,7 +123,9 @@ enum ZebraAssist {
             switch unit {
             case .ire: Int(ire.rounded())
             case .native:
-                Int((ScopeDisplayScale.signalNative(monitorPercent: ire, transfer: transfer) * 255).rounded())
+                Int(
+                    (ScopeDisplayScale.signalNative(monitorPercent: ire, transfer: transfer) * 255)
+                        .rounded())
             }
         }
 

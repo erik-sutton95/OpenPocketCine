@@ -1,5 +1,7 @@
-import XCTest
+import CoreMedia
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 @MainActor
@@ -43,6 +45,15 @@ final class EncoderFormatChangeTests: XCTestCase {
         let idr: [UInt8] = [0x28, 0x01]
         _ = decoder.decode(accessUnit: Self.annexB([Self.vps, flippedSPS, Self.pps, idr]))
         XCTAssertEqual(fired, 0, "second 0x09/0xa8 on an IDR AU hangs the hold")
+    }
+
+    func testLivePresentTimingDoesNotPaceAtThirtyFps() {
+        let timing = LiveViewPresentTiming.sampleTiming(frameIndex: 1)
+        XCTAssertEqual(timing.duration.timescale, 60_000)
+        XCTAssertEqual(timing.presentationTimeStamp.timescale, 60_000)
+        XCTAssertNotEqual(timing.duration.timescale, 30)
+        let seconds = CMTimeGetSeconds(timing.duration)
+        XCTAssertLessThan(seconds, 1.0 / 50.0)
     }
 
     private static func annexB(_ nals: [[UInt8]]) -> [UInt8] {

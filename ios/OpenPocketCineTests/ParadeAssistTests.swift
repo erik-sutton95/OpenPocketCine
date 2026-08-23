@@ -1,6 +1,7 @@
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+
 @testable import OpenPocketCine
 
 final class ParadeAssistTests: XCTestCase {
@@ -92,7 +93,8 @@ final class ParadeAssistTests: XCTestCase {
             feed: layout.feed,
             size: size,
             bounds: canvas,
-            chromeClearance: EdgeInsets(top: layout.topDeck.maxY, leading: 0, bottom: 0, trailing: 0)
+            chromeClearance: EdgeInsets(
+                top: layout.topDeck.maxY, leading: 0, bottom: 0, trailing: 0)
         )
         XCTAssertEqual(center.x, layout.feed.maxX - size.width / 2, accuracy: 0.6)
         XCTAssertGreaterThan(center.y, layout.topDeck.maxY)
@@ -134,8 +136,10 @@ final class ParadeAssistTests: XCTestCase {
 
     func testLaneXMatchesOpenZCineSplit() {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
-        XCTAssertEqual(ParadeAssist.laneWidth(mode: .rgb, plot: plot), plot.width / 3, accuracy: 0.001)
-        XCTAssertEqual(ParadeAssist.laneWidth(mode: .yrgb, plot: plot), plot.width / 4, accuracy: 0.001)
+        XCTAssertEqual(
+            ParadeAssist.laneWidth(mode: .rgb, plot: plot), plot.width / 3, accuracy: 0.001)
+        XCTAssertEqual(
+            ParadeAssist.laneWidth(mode: .yrgb, plot: plot), plot.width / 4, accuracy: 0.001)
         // OpenZCine: originX + xRatio * (laneWidth - 1)
         XCTAssertEqual(
             ParadeAssist.laneX(xRatio: 0, lane: 0, mode: .rgb, plot: plot),
@@ -160,7 +164,8 @@ final class ParadeAssistTests: XCTestCase {
             ScopePoint(xRatio: 0.25, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
         }
         let rgbCapacity = ScopeTraceMetal.maxVertexCount(points: points.count, mode: .parade(.rgb))
-        let yrgbCapacity = ScopeTraceMetal.maxVertexCount(points: points.count, mode: .parade(.yrgb))
+        let yrgbCapacity = ScopeTraceMetal.maxVertexCount(
+            points: points.count, mode: .parade(.yrgb))
         XCTAssertEqual(rgbCapacity, points.count * 3)
         XCTAssertEqual(yrgbCapacity, points.count * 4)
 

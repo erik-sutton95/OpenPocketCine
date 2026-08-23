@@ -48,12 +48,11 @@ enum LiveDesign {
     static let surface = Color(red: 28 / 255, green: 28 / 255, blue: 28 / 255)
     static let glass = djiBlack.opacity(0.24)
     static let glassOpaque = djiBlack.opacity(0.38)
-    /// Plate *behind* Liquid Glass. Must be dense enough that a bright window
-    /// and a dark shirt sample the same charcoal — an 18% overlay on top of
-    /// glass still washed the top deck out.
-    static let chromePlate = djiBlack.opacity(0.52)
-    /// Titan wash in `Glass.regular` — frost without a black mix.
-    static let chromeTint = djiTitan.opacity(0.26)
+    /// Plate *behind* Liquid Glass. Dense charcoal, not Titan — a gray mix
+    /// desaturates refraction and reads as weaker glass, not a darker HUD.
+    static let chromePlate = djiBlack.opacity(0.34)
+    /// Black ND on `Glass.regular`. Titan here turned the bars gray.
+    static let chromeTint = djiBlack.opacity(0.42)
     /// Inactive pills: Titan at low opacity so chrome stays light-on-dark.
     static let glassBright = djiTitan.opacity(0.18)
     static let hairline = djiTitan.opacity(0.45)

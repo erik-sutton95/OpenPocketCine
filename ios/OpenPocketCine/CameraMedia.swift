@@ -51,8 +51,6 @@ final class CameraMedia {
         return URLSession(configuration: cfg, delegate: pump, delegateQueue: nil)
     }()
 
-
-
     func nextBrowseID() -> Int {
         browseID += 1
         return browseID
@@ -79,7 +77,8 @@ final class CameraMedia {
     func loadFavorites(cameraID: String) -> Set<String> {
         if favoritesCameraID == cameraID { return favorites }
         favoritesCameraID = cameraID
-        favorites = Set(UserDefaults.standard.stringArray(forKey: Self.favoritesKey(cameraID)) ?? [])
+        favorites = Set(
+            UserDefaults.standard.stringArray(forKey: Self.favoritesKey(cameraID)) ?? [])
         return favorites
     }
 
@@ -101,7 +100,8 @@ final class CameraMedia {
     }
 
     func cacheRoot(cameraID: String) -> URL {
-        let app = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let app = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
+            0]
         return app.appendingPathComponent("OpenPocketCine/media/\(cameraID)", isDirectory: true)
     }
 
@@ -150,7 +150,7 @@ final class CameraMedia {
         head.httpMethod = "HEAD"
         head.timeoutInterval = 4
         if let (_, response) = try? await http.data(for: head),
-           let http = response as? HTTPURLResponse
+            let http = response as? HTTPURLResponse
         {
             if (200...299).contains(http.statusCode) { return true }
             if http.statusCode == 404 || http.statusCode == 400 { return false }
@@ -208,8 +208,9 @@ final class CameraMedia {
 
     func cacheByteCount(cameraID: String) -> UInt64 {
         let root = cacheRoot(cameraID: cameraID)
-        guard let enumerator = FileManager.default.enumerator(
-            at: root, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey])
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: root, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey])
         else { return 0 }
         var total: UInt64 = 0
         for case let url as URL in enumerator {
@@ -245,10 +246,11 @@ final class CameraMedia {
     static func existingFile(_ url: URL) -> URL? {
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
-              !isDir.boolValue
+            !isDir.boolValue
         else { return nil }
-        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
-           size.intValue <= 0
+        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size]
+            as? NSNumber,
+            size.intValue <= 0
         {
             return nil
         }
@@ -342,7 +344,8 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
 
     func urlSession(
         _ session: URLSession, dataTask: URLSessionDataTask,
-        didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         let length = max(0, response.expectedContentLength)
@@ -388,7 +391,8 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
         }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?)
+    {
         if let error, (error as NSError).code == NSURLErrorCancelled {
             lock.lock()
             let already = jobs[task.taskIdentifier]?.finished ?? true
@@ -502,7 +506,8 @@ extension CameraSession {
                 return
             case .exitPlayback:
                 ControlLiveLog.line(
-                    "media: exit playback attempt=\(attempt) inPlayback=\(status.inPlayback ? 1 : 0)")
+                    "media: exit playback attempt=\(attempt) inPlayback=\(status.inPlayback ? 1 : 0)"
+                )
                 do {
                     let reply = try await awaitMediaOpcode(0x02, 0x0C, timeout: .milliseconds(450))
                     {
@@ -584,7 +589,7 @@ extension CameraSession {
         mediaDownloadProgress[file.path] = 0
         let dest = mediaFileDest(file)
         do {
-            try await fetchMediaFile(file: file, path: MediaHTTP.originalPath(file), to: dest)
+            try await fetchMediaFile(file: file, path: MediaHTTP.deliveryPath(file), to: dest)
             guard CameraMedia.existingFile(dest) != nil else {
                 throw MediaTransferError.badResponse
             }
@@ -641,6 +646,7 @@ extension CameraSession {
     /// Cached file if we already pulled this clip. Does not touch the camera.
     /// A thumbnail or a short/failed original write is not a playback source.
     func localPlaybackSource(for file: MediaFile) -> MediaPlaybackSource? {
+        if let proxy = localProxySource(for: file) { return proxy }
         if isDownloaded(file), let local = localURL(for: file) {
             return MediaPlaybackSource(
                 url: local,
@@ -648,7 +654,12 @@ extension CameraSession {
                 isRemote: false,
                 path: file.path)
         }
-        for path in MediaHTTP.previewPaths(file) where path != file.path {
+        return nil
+    }
+
+    /// 720p LRF/XRF sidecar, never the 4K original.
+    func localProxySource(for file: MediaFile) -> MediaPlaybackSource? {
+        for path in MediaHTTP.proxyPaths(file) {
             let dest = mediaPlaybackDest(file, path: path)
             if let existing = CameraMedia.existingFile(dest) {
                 return MediaPlaybackSource(
@@ -755,7 +766,8 @@ extension CameraSession {
             let reply = try await awaitMediaOpcode(0x00, 0x28, timeout: .seconds(2)) {
                 self.sendMediaFrame(frame)
             }
-            acked = CameraReply.parse(reply.payload).isSuccess
+            acked =
+                CameraReply.parse(reply.payload).isSuccess
                 || reply.payload.starts(with: [0x00, 0x00])
         } catch {
             acked = false
@@ -869,9 +881,11 @@ extension CameraSession {
             }
             publishMediaFiles(collected)
             let handles = page.map(\.handle)
-            let newest = handles.filter { $0 >= MediaListCommand.videoHandleBase }.max()
+            let newest =
+                handles.filter { $0 >= MediaListCommand.videoHandleBase }.max()
                 ?? MediaListCommand.newestInternal
-            pageCursor = MediaListCommand.nextCursor(handles: handles, current: newest)
+            pageCursor =
+                MediaListCommand.nextCursor(handles: handles, current: newest)
                 ?? handles.filter { $0 >= MediaListCommand.videoHandleBase }.min()
             if added == 0 || page.count < MediaListCommand.pageSize { break }
             if !MediaListCommand.hasOlderPage(recordCount: page.count, cursor: pageCursor) {
@@ -918,7 +932,9 @@ extension CameraSession {
         return MediaManifest.decodeStores(assembler: cameraMedia.assembler)
     }
 
-    private func collectMediaChunks(floor: Duration, idle: Duration, cap: Duration = .seconds(8)) async {
+    private func collectMediaChunks(floor: Duration, idle: Duration, cap: Duration = .seconds(8))
+        async
+    {
         let clock = ContinuousClock()
         let start = clock.now
         var lastChange = start
@@ -1058,7 +1074,8 @@ extension CameraSession {
                 continue
             } catch {
                 lastError = error
-                if case MediaTransferError.httpStatus(let code) = error, (400...499).contains(code) {
+                if case MediaTransferError.httpStatus(let code) = error, (400...499).contains(code)
+                {
                     continue
                 }
                 throw error

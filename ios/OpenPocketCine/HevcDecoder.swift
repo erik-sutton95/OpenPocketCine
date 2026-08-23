@@ -1,12 +1,12 @@
-import Foundation
 import AVFoundation
 import CoreGraphics
-import CoreMedia
 import CoreImage
+import CoreMedia
+import Foundation
+import OpenPocketViewCore
 import QuartzCore
 import VideoToolbox
 import os
-import OpenPocketViewCore
 
 /// Decodes Osmo live-view access units (Pocket HEVC, Nano AVC) and displays them.
 /// Collects VPS/SPS/PPS (HEVC) or SPS/PPS (AVC) from keyframes into a
@@ -119,9 +119,9 @@ final class HevcDecoder {
     }
     /// VT owns the HEVC block; the display layer only shows already-decoded image buffers.
     private var vtOwnsHardwareDecode = false
-#if targetEnvironment(simulator)
-    private let simulatorFeed = SimulatorLiveFeed()
-#endif
+    #if targetEnvironment(simulator)
+        private let simulatorFeed = SimulatorLiveFeed()
+    #endif
 
     /// WAVE/HISTO/PEAK need a `CVPixelBuffer`. Do not also start VT just because
     /// `sampleBus` is attached — that dual-decoded 4K60 HEVC with the display layer
@@ -168,7 +168,8 @@ final class HevcDecoder {
 
     /// Layer is in the view hierarchy with a real size — safe to enqueue the first IDR.
     var isDisplayReady: Bool {
-        displayLayer.superlayer != nil && displayLayer.bounds.width > 1 && displayLayer.bounds.height > 1
+        displayLayer.superlayer != nil && displayLayer.bounds.width > 1
+            && displayLayer.bounds.height > 1
     }
 
     /// True while a VT session is allocated. LUT-off hands HEVC back to the display layer.
@@ -248,7 +249,9 @@ final class HevcDecoder {
                 }
                 switch type {
                 case Avc.sps: sps = nal
-                case Avc.pps: pps = nal; buildFormatIfReady()
+                case Avc.pps:
+                    pps = nal
+                    buildFormatIfReady()
                 case let t where Avc.isVCL(t): slices.append(nal)
                 default: break
                 }
@@ -262,13 +265,16 @@ final class HevcDecoder {
                 switch type {
                 case Hevc.vps: vps = nal
                 case Hevc.sps: sps = nal
-                case Hevc.pps: pps = nal; buildFormatIfReady()
+                case Hevc.pps:
+                    pps = nal
+                    buildFormatIfReady()
                 case let t where Hevc.isVCL(t): slices.append(nal)
                 default: break
                 }
             }
         }
-        let hasIDR = avc
+        let hasIDR =
+            avc
             ? slices.contains { !$0.isEmpty && Avc.nalType($0[0]) == Avc.idr }
             : slices.contains { !$0.isEmpty && Hevc.nalType($0[0]) == Hevc.idr }
         if pendingParameterChangeEnable {
@@ -279,9 +285,11 @@ final class HevcDecoder {
                 onParameterSetsChanged?()
             }
         }
-        guard FeedWatchdog.shouldPresentSample(
-            hasPicture: !slices.isEmpty, awaitingIDR: awaitingIDR, isIDR: hasIDR
-        ) else { return false }
+        guard
+            FeedWatchdog.shouldPresentSample(
+                hasPicture: !slices.isEmpty, awaitingIDR: awaitingIDR, isIDR: hasIDR
+            )
+        else { return false }
         guard let format, let sample = sampleBuffer(slices, format), Self.isPresentable(sample)
         else { return false }
         if hasIDR {
@@ -336,7 +344,8 @@ final class HevcDecoder {
     ) {
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
-        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer) { [weak self] result in
+        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer) {
+            [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.applyAssistResult(result)
@@ -352,11 +361,19 @@ final class HevcDecoder {
     func reset() {
         finishDisplayWait(false)
         stopSimulatorSample()
-        format = nil; liveCodec = nil; vps = nil; sps = nil; pps = nil
-        hasFormat = false; nalTypesSeen.removeAll()
+        format = nil
+        liveCodec = nil
+        vps = nil
+        sps = nil
+        pps = nil
+        hasFormat = false
+        nalTypesSeen.removeAll()
         pictureSize = .zero
         isVerticalPicture = false
-        decoderErrors = 0; lastKeyframeAt = nil; lastPresentedAt = nil; sawKeyframe = false
+        decoderErrors = 0
+        lastKeyframeAt = nil
+        lastPresentedAt = nil
+        sawKeyframe = false
         displayedImageRemoved = false
         awaitingIDR = false
         pendingParameterChangeEnable = false
@@ -366,13 +383,18 @@ final class HevcDecoder {
         sessionOwnsVT = false
         hardwareDecoderUnlocked = false
         lastDecodedBuffer = nil
-        builtVPS = nil; builtSPS = nil; builtPPS = nil
+        builtVPS = nil
+        builtSPS = nil
+        builtPPS = nil
         vtAttemptedStamp = nil
         vtRebuildCount = 0
         frameIndex = 0
         loggedLiveVT.withLock { $0 = false }
         assistEngine.reset()
         sampleBus?.reset()
+        // Invalidate VT and flush the layer. That is the Android analog of
+        // joining the MediaCodec output thread and unbinding a dead Surface —
+        // in-app disconnect must not leave a live decoder bound to leftover GOP.
         invalidateVT()
         vtOwnsHardwareDecode = false
         displayLayer.isHidden = false
@@ -420,8 +442,15 @@ final class HevcDecoder {
     }
 
     private func dropFormatForRecovery() {
-        format = nil; liveCodec = nil; vps = nil; sps = nil; pps = nil; hasFormat = false
-        builtVPS = nil; builtSPS = nil; builtPPS = nil
+        format = nil
+        liveCodec = nil
+        vps = nil
+        sps = nil
+        pps = nil
+        hasFormat = false
+        builtVPS = nil
+        builtSPS = nil
+        builtPPS = nil
         pictureSize = .zero
         invalidateVT()
         vtOwnsHardwareDecode = false
@@ -465,7 +494,9 @@ final class HevcDecoder {
     }
 
     nonisolated private static func isPresentable(_ sample: CMSampleBuffer) -> Bool {
-        guard CMSampleBufferIsValid(sample), CMSampleBufferGetNumSamples(sample) > 0 else { return false }
+        guard CMSampleBufferIsValid(sample), CMSampleBufferGetNumSamples(sample) > 0 else {
+            return false
+        }
         if let image = CMSampleBufferGetImageBuffer(sample) {
             return isPresentable(image)
         }
@@ -481,20 +512,20 @@ final class HevcDecoder {
 
     /// Simulator-only: loop the D-Log2 Downloads clip through `handleDecodedFrame`.
     func startSimulatorSampleIfNeeded() {
-#if targetEnvironment(simulator)
-        prefersPixelBufferDisplay = true
-        incomingTransfer = .dlog2
-        assistEngine.updatePolicy(effects: effectsProvider?() ?? effects, transfer: .dlog2)
-        simulatorFeed.start { [weak self] buffer in
-            self?.handleDecodedFrame(buffer, transfer: .dlog2)
-        }
-#endif
+        #if targetEnvironment(simulator)
+            prefersPixelBufferDisplay = true
+            incomingTransfer = .dlog2
+            assistEngine.updatePolicy(effects: effectsProvider?() ?? effects, transfer: .dlog2)
+            simulatorFeed.start { [weak self] buffer in
+                self?.handleDecodedFrame(buffer, transfer: .dlog2)
+            }
+        #endif
     }
 
     func stopSimulatorSample() {
-#if targetEnvironment(simulator)
-        simulatorFeed.stop()
-#endif
+        #if targetEnvironment(simulator)
+            simulatorFeed.stop()
+        #endif
     }
 
     private func applyEffectsChange() {
@@ -660,7 +691,9 @@ final class HevcDecoder {
         vps.withUnsafeBufferPointer { v in
             sps.withUnsafeBufferPointer { s in
                 pps.withUnsafeBufferPointer { p in
-                    let ptrs: [UnsafePointer<UInt8>] = [v.baseAddress!, s.baseAddress!, p.baseAddress!]
+                    let ptrs: [UnsafePointer<UInt8>] = [
+                        v.baseAddress!, s.baseAddress!, p.baseAddress!,
+                    ]
                     let sizes = [vps.count, sps.count, pps.count]
                     var fmt: CMFormatDescription?
                     let status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(
@@ -743,7 +776,9 @@ final class HevcDecoder {
         pendingParameterChangeEnable = true
     }
 
-    private func sampleBuffer(_ nals: [[UInt8]], _ format: CMVideoFormatDescription) -> CMSampleBuffer? {
+    private func sampleBuffer(_ nals: [[UInt8]], _ format: CMVideoFormatDescription)
+        -> CMSampleBuffer?
+    {
         var avcc = [UInt8]()
         for nal in nals {
             var len = UInt32(nal.count).bigEndian
@@ -752,35 +787,40 @@ final class HevcDecoder {
         }
 
         var block: CMBlockBuffer?
-        guard CMBlockBufferCreateWithMemoryBlock(
-            allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: avcc.count,
-            blockAllocator: kCFAllocatorDefault, customBlockSource: nil,
-            offsetToData: 0, dataLength: avcc.count, flags: 0, blockBufferOut: &block)
-            == kCMBlockBufferNoErr, let block else { return nil }
+        guard
+            CMBlockBufferCreateWithMemoryBlock(
+                allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: avcc.count,
+                blockAllocator: kCFAllocatorDefault, customBlockSource: nil,
+                offsetToData: 0, dataLength: avcc.count, flags: 0, blockBufferOut: &block)
+                == kCMBlockBufferNoErr, let block
+        else { return nil }
         let ok = avcc.withUnsafeBytes { raw in
-            CMBlockBufferReplaceDataBytes(with: raw.baseAddress!, blockBuffer: block,
-                                          offsetIntoDestination: 0, dataLength: avcc.count)
+            CMBlockBufferReplaceDataBytes(
+                with: raw.baseAddress!, blockBuffer: block,
+                offsetIntoDestination: 0, dataLength: avcc.count)
         }
         guard ok == kCMBlockBufferNoErr else { return nil }
 
         frameIndex += 1
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 30),
-            presentationTimeStamp: CMTime(value: frameIndex, timescale: 30),
-            decodeTimeStamp: .invalid
-        )
+        var timing = LiveViewPresentTiming.sampleTiming(frameIndex: frameIndex)
         var sample: CMSampleBuffer?
         var sizes = [avcc.count]
-        guard CMSampleBufferCreateReady(
-            allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format,
-            sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing,
-            sampleSizeEntryCount: 1, sampleSizeArray: &sizes, sampleBufferOut: &sample)
-            == noErr, let sample else { return nil }
+        guard
+            CMSampleBufferCreateReady(
+                allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format,
+                sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing,
+                sampleSizeEntryCount: 1, sampleSizeArray: &sizes, sampleBufferOut: &sample)
+                == noErr, let sample
+        else { return nil }
 
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
-           CFArrayGetCount(attachments) > 0 {
-            let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-            CFDictionarySetValue(dict,
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(
+            sample, createIfNecessary: true),
+            CFArrayGetCount(attachments) > 0
+        {
+            let dict = unsafeBitCast(
+                CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+            CFDictionarySetValue(
+                dict,
                 Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
         }
@@ -817,7 +857,8 @@ final class HevcDecoder {
             (
                 "metal-420v",
                 [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(
+                        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
                     kCVPixelBufferMetalCompatibilityKey as String: true,
                     kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
                 ]
@@ -825,7 +866,8 @@ final class HevcDecoder {
             (
                 "metal-x420",
                 [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange),
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(
+                        kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange),
                     kCVPixelBufferMetalCompatibilityKey as String: true,
                     kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
                 ]
@@ -878,38 +920,41 @@ final class HevcDecoder {
 
     /// Zero-copy present of a VT frame. Uncompressed — the layer must not start a second HEVC decoder.
     @discardableResult
-    private func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true) -> Bool {
+    private func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
+        -> Bool
+    {
         guard Self.isPresentable(imageBuffer) else { return false }
         var format: CMVideoFormatDescription?
-        guard CMVideoFormatDescriptionCreateForImageBuffer(
-            allocator: kCFAllocatorDefault,
-            imageBuffer: imageBuffer,
-            formatDescriptionOut: &format) == noErr,
+        guard
+            CMVideoFormatDescriptionCreateForImageBuffer(
+                allocator: kCFAllocatorDefault,
+                imageBuffer: imageBuffer,
+                formatDescriptionOut: &format) == noErr,
             let format
         else { return false }
 
         frameIndex += 1
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 30),
-            presentationTimeStamp: CMTime(value: frameIndex, timescale: 30),
-            decodeTimeStamp: .invalid
-        )
+        var timing = LiveViewPresentTiming.sampleTiming(frameIndex: frameIndex)
         var sample: CMSampleBuffer?
-        guard CMSampleBufferCreateForImageBuffer(
-            allocator: kCFAllocatorDefault,
-            imageBuffer: imageBuffer,
-            dataReady: true,
-            makeDataReadyCallback: nil,
-            refcon: nil,
-            formatDescription: format,
-            sampleTiming: &timing,
-            sampleBufferOut: &sample) == noErr,
+        guard
+            CMSampleBufferCreateForImageBuffer(
+                allocator: kCFAllocatorDefault,
+                imageBuffer: imageBuffer,
+                dataReady: true,
+                makeDataReadyCallback: nil,
+                refcon: nil,
+                formatDescription: format,
+                sampleTiming: &timing,
+                sampleBufferOut: &sample) == noErr,
             let sample
         else { return false }
 
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
-           CFArrayGetCount(attachments) > 0 {
-            let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(
+            sample, createIfNecessary: true),
+            CFArrayGetCount(attachments) > 0
+        {
+            let dict = unsafeBitCast(
+                CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
             CFDictionarySetValue(
                 dict,
                 Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
@@ -944,12 +989,16 @@ final class HevcDecoder {
             previous: incomingTransfer)
         let flags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression]
         let gen = vtGeneration
-        let err = decodeFrame(vtSession, sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
+        let err = decodeFrame(
+            vtSession, sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
         if err == noErr { return true }
         if Self.shouldRebuildSession(status: err) {
             rebuildVT(force: true)
             if let rebuilt = self.vtSession,
-               decodeFrame(rebuilt, sample, flags: flags, generation: vtGeneration, effects: fx, transfer: transfer) == noErr {
+                decodeFrame(
+                    rebuilt, sample, flags: flags, generation: vtGeneration, effects: fx,
+                    transfer: transfer) == noErr
+            {
                 return true
             }
         }
@@ -972,7 +1021,9 @@ final class HevcDecoder {
             if status != noErr {
                 if Self.shouldRebuildSession(status: status) {
                     Task { @MainActor [weak self] in
-                        guard let self, self.vtGeneration == generation, self.shouldStartVT else { return }
+                        guard let self, self.vtGeneration == generation, self.shouldStartVT else {
+                            return
+                        }
                         self.rebuildVT(force: true)
                     }
                 }
@@ -1001,137 +1052,153 @@ final class HevcDecoder {
     }
 }
 
-#if targetEnvironment(simulator)
-/// Loops the operator's D-Log2 4K/25p clip from Downloads. Not part of the Xcode/git tree.
-/// `AVAssetReader` — OpenZCine playback uses a player view; this feed only needs pixel buffers.
-final class SimulatorLiveFeed: @unchecked Sendable {
-    /// `OPV_SIM_FEED_CLIP` (env) beats `OPV.SimFeedClipPath` (defaults). No machine-specific
-    /// fallback — point the simulator at local footage without editing code.
-    static var clipURL: URL? {
-        let env = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"]
-        let stored = UserDefaults.standard.string(forKey: "OPV.SimFeedClipPath")
-        guard let path = [env, stored].compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
-            return nil
-        }
-        return URL(fileURLWithPath: path)
-    }
+/// SoftAP live HEVC is encoder-declared 25 fps (VPS/SPS `time_scale=25`). A 30 fps
+/// sample duration would still pace a faster GOP if the camera ever sent one.
+enum LiveViewPresentTiming {
+    static let timescale: Int32 = 60_000
 
-    private let queue = DispatchQueue(label: "opv.sim-live", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "sim-live")
-    private var reader: AVAssetReader?
-    private var output: AVAssetReaderTrackOutput?
-    private var timer: DispatchSourceTimer?
-    private var sink: (@Sendable (CVPixelBuffer) -> Void)?
-    private var missingLogged = false
-    private var running = false
-    private var loggedFirst = false
-
-    func start(sink: @escaping @Sendable (CVPixelBuffer) -> Void) {
-        queue.async { [self] in
-            if running {
-                self.sink = sink
-                return
-            }
-            begin(sink: sink)
-        }
-    }
-
-    func stop() {
-        queue.async { [self] in teardown() }
-    }
-
-    private func begin(sink: @escaping @Sendable (CVPixelBuffer) -> Void) {
-        teardown()
-        self.sink = sink
-        guard let url = Self.clipURL, FileManager.default.fileExists(atPath: url.path) else {
-            if !missingLogged {
-                missingLogged = true
-                log.warning(
-                    "Simulator live feed clip not configured — set OPV_SIM_FEED_CLIP or OPV.SimFeedClipPath")
-            }
-            return
-        }
-        guard openReader() else { return }
-        running = true
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 0.04, repeating: 1.0 / 25.0)
-        timer.setEventHandler { [weak self] in self?.pull() }
-        timer.resume()
-        self.timer = timer
-        log.info("Simulator D-Log2 clip looping through handleDecodedFrame")
-    }
-
-    @discardableResult
-    private func openReader() -> Bool {
-        reader?.cancelReading()
-        reader = nil
-        output = nil
-        guard let url = Self.clipURL else { return false }
-        let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .video).first else {
-            log.error("Simulator clip has no video track")
-            return false
-        }
-        do {
-            let reader = try AVAssetReader(asset: asset)
-            let settings: [String: Any] = [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
-                kCVPixelBufferMetalCompatibilityKey as String: true,
-                kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-            ]
-            let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
-            output.alwaysCopiesSampleData = false
-            reader.add(output)
-            guard reader.startReading() else {
-                log.error(
-                    "AVAssetReader failed to start: \(reader.error?.localizedDescription ?? "unknown", privacy: .public)")
-                return false
-            }
-            self.reader = reader
-            self.output = output
-            return true
-        } catch {
-            log.error("AVAssetReader: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-    }
-
-    private func pull() {
-        guard let sink else { return }
-        if reader?.status == .completed || output == nil {
-            _ = openReader()
-        }
-        guard let output,
-            let sample = output.copyNextSampleBuffer(),
-            let buffer = CMSampleBufferGetImageBuffer(sample)
-        else { return }
-        if !loggedFirst {
-            loggedFirst = true
-            let format = CVPixelBufferGetPixelFormatType(buffer)
-            let chars = [
-                UInt8((format >> 24) & 0xFF), UInt8((format >> 16) & 0xFF),
-                UInt8((format >> 8) & 0xFF), UInt8(format & 0xFF),
-            ]
-            let fourCC = String(bytes: chars, encoding: .ascii) ?? String(format)
-            CVPixelBufferLockBaseAddress(buffer, .readOnly)
-            let baseNil = CVPixelBufferGetBaseAddress(buffer) == nil
-            CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
-            log.info(
-                "first sim frame \(fourCC, privacy: .public) \(CVPixelBufferGetWidth(buffer))x\(CVPixelBufferGetHeight(buffer)) planes=\(CVPixelBufferGetPlaneCount(buffer)) baseNil=\(baseNil)"
-            )
-        }
-        sink(buffer)
-    }
-
-    private func teardown() {
-        timer?.cancel()
-        timer = nil
-        reader?.cancelReading()
-        reader = nil
-        output = nil
-        sink = nil
-        running = false
-        loggedFirst = false
+    static func sampleTiming(frameIndex: Int64) -> CMSampleTimingInfo {
+        CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: timescale),
+            presentationTimeStamp: CMTime(value: frameIndex, timescale: timescale),
+            decodeTimeStamp: .invalid)
     }
 }
+
+#if targetEnvironment(simulator)
+    /// Loops the operator's D-Log2 4K/25p clip from Downloads. Not part of the Xcode/git tree.
+    /// `AVAssetReader` — OpenZCine playback uses a player view; this feed only needs pixel buffers.
+    final class SimulatorLiveFeed: @unchecked Sendable {
+        /// `OPV_SIM_FEED_CLIP` (env) beats `OPV.SimFeedClipPath` (defaults). No machine-specific
+        /// fallback — point the simulator at local footage without editing code.
+        static var clipURL: URL? {
+            let env = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"]
+            let stored = UserDefaults.standard.string(forKey: "OPV.SimFeedClipPath")
+            guard let path = [env, stored].compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
+                return nil
+            }
+            return URL(fileURLWithPath: path)
+        }
+
+        private let queue = DispatchQueue(label: "opv.sim-live", qos: .userInitiated)
+        private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "sim-live")
+        private var reader: AVAssetReader?
+        private var output: AVAssetReaderTrackOutput?
+        private var timer: DispatchSourceTimer?
+        private var sink: (@Sendable (CVPixelBuffer) -> Void)?
+        private var missingLogged = false
+        private var running = false
+        private var loggedFirst = false
+
+        func start(sink: @escaping @Sendable (CVPixelBuffer) -> Void) {
+            queue.async { [self] in
+                if running {
+                    self.sink = sink
+                    return
+                }
+                begin(sink: sink)
+            }
+        }
+
+        func stop() {
+            queue.async { [self] in teardown() }
+        }
+
+        private func begin(sink: @escaping @Sendable (CVPixelBuffer) -> Void) {
+            teardown()
+            self.sink = sink
+            guard let url = Self.clipURL, FileManager.default.fileExists(atPath: url.path) else {
+                if !missingLogged {
+                    missingLogged = true
+                    log.warning(
+                        "Simulator live feed clip not configured — set OPV_SIM_FEED_CLIP or OPV.SimFeedClipPath"
+                    )
+                }
+                return
+            }
+            guard openReader() else { return }
+            running = true
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(deadline: .now() + 0.04, repeating: 1.0 / 25.0)
+            timer.setEventHandler { [weak self] in self?.pull() }
+            timer.resume()
+            self.timer = timer
+            log.info("Simulator D-Log2 clip looping through handleDecodedFrame")
+        }
+
+        @discardableResult
+        private func openReader() -> Bool {
+            reader?.cancelReading()
+            reader = nil
+            output = nil
+            guard let url = Self.clipURL else { return false }
+            let asset = AVURLAsset(url: url)
+            guard let track = asset.tracks(withMediaType: .video).first else {
+                log.error("Simulator clip has no video track")
+                return false
+            }
+            do {
+                let reader = try AVAssetReader(asset: asset)
+                let settings: [String: Any] = [
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(
+                        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+                    kCVPixelBufferMetalCompatibilityKey as String: true,
+                    kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
+                ]
+                let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
+                output.alwaysCopiesSampleData = false
+                reader.add(output)
+                guard reader.startReading() else {
+                    log.error(
+                        "AVAssetReader failed to start: \(reader.error?.localizedDescription ?? "unknown", privacy: .public)"
+                    )
+                    return false
+                }
+                self.reader = reader
+                self.output = output
+                return true
+            } catch {
+                log.error("AVAssetReader: \(error.localizedDescription, privacy: .public)")
+                return false
+            }
+        }
+
+        private func pull() {
+            guard let sink else { return }
+            if reader?.status == .completed || output == nil {
+                _ = openReader()
+            }
+            guard let output,
+                let sample = output.copyNextSampleBuffer(),
+                let buffer = CMSampleBufferGetImageBuffer(sample)
+            else { return }
+            if !loggedFirst {
+                loggedFirst = true
+                let format = CVPixelBufferGetPixelFormatType(buffer)
+                let chars = [
+                    UInt8((format >> 24) & 0xFF), UInt8((format >> 16) & 0xFF),
+                    UInt8((format >> 8) & 0xFF), UInt8(format & 0xFF),
+                ]
+                let fourCC = String(bytes: chars, encoding: .ascii) ?? String(format)
+                CVPixelBufferLockBaseAddress(buffer, .readOnly)
+                let baseNil = CVPixelBufferGetBaseAddress(buffer) == nil
+                CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+                log.info(
+                    "first sim frame \(fourCC, privacy: .public) \(CVPixelBufferGetWidth(buffer))x\(CVPixelBufferGetHeight(buffer)) planes=\(CVPixelBufferGetPlaneCount(buffer)) baseNil=\(baseNil)"
+                )
+            }
+            sink(buffer)
+        }
+
+        private func teardown() {
+            timer?.cancel()
+            timer = nil
+            reader?.cancelReading()
+            reader = nil
+            output = nil
+            sink = nil
+            running = false
+            loggedFirst = false
+        }
+    }
 #endif

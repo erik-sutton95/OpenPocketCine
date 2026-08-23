@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.max
@@ -165,6 +167,16 @@ fun portraitZones(
     return PortraitZones(topBar, feed, assist, controls, systemBar)
 }
 
+/**
+ * iOS `LiveViewScreen` fillCrop: landscape fill over-widens a 16:9 picture to
+ * the well height, then clips to the well (center crop). Vertical Pocket fill
+ * stays the pillarboxed 9:16 picture and does not use this.
+ */
+fun portraitFillCropContent(well: ChromeRect): ChromeRect {
+    val contentWidth = well.height * 16f / 9f
+    return ChromeRect(well.midX - contentWidth / 2f, well.minY, contentWidth, well.height)
+}
+
 fun fillAssistRail(
     feed: ChromeRect,
     captureStripTop: Float?,
@@ -244,7 +256,6 @@ fun LivePortraitChrome(
     assist: LiveAssistState,
     onAssistLongPress: (LiveAssistTool) -> Unit,
     chromeInteractive: Boolean,
-    onZoomCycle: () -> Unit,
     controlBusy: Boolean,
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
 ) {
@@ -350,8 +361,7 @@ fun LivePortraitChrome(
                     active = sheet,
                     enabled = !uiLocked && !controlBusy && chromeInteractive,
                     showFocus =
-                        CaptureLists.supportsFocusMode(model.session.connectedCamera?.model?.name) &&
-                            model.session.connectedCamera?.model?.supportsFocusMode != false,
+                        CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
                     facePriority = model.facePriorityExposureEnabled,
                     shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
@@ -376,15 +386,20 @@ fun LivePortraitChrome(
         }
 
         if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) {
+            val zoomReadout by model.session.zoomReadout.collectAsState()
+            val zoomPinching by model.session.zoomPinching.collectAsState()
             LiveZoomChip(
-                factor = LiveZoom.factor(status),
+                factor = zoomReadout,
                 locked = uiLocked,
+                pinching = zoomPinching,
                 modifier =
                     Modifier
                         .liveModuleFrame(zoom)
                         .alpha(if (uiLocked) 0.4f else 1f)
                         .chromeEditStroke(editing != null, true),
-                onCycle = onZoomCycle,
+                onCycle = {
+                    model.session.setZoom(CamFov.nextJump(model.session.zoomCycleFrom()))
+                },
             )
         }
 
@@ -523,7 +538,8 @@ fun LivePortraitSystemBar(
                 recording = status.isRecording,
                 enabled = !controlBusy,
                 confirm = model.recordConfirmationEnabled,
-                onClick = model::pressRecord,
+                photo = CameraCommands.isPhotoMode(status.shootingMode),
+                onClick = model::pressShutter,
             )
         }
     }
@@ -618,7 +634,7 @@ fun LiveCaptureStrip(
         CaptureSettingCell(
             "WB",
             CaptureLists.wbChipValue(status),
-            "10000K",
+            CaptureLists.wbChipWidest(),
             active == LiveSheet.WB,
             enabled,
             modifier = Modifier.weight(1f).reportChromeFrame { onTileFrame(LiveSheet.WB, it) },

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct MonitorLUTTests {
@@ -163,28 +164,34 @@ import Testing
     @Test func manualSelectionIgnoresColorMode() {
         #expect(
             LUTResolver.resolve(
-                selection: .officialDLog, colorMode: .dLog2, hasCustomDLog: true, hasCustomDLog2: true)
+                selection: .officialDLog, colorMode: .dLog2, hasCustomDLog: true,
+                hasCustomDLog2: true)
                 == .official(.dLogToRec709))
         #expect(
             LUTResolver.resolve(
-                selection: .officialDLog2, colorMode: .dLog, hasCustomDLog: false, hasCustomDLog2: false)
+                selection: .officialDLog2, colorMode: .dLog, hasCustomDLog: false,
+                hasCustomDLog2: false)
                 == .official(.dLog2ToRec709))
         #expect(
             LUTResolver.resolve(
-                selection: .customDLog, colorMode: .dLog2, hasCustomDLog: true, hasCustomDLog2: false)
+                selection: .customDLog, colorMode: .dLog2, hasCustomDLog: true,
+                hasCustomDLog2: false)
                 == .custom(.dLog))
         #expect(
             LUTResolver.resolve(
-                selection: .customDLog2, colorMode: .dLog, hasCustomDLog: false, hasCustomDLog2: false)
+                selection: .customDLog2, colorMode: .dLog, hasCustomDLog: false,
+                hasCustomDLog2: false)
                 == .off)
         #expect(
             LUTResolver.resolve(
-                selection: .customRec709, colorMode: .dLog2, hasCustomDLog: true, hasCustomDLog2: true,
+                selection: .customRec709, colorMode: .dLog2, hasCustomDLog: true,
+                hasCustomDLog2: true,
                 hasCustomRec709: true)
                 == .custom(.rec709))
         #expect(
             LUTResolver.resolve(
-                selection: .customRec709, colorMode: .normal, hasCustomDLog: false, hasCustomDLog2: false)
+                selection: .customRec709, colorMode: .normal, hasCustomDLog: false,
+                hasCustomDLog2: false)
                 == .off)
     }
 

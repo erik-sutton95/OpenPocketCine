@@ -43,7 +43,9 @@ enum OpcIcon: String, CaseIterable, View {
     case lock
     case maximize
     case minimize
+    case monitor
     case mountain
+    case palette
     case pause
     case pencil
     case play

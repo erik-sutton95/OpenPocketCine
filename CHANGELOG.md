@@ -8,11 +8,16 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Android playback LUT / PEAK / FALSE / ZEBRA grade in GLES on the 720p proxy
+  (ExoPlayer → OES surface → `FeedEffectsGlProgram` → TextureView), same order
+  as live. WAVE / HISTO tap that GL copy, not a TextureView `getBitmap`. Export
+  still pulls the original 4K file.
+
 - Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. The vendored set is 72 official
   24px stroke glyphs (plus a filled star). Pairing, media library, playback, LUT 50/50, chrome-edit
-  eyes, assist tools (zebra stripes stay custom), and recovery chrome use the same paths. SF Symbols
-  and Material icons remain on settings sheets, live capture bars, and playback screens the HUD
-  agents still own.
+  eyes, live top deck / capture strip / battery / assist tools (zebra stripes stay custom),
+  portrait fit-fill, and recovery chrome use the same paths. SF Symbols remain on settings
+  sheets and a few playback destinations.
 - Android clip player View Assist rail (independent of live, persisted as
   `OpenPocketCine.PlaybackAssists.v1`) and high-frame-rate conform preview
   (Real time + 23.976/24/25/29.97/30, muted, stretched time labels). GPU
@@ -41,6 +46,92 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android live scopes match iOS `ScopeMiniChrome` / `WaveformMovablePanel`:
+  DJI-black 72% plates (`LiveDesign.scopePlate`). WAVE / PARADE / VECTOR /
+  HISTO paint fill and traces in one Compose Canvas (iOS `plusLighter` on
+  `compositingGroup`) — no plot hole, no second 0.72 plate over the
+  traces, no Vulkan overlay. WAVE / PARADE / VECTOR bake the 0.72 plate
+  and additive traces into one full-panel bitmap (nearest-neighbor blit)
+  so gutters match the plot and ticks are not bilinear-boxed. WAVE /
+  PARADE / VECTOR traces blit into the live plot rect (iOS
+  `WaveformAxis.plotRect` gutters stay 26/6 dp) so L-scale cannot push
+  IRE 100 off the guide. The baked image is plot-sized and transparent
+  aside from ticks (Plus onto one plate) so the plot is not a second
+  0.72 square. Scope
+  chrome matches iOS `ScopeMiniChrome` (shadow outside, one clip, overlay
+  hairline) so `shadow`+clip+Offscreen+border no longer stacks a thick
+  inner edge. WAVE /
+  PARADE accumulate off the UI thread at 250×153; VECTOR at 190×190.
+  Compose only blits. The 1280×720→213×120 tap blit runs on the 10–15 Hz
+  sample tick, not every HEVC frame. Last touched or moved panel stacks
+  on top. Scopes sit above the feed and the focus / tracking box, under
+  the top deck, View Assist bar, and camera-value strip. Hold 0.3 s then
+  drag. Hold timeout is Compose `AwaitPointerEventScope.withTimeoutOrNull`
+  (kotlinx `withTimeout` cancelled the pointerInput so move/scale never
+  started). Drag uses `positionChange` so a moving offset does not jitter.
+  L-corner hit well is 90 dp with 40 dp outside the clip. HISTO is Compose
+  Canvas like iOS `HistogramScopePlot`. The pinch well stays under the
+  panels.
+- Android WAVE / PARADE traces use iOS additive `plusLighter` blending (not
+  src-alpha), luma hot ticks, HISTO a shared RGBL peak plus luma stroke, and
+  the WAVE IRE plot gutter so 0 / 100 sit on the same edges as iOS.
+- Android AF-C face box size eases with a 0.70 s time constant so detector
+  jitter does not resize the bracket every tick. Pinch hops D-Log2 → D-Log on
+  any step off 1× before `0xB8` (iOS `dropDLog2ForZoom`), not only on the
+  first magnification=1 begin event.
+- Android AF-C face brackets drop after 0.22 s without a hit (iOS
+  `FaceTrackHold.missTimeout`) instead of hanging on empty glass. Live pinch
+  uses `ScaleGestureDetector` on a full-canvas well over the Vulkan SurfaceView
+  (iOS `MagnifyGesture`), cumulative 1…12×, 20 Hz slider.
+- Android ActiveTrack cancel (x) sits on the tracking box's top-right corner
+  (iOS `LiveTrackingChrome.cancelRect`), not offset in mixed dp/px.
+- Android live pinch-zoom uses an iOS-style hit well over the Vulkan
+  SurfaceView and pipelines `0xB8` sliders at 20 Hz. Face AF runs on the live
+  picture (AF-C after first frame) so brackets appear and a tap starts
+  ActiveTrack, matching iOS Vision face tracking.
+- Android live camera SETs match iOS `fireCamera`: latest-wins mailbox, 300 ms
+  retransmit, 2 s settle, no `"Color timed out"` (or any SET timeout) toast, no
+  HUD revert on a missed ACK. Color `0x02/0x42` hops Native ISO immediately
+  (D-Log 400 ↔ D-Log2 1600) instead of waiting on the color ACK. GET / audio /
+  tap-focus round-trips match iOS `requestCamera` (`announce: false`).
+- Android landscape FORMAT and COLOR hang 8 dp under the top-deck chips at 340 dp
+  (iOS `LiveTopPickerHost`) instead of filling down to the assist bar. Color SET
+  is optimistic with a 2 s pin; D-Log2 still drops to D-Log on the zoom cycle.
+- Android live zoom matches iOS `CamFov`: chip 1×/3×/6×/12×, pinch slider per
+  lens tick, hybrid readout (12287 is 1×), D-Log2 hop off 1×.
+- Android feed tracking matches iOS ActiveTrack: hold-drag search box, tap a
+  face bracket to lock, `0xA6` SET / `0xA5` poll / `0x89` subject push, green
+  cancel, focus reset.
+
+- Android SHUTTER sheet speed / angle / EV / Face Priority logic matches iOS:
+  the wheel is the camera `camcap_shutter` list, the angle ladder is calculated
+  5.6°–360° and mapped to a legal 1/N at live fps, Auto expo turns the tile
+  into EV third-stops (−3.0…+3.0), Face Priority greys the drum and restores
+  EV when turned off, and the sheet reseats on cap-list / fps / expo mode —
+  not every live 1/N tick. Shutter SET stays `u16 denom | 0x8000`.
+- Android first-picture no longer holds a UDP rebuild for 8 s just because
+  status/0x03 is fresh. That left WAITING FOR LIVE VIEW with `videoPkts=0`
+  (the same healthy-telemetry / dead-HEVC bind iOS already rebuilds).
+- Android live picker / assist / capture popups use the same `liveChromeGlass`
+  ND plate as the HUD (not an opaque black slab), the circular glass close,
+  centered LUT caption, and the LUT 50/50 circle at 16 dp. Every View Assist
+  options sheet uses the LUT chrome: 27 dp close, 12 dp pad / 8 dp gap, and a
+  well from a 12 dp top margin down to the assist bar (short menus hug; LUT
+  still fills so the drum can grow, 0.12 / 0.88 fade, 50/50 pinned). Assist
+  option rows stack in a column (PEAK / FALSE / ZEBRA no longer paint on top
+  of each other). Capture ISO / shutter / WB / format / color drums use the
+  same 27 dp close, pad, fade, and fill-the-well drum so neighbours peek.
+  Drum faces 27/20 pt, and 50/50 is ~20% smaller than the iOS 34 / 30 / 14
+  tokens so the compact S25 card matches the baseline photo.
+  Picker / assist cards keep HUD glass plus a 0.20 black ND so the catalog is
+  a tad less see-through than the bars, and sample the scene backdrop so
+  liquid glass blurs chrome under the sheet (not only the live well).
+- In-app Disconnect on iOS now matches Android teardown: `DatalinkDriver.close()`
+  is terminal (callbacks dropped, UDP generation bumped), VideoToolbox is
+  invalidated and the display layer flushed, and a cancelled `open()` cannot
+  publish LIVE after the operator already left. Process death used to be the
+  only reliable reconnect; leftover UDP receive was why Waiting for live view
+  stuck until the app was killed.
 - Android live view paints LUT, peaking, false colour, and zebra on the
   HEVC picture through GLES (`GL_TEXTURE_EXTERNAL_OES` to `FeedEffectsGlProgram`),
   including 50/50 log-vs-LUT when that comparison is armed.
@@ -79,8 +170,9 @@ All notable changes to this project are documented here. The format is based on
   for reassociation. Pre-join Wi-Fi scan waits at most 3 s then requests.
 - Android live capture strip (ISO / shutter / mode / WB / focus / audio)
   uses a wider gap between cells.
-- Android live HUD glass matches iOS `liveChromeGlass`: Titan tint over a
-  52% DJI-black plate so the feed cannot bleach the pills.
+- Android live HUD glass matches iOS `liveChromeGlass`: black ND tint over a
+  DJI-black plate so the feed cannot bleach the pills. Titan gray as a glass
+  tint desaturated refraction instead of darkening it.
 - Android live-view enable and UDP ACK/keepalive no longer run on the
   main thread (StrictMode was dropping `0x09/0xa8`, so the camera never
   sent HEVC and the HUD stayed on Waiting for live view). UDP binds IPv4.
@@ -156,6 +248,59 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android playback drops Kyant. The transport plate is 82% DJI black so type
+  reads; the top row is back + filename + star with no bar. Chrome lives in
+  the same overlay as the video gestures so transport buttons receive taps.
+  Clip playback prefers the LRF/XRF proxy even when the 4K original is already
+  cached. LUT / FALSE / PEAK / ZEBRA update the GLES plan in place — they do
+  not swap ExoPlayer's output surface.
+- Android playback chrome and View Assist now sample the clip. Kyant cannot
+  see a TextureView, so WAVE / HISTO tap a 480 px `TextureView.getBitmap`
+  copy. LUT is not that overlay.
+- Android share sheet is DJI black at 94% (not Kyant frost) with a denser
+  scrim so type reads over a clip. It is a Dialog at the top of the screen so
+  clip-nav popups cannot draw over it. Playback chrome is its own Popup so
+  tap-to-play does not steal transport buttons.
+- Android playback View Assist uses the Lucide monitor glyph. Assist overlays
+  sit in a Popup above the TextureView so grid / guides / scopes actually
+  paint.
+- Opening an Android clip no longer native-crashes. Playback glass recorded
+  the box that also owned `liveChromeGlass`, so Kyant recursed in HWUI
+  `prepareTree`. The recorded well is now a sibling of the chrome.
+- Live HEVC is held while Media / Settings cover the monitor. Portrait media
+  header stacks the item count under the title. The library overlay is
+  z-indexed above live chrome so the record button cannot be tapped through
+  it.
+- Android live FPS chip now counts presented Vulkan frames over wall time.
+  It used to sample `lastPresentedAt` every 40 ms, so the readout could not
+  exceed ~25 fps. Datalink no longer `Log.i`s every HEVC fragment. ImageReader
+  AHB Vulkan imports are cached instead of `vkCreateImage` every frame.
+- Android live identity path (assists off) blits the hardware HEVC AHB
+  straight to the swapchain. Tools-off no longer runs two YCbCr copies, a
+  1280×720 histogram, a grade pass, and a CPU readback every frame — that
+  was ~25 fps on S25. Decoder prefers `c2.qti` / Exynos over `c2.android`.
+- Live view no longer paces decode at 30 fps. Android MediaCodec stamps
+  wall-clock PTS with low-latency / realtime hints (was `KEY_FRAME_RATE` 30
+  and +33.3 ms), and iOS sample timing uses a 60 kHz clock plus
+  `DisplayImmediately`, so a 4K 50p body can present 50 Hz 720p HEVC like Mimo.
+- Clip export downloads and shares the original camera file (4K HEVC), not the
+  720p LRF/XRF playback proxy. iOS LUT bake uses HEVC-highest at the source
+  raster instead of `AVAssetExportPresetHighestQuality` (720p/1080p cap).
+- Android portrait Fill center-crops the 16:9 live picture into the fill well
+  (iOS `fillCrop` / `feed.height * 16/9`) instead of stretching it vertically.
+- Android Pocket screen flip (vertical live raster) matches iOS: new VPS/SPS
+  rebuilds MediaCodec, `EncoderPresentPath.isVertical` pillarboxes 9:16 in the
+  cinema well, and a second `0x09/0xa8` is skipped when the AU already carries
+  the IDR.
+- Android live scopes overlay the full canvas (iOS `LiveScopeOverlays`) so they
+  can sit outside the feed well; drag uses root-space translation so portrait
+  layout changes do not leave the panel behind the finger.
+
+- Android first picture no longer sends gallery `0x02/0x0c` before every
+  `0x09/0xa8` (that left handshake+telemetry up and `videoPkts=0`). First-picture
+  recover also keeps running after a SoftAP flap: scene-inactive during
+  `holdsMonitor` no longer latches a forever skip, stray playback still enables
+  this tick, and UDP rebuild waits before the next enable.
 - First connect no longer sits on Waiting for live-view when HEVC freezes
   after a P-frame burst while status is still alive.
 - Stick pan while a subject is tracked matches the free gimbal (left is left).

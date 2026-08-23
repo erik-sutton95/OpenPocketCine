@@ -15,6 +15,7 @@ import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.openpocketcine.session.VideoFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -168,6 +169,7 @@ class AppModel(context: Context) {
     fun updateFacePriorityExposureEnabled(value: Boolean) {
         facePriorityExposureEnabled = value
         OperatorPrefs.setFacePriorityExposureEnabled(appContext, value)
+        session.setFacePriorityEnabled(value)
     }
 
     fun updateShutterUsesAngle(value: Boolean) {
@@ -213,6 +215,8 @@ class AppModel(context: Context) {
 
     fun refreshIsoLimit() = session.getIsoLimit()
 
+    suspend fun refreshIsoLimitNow(): Boolean = session.refreshIsoLimit()
+
     fun setShootingMode(raw: Int) = session.setShootingMode(raw)
 
     fun setZoom(factor: Double) = session.setZoom(factor)
@@ -242,7 +246,7 @@ class AppModel(context: Context) {
 
     fun setShutterDenom(denom: Int) = session.setShutterDenom(denom)
 
-    fun setExpoMode(manual: Boolean) = session.setExpoMode(manual)
+    fun setExpoMode(mode: Int) = session.setExpoMode(mode)
 
     fun setWhiteBalanceAuto() = session.setWhiteBalanceAuto()
 
@@ -254,9 +258,16 @@ class AppModel(context: Context) {
 
     fun refreshFocusTrack() = session.refreshFocusTrack()
 
-    fun setColorMode(mode: Int) = session.setColorMode(mode)
+    fun setColorMode(mode: Int) = session.setColorMode(mode, nativeISOHopEnabled)
 
-    fun setResolutionFps(res: Int, fpsIndex: Int) = session.setResolutionFps(res, fpsIndex)
+    fun setResolutionFps(res: Int, fpsIndex: Int) {
+        val format = VideoFormat.parse(res, fpsIndex) ?: return
+        setVideoFormat(format)
+    }
+
+    fun setVideoFormat(format: VideoFormat) {
+        session.setVideoFormat(format)
+    }
 
     fun setAudioChannel(value: Int) = session.setAudioChannel(value)
 
@@ -272,7 +283,7 @@ class AppModel(context: Context) {
 
     fun updateGimbalStick(x: Float, y: Float) {
         if (uiLocked) return
-        session.updateGimbalStick(x, y)
+        session.updateGimbalStick(x, y, gimbalStickSensitivity)
     }
 
     fun endGimbalStick() = session.endGimbalStick()

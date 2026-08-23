@@ -1,6 +1,7 @@
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+
 @testable import OpenPocketCine
 
 /// Pins OpenZCine histogram rows + `MovablePanel` ("histo") onto PocketCine.
@@ -28,7 +29,8 @@ final class HistogramAssistTests: XCTestCase {
         XCTAssertEqual(HistogramAssist.compensationTitle, "Crush/Clip Compensation")
         XCTAssertEqual(
             HistogramAssist.compensationHelp,
-            "Stops of crush/clip tolerance before a traffic light glows. Shared with the goal-post meter.")
+            "Stops of crush/clip tolerance before a traffic light glows. Shared with the goal-post meter."
+        )
         XCTAssertEqual(HistogramAssist.clipZoneIRE, 95)
         XCTAssertEqual(HistogramAssist.plotTop, WaveformAxis.titleHeight)
         XCTAssertEqual(HistogramAssist.trafficLampWidth, 7.5)
@@ -116,7 +118,8 @@ final class HistogramAssistTests: XCTestCase {
         let greyBucket = Int((WaveformAxis.ire(78.0 / 255, transfer: .dlog2) / 100 * 255).rounded())
         XCTAssertEqual(out[greyBucket], 40)
         XCTAssertEqual(greyBucket, 78)
-        let earlyBucket = Int((WaveformAxis.ire(188.0 / 255, transfer: .dlog2) / 100 * 255).rounded())
+        let earlyBucket = Int(
+            (WaveformAxis.ire(188.0 / 255, transfer: .dlog2) / 100 * 255).rounded())
         XCTAssertEqual(out[earlyBucket], 25)
         XCTAssertLessThan(earlyBucket, 230, "188 is recoverable highlight, not the 100 line")
     }
@@ -145,16 +148,20 @@ final class HistogramAssistTests: XCTestCase {
 
     func testCompensationDecodeClampsLegacyOutOfRange() throws {
         XCTAssertEqual(
-            try JSONDecoder().decode(HistogramAssist.CrushClipCompensation.self, from: Data("15".utf8)),
+            try JSONDecoder().decode(
+                HistogramAssist.CrushClipCompensation.self, from: Data("15".utf8)),
             .one)
         XCTAssertEqual(
-            try JSONDecoder().decode(HistogramAssist.CrushClipCompensation.self, from: Data("20".utf8)),
+            try JSONDecoder().decode(
+                HistogramAssist.CrushClipCompensation.self, from: Data("20".utf8)),
             .one)
         XCTAssertEqual(
-            try JSONDecoder().decode(HistogramAssist.CrushClipCompensation.self, from: Data("-1".utf8)),
+            try JSONDecoder().decode(
+                HistogramAssist.CrushClipCompensation.self, from: Data("-1".utf8)),
             .zero)
         XCTAssertEqual(
-            try JSONDecoder().decode(HistogramAssist.CrushClipCompensation.self, from: Data("5".utf8)),
+            try JSONDecoder().decode(
+                HistogramAssist.CrushClipCompensation.self, from: Data("5".utf8)),
             .half)
     }
 

@@ -1,5 +1,6 @@
-import XCTest
 import OpenPocketViewCore
+import XCTest
+
 @testable import OpenPocketCine
 
 /// Chip copy: operator 1×/3×/12× from the labeled Mimo pinch. Tele at 3.0×.
@@ -8,7 +9,9 @@ final class LiveZoomReadoutTests: XCTestCase {
         XCTAssertEqual(CamFov.factor(raw: 12_287), 1, accuracy: 0.01)
         XCTAssertEqual(CamFov.displayLabel(raw: 12_287), "1×")
         XCTAssertEqual(
-            CamFov.displayLabel(factor: CamFov.readout(live: CamFov.factor(raw: 12_287), preview: nil, fallback: 12)),
+            CamFov.displayLabel(
+                factor: CamFov.readout(live: CamFov.factor(raw: 12_287), preview: nil, fallback: 12)
+            ),
             "1×"
         )
         var status = CameraStatus()
@@ -17,20 +20,32 @@ final class LiveZoomReadoutTests: XCTestCase {
     }
 
     func testChipFollowsCamFovTenths() {
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1)), "2.3×")
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 5.36, preview: nil, fallback: 1)), "5.4×")
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 2.9, preview: nil, fallback: 1)), "2.9×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1)),
+            "2.3×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 5.36, preview: nil, fallback: 1)),
+            "5.4×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 2.9, preview: nil, fallback: 1)),
+            "2.9×")
     }
 
     func testPinchPreviewWinsUntilLift() {
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: 5.3, fallback: 1)), "5.3×")
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1)), "2.3×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: 5.3, fallback: 1)),
+            "5.3×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1)),
+            "2.3×")
     }
 
     func testChipIsCameraTruthNotOptimisticGuess() {
         XCTAssertEqual(CamFov.readout(live: 1, preview: nil, fallback: 12), 1)
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 8, preview: nil, fallback: 1)), "8×")
-        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 1, preview: nil, fallback: 3)), "1×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 8, preview: nil, fallback: 1)), "8×")
+        XCTAssertEqual(
+            CamFov.displayLabel(factor: CamFov.readout(live: 1, preview: nil, fallback: 3)), "1×")
     }
 
     func testWideJustUnderTeleStillCyclesToThree() {

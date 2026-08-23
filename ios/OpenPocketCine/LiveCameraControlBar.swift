@@ -1,5 +1,5 @@
-import SwiftUI
 import OpenPocketViewCore
+import SwiftUI
 
 /// OpenZCine `MonitorCaptureStrip` + `CaptureSettingButton` for Pocket:
 /// ISO — SHUTTER — MODE — WB — FOCUS — AUDIO. Parent already sizes this to ~2/3 width.
@@ -32,7 +32,7 @@ struct LiveCameraControlBar: View {
                 tile(
                     .shutter, label: "EV", value: evValue, widest: "+3.0",
                     badgeIcon: model.facePriorityExposureEnabled
-                        ? CaptureLists.facePriorityBadgeSymbol : nil)
+                        ? CaptureLists.facePriorityBadgeIcon : nil)
             } else {
                 tile(
                     .shutter, label: "SHUTTER", value: shutterValue,
@@ -49,7 +49,9 @@ struct LiveCameraControlBar: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity)
         .frame(height: LiveDesign.controlHeight)
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
+        .liveChromeGlass(
+            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
+        )
         .contentShape(Rectangle())
         .onTapGesture {}
         .opacity(tilesLocked ? 0.4 : 1)
@@ -61,8 +63,8 @@ struct LiveCameraControlBar: View {
         label: String,
         value: String,
         widest: String,
-        valueIcon: String? = nil,
-        badgeIcon: String? = nil
+        valueIcon: OpcIcon? = nil,
+        badgeIcon: OpcIcon? = nil
     ) -> some View {
         let isActive = model.captureSheet == sheet
         return Button {
@@ -123,8 +125,8 @@ struct LiveCameraControlBar: View {
         model.session.status.evComp?.label ?? "—"
     }
 
-    private var wbIcon: String? {
-        model.session.status.whiteBalance?.mode == .custom ? nil : "a.circle.fill"
+    private var wbIcon: OpcIcon? {
+        model.session.status.whiteBalance?.mode == .custom ? nil : .aperture
     }
 
     private var wbValue: String {
@@ -161,9 +163,9 @@ struct CaptureBarReadout: View {
     let value: String
     let widest: String
     var isActive = false
-    var valueIcon: String? = nil
+    var valueIcon: OpcIcon? = nil
     /// Shown beside the label (EV Face Priority). Distinct from `valueIcon`, which replaces the value.
-    var badgeIcon: String? = nil
+    var badgeIcon: OpcIcon? = nil
 
     var body: some View {
         VStack(spacing: 3) {
@@ -171,10 +173,8 @@ struct CaptureBarReadout: View {
                 Text(label)
                     .font(LiveType.ui(size: 9, weight: .semibold, design: .default))
                 if let badgeIcon {
-                    // System face — LiveType.ui is IBM Plex, which drops SF Symbols.
-                    Image(systemName: badgeIcon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .symbolRenderingMode(.monochrome)
+                    badgeIcon
+                        .frame(width: 11, height: 11)
                 }
             }
             .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.muted)
@@ -183,8 +183,8 @@ struct CaptureBarReadout: View {
                 .hidden()
                 .overlay {
                     if let valueIcon {
-                        Image(systemName: valueIcon)
-                            .font(.system(size: 18, weight: .regular))
+                        valueIcon
+                            .frame(width: 18, height: 18)
                             .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
                     } else {
                         Text(value)

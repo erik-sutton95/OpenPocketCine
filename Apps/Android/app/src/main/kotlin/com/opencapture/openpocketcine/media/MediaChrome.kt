@@ -43,10 +43,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeShape
+import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.openpocketcine.liveChromeGlass
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.max
 
@@ -55,7 +58,17 @@ val MediaCapsuleShape: RoundedCornerShape = RoundedCornerShape(percent = 50)
 val MediaCornerShape: RoundedCornerShape = ChromeShape
 
 @Composable
-fun Modifier.mediaGlass(shape: Shape = MediaCornerShape): Modifier = panelGlass(shape)
+fun Modifier.mediaGlass(shape: Shape = MediaCornerShape): Modifier {
+    val glass = LocalMonitorGlass.current
+    return if (glass == null) panelGlass(shape) else liveChromeGlass(shape)
+}
+
+/** Playback transport plate — frost fill, no Kyant. */
+fun Modifier.playbackFrost(shape: Shape = MediaCornerShape): Modifier =
+    background(LiveDesign.playbackPanel, shape).border(1.dp, LiveDesign.hairlineStrong, shape)
+
+fun Modifier.mediaSheetPlate(shape: Shape = MediaCornerShape): Modifier =
+    background(LiveDesign.sheetPlate, shape).border(1.dp, LiveDesign.hairlineStrong, shape)
 
 @Composable
 fun MediaCloseButton(
@@ -68,7 +81,7 @@ fun MediaCloseButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .panelGlass(CircleShape)
+            .mediaGlass(CircleShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { contentDescription = "Close" },
         contentAlignment = Alignment.Center,
@@ -92,7 +105,7 @@ fun MediaBackButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .panelGlass(CircleShape)
+            .mediaGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics { contentDescription = "Back" },
         contentAlignment = Alignment.Center,
@@ -117,7 +130,7 @@ fun MediaFavoriteButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .panelGlass(CircleShape)
+            .mediaGlass(CircleShape)
             .chromeClickable(onClick = onClick)
             .semantics {
                 contentDescription = if (favorite) "Remove from favorites" else "Add to favorites"
@@ -152,7 +165,7 @@ fun MediaCircleIconButton(
             .size(size)
             .clip(CircleShape)
             .then(if (highlighted) Modifier.background(LiveDesign.accentDim, CircleShape) else Modifier)
-            .panelGlass(CircleShape)
+            .mediaGlass(CircleShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
@@ -451,6 +464,15 @@ internal object PlaybackChromeMetrics {
     const val transportRowSpacing = 5f
     const val narrowestScreenWidth = 375f
     const val chromeHorizontalPadding = 16f
+    const val topScrimDp = 120f
+    const val bottomScrimDp = 200f
+    const val SAMPLE_MS = 80L
+    const val SAMPLE_MAX_SIDE = 480f
+    val hideChromeIcon = OpcIcon.MAXIMIZE
+    val showChromeIcon = OpcIcon.MINIMIZE
+    val viewAssistIcon = OpcIcon.MONITOR
+
+    fun usesDarkenedBars(tier: GlassTier): Boolean = tier == GlassTier.FLAT
 
     /** iOS `MediaPlayerView.PlaybackChrome.transportRowWidth`. */
     fun transportRowWidth(
@@ -489,7 +511,7 @@ fun MediaTransportIconButton(
             .size(width = width, height = height)
             .clip(shape)
             .then(if (highlighted) Modifier.background(LiveDesign.accentDim, shape) else Modifier)
-            .panelGlass(shape)
+            .mediaGlass(shape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
@@ -518,7 +540,7 @@ fun MediaTransportSkipButton(
         Modifier
             .size(width = PlaybackChromeMetrics.transportButtonWidth, height = PlaybackChromeMetrics.transportButtonHeight)
             .clip(PlaybackChromeMetrics.corner)
-            .panelGlass(PlaybackChromeMetrics.corner)
+            .mediaGlass(PlaybackChromeMetrics.corner)
             .chromeClickable(onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,

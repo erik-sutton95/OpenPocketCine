@@ -1,25 +1,33 @@
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct MimoControlTests {
     @Test func shutterPacksU16Denom() {
         #expect(Commands.setShutter(denom: 4).cmdId == 0x28)
-        #expect(Commands.setShutter(denom: 4).payload == [0x01, 0x04, 0x80, 0x00, 0x00, 0x00, 0x40])
-        #expect(Commands.setShutter(denom: 50).payload == [0x01, 0x32, 0x80, 0x00, 0x00, 0x00, 0x40])
-        #expect(Commands.setShutter(denom: 1600).payload == [0x01, 0x40, 0x86, 0x00, 0x00, 0x00, 0x40])
-        #expect(Commands.setShutter(denom: 16000).payload == [0x01, 0x80, 0xBE, 0x00, 0x00, 0x00, 0x40])
+        #expect(
+            Commands.setShutter(denom: 4).payload == [0x01, 0x04, 0x80, 0x00, 0x00, 0x00, 0x40])
+        #expect(
+            Commands.setShutter(denom: 50).payload == [0x01, 0x32, 0x80, 0x00, 0x00, 0x00, 0x40])
+        #expect(
+            Commands.setShutter(denom: 1600).payload == [0x01, 0x40, 0x86, 0x00, 0x00, 0x00, 0x40])
+        #expect(
+            Commands.setShutter(denom: 16000).payload == [0x01, 0x80, 0xBE, 0x00, 0x00, 0x00, 0x40])
         #expect(Commands.setShutter(denom: 40).receiver == Duml.rxCamera)
         #expect(Commands.setShutter(denom: 40).flags == Duml.flagRequest)
     }
 
     @Test func shutterParsesExpoAt2Not16() {
         var expo = [UInt8](repeating: 0, count: 46)
-        expo[2] = 0x80; expo[3] = 0xBE     // 1/16000
-        expo[16] = 0xC8; expo[17] = 0x00   // ISO 200 sitting where shutter used to be read
+        expo[2] = 0x80
+        expo[3] = 0xBE  // 1/16000
+        expo[16] = 0xC8
+        expo[17] = 0x00  // ISO 200 sitting where shutter used to be read
         #expect(ExpoParam.shutterDenom(expo) == 16000)
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
         #expect(s.shutterDenom == 16000)
         #expect(s.iso == 200)
     }
@@ -33,11 +41,14 @@ import Testing
 
         var expo = [UInt8](repeating: 0, count: 46)
         expo[5] = 0x0B
-        expo[13] = 0xC8; expo[14] = 0x00           // 200 at the unlabeled offset
-        expo[16] = 0x00; expo[17] = 0x64           // 25600
+        expo[13] = 0xC8
+        expo[14] = 0x00  // 200 at the unlabeled offset
+        expo[16] = 0x00
+        expo[17] = 0x64  // 25600
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
         #expect(s.isoIndex == .iso25600)
         #expect(s.iso == 25600)
     }
@@ -61,8 +72,9 @@ import Testing
         expo[7] = 0x01
         #expect(ExpoParam.evComp(expo) == EvComp(thirds: 2))
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
         #expect(s.evComp?.label == "+0.7")
         #expect(s.expoMode == .auto)
     }
@@ -80,15 +92,21 @@ import Testing
         #expect(CameraParam.parseGetReply(reply)?.pid == CameraParam.isoLimit.rawValue)
         #expect(CameraParam.parseGetReply(reply)?.value == 0x07)
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: reply),
+                to: &s))
         #expect(s.isoLimit == .max6400)
 
         let reply09: [UInt8] = [0x00, 0x00, 0x01, 0x0F, 0x00, 0x01, 0x09]
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: reply09),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: reply09),
+                to: &s))
         #expect(s.isoLimit == .max25600)
     }
 
@@ -102,7 +120,9 @@ import Testing
 
     @Test func probeGetTimeoutStaysOffTheHud() {
         #expect(ControlHud.timeoutNote(name: "ISO limit GET", announce: false) == nil)
-        #expect(ControlHud.timeoutNote(name: "ISO limit GET", announce: true) == "ISO limit GET timed out")
+        #expect(
+            ControlHud.timeoutNote(name: "ISO limit GET", announce: true)
+                == "ISO limit GET timed out")
         #expect(ControlHud.timeoutNote(name: "Audio ch GET", announce: false) == nil)
     }
 
@@ -134,8 +154,9 @@ import Testing
         var effect = [UInt8](repeating: 0, count: 16)
         effect[2] = 0x41
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_image_effect", value: effect), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_image_effect", value: effect), to: &s))
         #expect(s.colorMode == .dLog2)
     }
 
@@ -147,24 +168,38 @@ import Testing
         #expect(FocusMode.parseLensState([0xB2]) == .continuous)
 
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_lens_state", value: [0xB2]), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_lens_state", value: [0xB2]), to: &s))
         #expect(s.focusMode == .continuous)
     }
 
     @Test func focusTrackIsPid3B() {
         #expect(Commands.getFocusTrack().payload == [0x00, 0x01, 0x3B, 0x00])
-        #expect(Commands.setFocusTrack(.default).payload == [0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x00])
-        #expect(Commands.setFocusTrack(.productShowcase).payload == [0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x01])
-        #expect(Commands.setFocusTrack(.subjectLock).payload == [0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x02])
-        #expect(Commands.setFocusTrack(.registeredPriority).payload == [0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x03])
+        #expect(
+            Commands.setFocusTrack(.default).payload == [0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x00])
+        #expect(
+            Commands.setFocusTrack(.productShowcase).payload == [
+                0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x01,
+            ])
+        #expect(
+            Commands.setFocusTrack(.subjectLock).payload == [
+                0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x02,
+            ])
+        #expect(
+            Commands.setFocusTrack(.registeredPriority).payload == [
+                0x01, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x03,
+            ])
 
         let reply: [UInt8] = [0x00, 0x00, 0x01, 0x3B, 0x00, 0x02, 0x01, 0x02]
         #expect(FocusTrackMode.parseReply(reply) == .subjectLock)
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: reply),
+                to: &s))
         #expect(s.focusTrack == .subjectLock)
         #expect(
             FocusOption.resolve(mode: .continuous, track: .subjectLock) == .subjectLock)
@@ -179,23 +214,30 @@ import Testing
     @Test func whiteBalancePackAndParse() {
         #expect(Commands.setWhiteBalanceAuto().cmdId == 0x2C)
         #expect(Commands.setWhiteBalanceAuto().payload == [0x00, 0x00, 0x00, 0x00, 0x00])
-        #expect(Commands.setWhiteBalanceCustom(kelvin: 3000, tint: 0).payload
+        #expect(
+            Commands.setWhiteBalanceCustom(kelvin: 3000, tint: 0).payload
                 == [0x06, 0x1E, 0x00, 0x00, 0x00])
-        #expect(Commands.setWhiteBalanceCustom(kelvin: 2000, tint: -5).payload
+        #expect(
+            Commands.setWhiteBalanceCustom(kelvin: 2000, tint: -5).payload
                 == [0x06, 0x14, 0x00, 0xFB, 0xFF])
-        #expect(Commands.setWhiteBalanceCustom(kelvin: 10000, tint: 100).payload
+        #expect(
+            Commands.setWhiteBalanceCustom(kelvin: 10000, tint: 100).payload
                 == [0x06, 0x64, 0x00, 0x64, 0x00])
-        #expect(Commands.setWhiteBalanceCustom(kelvin: 10000, tint: -100).payload
+        #expect(
+            Commands.setWhiteBalanceCustom(kelvin: 10000, tint: -100).payload
                 == [0x06, 0x64, 0x00, 0x9C, 0xFF])
 
         var effect = [UInt8](repeating: 0, count: 16)
         effect[2] = 0x3F
         effect[4] = 0x06
-        effect[5] = 0x1E; effect[6] = 0x00
-        effect[7] = 0xFB; effect[8] = 0xFF
+        effect[5] = 0x1E
+        effect[6] = 0x00
+        effect[7] = 0xFB
+        effect[8] = 0xFF
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_image_effect", value: effect), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_image_effect", value: effect), to: &s))
         #expect(s.colorMode == .normal)
         #expect(s.whiteBalance == WhiteBalance.custom(kelvin: 3000, tint: -5))
         #expect(s.whiteBalanceKelvin == 3000)
@@ -213,13 +255,19 @@ import Testing
         #expect(CameraParam.parseGetReply(reply)?.pid == CameraParam.audioChannel.rawValue)
         #expect(CameraParam.parseGetReply(reply)?.value == 0x02)
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: reply),
+                to: &s))
         #expect(s.audioChannel == .stereo)
-        #expect(!CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: [0x00]),
-            to: &s))
+        #expect(
+            !CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: [0x00]),
+                to: &s))
     }
 
     @Test func glamourIsPid39BlobNot068() throws {
@@ -251,9 +299,12 @@ import Testing
         #expect(Array(set.payload.dropFirst(5)) == on)
 
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: offReply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: offReply),
+                to: &s))
         #expect(s.glamourEnabled == false)
         #expect(s.glamourBlob == off)
         #expect(CameraParam.parseGetReply(offReply) == nil)
@@ -266,9 +317,12 @@ import Testing
 
         let reply: [UInt8] = [0x00, 0x00, 0x01, 0x4C, 0x00, 0x01, 0x01]
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0x8E,
+                    payload: reply),
+                to: &s))
         #expect(s.vocalBoost == .on)
     }
 
@@ -277,13 +331,16 @@ import Testing
         #expect(Commands.audioDspGet().payload.isEmpty)
 
         var blob = [UInt8](repeating: 0, count: 26)
-        blob[0] = 0xC0; blob[1] = 0x04; blob[2] = 0xDA; blob[3] = 0x05
+        blob[0] = 0xC0
+        blob[1] = 0x04
+        blob[2] = 0xDA
+        blob[3] = 0x05
         let reply = [0x00] + blob
         #expect(AudioDspBlob.blob(fromGetReply: reply) == blob)
 
         let windOn = AudioDspBlob.patchWind(blob, .on)
         #expect(windOn[2] == 0xDA)
-        #expect(windOn[0] == 0xC0)   // do not rewrite @0
+        #expect(windOn[0] == 0xC0)  // do not rewrite @0
         #expect(Array(windOn[3...]) == Array(blob[3...]))
         var windBlob = blob
         windBlob[2] = 0x18
@@ -300,20 +357,24 @@ import Testing
         #expect(set.payload == windOn)
 
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0xA0, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0xA0,
+                    payload: reply),
+                to: &s))
         #expect(s.audioDspBlob == blob)
         #expect(s.audioDspAt2 == .directional(.all))
         #expect(s.windNR == .on)
         #expect(s.directionalAudio == .all)
 
         var windOnly = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(
-                sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0xA0,
-                payload: [0x00] + windBlob),
-            to: &windOnly))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x02, cmdId: 0xA0,
+                    payload: [0x00] + windBlob),
+                to: &windOnly))
         #expect(windOnly.windNR == .off)
         #expect(windOnly.directionalAudio == nil)
         #expect(AudioDspBlob.wind(from: 0x3A) == .on)
@@ -322,21 +383,27 @@ import Testing
 
     @Test func videoFormatPackAndParse() {
         #expect(Commands.setVideoFormat(resolution: .p1080, frameRate: .fps24).cmdId == 0x18)
-        #expect(Commands.setVideoFormat(resolution: .p1080, frameRate: .fps24).payload
+        #expect(
+            Commands.setVideoFormat(resolution: .p1080, frameRate: .fps24).payload
                 == [0x0A, 0x01, 0x00, 0x00, 0x00])
-        #expect(Commands.setVideoFormat(resolution: .p1080, frameRate: .fps60).payload
+        #expect(
+            Commands.setVideoFormat(resolution: .p1080, frameRate: .fps60).payload
                 == [0x0A, 0x06, 0x00, 0x00, 0x00])
-        #expect(Commands.setVideoFormat(resolution: .p4K, frameRate: .fps24).payload
+        #expect(
+            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps24).payload
                 == [0x10, 0x01, 0x00, 0x00, 0x00])
-        #expect(Commands.setVideoFormat(resolution: .p4K, frameRate: .fps30).payload
+        #expect(
+            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps30).payload
                 == [0x10, 0x03, 0x00, 0x00, 0x00])
-        #expect(Commands.setVideoFormat(resolution: .p4K, frameRate: .fps60).payload
+        #expect(
+            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps60).payload
                 == [0x10, 0x06, 0x00, 0x00, 0x00])
 
         let value: [UInt8] = [0x0A, 0x05, 0x00, 0x00, 0x00, 0x02, 0x01, 0x00, 0x11, 0x01]
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_video_param_v2", value: value), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_video_param_v2", value: value), to: &s))
         #expect(s.videoResolution == .p1080)
         #expect(s.fps == 50)
         #expect(s.videoFormat == VideoFormat(resolution: .p1080, frameRate: .fps50))
@@ -346,7 +413,8 @@ import Testing
         #expect(VideoResolution.allCases.map(\.label) == ["1080p", "4K"])
         #expect(VideoResolution.allCases.map(\.tabTitle) == ["1080", "4K"])
         #expect(VideoFrameRate.allCases.map(\.fps) == [24, 25, 30, 48, 50, 60])
-        #expect(VideoFrameRate.allCases.map(\.drumLabel) == ["24p", "25p", "30p", "48p", "50p", "60p"])
+        #expect(
+            VideoFrameRate.allCases.map(\.drumLabel) == ["24p", "25p", "30p", "48p", "50p", "60p"])
         #expect(VideoFrameRate(drumLabel: "48p") == .fps48)
         #expect(VideoFrameRate(drumLabel: "120p") == nil)
         #expect(
@@ -393,8 +461,9 @@ import Testing
         let value: [UInt8] = [0x00, 0x00, 0x00, 0x05, 0x16, 0x2F, 0x12, 0x00]
         #expect(CameraStatusDecoder.timecodeString(value) == "05:22:47:18")
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "timecode_info", value: value), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "timecode_info", value: value), to: &s))
         #expect(s.timecode == "05:22:47:18")
         #expect(s.timecodeClock == "05:22:47")
         #expect(CameraStatus.clockDisplay(nil) == "--:--:--")
@@ -506,21 +575,29 @@ import Testing
         #expect(Commands.setGimbalTiltLock(.locked).payload == [0x00, 0x04, 0x01, 0x01])
 
         let reply: [UInt8] = [0x00, 0x01, 0x04, 0x01, 0x01, 0x05, 0x01, 0x01]
-        #expect(GimbalParamState.parseGetReply(reply)
+        #expect(
+            GimbalParamState.parseGetReply(reply)
                 == GimbalParamState(tiltLock: .locked, speed: .defaultSpeed))
 
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0x00, cmdSet: 0x04, cmdId: 0x27,
-                  payload: [0x00, 0x80, 0x40, 0x00, 0x00]), to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0x00, cmdSet: 0x04, cmdId: 0x27,
+                    payload: [0x00, 0x80, 0x40, 0x00, 0x00]), to: &s))
         #expect(s.gimbalFace == .selfie)
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0x00, cmdSet: 0x04, cmdId: 0x27,
-                  payload: [0x00, 0x80, 0x00, 0x00, 0x00]), to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0x00, cmdSet: 0x04, cmdId: 0x27,
+                    payload: [0x00, 0x80, 0x00, 0x00, 0x00]), to: &s))
         #expect(s.gimbalFace == .front)
-        #expect(CameraStatusDecoder.apply(
-            .init(sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x04, cmdId: 0x50, payload: reply),
-            to: &s))
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0xC0, cmdSet: 0x04, cmdId: 0x50,
+                    payload: reply),
+                to: &s))
         #expect(s.gimbalParams?.tiltLock == .locked)
         #expect(s.gimbalParams?.speed == .defaultSpeed)
     }
@@ -607,8 +684,9 @@ import Testing
         #expect(Commands.setZoom(factor: 3).payload == [0x0A, 0x4E, 0x8B, 0x02])
 
         var s = CameraStatus()
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_fov", value: at12x), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_fov", value: at12x), to: &s))
         #expect(s.zoomFactorRaw == 12_287)
         #expect(abs((s.zoomFactor ?? 0) - 1) < 0.01)
         #expect(CamFov.displayLabel(factor: s.zoomFactor ?? 0) == "1×")
@@ -618,8 +696,9 @@ import Testing
         lensBlob[14] = 0xD9
         lensBlob[15] = 0x00
         #expect(CamFov.lensAt14(lensBlob) == 217)
-        #expect(CameraStatusDecoder.applySubscribePush(
-            SubscribePush.pack(name: "cam_lens_state", value: lensBlob), to: &s))
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_lens_state", value: lensBlob), to: &s))
         #expect(s.zoomLens == 217)
         #expect(abs((s.zoomFactor ?? 0) - 1) < 0.01)
     }
@@ -647,7 +726,9 @@ import Testing
         #expect(CamFov.readout(live: 5.36, preview: nil, fallback: 1) == 5.4)
         #expect(CamFov.readout(live: 2.29, preview: 5.3, fallback: 1) == 5.3)
         #expect(CamFov.readout(live: nil, preview: nil, fallback: 1) == 1)
-        #expect(CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1)) == "2.3×")
+        #expect(
+            CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1))
+                == "2.3×")
 
         #expect(CamFov.nextJump(from: 2.89) == 3)
         #expect(CamFov.nextJump(from: 2.9) == 3)
@@ -677,9 +758,14 @@ import Testing
         #expect(!CamFov.matches(3, 12))
 
         #expect(CamFov.pinchCommand(live: 2.3, preview: 3, slewing: nil) == .slider(651))
-        #expect(CamFov.pinchCommand(live: 12, preview: 10.5, slewing: nil) == .slider(CamFov.pinchLens(for: 10.5)))
-        #expect(CamFov.pinchCommand(live: 9.2, preview: 12, slewing: nil) == .slider(CamFov.lens12x))
-        #expect(CamFov.pinchCommand(live: 6.7, preview: 5.3, slewing: nil) == .slider(CamFov.pinchLens(for: 5.3)))
+        #expect(
+            CamFov.pinchCommand(live: 12, preview: 10.5, slewing: nil)
+                == .slider(CamFov.pinchLens(for: 10.5)))
+        #expect(
+            CamFov.pinchCommand(live: 9.2, preview: 12, slewing: nil) == .slider(CamFov.lens12x))
+        #expect(
+            CamFov.pinchCommand(live: 6.7, preview: 5.3, slewing: nil)
+                == .slider(CamFov.pinchLens(for: 5.3)))
 
         var lastLens: UInt16?
         for tenth in 10...120 {
@@ -845,18 +931,20 @@ import Testing
         let superseded = box.timeout(key: key, subscribeMatches: false)
         #expect(superseded == .launchPending)
         #expect(!CameraSetMailbox.timeoutImpliesUplinkFailure(superseded))
-        #expect(!CameraSoftAP.shouldRebuildAfterCommandTimeouts(
-            timeoutsInWindow: 2, downlinkFresh: true, videoFresh: true,
-            rebuildInFlight: false, secondsSinceLastRebuild: nil))
+        #expect(
+            !CameraSoftAP.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow: 2, downlinkFresh: true, videoFresh: true,
+                rebuildInFlight: false, secondsSinceLastRebuild: nil))
 
         box.beginLaunch(key: key, now: 0.12)
         box.noteTransmit(key: key, seq: 8)
         let latest = box.timeout(key: key, subscribeMatches: false)
         #expect(latest == .waitLate)
         #expect(CameraSetMailbox.timeoutImpliesUplinkFailure(latest))
-        #expect(!CameraSoftAP.shouldRebuildAfterCommandTimeouts(
-            timeoutsInWindow: 2, downlinkFresh: true, videoFresh: true,
-            rebuildInFlight: false, secondsSinceLastRebuild: nil),
+        #expect(
+            !CameraSoftAP.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow: 2, downlinkFresh: true, videoFresh: true,
+                rebuildInFlight: false, secondsSinceLastRebuild: nil),
             "latest SET timed out but video is fresh — leave UDP")
     }
 }

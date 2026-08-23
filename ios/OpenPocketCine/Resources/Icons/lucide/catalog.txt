@@ -36,7 +36,9 @@ list-filter
 lock
 maximize
 minimize
+monitor
 mountain
+palette
 pause
 pencil
 play
