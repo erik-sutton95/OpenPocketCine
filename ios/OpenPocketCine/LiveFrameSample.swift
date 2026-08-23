@@ -466,13 +466,33 @@ final class LiveAssistEngine: @unchecked Sendable {
         fx.colorMode = transfer.colorMode
         busy = true
 
-        // Identity keeps the buffer's Rec.709 / HLG attachments. NSNull is cube-only —
+        // Copy CPU planes before Core Image attaches. WAVE/HISTO read the source
+        // buffer; wrapping 10-bit x420 / IOSurface in CIImage first can unmap
+        // those planes so the later tap returns nil and scopes stay empty.
+        // The histogram walk still runs after present so it cannot hold 25 fps.
+        var packed: (bytes: [UInt8], width: Int, height: Int, bytesPerRow: Int)?
+        if fx.needsScopes {
+            let now = CFAbsoluteTimeGetCurrent()
+            let interval = PocketScopeSampler.minInterval(activeScopeCount: fx.activeScopeCount)
+            if now >= nextScopeAt {
+                nextScopeAt = now + interval
+                packed = PocketScopeSampler.copyBGRA(
+                    buffer, maxWidth: PocketScopeSampler.maxWidth)
+                if packed == nil {
+                    logTapOnce(buffer: buffer, packed: nil, points: 0)
+                }
+            }
+        }
+
+        // Identity keeps Rec.709 / HLG attachments. NSNull is cube-only —
         // AVSampleBufferDisplayLayer and color-managed CI both go black without them.
-        let identity = CIImage(cvPixelBuffer: buffer)
+        // Scopes-only present uses the pixel buffer, not this image, so skip the wrap.
+        let identity: CIImage
         let output: CIImage
         let overlayOnly: Bool
         let unmanagedBake: Bool
         if fx.needsGPUFeed {
+            identity = CIImage(cvPixelBuffer: buffer)
             let cameraCodes = CIImage(
                 cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
             // LUT / false colour cubes read encoded camera codes (WAVE/HISTO buffer).
@@ -493,12 +513,12 @@ final class LiveAssistEngine: @unchecked Sendable {
                 unmanagedBake = product.unmanagedBake
             }
         } else {
+            identity = CIImage.empty()
             output = identity
             overlayOnly = false
             unmanagedBake = false
         }
 
-        // Present first. The tap walk must not hold the 25 fps picture.
         completion(
             Result(
                 output: output,
@@ -512,66 +532,56 @@ final class LiveAssistEngine: @unchecked Sendable {
                 colorMode: transfer.colorMode,
                 shouldPresent: true))
 
-        if fx.needsScopes {
-            let now = CFAbsoluteTimeGetCurrent()
-            let interval = PocketScopeSampler.minInterval(activeScopeCount: fx.activeScopeCount)
-            if now >= nextScopeAt {
-                nextScopeAt = now + interval
-                if let packed = PocketScopeSampler.copyBGRA(
-                    buffer, maxWidth: PocketScopeSampler.maxWidth)
-                {
-                    let tapMin = LiveFrameTap.minRGB(packed.bytes)
-                    let tapMax = LiveFrameTap.maxRGB(packed.bytes)
-                    let inferred = MonitorTransfer.inferred(
-                        minByte: tapMin, maxByte: tapMax, fallback: transfer)
-                    if inferred != transfer {
-                        transfer = inferred
-                        pendingTransfer = inferred
-                        fx.colorMode = inferred.colorMode
-                        ControlLiveLog.line(
-                            "scope transfer: inferred \(inferred.rawValue) min=\(tapMin) max=\(tapMax)"
-                        )
-                    }
-                    let sampled = PocketScopeSampler.sample(
-                        bytes: packed.bytes, width: packed.width, height: packed.height,
-                        bytesPerRow: packed.bytesPerRow, transfer: transfer,
-                        includePoints: fx.waveform || fx.parade,
-                        includeVectorPoints: fx.vectorscope,
-                        look: fx.vectorscope
-                            ? PocketScopeSampler.monitorCube(for: transfer, effects: fx) : nil,
-                        trafficThreshold: fx.trafficThreshold,
-                        previous: previousBundle)
-                    previousBundle = sampled
-                    let observed = ScopeExposureCeiling.observeTapMax(tapMax, transfer: transfer)
-                    logTapOnce(buffer: buffer, packed: packed, points: sampled.samples.points.count)
-                    // Ceiling calibration breadcrumb: rolling 10 s tap maximum
-                    // into the pullable journal (tools/pull-control-log.sh).
-                    // Point the lens at a blown lamp at each ISO and read the
-                    // saturation byte straight off these lines.
-                    ceilingLogMax = max(ceilingLogMax, tapMax)
-                    if now >= nextCeilingLogAt {
-                        nextCeilingLogAt = now + 10
-                        ControlLiveLog.line(
-                            "scope max: byte=\(ceilingLogMax) clip=\(observed.clip) transfer=\(transfer.rawValue) ei=\(ScopeExposureCeiling.resolvedISO())"
-                        )
-                        ceilingLogMax = 0
-                    }
-                    completion(
-                        Result(
-                            output: output,
-                            identity: identity,
-                            source: buffer,
-                            needsGPU: false,
-                            overlayOnly: false,
-                            unmanagedBake: false,
-                            bundle: sampled,
-                            transfer: transfer,
-                            colorMode: transfer.colorMode,
-                            shouldPresent: false))
-                } else {
-                    logTapOnce(buffer: buffer, packed: nil, points: 0)
-                }
+        if let packed {
+            let tapMin = LiveFrameTap.minRGB(packed.bytes)
+            let tapMax = LiveFrameTap.maxRGB(packed.bytes)
+            let inferred = MonitorTransfer.inferred(
+                minByte: tapMin, maxByte: tapMax, fallback: transfer)
+            if inferred != transfer {
+                transfer = inferred
+                pendingTransfer = inferred
+                fx.colorMode = inferred.colorMode
+                ControlLiveLog.line(
+                    "scope transfer: inferred \(inferred.rawValue) min=\(tapMin) max=\(tapMax)"
+                )
             }
+            let sampled = PocketScopeSampler.sample(
+                bytes: packed.bytes, width: packed.width, height: packed.height,
+                bytesPerRow: packed.bytesPerRow, transfer: transfer,
+                includePoints: fx.waveform || fx.parade,
+                includeVectorPoints: fx.vectorscope,
+                look: fx.vectorscope
+                    ? PocketScopeSampler.monitorCube(for: transfer, effects: fx) : nil,
+                trafficThreshold: fx.trafficThreshold,
+                previous: previousBundle)
+            previousBundle = sampled
+            let observed = ScopeExposureCeiling.observeTapMax(tapMax, transfer: transfer)
+            logTapOnce(buffer: buffer, packed: packed, points: sampled.samples.points.count)
+            // Ceiling calibration breadcrumb: rolling 10 s tap maximum
+            // into the pullable journal (tools/pull-control-log.sh).
+            // Point the lens at a blown lamp at each ISO and read the
+            // saturation byte straight off these lines.
+            ceilingLogMax = max(ceilingLogMax, tapMax)
+            let now = CFAbsoluteTimeGetCurrent()
+            if now >= nextCeilingLogAt {
+                nextCeilingLogAt = now + 10
+                ControlLiveLog.line(
+                    "scope max: byte=\(ceilingLogMax) clip=\(observed.clip) transfer=\(transfer.rawValue) ei=\(ScopeExposureCeiling.resolvedISO())"
+                )
+                ceilingLogMax = 0
+            }
+            completion(
+                Result(
+                    output: output,
+                    identity: identity,
+                    source: buffer,
+                    needsGPU: false,
+                    overlayOnly: false,
+                    unmanagedBake: false,
+                    bundle: sampled,
+                    transfer: transfer,
+                    colorMode: transfer.colorMode,
+                    shouldPresent: false))
         }
 
         queue.async { [self] in

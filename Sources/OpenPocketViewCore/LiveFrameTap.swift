@@ -37,7 +37,6 @@
             guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else {
                 return nil
             }
-            defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
 
             var bytes = [UInt8](repeating: 0, count: width * height * 4)
             let format = CVPixelBufferGetPixelFormatType(buffer)
@@ -64,13 +63,14 @@
                     buffer, into: &bytes, width: width, height: height, step: step,
                     tenBit: true, videoRange: false)
             default:
-                // Packed / compressed VT formats (device "native" lottery). Core
-                // Image reads them all; its YCbCr decode range-expands video-range
-                // buffers, landing in the same curve-fraction domain as the direct
-                // readers. Slow path — the decoder pins x420 so this is a safety net.
-                return ciFallback(buffer, maxWidth: maxWidth)
+                ok = false
             }
-            return ok ? (bytes, width, height, width * 4) : nil
+            CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+            if ok { return (bytes, width, height, width * 4) }
+            // Packed / compressed VT formats, or a planar buffer whose CPU
+            // planes did not map. Unlock first — Core Image cannot attach
+            // while the buffer is still locked.
+            return ciFallback(buffer, maxWidth: maxWidth)
         }
 
         public static func fourCC(_ buffer: CVPixelBuffer) -> String {
