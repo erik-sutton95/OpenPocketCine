@@ -1,4 +1,4 @@
-# OpenPocketCine Claude Code guide
+# OpenPocketCine Grok guide
 
 Canonical project guidance is [`AGENTS.md`](AGENTS.md). Do not copy it here.
 

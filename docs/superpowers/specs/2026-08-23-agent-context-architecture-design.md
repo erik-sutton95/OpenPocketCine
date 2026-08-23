@@ -1,7 +1,7 @@
 # Agent context architecture
 
 **Date:** 2026-08-23
-**Status:** draft, awaiting implementation-plan approval
+**Status:** implemented on `docs/agent-context-architecture`
 **Slice:** 1 of 6 (index + split the two bloated loads)
 
 OpenPocketCine’s always-loaded agent context is a thin index. Durable seams, operator

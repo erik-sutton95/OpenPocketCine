@@ -55,6 +55,7 @@ Frame.io upload is **disabled unless you configure it**. Copy
 
 ## Code standards
 
+- Agent instructions live in [`AGENTS.md`](AGENTS.md). Do not copy them here.
 - The production target is a shared Swift business/protocol core with native UI shells: SwiftUI on
   iOS and Jetpack Compose on Android.
 - Composition over inheritance; prefer small pure functions and immutable data.

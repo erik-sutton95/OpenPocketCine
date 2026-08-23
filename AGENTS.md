@@ -1,63 +1,66 @@
 # OpenPocketCine
 
-Open-source iOS + Android app to connect to and monitor DJI Osmo Pocket cameras — primarily
-**Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC. Built openly with agentic coding tools,
-held to clean engineering standards.
+Open-source iOS + Android app to connect to and monitor DJI Osmo Pocket cameras —
+primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
-## Stack & tooling
+## Stack & paths
 
-- **Swift Package Manager / Swift** — production shared protocol core.
-- **SwiftUI** — production iOS app shell (`ios/OpenPocketCine`, generated with XcodeGen).
-- **Jetpack Compose / Kotlin** — production Android app shell.
-- **just** — the single entry point for repository tasks. Run `just` to list recipes.
-- **swift-format / swift test / xcodebuild** — formatting, tests, and iOS build checks.
-- **typos, editorconfig-checker, markdownlint-cli2, lychee, actionlint, gitleaks** — meta-checks.
+- **Swift Package Manager / Swift** — portable protocol core (`Sources/OpenPocketViewCore/`).
+- **SwiftUI** — iOS/iPadOS shell (`ios/OpenPocketCine/`, XcodeGen).
+- **Jetpack Compose / Kotlin** — Android shell (`Apps/Android/`).
+- **just** — every repo task. Run `just` to list recipes. `just setup` on macOS.
 
-Install local tooling with `just setup` (macOS / Homebrew).
+| Path | What |
+| --- | --- |
+| `Sources/OpenPocketViewCore/` | Portable Swift core |
+| `Tests/OpenPocketViewCoreTests/` | Core tests |
+| `ios/OpenPocketCine/` | SwiftUI shell |
+| `Apps/Android/` | Compose shell and adapters |
+| `Sources/OpenPocketCineAndroidFacade/` | Android JNI facade |
+| `docs/` | Engineering references |
+| `handbook/src/content/docs/` | Protocol handbook source |
+| `site/` | GitHub Pages landing |
+| `.github/` | CI and templates |
 
-## Where things live
-
-- `Sources/OpenPocketViewCore/` — production Swift shared core.
-- `Tests/OpenPocketViewCoreTests/` — Swift shared-core tests.
-- `ios/OpenPocketCine/` — production SwiftUI iOS app shell.
-- `Apps/Android/` — production Jetpack Compose app and platform adapters.
-- `captures/` — **gitignored.** Packet captures; never commit.
-- `docs/` — engineering references. Start with `commit-hygiene.md`.
-- `handbook/` — Astro Starlight protocol handbook (BLE, Wi-Fi, DUML). Preview with
-  `just handbook`. Markdown in `handbook/src/content/docs/` is the source. Shipped
-  at [openpocketcine.app/docs](https://openpocketcine.app/docs/) (GitHub Pages
-  merges it next to `site/`).
-- `site/` — GitHub Pages landing page.
-- `.github/` — CI workflows, issue/PR templates.
-
-## Supported agent tools
-
-OpenPocketCine supports **Claude Code** and **Codex** only. Shared instructions live here. Do not
-add Cursor, Copilot, Gemini, Windsurf, or other client-specific instruction files.
+`captures/` is gitignored.
 
 ## Hard rules
 
-- **Never commit `captures/`, `Osmo LUTS/`, `vendor/`, `ref/`, or `.local/`.** They contain
-  private or non-redistributable material.
-- **Never commit unofficial LUT dumps** (`Osmo LUTS/`). Official Rec.709 cubes in
-  `ios/OpenPocketCine/Resources/` are redistributable and tracked. See `docs/commit-hygiene.md`.
-- **Mind commit hygiene.** Never commit secrets, credentials, PII, or Wi-Fi passwords.
-- **Work on a branch and open a PR.** Do not commit directly to `main`.
-- **Conventional Commits** for every commit (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`,
-  `test:`).
-- **Keep the Swift core portable.** No SwiftUI, UIKit, Android, Compose, or filesystem/UI
-  dependencies in protocol/business logic.
+- Keep the Swift core **portable**: Foundation-only protocol and business logic.
+- Live view is **enable-once**: `0x09/0xa8` starts the stream and is the only PLI. After picture, further enables follow the **watchdog** only.
+- **Hygiene:** secrets, camera Wi-Fi passwords, PII, unofficial LUT dumps, and `captures/`, `Osmo LUTS/`, `vendor/`, `ref/`, `.local/` stay out of git. Official Rec.709 cubes under `ios/OpenPocketCine/Resources/` and `Apps/Android/app/src/main/assets/luts/` are tracked.
+- Work on a branch and open a PR. Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`).
+- `AGENTS.md` is canonical for every agent. Client stubs (`CLAUDE.md`, `CODEX.md`, `GROK.md`) are pointers only — do not copy these rules into a second instruction file. Do not add Cursor, Copilot, Gemini, or Windsurf instruction dumps.
+
+## Before you edit
+
+1. Name the surface: core, iOS **shell**, Android **shell**, or docs.
+2. Load every pointer whose trigger matches.
+3. If the change is operator-visible, read **parity** and touch both shells or record the exception in `docs/PARITY.md`.
+
+## Read when
+
+- **naming** — fuzzy term, new name, operator-visible copy: [`CONTEXT.md`](CONTEXT.md)
+- **seams** — new module, core vs shell, spine order: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **parity** — chrome, assist, connection UX, one-platform feature: [`docs/PARITY.md`](docs/PARITY.md)
+- **JNI** — Gradle, Swift-for-Android, `.so`, facade, OpenZCine pattern: [`ANDROID.md`](ANDROID.md)
+- **live-session** — freeze, black feed, reconnect, UDP bind, ACK, decoder: [`docs/live-session.md`](docs/live-session.md)
+- **watchdog** — stall, GOP-reset grace, recover `0x09/0xa8`: [`docs/feed-watchdog.md`](docs/feed-watchdog.md)
+- **protocol** — DUML, BLE, opcode, pktType, HEVC/AVC payload: `handbook/src/content/docs/`
+- **hygiene** — commit/PR that might touch secrets, LUTs, captures, identity: [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
+- **contributing** — issues vs discussions, labels, human setup: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## Verification
 
-- `just check` — full repository quality gate (hygiene, site, typos, markdown, links,
-  editorconfig, actionlint, secrets, swift-format lint, swift test).
+- `just check` — full repository quality gate.
 - `just native-check` — Swift lint/test plus iOS simulator build and tests.
 - `just android-check` — Gradle assembleDebug, unit tests, lint.
-- UI / chrome changes: build-run on a physical iPhone or connected Android device. Compile-only
-  is not done for operator-visible work. Simulator cannot exercise BLE or camera Wi-Fi.
+- **physical:** operator-visible work is proven on a real iPhone or Android device for the platform changed. Simulator has no BLE or camera Wi-Fi. Compile-only is not done.
 
 ## Completion
 
-A task is not done until `just check` is green for the paths you touched, docs that describe the
-behavior are updated, and no forbidden paths are staged.
+A task is not done until `just check` is green for the paths touched, docs that describe the behavior are updated, **parity** is held or an exception is recorded in `docs/PARITY.md`, no forbidden paths are staged, and operator-visible work is **physical** for the platform changed.
+
+## Sediment
+
+`STATUS.md`, `OVERNIGHT.md`, and `.planning/` are local or dated notes. They are not current architecture. `docs/connection-reliability-plan.md` is a dated PR plan, not a contract.

@@ -46,6 +46,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Agent instructions are a thin [`AGENTS.md`](AGENTS.md) index. Operator-visible
+  contract lives in [`docs/PARITY.md`](docs/PARITY.md); live UDP and decoder
+  facts in [`docs/live-session.md`](docs/live-session.md); glossary in
+  [`CONTEXT.md`](CONTEXT.md). [`ANDROID.md`](ANDROID.md) is build/JNI/I/O only.
+
 - Android live scopes match iOS `ScopeMiniChrome` / `WaveformMovablePanel`:
   DJI-black 72% plates (`LiveDesign.scopePlate`). WAVE / PARADE / VECTOR /
   HISTO paint fill and traces in one Compose Canvas (iOS `plusLighter` on
