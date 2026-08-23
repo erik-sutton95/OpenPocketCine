@@ -1,25 +1,31 @@
 ---
-title: Protocol handbook
-description: BLE pairing, camera Wi-Fi, and DUML as implemented in OpenPocketCine.
+title: OpenPocketCine docs
+description: Protocol, apps, and how to build OpenPocketCine — the public handbook at openpocketcine.app/docs.
 ---
 
-OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
-this repository. The BLE pairing and camera Wi-Fi path was learned with the help
-of [Osmosis](https://github.com/KonradIT/osmosis) by Konrad Iturbe. Live view,
-monitoring, and the rest of the monitor were confirmed on hardware we own. This
-is OpenPocketCine's condensed reference — not an Osmosis port.
+OpenPocketCine is the open field monitor for DJI Osmo. These pages are the
+**public handbook**: protocol, both apps, and how to build and maintain the
+project. Markdown in `handbook/src/content/docs/` is the source. Preview with
+`just handbook`. Engineering contracts that agents follow (`docs/PARITY.md`,
+`docs/live-session.md`, …) stay in the git repo and are not uploaded here.
 
-Implementation lives in `Sources/OpenPocketViewCore/`. These pages are Markdown
-in `handbook/src/content/docs/` so people can read them as a site and agents can
-still read the source.
+OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
+this repository. Protocol facts come from public behavior and hardware we own.
 
 :::caution[Do not publish captures]
 Packet captures stay in gitignored `captures/` and are never committed. Do not
-open issues with pcaps or SoftAP passwords. Protocol facts here are from public
-behavior and hardware observation — never from proprietary DJI documentation.
+open issues with pcaps or SoftAP passwords.
 :::
 
-## The connection spine
+## Start here
+
+- [Setup and build](./guides/setup/) — `just`, Xcode, Android, quality gate
+- [Architecture](./apps/architecture/) — portable Swift core, SwiftUI, Compose
+- [iOS app](./apps/ios/) — physical device, XcodeGen, TestFlight
+- [Android app](./apps/android/) — JNI, Gradle, not on Play yet
+- [Keeping docs current](./contribute/documentation/) — what to update in the same PR
+
+## Protocol
 
 BLE is control only; bulk data goes over Wi-Fi.
 
@@ -27,14 +33,11 @@ BLE is control only; bulk data goes over Wi-Fi.
 BLE scan → GATT connect → app-pairing → read Wi-Fi creds → join AP → UDP DUML → HTTP media
 ```
 
-## Pages
-
-- [Connection spine](./protocol/connection/) — order of operations
-- [BLE pairing](./protocol/ble/) — scan, GATT, app-level pairing
-- [Camera Wi-Fi](./protocol/wifi/) — credentials over BLE, SoftAP join
-- [DUML frame](./protocol/duml-frame/) — `0x55` framing and CRCs
-- [DUML transport](./protocol/duml-transport/) — UDP 9004, TCP poke, wrapping headers
-- [Command catalog](./protocol/commands/) — set/cmd table
-- [Live view](./protocol/live-view/) — enable, HEVC/AVC, fragments
-- [HTTP media](./protocol/media/) — SoftAP `/v2` fetch, list, delete, star
-- [iOS notes](./protocol/ios/) — Hotspot Configuration, Local Network, Simulator
+- [Connection spine](./protocol/connection/)
+- [BLE pairing](./protocol/ble/)
+- [Camera Wi-Fi](./protocol/wifi/)
+- [DUML frame](./protocol/duml-frame/) · [transport](./protocol/duml-transport/)
+- [Command catalog](./protocol/commands/)
+- [Live view](./protocol/live-view/)
+- [HTTP media](./protocol/media/)
+- [iOS protocol notes](./protocol/ios/)

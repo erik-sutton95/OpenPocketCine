@@ -1,7 +1,8 @@
 name: Deploy GitHub Pages
 
-# Landing page (site/) plus the Starlight handbook at /docs/. Engineering notes
-# in docs/ are never uploaded.
+# Landing page (site/) plus the Starlight handbook at /docs/ (protocol, apps,
+# setup). Engineering contracts in docs/ (PARITY, live-session, …) are never
+# uploaded.
 on:
   push:
     branches: [main]

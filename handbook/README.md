@@ -1,8 +1,12 @@
-# Protocol handbook
+# OpenPocketCine handbook
 
-Astro [Starlight](https://starlight.astro.build/) site for the OpenPocketCine
-camera protocol (BLE, SoftAP, DUML). Markdown in `src/content/docs/` is the
-source of truth for both the local site and agent tooling.
+Astro [Starlight](https://starlight.astro.build/) site for OpenPocketCine:
+protocol, iOS and Android apps, and how to build. Markdown in `src/content/docs/`
+is the public source. Engineering contracts (`docs/PARITY.md`, live-session)
+stay in the git repo and are not uploaded.
+
+When protocol, app UX, or setup changes, update the matching page in the same
+PR. Standard: `src/content/docs/contribute/documentation.md`.
 
 Published at [openpocketcine.app/docs](https://openpocketcine.app/docs/).
 Preview from the repository root:

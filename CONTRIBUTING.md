@@ -11,8 +11,11 @@ engineering. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT
 3. Run `just check` to confirm a green baseline.
 
 No vendor SDK is included or required — the camera protocol is reverse-engineered from public
-behavior (see [`docs/protocol-notes.md`](docs/protocol-notes.md) and
-[openpocketcine.app/docs](https://openpocketcine.app/docs/); `just handbook` locally).
+behavior. Public docs (protocol, apps, setup):
+[openpocketcine.app/docs](https://openpocketcine.app/docs/) (`just handbook` locally).
+Keep those pages current in the same PR — see
+[Keeping docs current](https://openpocketcine.app/docs/contribute/documentation/).
+
 **Hygiene** (secrets, captures, unofficial LUTs): [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
 and [`AGENTS.md`](AGENTS.md). Official Rec.709 cubes in
 `ios/OpenPocketCine/Resources/` are part of the app.

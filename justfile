@@ -8,7 +8,7 @@ default:
 # ── Setup ──────────────────────────────────────────────────────────────────
 # Install the meta-check tools used by `just check` (macOS / Homebrew),
 # and enable the repo's git hooks (pre-commit secret scan + proprietary guard).
-# Node is required for the protocol handbook (`just handbook`).
+# Node is required for the public handbook (`just handbook`).
 setup:
     brew install node typos-cli editorconfig-checker lychee markdownlint-cli2 actionlint gitleaks swift-format xcodegen
     git config core.hooksPath .githooks
@@ -132,7 +132,7 @@ run:
 clean:
     swift package clean
 
-# ── Protocol handbook (Astro Starlight) ────────────────────────────────────
+# ── Public handbook (Astro Starlight: protocol, apps, setup) ───────────────
 # Local preview at http://localhost:4321/. Production is /docs/ on Pages.
 
 handbook:

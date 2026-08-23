@@ -55,6 +55,9 @@ All notable changes to this project are documented here. The format is based on
   [`docs/WORKFLOW.md`](docs/WORKFLOW.md). Runtime trust boundaries:
   [`SECURITY.md`](SECURITY.md). Git and version trains:
   [`docs/RELEASE.md`](docs/RELEASE.md).
+- Public handbook at [openpocketcine.app/docs](https://openpocketcine.app/docs/)
+  covers protocol, iOS and Android apps, and setup — not protocol only. Same-PR
+  update rule: `handbook/src/content/docs/contribute/documentation.md`.
 
 - Android live scopes match iOS `ScopeMiniChrome` / `WaveformMovablePanel`:
   DJI-black 72% plates (`LiveDesign.scopePlate`). WAVE / PARADE / VECTOR /
