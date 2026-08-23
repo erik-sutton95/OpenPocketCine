@@ -194,6 +194,18 @@ jobs:
           SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
         run: ./gradlew assembleDebug test lint
 
+      # The debug APK is the only way to get a real build onto a physical
+      # Android device from a machine that cannot cross-compile the Swift core
+      # (no Swift 6.3.3 host toolchain, or no room for the NDK 27 sysroot).
+      # arm64-v8a only, matching the ABI filter in Apps/Android/app/build.gradle.kts.
+      - name: Upload debug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openpocketcine-debug-apk
+          path: Apps/Android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
   handbook:
     name: Protocol handbook
     needs: changes
