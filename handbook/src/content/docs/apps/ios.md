@@ -22,7 +22,9 @@ project with XcodeGen — see [Setup](../guides/setup/).
   keeps that Auto cube (it does not restamp from a missing live SET).
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
-  picture — the same on iPhone and iPad, portrait and landscape.
+  picture — the same on iPhone and iPad, portrait and landscape. D-Log2
+  cannot zoom: idle hops to D-Log off 1×; while rolling the chip grays and
+  tap/pinch toast instead of changing color.
 - Media library, playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
   GPU latest-wins, freeze keeps the last frame). Next/prev with LUT on keeps

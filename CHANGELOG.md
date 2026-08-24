@@ -313,6 +313,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Zoom while recording in D-Log2: the chip now grays (same 0.4 as interface
+  lock) but stays hittable. Chip tap and pinch toast
+  `Can't change color while recording — D-Log2 can't zoom` and do not send
+  zoom or a color hop — the body will not change color while rolling. Color
+  drum while recording uses the same lock. D-Log / Rec.709 / HLG still zoom
+  while rolling. Idle D-Log2 still hops to D-Log off 1×. The control toast
+  parks under the mounted top bar in DISP 1 and on the feed edge in DISP 2
+  (follows the operator's DISP map if that bar is shown or hidden).
 - Live WAVE / PARADE / HISTO / VECTOR tracked the picture at 15 Hz (10 Hz
   with three or more), so traces held about two SoftAP frames. Nominal tap
   is 25 Hz with 1–2 scopes; dense 3+ stays 10 Hz; thermal still ×3 / ×5.

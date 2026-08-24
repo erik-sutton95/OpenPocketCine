@@ -667,6 +667,15 @@ class CameraControlTest {
         assertEquals("ISO limit GET timed out", ControlHud.timeoutNote("ISO limit GET", announce = true))
         assertEquals(2.0, ControlHud.TOAST_HOLD_SECONDS)
         assertEquals(222.0, ControlHud.toastCenterY(200.0))
+        assertEquals(82.0, ControlHud.toastCenterY(0.0, 60.0))
+        assertEquals(222.0, ControlHud.toastCenterY(200.0, null))
+        assertEquals(72.0, ControlHud.toastCenterY(50.0, 50.0))
+        assertEquals(72.0, ControlHud.toastCenterY(50.0, 40.0))
+        assertEquals(
+            "Can't change color while recording — D-Log2 can't zoom",
+            ControlHud.RECORDING_COLOR_LOCK_NOTE,
+        )
+        assertTrue(!ControlHud.RECORDING_COLOR_LOCK_NOTE.contains("0x"))
     }
 
     @Test

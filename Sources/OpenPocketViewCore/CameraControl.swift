@@ -160,8 +160,21 @@ public enum ControlHud {
         announce ? "\(name) timed out" : nil
     }
 
-    public static func toastCenterY(feedMinY: Double) -> Double {
-        feedMinY + toastOffsetFromFeedTop
+    /// Chip / pinch / color drum while rolling in D-Log2. No opcode names.
+    public static let recordingColorLockNote =
+        "Can't change color while recording — D-Log2 can't zoom"
+
+    /// Center Y for the control toast. Parks under a mounted top bar when that
+    /// bar overlays the feed (DISP 1). Falls back to the feed edge when the
+    /// bar is off or already sits above the picture (DISP 2 / portrait).
+    public static func toastCenterY(feedMinY: Double, chromeBottomY: Double? = nil) -> Double {
+        let edge: Double
+        if let chromeBottomY, chromeBottomY > feedMinY + 0.5 {
+            edge = chromeBottomY
+        } else {
+            edge = feedMinY
+        }
+        return edge + toastOffsetFromFeedTop
     }
 }
 
@@ -1314,6 +1327,13 @@ public enum CamFov {
     public static func colorMode(forZoom factor: Double, current: ColorMode?) -> ColorMode? {
         guard current == .dLog2, displayTenths(factor) > 1.05 else { return nil }
         return .dLog
+    }
+
+    /// Body will not change color while rolling, so D-Log2 cannot leave 1×.
+    public static func zoomNeedsColorHopWhileRecording(
+        factor: Double, current: ColorMode?, isRecording: Bool
+    ) -> Bool {
+        isRecording && colorMode(forZoom: factor, current: current) != nil
     }
 
     /// Restore D-Log2 only when parked back at 1×, not at 2.9×.

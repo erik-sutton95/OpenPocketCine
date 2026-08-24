@@ -1066,6 +1066,7 @@ final class CameraSession {
             lastPinchLogTenths = nil
         }
         let factor = CamFov.pinchFactor(anchor: zoomPinchAnchor, magnification: magnification)
+        if blockZoomColorHopIfRecording(for: factor) { return }
         let first = zoomPinchPreview == nil
         if first { dropDLog2ForZoom(factor) }
         zoomPinchPreview = factor
@@ -1100,6 +1101,7 @@ final class CameraSession {
             ControlLiveLog.line("zoom: tap ignored — no write for \(to)")
             return
         }
+        if blockZoomColorHopIfRecording(for: factor) { return }
         zoomPinchPreview = nil
         zoomPinchSlew = nil
         dropDLog2ForZoom(factor)
@@ -1123,6 +1125,7 @@ final class CameraSession {
             controlNote = "Zoom locked"
             return
         }
+        if blockZoomColorHopIfRecording(for: factor) { return }
         zoomPinchSlew = nil
         fireZoom(.lens(position), target: tenths, announce: false)
     }
@@ -1210,9 +1213,21 @@ final class CameraSession {
         setISO(next)
     }
 
+    /// True when a zoom SET would need a D-Log2→D-Log hop while rolling.
+    private func blockZoomColorHopIfRecording(for factor: Double) -> Bool {
+        guard
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: factor, current: status.colorMode, isRecording: status.isRecording)
+        else { return false }
+        controlNote = ControlHud.recordingColorLockNote
+        ControlLiveLog.line("zoom: blocked — color hop while recording")
+        return true
+    }
+
     /// D-Log2 rejects every zoom SET. Hop to D-Log on the first pinch / chip,
     /// before `0xB8`, and restore only when parked back at 1×.
     private func dropDLog2ForZoom(_ factor: Double) {
+        if blockZoomColorHopIfRecording(for: factor) { return }
         guard let next = CamFov.colorMode(forZoom: factor, current: status.colorMode) else {
             restoreDLog2IfNeeded(afterZoom: factor)
             return
@@ -1221,6 +1236,10 @@ final class CameraSession {
     }
 
     private func sendZoomColorOnce(_ next: ColorMode) {
+        guard !status.isRecording else {
+            controlNote = ControlHud.recordingColorLockNote
+            return
+        }
         guard !teleColorSent else { return }
         teleColorSent = true
         restoreDLog2OnWide = true
@@ -1243,6 +1262,7 @@ final class CameraSession {
 
     private func restoreDLog2IfNeeded(afterZoom factor: Double) {
         guard restoreDLog2OnWide, CamFov.shouldRestoreDLog2(factor: factor) else { return }
+        guard !status.isRecording else { return }
         restoreDLog2OnWide = false
         teleColorSent = false
         let from = status.colorMode
@@ -1791,6 +1811,10 @@ final class CameraSession {
 
     /// `0x02/0x42` via `Commands.setColorMode`.
     func setColorMode(_ mode: ColorMode) {
+        if status.isRecording, mode != status.colorMode {
+            controlNote = ControlHud.recordingColorLockNote
+            return
+        }
         guard colorModes.contains(mode) else { return }
         let from = status.colorMode
         colorPin = (mode, Date().addingTimeInterval(2))

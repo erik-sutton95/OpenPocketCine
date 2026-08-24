@@ -154,6 +154,13 @@ object CamFov {
         return if (displayTenths(factor) > 1.05) CameraCommands.COLOR_DLOG else null
     }
 
+    /** Body will not change color while rolling, so D-Log2 cannot leave 1×. */
+    fun zoomNeedsColorHopWhileRecording(
+        factor: Double,
+        current: Int,
+        isRecording: Boolean,
+    ): Boolean = isRecording && colorModeForZoom(factor, current) != null
+
     fun shouldRestoreDLog2(factor: Double): Boolean = displayTenths(factor) <= 1.05
 
     fun absorb(status: CameraStatus): CameraStatus {

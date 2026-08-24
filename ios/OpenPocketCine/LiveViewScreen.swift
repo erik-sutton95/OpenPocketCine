@@ -395,7 +395,10 @@ struct LiveViewScreen: View {
                     .zIndex(4)
             }
 
-            LiveSessionBanners(feed: layout.onFeed)
+            LiveSessionBanners(
+                feed: layout.onFeed,
+                topBar: showsStatusBar ? layout.topDeck : nil
+            )
 
             if model.chromeSectionMounts(.toolBar) {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -560,7 +563,10 @@ struct LiveViewScreen: View {
                     .zIndex(3)
             }
 
-            LiveSessionBanners(feed: picture)
+            LiveSessionBanners(
+                feed: picture,
+                topBar: showsStatusBar ? layout.topDeck : nil
+            )
 
             Rectangle()
                 .fill(LiveDesign.glass)
@@ -875,9 +881,13 @@ enum LiveChromeEditGeometry {
 private struct LiveSessionBanners: View {
     @Environment(AppModel.self) private var model
     var feed: CGRect
+    var topBar: CGRect?
 
     var body: some View {
-        let toastY = CGFloat(ControlHud.toastCenterY(feedMinY: Double(feed.minY)))
+        let chromeBottom =
+            (topBar?.height ?? 0) > 1 ? topBar.map { Double($0.maxY) } : nil
+        let toastY = CGFloat(
+            ControlHud.toastCenterY(feedMinY: Double(feed.minY), chromeBottomY: chromeBottom))
         Group {
             if model.session.feedRecovering {
                 Text("Reconnecting")
@@ -910,6 +920,7 @@ private struct LiveSessionBanners: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: model.session.controlNote)
+        .animation(.easeOut(duration: 0.18), value: toastY)
     }
 }
 

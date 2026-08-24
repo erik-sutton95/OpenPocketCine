@@ -93,6 +93,15 @@ final class LiveZoomReadoutTests: XCTestCase {
         XCTAssertEqual(CamFov.colorMode(forZoom: 2.9, current: .dLog2), .dLog)
         XCTAssertEqual(CamFov.colorMode(forZoom: 3, current: .dLog2), .dLog)
         XCTAssertNil(CamFov.colorMode(forZoom: 1, current: .dLog2))
+        XCTAssertTrue(
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog2, isRecording: true))
+        XCTAssertFalse(
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog, isRecording: true))
+        XCTAssertFalse(
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog2, isRecording: false))
         XCTAssertTrue(CamFov.shouldRestoreDLog2(factor: 1))
         XCTAssertFalse(CamFov.shouldRestoreDLog2(factor: 2.9))
     }

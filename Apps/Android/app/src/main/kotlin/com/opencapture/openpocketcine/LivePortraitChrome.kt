@@ -377,14 +377,21 @@ fun LivePortraitChrome(
         if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) {
             val zoomReadout by model.session.zoomReadout.collectAsState()
             val zoomPinching by model.session.zoomPinching.collectAsState()
+            val zoomBlocked =
+                CamFov.zoomNeedsColorHopWhileRecording(
+                    CamFov.nextJump(model.session.zoomCycleFrom()),
+                    status.colorMode,
+                    status.isRecording,
+                )
             LiveZoomChip(
                 factor = zoomReadout,
                 locked = uiLocked,
                 pinching = zoomPinching,
+                dimmed = zoomBlocked,
                 modifier =
                     Modifier
                         .liveModuleFrame(zoom)
-                        .alpha(if (uiLocked) 0.4f else 1f)
+                        .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
                         .chromeEditStroke(editing != null, true),
                 onCycle = {
                     model.session.setZoom(CamFov.nextJump(model.session.zoomCycleFrom()))

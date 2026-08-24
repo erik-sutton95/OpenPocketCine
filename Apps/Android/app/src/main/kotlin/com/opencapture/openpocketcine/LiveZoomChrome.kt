@@ -83,6 +83,7 @@ fun LiveZoomChip(
     locked: Boolean,
     modifier: Modifier = Modifier,
     pinching: Boolean = false,
+    dimmed: Boolean = false,
     onCycle: () -> Unit,
 ) {
     var held by remember { mutableStateOf(factor) }
@@ -103,7 +104,7 @@ fun LiveZoomChip(
     ) {
         Text(
             LiveZoom.label(held),
-            color = LiveDesign.text.copy(alpha = if (locked) 0.4f else 1f),
+            color = LiveDesign.text.copy(alpha = if (locked || dimmed) 0.4f else 1f),
             style = LiveType.ui(13f, FontWeight.Bold),
             maxLines = 1,
         )

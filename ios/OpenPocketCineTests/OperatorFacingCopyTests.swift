@@ -111,6 +111,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SessionRecoveryCopy.detail(
                 .pausedAfterRepeatedDrops(drops: 3), deviceName: "Pocket 4 Pro"),
             SessionRecoveryCopy.heldFrameBadge,
+            ControlHud.recordingColorLockNote,
         ]
     }
 }

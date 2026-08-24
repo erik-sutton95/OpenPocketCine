@@ -755,6 +755,12 @@ struct CapturePickerPanel: View {
 
     private func applyDrum(_ value: String) {
         guard !value.isEmpty, value != lastApplied else { return }
+        if sheet == .color, model.session.status.isRecording {
+            if let mode = ColorMode(label: value) {
+                model.session.setColorMode(mode)
+            }
+            return
+        }
         lastApplied = value
         switch sheet {
         case .iso:

@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
 import android.os.SystemClock
 import com.opencapture.openpocketcine.session.SessionRecoveryCopy
 import androidx.compose.ui.text.font.FontWeight
@@ -94,6 +95,7 @@ import com.opencapture.openpocketcine.media.MediaLibraryScreen
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.ControlHud
 import com.opencapture.openpocketcine.session.FocusOverlay
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
@@ -145,8 +147,13 @@ fun LiveViewScreen(model: AppModel) {
     }
     LaunchedEffect(chromeNote) {
         val note = chromeNote ?: return@LaunchedEffect
-        delay(2_000)
+        delay((ControlHud.TOAST_HOLD_SECONDS * 1000).toLong())
         if (chromeNote == note) chromeNote = null
+    }
+    LaunchedEffect(controlNote) {
+        val note = controlNote ?: return@LaunchedEffect
+        delay((ControlHud.TOAST_HOLD_SECONDS * 1000).toLong())
+        model.session.clearControlNoteIf(note)
     }
 
     fun setLocked(value: Boolean) {
@@ -660,6 +667,22 @@ fun LiveViewScreen(model: AppModel) {
 
             val toast = chromeNote ?: controlNote
             if (!toast.isNullOrEmpty()) {
+                val chromeBottom =
+                    if (model.chromeSectionMounts(PocketDispSection.STATUS_BAR) &&
+                        layout.topDeck.height > 1f
+                    ) {
+                        layout.topDeck.maxY.toDouble()
+                    } else {
+                        null
+                    }
+                val toastY =
+                    ControlHud.toastCenterY(
+                        layout.onFeed.minY.toDouble(),
+                        chromeBottom,
+                    ).toFloat()
+                val parkedY by animateFloatAsState(toastY, tween(180), label = "toastY")
+                var toastHeightPx by remember { mutableIntStateOf(0) }
+                val toastDensity = LocalDensity.current
                 Text(
                     toast,
                     color = LiveDesign.text.copy(alpha = 0.92f),
@@ -667,7 +690,13 @@ fun LiveViewScreen(model: AppModel) {
                     modifier =
                         Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = (layout.onFeed.minY + 36f).dp)
+                            .onSizeChanged { toastHeightPx = it.height }
+                            .offset {
+                                IntOffset(
+                                    0,
+                                    with(toastDensity) { parkedY.dp.roundToPx() } - toastHeightPx / 2,
+                                )
+                            }
                             .clip(RoundedCornerShape(50))
                             .chipGlass(RoundedCornerShape(50))
                             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1327,14 +1356,21 @@ private fun LandscapeChrome(
             )
         }
         if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP) && !zoom.isEmpty) {
+            val zoomBlocked =
+                CamFov.zoomNeedsColorHopWhileRecording(
+                    CamFov.nextJump(model.session.zoomCycleFrom()),
+                    status.colorMode,
+                    status.isRecording,
+                )
             LiveZoomChip(
                 factor = zoomReadout,
                 locked = uiLocked,
                 pinching = zoomPinching,
+                dimmed = zoomBlocked,
                 modifier =
                     Modifier
                         .liveModuleFrame(zoom)
-                        .alpha(if (uiLocked) 0.4f else 1f)
+                        .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
                         .chromeEditStroke(editing != null, true),
                 onCycle = {
                     model.session.setZoom(CamFov.nextJump(model.session.zoomCycleFrom()))

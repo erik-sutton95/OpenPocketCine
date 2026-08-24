@@ -13,7 +13,8 @@ Write for the operator, not the stack. Name the camera action. Keep it short.
 
 Operator-facing strings never name sister apps or other camera brands
 (OpenZCine, Nikon). `OperatorFacingCopyTests` enforces that on iOS; Android copy
-follows the same list.
+follows the same list. Control toasts name the camera action (`Can't change
+color while recording — D-Log2 can't zoom`), not opcodes.
 
 Every assist that has a long-press sheet includes help for the control the
 operator is holding (units, scale, sensitivity). Empty and error states say what

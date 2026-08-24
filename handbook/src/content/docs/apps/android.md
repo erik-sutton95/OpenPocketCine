@@ -27,7 +27,9 @@ Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
 The gimbal stick and zoom chip sit together as a cluster in the
-trailing-bottom of the picture, same as iOS.
+trailing-bottom of the picture, same as iOS. D-Log2 cannot zoom while
+rolling — the chip grays and tap/pinch toast; idle still hops to D-Log
+off 1×.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Next/prev with LUT on keeps the grade on
 the same GLES host. Auto on a clip reads `com.dji.camera.ColorGammaSxS`

@@ -66,6 +66,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private val _controlNote = MutableStateFlow<String?>(null)
     val controlNote: StateFlow<String?> = _controlNote.asStateFlow()
+
+    fun clearControlNoteIf(note: String) {
+        if (_controlNote.value == note) _controlNote.value = null
+    }
     private val _controlBusy = MutableStateFlow(false)
     val controlBusy: StateFlow<Boolean> = _controlBusy.asStateFlow()
     private val _focusPoint = MutableStateFlow(0.5f to 0.5f)
@@ -1416,6 +1420,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             Log.i(TAG, "zoom: tap ignored — no write for $to")
             return
         }
+        if (blockZoomColorHopIfRecording(factor)) return
         zoomPinchPreview = null
         dropDLog2ForZoom(factor)
         zoomOptimistic = factor
@@ -1438,6 +1443,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             lastPinchLogTenths = tenths
             Log.i(TAG, "zoom: setZoomSlider ${CamFov.displayLabel(factor)} lens=$position")
         }
+        if (blockZoomColorHopIfRecording(factor)) return
         fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
     }
 
@@ -1457,6 +1463,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             lastPinchLogTenths = null
         }
         val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification)
+        if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
         // iOS `dropDLog2ForZoom` before every 0xB8. D-Log2 rejects zoom; any
         // step off 1× hops to D-Log first. Do not gate on `first` — the pinch
@@ -1924,10 +1931,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         hopEnabled: Boolean = OperatorPrefs.nativeISOHopEnabled(appContext),
     ) {
         val live = _status.value
+        val from = live.colorMode
+        if (live.isRecording && mode != from) {
+            _controlNote.value = ControlHud.RECORDING_COLOR_LOCK_NOTE
+            return
+        }
         val family = connectedCamera?.model?.family ?: "pocket"
         val allowed = CaptureLists.colorWheel(family, live.availableColorModes).map { it.first }
         if (mode !in allowed) return
-        val from = live.colorMode
         pinColor(mode)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
@@ -2027,7 +2038,23 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         setIsoIndex(hop)
     }
 
+    private fun blockZoomColorHopIfRecording(factor: Double): Boolean {
+        if (
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor,
+                _status.value.colorMode,
+                _status.value.isRecording,
+            )
+        ) {
+            return false
+        }
+        _controlNote.value = ControlHud.RECORDING_COLOR_LOCK_NOTE
+        Log.i(TAG, "zoom: blocked — color hop while recording")
+        return true
+    }
+
     private fun dropDLog2ForZoom(factor: Double) {
+        if (blockZoomColorHopIfRecording(factor)) return
         val next = CamFov.colorModeForZoom(factor, _status.value.colorMode)
         if (next == null) {
             restoreDLog2IfNeeded(factor)
@@ -2037,6 +2064,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun sendZoomColorOnce(next: Int) {
+        if (_status.value.isRecording) {
+            _controlNote.value = ControlHud.RECORDING_COLOR_LOCK_NOTE
+            return
+        }
         if (teleColorSent) return
         teleColorSent = true
         restoreDLog2OnWide = true
@@ -2059,6 +2090,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun restoreDLog2IfNeeded(factor: Double) {
         if (!restoreDLog2OnWide || !CamFov.shouldRestoreDLog2(factor)) return
+        if (_status.value.isRecording) return
         restoreDLog2OnWide = false
         teleColorSent = false
         val from = _status.value.colorMode

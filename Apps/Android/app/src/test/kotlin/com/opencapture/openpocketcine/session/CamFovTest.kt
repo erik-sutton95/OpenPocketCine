@@ -99,6 +99,24 @@ class CamFovTest {
         assertNull(CamFov.colorModeForZoom(3.0, CameraCommands.COLOR_DLOG))
         assertTrue(CamFov.shouldRestoreDLog2(1.0))
         assertTrue(!CamFov.shouldRestoreDLog2(2.9))
+        assertTrue(
+            CamFov.zoomNeedsColorHopWhileRecording(3.0, CameraCommands.COLOR_DLOG2, true),
+        )
+        assertTrue(
+            CamFov.zoomNeedsColorHopWhileRecording(1.1, CameraCommands.COLOR_DLOG2, true),
+        )
+        assertTrue(
+            !CamFov.zoomNeedsColorHopWhileRecording(1.0, CameraCommands.COLOR_DLOG2, true),
+        )
+        assertTrue(
+            !CamFov.zoomNeedsColorHopWhileRecording(3.0, CameraCommands.COLOR_DLOG2, false),
+        )
+        assertTrue(
+            !CamFov.zoomNeedsColorHopWhileRecording(3.0, CameraCommands.COLOR_DLOG, true),
+        )
+        assertTrue(
+            !CamFov.zoomNeedsColorHopWhileRecording(3.0, CameraCommands.COLOR_NORMAL, true),
+        )
     }
 
     @Test

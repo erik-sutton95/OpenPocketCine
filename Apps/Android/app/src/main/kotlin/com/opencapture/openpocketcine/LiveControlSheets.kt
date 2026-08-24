@@ -257,6 +257,15 @@ fun LiveControlSheet(
 
     fun applyDrum(value: String) {
         if (!enabled || value.isEmpty() || value == lastApplied) return
+        if (sheet == LiveSheet.COLOR && status.isRecording) {
+            CaptureLists.applyColorDrum(
+                label = value,
+                family = bodyFamily,
+                status = status,
+                hopEnabled = model.nativeISOHopEnabled,
+            )?.let { model.setColorMode(it.colorMode) }
+            return
+        }
         lastApplied = value
         when (sheet) {
             LiveSheet.ISO -> {

@@ -131,6 +131,26 @@ import Testing
         #expect(ControlHud.toastOpacity < 1)
         #expect(ControlHud.toastOpacity > 0.5)
         #expect(ControlHud.toastCenterY(feedMinY: 200) == 222)
+        #expect(
+            ControlHud.toastCenterY(feedMinY: 0, chromeBottomY: 60) == 82,
+            "DISP 1: park under the mounted top bar")
+        #expect(
+            ControlHud.toastCenterY(feedMinY: 200, chromeBottomY: Double?.none) == 222,
+            "DISP 2: feed edge when the bar is off")
+        #expect(
+            ControlHud.toastCenterY(feedMinY: 50, chromeBottomY: 50) == 72,
+            "portrait bar already sits above the feed")
+        #expect(
+            ControlHud.toastCenterY(feedMinY: 50, chromeBottomY: 40) == 72,
+            "chrome above the feed does not pull the toast up")
+    }
+
+    @Test func recordingColorLockNoteIsOperatorFacing() {
+        #expect(
+            ControlHud.recordingColorLockNote
+                == "Can't change color while recording — D-Log2 can't zoom")
+        #expect(!ControlHud.recordingColorLockNote.contains("0x"))
+        #expect(!ControlHud.recordingColorLockNote.localizedCaseInsensitiveContains("opcode"))
     }
 
     @Test func audioStateRefreshOmitsIsoLimitGet() {
@@ -671,6 +691,29 @@ import Testing
         #expect(CamFov.colorMode(forZoom: 1, current: .dLog2) == nil)
         #expect(CamFov.colorMode(forZoom: 3, current: .dLog) == nil)
         #expect(CamFov.colorMode(forZoom: 3, current: .normal) == nil)
+        #expect(
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog2, isRecording: true))
+        #expect(
+            CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 1.1, current: .dLog2, isRecording: true))
+        #expect(
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 1, current: .dLog2, isRecording: true),
+            "parked 1× does not hop")
+        #expect(
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog2, isRecording: false),
+            "idle D-Log2 still hops")
+        #expect(
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .dLog, isRecording: true))
+        #expect(
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .normal, isRecording: true))
+        #expect(
+            !CamFov.zoomNeedsColorHopWhileRecording(
+                factor: 3, current: .hdr, isRecording: true))
         #expect(CamFov.shouldRestoreDLog2(factor: 1))
         #expect(!CamFov.shouldRestoreDLog2(factor: 2.9))
         #expect(CamFov.nextJump(from: 1) == 3)

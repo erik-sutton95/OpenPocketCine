@@ -296,6 +296,13 @@ struct LiveZoomChip: View {
             ?? model.session.zoomStop
     }
     private var title: String { CamFov.displayLabel(factor: displayFactor) }
+    /// D-Log2 while rolling: gray like lock, but keep the tap so we can toast.
+    private var zoomBlockedWhileRecording: Bool {
+        CamFov.zoomNeedsColorHopWhileRecording(
+            factor: CamFov.nextJump(from: cycleFrom),
+            current: model.session.status.colorMode,
+            isRecording: model.session.status.isRecording)
+    }
 
     var body: some View {
         Button {
@@ -318,7 +325,7 @@ struct LiveZoomChip: View {
                 .liveChromeCircle()
         }
         .buttonStyle(.zcTapTarget)
-        .opacity(interfaceLocked ? 0.4 : 1)
+        .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
         .allowsHitTesting(!interfaceLocked)
         .disabled(interfaceLocked)
         .accessibilityLabel("Zoom \(title)")
