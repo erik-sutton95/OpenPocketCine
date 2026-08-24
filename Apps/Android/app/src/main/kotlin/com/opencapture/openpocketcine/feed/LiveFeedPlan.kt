@@ -7,7 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.openpocketcine.lut.PlaybackLutColor
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,6 +23,7 @@ internal fun rememberLiveFeedEffectsPlan(
     family: String,
     cameraName: String?,
     playback: Boolean = false,
+    clipColorMode: Int = -1,
 ): FeedEffectsRenderPlan {
     val context = LocalContext.current
     var plan by remember { mutableStateOf(FeedEffectsRenderPlan.IDENTITY) }
@@ -48,6 +51,7 @@ internal fun rememberLiveFeedEffectsPlan(
     val trafficLights = assist.trafficLights
     val crushClip = assist.crushClipCompensation
     val playbackTools = assist.playbackVisibleTools
+    val lutExposureStops = assist.lutExposureStops
     LaunchedEffect(
         playback,
         playbackTools,
@@ -75,19 +79,34 @@ internal fun rememberLiveFeedEffectsPlan(
         vectorscope,
         trafficLights,
         crushClip,
+        lutExposureStops,
         status.colorMode,
         status.iso,
         family,
         cameraName,
+        clipColorMode,
     ) {
         val app = context.applicationContext
+        if (!playback && status.colorMode >= 0) {
+            OperatorPrefs.setLastMonitorColorMode(app, status.colorMode)
+        }
+        val colorMode =
+            if (playback) {
+                PlaybackLutColor.resolve(
+                    clip = clipColorMode,
+                    live = status.colorMode,
+                    last = OperatorPrefs.lastMonitorColorMode(app),
+                )
+            } else {
+                status.colorMode
+            }
         plan =
             withContext(Dispatchers.Default) {
                 FeedEffectsRenderPlanFactory.create(
                     context = app,
                     assist = assist,
                     lutSelection = lutSelection,
-                    colorMode = status.colorMode,
+                    colorMode = colorMode,
                     iso = status.iso,
                     family = family,
                     cameraName = cameraName,

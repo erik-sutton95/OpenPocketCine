@@ -345,8 +345,8 @@ enum MediaDeliveryRunner {
         // `localURL` is the original camera file (`files/`), never the LRF proxy.
         let cube: CubeLUT? = {
             guard request.configuration.bakeLUT else { return nil }
-            return ScopeMonitorLook.cube(from: model.assist.effects)
-                ?? ScopeMonitorLook.cube(from: model.assist.playbackEffects)
+            return model.assist.exportLUTCube(
+                bakeExposure: request.configuration.bakeLUTExposure)
         }()
         if request.configuration.bakeLUT, cube == nil {
             throw MediaDeliveryError.noLUTSelected
@@ -359,7 +359,8 @@ enum MediaDeliveryRunner {
             metadata: MediaDelivery.metadata(
                 for: file, configuration: request.configuration,
                 lutName: model.assist.lutStatusLabel,
-                cameraName: model.session.connectedCamera?.model.name)
+                cameraName: model.session.connectedCamera?.model.name,
+                lutExposureStops: model.assist.lutExposureStops)
         ) { fraction in
             progress(fraction)
         }

@@ -177,7 +177,7 @@ enum LiveMonitorCompositor {
     /// no layer). Peaking / zebra / false colour are display-referred — evaluating their
     /// convolution graphs over the full 4K extent was the top heat source; `FeedFrameBaker`
     /// only downscaled *after* the graph, so ROI pull-back still ran every kernel at 4K.
-    private static let maxWorkingWidth: CGFloat = 1440
+    private static let maxWorkingWidth = CGFloat(FeedPresentPolicy.maxWorkingWidth)
 
     /// LUT is the displayed look. False colour / peaking / zebra read unmanaged
     /// camera codes, then composite over that look.
@@ -810,6 +810,7 @@ final class FeedFrameBaker: @unchecked Sendable {
     private var textures: [MTLTexture] = []
     private var nextTexture = 0
     private var retained: [ObjectIdentifier: Int] = [:]
+    private var baking: Set<ObjectIdentifier> = []
     private var published: (texture: MTLTexture, drawableSize: CGSize, pixelFormat: MTLPixelFormat)?
     private(set) var lastBakeUnmanaged = true
     private(set) var lastBakeOverlay = false
@@ -903,62 +904,79 @@ final class FeedFrameBaker: @unchecked Sendable {
         pendingDone = nil
         lock.unlock()
 
-        bake(
+        let started = bake(
             request.image, drawableSize: request.drawableSize, pixelFormat: request.pixelFormat,
             unmanaged: request.unmanaged, overlay: request.overlay
         ) {
             done?()
-            self.workQueue.async { [self] in run() }
         }
+        if started {
+            // Overlap the next cube while this one is still on the GPU.
+            workQueue.async { [self] in run() }
+            return
+        }
+        lock.lock()
+        if pending == nil {
+            pending = request
+            pendingDone = done
+        }
+        let waitingGPU = !baking.isEmpty
+        if !waitingGPU { busy = false }
+        lock.unlock()
     }
 
+    @discardableResult
     private func bake(
         _ source: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat,
         unmanaged: Bool, overlay: Bool, finished: @escaping () -> Void
-    ) {
-        autoreleasepool {
-            let extent = source.extent
-            let size = Self.bakeSize(source: extent.size, drawable: drawableSize)
-            let width = max(1, Int(size.width.rounded()))
-            let height = max(1, Int(size.height.rounded()))
-            // Same origin flip as OpenZCine `MetalFeedFrameBaker`: CI is bottom-left,
-            // MPS / Metal treat y=0 as the bottom of the picture. CAMetalLayer blit
-            // of an unflipped bake is upright; Fast/Quality go through MPS, so the
-            // bake must match that kernel or the picture lands upside down.
-            let prepared =
-                source
-                .transformed(
-                    by: CGAffineTransform(translationX: -extent.origin.x, y: -extent.origin.y)
-                )
-                .transformed(
-                    by: CGAffineTransform(
-                        scaleX: CGFloat(width) / max(extent.width, 1),
-                        y: CGFloat(height) / max(extent.height, 1))
-                )
-                .transformed(by: CGAffineTransform(scaleX: 1, y: -1))
-                .transformed(by: CGAffineTransform(translationX: 0, y: CGFloat(height)))
-            guard
-                let target = renderTexture(width: width, height: height, pixelFormat: pixelFormat),
-                let commandBuffer = commandQueue.makeCommandBuffer()
-            else {
-                finished()
-                return
-            }
-            let context = unmanaged ? lutContext : displayContext
-            context.render(
-                prepared, to: target, commandBuffer: commandBuffer,
-                bounds: CGRect(x: 0, y: 0, width: width, height: height),
-                colorSpace: LiveMonitorWorkingSpace.metalDestination)
-            commandBuffer.addCompletedHandler { [self] _ in
-                lock.lock()
-                published = (target, drawableSize, pixelFormat)
-                lastBakeUnmanaged = unmanaged
-                lastBakeOverlay = overlay
-                lock.unlock()
-                finished()
-            }
-            commandBuffer.commit()
+    ) -> Bool {
+        let extent = source.extent
+        let size = Self.bakeSize(source: extent.size, drawable: drawableSize)
+        let width = max(1, Int(size.width.rounded()))
+        let height = max(1, Int(size.height.rounded()))
+        // Same origin flip as OpenZCine `MetalFeedFrameBaker`: CI is bottom-left,
+        // MPS / Metal treat y=0 as the bottom of the picture. CAMetalLayer blit
+        // of an unflipped bake is upright; Fast/Quality go through MPS, so the
+        // bake must match that kernel or the picture lands upside down.
+        let prepared =
+            source
+            .transformed(
+                by: CGAffineTransform(translationX: -extent.origin.x, y: -extent.origin.y)
+            )
+            .transformed(
+                by: CGAffineTransform(
+                    scaleX: CGFloat(width) / max(extent.width, 1),
+                    y: CGFloat(height) / max(extent.height, 1))
+            )
+            .transformed(by: CGAffineTransform(scaleX: 1, y: -1))
+            .transformed(by: CGAffineTransform(translationX: 0, y: CGFloat(height)))
+        guard
+            let target = renderTexture(width: width, height: height, pixelFormat: pixelFormat),
+            let commandBuffer = commandQueue.makeCommandBuffer()
+        else {
+            return false
         }
+        let context = unmanaged ? lutContext : displayContext
+        let token = ObjectIdentifier(target)
+        lock.lock()
+        baking.insert(token)
+        lock.unlock()
+        context.render(
+            prepared, to: target, commandBuffer: commandBuffer,
+            bounds: CGRect(x: 0, y: 0, width: width, height: height),
+            colorSpace: LiveMonitorWorkingSpace.metalDestination)
+        commandBuffer.addCompletedHandler { [self] _ in
+            lock.lock()
+            baking.remove(token)
+            published = (target, drawableSize, pixelFormat)
+            lastBakeUnmanaged = unmanaged
+            lastBakeOverlay = overlay
+            lock.unlock()
+            finished()
+            workQueue.async { [self] in run() }
+        }
+        commandBuffer.commit()
+        return true
     }
 
     private func renderTexture(width: Int, height: Int, pixelFormat: MTLPixelFormat) -> MTLTexture?
@@ -988,7 +1006,8 @@ final class FeedFrameBaker: @unchecked Sendable {
         for offset in 0..<textures.count {
             let index = (nextTexture + offset) % textures.count
             let texture = textures[index]
-            if retained[ObjectIdentifier(texture)] == nil {
+            let id = ObjectIdentifier(texture)
+            if retained[id] == nil, !baking.contains(id) {
                 nextTexture = index + 1
                 return texture
             }
@@ -1011,6 +1030,33 @@ final class CIFeedView: UIView {
     /// First successful present. Until then the VT layer must stay visible —
     /// this view is opaque black and `display` returns before the bake lands.
     private(set) var hasPresentedFrame = false
+    /// Last successful present was transparent zebra / peaking / false colour.
+    /// LUT must not treat that as replace-ownership.
+    private(set) var lastPresentWasOverlay = false
+    /// Offscreen / scrolling-off views skip Metal. Same contract as LiveKit `VideoView.isEnabled`.
+    var isEnabled = true
+    /// Playback (and live LUT replace) adopt the metal picture after this fires.
+    var onPresented: (() -> Void)?
+    private var lastPresentedTimeNs: Int64 = 0
+    private var pendingTimeNs: Int64 = 0
+    private var presentGeneration = 0
+    private(set) var lastPresentedAt: Date?
+    private(set) var presentedFrames = 0
+    private(set) var skippedDuplicates = 0
+    private(set) var skippedDisabled = 0
+    private var fpsWindowStart = Date()
+    private var fpsWindowCount = 0
+    private(set) var presentFPS = 0
+
+    var isRendering: Bool {
+        !FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: lastPresentedAt.map { Date().timeIntervalSince($0) })
+            && hasPresentedFrame
+    }
+
+    var debugLine: String {
+        "feed present fps=\(presentFPS) first=\(hasPresentedFrame ? 1 : 0) frozen=\(isRendering ? 0 : 1) overlay=\(lastPresentWasOverlay ? 1 : 0) skipDup=\(skippedDuplicates) skipOff=\(skippedDisabled)"
+    }
 
     override init(frame: CGRect) {
         let device = MTLCreateSystemDefaultDevice()
@@ -1056,18 +1102,65 @@ final class CIFeedView: UIView {
         metalLayer.isOpaque = !overlay
     }
 
+    func resetPresentDedup() {
+        lastPresentedTimeNs = 0
+        pendingTimeNs = 0
+    }
+
+    /// Next clip / new look. Stale `hasPresentedFrame` would hide the new
+    /// identity under the previous LUT until the chip is cycled.
+    func resetPresentation() {
+        invalidatePendingPresents()
+        resetPresentDedup()
+        hideForLayerPlan()
+    }
+
+    /// Hide the metal plate without dropping an in-flight bake. SwiftUI
+    /// `attach` runs every pass — bumping `presentGeneration` here cancels the
+    /// LUT cube that `present` just scheduled, then unhides an empty layer.
+    func hideForLayerPlan() {
+        hasPresentedFrame = false
+        lastPresentWasOverlay = false
+        lastPresentedAt = nil
+        setOverlayChrome(false)
+        isHidden = true
+    }
+
+    var debugPresentGeneration: Int { presentGeneration }
+
+    /// Drop in-flight bakes (LUT off, feed detached). A late replace present
+    /// must not unhide an opaque plate over identity.
+    func invalidatePendingPresents() {
+        presentGeneration += 1
+        pendingTimeNs = 0
+    }
+
     @discardableResult
-    func display(_ image: CIImage, unmanaged: Bool = true, overlay: Bool = false) -> Bool {
+    func display(
+        _ image: CIImage, unmanaged: Bool = true, overlay: Bool = false, timeNs: Int64 = 0
+    ) -> Bool {
+        if FeedPresentPolicy.isDuplicateFrameTime(timeNs, lastPresentedNs: lastPresentedTimeNs) {
+            skippedDuplicates += 1
+            return hasPresentedFrame
+        }
         setOverlayChrome(overlay)
         let size = metalLayer.drawableSize
-        guard size.width > 1, size.height > 1 else { return false }
+        let hasDrawable = size.width > 1 && size.height > 1
+        guard
+            FeedPresentPolicy.shouldScheduleBake(enabled: isEnabled, hasDrawable: hasDrawable)
+        else {
+            skippedDisabled += 1
+            return false
+        }
         guard image.extent.width > 1, image.extent.height > 1 else { return false }
+        pendingTimeNs = timeNs
+        let generation = presentGeneration
         if let baker {
             baker.scheduleBake(
                 image: image, drawableSize: size, pixelFormat: metalLayer.pixelFormat,
                 unmanaged: unmanaged, overlay: overlay
             ) { [weak self] in
-                DispatchQueue.main.async { self?.presentLatestBake() }
+                DispatchQueue.main.async { self?.presentLatestBake(generation: generation) }
             }
             return true
         }
@@ -1080,17 +1173,27 @@ final class CIFeedView: UIView {
     /// re-wrapped the bake as `CIImage(mtlTexture:)` and rendered it a second time
     /// (two cancelling origin flips) with `commandBuffer: nil`, a synchronous GPU
     /// submit on main plus a freshly allocated full-extent black composite every frame.
-    private func presentLatestBake() {
+    private func presentLatestBake(generation: Int) {
         let size = metalLayer.drawableSize
+        guard generation == presentGeneration else { return }
         guard let baker,
             let baked = baker.bakedTexture(for: size, pixelFormat: metalLayer.pixelFormat)
         else { return }
-        guard let queue = presentQueue,
+        let overlay = baker.lastBakeOverlay
+        // Unhide only when we already hold a bake. Unhiding then failing
+        // `nextDrawable` is an opaque black plate over the player.
+        if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
+            isHidden = false
+        }
+        guard isEnabled, let queue = presentQueue,
             let drawable = metalLayer.nextDrawable(),
             let commandBuffer = queue.makeCommandBuffer(),
             encodePresent(baked, to: drawable.texture, commandBuffer: commandBuffer)
         else {
             baker.releaseBakedTexture(baked)
+            if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
+                isHidden = true
+            }
             return
         }
         commandBuffer.addCompletedHandler { _ in
@@ -1099,10 +1202,26 @@ final class CIFeedView: UIView {
         }
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        notePresented(overlay: overlay)
+        onPresented?()
+    }
+
+    private func notePresented(overlay: Bool) {
         hasPresentedFrame = true
+        lastPresentWasOverlay = overlay
+        lastPresentedTimeNs = pendingTimeNs
+        lastPresentedAt = Date()
+        presentedFrames += 1
+        fpsWindowCount += 1
+        let elapsed = Date().timeIntervalSince(fpsWindowStart)
+        if elapsed >= 1 {
+            presentFPS = fpsWindowCount
+            fpsWindowCount = 0
+            fpsWindowStart = Date()
+        }
         // Overlay only: identity stays on the HEVC / VT layer. Unhiding an
         // opaque identity bake here is a black plate over a working picture.
-        if baker.lastBakeOverlay {
+        if overlay {
             isHidden = false
         }
     }
@@ -1165,7 +1284,10 @@ final class CIFeedView: UIView {
 
     @discardableResult
     private func presentSynchronously(_ image: CIImage, unmanaged: Bool, overlay: Bool) -> Bool {
-        guard let drawable = metalLayer.nextDrawable() else { return false }
+        if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
+            isHidden = false
+        }
+        guard isEnabled, let drawable = metalLayer.nextDrawable() else { return false }
         let dest = CGRect(
             origin: .zero,
             size: CGSize(width: drawable.texture.width, height: drawable.texture.height))
@@ -1177,6 +1299,8 @@ final class CIFeedView: UIView {
             fitted.composited(over: backdrop), to: drawable.texture, commandBuffer: nil,
             bounds: dest, colorSpace: LiveMonitorWorkingSpace.metalDestination)
         drawable.present()
+        notePresented(overlay: overlay)
+        onPresented?()
         return true
     }
 

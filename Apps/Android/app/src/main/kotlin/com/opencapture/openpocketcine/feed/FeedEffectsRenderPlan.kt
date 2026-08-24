@@ -7,6 +7,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.lut.LutCatalog
+import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import com.opencapture.openpocketcine.session.CameraCommands
 import java.io.File
 import java.util.LinkedHashMap
@@ -130,7 +131,7 @@ internal object FeedEffectsRenderPlanFactory {
                 family = family,
                 cameraName = cameraName,
             )
-        val lutCube = lutCube(context, look)
+        val lutCube = lutCube(context, look, assist.lutExposureStops, colorMode)
         val split =
             assist.splitComparison && lutCube != null && lutOn &&
                 (!falseColor || assist.falseColorScale == FalseColorScale.LIMITS)
@@ -210,6 +211,8 @@ internal object FeedEffectsRenderPlanFactory {
                                                 family = family,
                                                 cameraName = cameraName,
                                             ),
+                                            assist.lutExposureStops,
+                                            colorMode,
                                         )
                                     else -> null
                                 }
@@ -220,14 +223,28 @@ internal object FeedEffectsRenderPlanFactory {
         )
     }
 
-    private fun lutCube(context: Context, source: LutLookSource): FeedEffectsCube? {
+    private fun lutCube(
+        context: Context,
+        source: LutLookSource,
+        exposureStops: Double,
+        colorMode: Int,
+    ): FeedEffectsCube? {
+        val snapped = LutExposureCompensation.snap(exposureStops)
         val key =
             when (source) {
-                is LutLookSource.Asset -> "asset:${source.fileName}"
-                is LutLookSource.Custom -> "custom:${source.fileName}"
+                is LutLookSource.Asset -> "asset:${source.fileName}:$snapped:$colorMode"
+                is LutLookSource.Custom -> "custom:${source.fileName}:$snapped:$colorMode"
+                is LutLookSource.Creative -> "creative:${source.name}:$snapped:$colorMode"
                 LutLookSource.Off -> return null
             }
         return PackedCubeCache.value(key) {
+            if (!SwiftCore.isAvailable) {
+                Log.w(TAG, "LUT pack needs the Swift core")
+                return@value null
+            }
+            if (source is LutLookSource.Creative) {
+                return@value SwiftCore.packCreativeLut(source.name, snapped, colorMode)
+            }
             val utf8 =
                 when (source) {
                     is LutLookSource.Asset ->
@@ -240,13 +257,9 @@ internal object FeedEffectsRenderPlanFactory {
                         if (!file.isFile) return@value null
                         runCatching { file.readBytes() }.getOrNull()
                     }
-                    LutLookSource.Off -> null
+                    is LutLookSource.Creative, LutLookSource.Off -> null
                 } ?: return@value null
-            if (!SwiftCore.isAvailable) {
-                Log.w(TAG, "LUT pack needs the Swift core")
-                return@value null
-            }
-            SwiftCore.packImportedLut(utf8)
+            SwiftCore.packImportedLut(utf8, snapped, colorMode)
         }
     }
 

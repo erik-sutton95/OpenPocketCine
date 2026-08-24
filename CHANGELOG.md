@@ -8,6 +8,31 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- LUT exposure compensation in the LUT popup (live and playback, iOS and
+  Android): plus/minus in half-stops from −3 to +3, applied as input-referred
+  gain before the Rec.709 cube. Pull 1–2 after ETTR so the cube's mid-grey
+  lands. Not camera EV. Persists with View Assist. iOS Share **Bake LUT**
+  has a **Bake exposure** row (on by default) that writes that pull into
+  the file; off keeps the cube at 0.0. Android share/save stays the original.
+
+- Playback Auto LUT reads the shot profile from QuickTime Keys
+  `com.dji.camera.ColorGammaSxS` (Mimo Color Recovery's field) on the
+  **original** take. The 720p LRF/XRF sidecar is Rec.709 even for D-Log /
+  D-Log2, so Auto was turning the cube off. When the original is not cached,
+  a 2 MiB HTTP Range of its `moov` tail is enough. Last live D-Log / D-Log2
+  is the fallback when that atom is missing. `colr`/`nclx` stays Rec.709 for
+  log. A Rec.709 live SET no longer turns Auto off after you monitored log.
+  Opening the LUT sheet in playback no longer restamps Auto from the body's
+  current SET (that was applying live D-Log2 on a D-Log clip). Shot color is
+  stored next to the cached clip (`color.json`) so Auto still binds when the
+  camera is disconnected. A **Proxy** tag marks 720p-only cache. Storage has
+  **Full Resolution Caching** (on by default) so opening a clip also pulls the
+  original; off keeps only the proxy.
+
+- LUT picker is DJI / Creative / Custom. Built-in Rec.709 conversions are
+  gone. DJI Auto uses the official manufacturer cubes (and last live log
+  color on playback). Creative is Mono / Contrast / Warm / Cool.
+
 - Android closed-beta waitlist on the landing page. The Android CTA opens a dialog
   with the Tally signup (email required; Osmo and phone optional). Submissions stay
   in Tally, not git.
@@ -16,6 +41,29 @@ All notable changes to this project are documented here. The format is based on
   (ExoPlayer → OES surface → `FeedEffectsGlProgram` → TextureView), same order
   as live. WAVE / HISTO tap that GL copy, not a TextureView `getBitmap`. Export
   still pulls the original 4K file.
+
+- iOS playback LUT / PEAK / FALSE / ZEBRA follow live present order on the 720p
+  proxy (`AVPlayerItemVideoOutput` → `LiveAssistEngine` → `CIFeedView` as a
+  sibling of `AVPlayerLayer`). Nesting Metal inside `AVPlayerLayer` presented
+  LUT replace as a black plate (zebra / peaking still showed through). The
+  look unhides only after a bake lands — attaching an `AVVideoComposition`
+  after `replaceCurrentItem` never painted the picture. SwiftUI `attach` no
+  longer invalidates the in-flight cube. Auto LUT uses the last live color
+  mode so a disconnected library clip still binds the D-Log / D-Log2 cube.
+  Grade is GPU-only (no per-frame CPU blit).
+
+- Shared `FeedPresentPolicy` (Swift core + Android lockstep): skip duplicate
+  GPU timestamps, latest-wins if a bake is busy, freeze is a 2 s flag (keep
+  the last sample — do not flush), replace-grade unhides the drawable before
+  present, offscreen feeds disable Metal/GLES, and one `0x09/0xa8` write at a
+  time (`SerialSessionGate`). Recreating the processed feed re-paints the last
+  decoded buffer.
+
+- LUT grade stays on the 720p working raster (cap 1440 px): 4K originals
+  downscale before the cube, the baker pipelines the next frame, and the
+  player stays as underlay so an empty Metal plate cannot black the monitor.
+  Panel fit is bilinear. Next/prev keeps that host — a slide identity
+  rebuild left LUT on a departing view until the chip was cycled.
 
 - Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. The vendored set is 72 official
   24px stroke glyphs (plus a filled star). Pairing, media library, playback, LUT 50/50, chrome-edit
@@ -265,6 +313,25 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Disconnected library Auto LUT keeps the clip's D-Log / D-Log2 cube. Opening
+  the LUT sheet no longer restamps Auto from a missing live SET (that showed
+  “No matching look for this color / camera” on a log clip). Color is
+  re-read when Full Resolution Caching finishes the original.
+- iPad hides the system time / battery bar. The HUD status chips stay.
+- Gimbal stick and zoom chip are one **gimbal cluster** in every orientation:
+  zoom stacks above the stick in the trailing-bottom of the 16:9 well, not
+  glued to the record button. On iPad landscape the cluster sits on the
+  right edge above record (it used to slide left, and before that drop
+  off-screen). Follow / speed / A·B·C will sit leading of the stick in
+  that same cluster.
+- Playback Share is the same chrome as the other transport actions while the
+  original is still on camera (the sheet caches first). The portrait share
+  card hugs its options instead of filling to the status bar.
+- Next/prev clip with LUT still on rebakes the look without cycling the chip.
+  The playback Metal host stays put. The first pull often ran before the new
+  item had a pixel buffer, then display-link ticks would not resubmit, so the
+  cube stayed armed in chrome until the chip was toggled. Force-pull until
+  this item presents.
 - Android playback drops Kyant. The transport plate is 82% DJI black so type
   reads; the top row is back + filename + star with no bar. Chrome lives in
   the same overlay as the video gestures so transport buttons receive taps.

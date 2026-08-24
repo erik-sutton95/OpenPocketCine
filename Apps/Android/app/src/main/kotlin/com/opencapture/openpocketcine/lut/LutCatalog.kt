@@ -3,8 +3,8 @@ package com.opencapture.openpocketcine.lut
 import java.io.File
 
 enum class LutCategory {
-    BUILT_IN,
     DJI,
+    CREATIVE,
     CUSTOM,
 }
 
@@ -26,27 +26,31 @@ object LutCatalog {
     private const val CUSTOM_PREFIX = "custom:"
     private const val ASSET_PREFIX = "asset:"
 
-    val builtIn: List<LutEntry> =
-        listOf(
-            LutEntry(AUTO, "Auto", LutCategory.BUILT_IN),
-            LutEntry(OFF, "Off", LutCategory.BUILT_IN),
-        )
-
     val djiAuto: LutEntry = LutEntry(DJI_AUTO, "Auto", LutCategory.DJI)
 
-    /** App-authored Rec.709 looks shipped next to the official cubes. Built-in tab is Auto / Off. */
+    val creative: List<LutEntry> =
+        listOf(
+            LutEntry("creativeMono", "Mono", LutCategory.CREATIVE),
+            LutEntry("creativeContrast", "Contrast", LutCategory.CREATIVE),
+            LutEntry("creativeWarm", "Warm", LutCategory.CREATIVE),
+            LutEntry("creativeCool", "Cool", LutCategory.CREATIVE),
+        )
+
+    fun creativeName(id: String): String? = creative.firstOrNull { it.id == id }?.title
+
+    /** Legacy app-authored Rec.709 conversions — hidden; reserved so they do not appear as extras. */
     val officialBuiltInLooks: List<LutEntry> =
         listOf(
             LutEntry(
                 "officialDLog",
                 "D-Log → Rec.709",
-                LutCategory.BUILT_IN,
+                LutCategory.DJI,
                 "DJI_Pocket4P_DLog_Rec709_33.cube",
             ),
             LutEntry(
                 "officialDLog2",
                 "D-Log2 → Rec.709",
-                LutCategory.BUILT_IN,
+                LutCategory.DJI,
                 "DJI_Pocket4P_DLog2_Rec709_33.cube",
             ),
         )
@@ -164,14 +168,15 @@ object LutCatalog {
     }
 
     fun titleFor(id: String): String {
-        if (id.isBlank()) return "Auto"
-        builtIn.firstOrNull { it.id == id }?.let { return it.title }
-        if (id == DJI_AUTO) return djiAuto.title
-        officialDji.firstOrNull { it.id == id }?.let { return it.title }
-        officialBuiltInLooks.firstOrNull { it.id == id }?.let { return it.title }
-        customFileName(id)?.let { return displayName(it) }
-        if (id.startsWith(ASSET_PREFIX)) return displayName(id.removePrefix(ASSET_PREFIX))
-        return when (id) {
+        val canonical = migratedToDjiCatalog(id)
+        if (canonical.isBlank()) return "Auto"
+        if (canonical == AUTO || canonical == DJI_AUTO) return djiAuto.title
+        officialDji.firstOrNull { it.id == canonical }?.let { return it.title }
+        creative.firstOrNull { it.id == canonical }?.let { return it.title }
+        customFileName(canonical)?.let { return displayName(it) }
+        if (canonical.startsWith(ASSET_PREFIX)) return displayName(canonical.removePrefix(ASSET_PREFIX))
+        return when (canonical) {
+            "off" -> "Off"
             "customRec709" -> "Custom"
             "customDLog" -> "Custom D-Log"
             "customDLog2" -> "Custom D-Log2"
@@ -187,8 +192,16 @@ object LutCatalog {
                 id == "customRec709" ||
                 id == "customDLog" ||
                 id == "customDLog2" -> LutCategory.CUSTOM
-            isDjiId(id) -> LutCategory.DJI
-            else -> LutCategory.BUILT_IN
+            creative.any { it.id == id } -> LutCategory.CREATIVE
+            else -> LutCategory.DJI
+        }
+
+    fun migratedToDjiCatalog(id: String): String =
+        when (id) {
+            AUTO -> DJI_AUTO
+            "officialDLog" -> "djiDLog"
+            "officialDLog2" -> "djiDLog2"
+            else -> id
         }
 
     fun matches(entry: LutEntry, selection: String): Boolean {

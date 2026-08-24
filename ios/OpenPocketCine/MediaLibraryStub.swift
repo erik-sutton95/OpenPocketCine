@@ -263,6 +263,8 @@ enum MediaLibraryCopy {
     static let disconnected = "Connect the camera to list clips on the body."
     static let disconnectedEmptyCache =
         "Nothing cached on this phone. Connect the camera to list clips on the body."
+    static let proxyTag = "Proxy"
+    static let proxyHelp = "720p preview. Connect the camera to share the original."
 }
 
 struct MediaLibraryView: View {
@@ -876,7 +878,7 @@ struct MediaLibraryView: View {
                     ForEach(displayedFiles) { file in
                         MediaClipListRow(
                             file: file,
-                            isDownloaded: session.isDownloaded(file),
+                            cacheGrade: session.cacheGrade(for: file),
                             localURL: session.localURL(for: file),
                             thumbnailURL: session.thumbnailURL(for: file),
                             cacheProgress: session.mediaDownloadProgress[file.path],
@@ -899,7 +901,7 @@ struct MediaLibraryView: View {
                     ForEach(displayedFiles) { file in
                         MediaClipCell(
                             file: file,
-                            isDownloaded: session.isDownloaded(file),
+                            cacheGrade: session.cacheGrade(for: file),
                             localURL: session.localURL(for: file),
                             thumbnailURL: session.thumbnailURL(for: file),
                             cacheProgress: session.mediaDownloadProgress[file.path],
@@ -1176,7 +1178,7 @@ private struct MediaClipFavoriteButton: View {
 
 private struct MediaClipListRow: View {
     let file: MediaFile
-    let isDownloaded: Bool
+    let cacheGrade: MediaCacheGrade
     let localURL: URL?
     let thumbnailURL: URL?
     let cacheProgress: Double?
@@ -1194,8 +1196,14 @@ private struct MediaClipListRow: View {
 
     private var isPhoto: Bool { file.kind == .photo }
 
+    private var isDownloaded: Bool { cacheGrade == .original }
+
     private var metadataLine: String {
         let line = MediaClipPresentation.metadataLine(file: file, durationOverride: durationLabel)
+        if cacheGrade.isProxyOnly {
+            return line.isEmpty
+                ? MediaLibraryCopy.proxyTag : "\(line) · \(MediaLibraryCopy.proxyTag)"
+        }
         if line.isEmpty {
             return isDownloaded ? "Cached" : "On camera"
         }
@@ -1301,12 +1309,22 @@ private struct MediaClipListRow: View {
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(LiveDesign.text)
                 }
-            } else if !isDownloaded {
+            } else if cacheGrade == .none {
                 ZStack {
                     Color.black.opacity(0.35)
                     (isPhoto ? OpcIcon.image : OpcIcon.circlePlay)
                         .frame(width: 18, height: 18)
                         .foregroundStyle(LiveDesign.text.opacity(0.9))
+                }
+            } else if cacheGrade.isProxyOnly {
+                ZStack {
+                    Color.black.opacity(0.28)
+                    Text(MediaLibraryCopy.proxyTag)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(LiveDesign.text)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.55), in: Capsule())
                 }
             }
         }
@@ -1377,7 +1395,7 @@ private struct MediaClipListRow: View {
 
 private struct MediaClipCell: View {
     let file: MediaFile
-    let isDownloaded: Bool
+    let cacheGrade: MediaCacheGrade
     let localURL: URL?
     let thumbnailURL: URL?
     let cacheProgress: Double?
@@ -1394,6 +1412,7 @@ private struct MediaClipCell: View {
     @State private var durationLabel: String?
 
     private var isPhoto: Bool { file.kind == .photo }
+    private var isDownloaded: Bool { cacheGrade == .original }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -1420,6 +1439,18 @@ private struct MediaClipCell: View {
                 RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
                     .strokeBorder(LiveDesign.hairline, lineWidth: 1)
             )
+            .overlay(alignment: .topLeading) {
+                if cacheGrade.isProxyOnly, cacheProgress == nil, !isSelecting {
+                    Text(MediaLibraryCopy.proxyTag)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(LiveDesign.text)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.58), in: Capsule())
+                        .padding(8)
+                        .accessibilityLabel(MediaLibraryCopy.proxyHelp)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 let badge = isPhoto ? nil : durationLabel
                 if let badge, cacheProgress == nil, !isSelecting {
@@ -1488,7 +1519,7 @@ private struct MediaClipCell: View {
                         .frame(width: 120)
                 }
             }
-        } else if !isDownloaded {
+        } else if cacheGrade == .none {
             ZStack {
                 Color.black.opacity(0.35)
                 VStack(spacing: 4) {

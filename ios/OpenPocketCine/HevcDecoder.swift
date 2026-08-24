@@ -67,7 +67,20 @@ final class HevcDecoder {
     /// Read on every access unit so PEAK/LUT do not depend on SwiftUI `onChange`.
     var effectsProvider: (() -> LiveImageEffects)?
     var transferProvider: (() -> MonitorTransfer?)?
-    weak var processedFeed: CIFeedView?
+    weak var processedFeed: CIFeedView? {
+        didSet {
+            if processedFeed !== oldValue {
+                oldValue?.onPresented = nil
+            }
+            processedFeed?.onPresented = { [weak self] in
+                Task { @MainActor in self?.adoptPresentedFeed() }
+            }
+            guard processedFeed !== oldValue, let buffer = lastDecodedBuffer,
+                effects.needsGPUFeed
+            else { return }
+            handleDecodedFrame(buffer)
+        }
+    }
     weak var sampleBus: LiveFrameSampleBus? {
         didSet {
             if shouldStartVT, vtSession == nil, format != nil { rebuildVT() }
@@ -147,6 +160,17 @@ final class HevcDecoder {
     }
     /// VT owns the picture so the hardware decoder is not shared with the display layer.
     private var usesPixelBufferDisplay: Bool { prefersPixelBufferDisplay || shouldStartVT }
+    /// UDP may still be alive. This is a present hitch, not a recover enable.
+    var isPresentFrozen: Bool {
+        let age: TimeInterval?
+        if effects.replacesIdentityFeed, let feed = processedFeed, feed.hasPresentedFrame {
+            age = feed.lastPresentedAt.map { Date().timeIntervalSince($0) }
+        } else {
+            age = lastPresentedAt.map { Date().timeIntervalSince($0) }
+        }
+        return FeedPresentPolicy.isFrozen(secondsSinceLastPresent: age)
+    }
+
     /// Last HEVC picture is still on the layer; release it only when a VT frame is in hand.
     private var pendingLayerRelease = false
     /// LUT (or other GPU) just ended. Keep the last CI frame until the layer presents.
@@ -154,6 +178,7 @@ final class HevcDecoder {
     private var lastNeedsSample = false
     /// Last VT / assist source. LUT-off enqueues this on the layer so the canvas never goes black.
     private var lastDecodedBuffer: CVPixelBuffer?
+    private var lastPresentHealthLogAt: Date?
     private var builtVPS: [UInt8]?
     private var builtSPS: [UInt8]?
     private var builtPPS: [UInt8]?
@@ -344,7 +369,7 @@ final class HevcDecoder {
     ) {
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
-        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer) {
+        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: 0) {
             [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -383,6 +408,7 @@ final class HevcDecoder {
         sessionOwnsVT = false
         hardwareDecoderUnlocked = false
         lastDecodedBuffer = nil
+        lastPresentHealthLogAt = nil
         builtVPS = nil
         builtSPS = nil
         builtPPS = nil
@@ -398,6 +424,7 @@ final class HevcDecoder {
         invalidateVT()
         vtOwnsHardwareDecode = false
         displayLayer.isHidden = false
+        processedFeed?.invalidatePendingPresents()
         processedFeed?.setOverlayChrome(false)
         processedFeed?.isHidden = true
         displayLayer.flushAndRemoveImage()
@@ -457,6 +484,12 @@ final class HevcDecoder {
     }
 
     private func removeDisplayedImage() {
+        guard
+            FeedPresentPolicy.shouldFlushDisplayedImage(
+                disconnecting: false,
+                layerFailed: displayLayer.status == .failed,
+                nextFrameReady: lastDecodedBuffer != nil)
+        else { return }
         displayLayer.flushAndRemoveImage()
         displayedImageRemoved = true
         log.info("feed: black removed displayed image")
@@ -535,6 +568,7 @@ final class HevcDecoder {
             hardwareDecoderUnlocked = true
         }
         if effects.needsSample { sessionOwnsVT = true }
+        processedFeed?.resetPresentDedup()
         let needVT = shouldStartVT
         let needGPU = effects.needsGPUFeed || presentsOnMetal
         // A fresh VT session cannot decode mid-GOP P-frames. Once VT owns the
@@ -547,6 +581,7 @@ final class HevcDecoder {
         }
         if !needGPU {
             // Opaque CIFeedView covers Rec.709 / HLG even when the layer has a picture.
+            processedFeed?.invalidatePendingPresents()
             layerHandoffPending = false
             if !vtStarting { awaitingIDR = false }
             displayLayer.isHidden = false
@@ -602,10 +637,48 @@ final class HevcDecoder {
     /// HEVC / VT layer stays the identity — OpenZCine has no HEVC layer, so it
     /// never has this underlay.
     private func adoptReplacingMetalFeed(_ feed: CIFeedView) {
-        guard feed.hasPresentedFrame else { return }
+        guard
+            FeedPresentPolicy.replaceOwnsPicture(
+                hasPresentedFrame: feed.hasPresentedFrame,
+                lastPresentWasOverlay: feed.lastPresentWasOverlay)
+        else { return }
         feed.isHidden = false
         displayLayer.isHidden = true
         releaseLayerDecoderIfNeeded()
+    }
+
+    private func adoptPresentedFeed() {
+        guard let feed = processedFeed else { return }
+        if !effects.needsGPUFeed {
+            feed.setOverlayChrome(false)
+            feed.isHidden = true
+            displayLayer.isHidden = false
+            return
+        }
+        if effects.needsOverlayFeed {
+            if feed.hasPresentedFrame { feed.isHidden = false }
+            displayLayer.isHidden = false
+            return
+        }
+        if effects.replacesIdentityFeed {
+            adoptReplacingMetalFeed(feed)
+        }
+        maybeLogPresentHealth()
+    }
+
+    private func maybeLogPresentHealth() {
+        guard effects.needsGPUFeed else { return }
+        let now = Date()
+        if let last = lastPresentHealthLogAt, now.timeIntervalSince(last) < 2 { return }
+        lastPresentHealthLogAt = now
+        let frozen = isPresentFrozen ? 1 : 0
+        let line = processedFeed?.debugLine ?? "feed present none frozen=\(frozen)"
+        ControlLiveLog.line(line)
+        if isPresentFrozen {
+            log.info(
+                "feed: freeze lastFrame=\(self.lastPresentedAt.map { now.timeIntervalSince($0) } ?? -1, format: .fixed(precision: 1), privacy: .public)s (keep picture)"
+            )
+        }
     }
 
     private func applyAssistResult(_ result: LiveAssistEngine.Result) {
@@ -647,7 +720,8 @@ final class HevcDecoder {
         if result.overlayOnly, !replaceIdentity, !prefersPixelBufferDisplay {
             // Transparent stripes on top of the layer. Do not unhide here —
             // an unpresented CAMetalLayer is an opaque black plate.
-            let painted = feed.display(result.output, unmanaged: true, overlay: true)
+            let painted = feed.display(
+                result.output, unmanaged: true, overlay: true, timeNs: result.timeNs)
             if !painted {
                 feed.setOverlayChrome(false)
                 feed.isHidden = true
@@ -657,8 +731,8 @@ final class HevcDecoder {
 
         if prefersPixelBufferDisplay, result.overlayOnly {
             let picture = LiveMonitorCompositor.place(result.output, over: result.identity)
-            if feed.display(picture, unmanaged: false, overlay: false)
-                || feed.display(result.identity, unmanaged: false)
+            if feed.display(picture, unmanaged: false, overlay: false, timeNs: result.timeNs)
+                || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
             }
@@ -666,8 +740,9 @@ final class HevcDecoder {
         }
 
         if replaceIdentity {
-            if feed.display(result.output, unmanaged: result.unmanagedBake)
-                || feed.display(result.identity, unmanaged: false)
+            if feed.display(
+                result.output, unmanaged: result.unmanagedBake, timeNs: result.timeNs)
+                || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
             }

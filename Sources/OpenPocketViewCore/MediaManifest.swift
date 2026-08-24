@@ -125,6 +125,22 @@ public enum MediaKind: String, Sendable, Codable {
     }
 }
 
+/// What the phone has for a clip. Playback grades the proxy; Share needs the original.
+public enum MediaCacheGrade: String, Sendable, Equatable {
+    case none
+    case proxy
+    case original
+
+    public var isPlayableOffline: Bool { self != .none }
+    public var isProxyOnly: Bool { self == .proxy }
+
+    public static func resolve(hasOriginal: Bool, hasProxy: Bool) -> MediaCacheGrade {
+        if hasOriginal { return .original }
+        if hasProxy { return .proxy }
+        return .none
+    }
+}
+
 /// SoftAP HTTP `/v2` paths. Osmosis `PathAddressing` + `StorageRules`.
 public enum MediaHTTP {
     public static let host = CameraSoftAP.host

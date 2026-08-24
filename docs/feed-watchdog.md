@@ -8,7 +8,7 @@ On a physical iPhone, after a healthy take of **~3–5 minutes**, the live canva
 
 There is **no periodic GOP**. Keyframe age growing for tens of seconds is normal. Stall is **no new decoded/displayed frame**, not “last IDR is old”.
 
-A freeze that keeps the last picture is a stall. **Black** means the last picture was removed (or the display layer failed) before a replacement sample arrived.
+A freeze that keeps the last picture is a stall (`feed: freeze` when UDP is still alive — `FeedPresentPolicy.isFrozen`, 2 s without a present). **Black** means the last picture was removed (or the display layer failed) before a replacement sample arrived. Recreating the Metal / GLES feed re-presents the last decoded sample. Do not flush on freeze.
 
 ## Likely layers (not a proven single root cause)
 

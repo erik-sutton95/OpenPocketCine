@@ -89,10 +89,16 @@ final class DisplayLayerView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        ciFeed.isEnabled = window != nil
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         displayLayer.frame = bounds
         ciFeed.frame = bounds
+        ciFeed.isEnabled = window != nil && bounds.width > 1 && bounds.height > 1
         if bounds.width > 1, bounds.height > 1 { onReady?() }
     }
 }

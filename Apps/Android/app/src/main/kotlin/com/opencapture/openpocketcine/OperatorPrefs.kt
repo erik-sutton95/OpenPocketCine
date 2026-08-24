@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine
 import android.content.Context
 import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
 import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.openpocketcine.lut.LutCatalog
 import org.json.JSONObject
 
 enum class PocketDispMode(val title: String, val settingsTitle: String, val settingsCaption: String) {
@@ -213,6 +214,9 @@ object OperatorPrefs {
     private const val SHUTTER_ANGLE = "OpenPocketCine.ShutterUsesAngle"
     private const val SHUTTER_DEGREES = "OpenPocketCine.ShutterAngleDegrees"
     private const val LUT_SELECTION = "OpenPocketCine.LUTSelection"
+    private const val LAST_MONITOR_COLOR = "OpenPocketCine.LastMonitorColorMode"
+    private const val CLIP_SHOT_COLOR = "OpenPocketCine.ClipShotColor"
+    private const val CACHE_FULL_RESOLUTION = "OpenPocketCine.CacheFullResolution"
     private const val ASSIST_V1 = "OpenPocketCine.Assist.v1"
     private const val PLAYBACK_ASSISTS = "OpenPocketCine.PlaybackAssists.v1"
     private const val FEED_UPSCALER = "OpenPocketCine.feedUpscaler"
@@ -333,11 +337,74 @@ object OperatorPrefs {
         prefs(context).edit().putFloat(SHUTTER_DEGREES, snapped.toFloat()).apply()
     }
 
-    fun lutSelection(context: Context): String =
-        prefs(context).getString(LUT_SELECTION, "auto") ?: "auto"
+    fun lutSelection(context: Context): String {
+        val stored = prefs(context).getString(LUT_SELECTION, LutCatalog.DJI_AUTO) ?: LutCatalog.DJI_AUTO
+        return LutCatalog.migratedToDjiCatalog(stored)
+    }
 
     fun setLutSelection(context: Context, value: String) {
         prefs(context).edit().putString(LUT_SELECTION, value).apply()
+    }
+
+    fun lastMonitorColorMode(context: Context): Int =
+        if (prefs(context).contains(LAST_MONITOR_COLOR)) {
+            prefs(context).getInt(LAST_MONITOR_COLOR, -1)
+        } else {
+            -1
+        }
+
+    fun setLastMonitorColorMode(context: Context, value: Int) {
+        if (value < 0) {
+            prefs(context).edit().remove(LAST_MONITOR_COLOR).apply()
+        } else {
+            prefs(context).edit().putInt(LAST_MONITOR_COLOR, value).apply()
+        }
+    }
+
+    fun clipShotColor(context: Context, path: String): Int {
+        val raw = prefs(context).getString(CLIP_SHOT_COLOR, null) ?: return -1
+        return try {
+            JSONObject(raw).optInt(path, -1)
+        } catch (_: Exception) {
+            -1
+        }
+    }
+
+    fun setClipShotColor(context: Context, path: String, value: Int) {
+        if (value < 0) return
+        val prefs = prefs(context)
+        val json =
+            try {
+                JSONObject(prefs.getString(CLIP_SHOT_COLOR, null) ?: "{}")
+            } catch (_: Exception) {
+                JSONObject()
+            }
+        json.put(path, value)
+        prefs.edit().putString(CLIP_SHOT_COLOR, json.toString()).apply()
+    }
+
+    fun legacyClipShotColorJson(context: Context): JSONObject? {
+        val raw = prefs(context).getString(CLIP_SHOT_COLOR, null) ?: return null
+        return try {
+            JSONObject(raw)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun clearLegacyClipShotColor(context: Context) {
+        prefs(context).edit().remove(CLIP_SHOT_COLOR).apply()
+    }
+
+    fun cacheFullResolution(context: Context): Boolean =
+        if (prefs(context).contains(CACHE_FULL_RESOLUTION)) {
+            prefs(context).getBoolean(CACHE_FULL_RESOLUTION, true)
+        } else {
+            true
+        }
+
+    fun setCacheFullResolution(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(CACHE_FULL_RESOLUTION, value).apply()
     }
 
     fun assistEncoded(context: Context): String? =

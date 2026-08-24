@@ -120,6 +120,10 @@ class MediaLibraryTest {
         assertEquals("video/mp4", MediaHTTP.playbackMIMEType(file.path))
         assertTrue(MediaHTTP.playbackCacheFileName(play[0].second).endsWith(".mp4"))
         assertTrue(MediaHTTP.playbackCacheFileName(file.path).endsWith(".MP4"))
+        assertEquals(MediaCacheGrade.ORIGINAL, MediaCacheGrade.resolve(true, true))
+        assertEquals(MediaCacheGrade.PROXY, MediaCacheGrade.resolve(false, true))
+        assertEquals(MediaCacheGrade.NONE, MediaCacheGrade.resolve(false, false))
+        assertTrue(MediaCacheGrade.PROXY.isProxyOnly)
         assertTrue(MediaHTTP.pathUrl(storage, file.thumbPath).encodedPath == "/v2")
     }
 

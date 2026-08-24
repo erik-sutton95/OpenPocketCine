@@ -172,8 +172,11 @@ object SwiftCore {
     /** `"1\\u001F{size}\\u001Fcustom:{fileName}"` or empty on reject. */
     external fun validateImportedLut(utf8: ByteArray, fileName: String): String?
 
-    /** Packed-2D RGBA8 cube (`n³ × 4`) for GLES upload. */
-    external fun packImportedLut(utf8: ByteArray): ByteArray?
+    /** Packed-2D RGBA8 cube (`n³ × 4`) for GLES upload. Input-referred LUT exposure. */
+    external fun packImportedLut(utf8: ByteArray, exposureStops: Double, colorMode: Int): ByteArray?
+
+    /** Generated Creative look (Mono / Contrast / Warm / Cool). */
+    external fun packCreativeLut(title: String, exposureStops: Double, colorMode: Int): ByteArray?
 
     /** Overlay paint cube for FALSE (`0` PStops / `1` IRE / `2` Limits). */
     external fun packFalseColorPaint(scaleOrdinal: Int, colorMode: Int, iso: Int): ByteArray?

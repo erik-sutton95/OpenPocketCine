@@ -256,6 +256,7 @@ internal class LiveFeedEffectsSession(
             GLES20.glClearColor(0f, 0f, 0f, 1f)
             var hasOesFrame = false
             var signaledFirstFrame = false
+            var lastOesTimestampNs = 0L
             while (running.get()) {
                 val pullOes: Boolean
                 synchronized(frameLock) {
@@ -287,14 +288,32 @@ internal class LiveFeedEffectsSession(
                     tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
                     tapScratch = ByteArray(tapBytes)
                 }
+                var skipDuplicate = false
                 if (pullOes) {
                     oesSurfaceTexture.updateTexImage()
-                    oesSurfaceTexture.getTransformMatrix(texMatrix)
-                    hasOesFrame = true
+                    val timestampNs = oesSurfaceTexture.timestamp
+                    if (FeedPresentPolicy.isDuplicateFrameTime(timestampNs, lastOesTimestampNs)) {
+                        skipDuplicate = true
+                    } else {
+                        lastOesTimestampNs = timestampNs
+                        oesSurfaceTexture.getTransformMatrix(texMatrix)
+                        hasOesFrame = true
+                    }
                 }
                 if (!hasOesFrame) continue
+                if (skipDuplicate && !planDirty) continue
                 val width = displayWidth
                 val height = displayHeight
+                if (
+                    !FeedPresentPolicy.shouldRender(
+                        attached = true,
+                        enabled = running.get(),
+                        hidden = false,
+                        hasDrawable = width > 1 && height > 1,
+                    )
+                ) {
+                    continue
+                }
                 val source = checkNotNull(sourceTarget)
                 val copy = oesCopy ?: continue
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)

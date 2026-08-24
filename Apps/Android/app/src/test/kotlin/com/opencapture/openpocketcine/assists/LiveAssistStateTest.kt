@@ -108,12 +108,14 @@ class LiveAssistStateTest {
         val state = LiveAssistState(onPersist = { saved = it })
         state.toggle(LiveAssistTool.GRID)
         state.toggle(LiveAssistTool.MIRROR)
+        state.nudgeLutExposure(-1.5)
         assertTrue(saved!!.contains("GRID"))
         val restored = LiveAssistState(encoded = saved)
         assertTrue(restored.isOn(LiveAssistTool.LUT))
         assertTrue(restored.isOn(LiveAssistTool.GRID))
         assertTrue(restored.isOn(LiveAssistTool.MIRROR))
         assertTrue(restored.lutOn)
+        assertEquals(-1.5, restored.lutExposureStops)
     }
 
     @Test

@@ -9,6 +9,8 @@ internal sealed class LutLookSource {
 
     data class Custom(val fileName: String) : LutLookSource()
 
+    data class Creative(val name: String) : LutLookSource()
+
     data object Off : LutLookSource()
 }
 
@@ -24,10 +26,11 @@ internal object LutLookResolver {
         if (!lutOn) return LutLookSource.Off
         return when (selection) {
             LutCatalog.OFF -> LutLookSource.Off
-            LutCatalog.AUTO -> builtInAuto(colorMode, family)
-            "officialDLog" -> LutLookSource.Asset("DJI_Pocket4P_DLog_Rec709_33.cube")
-            "officialDLog2" -> LutLookSource.Asset("DJI_Pocket4P_DLog2_Rec709_33.cube")
-            LutCatalog.DJI_AUTO -> djiAuto(colorMode, family, cameraName)
+            LutCatalog.AUTO, LutCatalog.DJI_AUTO -> djiAuto(colorMode, family, cameraName)
+            "officialDLog" -> LutLookSource.Asset("DJI_Official_Pocket4P_DLog_Rec709_33.cube")
+            "officialDLog2" -> LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube")
+            "creativeMono", "creativeContrast", "creativeWarm", "creativeCool" ->
+                LutLookSource.Creative(LutCatalog.creativeName(selection) ?: "Mono")
             "djiDLog" -> LutLookSource.Asset("DJI_Official_Pocket4P_DLog_Rec709_33.cube")
             "djiDLog2" -> LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube")
             "djiDLogM" -> LutLookSource.Asset(dLogMFile(cameraName))
@@ -53,8 +56,9 @@ internal object LutLookResolver {
     ): String {
         val title = LutCatalog.titleFor(selection)
         if (!enabled) return "Off · $title"
-        if (selection == LutCatalog.AUTO) return "Auto · ${sourceTitle(source)}"
-        if (selection == LutCatalog.DJI_AUTO) return "DJI Auto · ${sourceTitle(source)}"
+        if (selection == LutCatalog.AUTO || selection == LutCatalog.DJI_AUTO) {
+            return "Auto · ${sourceTitle(source)}"
+        }
         return title
     }
 
@@ -69,6 +73,7 @@ internal object LutLookResolver {
                 if (official) "Applying official $title" else "Applying $title"
             }
             is LutLookSource.Custom -> "Applying ${LutCatalog.displayName(source.fileName)}"
+            is LutLookSource.Creative -> "Applying ${source.name}"
         }
 
     fun sourceTitle(source: LutLookSource): String =
@@ -79,16 +84,8 @@ internal object LutLookResolver {
                     ?: LutCatalog.officialDji.firstOrNull { it.fileName == source.fileName }?.title
                     ?: LutCatalog.displayName(source.fileName)
             is LutLookSource.Custom -> LutCatalog.displayName(source.fileName)
+            is LutLookSource.Creative -> source.name
         }
-
-    private fun builtInAuto(colorMode: Int, family: String): LutLookSource {
-        if (family.equals("nano", ignoreCase = true)) return LutLookSource.Off
-        return when (colorMode) {
-            CameraCommands.COLOR_DLOG2 -> LutLookSource.Asset("DJI_Pocket4P_DLog2_Rec709_33.cube")
-            CameraCommands.COLOR_DLOG -> LutLookSource.Asset("DJI_Pocket4P_DLog_Rec709_33.cube")
-            else -> LutLookSource.Off
-        }
-    }
 
     private fun djiAuto(colorMode: Int, family: String, cameraName: String?): LutLookSource {
         val nano = family.equals("nano", ignoreCase = true)

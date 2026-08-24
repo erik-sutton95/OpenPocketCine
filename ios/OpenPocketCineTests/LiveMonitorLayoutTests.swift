@@ -49,14 +49,18 @@ final class LiveMonitorLayoutTests: XCTestCase {
         XCTAssertEqual(LiveRecordingTally.displayCornerRadius, 52, accuracy: 0.05)
 
         let zoom = layout.zoomButton
+        let stick = layout.gimbalStick
         XCTAssertEqual(zoom.width, 44, accuracy: 0.05)
         XCTAssertEqual(zoom.height, 44, accuracy: 0.05)
-        XCTAssertEqual(zoom.midY, layout.record.midY, accuracy: 0.05)
-        XCTAssertEqual(zoom.maxX, layout.feed.maxX - 10, accuracy: 0.2)
-        XCTAssertLessThan(zoom.maxX + 0.5, layout.record.minX, "zoom stays clear of record")
+        XCTAssertEqual(zoom.maxX, stick.maxX, accuracy: 0.2)
+        XCTAssertEqual(
+            zoom.maxY, stick.minY - LiveChromeMetrics.gimbalStickGap, accuracy: 0.2)
         XCTAssertGreaterThanOrEqual(zoom.minX, layout.feed.minX)
+        XCTAssertFalse(
+            zoom.intersects(layout.record),
+            "zoom stays in the gimbal cluster, not on record"
+        )
 
-        let stick = layout.gimbalStick
         XCTAssertEqual(LiveChromeMetrics.gimbalStickOpacity, 0.55, accuracy: 0.001)
         XCTAssertEqual(stick.width, 88, accuracy: 0.05)
         XCTAssertEqual(stick.height, 88, accuracy: 0.05)
@@ -283,6 +287,54 @@ final class LiveMonitorLayoutTests: XCTestCase {
             accuracy: 0.2)
         XCTAssertFalse(
             clean.gimbalStick.intersects(clean.zoomButton.insetBy(dx: -1, dy: -1)))
+    }
+
+    /// iPad mini A17 Pro landscape (1133×744). 16:9 is width-constrained, so
+    /// record sits on the canvas floor. The cluster parks on the right edge
+    /// above record.
+    func testGimbalStickStaysOnCanvasOnIPadMiniLandscape() {
+        let layout = LiveMonitorLayout.fit(
+            viewportWidth: 1133,
+            viewportHeight: 744,
+            safeLeading: 0,
+            safeTrailing: 0,
+            showsBottomBars: true
+        )
+        XCTAssertTrue(layout.isWidthConstrained)
+        assertGimbalStickOnCanvas(layout)
+
+        let clean = LiveMonitorLayout.fit(
+            viewportWidth: 1133,
+            viewportHeight: 744,
+            safeLeading: 0,
+            safeTrailing: 0,
+            showsBottomBars: false
+        )
+        XCTAssertTrue(clean.isWidthConstrained)
+        assertGimbalStickOnCanvas(clean)
+
+        let mirrored = LiveMonitorLayout.fit(
+            viewportWidth: 1133,
+            viewportHeight: 744,
+            safeLeading: 0,
+            safeTrailing: 0,
+            showsBottomBars: true,
+            mirrored: true
+        )
+        XCTAssertTrue(mirrored.isWidthConstrained)
+        assertGimbalStickOnCanvas(mirrored)
+    }
+
+    func testGimbalStickStaysOnCanvasOnIPadA16Landscape() {
+        let layout = LiveMonitorLayout.fit(
+            viewportWidth: 1180,
+            viewportHeight: 820,
+            safeLeading: 0,
+            safeTrailing: 0,
+            showsBottomBars: true
+        )
+        XCTAssertTrue(layout.isWidthConstrained)
+        assertGimbalStickOnCanvas(layout)
     }
 
     func testAuditorPhoneScopeWellAndDeck() {
@@ -549,6 +601,61 @@ final class LiveMonitorLayoutTests: XCTestCase {
         XCTAssertFalse(path.isEmpty)
         XCTAssertEqual(path.boundingRect.maxX, width, accuracy: 0.5)
         XCTAssertEqual(path.boundingRect.maxY, height, accuracy: 0.5)
+    }
+
+    private func assertGimbalStickOnCanvas(
+        _ layout: LiveMonitorLayout,
+        file: StaticString = #file, line: UInt = #line
+    ) {
+        let stick = layout.gimbalStick
+        let inset = LiveChromeMetrics.gimbalStickInset
+        XCTAssertEqual(
+            stick.width, LiveChromeMetrics.gimbalStickSize, accuracy: 0.05, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(stick.minX, layout.feed.minX, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(stick.minY, layout.feed.minY, file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            stick.maxY, layout.viewport.height - inset + 0.05, file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            stick.maxX, layout.viewport.width + 0.05, file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            stick.maxY, layout.feed.maxY + 0.05, file: file, line: line)
+        XCTAssertFalse(
+            stick.intersects(layout.zoomButton.insetBy(dx: -1, dy: -1)),
+            "gimbal stick stays clear of the zoom chip",
+            file: file, line: line
+        )
+        XCTAssertFalse(
+            stick.intersects(layout.record.insetBy(dx: -1, dy: -1)),
+            "gimbal stick stays clear of record",
+            file: file, line: line
+        )
+        let zoom = layout.zoomButton
+        let gap = LiveChromeMetrics.gimbalStickGap
+        XCTAssertEqual(zoom.maxX, stick.maxX, accuracy: 0.2, file: file, line: line)
+        XCTAssertEqual(
+            zoom.maxY, stick.minY - gap, accuracy: 0.2,
+            file: file, line: line)
+        XCTAssertFalse(
+            zoom.intersects(layout.record.insetBy(dx: -1, dy: -1)),
+            "zoom stays in the gimbal cluster, not on record",
+            file: file, line: line
+        )
+        if layout.isWidthConstrained {
+            XCTAssertEqual(
+                stick.maxX, layout.feed.maxX - inset, accuracy: 0.5,
+                "iPad cluster stays on the right edge",
+                file: file, line: line)
+            if layout.record.width > 1, layout.record.midX >= layout.feed.midX {
+                XCTAssertLessThanOrEqual(
+                    stick.maxY + gap, layout.record.minY + 0.05,
+                    "iPad cluster sits above record",
+                    file: file, line: line)
+            }
+        }
+        if layout.showsBottomBars {
+            XCTAssertLessThanOrEqual(
+                stick.maxY + 0.05, layout.capture.minY, file: file, line: line)
+        }
     }
 
     private func assertHorizontalMirror(

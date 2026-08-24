@@ -41,6 +41,8 @@ class AppModel(context: Context) {
     var liveChromeInteractive by mutableStateOf(true)
     var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
         private set
+    var cacheFullResolution by mutableStateOf(OperatorPrefs.cacheFullResolution(appContext))
+        private set
     var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))
         private set
     var hapticsEnabled by mutableStateOf(OperatorPrefs.hapticsEnabled(appContext))
@@ -138,6 +140,11 @@ class AppModel(context: Context) {
     fun updateKeepScreenAwake(value: Boolean) {
         keepScreenAwake = value
         OperatorPrefs.setKeepScreenAwake(appContext, value)
+    }
+
+    fun updateCacheFullResolution(value: Boolean) {
+        cacheFullResolution = value
+        OperatorPrefs.setCacheFullResolution(appContext, value)
     }
 
     fun updateRecordConfirmationEnabled(value: Boolean) {

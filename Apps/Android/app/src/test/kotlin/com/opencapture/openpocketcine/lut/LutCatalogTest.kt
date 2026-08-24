@@ -19,9 +19,15 @@ class LutCatalogTest {
         )
 
     @Test
-    fun builtInIsAutoAndOff() {
-        assertEquals(listOf("auto", "off"), LutCatalog.builtIn.map { it.id })
-        assertEquals(listOf("Auto", "Off"), LutCatalog.builtIn.map { it.title })
+    fun creativeLooksAreMonoContrastWarmCool() {
+        assertEquals(
+            listOf("creativeMono", "creativeContrast", "creativeWarm", "creativeCool"),
+            LutCatalog.creative.map { it.id },
+        )
+        assertEquals(listOf("Mono", "Contrast", "Warm", "Cool"), LutCatalog.creative.map { it.title })
+        assertEquals(LutCategory.CREATIVE, LutCatalog.categoryOf("creativeWarm"))
+        assertEquals("djiAuto", LutCatalog.migratedToDjiCatalog("auto"))
+        assertEquals("djiDLog2", LutCatalog.migratedToDjiCatalog("officialDLog2"))
     }
 
     @Test
@@ -100,12 +106,12 @@ class LutCatalogTest {
     @Test
     fun titleAndCategoryCoverPickerIds() {
         assertEquals("Auto", LutCatalog.titleFor("auto"))
-        assertEquals("Off", LutCatalog.titleFor("off"))
+        assertEquals("Auto", LutCatalog.titleFor("djiAuto"))
         assertEquals("D-Log2 → Rec.709", LutCatalog.titleFor("officialDLog2"))
         assertEquals("Action 6 D-Log M → Rec.709", LutCatalog.titleFor("djiAction6DLogM"))
         assertEquals("Look", LutCatalog.titleFor("custom:Look.cube"))
         assertEquals("Custom", LutCatalog.titleFor("customFile"))
-        assertEquals(LutCategory.BUILT_IN, LutCatalog.categoryOf("off"))
+        assertEquals(LutCategory.DJI, LutCatalog.categoryOf("off"))
         assertEquals(LutCategory.DJI, LutCatalog.categoryOf("djiDLog"))
         assertEquals(LutCategory.CUSTOM, LutCatalog.categoryOf("custom:Look.cube"))
         assertEquals(LutCategory.CUSTOM, LutCatalog.categoryOf("customFile"))

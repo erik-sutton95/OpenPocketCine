@@ -47,7 +47,10 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
         INFOPLIST_KEY_UIStatusBarHidden: YES
-        INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: NO
+        # YES so SwiftUI `.statusBarHidden` can hide the iPad system bar after launch.
+        # `UIStatusBarHidden~ipad` lives in Info-Frameio.plist — INFOPLIST_KEY cannot
+        # spell a `~ipad` variant.
+        INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: YES
         # Space-separated — a colon list becomes one invalid string and iOS stays portrait-only.
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

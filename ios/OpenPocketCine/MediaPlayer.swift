@@ -326,14 +326,12 @@ struct MediaPlayerView: View {
     @State private var frameScrubOriginTime: Double = 0
     @State private var frameScrubVideoWidth: CGFloat = 0
     @State private var frameScrubPending = false
-    @State private var clipSlideEdge: Edge = .trailing
     @State private var toastMessage: String?
     @State private var conformSource = ConformPreview.Source()
     @State private var conformTarget: Double?
     @State private var playerLoadGeneration = 0
-    @State private var playbackEffectsBox = MediaLUT.PlaybackEffectsBox()
+    @State private var playbackFeed = PlaybackFeedSession()
     @State private var deliveryPresentation: MediaDeliveryPresentation?
-    @State private var scopePollTask: Task<Void, Never>?
     @State private var playbackAssistToolbarFrame: CGRect = .zero
     @State private var playbackBarFrame: CGRect = .zero
     @State private var playbackAudioLevels = AudioMeterLevels.silent
@@ -411,26 +409,25 @@ struct MediaPlayerView: View {
                     videoSize: videoDisplaySize, in: container)
 
                 ZStack {
-                    MediaPlayerLayerView(player: player)
-                        .scaleEffect(
-                            x: model.assist.isPlaybackVisible(.mirror) ? -1 : 1,
-                            y: 1,
-                            anchor: .center
-                        )
-                        .scaleEffect(zoom.scale)
-                        .offset(zoom.offset)
+                    MediaPlayerLayerView(
+                        player: player,
+                        session: playbackFeed,
+                        effects: model.assist.playbackEffects,
+                        transfer: MonitorTransfer(model.assist.monitorColorMode ?? .normal),
+                        sampleBus: model.frameSamples
+                    )
+                    .scaleEffect(
+                        x: model.assist.isPlaybackVisible(.mirror) ? -1 : 1,
+                        y: 1,
+                        anchor: .center
+                    )
+                    .scaleEffect(zoom.scale)
+                    .offset(zoom.offset)
                 }
                 .frame(width: videoRect.width, height: videoRect.height)
                 .clipped()
                 .position(x: videoRect.midX, y: videoRect.midY)
                 .allowsHitTesting(false)
-                .id(active.id)
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: clipSlideEdge),
-                        removal: .move(edge: clipSlideEdge == .trailing ? .leading : .trailing)
-                    )
-                )
 
                 FeedAlignedAssists(
                     grid: model.assist.isPlaybackVisible(.grid),
@@ -501,13 +498,23 @@ struct MediaPlayerView: View {
         .animation(.easeInOut(duration: 0.28), value: active.id)
         .statusBarHidden()
         .preferredColorScheme(.dark)
-        .onAppear { appear() }
-        .onDisappear { disappear() }
+        .onAppear {
+            model.assist.gradesClip = true
+            appear()
+        }
+        .onDisappear {
+            model.assist.gradesClip = false
+            disappear()
+        }
         .task(id: active.id) { await loadActiveClip() }
         .onChange(of: session.mediaDownloadProgress[active.path] ?? -1) { _, _ in
             if session.isDownloaded(active), isRemoteStream, isClipReady {
                 Task { await loadActiveClip() }
             }
+        }
+        .onChange(of: session.isDownloaded(active)) { _, downloaded in
+            guard downloaded, isClipReady else { return }
+            Task { await adoptPlaybackLUTColor() }
         }
         .sheet(isPresented: $isSharePresented) {
             if let url = session.localURL(for: active), session.isDownloaded(active) {
@@ -572,6 +579,11 @@ struct MediaPlayerView: View {
         }
     }
 
+    private var isProxyPlayback: Bool {
+        _ = session.mediaDownloadProgress[active.path]
+        return session.cacheGrade(for: active).isProxyOnly
+    }
+
     private var playbackEffectsSignature: Int {
         var hasher = Hasher()
         hasher.combine(model.assist.playbackVisibleTools.map(\.rawValue).sorted().joined())
@@ -586,6 +598,7 @@ struct MediaPlayerView: View {
         hasher.combine(model.assist.lutEnabled)
         hasher.combine(model.assist.lutSelection.rawValue)
         hasher.combine(model.assist.splitComparison)
+        hasher.combine(model.assist.monitorColorMode?.rawValue)
         return hasher.finalize()
     }
 
@@ -601,6 +614,15 @@ struct MediaPlayerView: View {
                 .font(LiveType.ui(size: 14, weight: .semibold))
                 .foregroundStyle(LiveDesign.text)
                 .lineLimit(1)
+            if isProxyPlayback {
+                Text(MediaLibraryCopy.proxyTag)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(LiveDesign.text)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.black.opacity(0.55), in: Capsule())
+                    .accessibilityLabel(MediaLibraryCopy.proxyHelp)
+            }
             Spacer()
             Button {
                 session.toggleFavorite(active)
@@ -956,31 +978,17 @@ struct MediaPlayerView: View {
         }
     }
 
-    private func attachPlaybackVideoComposition(to item: AVPlayerItem) {
+    private func attachPlaybackAssists(to item: AVPlayerItem) {
         audioMeterController.attach(to: item)
-        startScopePolling()
-        Task { @MainActor in
-            _ = try? await item.asset.loadTracks(withMediaType: .video)
-            guard player.currentItem === item else { return }
-            updatePlaybackEffects()
-        }
+        updatePlaybackEffects()
     }
 
     private func updatePlaybackEffects() {
         let fx = model.assist.playbackEffects
-        playbackEffectsBox.setScopesActive(fx.needsScopes)
-        let changed = playbackEffectsBox.set(effects: fx)
-        guard let item = player.currentItem else { return }
-        let needsComp = fx.needsGPUFeed || fx.needsScopes
-        if !needsComp {
-            if item.videoComposition != nil {
-                item.videoComposition = nil
-            }
-            return
-        }
-        if item.videoComposition == nil || (changed && player.rate == 0) {
-            item.videoComposition = playbackEffectsBox.makeVideoComposition(for: item.asset)
-        }
+        playbackFeed.setEffects(
+            fx,
+            transfer: MonitorTransfer(fx.colorMode),
+            sampleBus: model.frameSamples)
         syncPlaybackAudioMetering()
     }
 
@@ -992,19 +1000,6 @@ struct MediaPlayerView: View {
         } else {
             audioMeterController.stopPolling()
             playbackAudioLevels = .silent
-        }
-    }
-
-    private func startScopePolling() {
-        scopePollTask?.cancel()
-        scopePollTask = Task { @MainActor in
-            while !Task.isCancelled {
-                let snap = playbackEffectsBox.readScopeSnapshot()
-                if model.frameSamples.playbackBundle?.revision != snap.revision {
-                    model.frameSamples.playbackBundle = snap.bundle
-                }
-                try? await Task.sleep(for: .milliseconds(84))
-            }
         }
     }
 
@@ -1169,7 +1164,7 @@ struct MediaPlayerView: View {
                         width: PlaybackChrome.actionIconSize,
                         height: PlaybackChrome.actionIconSize
                     )
-                    .foregroundStyle(downloaded ? LiveDesign.text : LiveDesign.faint)
+                    .foregroundStyle(LiveDesign.text)
                     .frame(
                         width: PlaybackChrome.actionButtonSize.width,
                         height: PlaybackChrome.actionButtonSize.height
@@ -1400,13 +1395,51 @@ struct MediaPlayerView: View {
         syncPlaybackAudioMetering()
     }
 
+    /// Auto LUT needs ColorMode. `colr`/`nclx` is Rec.709 even for D-Log2;
+    /// QuickTime Keys `com.dji.camera.ColorGammaSxS` on the **original** is the
+    /// shot profile. LRF/XRF sidecars are Rec.709 even for log — do not read them.
+    /// Live `@2` is the body's current SET — used only when the original has no Keys.
+    private func adoptPlaybackLUTColor(playedPath: String? = nil, playedURL: URL? = nil) async {
+        let clip: ColorMode?
+        if let original = session.localURL(for: active),
+            let mode = ClipColorProfileIO.shotColor(at: original, path: active.path)
+        {
+            session.rememberShotColor(mode, for: active)
+            clip = mode
+        } else if let playedPath, let playedURL,
+            let mode = ClipColorProfileIO.shotColor(at: playedURL, path: playedPath)
+        {
+            session.rememberShotColor(mode, for: active)
+            clip = mode
+        } else if let cached = session.shotColor(for: active) {
+            clip = cached
+        } else {
+            clip = await session.fetchOriginalShotColor(for: active)
+        }
+        let color = PlaybackLUTColor.resolve(
+            clip: clip,
+            live: session.status.colorMode,
+            last: OperatorPrefs.lastMonitorColorMode ?? model.assist.monitorColorMode)
+        guard let color else { return }
+        model.assist.adoptPlaybackColor(
+            color,
+            family: session.bodyFamily != .other
+                ? session.bodyFamily : model.assist.monitorFamily,
+            cameraName: session.connectedCamera?.model.name)
+        if let clip {
+            ControlLiveLog.line("media: clip color \(clip.label)")
+        } else {
+            ControlLiveLog.line(
+                "media: clip color fallback \(color.label) (proxy Keys ignored)")
+        }
+    }
+
     private func disappear() {
         loadTask?.cancel()
         playbackFlashTask?.cancel()
-        scopePollTask?.cancel()
         audioMeterController.stopPolling()
         audioMeterController.detach(from: player.currentItem)
-        playbackEffectsBox.invalidateScopeComposition()
+        playbackFeed.shutdown()
         model.frameSamples.playbackBundle = nil
         model.assist.configureTool = nil
         teardownPlayer()
@@ -1421,14 +1454,15 @@ struct MediaPlayerView: View {
         duration = Double(active.durationSeconds)
         applyListedClipGeometry()
         teardownPlayerObservers()
-        player.replaceCurrentItem(with: nil)
+        player.pause()
 
         // Never hand AVPlayer a `/v2?path=` URL. That path has no extension, the
         // camera often parks `moov` at the end, and SoftAP has no internet —
         // the item stays `.unknown` and this overlay never clears. Pull the
         // sidecar (same GET as thumbs) and play the local file.
         // Prefer the 720p sidecar even when the 4K original is already cached
-        // for export. LUT / false colour grade that proxy, not the raw clip.
+        // for export (`FeedPresentPolicy.preferProxyForMonitorGrade`). LUT /
+        // false colour grade that proxy, not the raw clip.
         if let proxy = session.localProxySource(for: active) {
             isRemoteStream = false
             if await playSource(proxy, timeout: .seconds(8)) { return }
@@ -1496,6 +1530,11 @@ struct MediaPlayerView: View {
             isClipReady = true
             loadError = nil
             if isPlaying { startPlayback() }
+            playbackFeed.noteItemReady()
+            await adoptPlaybackLUTColor(playedPath: source.path, playedURL: source.url)
+            if OperatorPrefs.cacheFullResolution, !session.isDownloaded(active) {
+                Task { await session.download(file: active) }
+            }
             Task { await probeConformAndSize(from: item.asset) }
             ControlLiveLog.line("media: play ready \(source.path) remote=\(source.isRemote)")
             return true
@@ -1516,10 +1555,11 @@ struct MediaPlayerView: View {
                 "AVURLAssetHTTPHeaderFieldsKey": ["Accept": "*/*"],
             ])
         let item = AVPlayerItem(asset: asset)
+        playbackFeed.prepare(item)
         player.replaceCurrentItem(with: item)
         applyMute()
         player.automaticallyWaitsToMinimizeStalling = isRemote
-        attachPlaybackVideoComposition(to: item)
+        attachPlaybackAssists(to: item)
         observePlaybackEnd(for: item)
         attachTimeObserver()
         return item
@@ -1633,6 +1673,7 @@ struct MediaPlayerView: View {
         reachedEnd = false
         player.rate = Float(conformSpeed)
         isPlaying = true
+        playbackFeed.noteItemReady()
     }
 
     private func applyMute() {
@@ -1670,7 +1711,6 @@ struct MediaPlayerView: View {
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
             return
         }
-        clipSlideEdge = offset > 0 ? .trailing : .leading
         player.pause()
         isPlaying = true
         reachedEnd = false
@@ -1866,25 +1906,40 @@ private struct MediaPlaybackScrubber: View {
 
 private struct MediaPlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
+    let session: PlaybackFeedSession
+    var effects: LiveImageEffects
+    var transfer: MonitorTransfer
+    var sampleBus: LiveFrameSampleBus
 
-    func makeUIView(context: Context) -> PlayerHostView {
-        let view = PlayerHostView()
-        view.isUserInteractionEnabled = false
-        view.playerLayer.player = player
-        view.playerLayer.videoGravity = .resizeAspect
+    final class Coordinator {
+        let session: PlaybackFeedSession
+        let generation: Int
+        init(session: PlaybackFeedSession) {
+            self.session = session
+            self.generation = session.reserveHostGeneration()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(session: session)
+    }
+
+    func makeUIView(context: Context) -> PlaybackFeedHostView {
+        let view = PlaybackFeedHostView()
+        view.attachGeneration = context.coordinator.generation
+        session.attach(host: view, player: player)
+        session.setEffects(effects, transfer: transfer, sampleBus: sampleBus)
         return view
     }
 
-    func updateUIView(_ uiView: PlayerHostView, context: Context) {
-        uiView.playerLayer.player = player
+    func updateUIView(_ uiView: PlaybackFeedHostView, context: Context) {
+        uiView.attachGeneration = context.coordinator.generation
+        session.attach(host: uiView, player: player)
+        session.setEffects(effects, transfer: transfer, sampleBus: sampleBus)
     }
 
-    static func dismantleUIView(_ uiView: PlayerHostView, coordinator: ()) {
+    static func dismantleUIView(_ uiView: PlaybackFeedHostView, coordinator: Coordinator) {
+        coordinator.session.detach(host: uiView)
         uiView.playerLayer.player = nil
-    }
-
-    final class PlayerHostView: UIView {
-        override class var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
     }
 }

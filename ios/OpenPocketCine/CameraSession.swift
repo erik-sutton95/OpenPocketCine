@@ -1,9 +1,9 @@
-import Foundation
-import CoreGraphics
-import Observation
 import AVFoundation
-import os
+import CoreGraphics
+import Foundation
+import Observation
 import OpenPocketViewCore
+import os
 
 /// Orchestrates the whole Phase-0 spine: scan -> GATT -> pair -> read Wi-Fi creds -> join AP ->
 /// datalink -> live status. Owns the single consumer of the BLE frame stream and routes replies to
@@ -24,10 +24,12 @@ final class CameraSession {
             let previous = statusStorage
             statusStorage = newValue
             guard newValue != previous else { return }
-            guard LiveChromeThrottle.shouldNotify(
-                previous: previous, next: newValue,
-                elapsed: CFAbsoluteTimeGetCurrent() - lastStatusMutation
-            ) else {
+            guard
+                LiveChromeThrottle.shouldNotify(
+                    previous: previous, next: newValue,
+                    elapsed: CFAbsoluteTimeGetCurrent() - lastStatusMutation
+                )
+            else {
                 scheduleStatusFlush()
                 return
             }
@@ -65,6 +67,8 @@ final class CameraSession {
     @ObservationIgnored private var lastIdrRequest = Date.distantPast
     @ObservationIgnored private var liveViewEnableSent = false
     @ObservationIgnored private var liveViewEnableSends = 0
+    /// One `0x09/0xa8` write in flight. Overlapping enables are a black well.
+    @ObservationIgnored private var liveEnableGate = SerialSessionGate()
     /// `0x09/0xa8` sends while `awaitingIDR` is still true. Caps the mid-session
     /// IDR retry at one extra enable so a missed keyframe cannot 1 Hz loop.
     @ObservationIgnored private var idrHoldEnableCount = 0
@@ -80,6 +84,7 @@ final class CameraSession {
         lastFocusTrackAt.map { Date().timeIntervalSince($0) }
     }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
+    @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var statusStorage = CameraStatus()
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
@@ -92,7 +97,8 @@ final class CameraSession {
     @ObservationIgnored private var waiters: [UInt16: FrameWaiter] = [:]
     /// Handshake replies can land in the same notification before the next waiter is registered.
     @ObservationIgnored private var pairingHold: [UInt16: Duml.Frame] = [:]
-    @ObservationIgnored private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "session")
+    @ObservationIgnored private let log = Logger(
+        subsystem: "com.opencapture.openpocketcine", category: "session")
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var connectGeneration = 0
@@ -384,12 +390,10 @@ final class CameraSession {
             defer {
                 if generation == connectGeneration { runTask = nil }
             }
-            do { try await run(camera) }
-            catch is CancellationError { return }
-            catch {
+            do { try await run(camera) } catch is CancellationError { return } catch {
                 guard generation == connectGeneration else { return }
                 if Task.isCancelled { return }
-                if case .idle = phase { return }   // user already hit Disconnect
+                if case .idle = phase { return }  // user already hit Disconnect
                 if preserveMonitor {
                     log.info(
                         "session: recovery attempt failed \(error.localizedDescription, privacy: .public)"
@@ -473,9 +477,14 @@ final class CameraSession {
         pendingGimbalAxes = nil
         gimbalStickHeld = false
         lastGimbalStickAt = nil
-        videoPackets = 0; accessUnits = 0; framesEnqueued = 0
-        droppedIncomplete = 0; decoderErrors = 0; hasVideoFormat = false
-        nalTypes = ""; lastKeyframeAge = "—"
+        videoPackets = 0
+        accessUnits = 0
+        framesEnqueued = 0
+        droppedIncomplete = 0
+        decoderErrors = 0
+        hasVideoFormat = false
+        nalTypes = ""
+        lastKeyframeAge = "—"
         liveViewEnableSent = false
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
@@ -506,7 +515,8 @@ final class CameraSession {
     private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false) {
         runTask?.cancel()
         runTask = nil
-        keepaliveLoop?.cancel(); frameRouter?.cancel()
+        keepaliveLoop?.cancel()
+        frameRouter?.cancel()
         failAllWaiters(Fail.disconnected)
         pairingHold.removeAll()
         inflight.removeAll()
@@ -519,7 +529,8 @@ final class CameraSession {
         pendingGimbalAxes = nil
         gimbalStickHeld = false
         lastGimbalStickAt = nil
-        disposeDatalink(); ble.disconnect()
+        disposeDatalink()
+        ble.disconnect()
         liveViewEnableSent = false
         liveViewEnableSends = 0
         idrHoldEnableCount = 0
@@ -549,7 +560,8 @@ final class CameraSession {
     private func run(_ camera: FoundCamera) async throws {
         var timeline = ConnectTimeline(now: ProcessInfo.processInfo.systemUptime)
         connectedCamera = camera
-        rawAccessUnits = 0; rawFramesEnqueued = 0
+        rawAccessUnits = 0
+        rawFramesEnqueued = 0
         lastIdrRequest = Date.distantPast
         liveViewEnableSent = false
         liveViewEnableSends = 0
@@ -607,7 +619,7 @@ final class CameraSession {
         log.info("creds: sending 0x53/0x10 (wake AP)")
         ble.send(Commands.session5310())
         do {
-            _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))   // Pocket 3 may answer e0
+            _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))  // Pocket 3 may answer e0
         } catch Fail.timeout {
             log.info("creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
         } catch Fail.disconnected {
@@ -619,7 +631,9 @@ final class CameraSession {
         try Task.checkCancellation()
         let (ssid, pass) = try await wifiCredsAfterPairing(camera)
         try assertSSIDBelongs(to: camera, ssid: ssid)
-        log.info("creds: SSID \(ssid, privacy: .public) (\(pass.count) char password) body=\(camera.model.name, privacy: .public)")
+        log.info(
+            "creds: SSID \(ssid, privacy: .public) (\(pass.count) char password) body=\(camera.model.name, privacy: .public)"
+        )
         let persistHotspot = CameraSoftAP.shouldPersistHotspot(
             isSavedCamera: SavedCameraStore.load().contains { $0.id == camera.id }
                 || cachedWifiCameraId == camera.id)
@@ -644,9 +658,10 @@ final class CameraSession {
         if let existing, CameraSoftAP.shouldReuseDatalink(isClosed: existing.isClosed) {
             dl = existing
         } else {
-            dl = DatalinkDriver(port: UInt16(camera.model.datalinkPort),
-                                tcpPoke: camera.model.tcpPoke,
-                                pairingToken: camera.model.pairingToken)
+            dl = DatalinkDriver(
+                port: UInt16(camera.model.datalinkPort),
+                tcpPoke: camera.model.tcpPoke,
+                pairingToken: camera.model.pairingToken)
             wireDatalink(dl)
             datalink = dl
         }
@@ -697,7 +712,8 @@ final class CameraSession {
                     throw error
                 }
                 log.info("session: handshake miss #\(attempt) — SoftAP up, retry (no kick)")
-                try? await Task.sleep(for: .milliseconds(CameraSoftAP.handshakeRetryPauseMilliseconds))
+                try? await Task.sleep(
+                    for: .milliseconds(CameraSoftAP.handshakeRetryPauseMilliseconds))
             }
         }
     }
@@ -711,7 +727,7 @@ final class CameraSession {
                 lastBleNotifyAt = Date()
                 route(frame)
             }
-            failAllWaiters(Fail.disconnected)   // BLE dropped; don't sit on a command timeout
+            failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
                 beginSessionRecovery(reason: "BLE dropped")
             }
@@ -745,7 +761,7 @@ final class CameraSession {
     private func routeLiveControlAck(_ frame: Duml.Frame, key: UInt16) {
         switch setMailbox.decideAck(key: key, seq: frame.seq) {
         case .accept:
-            commandTimeoutsAt.removeAll()   // an ACK landed — the uplink works
+            commandTimeoutsAt.removeAll()  // an ACK landed — the uplink works
             noteControlAck(frame, decision: "inflight")
             if let send = inflight.removeValue(forKey: key) {
                 finishInflight(send, key: key, reply: frame, late: false)
@@ -753,7 +769,7 @@ final class CameraSession {
                 finishInflight(send, key: key, reply: frame, late: true)
             }
         case .acceptLate:
-            commandTimeoutsAt.removeAll()   // late, but it landed — uplink works
+            commandTimeoutsAt.removeAll()  // late, but it landed — uplink works
             noteControlAck(frame, decision: "late")
             inflight[key] = nil
             if let send = lateWait.removeValue(forKey: key) {
@@ -780,9 +796,11 @@ final class CameraSession {
     /// Success is `0x07/0x45` `[00 01]` (already paired) or a `0x07/0x46` approval
     /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`.
     private func completePairing() async throws {
-        let frame = try await waitFrame(matching: [(0x07, 0x45), (0x07, 0x46)], timeout: .seconds(90))
+        let frame = try await waitFrame(
+            matching: [(0x07, 0x45), (0x07, 0x46)], timeout: .seconds(90))
         if frame.cmdSet == 0x07, frame.cmdId == 0x45,
-           frame.payload.count >= 2, frame.payload[1] == 0x02 {
+            frame.payload.count >= 2, frame.payload[1] == 0x02
+        {
             _ = try await waitFrame(0x07, 0x46, timeout: .seconds(90))
         }
     }
@@ -793,7 +811,8 @@ final class CameraSession {
         consumeHold: Bool = true,
         send: (() -> Void)? = nil
     ) async throws -> Duml.Frame {
-        try await waitFrame(matching: [(set, cmd)], timeout: timeout, consumeHold: consumeHold, send: send)
+        try await waitFrame(
+            matching: [(set, cmd)], timeout: timeout, consumeHold: consumeHold, send: send)
     }
 
     private func waitFrame(
@@ -830,7 +849,9 @@ final class CameraSession {
                     try? await Task.sleep(for: timeout)
                     await MainActor.run { [weak self] in
                         guard let self else { return }
-                        guard let stuck = keys.lazy.compactMap({ self.waiters[$0] }).first, stuck === waiter else { return }
+                        guard let stuck = keys.lazy.compactMap({ self.waiters[$0] }).first,
+                            stuck === waiter
+                        else { return }
                         for k in stuck.keys { self.waiters.removeValue(forKey: k) }
                         stuck.resume(throwing: Fail.timeout)
                     }
@@ -904,9 +925,11 @@ final class CameraSession {
     func setShootingMode(_ mode: ShootingMode) {
         let previous = status.shootingMode
         status.shootingMode = Int(mode.rawValue)
-        fireCamera(Commands.setShootingMode(mode), name: mode.label, onFail: { [weak self] in
-            self?.status.shootingMode = previous
-        })
+        fireCamera(
+            Commands.setShootingMode(mode), name: mode.label,
+            onFail: { [weak self] in
+                self?.status.shootingMode = previous
+            })
     }
 
     func setIsoLimit(_ limit: IsoLimit) {
@@ -918,7 +941,8 @@ final class CameraSession {
             onFail: { [weak self] in self?.status.isoLimit = previous },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
-                    "iso: limit \(limit.label(base: base)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
+                    "iso: limit \(limit.label(base: base)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
+                )
             })
     }
 
@@ -978,7 +1002,7 @@ final class CameraSession {
     private func noteExpoIfChanged(_ new: CameraStatus) {
         let snap = (new.expoMode, new.iso, new.shutterDenom, new.evComp)
         if lastLoggedExpo?.0 == snap.0, lastLoggedExpo?.1 == snap.1,
-           lastLoggedExpo?.2 == snap.2, lastLoggedExpo?.3 == snap.3
+            lastLoggedExpo?.2 == snap.2, lastLoggedExpo?.3 == snap.3
         {
             return
         }
@@ -1010,16 +1034,22 @@ final class CameraSession {
                 zoomOptimistic = nil
             }
             if !zoomStopTouched {
-                if abs(factor - CamFov.maxFactor) < 0.15 { zoomStop = 12 }
-                else if abs(factor - 6) < 0.2 { zoomStop = 6 }
-                else if abs(factor - 3) < 0.2 { zoomStop = 3 }
-                else if factor < 2.5 { zoomStop = 1 }
+                if abs(factor - CamFov.maxFactor) < 0.15 {
+                    zoomStop = 12
+                } else if abs(factor - 6) < 0.2 {
+                    zoomStop = 6
+                } else if abs(factor - 3) < 0.2 {
+                    zoomStop = 3
+                } else if factor < 2.5 {
+                    zoomStop = 1
+                }
             }
         }
         let now = Date()
         guard now.timeIntervalSince(lastZoomLogAt) >= 0.5 else { return }
         lastZoomLogAt = now
-        let label = new.zoomFactor.map { CamFov.displayLabel(factor: $0) }
+        let label =
+            new.zoomFactor.map { CamFov.displayLabel(factor: $0) }
             ?? CamFov.displayLabel(raw: new.zoomFactorRaw)
         let lens = new.zoomLens.map { " lens=\($0)" } ?? ""
         ControlLiveLog.line("zoom: cam_fov @0=\(new.zoomFactorRaw)\(lens) \(label)")
@@ -1059,7 +1089,8 @@ final class CameraSession {
     func setZoom(_ factor: Double) {
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
-        ControlLiveLog.line("zoom: setZoom \(from) → \(to) locked=\(isLocked) live=\(datalink != nil)")
+        ControlLiveLog.line(
+            "zoom: setZoom \(from) → \(to) locked=\(isLocked) live=\(datalink != nil)")
         guard !isLocked else {
             controlNote = "Zoom locked"
             return
@@ -1118,10 +1149,13 @@ final class CameraSession {
         )
         guard !isLocked else { return }
         let frame = Commands.setZoomStop()
-        fireCamera(frame, name: "Zoom stop", onSettle: { [weak self] ok in
-            ControlLiveLog.line(
-                "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
-        })
+        fireCamera(
+            frame, name: "Zoom stop",
+            onSettle: { [weak self] ok in
+                ControlLiveLog.line(
+                    "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
+                )
+            })
     }
 
     private func markZoomStop(_ factor: Double) {
@@ -1144,8 +1178,10 @@ final class CameraSession {
             name = target.map { "Zoom \(CamFov.displayLabel(factor: $0))" } ?? "Zoom slider"
         case .slew(let value):
             frame = Commands.setZoomSlew(value)
-            name = target.map { "Zoom \(CamFov.displayLabel(factor: $0))" }
-                ?? (value == CamFov.slewTele ? "Zoom 1×" : value == CamFov.slewWide ? "Zoom 3×" : "Zoom slew")
+            name =
+                target.map { "Zoom \(CamFov.displayLabel(factor: $0))" }
+                ?? (value == CamFov.slewTele
+                    ? "Zoom 1×" : value == CamFov.slewWide ? "Zoom 3×" : "Zoom slew")
         }
         fireCamera(
             frame, name: name,
@@ -1156,15 +1192,17 @@ final class CameraSession {
                 guard let self else { return }
                 if ok, announce { self.controlNote = name }
                 ControlLiveLog.line(
-                    "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
+                    "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))"
+                )
             })
     }
 
     /// D-Log native 400 ↔ D-Log2 native 1600 when the operator is still on base.
     private func hopNativeISO(from: ColorMode?, to: ColorMode) {
-        guard let next = CamCapIso.nativeISOHop(
-            from: from, to: to, current: status.isoIndex,
-            hopEnabled: OperatorPrefs.nativeISOHopEnabled)
+        guard
+            let next = CamCapIso.nativeISOHop(
+                from: from, to: to, current: status.isoIndex,
+                hopEnabled: OperatorPrefs.nativeISOHopEnabled)
         else { return }
         ControlLiveLog.line(
             "iso: native hop \(from?.label ?? "?") → \(to.label) \(status.isoIndex?.label ?? "?") → \(next.label)"
@@ -1358,7 +1396,8 @@ final class CameraSession {
         ev: EvComp? = nil, mode: ExpoMode? = nil
     ) {
         expoGeneration += 1
-        var pin = expoPin ?? ExpoPin(generation: expoGeneration, deadline: Date().addingTimeInterval(2))
+        var pin =
+            expoPin ?? ExpoPin(generation: expoGeneration, deadline: Date().addingTimeInterval(2))
         pin.generation = expoGeneration
         pin.deadline = Date().addingTimeInterval(2)
         if iso != nil || isoIndex != nil {
@@ -1379,7 +1418,10 @@ final class CameraSession {
         iso: Bool = false, shutter: Bool = false, ev: Bool = false, mode: Bool = false
     ) {
         guard var pin = expoPin else { return }
-        if iso { pin.iso = nil; pin.isoIndex = nil }
+        if iso {
+            pin.iso = nil
+            pin.isoIndex = nil
+        }
         if shutter { pin.shutter = nil }
         if ev { pin.ev = nil }
         if mode { pin.mode = nil }
@@ -1394,7 +1436,8 @@ final class CameraSession {
             return
         }
         if let expectIdx = pin.isoIndex {
-            let matched = incoming.isoIndex == expectIdx
+            let matched =
+                incoming.isoIndex == expectIdx
                 || (expectIdx.isoValue.map { incoming.iso == $0 } ?? false)
             if matched {
                 pin.isoIndex = nil
@@ -1497,10 +1540,11 @@ final class CameraSession {
     }
 
     func setWhiteBalanceCustom(kelvin: Int, tint: Int) {
-        fireWhiteBalance(.custom(
-            kelvin: min(max(kelvin, 2_000), 10_000),
-            tint: min(max(tint, -100), 100)
-        ))
+        fireWhiteBalance(
+            .custom(
+                kelvin: min(max(kelvin, 2_000), 10_000),
+                tint: min(max(tint, -100), 100)
+            ))
     }
 
     private func fireWhiteBalance(_ wb: WhiteBalance) {
@@ -1511,7 +1555,8 @@ final class CameraSession {
         status.whiteBalanceKelvin = wb.mode == .auto ? -1 : wb.kelvin
         status.whiteBalanceTint = wb.mode == .auto ? 0 : wb.tint
         let name = wb.mode == .auto ? "WB Auto" : "WB \(wb.kelvin)K tint \(wb.tint)"
-        let frame = wb.mode == .auto
+        let frame =
+            wb.mode == .auto
             ? Commands.setWhiteBalanceAuto()
             : Commands.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
         fireCamera(
@@ -1523,7 +1568,8 @@ final class CameraSession {
                 self.status.whiteBalanceTint = previousTint
             },
             onSettle: { [weak self] ok in
-                ControlLiveLog.line("wb: SET \(name) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
+                ControlLiveLog.line(
+                    "wb: SET \(name) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
             })
     }
 
@@ -1611,7 +1657,9 @@ final class CameraSession {
         pinAudio(wind: value)
         status.windNR = value
         enqueueAudio {
-            await self.patchAudioDsp(name: "Wind \(value.label)") { AudioDspBlob.patchWind($0, value) }
+            await self.patchAudioDsp(name: "Wind \(value.label)") {
+                AudioDspBlob.patchWind($0, value)
+            }
         }
     }
 
@@ -1654,7 +1702,9 @@ final class CameraSession {
 
     func refreshAudioState() async {
         enqueueAudio {
-            for (frame, name) in zip(Commands.audioStateGets, ["Audio ch GET", "Vocal GET", "AudioDSP GET"]) {
+            for (frame, name) in zip(
+                Commands.audioStateGets, ["Audio ch GET", "Vocal GET", "AudioDSP GET"])
+            {
                 _ = await self.requestCamera(frame, name: name)
             }
         }
@@ -2034,8 +2084,9 @@ final class CameraSession {
     /// The camera is the source of truth: a body-screen lock starts here, a
     /// body-screen cancel is silence + `0xA5` idle.
     private func applyLiveTrackingPush(_ payload: [UInt8]) {
-        guard TrackingClearPolicy.shouldApplyLivePush(
-            operatorClearedAt: lastOperatorClearAt, now: Date())
+        guard
+            TrackingClearPolicy.shouldApplyLivePush(
+                operatorClearedAt: lastOperatorClearAt, now: Date())
         else { return }
         guard let box = TrackingBox.parseLivePush(payload) else { return }
         lastSubjectPushAt = Date()
@@ -2048,9 +2099,10 @@ final class CameraSession {
     }
 
     private func adoptCameraFocus(x: Double, y: Double, fromTrackingBox: Bool) {
-        guard CameraFocusPolicy.shouldAdopt(
-            currentX: Double(focusPoint.x), currentY: Double(focusPoint.y),
-            cameraX: x, cameraY: y)
+        guard
+            CameraFocusPolicy.shouldAdopt(
+                currentX: Double(focusPoint.x), currentY: Double(focusPoint.y),
+                cameraX: x, cameraY: y)
         else { return }
         focusPoint = CGPoint(x: x, y: y)
         guard !fromTrackingBox else { return }
@@ -2141,8 +2193,9 @@ final class CameraSession {
             }
         }
         for (index, hit) in heads.enumerated() where !claimed.contains(index) {
-            guard HeadTrackPolicy.shouldSpawn(
-                detection: hit.box, existing: next.map(\.box))
+            guard
+                HeadTrackPolicy.shouldSpawn(
+                    detection: hit.box, existing: next.map(\.box))
             else { continue }
             next.append(FaceTrack(box: hit.box, target: hit.box, lastHit: now))
         }
@@ -2182,18 +2235,21 @@ final class CameraSession {
         let spacing = FacePriorityExposure.interval(
             sinceAcquire: facePriorityAcquireAt, now: now)
         guard now.timeIntervalSince(lastFacePriorityEVAt) >= spacing else { return }
-        guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
+        guard
+            let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
         else { return }
         lastFacePriorityEVAt = now
         let transfer = MonitorTransfer.resolved(
             status.monitorTransfer, colorMode: status.colorMode)
-        guard let encoded = FacePriorityExposure.medianEncoded(
-            bytes: packed.bytes, width: packed.width, height: packed.height,
-            bytesPerRow: packed.bytesPerRow, boxes: boxes, transfer: transfer)
+        guard
+            let encoded = FacePriorityExposure.medianEncoded(
+                bytes: packed.bytes, width: packed.width, height: packed.height,
+                bytesPerRow: packed.bytesPerRow, boxes: boxes, transfer: transfer)
         else { return }
         let current = status.evComp ?? .zero
-        guard let next = FacePriorityExposure.nextEV(
-            current: current, encoded: encoded, transfer: transfer)
+        guard
+            let next = FacePriorityExposure.nextEV(
+                current: current, encoded: encoded, transfer: transfer)
         else { return }
         setEv(next)
         ControlLiveLog.line("ev: face-priority \(current.label) → \(next.label)")
@@ -2246,8 +2302,9 @@ final class CameraSession {
     }
 
     private func applyTrackingPoll(_ payload: [UInt8]) {
-        guard TrackingClearPolicy.shouldApplyLivePush(
-            operatorClearedAt: lastOperatorClearAt, now: Date())
+        guard
+            TrackingClearPolicy.shouldApplyLivePush(
+                operatorClearedAt: lastOperatorClearAt, now: Date())
         else { return }
         switch TrackingPoll.parse(payload) {
         case .locked(let cameraBox):
@@ -2403,13 +2460,15 @@ final class CameraSession {
         inflight[key] = nil
         let matched = send.expect?.confirmed(by: status) == true
         let result = setMailbox.timeout(key: key, subscribeMatches: matched)
-        let videoFresh = datalink?.lastVideoPacketAt.map {
-            Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
-        } == true
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
         if CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
             if videoFresh {
                 log.info("control: SET timeout with video flowing — leave UDP")
-                ControlLiveLog.line("control: \(send.name) \(send.opcode) — SET timeout, video flowing, leave UDP")
+                ControlLiveLog.line(
+                    "control: \(send.name) \(send.opcode) — SET timeout, video flowing, leave UDP")
             } else {
                 noteCommandTimeout()
             }
@@ -2446,7 +2505,8 @@ final class CameraSession {
     private func scheduleCoalesceLaunch(_ key: UInt16) {
         guard coalesceScheduled.insert(key).inserted else { return }
         let remain = setMailbox.holdRemaining(key: key, now: CFAbsoluteTimeGetCurrent())
-        let delay: Duration = remain > 0
+        let delay: Duration =
+            remain > 0
             ? .milliseconds(Int((remain * 1_000).rounded(.up)))
             : .milliseconds(1)
         Task.detached { [weak self] in
@@ -2454,7 +2514,8 @@ final class CameraSession {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.coalesceScheduled.remove(key)
-                let blocked = self.inflight[key] != nil
+                let blocked =
+                    self.inflight[key] != nil
                     && !CameraSetMailbox.pipelinesWhileOpen(key)
                 guard !blocked else { return }
                 switch self.setMailbox.pendingLaunch(key: key, now: CFAbsoluteTimeGetCurrent()) {
@@ -2497,7 +2558,8 @@ final class CameraSession {
                     "control: send \(name) \(opcode) seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
                 )
             }
-            return finishControlReply(reply, name: name, opcode: opcode, expect: nil, announce: false)
+            return finishControlReply(
+                reply, name: name, opcode: opcode, expect: nil, announce: false)
         } catch {
             if let note = ControlHud.timeoutNote(name: name, announce: false) {
                 controlNote = note
@@ -2525,7 +2587,8 @@ final class CameraSession {
         }
         if expect?.confirmed(by: status) == true {
             controlNote = nil
-            ControlLiveLog.line("control: \(name) \(opcode) subscribe already matches after \(parsed.message)")
+            ControlLiveLog.line(
+                "control: \(name) \(opcode) subscribe already matches after \(parsed.message)")
             return true
         }
         if announce { controlNote = "\(name): \(parsed.message)" }
@@ -2549,13 +2612,17 @@ final class CameraSession {
                                 lastVideoPacketAge: datalink?.lastVideoPacketAt.map {
                                     Date().timeIntervalSince($0)
                                 })
-                            let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(hadVideo: hadVideo)
+                            let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
+                                hadVideo: hadVideo)
                             if force {
-                                log.info("live: first-picture enable after UDP rebuild (neverGotVideo)")
+                                log.info(
+                                    "live: first-picture enable after UDP rebuild (neverGotVideo)")
                             }
                             sendRecoverEnable(
                                 force: force,
-                                reason: force ? "first-picture after UDP rebuild" : "keepalive after UDP rebuild")
+                                reason: force
+                                    ? "first-picture after UDP rebuild"
+                                    : "keepalive after UDP rebuild")
                         }
                     }
                     datalink?.keepalive()
@@ -2592,31 +2659,50 @@ final class CameraSession {
             let signature =
                 "\(videoPackets).\(rawAccessUnits).\(hasVideoFormat).\(liveViewEnableSends).\(datalink?.receiveErrorCount ?? 0)"
             let now = Date()
-            guard signature != lastFirstPictureSignature
-                || now.timeIntervalSince(lastFirstPictureLogAt) >= 3
+            guard
+                signature != lastFirstPictureSignature
+                    || now.timeIntervalSince(lastFirstPictureLogAt) >= 3
             else { return }
             lastFirstPictureSignature = signature
             lastFirstPictureLogAt = now
-            let videoAge = datalink?.lastVideoPacketAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) } ?? "none"
-            let statusAge = datalink?.lastStatusAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) } ?? "none"
+            let videoAge =
+                datalink?.lastVideoPacketAt.map {
+                    String(format: "%.1f", Date().timeIntervalSince($0))
+                } ?? "none"
+            let statusAge =
+                datalink?.lastStatusAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) }
+                ?? "none"
             let write: String
             switch datalink?.lastWriteLanded {
             case true: write = "ok"
             case false: write = "fail"
             default: write = "—"
             }
-            let auAge = self.datalink?.lastAccessUnitAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) } ?? "none"
-            let rebuildAge = self.datalink?.secondsSinceLastRebuild.map { String(format: "%.1f", $0) } ?? "none"
+            let auAge =
+                self.datalink?.lastAccessUnitAt.map {
+                    String(format: "%.1f", Date().timeIntervalSince($0))
+                } ?? "none"
+            let rebuildAge =
+                self.datalink?.secondsSinceLastRebuild.map { String(format: "%.1f", $0) } ?? "none"
             let hadVideo = FeedWatchdog.hadVideo(
                 videoPackets: self.videoPackets,
-                lastVideoPacketAge: self.datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) })
-            log.info("live: first-picture videoPkts=\(self.videoPackets, privacy: .public) aus=\(self.rawAccessUnits, privacy: .public) lastAU=\(auAge, privacy: .public)s drop=\(self.droppedIncomplete, privacy: .public) rxErr=\(self.datalink?.receiveErrorCount ?? 0, privacy: .public) lastVideo=\(videoAge, privacy: .public)s lastStatus=\(statusAge, privacy: .public)s lastRebuild=\(rebuildAge, privacy: .public)s hadVideo=\(hadVideo ? 1 : 0) format=\(self.hasVideoFormat ? 1 : 0) idrHold=\(self.decoder.awaitingIDR ? 1 : 0) nals=\(self.nalTypes, privacy: .public) enables=\(self.liveViewEnableSends, privacy: .public) tcp=\(self.datalink?.isTcpPokeReady == true ? 1 : 0) flow=\(self.datalink?.isFlowHealthy == true ? 1 : 0) write=\(write, privacy: .public)")
+                lastVideoPacketAge: self.datalink?.lastVideoPacketAt.map {
+                    Date().timeIntervalSince($0)
+                })
+            log.info(
+                "live: first-picture videoPkts=\(self.videoPackets, privacy: .public) aus=\(self.rawAccessUnits, privacy: .public) lastAU=\(auAge, privacy: .public)s drop=\(self.droppedIncomplete, privacy: .public) rxErr=\(self.datalink?.receiveErrorCount ?? 0, privacy: .public) lastVideo=\(videoAge, privacy: .public)s lastStatus=\(statusAge, privacy: .public)s lastRebuild=\(rebuildAge, privacy: .public)s hadVideo=\(hadVideo ? 1 : 0) format=\(self.hasVideoFormat ? 1 : 0) idrHold=\(self.decoder.awaitingIDR ? 1 : 0) nals=\(self.nalTypes, privacy: .public) enables=\(self.liveViewEnableSends, privacy: .public) tcp=\(self.datalink?.isTcpPokeReady == true ? 1 : 0) flow=\(self.datalink?.isFlowHealthy == true ? 1 : 0) write=\(write, privacy: .public)"
+            )
         }
     }
 
     /// Pocket + Nano capture (`0x09/0xa8`). Action live start is uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
         if isBrowsingMedia, reason != "media browse ended" { return false }
+        guard liveEnableGate.begin() else {
+            log.info("live: skip overlapping 0x09/0xa8 (\(reason, privacy: .public))")
+            return false
+        }
+        defer { liveEnableGate.end() }
         guard connectedCamera?.model.usesCapturedLiveEnable != false else {
             log.info(
                 "live: skip 0x09/0xa8 — \(self.connectedCamera?.model.name ?? "camera", privacy: .public) has no captured enable (\(reason, privacy: .public))"
@@ -2656,7 +2742,9 @@ final class CameraSession {
             lastIdrRequest = Date()
             idrHoldEnableCount = 1
             decoder.beginIDRHold()
-            log.info("live: sent 0x09/0xa8 once (path ready, display attached) #\(self.liveViewEnableSends, privacy: .public)")
+            log.info(
+                "live: sent 0x09/0xa8 once (path ready, display attached) #\(self.liveViewEnableSends, privacy: .public)"
+            )
             return
         }
         // Display layout missed the wait (rare). Path is up and handshake already
@@ -2668,9 +2756,13 @@ final class CameraSession {
             lastIdrRequest = Date()
             idrHoldEnableCount = 1
             decoder.beginIDRHold()
-            log.info("live: sent 0x09/0xa8 once after display wait (attached=\(displayAttached)) #\(self.liveViewEnableSends, privacy: .public)")
+            log.info(
+                "live: sent 0x09/0xa8 once after display wait (attached=\(displayAttached)) #\(self.liveViewEnableSends, privacy: .public)"
+            )
         } else {
-            log.info("live: skipped enable pathReady=\(pathReady) attached=\(displayAttached) sent=\(self.liveViewEnableSent)")
+            log.info(
+                "live: skipped enable pathReady=\(pathReady) attached=\(displayAttached) sent=\(self.liveViewEnableSent)"
+            )
         }
     }
 
@@ -2682,19 +2774,22 @@ final class CameraSession {
             now.timeIntervalSince($0) < CameraSoftAP.commandTimeoutWindow
         }
         commandTimeoutsAt.append(now)
-        let videoFresh = datalink?.lastVideoPacketAt.map {
-            now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-        } == true
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
         let downlinkFresh = [datalink?.lastStatusAt, datalink?.lastVideoPacketAt]
             .compactMap { $0 }
             .contains { now.timeIntervalSince($0) < CameraSoftAP.commandTimeoutWindow }
-        guard CameraSoftAP.shouldRebuildAfterCommandTimeouts(
-            timeoutsInWindow: commandTimeoutsAt.count,
-            downlinkFresh: downlinkFresh,
-            videoFresh: videoFresh,
-            rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
-            secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild
-        ) else { return }
+        guard
+            CameraSoftAP.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow: commandTimeoutsAt.count,
+                downlinkFresh: downlinkFresh,
+                videoFresh: videoFresh,
+                rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
+                secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild
+            )
+        else { return }
         if FeedWatchdog.shouldHoldForGOPReset(
             secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
@@ -2733,9 +2828,10 @@ final class CameraSession {
         if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: secondsSinceFocusTrackSet) {
             return false
         }
-        let videoFresh = datalink?.lastVideoPacketAt.map {
-            now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-        } == true
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
         return CameraSoftAP.shouldKeepaliveRebuildUDP(
             flowNeedsRebuild: datalink?.needsRebuild == true,
             rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
@@ -2836,7 +2932,9 @@ final class CameraSession {
             idrHoldEnableCount += 1
             return
         case .rebuildUDP:
-            log.info("live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)")
+            log.info(
+                "live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)"
+            )
             startFeedRecovery { [weak self] in
                 guard let self else { return }
                 try? await self.datalink?.rebuildUDP(reason: "first picture")
@@ -2885,20 +2983,33 @@ final class CameraSession {
         feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
         switch action {
         case .none:
+            if FeedWatchdog.udpReceiveAlive(snap), decoder.isPresentFrozen {
+                let now = Date()
+                if lastFeedFreezeLogAt.map({ now.timeIntervalSince($0) >= 2 }) ?? true {
+                    lastFeedFreezeLogAt = now
+                    log.info(
+                        "feed: freeze lastFrame=\(snap.lastDecodedFrameAge ?? -1, format: .fixed(precision: 1), privacy: .public)s (UDP alive — keep picture)"
+                    )
+                    ControlLiveLog.line(decoder.processedFeed?.debugLine ?? "feed: freeze")
+                }
+            }
             if !FeedWatchdog.udpReceiveAlive(snap),
                 FeedWatchdog.shouldHoldForGOPReset(
                     secondsSinceLastEnable: snap.secondsSinceLastEnable,
                     lastVideoPacketAge: snap.lastVideoPacketAge)
             {
                 log.info(
-                    "feed: hold UDP rebuild — GOP-reset grace lastEnable=\(snap.secondsSinceLastEnable ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s")
+                    "feed: hold UDP rebuild — GOP-reset grace lastEnable=\(snap.secondsSinceLastEnable ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s"
+                )
             } else if !FeedWatchdog.udpReceiveAlive(snap),
                 FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceFocusTrackSet)
             {
                 log.info(
-                    "feed: hold UDP rebuild — AF-C grace lastSet=\(snap.secondsSinceFocusTrackSet ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s")
+                    "feed: hold UDP rebuild — AF-C grace lastSet=\(snap.secondsSinceFocusTrackSet ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s"
+                )
                 ControlLiveLog.line(
-                    "feed: hold UDP rebuild — AF-C grace lastSet=\(String(format: "%.1f", snap.secondsSinceFocusTrackSet ?? -1))s")
+                    "feed: hold UDP rebuild — AF-C grace lastSet=\(String(format: "%.1f", snap.secondsSinceFocusTrackSet ?? -1))s"
+                )
             }
             return
         case .resendLiveViewEnable:
@@ -2929,7 +3040,9 @@ final class CameraSession {
         let decoderReady = decoder.isPresentationReady
         guard FeedWatchdog.shouldSendRecoverEnable(pathReady: pathReady, decoderReady: decoderReady)
         else {
-            log.info("feed: hold enable path=\(pathReady ? 1 : 0) decoder=\(decoderReady ? 1 : 0) reason=\(reason, privacy: .public)")
+            log.info(
+                "feed: hold enable path=\(pathReady ? 1 : 0) decoder=\(decoderReady ? 1 : 0) reason=\(reason, privacy: .public)"
+            )
             return
         }
         if !force, Date().timeIntervalSince(lastIdrRequest) < FeedWatchdog.escalateAfter {
@@ -2941,7 +3054,9 @@ final class CameraSession {
         idrHoldEnableCount += 1
         guard startCapturedLiveView(reason: reason) else { return }
         liveViewEnableSends += 1
-        log.info("live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(self.liveViewEnableSends, privacy: .public)")
+        log.info(
+            "live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(self.liveViewEnableSends, privacy: .public)"
+        )
         ControlLiveLog.line(
             "feed: recover 0x09/0xa8 reason=\(reason) #\(liveViewEnableSends)")
     }
@@ -2951,6 +3066,8 @@ final class CameraSession {
         feedWatchdog = FeedWatchdog()
         feedRecoveryTask?.cancel()
         feedRecoveryTask = nil
+        lastFeedFreezeLogAt = nil
+        liveEnableGate.end()
     }
 
     private func resetLinkHealthMeasurements() {
@@ -2999,7 +3116,7 @@ final class CameraSession {
             let audio = audioRefreshPending
             let glamour = glamourClearPending
             let focus = focusTrackPending
-            if (audio || glamour || focus), !isBrowsingMedia {
+            if audio || glamour || focus, !isBrowsingMedia {
                 audioRefreshPending = false
                 glamourClearPending = false
                 focusTrackPending = false
@@ -3544,7 +3661,8 @@ final class CameraSession {
     private func scheduleStatusFlush() {
         guard statusFlushTask == nil else { return }
         statusFlushTask = Task { @MainActor in
-            let remaining = LiveChromeThrottle.statusInterval
+            let remaining =
+                LiveChromeThrottle.statusInterval
                 - (CFAbsoluteTimeGetCurrent() - lastStatusMutation)
             if remaining > 0 {
                 try? await Task.sleep(for: .seconds(remaining))
@@ -3596,7 +3714,9 @@ final class CameraSession {
             keychainPassword: keychain?.password
         )
         if let ssid = resolved.ssid, ssidBelongsToAnotherBody(ssid, camera: camera) {
-            log.info("creds: dropping \(resolved.source, privacy: .public) SSID \(ssid, privacy: .public) — other body")
+            log.info(
+                "creds: dropping \(resolved.source, privacy: .public) SSID \(ssid, privacy: .public) — other body"
+            )
             return KnownWifi(ssid: nil, password: nil, source: "none", skipBle: false)
         }
         return KnownWifi(
@@ -3657,7 +3777,9 @@ final class CameraSession {
     private func wifiCredsAfterPairing(_ camera: FoundCamera) async throws -> (String, String) {
         let known = resolvedWifiCreds(for: camera)
         if known.skipBle, let ssid = known.ssid, let pass = known.password {
-            log.info("creds: skipping BLE GetSSID/GetPassword — \(known.source, privacy: .public) SSID \(ssid, privacy: .public)")
+            log.info(
+                "creds: skipping BLE GetSSID/GetPassword — \(known.source, privacy: .public) SSID \(ssid, privacy: .public)"
+            )
             return (ssid, pass)
         }
 
@@ -3668,7 +3790,9 @@ final class CameraSession {
 
         let ssid: String
         if let stored = known.ssid, !stored.isEmpty, known.password == nil {
-            log.info("creds: skipping GetSSID — using \(known.source, privacy: .public) SSID \(stored, privacy: .public)")
+            log.info(
+                "creds: skipping GetSSID — using \(known.source, privacy: .public) SSID \(stored, privacy: .public)"
+            )
             ssid = stored
         } else {
             do {
@@ -3708,7 +3832,8 @@ final class CameraSession {
             throw Fail.disconnectedDuring("GetPassword")
         } catch {
             if let pass = known.password, !pass.isEmpty {
-                log.info("creds: GetPassword refused — using \(known.source, privacy: .public) password")
+                log.info(
+                    "creds: GetPassword refused — using \(known.source, privacy: .public) password")
                 return (ssid, pass)
             }
             throw Fail.mimoSession
@@ -3718,8 +3843,10 @@ final class CameraSession {
     /// Ask until the camera returns a non-empty Wi-Fi string. First-time pairing leaves the
     /// AP down for a few seconds; a single 8 s wait mapped that to a vague Fail.
     /// 1-byte / `0xE0…0xEF` is a refuse (Mimo still holding the AP) — use cache or fail now.
-    private func readWifiString(name: String, set: UInt8, cmd: UInt8, cached: String?,
-                                send: () -> Void) async throws -> String {
+    private func readWifiString(
+        name: String, set: UInt8, cmd: UInt8, cached: String?,
+        send: () -> Void
+    ) async throws -> String {
         let holdKey = UInt16(set) << 8 | UInt16(cmd)
         let deadline = Date().addingTimeInterval(12)
         var last: Error = Fail.commandTimeout(name)
@@ -3741,7 +3868,9 @@ final class CameraSession {
                 // 1-byte or 0xE0–0xEF: camera refused. Retrying the same GET will not help.
                 if frame.payload.count <= 1 || (0xE0...0xEF).contains(status) {
                     if let cached, !cached.isEmpty {
-                        log.info("creds: \(name, privacy: .public) status=\(status) (\(frame.payload.count)B) — using cached value")
+                        log.info(
+                            "creds: \(name, privacy: .public) status=\(status) (\(frame.payload.count)B) — using cached value"
+                        )
                         return cached
                     }
                     throw Fail.credsRefused(name, status)
@@ -3774,7 +3903,9 @@ final class CameraSession {
 
     enum Fail: LocalizedError {
         case creds, timeout, pairingTimeout, disconnected
-        case commandTimeout(String), credsEmpty(String), disconnectedDuring(String)
+        case commandTimeout(String)
+        case credsEmpty(String)
+        case disconnectedDuring(String)
         case credsRefused(String, UInt8)
         case mimoSession
         case staleSoftAP
@@ -3785,7 +3916,8 @@ final class CameraSession {
             case .timeout: "the camera stopped responding"
             case .pairingTimeout: "pairing timed out — tap Approve on the camera if it asked"
             case .disconnected: "the camera disconnected"
-            case .commandTimeout(let name): "\(name) timed out — camera didn't reply (AP still coming up?)"
+            case .commandTimeout(let name):
+                "\(name) timed out — camera didn't reply (AP still coming up?)"
             case .credsEmpty(let name): "\(name) came back empty — camera AP not up yet"
             case .disconnectedDuring(let name): "the camera disconnected while reading \(name)"
             case .credsRefused(let name, let status):

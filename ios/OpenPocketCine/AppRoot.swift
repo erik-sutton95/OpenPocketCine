@@ -21,6 +21,9 @@ final class AppModel {
     var keepScreenAwake: Bool = OperatorPrefs.keepScreenAwake {
         didSet { OperatorPrefs.keepScreenAwake = keepScreenAwake }
     }
+    var cacheFullResolution: Bool = OperatorPrefs.cacheFullResolution {
+        didSet { OperatorPrefs.cacheFullResolution = cacheFullResolution }
+    }
     var recordConfirmationEnabled: Bool = OperatorPrefs.recordConfirmationEnabled {
         didSet { OperatorPrefs.recordConfirmationEnabled = recordConfirmationEnabled }
     }

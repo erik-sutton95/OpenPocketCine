@@ -11,6 +11,7 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
+import com.opencapture.openpocketcine.feed.SerialSessionGate
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
@@ -108,6 +109,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var rawAccessUnits = 0
     private var lastIdrRequest = 0L
     private var liveViewEnableSends = 0
+    private val liveEnableGate = SerialSessionGate()
     private var idrHoldEnableCount = 0
     private var firstPictureSettled = false
     private var focusTrackPending = false
@@ -1004,30 +1006,38 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun sendCapturedLiveView(reason: String): Boolean {
         if (isBrowsingMedia && reason != "media browse ended") return false
-        val camera = connectedCamera
-        val receiver = liveViewEnableReceiver(camera)
-        // Handbook: do not send `0x02/0x0c` to start live view. Gallery leftover
-        // is stray-playback's job. Unconditional exit sat on videoPkts=0.
-        if (LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(_status.value.inPlayback)) {
-            datalink?.exitPlayback()
+        if (!liveEnableGate.begin()) {
+            Log.i(TAG, "live: skip overlapping 0x09/0xa8 ($reason)")
+            return false
         }
-        val nanoGate = usesNanoLiveViewGate(camera)
-        if (nanoGate) datalink?.sendNanoGate(start = true)
-        val prepare = LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
-        if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
-        datalink?.startLiveView(receiver)
-        val now = SystemClock.elapsedRealtime()
-        lastIdrRequest = now
-        liveViewEnableSends += 1
-        if (!decoder.awaitingIdr) idrHoldEnableCount = 0
-        decoder.beginIDRHold()
-        idrHoldEnableCount += 1
-        Log.i(
-            TAG,
-            "live: ${if (prepare) "0x02/0x68 08 then " else ""}" +
-                "0x09/0xa8 rcv=0x${receiver.toString(16)} ($reason) #$liveViewEnableSends",
-        )
-        return true
+        try {
+            val camera = connectedCamera
+            val receiver = liveViewEnableReceiver(camera)
+            // Handbook: do not send `0x02/0x0c` to start live view. Gallery leftover
+            // is stray-playback's job. Unconditional exit sat on videoPkts=0.
+            if (LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(_status.value.inPlayback)) {
+                datalink?.exitPlayback()
+            }
+            val nanoGate = usesNanoLiveViewGate(camera)
+            if (nanoGate) datalink?.sendNanoGate(start = true)
+            val prepare = LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
+            if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
+            datalink?.startLiveView(receiver)
+            val now = SystemClock.elapsedRealtime()
+            lastIdrRequest = now
+            liveViewEnableSends += 1
+            if (!decoder.awaitingIdr) idrHoldEnableCount = 0
+            decoder.beginIDRHold()
+            idrHoldEnableCount += 1
+            Log.i(
+                TAG,
+                "live: ${if (prepare) "0x02/0x68 08 then " else ""}" +
+                    "0x09/0xa8 rcv=0x${receiver.toString(16)} ($reason) #$liveViewEnableSends",
+            )
+            return true
+        } finally {
+            liveEnableGate.end()
+        }
     }
 
     private fun liveViewEnableReceiver(camera: FoundCamera?): Int {

@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine.media
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.opencapture.openpocketcine.OperatorPrefs
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -51,6 +53,52 @@ class MediaCache(
 
     fun isAvailableOffline(file: MediaFile, cameraId: String): Boolean =
         localPlaybackFile(file, cameraId) != null
+
+    fun cacheGrade(file: MediaFile, cameraId: String): MediaCacheGrade =
+        MediaCacheGrade.resolve(
+            hasOriginal = isDownloaded(file, cameraId),
+            hasProxy = localProxyFile(file, cameraId) != null,
+        )
+
+    fun colorStoreFile(cameraId: String): File = File(cacheRoot(cameraId), "color.json")
+
+    fun shotColor(path: String, cameraId: String, context: Context? = null): Int {
+        migrateLegacyShotColors(cameraId, context)
+        val map = loadColorMap(cameraId)
+        return map.optInt(path, -1)
+    }
+
+    fun rememberShotColor(path: String, colorMode: Int, cameraId: String) {
+        if (colorMode < 0) return
+        val map = loadColorMap(cameraId)
+        map.put(path, colorMode)
+        persistColorMap(map, cameraId)
+    }
+
+    private fun loadColorMap(cameraId: String): JSONObject {
+        val dest = colorStoreFile(cameraId)
+        if (!dest.isFile) return JSONObject()
+        return runCatching { JSONObject(dest.readText()) }.getOrDefault(JSONObject())
+    }
+
+    private fun persistColorMap(map: JSONObject, cameraId: String) {
+        val dest = colorStoreFile(cameraId)
+        dest.parentFile?.mkdirs()
+        dest.writeText(map.toString())
+    }
+
+    private fun migrateLegacyShotColors(cameraId: String, context: Context?) {
+        val ctx = context ?: return
+        val raw = OperatorPrefs.legacyClipShotColorJson(ctx) ?: return
+        val map = loadColorMap(cameraId)
+        val keys = raw.keys()
+        while (keys.hasNext()) {
+            val path = keys.next()
+            if (!map.has(path)) map.put(path, raw.optInt(path, -1))
+        }
+        persistColorMap(map, cameraId)
+        OperatorPrefs.clearLegacyClipShotColor(ctx)
+    }
 
     fun persistCatalog(files: List<MediaFile>, cameraId: String) {
         val dest = catalogFile(cameraId)

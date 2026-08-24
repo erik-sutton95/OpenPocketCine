@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.lut.ClipColorProfile
 import com.opencapture.openpocketcine.session.DumlFrame
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.CoroutineScope
@@ -133,6 +134,34 @@ class MediaLibraryController(
 
     fun localFile(file: MediaFile): File? = cache.existingFile(cache.fileCache(cameraId, file))
 
+    fun cacheGrade(file: MediaFile): MediaCacheGrade = cache.cacheGrade(file, cameraId)
+
+    /** Shot color for Auto LUT. Never the LRF/XRF sidecar (Rec.709 even on D-Log2). */
+    fun fetchShotColor(file: MediaFile): Int {
+        localFile(file)?.let { original ->
+            val mode = ClipColorProfile.shotColorFromFile(original, file.path)
+            if (mode >= 0) {
+                cache.rememberShotColor(file.path, mode, cameraId)
+                return mode
+            }
+        }
+        val cached = cache.shotColor(file.path, cameraId, appContext)
+        if (cached >= 0) return cached
+        if (!isLive) return -1
+        return try {
+            val range = ClipColorProfile.httpRange(file.sizeBytes)
+            val cap = ClipColorProfile.FILE_TAIL_BYTES * 3
+            val (data, storage) =
+                MediaTransfer.fetchRange(resolvedStorage(file), file.path, range, cap)
+            rememberStorage(storage, file.path)
+            val mode = ClipColorProfile.colorModeFromMp4(data)
+            if (mode >= 0) cache.rememberShotColor(file.path, mode, cameraId)
+            mode
+        } catch (_: Exception) {
+            -1
+        }
+    }
+
     fun thumbnailFile(file: MediaFile): File? = cache.existingFile(cache.thumbnailFile(cameraId, file))
 
     fun localPlaybackFile(file: MediaFile): File? = cache.localPlaybackFile(file, cameraId)
@@ -226,6 +255,8 @@ class MediaLibraryController(
             }
             if (cache.existingFile(dest) == null) throw MediaTransferError.BadResponse
             rememberStorage(storage, file.path)
+            val mode = ClipColorProfile.shotColorFromFile(dest, file.path)
+            if (mode >= 0) cache.rememberShotColor(file.path, mode, cameraId)
             finishProgress(file.path)
         } catch (_: Exception) {
             clearProgress(file.path)

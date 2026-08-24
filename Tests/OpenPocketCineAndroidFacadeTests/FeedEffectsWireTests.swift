@@ -7,6 +7,7 @@ import Testing
 struct FeedEffectsWireTests {
     @Test
     func assistScalarsMapDLog2HighlightToLiveTapCeiling() {
+        ScopeExposureCeiling.reset()
         let scalars = FeedEffectsWire.assistScalars(
             colorModeCode: Int(ColorMode.dLog2.rawValue),
             iso: 1600,

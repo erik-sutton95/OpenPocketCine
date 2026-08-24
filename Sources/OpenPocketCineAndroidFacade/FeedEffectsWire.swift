@@ -63,12 +63,12 @@ public enum FeedEffectsWire {
     ) -> [Float] {
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
         let highlight = ScopeDisplayScale.signalNative(
-            monitorPercent: highlightIRE, transfer: transfer)
+            monitorPercent: highlightIRE, transfer: transfer, iso: iso)
         let half = LiveZebra.midtoneHalfWidthIRE
         let lo = ScopeDisplayScale.signalNative(
-            monitorPercent: midtoneIRE - half, transfer: transfer)
+            monitorPercent: midtoneIRE - half, transfer: transfer, iso: iso)
         let hi = ScopeDisplayScale.signalNative(
-            monitorPercent: midtoneIRE + half, transfer: transfer)
+            monitorPercent: midtoneIRE + half, transfer: transfer, iso: iso)
         return [
             Float(highlight),
             Float((lo + hi) * 0.5),

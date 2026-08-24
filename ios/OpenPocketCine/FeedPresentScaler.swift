@@ -11,7 +11,6 @@ import os
 final class FeedPresentScaler {
     private let device: MTLDevice
     private let bilinear: MPSImageBilinearScale
-    private let lanczos: MPSImageLanczosScale
     private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "feed-upscale")
 
     #if canImport(MetalFX)
@@ -38,7 +37,6 @@ final class FeedPresentScaler {
     init(device: MTLDevice) {
         self.device = device
         bilinear = MPSImageBilinearScale(device: device)
-        lanczos = MPSImageLanczosScale(device: device)
     }
 
     /// Encodes the present-fit (and Super Res / MetalFX when selected) into `target`.
@@ -74,13 +72,14 @@ final class FeedPresentScaler {
         var transform = Self.mpsFitTransform(
             sourceWidth: source.width, sourceHeight: source.height,
             targetWidth: target.width, targetHeight: target.height)
-        let scaler: MPSImageScale =
-            FeedUpscaleSwitch.rendererReadsUpscaler == .off ? bilinear : lanczos
+        // Identity HEVC uses the display layer's hardware scaler. LUT already
+        // ran the cube at feed resolution — Lanczos on every replace frame is
+        // why enabling a look hitchs a 720p proxy. Quality / AI return above.
         withUnsafePointer(to: &transform) { pointer in
-            scaler.scaleTransform = pointer
-            scaler.encode(
+            bilinear.scaleTransform = pointer
+            bilinear.encode(
                 commandBuffer: commandBuffer, sourceTexture: source, destinationTexture: target)
-            scaler.scaleTransform = nil
+            bilinear.scaleTransform = nil
         }
         return true
     }

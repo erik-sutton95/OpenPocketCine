@@ -227,8 +227,8 @@ enum PocketScopeSampler {
     static func monitorCube(for transfer: MonitorTransfer, effects: LiveImageEffects) -> CubeLUT? {
         if let armed = ScopeMonitorLook.cube(from: effects) { return armed }
         switch transfer {
-        case .dlog: return BundledPocketLUT.cube(.dLogToRec709)
-        case .dlog2: return BundledPocketLUT.cube(.dLog2ToRec709)
+        case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
+        case .dlog2: return BundledOfficialDJILUT.cube(.pocketDLog2)
         case .rec709, .hdr: return nil
         }
     }
@@ -370,6 +370,8 @@ final class LiveAssistEngine: @unchecked Sendable {
         var colorMode: ColorMode
         /// False when this result is a late scope bundle. Present already happened.
         var shouldPresent: Bool
+        /// Presentation time for skip-duplicate. `0` means unknown — never skip.
+        var timeNs: Int64
     }
 
     private let queue = DispatchQueue(label: "opv.live-assist", qos: .userInitiated)
@@ -377,6 +379,7 @@ final class LiveAssistEngine: @unchecked Sendable {
     private var pendingBuffer: CVPixelBuffer?
     private var pendingEffects = LiveImageEffects()
     private var pendingTransfer = MonitorTransfer.rec709
+    private var pendingTimeNs: Int64 = 0
     private var pendingCompletion: (@Sendable (Result) -> Void)?
     private var busy = false
     private var nextScopeAt: CFAbsoluteTime = 0
@@ -408,12 +411,14 @@ final class LiveAssistEngine: @unchecked Sendable {
         _ buffer: CVPixelBuffer,
         effects: LiveImageEffects? = nil,
         transfer: MonitorTransfer? = nil,
+        timeNs: Int64 = 0,
         completion: @escaping @Sendable (Result) -> Void
     ) {
         queue.async { [self] in
-            pendingBuffer = buffer
+            pendingBuffer = FeedWorkingRaster.prepared(buffer)
             if let effects { pendingEffects = effects }
             if let transfer { pendingTransfer = transfer }
+            pendingTimeNs = timeNs
             pendingCompletion = completion
             drain()
         }
@@ -422,6 +427,7 @@ final class LiveAssistEngine: @unchecked Sendable {
     func reset() {
         queue.async { [self] in
             pendingBuffer = nil
+            pendingTimeNs = 0
             pendingCompletion = nil
             busy = false
             nextScopeAt = 0
@@ -463,6 +469,7 @@ final class LiveAssistEngine: @unchecked Sendable {
         pendingBuffer = nil
         var fx = pendingEffects
         var transfer = pendingTransfer
+        let timeNs = pendingTimeNs
         fx.colorMode = transfer.colorMode
         busy = true
 
@@ -530,7 +537,8 @@ final class LiveAssistEngine: @unchecked Sendable {
                 bundle: nil,
                 transfer: transfer,
                 colorMode: transfer.colorMode,
-                shouldPresent: true))
+                shouldPresent: true,
+                timeNs: timeNs))
 
         if let packed {
             let tapMin = LiveFrameTap.minRGB(packed.bytes)
@@ -581,7 +589,8 @@ final class LiveAssistEngine: @unchecked Sendable {
                     bundle: sampled,
                     transfer: transfer,
                     colorMode: transfer.colorMode,
-                    shouldPresent: false))
+                    shouldPresent: false,
+                    timeNs: timeNs))
         }
 
         queue.async { [self] in

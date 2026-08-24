@@ -405,9 +405,28 @@
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packImportedLut")
     public func swiftCorePackImportedLut(
-        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, utf8: jbyteArray?
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, utf8: jbyteArray?,
+        exposureStops: jdouble, colorMode: jint
     ) -> jbyteArray? {
-        guard let packed = LUTLibraryWire.packedImportedLUT(utf8: swiftBytes(env, utf8) ?? [])
+        guard
+            let packed = LUTLibraryWire.packedImportedLUT(
+                utf8: swiftBytes(env, utf8) ?? [],
+                exposureStops: Double(exposureStops),
+                colorModeCode: Int(colorMode))
+        else { return nil }
+        return javaByteArray(env, packed)
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_packCreativeLut")
+    public func swiftCorePackCreativeLut(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, title: jstring?,
+        exposureStops: jdouble, colorMode: jint
+    ) -> jbyteArray? {
+        guard
+            let packed = LUTLibraryWire.packedCreativeLook(
+                swiftString(env, title) ?? "",
+                exposureStops: Double(exposureStops),
+                colorModeCode: Int(colorMode))
         else { return nil }
         return javaByteArray(env, packed)
     }

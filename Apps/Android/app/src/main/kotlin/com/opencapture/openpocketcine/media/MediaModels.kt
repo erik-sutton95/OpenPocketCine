@@ -66,6 +66,26 @@ enum class MediaKind {
     }
 }
 
+/** iOS `MediaCacheGrade`. Playback grades the proxy; Share needs the original. */
+enum class MediaCacheGrade {
+    NONE,
+    PROXY,
+    ORIGINAL,
+    ;
+
+    val isPlayableOffline: Boolean get() = this != NONE
+    val isProxyOnly: Boolean get() = this == PROXY
+
+    companion object {
+        fun resolve(hasOriginal: Boolean, hasProxy: Boolean): MediaCacheGrade =
+            when {
+                hasOriginal -> ORIGINAL
+                hasProxy -> PROXY
+                else -> NONE
+            }
+    }
+}
+
 /** SoftAP HTTP `/v2` paths. Osmosis `PathAddressing` + `StorageRules`. */
 object MediaHTTP {
     const val HOST = "192.168.2.1"
@@ -445,6 +465,8 @@ object MediaLibraryCopy {
     const val DISCONNECTED = "Connect the camera to list clips on the body."
     const val DISCONNECTED_EMPTY_CACHE =
         "Nothing cached on this phone. Connect the camera to list clips on the body."
+    const val PROXY_TAG = "Proxy"
+    const val PROXY_HELP = "720p preview. Connect the camera to share the original."
 }
 
 object MediaOperatorCopy {

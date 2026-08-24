@@ -2,13 +2,13 @@ import OpenPocketViewCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Built-in / DJI / Custom. 50/50 is pinned on the long-press footer so
+/// DJI / Creative / Custom. 50/50 is pinned on the long-press footer so
 /// landscape never hides it under the catalog; the sheet keeps it inline.
 /// `embedded` is the assist-tray form; the sheet wraps the same body.
 struct LUTPicker: View {
     private enum Category: String, CaseIterable {
-        case builtIn = "Built-in"
         case dji = "DJI"
+        case creative = "Creative"
         case custom = "Custom"
     }
 
@@ -16,7 +16,7 @@ struct LUTPicker: View {
     var embedded = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @State private var category: Category = .builtIn
+    @State private var category: Category = .dji
     @State private var importing = false
     @State private var pendingDeletion: String?
     @State private var deletionErrorMessage: String?
@@ -57,10 +57,10 @@ struct LUTPicker: View {
                 guard let next = Category(rawValue: raw), next != category else { return }
                 category = next
                 switch next {
-                case .builtIn:
-                    if !assist.lutSelection.isBuiltIn { assist.selectLUT(.auto) }
                 case .dji:
                     if !assist.lutSelection.isDJI { assist.selectLUT(.djiAuto) }
+                case .creative:
+                    if !assist.lutSelection.isCreative { assist.selectLUT(.creativeMono) }
                 case .custom:
                     break
                 }
@@ -68,8 +68,8 @@ struct LUTPicker: View {
             tabContent
                 .frame(maxWidth: .infinity)
                 .frame(height: contentHeight)
-            // Embedded long-press parks 50/50 on the panel footer so it
-            // stays on screen when the catalog scrolls.
+            // Embedded long-press parks exposure + 50/50 on the panel footer
+            // so landscape never hides them under the catalog.
             if !embedded {
                 LUTSplitComparisonBar(assist: assist)
             }
@@ -84,13 +84,14 @@ struct LUTPicker: View {
         .onAppear {
             if assist.lutSelection.isCustom {
                 category = .custom
-            } else if assist.lutSelection.isDJI {
-                category = .dji
+            } else if assist.lutSelection.isCreative {
+                category = .creative
             } else {
-                category = .builtIn
+                category = .dji
             }
-            assist.syncLUT(
-                to: model.session.status.colorMode,
+            assist.bindLUTPicker(
+                live: model.session.status.colorMode,
+                inPlayback: model.session.status.inPlayback,
                 family: model.session.bodyFamily,
                 cameraName: model.session.connectedCamera?.model.name)
         }
@@ -131,19 +132,19 @@ struct LUTPicker: View {
 
     @ViewBuilder private var tabContent: some View {
         switch category {
-        case .builtIn:
-            catalogTab(
-                cases: LUTSelection.builtInCases,
-                inCatalog: assist.lutSelection.isBuiltIn,
-                fallback: .auto,
-                caption: builtInCaption
-            )
         case .dji:
             catalogTab(
                 cases: LUTSelection.djiCases,
                 inCatalog: assist.lutSelection.isDJI,
                 fallback: .djiAuto,
                 caption: djiCaption
+            )
+        case .creative:
+            catalogTab(
+                cases: LUTSelection.creativeCases,
+                inCatalog: assist.lutSelection.isCreative,
+                fallback: .creativeMono,
+                caption: creativeCaption
             )
         case .custom:
             customTab
@@ -180,27 +181,21 @@ struct LUTPicker: View {
         }
     }
 
-    private var builtInCaption: String {
-        if assist.lutSelection == .auto {
-            return LUTResolver.autoCaption(source: assist.resolvedSource())
-        }
-        if assist.lutSelection == .officialDLog {
-            return "Built-in D-Log look"
-        }
-        if assist.lutSelection == .officialDLog2 {
-            return "Built-in D-Log2 look"
-        }
-        return "App looks for this color / camera"
-    }
-
     private var djiCaption: String {
-        if assist.lutSelection == .djiAuto {
+        if assist.lutSelection == .djiAuto || assist.lutSelection == .auto {
             return LUTResolver.autoCaption(source: assist.resolvedSource())
         }
         if assist.lutSelection.isDJI {
             return "Official DJI Rec.709 cube"
         }
         return "Official DJI looks for this color / camera"
+    }
+
+    private var creativeCaption: String {
+        if assist.lutSelection.isCreative {
+            return LUTResolver.autoCaption(source: assist.resolvedSource())
+        }
+        return "Looks for the displayed picture"
     }
 
     @ViewBuilder private var customTab: some View {
@@ -306,51 +301,102 @@ struct LUTPicker: View {
     }
 }
 
+/// Compact ± stepper for the LUT footer. Sits on the same row as 50/50.
+struct LUTExposureCompensationBar: View {
+    @Bindable var assist: LiveAssistState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            stepButton(
+                "−",
+                enabled: LUTExposureCompensation.canStep(assist.lutExposureStops, by: -0.5)
+            ) {
+                assist.nudgeLUTExposure(-0.5)
+            }
+            Text(LUTExposureCompensation.label(assist.lutExposureStops))
+                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                .foregroundStyle(
+                    assist.lutExposureStops == 0 ? LiveDesign.text : LiveDesign.accent
+                )
+                .frame(minWidth: 44)
+                .accessibilityLabel(LUTAssist.exposureTitle)
+                .accessibilityValue(LUTExposureCompensation.label(assist.lutExposureStops))
+                .accessibilityHint(LUTAssist.exposureHelp)
+            stepButton(
+                "+",
+                enabled: LUTExposureCompensation.canStep(assist.lutExposureStops, by: 0.5)
+            ) {
+                assist.nudgeLUTExposure(0.5)
+            }
+        }
+        .sensoryFeedback(.selection, trigger: assist.lutExposureStops)
+    }
+
+    private func stepButton(_ title: String, enabled: Bool, action: @escaping () -> Void)
+        -> some View
+    {
+        Button(action: action) {
+            Text(title)
+                .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.muted)
+                .frame(width: 32, height: 32)
+                .background(LiveDesign.glassBright, in: Capsule())
+        }
+        .buttonStyle(.zcTapTarget)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .accessibilityLabel(title == "+" ? "Add half stop" : "Subtract half stop")
+    }
+}
+
 /// OpenZCine 50/50: off-by-default toggle; orientation chips only while armed.
 /// Labels are `Left / Right` and `Top / Bottom`, not Vertical/Horizontal.
 ///
-/// The long-press panel renders this as a pinned footer so opening LUT never
-/// hides the control under a catalog scroll.
+/// Exposure stepper shares this row. Orientation chips drop under 50/50 when
+/// armed so the catalog keeps the height.
 struct LUTSplitComparisonBar: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                assist.splitComparison.toggle()
-                if assist.splitComparison {
-                    if !assist.lutArmed { assist.armLastLUT() }
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                LUTExposureCompensationBar(assist: assist)
+                Spacer(minLength: 8)
+                Button {
+                    assist.splitComparison.toggle()
+                    if assist.splitComparison {
+                        if !assist.lutArmed { assist.armLastLUT() }
+                    }
+                    assist.persist()
+                } label: {
+                    HStack(spacing: 8) {
+                        (assist.splitComparison ? OpcIcon.circleCheck : OpcIcon.circle)
+                            .frame(width: 16, height: 16)
+                            .foregroundStyle(
+                                assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
+                        Text("50/50")
+                            .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(LiveDesign.text)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(
+                        assist.splitComparison
+                            ? LiveDesign.accentDim : LiveDesign.glassBright,
+                        in: Capsule())
                 }
-                assist.persist()
-            } label: {
-                HStack(spacing: 8) {
-                    (assist.splitComparison ? OpcIcon.circleCheck : OpcIcon.circle)
-                        .frame(width: 16, height: 16)
-                        .foregroundStyle(
-                            assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
-                    Text("50/50")
-                        .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LiveDesign.text)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(
-                    assist.splitComparison
-                        ? LiveDesign.accentDim : LiveDesign.glassBright,
-                    in: Capsule())
+                .buttonStyle(.zcTapTarget)
             }
-            .buttonStyle(.zcTapTarget)
             if assist.splitComparison {
                 LUTSegmentedButtons(
                     items: LUTSplitOrientation.allCases.map(\.rawValue),
-                    selected: LUTSplitOrientation.current(vertical: assist.splitVertical).rawValue
+                    selected: LUTSplitOrientation.current(vertical: assist.splitVertical)
+                        .rawValue
                 ) { raw in
                     guard let next = LUTSplitOrientation(rawValue: raw) else { return }
                     assist.splitVertical = next.isVertical
                     assist.persist()
                 }
-            } else {
-                Spacer(minLength: 0)
             }
         }
     }

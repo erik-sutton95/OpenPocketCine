@@ -569,62 +569,51 @@ extension LiveMonitorLayout {
 
 extension LiveMonitorLayout {
     /// On-feed raster. Assists and the pinch well sit here.
-    /// Zoom and the gimbal stick use the cinema `feed` well so a vertical
-    /// Pocket picture does not drag them inward with the pillarbox.
+    /// The gimbal cluster (zoom + stick) uses the cinema `feed` well so a
+    /// vertical Pocket picture does not drag it inward with the pillarbox.
     var onFeed: CGRect { picture.width > 1 ? picture : feed }
 
-    var zoomButton: CGRect {
-        let size = LiveChromeMetrics.zoomButtonSize
-        let inset = LiveChromeMetrics.zoomChipInset
-        let clear: CGFloat = 8
-        let well = feed
-        if record.midX >= well.midX {
-            let trailing = min(well.maxX - inset, record.minX - clear)
-            return CGRect(
-                x: trailing - size,
-                y: record.midY - size / 2,
-                width: size,
-                height: size
-            )
+    /// Stick + zoom (+ reserved gimbal controls). Trailing-bottom of the cinema
+    /// well — not glued to record. Same cluster in every orientation.
+    var gimbalCluster: GimbalCluster {
+        let inset = Double(LiveChromeMetrics.gimbalStickInset)
+        let gap = Double(LiveChromeMetrics.gimbalStickGap)
+        var barTop = Double.greatestFiniteMagnitude
+        if showsBottomBars {
+            if assist.height > 1 { barTop = min(barTop, Double(assist.minY)) }
+            if capture.height > 1 { barTop = min(barTop, Double(capture.minY)) }
         }
-        let leading = max(well.minX + inset, record.maxX + clear)
-        return CGRect(
-            x: leading,
-            y: record.midY - size / 2,
-            width: size,
-            height: size
+        let well = MonitorLayoutRegion(
+            x: Double(feed.minX), y: Double(feed.minY),
+            width: Double(feed.width), height: Double(feed.height))
+        let floorY =
+            barTop < Double.greatestFiniteMagnitude
+            ? min(Double(feed.maxY) - inset, barTop - gap)
+            : Double(feed.maxY) - inset
+        let avoid =
+            record.width > 1
+            ? MonitorLayoutRegion(
+                x: Double(record.minX), y: Double(record.minY),
+                width: Double(record.width), height: Double(record.height))
+            : nil
+        return GimbalCluster.inTrailingBottom(
+            well: well,
+            floorY: floorY,
+            canvasMaxY: Double(viewport.height - max(0, safeArea.bottom)),
+            avoid: avoid,
+            stickSize: Double(LiveChromeMetrics.gimbalStickSize),
+            zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
+            gap: gap,
+            inset: inset
         )
     }
 
-    /// Analog stick in the feed's trailing-bottom corner. DISP 1 parks it
-    /// above the capture strip; DISP 2 drops it into the free corner.
-    var gimbalStick: CGRect {
-        let size = LiveChromeMetrics.gimbalStickSize
-        let inset = LiveChromeMetrics.gimbalStickInset
-        let gap = LiveChromeMetrics.gimbalStickGap
-        var barTop = CGFloat.greatestFiniteMagnitude
-        if showsBottomBars {
-            if assist.height > 1 { barTop = min(barTop, assist.minY) }
-            if capture.height > 1 { barTop = min(barTop, capture.minY) }
-        }
-        let well = feed
-        let floorY =
-            barTop < CGFloat.greatestFiniteMagnitude
-            ? min(well.maxY - inset, barTop - gap)
-            : well.maxY - inset
-        var x = well.maxX - inset - size
-        var y = floorY - size
-        x = min(max(x, well.minX + inset), max(well.minX, well.maxX - inset - size))
-        y = min(max(y, well.minY + inset), max(well.minY, well.maxY - inset - size))
-        var rect = CGRect(x: x, y: y, width: size, height: size)
-        let zoom = zoomButton
-        if zoom.width > 1, rect.intersects(zoom.insetBy(dx: -gap, dy: -gap)) {
-            rect.origin.y = zoom.maxY + gap
-        }
-        if record.width > 1, rect.intersects(record.insetBy(dx: -gap, dy: -gap)) {
-            rect.origin.x = record.minX - gap - size
-        }
-        return rect
+    var zoomButton: CGRect { Self.cgRect(gimbalCluster.zoom) }
+
+    var gimbalStick: CGRect { Self.cgRect(gimbalCluster.stick) }
+
+    private static func cgRect(_ region: MonitorLayoutRegion) -> CGRect {
+        CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
     }
 
     /// OpenZCine recenter key. Landscape: just past the battery, toward the feed,

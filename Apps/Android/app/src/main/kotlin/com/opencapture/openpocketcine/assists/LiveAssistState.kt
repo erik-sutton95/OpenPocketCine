@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
+import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -65,6 +66,10 @@ class LiveAssistState(
 
     /** iOS `splitVertical` — true is Left / Right, false is Top / Bottom. */
     var splitVertical by mutableStateOf(true)
+        private set
+
+    /** iOS `lutExposureStops` — input-referred half-stops before the cube. */
+    var lutExposureStops by mutableDoubleStateOf(0.0)
         private set
 
     var clean by mutableStateOf(false)
@@ -184,6 +189,13 @@ class LiveAssistState(
         splitComparison = enabled
         splitVertical = vertical
         if (enabled) armLut()
+        persist()
+    }
+
+    fun nudgeLutExposure(delta: Double) {
+        val next = LutExposureCompensation.stepped(lutExposureStops, delta)
+        if (next == lutExposureStops) return
+        lutExposureStops = next
         persist()
     }
 
@@ -422,6 +434,7 @@ class LiveAssistState(
             .put("zebraHighlightColor", zebraHighlightColor.label)
             .put("zebraMidtoneColor", zebraMidtoneColor.label)
             .put("lutArmed", lutOn)
+            .put("lutExposureStops", lutExposureStops)
             .put("splitComparison", splitComparison)
             .put("splitVertical", splitVertical)
             .put("crushClipCompensation", crushClipCompensation.raw)
@@ -470,6 +483,7 @@ class LiveAssistState(
         crosshair = LiveAssistTool.CROSS in on
         mirror = LiveAssistTool.MIRROR in on
         lutOn = if (obj.has("lutArmed")) obj.optBoolean("lutArmed", true) else LiveAssistTool.LUT in on
+        lutExposureStops = LutExposureCompensation.snap(obj.optDouble("lutExposureStops", 0.0))
         splitComparison = obj.optBoolean("splitComparison", false)
         splitVertical = obj.optBoolean("splitVertical", true)
         guideAspect = GuideAspect.fromPersisted(obj.optString("guideAspect", GuideAspect.CINEMA.label))

@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.openpocketcine.media.MediaLibraryCopy
 import com.opencapture.openpocketcine.session.CameraCommands
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -219,6 +220,8 @@ class OperatorSetupContractTest {
 
     @Test
     fun keepScreenAwakeCopyNamesAndroid() {
+        assertTrue(SettingsHelpCopy.CACHE_FULL_RESOLUTION.contains("720p proxy"))
+        assertEquals("Proxy", MediaLibraryCopy.PROXY_TAG)
         assertTrue(SettingsHelpCopy.KEEP_SCREEN_AWAKE.contains("Android may still dim"))
         assertFalse(SettingsHelpCopy.KEEP_SCREEN_AWAKE.contains("iOS may still dim"))
     }

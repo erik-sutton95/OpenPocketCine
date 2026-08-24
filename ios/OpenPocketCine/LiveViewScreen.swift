@@ -663,38 +663,34 @@ struct LiveViewScreen: View {
         let feed = MonitorLayoutRegion(
             x: Double(picture.minX), y: Double(picture.minY),
             width: Double(picture.width), height: Double(picture.height))
-        let stick: MonitorLayoutRegion
-        let zoom: MonitorLayoutRegion
+        let cluster: GimbalCluster
         if fill {
-            stick = MonitorPortraitLayout.feedGimbalStickTrailing(
-                feed: feed,
-                size: Double(LiveChromeMetrics.gimbalStickSize),
-                bottomClearance: Double(bottomClearance),
-                trailingInset: Double(LiveChromeMetrics.gimbalStickInset)
-            )
-            zoom = MonitorPortraitLayout.feedZoomChipAbove(
-                feed: feed,
-                stick: stick,
-                size: Double(LiveChromeMetrics.zoomButtonSize),
-                gap: Double(LiveChromeMetrics.gimbalStickGap)
+            cluster = GimbalCluster.inTrailingBottom(
+                well: feed,
+                floorY: Double(picture.maxY - bottomClearance),
+                canvasMaxY: Double(picture.maxY),
+                stickSize: Double(LiveChromeMetrics.gimbalStickSize),
+                zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
+                gap: Double(LiveChromeMetrics.gimbalStickGap),
+                inset: Double(LiveChromeMetrics.gimbalStickInset)
             )
         } else {
-            let cluster = MonitorPortraitLayout.outsideTrailingCorner(
-                feed: MonitorFeedFrame(
-                    x: Double(picture.minX), y: Double(picture.minY),
-                    width: Double(picture.width), height: Double(picture.height)),
+            cluster = GimbalCluster.belowWell(
+                well: feed,
                 floorY: floorY,
                 stickSize: Double(LiveChromeMetrics.gimbalStickSize),
                 zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
                 gap: Double(LiveChromeMetrics.gimbalStickGap),
                 inset: Double(LiveChromeMetrics.gimbalStickInset)
             )
-            stick = cluster.stick
-            zoom = cluster.zoom
         }
         return (
-            CGRect(x: stick.x, y: stick.y, width: stick.width, height: stick.height),
-            CGRect(x: zoom.x, y: zoom.y, width: zoom.width, height: zoom.height)
+            CGRect(
+                x: cluster.stick.x, y: cluster.stick.y, width: cluster.stick.width,
+                height: cluster.stick.height),
+            CGRect(
+                x: cluster.zoom.x, y: cluster.zoom.y, width: cluster.zoom.width,
+                height: cluster.zoom.height)
         )
     }
 
@@ -762,6 +758,7 @@ private struct LiveFeedPane: View {
         }
         .onChange(of: model.session.status.colorMode) { _, mode in
             model.session.decoder.incomingColorMode = mode
+            guard !model.session.status.inPlayback else { return }
             model.assist.syncLUT(
                 to: mode,
                 family: model.session.bodyFamily,

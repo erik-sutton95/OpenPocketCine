@@ -143,6 +143,17 @@ final class CameraMedia {
         return (data, http)
     }
 
+    /// Last 2 MiB of the original take — LRF Keys are Rec.709 even for log.
+    func getRange(url: URL, range: String) async throws -> (Data, HTTPURLResponse) {
+        var request = URLRequest(url: url)
+        request.setValue(range, forHTTPHeaderField: "Range")
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 10
+        let (data, response) = try await http.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw MediaTransferError.badResponse }
+        return (data, http)
+    }
+
     /// Existence check that does not pull the body. HEAD first; ranged GET if the
     /// camera rejects HEAD. Cancels as soon as the status line is in.
     func probeExists(url: URL) async -> Bool {
@@ -185,6 +196,58 @@ final class CameraMedia {
 
     func catalogURL(cameraID: String) -> URL {
         cacheRoot(cameraID: cameraID).appendingPathComponent("index.json")
+    }
+
+    func colorStoreURL(cameraID: String) -> URL {
+        cacheRoot(cameraID: cameraID).appendingPathComponent("color.json")
+    }
+
+    func shotColor(for path: String, cameraID: String) -> ColorMode? {
+        migrateLegacyShotColors(cameraID: cameraID)
+        guard let raw = loadColorMap(cameraID: cameraID)[path],
+            let mode = ColorMode(rawValue: UInt8(truncatingIfNeeded: raw))
+        else { return nil }
+        return mode
+    }
+
+    func rememberShotColor(_ color: ColorMode, path: String, cameraID: String) {
+        migrateLegacyShotColors(cameraID: cameraID)
+        var map = loadColorMap(cameraID: cameraID)
+        map[path] = Int(color.rawValue)
+        persistColorMap(map, cameraID: cameraID)
+    }
+
+    private func loadColorMap(cameraID: String) -> [String: Int] {
+        let url = colorStoreURL(cameraID: cameraID)
+        guard let data = try? Data(contentsOf: url),
+            let map = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return [:] }
+        return map
+    }
+
+    private func persistColorMap(_ map: [String: Int], cameraID: String) {
+        let url = colorStoreURL(cameraID: cameraID)
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(map)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            ControlLiveLog.line("media: color store write failed \(error.localizedDescription)")
+        }
+    }
+
+    private func migrateLegacyShotColors(cameraID: String) {
+        let legacyKey = "OpenPocketCine.ClipShotColor"
+        guard let raw = UserDefaults.standard.dictionary(forKey: legacyKey) as? [String: Int],
+            !raw.isEmpty
+        else { return }
+        var map = loadColorMap(cameraID: cameraID)
+        for (path, code) in raw where map[path] == nil {
+            map[path] = code
+        }
+        persistColorMap(map, cameraID: cameraID)
+        UserDefaults.standard.removeObject(forKey: legacyKey)
     }
 
     func persistCatalog(_ files: [MediaFile], cameraID: String) {
@@ -593,6 +656,9 @@ extension CameraSession {
             guard CameraMedia.existingFile(dest) != nil else {
                 throw MediaTransferError.badResponse
             }
+            if let mode = ClipColorProfileIO.shotColor(at: dest, path: file.path) {
+                rememberShotColor(mode, for: file)
+            }
             finishDownloadProgress(file.path)
         } catch {
             mediaDownloadProgress[file.path] = nil
@@ -616,6 +682,56 @@ extension CameraSession {
 
     func localURL(for file: MediaFile) -> URL? {
         CameraMedia.existingFile(mediaFileDest(file))
+    }
+
+    /// Shot color for Auto LUT. Never the LRF/XRF sidecar (Rec.709 even on D-Log2).
+    func fetchOriginalShotColor(for file: MediaFile) async -> ColorMode? {
+        if let url = localURL(for: file),
+            let mode = ClipColorProfileIO.shotColor(at: url, path: file.path)
+        {
+            rememberShotColor(mode, for: file)
+            return mode
+        }
+        if let cached = shotColor(for: file) { return cached }
+        guard canReachCameraMedia else { return nil }
+        let range = ClipColorProfile.httpRange(fileSize: file.sizeBytes)
+        let first = cameraMedia.resolvedStorage(for: file, singleSd: usesSingleSdStorage)
+        let second = first == 0 ? 1 : 0
+        let cap = ClipColorProfile.fileTailBytes * 3
+        for storage in [first, second] {
+            guard let url = MediaHTTP.pathURL(storage: storage, path: file.path) else { continue }
+            do {
+                let (data, response) = try await cameraMedia.getRange(url: url, range: range)
+                guard (200...299).contains(response.statusCode) else { continue }
+                if data.count > cap {
+                    ControlLiveLog.line(
+                        "media: clip color range ignored (\(data.count) bytes) \(file.path)")
+                    continue
+                }
+                if let mode = ClipColorProfile.colorMode(fromMP4: data) {
+                    cameraMedia.rememberStorage(storage, for: file.path)
+                    rememberShotColor(mode, for: file)
+                    return mode
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
+    }
+
+    func shotColor(for file: MediaFile) -> ColorMode? {
+        cameraMedia.shotColor(for: file.path, cameraID: mediaCameraID)
+    }
+
+    func rememberShotColor(_ color: ColorMode, for file: MediaFile) {
+        cameraMedia.rememberShotColor(color, path: file.path, cameraID: mediaCameraID)
+    }
+
+    func cacheGrade(for file: MediaFile) -> MediaCacheGrade {
+        MediaCacheGrade.resolve(
+            hasOriginal: isDownloaded(file),
+            hasProxy: localProxySource(for: file) != nil)
     }
 
     func thumbnailURL(for file: MediaFile) -> URL? {

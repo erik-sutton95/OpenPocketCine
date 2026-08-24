@@ -102,6 +102,8 @@ public struct MonitorLayoutRegion: Equatable, Sendable {
     public let width: Double
     public let height: Double
 
+    public var minX: Double { x }
+    public var minY: Double { y }
     public var maxX: Double { x + width }
     public var maxY: Double { y + height }
     public var midX: Double { x + width / 2 }
@@ -137,6 +139,20 @@ public struct MonitorLayoutRegion: Equatable, Sendable {
             width: width,
             height: height
         )
+    }
+
+    public func offsetBy(dx: Double, dy: Double) -> MonitorLayoutRegion {
+        MonitorLayoutRegion(x: x + dx, y: y + dy, width: width, height: height)
+    }
+
+    public func insetBy(dx: Double, dy: Double) -> MonitorLayoutRegion {
+        MonitorLayoutRegion(
+            x: x + dx, y: y + dy,
+            width: max(0, width - 2 * dx), height: max(0, height - 2 * dy))
+    }
+
+    public func intersects(_ other: MonitorLayoutRegion) -> Bool {
+        x < other.maxX && other.x < maxX && y < other.maxY && other.y < maxY
     }
 }
 

@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -274,10 +275,84 @@ class LiveMonitorLayoutTest {
     }
 
     @Test
+    fun gimbalStickStaysOnCanvasOnIPadMiniLandscape() {
+        LiveChromeMetrics.scale = 1f
+        val layout =
+            LiveMonitorLayout.fit(
+                viewportWidth = 1133f,
+                viewportHeight = 744f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+            )
+        assertTrue(layout.isWidthConstrained)
+        assertGimbalStickOnCanvas(layout)
+
+        val clean =
+            LiveMonitorLayout.fit(
+                viewportWidth = 1133f,
+                viewportHeight = 744f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = false,
+            )
+        assertTrue(clean.isWidthConstrained)
+        assertGimbalStickOnCanvas(clean)
+    }
+
+    @Test
+    fun gimbalStickStaysOnCanvasOnIPadA16Landscape() {
+        LiveChromeMetrics.scale = 1f
+        val layout =
+            LiveMonitorLayout.fit(
+                viewportWidth = 1180f,
+                viewportHeight = 820f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+            )
+        assertTrue(layout.isWidthConstrained)
+        assertGimbalStickOnCanvas(layout)
+    }
+
+    @Test
     fun bottomBandKeepsTheThirdsSplitWhenCaptureFits() {
         val split = bottomBarSplit(barsWidth = 600f, gap = 12f, captureHug = 800f)
         assertEquals((600f - 12f) / 3f, split.assistWidth, 0.05f)
         assertEquals((600f - 12f) * 2f / 3f, split.captureWidth, 0.05f)
+    }
+}
+
+private fun assertGimbalStickOnCanvas(layout: LiveMonitorLayout) {
+    val stick = layout.gimbalStick
+    val inset = LiveChromeMetrics.STICK_INSET
+    assertEquals(LiveChromeMetrics.STICK, stick.width, 0.05f)
+    assertTrue(stick.minX >= layout.feed.minX)
+    assertTrue(stick.minY >= layout.feed.minY)
+    assertTrue(stick.maxY <= layout.viewportHeight - inset + 0.05f)
+    assertTrue(stick.maxX <= layout.viewportWidth + 0.05f)
+    assertTrue(stick.maxY <= layout.feed.maxY + 0.05f)
+    assertFalse(stick.intersects(layout.zoomButton.inset(-1f, -1f)), "gimbal stick stays clear of the zoom chip")
+    assertFalse(stick.intersects(layout.record.inset(-1f, -1f)), "gimbal stick stays clear of record")
+    val zoom = layout.zoomButton
+    val gap = LiveChromeMetrics.STICK_GAP
+    assertEquals(stick.maxX, zoom.maxX, 0.2f)
+    assertEquals(stick.minY - gap, zoom.maxY, 0.2f)
+    assertFalse(zoom.intersects(layout.record.inset(-1f, -1f)), "zoom stays in the gimbal cluster, not on record")
+    if (layout.isWidthConstrained) {
+        assertEquals(layout.feed.maxX - inset, stick.maxX, 0.5f)
+        if (layout.record.width > 1f && layout.record.midX >= layout.feed.midX) {
+            assertTrue(stick.maxY + gap <= layout.record.minY + 0.05f)
+        }
+    }
+    if (layout.showsBottomBars) {
+        assertTrue(stick.maxY <= layout.capture.minY + 0.05f)
     }
 }
 

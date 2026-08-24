@@ -24,7 +24,7 @@ class LutLookResolverTest {
     @Test
     fun `built-in auto follows pocket log`() {
         assertEquals(
-            LutLookSource.Asset("DJI_Pocket4P_DLog2_Rec709_33.cube"),
+            LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
             LutLookResolver.resolve(
                 LutCatalog.AUTO,
                 lutOn = true,
@@ -34,7 +34,7 @@ class LutLookResolverTest {
             ),
         )
         assertEquals(
-            LutLookSource.Asset("DJI_Pocket4P_DLog_Rec709_33.cube"),
+            LutLookSource.Asset("DJI_Official_Pocket4P_DLog_Rec709_33.cube"),
             LutLookResolver.resolve(
                 LutCatalog.AUTO,
                 lutOn = true,
@@ -58,7 +58,7 @@ class LutLookResolverTest {
     @Test
     fun `built-in auto leaves nano ungraded`() {
         assertEquals(
-            LutLookSource.Off,
+            LutLookSource.Asset("DJI_Official_Nano_DLogM_Rec709_33.cube"),
             LutLookResolver.resolve(
                 LutCatalog.AUTO,
                 lutOn = true,
@@ -144,7 +144,7 @@ class LutLookResolverTest {
             LutLookResolver.statusLabel(enabled = false, selection = LutCatalog.AUTO, source = autoDlog2),
         )
         assertEquals(
-            "DJI Auto · D-Log2 → Rec.709",
+            "Auto · D-Log2 → Rec.709",
             LutLookResolver.statusLabel(
                 enabled = true,
                 selection = LutCatalog.DJI_AUTO,

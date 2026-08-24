@@ -68,6 +68,31 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertEqual(MediaClipFormatting.durationLabel(seconds: 209), "3:29")
     }
 
+    func testCacheGradePrefersOriginalOverProxy() {
+        XCTAssertEqual(
+            MediaCacheGrade.resolve(hasOriginal: true, hasProxy: true), .original)
+        XCTAssertEqual(
+            MediaCacheGrade.resolve(hasOriginal: false, hasProxy: true), .proxy)
+        XCTAssertEqual(
+            MediaCacheGrade.resolve(hasOriginal: false, hasProxy: false), .none)
+        XCTAssertTrue(MediaCacheGrade.proxy.isProxyOnly)
+        XCTAssertFalse(MediaCacheGrade.original.isProxyOnly)
+    }
+
+    func testCacheFullResolutionDefaultsOn() {
+        let key = "OpenPocketCine.CacheFullResolution"
+        let saved = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertTrue(OperatorPrefs.cacheFullResolution)
+        OperatorPrefs.cacheFullResolution = false
+        XCTAssertFalse(OperatorPrefs.cacheFullResolution)
+        if let saved {
+            UserDefaults.standard.set(saved, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+
     func testOfflineLibraryHidesThumbOnlyClips() {
         let cached = MediaFile(
             path: "DCIM/DJI_001/CACHED.MP4",
@@ -181,6 +206,22 @@ final class MediaLibraryTests: XCTestCase {
             "DJI_20260814125250_0034_D.mov")
         config.bakeLUT = false
         XCTAssertEqual(MediaDelivery.filename(for: file, configuration: config), file.filename)
+        var exposure = MediaDeliveryConfiguration()
+        XCTAssertTrue(exposure.bakeLUTExposure)
+        let baked = MediaDelivery.metadata(
+            for: file, configuration: exposure, lutName: "Auto · D-Log2 → Rec.709",
+            cameraName: nil, lutExposureStops: -1)
+        XCTAssertEqual(baked?.lutExposureStops, -1)
+        exposure.bakeLUTExposure = false
+        let cubeOnly = MediaDelivery.metadata(
+            for: file, configuration: exposure, lutName: "Auto · D-Log2 → Rec.709",
+            cameraName: nil, lutExposureStops: -1)
+        XCTAssertNil(cubeOnly?.lutExposureStops)
+        XCTAssertEqual(MediaDeliveryCopy.bakeExposure, "Bake exposure")
+        XCTAssertFalse(MediaDeliveryCopy.bakeExposureHelp.isEmpty)
+        XCTAssertEqual(
+            MediaDeliveryChrome.maxCardHeight, 520,
+            "portrait share card must hug; 520 matches Android heightIn(max = 520.dp)")
     }
 
     func testPlaybackCandidatesPreferProxyThenOriginalOnBothStores() {

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -60,6 +61,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,8 +81,8 @@ import java.io.File
 import kotlin.math.abs
 
 private enum class LutTab(val label: String) {
-    BUILT_IN("Built-in"),
     DJI("DJI"),
+    CREATIVE("Creative"),
     CUSTOM("Custom"),
 }
 
@@ -124,8 +126,10 @@ fun LUTPicker(model: AppModel, onClose: () -> Unit) {
         embedded = false,
         splitComparison = assist.splitComparison,
         splitVertical = assist.splitVertical,
+        lutExposureStops = assist.lutExposureStops,
         onToggleSplit = { assist.setSplitComparison(!assist.splitComparison) },
         onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
+        onNudgeExposure = { assist.nudgeLutExposure(it) },
         onArmLut = { assist.armLut() },
         colorMode = status.colorMode,
         family = model.session.connectedCamera?.model?.family ?: "pocket",
@@ -144,8 +148,10 @@ internal fun LUTPicker(
     embedded: Boolean,
     splitComparison: Boolean,
     splitVertical: Boolean,
+    lutExposureStops: Double = 0.0,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
+    onNudgeExposure: (Double) -> Unit = {},
     onArmLut: () -> Unit = {},
     onClose: (() -> Unit)? = null,
     colorMode: Int = CameraCommands.COLOR_NORMAL,
@@ -159,17 +165,13 @@ internal fun LUTPicker(
             val names = context.assets.list(LutCatalog.ASSET_DIRECTORY)?.toList().orEmpty()
             LutCatalog.djiEntries(names)
         }
-    val builtInEntries =
-        remember {
-            listOfNotNull(LutCatalog.builtIn.firstOrNull { it.id == LutCatalog.AUTO }) +
-                LutCatalog.officialBuiltInLooks
-        }
+    val creativeEntries = remember { LutCatalog.creative }
     var tab by remember {
         mutableStateOf(
             when (LutCatalog.categoryOf(selection)) {
-                LutCategory.DJI -> LutTab.DJI
+                LutCategory.CREATIVE -> LutTab.CREATIVE
                 LutCategory.CUSTOM -> LutTab.CUSTOM
-                LutCategory.BUILT_IN -> LutTab.BUILT_IN
+                LutCategory.DJI -> LutTab.DJI
             }
         )
     }
@@ -201,14 +203,14 @@ internal fun LUTPicker(
         if (next != tab) {
             tab = next
             when (next) {
-                LutTab.BUILT_IN ->
-                    if (LutCatalog.categoryOf(selection) != LutCategory.BUILT_IN) {
-                        onSelect(LutCatalog.AUTO)
-                        onArmLut()
-                    }
                 LutTab.DJI ->
                     if (LutCatalog.categoryOf(selection) != LutCategory.DJI) {
                         onSelect(LutCatalog.DJI_AUTO)
+                        onArmLut()
+                    }
+                LutTab.CREATIVE ->
+                    if (LutCatalog.categoryOf(selection) != LutCategory.CREATIVE) {
+                        onSelect("creativeMono")
                         onArmLut()
                     }
                 LutTab.CUSTOM -> Unit
@@ -227,7 +229,7 @@ internal fun LUTPicker(
                 onTab = onTab,
                 selection = selection,
                 onSelect = onPick,
-                builtInEntries = builtInEntries,
+                creativeEntries = creativeEntries,
                 djiEntries = djiEntries,
                 customEntries = customEntries,
                 onImport = { importer.launch(arrayOf("*/*")) },
@@ -236,8 +238,10 @@ internal fun LUTPicker(
                 embedded = embedded,
                 splitComparison = splitComparison,
                 splitVertical = splitVertical,
+                lutExposureStops = lutExposureStops,
                 onToggleSplit = onToggleSplit,
                 onSplitVertical = onSplitVertical,
+                onNudgeExposure = onNudgeExposure,
                 colorMode = colorMode,
                 family = family,
                 cameraName = cameraName,
@@ -319,7 +323,7 @@ private fun LUTPickerBody(
     onTab: (LutTab) -> Unit,
     selection: String,
     onSelect: (String) -> Unit,
-    builtInEntries: List<LutEntry>,
+    creativeEntries: List<LutEntry>,
     djiEntries: List<LutEntry>,
     customEntries: List<LutEntry>,
     onImport: () -> Unit,
@@ -328,8 +332,10 @@ private fun LUTPickerBody(
     embedded: Boolean,
     splitComparison: Boolean,
     splitVertical: Boolean,
+    lutExposureStops: Double,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
+    onNudgeExposure: (Double) -> Unit,
     colorMode: Int,
     family: String,
     cameraName: String?,
@@ -359,21 +365,21 @@ private fun LUTPickerBody(
         }
         Box(Modifier.fillMaxWidth().height(contentH)) {
             when (tab) {
-                LutTab.BUILT_IN ->
-                    CatalogTab(
-                        caption = builtInCaption(selection, colorMode, family, cameraName),
-                        entries = builtInEntries,
-                        selection = selection,
-                        fallbackId = LutCatalog.AUTO,
-                        onSelect = onSelect,
-                        contentHeight = contentH,
-                    )
                 LutTab.DJI ->
                     CatalogTab(
                         caption = djiCaption(selection, colorMode, family, cameraName),
                         entries = djiEntries,
                         selection = selection,
                         fallbackId = LutCatalog.DJI_AUTO,
+                        onSelect = onSelect,
+                        contentHeight = contentH,
+                    )
+                LutTab.CREATIVE ->
+                    CatalogTab(
+                        caption = creativeCaption(selection, colorMode, family, cameraName),
+                        entries = creativeEntries,
+                        selection = selection,
+                        fallbackId = "creativeMono",
                         onSelect = onSelect,
                         contentHeight = contentH,
                     )
@@ -391,8 +397,10 @@ private fun LUTPickerBody(
             LUTSplitComparisonBar(
                 splitComparison = splitComparison,
                 splitVertical = splitVertical,
+                lutExposureStops = lutExposureStops,
                 onToggleSplit = onToggleSplit,
                 onSplitVertical = onSplitVertical,
+                onNudgeExposure = onNudgeExposure,
             )
         }
         if (importError != null) {
@@ -525,53 +533,107 @@ private fun CustomTab(
     }
 }
 
+/** Compact ± stepper. Sits on the same row as 50/50 (iOS `LUTExposureCompensationBar`). */
+@Composable
+internal fun LUTExposureCompensationBar(
+    stops: Double,
+    onNudge: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val minusOn = LutExposureCompensation.canStep(stops, -LutExposureCompensation.STEP)
+    val plusOn = LutExposureCompensation.canStep(stops, LutExposureCompensation.STEP)
+    Row(
+        modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ExposureStepButton("−", enabled = minusOn) {
+            onNudge(-LutExposureCompensation.STEP)
+        }
+        Text(
+            LutExposureCompensation.label(stops),
+            color = if (stops == 0.0) LiveDesign.text else LiveDesign.accent,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.widthIn(min = 44.dp),
+            textAlign = TextAlign.Center,
+        )
+        ExposureStepButton("+", enabled = plusOn) {
+            onNudge(LutExposureCompensation.STEP)
+        }
+    }
+}
+
+@Composable
+private fun ExposureStepButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(width = 32.dp, height = 32.dp)
+            .clip(RoundedCornerShape(50))
+            .background(LiveDesign.glassBright)
+            .then(if (enabled) Modifier.chromeClickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (enabled) LiveDesign.text else LiveDesign.muted,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
 /** OpenZCine 50/50: off-by-default; orientation chips only while armed. */
 @Composable
 internal fun LUTSplitComparisonBar(
     splitComparison: Boolean,
     splitVertical: Boolean,
+    lutExposureStops: Double = 0.0,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
+    onNudgeExposure: (Double) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.clip(RoundedCornerShape(50))
-                .background(if (splitComparison) LiveDesign.accentDim else LiveDesign.glassBright)
-                .chromeClickable(onClick = onToggleSplit)
-                .padding(
-                    horizontal = LutPickerMetrics.SPLIT_PAD_H_DP.dp,
-                    vertical = LutPickerMetrics.SPLIT_PAD_V_DP.dp,
-                ),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OpcIcon(
-                icon = if (splitComparison) OpcIcon.CIRCLE_CHECK else OpcIcon.CIRCLE,
-                contentDescription = null,
-                tint = if (splitComparison) LiveDesign.accent else LiveDesign.muted,
-                modifier = Modifier.size(LutPickerMetrics.SPLIT_ICON_DP.dp),
-            )
-            Text(
-                "50/50",
-                style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold, LiveTypeDesign.Rounded),
-                color = LiveDesign.text,
-            )
+            LUTExposureCompensationBar(stops = lutExposureStops, onNudge = onNudgeExposure)
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier.clip(RoundedCornerShape(50))
+                    .background(if (splitComparison) LiveDesign.accentDim else LiveDesign.glassBright)
+                    .chromeClickable(onClick = onToggleSplit)
+                    .padding(
+                        horizontal = LutPickerMetrics.SPLIT_PAD_H_DP.dp,
+                        vertical = LutPickerMetrics.SPLIT_PAD_V_DP.dp,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                OpcIcon(
+                    icon = if (splitComparison) OpcIcon.CIRCLE_CHECK else OpcIcon.CIRCLE,
+                    contentDescription = null,
+                    tint = if (splitComparison) LiveDesign.accent else LiveDesign.muted,
+                    modifier = Modifier.size(LutPickerMetrics.SPLIT_ICON_DP.dp),
+                )
+                Text(
+                    "50/50",
+                    style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                    color = LiveDesign.text,
+                )
+            }
         }
         if (splitComparison) {
             LutSegmentedButtons(
                 items = listOf("Left / Right", "Top / Bottom"),
                 selected = if (splitVertical) "Left / Right" else "Top / Bottom",
-                modifier = Modifier.weight(1f),
             ) { label ->
                 onSplitVertical(label == "Left / Right")
             }
-        } else {
-            Spacer(Modifier.weight(1f))
         }
     }
 }
@@ -739,21 +801,18 @@ private fun LutDrumWheel(
     }
 }
 
-private fun builtInCaption(
+private fun creativeCaption(
     selection: String,
     colorMode: Int,
     family: String,
     cameraName: String?,
 ): String =
-    when (selection) {
-        LutCatalog.AUTO ->
-            LutLookResolver.autoCaption(
-                LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
-            )
-        LutCatalog.OFF -> "No matching look for this color / camera"
-        "officialDLog" -> "Built-in D-Log look"
-        "officialDLog2" -> "Built-in D-Log2 look"
-        else -> "App looks for this color / camera"
+    if (LutCatalog.categoryOf(selection) == LutCategory.CREATIVE) {
+        LutLookResolver.autoCaption(
+            LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
+        )
+    } else {
+        "Looks for the displayed picture"
     }
 
 private fun djiCaption(
@@ -763,7 +822,7 @@ private fun djiCaption(
     cameraName: String?,
 ): String =
     when (selection) {
-        LutCatalog.DJI_AUTO ->
+        LutCatalog.AUTO, LutCatalog.DJI_AUTO ->
             LutLookResolver.autoCaption(
                 LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
             )

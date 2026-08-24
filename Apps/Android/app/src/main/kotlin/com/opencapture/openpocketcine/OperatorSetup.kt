@@ -135,6 +135,8 @@ object SettingsHelpCopy {
         "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required."
     const val APP_VERSION = "Current OpenPocketCine build from the native project metadata."
     const val LOCAL_CACHE = "Originals and playback proxies downloaded from the camera."
+    const val CACHE_FULL_RESOLUTION =
+        "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original — connect the camera if it is not cached."
     const val FEED_UPSCALER =
         "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented — plausible rather than real — so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
     const val FALSE_COLOR_SCALE =
@@ -787,7 +789,7 @@ private fun SettingsContentPane(
                         OperatorSettingsTab.CONTROLS -> ControlsRows(model)
                         OperatorSettingsTab.DISPLAY ->
                             DisplayRows(model, isLive, expandedDisp, onExpandDisp)
-                        OperatorSettingsTab.STORAGE -> StorageRows(onClearCache)
+                        OperatorSettingsTab.STORAGE -> StorageRows(model, onClearCache)
                         OperatorSettingsTab.SYSTEM -> SystemRows(onLegal)
                     }
                 }
@@ -1408,8 +1410,9 @@ private fun CleanViewPinStrip(model: AppModel, view: View) {
 }
 
 @Composable
-private fun StorageRows(onClearCache: () -> Unit) {
+private fun StorageRows(model: AppModel, onClearCache: () -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
     val bytes = OperatorMediaCache.byteCount(context)
     val cacheLabel =
         if (OperatorMediaCache.existingDir(context) == null) "Empty" else formatCacheSize(bytes)
@@ -1419,7 +1422,16 @@ private fun StorageRows(onClearCache: () -> Unit) {
         }
     }
     SettingsRowCard {
-        SettingsInlineRow("Local Media Cache", SettingsHelpCopy.LOCAL_CACHE, showTopDivider = false) {
+        SettingsSwitchInlineRow(
+            title = "Full Resolution Caching",
+            isOn = model.cacheFullResolution,
+            help = SettingsHelpCopy.CACHE_FULL_RESOLUTION,
+            showTopDivider = false,
+        ) {
+            operatorHaptic(view, model.hapticsEnabled)
+            model.updateCacheFullResolution(!model.cacheFullResolution)
+        }
+        SettingsInlineRow("Local Media Cache", SettingsHelpCopy.LOCAL_CACHE) {
             SettingsValueText(cacheLabel)
         }
         SettingsInlineRow("Clear Cache", SettingsHelpCopy.CLEAR_CACHE) {

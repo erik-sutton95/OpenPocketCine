@@ -41,6 +41,12 @@ _Avoid_: keepalive, heartbeat
 Operator HUD around the picture (bars, chips, DISP), not the picture.
 _Avoid_: UI, overlay
 
+**Gimbal cluster**:
+Stick, zoom chip, and (later) gimbal controls (follow / speed / A·B·C) as one
+trailing-bottom parking spot in every orientation. Zoom stacks above the stick.
+Controls grow leading of the stick without moving it.
+_Avoid_: joystick pack, gimbal HUD
+
 **Parity**:
 Operator-visible match to the iOS baseline unless `docs/PARITY.md` lists an exception.
 _Avoid_: pixel-identical, 1:1 clone
@@ -48,6 +54,22 @@ _Avoid_: pixel-identical, 1:1 clone
 **Assist**:
 A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
+
+**LUT exposure compensation**:
+Input-referred stops applied before the Rec.709 cube (half-stop −3…+3). Pull after ETTR so the cube's mid-grey lands. Not camera EV. iOS Share **Bake exposure** writes that pull into the file.
+_Avoid_: LUT gain, LUT mix, intensity, EV (the body SET)
+
+**Clip color profile**:
+Shot color in QuickTime Keys `com.dji.camera.ColorGammaSxS` (`Rec.709` / `Rec.2100 HLG` / `D-Log` / `D-Log2`) on the original take. LRF/XRF proxies are Rec.709 even for log. Playback Auto reads the original (or its `moov` tail) and stores it with the cached clip; `colr`/`nclx` is Rec.709 even for log.
+_Avoid_: nclx (alone), color space box
+
+**Proxy**:
+720p LRF/XRF sidecar on the phone without the original camera file. Tagged **Proxy** in the library and playback chrome.
+_Avoid_: preview (alone), low-res
+
+**Full Resolution Caching**:
+Storage switch (on by default). On, opening a clip also downloads the original camera file. Off keeps only the proxy.
+_Avoid_: RAW cache, 4K always (the setting name is Full Resolution Caching)
 
 **Physical**:
 Proof on a real phone. Simulator cannot exercise BLE or camera Wi-Fi.

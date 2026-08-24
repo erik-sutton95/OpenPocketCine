@@ -142,8 +142,10 @@ fun AssistOptionsPopup(
                     embedded = true,
                     splitComparison = state.splitComparison,
                     splitVertical = state.splitVertical,
+                    lutExposureStops = state.lutExposureStops,
                     onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
                     onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
+                    onNudgeExposure = { state.nudgeLutExposure(it) },
                     onArmLut = { state.armLut() },
                     colorMode = colorMode,
                     family = model?.session?.connectedCamera?.model?.family ?: "pocket",
@@ -164,8 +166,10 @@ fun AssistOptionsPopup(
             LUTSplitComparisonBar(
                 splitComparison = state.splitComparison,
                 splitVertical = state.splitVertical,
+                lutExposureStops = state.lutExposureStops,
                 onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
                 onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
+                onNudgeExposure = { state.nudgeLutExposure(it) },
             )
         }
     }

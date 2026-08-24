@@ -7,12 +7,13 @@ struct MediaDeliveryPopupOverlay: View {
     var onDismiss: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.18)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-            VStack {
-                Spacer()
+        GeometryReader { geo in
+            let cap = min(
+                MediaDeliveryChrome.maxCardHeight, max(240, geo.size.height - 80))
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { onDismiss() }
                 MediaDeliveryPopup(
                     files: files,
                     preferredDestination: preferredDestination,
@@ -20,7 +21,9 @@ struct MediaDeliveryPopupOverlay: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
+                .frame(maxHeight: cap, alignment: .bottom)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
     }
@@ -112,12 +115,14 @@ struct MediaDeliveryPopup: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 12)
             }
+            .fixedSize(horizontal: false, vertical: true)
             if step == .options, !frameioHopGateActive {
                 footer.padding(.top, 12)
             }
         }
         .padding(16)
         .frame(maxWidth: 420)
+        .fixedSize(horizontal: false, vertical: true)
         .liquidGlass(
             in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
             interactive: false
@@ -498,12 +503,19 @@ struct MediaDeliveryPopup: View {
                         cornerRadius: DesignTokens.cornerRadius, style: .continuous))
             }
             toggleRow(
-                "Bake LUT",
+                MediaDeliveryCopy.bakeLUT,
                 help: lutAvailable
-                    ? "Apply \(model.assist.lutStatusLabel) to exports."
-                    : "No LUT selected — pick one in view assists.",
+                    ? MediaDeliveryCopy.bakeLUTHelp(statusLabel: model.assist.lutStatusLabel)
+                    : MediaDeliveryCopy.bakeLUTHelpUnavailable,
                 isOn: $configuration.bakeLUT,
                 enabled: lutAvailable)
+            if configuration.bakeLUT {
+                toggleRow(
+                    MediaDeliveryCopy.bakeExposure,
+                    help: MediaDeliveryCopy.bakeExposureHelp,
+                    isOn: $configuration.bakeLUTExposure,
+                    enabled: lutAvailable)
+            }
             if configuration.bakeLUT || destination == .nativeShare {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 4) {

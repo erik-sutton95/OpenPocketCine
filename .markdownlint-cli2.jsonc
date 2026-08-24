@@ -5,6 +5,8 @@
     "MD013": false,
     "MD033": false,
     "MD041": false,
+    // Keep a Changelog repeats Added/Fixed/Changed per version.
+    "MD024": { "siblings_only": true },
     // Protocol tables are compact on purpose; don't fight pipe spacing.
     "MD060": false
   },

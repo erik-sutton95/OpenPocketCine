@@ -1,5 +1,6 @@
 import Foundation
 import OpenPocketCineAndroidFacade
+import OpenPocketViewCore
 import Testing
 
 @Suite
@@ -36,5 +37,34 @@ struct LUTLibraryWireTests {
         #expect(packed[13] == 0)
         #expect(packed[14] == 255)
         #expect(packed[15] == 255)
+    }
+
+    @Test
+    func exposurePullRemapsPackedIdentity() throws {
+        let text = """
+            LUT_3D_SIZE 2
+            0 0 0
+            1 0 0
+            0 1 0
+            1 1 0
+            0 0 1
+            1 0 1
+            0 1 1
+            1 1 1
+            """
+        let utf8 = Array(text.utf8)
+        let identity = try #require(LUTLibraryWire.packedImportedLUT(utf8: utf8))
+        let pulled = try #require(
+            LUTLibraryWire.packedImportedLUT(
+                utf8: utf8, exposureStops: -1, colorModeCode: Int(ColorMode.dLog2.rawValue)))
+        #expect(pulled.count == identity.count)
+        #expect(pulled != identity)
+    }
+
+    @Test
+    func creativeMonoPacksAGreyscaleCube() throws {
+        let packed = try #require(LUTLibraryWire.packedCreativeLook("Mono"))
+        #expect(!packed.isEmpty)
+        #expect(packed.count % 4 == 0)
     }
 }

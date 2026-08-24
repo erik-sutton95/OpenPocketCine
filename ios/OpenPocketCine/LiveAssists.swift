@@ -234,6 +234,8 @@ final class LiveAssistState {
     var desqueezeHorizontal = true
     var splitComparison = false
     var splitVertical = true
+    /// Input-referred LUT stops (−3…+3, half-stop). 0 is the cube as shipped.
+    var lutExposureStops: Double = 0
     /// DISP 2. Chrome follows `PocketDispChrome`; assists follow `cleanViewPinnedTools`.
     var clean = false
     /// View-assist tools that stay on the picture in DISP 2. Filter only — never mutates `isOn`.
@@ -248,12 +250,15 @@ final class LiveAssistState {
     var crushClipCompensation = TrafficLightsAssist.defaultCompensation
     var trafficLightsScale = TrafficLightsAssist.defaultScale
     var trafficLightsPosition: TrafficLightsAssist.StoredCenter?
-    /// First-launch default is on — Auto applies the matching official cube.
+    /// First-launch default is on — DJI Auto applies the matching official cube.
     var lutEnabled = true
-    var lutSelection: LUTSelection = .auto
+    var lutSelection: LUTSelection = .djiAuto
     var monitorColorMode: ColorMode?
     var monitorFamily: CameraBodyFamily = .pocket
     var monitorCameraName: String?
+    /// Media player is grading a clip (connected or not). LUT sheet must not
+    /// restamp Auto from the live SET — disconnected has no `inPlayback` flag.
+    var gradesClip = false
 
     @ObservationIgnored private var lutCube: CubeLUT?
     @ObservationIgnored private var lutDimension = 0
@@ -306,6 +311,7 @@ final class LiveAssistState {
             zebraMidtoneIRE: zebraMidtoneIRE,
             zebraHighlightColor: zebraHighlightColor,
             zebraMidtoneColor: zebraMidtoneColor,
+            colorMode: monitorColorMode ?? .normal,
             splitComparison: splitComparison && isVisible(.lut),
             splitVertical: splitVertical,
             mirror: isVisible(.mirror),
@@ -340,6 +346,9 @@ final class LiveAssistState {
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
         level = false
         desqueeze = false
+        if monitorColorMode == nil {
+            monitorColorMode = OperatorPrefs.lastMonitorColorMode
+        }
         if lutEnabled { refreshLUTCube() }
         lastSaved = OperatorPrefs.encoded(self)
     }
@@ -403,6 +412,12 @@ final class LiveAssistState {
             playbackVisibleTools.insert(tool)
         }
         OperatorPrefs.playbackVisibleAssistTools = playbackVisibleTools
+        if tool == .falseColor, isPlaybackVisible(.falseColor) {
+            PocketFalseColorMap.warm(
+                scale: falseColorScale,
+                mode: monitorColorMode ?? .normal,
+                hasLUT: lutEnabled && lutDimension >= 2)
+        }
     }
 
     func toggle(_ tool: LiveAssistTool) {
@@ -461,6 +476,14 @@ final class LiveAssistState {
         OperatorPrefs.save(self)
     }
 
+    func nudgeLUTExposure(_ delta: Double) {
+        let next = LUTExposureCompensation.stepped(lutExposureStops, by: delta)
+        guard next != lutExposureStops else { return }
+        lutExposureStops = next
+        refreshLUTCube()
+        OperatorPrefs.save(self)
+    }
+
     /// Color / zoom / body changes only swap the cube while an Auto row is selected.
     func syncLUT(
         to colorMode: ColorMode?,
@@ -470,7 +493,38 @@ final class LiveAssistState {
         monitorColorMode = colorMode
         monitorFamily = family
         if let cameraName { monitorCameraName = cameraName }
+        if let colorMode {
+            OperatorPrefs.lastMonitorColorMode = colorMode
+        }
         refreshLUTCube()
+    }
+
+    /// Playback Auto follows the clip's ColorGammaSxS. Do not persist Rec.709
+    /// from a Normal take over last live D-Log / D-Log2.
+    func adoptPlaybackColor(
+        _ colorMode: ColorMode,
+        family: CameraBodyFamily = .pocket,
+        cameraName: String? = nil
+    ) {
+        monitorColorMode = colorMode
+        monitorFamily = family
+        if let cameraName { monitorCameraName = cameraName }
+        refreshLUTCube()
+    }
+
+    /// LUT sheet appear. Live SET must not replace the clip's Auto cube —
+    /// including disconnected library playback (`gradesClip`, no camera SET).
+    func bindLUTPicker(
+        live: ColorMode?,
+        inPlayback: Bool,
+        family: CameraBodyFamily = .pocket,
+        cameraName: String? = nil
+    ) {
+        if inPlayback || gradesClip {
+            refreshLUTCube()
+            return
+        }
+        syncLUT(to: live, family: family, cameraName: cameraName)
     }
 
     func refreshLUTCube() {
@@ -497,6 +551,8 @@ final class LiveAssistState {
                 lutDimension = 0
                 lutRGBA = Data()
             }
+        case .creative(let look):
+            cache(look.cube())
         case .custom(let slot):
             if let cube = CustomLUTStore.cube(slot) {
                 cache(cube)
@@ -606,9 +662,25 @@ final class LiveAssistState {
         OperatorPrefs.write(data)
     }
 
+    /// Cube for share / export. Does not use the GPU `lutRGBA` table so
+    /// Bake exposure can stay off while the monitor still shows the pull.
+    func exportLUTCube(bakeExposure: Bool) -> CubeLUT? {
+        guard lutEnabled, let cube = lutCube else { return nil }
+        let color = PlaybackLUTColor.resolve(
+            clip: monitorColorMode,
+            live: monitorColorMode,
+            last: OperatorPrefs.lastMonitorColorMode)
+        return cube.preparedForExport(
+            bakeExposure: bakeExposure,
+            stops: lutExposureStops,
+            transfer: MonitorTransfer(color ?? .normal))
+    }
+
     private func cache(_ cube: CubeLUT) {
         lutCube = cube
-        let gpu = cube.colorCube
+        let transfer = MonitorTransfer(monitorColorMode ?? .normal)
+        let gpu = cube.colorCube.compensatingExposure(
+            stops: lutExposureStops, transfer: transfer)
         lutDimension = gpu.size
         lutRGBA = gpu.rgbaComponents.withUnsafeBytes { Data($0) }
     }
@@ -632,6 +704,8 @@ enum OperatorPrefs {
     private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
+    private static let lastMonitorColorModeKey = "OpenPocketCine.LastMonitorColorMode"
+    private static let cacheFullResolutionKey = "OpenPocketCine.CacheFullResolution"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
     private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
     private static let facePriorityExposureKey = "OpenPocketCine.FacePriorityExposure"
@@ -644,6 +718,15 @@ enum OperatorPrefs {
             return UserDefaults.standard.bool(forKey: awakeKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: awakeKey) }
+    }
+
+    /// Download the original camera file when a clip is opened. Off keeps the 720p proxy.
+    static var cacheFullResolution: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: cacheFullResolutionKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: cacheFullResolutionKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: cacheFullResolutionKey) }
     }
 
     static var recordConfirmationEnabled: Bool {
@@ -726,6 +809,26 @@ enum OperatorPrefs {
         set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
     }
 
+    /// Last live `ColorMode` so Auto LUT can bind a cube from the offline library.
+    static var lastMonitorColorMode: ColorMode? {
+        get {
+            guard UserDefaults.standard.object(forKey: lastMonitorColorModeKey) != nil else {
+                return nil
+            }
+            return ColorMode(
+                rawValue: UInt8(
+                    truncatingIfNeeded: UserDefaults.standard.integer(
+                        forKey: lastMonitorColorModeKey)))
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(Int(newValue.rawValue), forKey: lastMonitorColorModeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: lastMonitorColorModeKey)
+            }
+        }
+    }
+
     static var playbackVisibleAssistTools: Set<LiveAssistTool> {
         get {
             guard let raw = UserDefaults.standard.array(forKey: playbackAssistsKey) as? [String]
@@ -795,7 +898,7 @@ enum OperatorPrefs {
             {
                 return value
             }
-            return .auto
+            return .djiAuto
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: lutSelectionKey) }
     }
@@ -832,7 +935,9 @@ enum OperatorPrefs {
             snap.apply(to: state)
         }
         migrateLegacyLUTIfNeeded(into: state)
-        state.lutSelection = lutSelection
+        let migrated = lutSelection.migratedToDJICatalog
+        if migrated != lutSelection { lutSelection = migrated }
+        state.lutSelection = migrated
     }
 
     /// One-shot: old Built-in looks become Auto; a stored custom file becomes Custom D-Log.
@@ -847,7 +952,7 @@ enum OperatorPrefs {
                 return
             }
         }
-        UserDefaults.standard.set(LUTSelection.auto.rawValue, forKey: lutSelectionKey)
+        UserDefaults.standard.set(LUTSelection.djiAuto.rawValue, forKey: lutSelectionKey)
     }
 
     static func save(_ state: LiveAssistState) {
@@ -889,6 +994,7 @@ enum OperatorPrefs {
         var splitComparison: Bool
         var splitVertical: Bool
         var lutArmed: Bool
+        var lutExposureStops: Double?
         var crushClipCompensation: Int?
 
         init(_ s: LiveAssistState) {
@@ -916,6 +1022,7 @@ enum OperatorPrefs {
             splitComparison = s.splitComparison
             splitVertical = s.splitVertical
             lutArmed = s.lutEnabled
+            lutExposureStops = s.lutExposureStops
             crushClipCompensation = s.crushClipCompensation.rawValue
         }
 
@@ -961,6 +1068,9 @@ enum OperatorPrefs {
             s.desqueezeHorizontal = desqueezeHorizontal
             s.splitComparison = splitComparison
             s.splitVertical = splitVertical
+            if let stops = lutExposureStops {
+                s.lutExposureStops = LUTExposureCompensation.snap(stops)
+            }
             if let raw = crushClipCompensation,
                 let value = TrafficLightsAssist.CrushClipCompensation(rawValue: raw)
             {

@@ -67,6 +67,28 @@ object MediaTransfer {
 
     fun fetchBytes(storage: Int, path: String): Pair<ByteArray, Int> = performGet(storage, path)
 
+    /** Last 2 MiB of the original take. Camera `/v2` already answers Range. */
+    fun fetchRange(storage: Int, path: String, range: String, maxBytes: Int): Pair<ByteArray, Int> {
+        var last: MediaTransferError = MediaTransferError.BadResponse
+        for (candidate in storageOrder(storage)) {
+            try {
+                val data = getOnceRange(MediaHTTP.pathUrlString(candidate, path), range, maxBytes)
+                if (data.isEmpty()) {
+                    last = MediaTransferError.BadResponse
+                    continue
+                }
+                return data to candidate
+            } catch (e: MediaTransferError.HttpStatus) {
+                last = e
+                if (e.code == 404 || e.code in 400..499) continue
+                throw e
+            } catch (e: MediaTransferError) {
+                last = e
+            }
+        }
+        throw last
+    }
+
     private fun performGet(firstStorage: Int, path: String): Pair<ByteArray, Int> {
         var last: MediaTransferError = MediaTransferError.BadResponse
         for (storage in storageOrder(firstStorage)) {
@@ -86,6 +108,39 @@ object MediaTransfer {
             }
         }
         throw last
+    }
+
+    private fun getOnceRange(url: String, range: String, maxBytes: Int): ByteArray {
+        val request =
+            Request.Builder()
+                .url(url)
+                .header("Accept", "*/*")
+                .header("Range", range)
+                .get()
+                .build()
+        val call = client.newCall(request)
+        call.execute().use { response ->
+            val code = response.code
+            if (code !in 200..299) throw MediaTransferError.HttpStatus(code)
+            val body = response.body ?: throw MediaTransferError.BadResponse
+            val expected = body.contentLength()
+            if (code == 200 && expected > maxBytes.toLong()) {
+                call.cancel()
+                throw MediaTransferError.BadResponse
+            }
+            val cap = if (expected > 0) expected.coerceAtMost(maxBytes.toLong()) else maxBytes.toLong()
+            val sink = java.io.ByteArrayOutputStream()
+            val written =
+                try {
+                    readUntilLength(body.byteStream(), sink, cap) { }
+                } catch (e: IOException) {
+                    if (sink.size() > 0) sink.size().toLong() else throw e
+                }
+            call.cancel()
+            if (written <= 0L) throw MediaTransferError.BadResponse
+            if (sink.size() > maxBytes) throw MediaTransferError.BadResponse
+            return sink.toByteArray()
+        }
     }
 
     private fun getOnce(url: String): ByteArray {

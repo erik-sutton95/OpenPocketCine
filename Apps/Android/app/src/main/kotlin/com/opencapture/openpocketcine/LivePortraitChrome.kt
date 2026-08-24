@@ -208,39 +208,28 @@ fun portraitOnFeedControls(
     bottomClearance: Float,
     floorY: Float,
 ): Pair<ChromeRect, ChromeRect> {
-    val stickSize = LiveChromeMetrics.STICK
-    val zoomSize = LiveChromeMetrics.ZOOM
-    val gap = LiveChromeMetrics.STICK_GAP
-    val inset = LiveChromeMetrics.STICK_INSET
-    if (fill) {
-        val stick =
-            ChromeRect(
-                picture.maxX - inset - stickSize,
-                picture.maxY - bottomClearance - stickSize,
-                stickSize,
-                stickSize,
+    val cluster =
+        if (fill) {
+            GimbalCluster.inTrailingBottom(
+                well = picture,
+                floorY = picture.maxY - bottomClearance,
+                canvasMaxY = picture.maxY,
+                stickSize = LiveChromeMetrics.STICK,
+                zoomSize = LiveChromeMetrics.ZOOM,
+                gap = LiveChromeMetrics.STICK_GAP,
+                inset = LiveChromeMetrics.STICK_INSET,
             )
-        val zoom =
-            ChromeRect(
-                min(max(picture.minX, stick.maxX - zoomSize), picture.maxX - zoomSize),
-                max(picture.minY, stick.minY - gap - zoomSize),
-                zoomSize,
-                zoomSize,
+        } else {
+            GimbalCluster.belowWell(
+                well = picture,
+                floorY = floorY,
+                stickSize = LiveChromeMetrics.STICK,
+                zoomSize = LiveChromeMetrics.ZOOM,
+                gap = LiveChromeMetrics.STICK_GAP,
+                inset = LiveChromeMetrics.STICK_INSET,
             )
-        return stick to zoom
-    }
-    val ceiling = picture.maxY + gap
-    val stickY = max(ceiling + zoomSize + gap, floorY - inset - stickSize)
-    val stickX = max(picture.minX, picture.maxX - inset - stickSize)
-    val stick = ChromeRect(stickX, stickY, stickSize, stickSize)
-    val zoom =
-        ChromeRect(
-            min(max(picture.minX, stick.maxX - zoomSize), picture.maxX - zoomSize),
-            max(ceiling, stick.minY - gap - zoomSize),
-            zoomSize,
-            zoomSize,
-        )
-    return stick to zoom
+        }
+    return cluster.stick to cluster.zoom
 }
 
 @Composable

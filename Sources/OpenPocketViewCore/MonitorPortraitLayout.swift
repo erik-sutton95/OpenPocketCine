@@ -265,20 +265,15 @@ public enum MonitorPortraitLayout {
         gap: Double = outsideControlsGap,
         inset: Double = outsideControlsInset
     ) -> (stick: MonitorLayoutRegion, zoom: MonitorLayoutRegion) {
-        let stickSize = max(0, stickSize)
-        let zoomSize = max(0, zoomSize)
-        let gap = max(0, gap)
-        let inset = max(0, inset)
-        let feedRight = feed.x + feed.width
-        let feedBottom = feed.y + feed.height
-        let ceiling = feedBottom + gap
-        let stickY = max(ceiling + zoomSize + gap, floorY - inset - stickSize)
-        let stickX = max(feed.x, feedRight - inset - stickSize)
-        let stick = MonitorLayoutRegion(x: stickX, y: stickY, width: stickSize, height: stickSize)
-        let zoomY = max(ceiling, stick.y - gap - zoomSize)
-        let zoomX = min(max(feed.x, stick.maxX - zoomSize), feedRight - zoomSize)
-        let zoom = MonitorLayoutRegion(x: zoomX, y: zoomY, width: zoomSize, height: zoomSize)
-        return (stick, zoom)
+        let cluster = GimbalCluster.belowWell(
+            well: MonitorLayoutRegion(
+                x: feed.x, y: feed.y, width: feed.width, height: feed.height),
+            floorY: floorY,
+            stickSize: stickSize,
+            zoomSize: zoomSize,
+            gap: gap,
+            inset: inset)
+        return (cluster.stick, cluster.zoom)
     }
 
     /// Zoom chip to the trailing side of the stick, vertically centred on it.

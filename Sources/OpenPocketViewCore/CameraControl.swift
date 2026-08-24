@@ -387,6 +387,14 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         }
     }
 
+    /// Log encodings Auto can bind a Rec.709 cube to.
+    public var bindsAutoLUT: Bool {
+        switch self {
+        case .dLog, .dLog2, .dLogM: true
+        default: false
+        }
+    }
+
     public func label(for family: CameraBodyFamily) -> String {
         if family == .nano, self == .normal { return "Normal 8-bit" }
         return label

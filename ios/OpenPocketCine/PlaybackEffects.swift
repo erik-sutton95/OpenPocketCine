@@ -3,20 +3,12 @@ import CoreImage
 import Foundation
 import OpenPocketViewCore
 import UIKit
-import os
 
-/// LUT bake + live playback composition. OpenZCine `MediaLUT` / `PlaybackEffectsBox`,
-/// using Pocket's `LiveMonitorCompositor` instead of the Nikon compositor.
+/// LUT bake for export. Clip playback grades through `PlaybackFeedSession`
+/// (player identity + `CIFeedView`), not `AVVideoComposition`.
 enum MediaLUT {
     private static let displayColorSpace =
         CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-    static let renderContext = CIContext(options: [
-        .workingFormat: CIFormat.RGBAh,
-        .workingColorSpace: displayColorSpace,
-        .highQualityDownsample: true,
-    ])
-    /// Separate from `renderContext` so a bake cannot race the playback compositor
-    /// (CIContext is not safe for concurrent `finish` / `createCGImage`).
     private static let exportContext = CIContext(options: [
         .workingFormat: CIFormat.RGBAh,
         .workingColorSpace: displayColorSpace,
@@ -38,16 +30,6 @@ enum MediaLUT {
             CGAffineTransform(
                 translationX: target.minX - scaledOrigin.x,
                 y: target.minY - scaledOrigin.y))
-    }
-
-    static func image(_ image: CIImage, fittedTo extent: CGRect) -> CIImage {
-        let source = image.extent
-        if abs(source.width - extent.width) < 0.5, abs(source.height - extent.height) < 0.5,
-            abs(source.minX - extent.minX) < 0.5, abs(source.minY - extent.minY) < 0.5
-        {
-            return image.cropped(to: extent)
-        }
-        return image.transformed(by: transformFitting(source, to: extent)).cropped(to: extent)
     }
 
     enum ExportError: LocalizedError {
@@ -101,100 +83,6 @@ enum MediaLUT {
         mutable.renderSize = renderSize
         mutable.renderScale = 1
         return mutable
-    }
-
-    final class PlaybackEffectsBox: @unchecked Sendable {
-        struct ScopeSnapshot: Sendable {
-            let revision: UInt64
-            let bundle: ScopeAssistBundle
-        }
-
-        private let effects = OSAllocatedUnfairLock<LiveImageEffects>(
-            initialState: LiveImageEffects())
-        private let scopeState = OSAllocatedUnfairLock<ScopeAssistBundle>(
-            initialState: .empty)
-        private let active = OSAllocatedUnfairLock(initialState: false)
-        private var compositionGeneration: UInt64 = 0
-
-        func set(effects: LiveImageEffects) -> Bool {
-            self.effects.withLock { current in
-                guard current != effects else { return false }
-                current = effects
-                return true
-            }
-        }
-
-        func setScopesActive(_ on: Bool) {
-            active.withLock { $0 = on }
-            if !on {
-                scopeState.withLock { $0 = .empty }
-            }
-        }
-
-        func invalidateScopeComposition() {
-            compositionGeneration &+= 1
-            scopeState.withLock { $0 = .empty }
-        }
-
-        func readScopeSnapshot() -> ScopeSnapshot {
-            scopeState.withLock { ScopeSnapshot(revision: $0.revision, bundle: $0) }
-        }
-
-        func makeVideoComposition(for asset: AVAsset) -> AVVideoComposition {
-            let box = self
-            compositionGeneration &+= 1
-            let generation = compositionGeneration
-            return AVVideoComposition(asset: asset) { request in
-                let source = request.sourceImage
-                let extent = source.extent
-                if generation == box.compositionGeneration {
-                    box.sampleScopesIfNeeded(from: source)
-                }
-                let resolved = box.effects.withLock { $0 }
-                let output: CIImage
-                if resolved.needsGPUFeed {
-                    output = MediaLUT.image(
-                        LiveMonitorCompositor.apply(to: source, effects: resolved),
-                        fittedTo: extent)
-                } else {
-                    output = source.cropped(to: extent)
-                }
-                request.finish(with: output, context: renderContext)
-            }
-        }
-
-        private func sampleScopesIfNeeded(from source: CIImage) {
-            guard active.withLock({ $0 }) else { return }
-            let fx = effects.withLock { $0 }
-            guard fx.needsScopes else { return }
-            let scaled = source.transformed(
-                by: CGAffineTransform(
-                    scaleX: CGFloat(PocketScopeSampler.maxWidth) / max(source.extent.width, 1),
-                    y: CGFloat(PocketScopeSampler.maxWidth) / max(source.extent.width, 1)))
-            guard
-                let cg = renderContext.createCGImage(
-                    scaled, from: scaled.extent, format: .RGBA8,
-                    colorSpace: displayColorSpace)
-            else { return }
-            guard let data = cg.dataProvider?.data else { return }
-            var bytes = [UInt8](repeating: 0, count: CFDataGetLength(data))
-            CFDataGetBytes(data, CFRange(location: 0, length: bytes.count), &bytes)
-            let width = cg.width
-            let height = cg.height
-            let bpr = cg.bytesPerRow
-            let previous = scopeState.withLock { $0 }
-            let transfer = MonitorTransfer(fx.colorMode)
-            let look = ScopeMonitorLook.cube(from: fx)
-            let bundle = PocketScopeSampler.sample(
-                bytes: bytes, width: width, height: height, bytesPerRow: bpr,
-                transfer: transfer,
-                includePoints: fx.needsScopePoints,
-                includeVectorPoints: fx.vectorscope,
-                look: look,
-                trafficThreshold: fx.trafficThreshold,
-                previous: previous)
-            scopeState.withLock { $0 = bundle }
-        }
     }
 
     static func export(

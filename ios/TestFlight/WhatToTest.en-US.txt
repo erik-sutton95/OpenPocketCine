@@ -2,10 +2,10 @@ New and changed
 
 - Opening a clip plays the camera's small preview file so the monitor stays snappy. Share and Save still use the original camera file.
 - View Assist on a clip uses a monitor icon. LUT, false colour, peaking, and zebra grade the picture itself.
+- Long-press LUT: DJI / Creative / Custom. DJI Auto should grade D-Log / D-Log2 with the official cube. Creative is Mono / Contrast / Warm / Cool. Exposure is −3…+3 at ½ stop.
 - In Auto, the EV sheet has Face Priority. On, the drum grays out and EV follows faces to middle gray — fast for the first couple of seconds a face is in, then about one third-stop a second.
 - Saved cameras remember the camera Wi-Fi on this phone, so reconnect should not re-prompt every time.
-- ISO has an Auto Native ISO switch. Off keeps your ISO when you change D-Log / D-Log2.
-- The SHUTTER sheet has Speed and Angle tabs. Angle runs 5.6° to 360° and is sent as the matching 1/N.
+- ISO has an Auto Native ISO switch (off keeps ISO when you change D-Log / D-Log2). The SHUTTER sheet has Speed and Angle tabs; Angle runs 5.6° to 360° and is sent as the matching 1/N.
 
 Fixes
 
@@ -15,11 +15,13 @@ Fixes
 - After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
 - The live feed comes up as soon as the camera answers, instead of waiting out extra beats.
 - If the camera is still talking but the picture dies, the app asks for a fresh frame instead of sitting on a black well.
+- Gimbal stick and zoom chip stay together (zoom above the stick) in the trailing-bottom of the picture on iPhone and iPad, portrait and landscape — not glued to the record button. On iPad landscape they sit on the right edge above the record button.
+- On iPad the system time / battery bar should be gone. HUD chips (STBY, TC, battery) stay.
 
 What to test
 
-- Open a clip, turn on LUT or false colour, and confirm the picture changes. WAVE should look like the live scopes.
-- Share that clip and confirm the file is the original camera clip, not a small preview.
+- Open a clip, turn on LUT or false colour, and confirm the picture changes without hitching. WAVE should look like the live scopes. Auto LUT should pick D-Log vs D-Log2 from the original take (not the 720p preview, which is Rec.709 even for log). A Normal clip should not keep a previous D-Log2 cube. Disconnect, reopen that clip — Auto should still pick the same cube (LUT should say Applying official D-Log2 → Rec.709, not “No matching look”). Clips that are only the 720p sidecar should show a Proxy tag; Share of the original needs the camera unless Full Resolution Caching already pulled it. Storage: Full Resolution Caching on by default. Long-press LUT, pull −1.0 / −2.0, and confirm the look darkens without changing camera EV. With LUT still on, tap next clip — the look should already be on the new picture without cycling the chip.
+- Share that clip with Bake LUT on. Bake exposure should be on by default — a −1.0 pull should land in the file, matching the monitor. Turn Bake exposure off to keep the cube at 0.0. Share without Bake LUT still sends the original camera clip, not a small preview.
 - Leave the clip and confirm live view returns in a couple of seconds — not a long black well.
 - Set MODE to Auto, open EV, turn Face Priority on, then off — EV should return to the value from before it was on (or 0.0).
 - In Manual, open SHUTTER, switch to Angle, pick 180°, and confirm the tile shows 180°.

@@ -59,7 +59,8 @@ fun MediaClipCell(
     onBeginSelection: (() -> Unit)? = null,
     onToggleSelection: (() -> Unit)? = null,
 ) {
-    val downloaded = controller.isDownloaded(file)
+    val grade = controller.cacheGrade(file)
+    val downloaded = grade == MediaCacheGrade.ORIGINAL
     val progress = controller.downloadProgress[file.path]
     val favorite = controller.isFavorite(file)
     val isPhoto = file.kind == MediaKind.PHOTO
@@ -138,7 +139,7 @@ fun MediaClipCell(
                         }
                     }
                 }
-                !downloaded -> {
+                grade == MediaCacheGrade.NONE -> {
                     Box(
                         Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.35f)),
                         contentAlignment = Alignment.Center,
@@ -166,6 +167,12 @@ fun MediaClipCell(
                         modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).size(22.dp),
                     )
                 }
+            }
+            if (grade.isProxyOnly && progress == null && !isSelecting) {
+                MediaBadge(
+                    MediaLibraryCopy.PROXY_TAG,
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                )
             }
             if (!isPhoto && duration != null && progress == null && !isSelecting) {
                 MediaBadge(
@@ -204,7 +211,8 @@ fun MediaClipListRow(
     onBeginSelection: (() -> Unit)? = null,
     onToggleSelection: (() -> Unit)? = null,
 ) {
-    val downloaded = controller.isDownloaded(file)
+    val grade = controller.cacheGrade(file)
+    val downloaded = grade == MediaCacheGrade.ORIGINAL
     val progress = controller.downloadProgress[file.path]
     val favorite = controller.isFavorite(file)
     val isPhoto = file.kind == MediaKind.PHOTO
@@ -216,8 +224,11 @@ fun MediaClipListRow(
     }
     val meta = MediaClipPresentation.metadataLine(file, duration)
     val line =
-        meta.ifEmpty {
-            if (downloaded) "Cached" else "On camera"
+        when {
+            grade.isProxyOnly && meta.isEmpty() -> MediaLibraryCopy.PROXY_TAG
+            grade.isProxyOnly -> "$meta · ${MediaLibraryCopy.PROXY_TAG}"
+            meta.isEmpty() -> if (downloaded) "Cached" else "On camera"
+            else -> meta
         }
     val interaction =
         if (isSelecting) {
@@ -288,13 +299,16 @@ fun MediaClipListRow(
                         )
                     }
                 }
-                !downloaded -> {
+                grade == MediaCacheGrade.NONE -> {
                     OpcIcon(
                         icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.CIRCLE_PLAY,
                         contentDescription = null,
                         tint = LiveDesign.text.copy(alpha = 0.9f),
                         modifier = Modifier.size(18.dp).align(Alignment.Center),
                     )
+                }
+                grade.isProxyOnly -> {
+                    MediaBadge(MediaLibraryCopy.PROXY_TAG, modifier = Modifier.align(Alignment.Center))
                 }
             }
             if (isSelecting) {

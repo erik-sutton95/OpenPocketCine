@@ -45,6 +45,8 @@ enum SettingsHelpCopy {
         "How healthy the camera link is right now — delivery, not radio RSSI."
     static let clearCache =
         "Removes downloaded clip files from this phone. The clip list stays so you can cache them again from the camera."
+    static let cacheFullResolution =
+        "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original — connect the camera if it is not cached."
 }
 
 enum OperatorSettingsTab: String, CaseIterable, Identifiable {
@@ -780,10 +782,17 @@ struct SettingsRootView: View {
             }
         }
         SettingsRowCard {
+            SettingsSwitchInlineRow(
+                title: "Full Resolution Caching",
+                help: SettingsHelpCopy.cacheFullResolution,
+                showTopDivider: false,
+                isOn: model.cacheFullResolution
+            ) {
+                model.cacheFullResolution.toggle()
+            }
             SettingsInlineRow(
                 title: "Local Media Cache",
-                help: "Originals and playback proxies downloaded from the camera.",
-                showTopDivider: false
+                help: "Originals and playback proxies downloaded from the camera."
             ) {
                 SettingsValueText(value: cacheSizeLabel)
             }

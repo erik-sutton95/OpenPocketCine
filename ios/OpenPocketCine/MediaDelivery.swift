@@ -91,9 +91,30 @@ enum MediaDeliveryPostExportAction: String, Sendable {
 
 struct MediaDeliveryConfiguration: Sendable {
     var bakeLUT = true
+    /// When ``bakeLUT`` is on, write ``LUTExposureCompensation`` into the file.
+    /// Off keeps the cube at 0.0. Default on so the export matches the monitor.
+    var bakeLUTExposure = true
     var exportFormat: MediaExportFormat = .mov
     var includeMetadata = true
     var forceFrameioReupload = false
+}
+
+enum MediaDeliveryChrome {
+    /// Hug the options. Cap matches Android `heightIn(max = 520.dp)` so portrait
+    /// Back stays clear of the status bar.
+    static let maxCardHeight: CGFloat = 520
+}
+
+enum MediaDeliveryCopy {
+    static let bakeLUT = "Bake LUT"
+    static let bakeLUTHelpUnavailable = "No LUT selected — pick one in view assists."
+    static let bakeExposure = "Bake exposure"
+    static let bakeExposureHelp =
+        "Write the LUT exposure pull into the file so it matches the monitor. Off bakes the cube at 0.0."
+
+    static func bakeLUTHelp(statusLabel: String) -> String {
+        "Apply \(statusLabel) to exports."
+    }
 }
 
 struct MediaClipDeliveryMetadata: Codable, Sendable {
@@ -102,6 +123,7 @@ struct MediaClipDeliveryMetadata: Codable, Sendable {
     let sizeBytes: UInt64
     let cameraName: String?
     let lutName: String?
+    let lutExposureStops: Double?
     let exportedAt: Date
 }
 
@@ -157,15 +179,22 @@ enum MediaDelivery {
 
     static func metadata(
         for file: MediaFile, configuration: MediaDeliveryConfiguration, lutName: String?,
-        cameraName: String?
+        cameraName: String?, lutExposureStops: Double = 0
     ) -> MediaClipDeliveryMetadata? {
         guard configuration.includeMetadata else { return nil }
+        let bakedStops: Double?
+        if configuration.bakeLUT, configuration.bakeLUTExposure {
+            bakedStops = LUTExposureCompensation.snap(lutExposureStops)
+        } else {
+            bakedStops = nil
+        }
         return MediaClipDeliveryMetadata(
             filename: file.filename,
             captureDate: file.filenameTimestamp ?? "",
             sizeBytes: file.sizeBytes,
             cameraName: cameraName,
             lutName: configuration.bakeLUT ? lutName : nil,
+            lutExposureStops: bakedStops,
             exportedAt: Date())
     }
 

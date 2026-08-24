@@ -142,8 +142,11 @@ final class AssistBarChromeTests: XCTestCase {
             safeArea: EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 0),
             ceilingY: 60 + 8
         )
+        // Header + pad + one footer row (exposure stepper inline with 50/50).
         let pinnedChrome: CGFloat = 16 + 32 + 14 + 40 + 16
-        XCTAssertGreaterThan(well.maxHeight - pinnedChrome, 100)
+        XCTAssertGreaterThan(
+            well.maxHeight - pinnedChrome, 100,
+            "catalog well must still show a drum row above the pinned exposure / 50/50 footer")
         XCTAssertLessThanOrEqual(well.y + well.maxHeight, 330 - 10 + 0.05)
     }
 

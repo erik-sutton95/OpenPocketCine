@@ -84,6 +84,7 @@ import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.AudioAssist
 import com.opencapture.openpocketcine.assists.AudioMetersPanel
@@ -94,7 +95,7 @@ import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.openpocketcine.lut.PlaybackLutColor
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -326,6 +327,7 @@ fun MediaPlayerScreen(
     val status by model.session.status.collectAsState()
     var decodeWidth by remember { mutableIntStateOf(1280) }
     var decodeHeight by remember { mutableIntStateOf(720) }
+    var clipColorMode by remember { mutableIntStateOf(-1) }
     val effectsPlan =
         rememberLiveFeedEffectsPlan(
             assist = assist,
@@ -334,6 +336,7 @@ fun MediaPlayerScreen(
             family = model.session.connectedCamera?.model?.family.orEmpty(),
             cameraName = model.session.connectedCamera?.name,
             playback = true,
+            clipColorMode = clipColorMode,
         )
 
     fun applyListedGeometry() {
@@ -401,6 +404,7 @@ fun MediaPlayerScreen(
         reachedEnd = false
         currentTime = 0f
         duration = active.durationSeconds.toFloat()
+        clipColorMode = -1
         zoom = AnchoredPinchZoom()
         frameScrubbing = false
         decodeWidth = 1280
@@ -411,16 +415,29 @@ fun MediaPlayerScreen(
         player.clearMediaItems()
         val local = controller.cacheForPlayback(active)
         if (local == null) {
+            clipColorMode = -1
             loadError =
                 if (controller.isLive) MediaOperatorCopy.CLIP_OPEN_FAILED
                 else MediaOperatorCopy.CLIP_NOT_CACHED
             return@LaunchedEffect
         }
+        clipColorMode =
+            withContext(Dispatchers.IO) { controller.fetchShotColor(active) }
         player.setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(local)))
         player.prepare()
         applyPlaybackRate()
         player.playWhenReady = true
         isPlaying = true
+        if (model.cacheFullResolution && controller.isLive && !controller.isDownloaded(active)) {
+            controller.download(active)
+        }
+    }
+
+    LaunchedEffect(progress, active.id) {
+        if (progress != null && progress >= 1f && controller.isDownloaded(active)) {
+            clipColorMode =
+                withContext(Dispatchers.IO) { controller.fetchShotColor(active) }
+        }
     }
 
     LaunchedEffect(ready, active.id) {
@@ -790,6 +807,13 @@ fun MediaPlayerScreen(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    if (controller.cacheGrade(active).isProxyOnly) {
+                        MediaBadge(
+                            MediaLibraryCopy.PROXY_TAG,
+                            modifier =
+                                Modifier.semantics { contentDescription = MediaLibraryCopy.PROXY_HELP },
+                        )
+                    }
                     MediaFavoriteButton(favorite) { controller.toggleFavorite(active) }
                 }
                 Column(
@@ -1002,7 +1026,12 @@ fun MediaPlayerScreen(
                     maxHeightDp = 420f,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 88.dp),
                     model = model,
-                    colorMode = CameraCommands.COLOR_NORMAL,
+                    colorMode =
+                        PlaybackLutColor.resolve(
+                            clip = clipColorMode,
+                            live = status.colorMode,
+                            last = OperatorPrefs.lastMonitorColorMode(context),
+                        ),
                 )
             }
             }

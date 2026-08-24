@@ -2,13 +2,16 @@ import Foundation
 import OpenPocketViewCore
 import SwiftUI
 
-/// LUT long-press body: Built-in / DJI / Custom, then 50/50.
+/// LUT long-press body: DJI / Creative / Custom, then exposure and 50/50.
 ///
-/// Keeps OpenZCine chrome: 50/50 + orientation, `.cube` import, no intensity slider,
-/// no RED IPP2, no Off row — the assist-bar chip is off.
+/// DJI Auto follows color with the official Rec.709 cubes. Creative is Mono /
+/// Contrast / Warm / Cool. Custom is imported `.cube` files. The assist-bar
+/// chip is off. Exposure is input-referred stops before the cube (ETTR pull).
 enum LUTAssist {
     /// OpenZCine `assistPanelWidth(for: .lut)`.
     static let longPressPanelWidth: CGFloat = 400
+    static let exposureTitle = "Exposure"
+    static let exposureHelp = "Input stops before the cube. Pull 1–2 after ETTR."
 
     @ViewBuilder
     static func longPressMenu(assist: LiveAssistState) -> some View {
@@ -20,7 +23,7 @@ enum LUTAssist {
         LUTPicker(assist: assist, embedded: true)
     }
 
-    /// Pinned under the catalog so landscape never scrolls 50/50 off-screen.
+    /// Pinned under the catalog so landscape never scrolls exposure / 50/50 off-screen.
     @ViewBuilder
     static func longPressFooter(assist: LiveAssistState) -> some View {
         LUTSplitComparisonBar(assist: assist)
