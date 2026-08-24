@@ -211,6 +211,7 @@ fun LiveViewScreen(model: AppModel) {
         remember {
             if (OpcVulkan.isAvailable) {
                 LiveVulkanSession(
+                    context = context,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onFirstFrame = { model.session.noteLiveFrame() },
                     onFailed = { vulkanFailed = true },

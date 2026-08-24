@@ -218,7 +218,7 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
     /// straight into a slot's `contents()`; `draw(in:)` only binds the
     /// published buffer. Depth 3 means a slot is not rewritten until two newer
     /// builds — each with its draw scheduled immediately on publish — landed.
-    /// ponytail: no semaphore; builds are ≤15 Hz and draws complete within a
+    /// ponytail: no semaphore; builds are ≤25 Hz and draws complete within a
     /// frame. Add completion-handler slot tracking if draw cadence ever
     /// decouples from builds.
     private final class VertexRing: @unchecked Sendable {

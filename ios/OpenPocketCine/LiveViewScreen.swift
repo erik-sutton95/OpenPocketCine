@@ -923,7 +923,7 @@ private struct LiveRecordingTallyGate: View {
     }
 }
 
-/// Scope panels observe `frameSamples.bundle` themselves (≤15 Hz). This host
+/// Scope panels observe `frameSamples.bundle` themselves (≤25 Hz). This host
 /// only tracks assist on/off flags — not `generation`.
 private struct LiveScopeOverlays: View {
     @Environment(AppModel.self) private var model

@@ -18,11 +18,37 @@ class PocketScopeSamplerTest {
         assertEquals(120, h)
         assertEquals(PocketScopeSampler.MAX_WIDTH, 200)
         assertEquals(PocketScopeSampler.POINT_STRIDE, 2)
-        assertEquals(1_000_000_000L / 15, PocketScopeSampler.BASE_MIN_INTERVAL_NS)
+        assertEquals(1_000_000_000L / 25, PocketScopeSampler.BASE_MIN_INTERVAL_NS)
         assertEquals(1_000_000_000L / 10, PocketScopeSampler.DENSE_MIN_INTERVAL_NS)
+        assertEquals(PocketScopeSampler.BASE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(1))
+        assertEquals(PocketScopeSampler.BASE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(2))
+        assertEquals(PocketScopeSampler.DENSE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(3))
         assertTrue(PocketScopeSampler.minIntervalNs(1) < PocketScopeSampler.minIntervalNs(3))
         assertEquals(3.0, PocketScopeSampler.thermalMultiplier(3))
         assertEquals(5.0, PocketScopeSampler.thermalMultiplier(4))
+        assertEquals(
+            3 * PocketScopeSampler.BASE_MIN_INTERVAL_NS,
+            PocketScopeSampler.minIntervalNs(1, 3.0),
+        )
+        // 15 Hz next to a 25 fps well is a 2-frame hold. WAVE-only must
+        // tap every typical SoftAP picture; dense 3+ stays the 10 Hz back-off.
+        assertEquals(25, scheduledTaps(frames = 25, fps = 25, PocketScopeSampler.minIntervalNs(1)))
+        // 10 Hz on a 40 ms picture clock lands every third frame (deadline skip).
+        assertEquals(9, scheduledTaps(frames = 25, fps = 25, PocketScopeSampler.minIntervalNs(3)))
+    }
+
+    private fun scheduledTaps(frames: Int, fps: Int, intervalNs: Long): Int {
+        var next = 0L
+        var taps = 0
+        val dt = 1_000_000_000L / fps
+        for (i in 0 until frames) {
+            val now = i * dt
+            if (now >= next) {
+                next = now + intervalNs
+                taps += 1
+            }
+        }
+        return taps
     }
 
     @Test

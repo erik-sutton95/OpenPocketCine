@@ -77,7 +77,8 @@ Operator Setup, and media list rows stay solid fills.
 
 Assists-off is one YCbCr blit of the MediaCodec AHB (hardware `c2.qti` / Exynos
 HEVC, not `c2.android`). LUT / FALSE / ZEBRA add the grade pass. WAVE / PARADE /
-VECTOR / HISTO tap a 213×120 downsample at 10–15 Hz and paint in Compose Canvas.
+VECTOR / HISTO tap a 200-wide downsample (213×120 on 720p) at 25 Hz
+(10 Hz with three or more scopes) and paint in Compose Canvas.
 WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread; VECTOR uses
 the 128-bin raster.
 

@@ -97,8 +97,9 @@ enum PocketScopeSampler {
     /// Known-good OpenZCine width. 128 + extra pack/vImage was slower on device.
     static let maxWidth = 200
     static let pointStride = 2
-    /// SoftAP stays 25 fps. Scopes do not ride every AU — a hard deadline skips.
-    static let baseMinInterval: CFAbsoluteTime = 1.0 / 15.0
+    /// Typical SoftAP is 25 fps. 1–2 scopes track that picture; a 50 Hz
+    /// proxy still skips. Deadline cannot catch up.
+    static let baseMinInterval: CFAbsoluteTime = 1.0 / 25.0
     /// More scopes share one tap — go slower, not faster.
     static let denseMinInterval: CFAbsoluteTime = 1.0 / 10.0
     static let denseAssistThreshold = 2
@@ -311,7 +312,7 @@ final class LiveFrameSampleBus {
     @ObservationIgnored var sourcePixelBuffer: CVPixelBuffer?
     var transfer: MonitorTransfer = .rec709
     var colorMode: ColorMode?
-    /// Bumps when a new scope bundle lands (≤15 Hz). Present is not gated on this.
+    /// Bumps when a new scope bundle lands (≤25 Hz). Present is not gated on this.
     private(set) var generation = 0
     /// Incremented for every decoded pixel buffer that enters the assist pipeline.
     /// Tests use this to prove the callback ran without hardware HEVC.
@@ -388,7 +389,9 @@ final class LiveAssistEngine: @unchecked Sendable {
     private var nextCeilingLogAt: CFAbsoluteTime = 0
     private var previousBundle = ScopeAssistBundle.empty
     private var loggedTap = false
-    /// Shared tap: 15 Hz, 10 Hz with three or more scopes, shed further by
+    private var tapWindowStart: CFAbsoluteTime = 0
+    private var tapsInWindow = 0
+    /// Shared tap: 25 Hz, 10 Hz with three or more scopes, shed further by
     /// thermal tier (×3 serious, ×5 critical). Deadline cannot catch up.
 
     init() {}
@@ -433,6 +436,8 @@ final class LiveAssistEngine: @unchecked Sendable {
             nextScopeAt = 0
             previousBundle = .empty
             loggedTap = false
+            tapWindowStart = 0
+            tapsInWindow = 0
             ceilingLogMax = 0
             nextCeilingLogAt = 0
             ScopeExposureCeiling.reset()
@@ -565,6 +570,21 @@ final class LiveAssistEngine: @unchecked Sendable {
             previousBundle = sampled
             let observed = ScopeExposureCeiling.observeTapMax(tapMax, transfer: transfer)
             logTapOnce(buffer: buffer, packed: packed, points: sampled.samples.points.count)
+            let tapNow = CFAbsoluteTimeGetCurrent()
+            let interval = PocketScopeSampler.minInterval(activeScopeCount: fx.activeScopeCount)
+            tapsInWindow += 1
+            if tapWindowStart == 0 { tapWindowStart = tapNow }
+            let elapsed = tapNow - tapWindowStart
+            if elapsed >= 2 {
+                let hz = Double(tapsInWindow) / elapsed
+                let budget = 1.0 / interval
+                ControlLiveLog.line(
+                    String(
+                        format: "scope tap: %.1fHz budget=%.0fHz scopes=%d", hz, budget,
+                        fx.activeScopeCount))
+                tapsInWindow = 0
+                tapWindowStart = tapNow
+            }
             // Ceiling calibration breadcrumb: rolling 10 s tap maximum
             // into the pullable journal (tools/pull-control-log.sh).
             // Point the lens at a blown lamp at each ISO and read the

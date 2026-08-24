@@ -127,7 +127,7 @@ internal class LiveFeedEffectsSession(
 
     /**
      * After present. Downsample the OES frame to the iOS tap size, walk it off
-     * the GL thread at 15 Hz (10 Hz with three or more scopes).
+     * the GL thread at 25 Hz (10 Hz with three or more scopes).
      */
     private fun maybeTapScopes(
         policy: ScopeTapPolicy,
@@ -192,6 +192,11 @@ internal class LiveFeedEffectsSession(
                     )
                 previousBundle = sampled
                 mainHandler.post { LiveScopeSampleBus.publish(sampled) }
+                ScopeTapHzLog.note(
+                    TAG,
+                    scopes = policy.activeScopeCount,
+                    intervalNs = PocketScopeSampler.minIntervalNs(policy.activeScopeCount, thermal),
+                )
             } catch (error: Exception) {
                 Log.w(TAG, "scope tap failed", error)
             } finally {

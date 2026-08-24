@@ -79,7 +79,7 @@ data class ScopeAssistBundle(
 object PocketScopeSampler {
     const val MAX_WIDTH = 200
     const val POINT_STRIDE = 2
-    const val BASE_MIN_INTERVAL_NS = 1_000_000_000L / 15
+    const val BASE_MIN_INTERVAL_NS = 1_000_000_000L / 25
     const val DENSE_MIN_INTERVAL_NS = 1_000_000_000L / 10
     const val DENSE_ASSIST_THRESHOLD = 2
     const val TRAIL_DECAY = 0.35

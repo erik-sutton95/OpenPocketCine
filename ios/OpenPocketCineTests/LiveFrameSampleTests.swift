@@ -67,8 +67,8 @@ final class LiveFrameSampleTests: XCTestCase {
         let first = bus.generation
         XCTAssertGreaterThanOrEqual(first, 1, "first scoped sample must tick generation")
 
-        // Past the 15 Hz gate.
-        try? await Task.sleep(for: .milliseconds(100))
+        // Past the 25 Hz gate.
+        try? await Task.sleep(for: .milliseconds(50))
         decoder.handleDecodedFrame(
             ScopeTestBuffers.makeFlatBuffer(code: 200), effects: fx, transfer: .rec709)
         let secondDeadline = Date().addingTimeInterval(2)
@@ -78,7 +78,7 @@ final class LiveFrameSampleTests: XCTestCase {
         }
 
         XCTAssertGreaterThan(
-            bus.generation, first, "each scoped sample past the 15 Hz gate must tick generation")
+            bus.generation, first, "each scoped sample past the 25 Hz gate must tick generation")
         XCTAssertGreaterThanOrEqual(bus.decodedFrames, 2, "sequential feed drains every frame")
     }
 
@@ -378,8 +378,8 @@ final class LiveFrameSampleTests: XCTestCase {
 
     // MARK: - Throttle constants
 
-    func testScopeTapIntervalIsAtMost15Hz() {
-        XCTAssertEqual(PocketScopeSampler.baseMinInterval, 1.0 / 15.0, accuracy: 1e-9)
+    func testScopeTapIntervalTracksTypicalSoftAPRate() {
+        XCTAssertEqual(PocketScopeSampler.baseMinInterval, 1.0 / 25.0, accuracy: 1e-9)
         XCTAssertEqual(PocketScopeSampler.denseMinInterval, 1.0 / 10.0, accuracy: 1e-9)
         XCTAssertEqual(
             PocketScopeSampler.minInterval(activeScopeCount: 1, thermalState: .nominal),
@@ -397,9 +397,32 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertEqual(PocketScopeSampler.thermalMultiplier(.critical), 5)
         XCTAssertEqual(
             PocketScopeSampler.minInterval(activeScopeCount: 1, thermalState: .serious),
-            3.0 / 15.0, accuracy: 1e-9)
+            3.0 / 25.0, accuracy: 1e-9)
         XCTAssertEqual(PocketScopeSampler.maxWidth, 200)
         XCTAssertEqual(PocketScopeSampler.pointStride, 2)
+        // 15 Hz next to a 25 fps well is a 2-frame hold. WAVE-only must
+        // tap every typical SoftAP picture; dense 3+ stays the 10 Hz back-off.
+        XCTAssertEqual(
+            scheduledScopeTaps(frames: 25, fps: 25, interval: PocketScopeSampler.baseMinInterval),
+            25)
+        // 10 Hz on a 40 ms picture clock lands every third frame (deadline skip).
+        XCTAssertEqual(
+            scheduledScopeTaps(frames: 25, fps: 25, interval: PocketScopeSampler.denseMinInterval),
+            9)
+    }
+
+    private func scheduledScopeTaps(frames: Int, fps: Double, interval: CFAbsoluteTime) -> Int {
+        var next = 0.0
+        var taps = 0
+        let dt = 1.0 / fps
+        for i in 0..<frames {
+            let now = Double(i) * dt
+            if now + 1e-12 >= next {
+                next = now + interval
+                taps += 1
+            }
+        }
+        return taps
     }
 
     // MARK: - Sampler contracts (app layer)

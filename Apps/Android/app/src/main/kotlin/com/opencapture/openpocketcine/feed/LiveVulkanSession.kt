@@ -1,15 +1,18 @@
 package com.opencapture.openpocketcine.feed
 
+import android.content.Context
 import android.graphics.ImageFormat
 import android.media.Image
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -20,13 +23,20 @@ import java.util.concurrent.atomic.AtomicReference
  * the SurfaceView swapchain. No `glReadPixels`, no `TextureView.getBitmap`.
  */
 internal class LiveVulkanSession(
+    context: Context,
     private val onDecoderSurface: (Surface) -> Unit,
     private val onFirstFrame: () -> Unit,
     private val onFailed: () -> Unit,
 ) {
+    private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val imageThread = HandlerThread("opc.vk.img").apply { start() }
     private val imageHandler = Handler(imageThread.looper)
+    private val sampleExecutor =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "opc.vk.scope").apply { isDaemon = true }
+        }
+    private val sampleBusy = AtomicBoolean(false)
     private val handle = if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L
     private val slots = FloatArray(GpuLiveLayout.SLOT_STRIDE * 4)
     private val plates = AtomicReference(FloatArray(0))
@@ -40,7 +50,7 @@ internal class LiveVulkanSession(
     private var lastPaint: Any? = cubeSentinel
     private var lastWeight: Any? = cubeSentinel
     @Volatile private var lastPlan: FeedEffectsRenderPlan? = null
-    private var previousBundle = ScopeAssistBundle.EMPTY
+    @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
     private var lastSampleNs = 0L
     @Volatile var windowReady = false
@@ -231,74 +241,114 @@ internal class LiveVulkanSession(
                 val policy = lastPlan?.scopeTap ?: ScopeTapPolicy.IDLE
                 val wantSample = policy.needsTap
                 val now = System.nanoTime()
-                val due =
-                    wantSample &&
-                        now - lastSampleNs >=
-                            PocketScopeSampler.minIntervalNs(policy.activeScopeCount.coerceAtLeast(1))
-                // 1280→213 blit is per-submit. Arm it only on the 10–15 Hz sample
-                // tick; leaving needTap on made WAVE/PARADE/VECTOR stall every frame.
-                OpcVulkan.nativeSetNeedTap(handle, due)
+                var intervalNs = PocketScopeSampler.BASE_MIN_INTERVAL_NS
+                val takeTap =
+                    if (wantSample && now - lastSampleNs >= PocketScopeSampler.BASE_MIN_INTERVAL_NS) {
+                        val thermal =
+                            runCatching {
+                                val pm =
+                                    appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                                PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
+                            }.getOrDefault(1.0)
+                        intervalNs =
+                            PocketScopeSampler.minIntervalNs(
+                                policy.activeScopeCount.coerceAtLeast(1),
+                                thermal,
+                            )
+                        now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)
+                    } else {
+                        false
+                    }
+                // 1280→213 blit is per-submit. Arm it only on the sample tick;
+                // leaving needTap on made WAVE/PARADE/VECTOR stall every frame.
+                OpcVulkan.nativeSetNeedTap(handle, takeTap)
                 val ok = OpcVulkan.nativeSubmit(handle, hb)
                 hb.close()
                 held?.close()
                 held = image
-                if (ok) {
-                    framesPresented.incrementAndGet()
-                    if (started.compareAndSet(false, true)) main.post(onFirstFrame)
-                    val transfer = MonitorTransfer.fromColorMode(policy.colorMode)
-                    if (!wantSample || !due) {
-                        return@setOnImageAvailableListener
-                    }
-                    lastSampleNs = now
-                    val bundle =
-                        if ((policy.includePoints || policy.includeVectorPoints) &&
-                            OpcVulkan.nativeCopyTap(handle, tapBytes)
-                        ) {
-                            PocketScopeSampler.sample(
-                                bytes = tapBytes,
-                                width = TAP_W,
-                                height = TAP_H,
-                                bytesPerRow = TAP_W * 4,
-                                transfer = transfer,
-                                includePoints = policy.includePoints,
-                                includeVectorPoints = policy.includeVectorPoints,
-                                look = policy.vectorLut,
-                                previous = previousBundle,
-                                iso = policy.iso,
-                            )
-                        } else {
-                            OpcVulkan.nativeCopyHisto(handle, histo)
-                            val y = histo.copyOfRange(0, 256)
-                            val rr = histo.copyOfRange(256, 512)
-                            val gg = histo.copyOfRange(512, 768)
-                            val bb = histo.copyOfRange(768, 1024)
-                            val samples = ScopeSamples(y, rr, gg, bb, emptyList())
-                            ScopeAssistBundle(
-                                revision = previousBundle.revision + 1,
-                                samples = samples,
-                                traffic =
-                                    ScopeTrafficLights.reading(
-                                        red = rr,
-                                        green = gg,
-                                        blue = bb,
-                                        transfer = transfer,
-                                        luma = y,
-                                    ),
-                                histogramDisplay =
-                                    PocketScopeSampler.histogramDisplay(
-                                        samples,
-                                        previousBundle.histogramDisplay,
-                                        transfer,
-                                        policy.iso,
-                                    ),
-                                transfer = transfer,
-                                iso = policy.iso,
-                            )
-                        }
-                    previousBundle = bundle
-                    main.post { LiveScopeSampleBus.publish(bundle) }
-                } else {
+                if (!ok) {
+                    if (takeTap) sampleBusy.set(false)
                     main.post(onFailed)
+                    return@setOnImageAvailableListener
+                }
+                framesPresented.incrementAndGet()
+                if (started.compareAndSet(false, true)) main.post(onFirstFrame)
+                if (!takeTap) return@setOnImageAvailableListener
+                lastSampleNs = now
+                val transfer = MonitorTransfer.fromColorMode(policy.colorMode)
+                val includePoints = policy.includePoints
+                val includeVectorPoints = policy.includeVectorPoints
+                val look = policy.vectorLut
+                val iso = policy.iso
+                val previous = previousBundle
+                val packed =
+                    if ((includePoints || includeVectorPoints) &&
+                        OpcVulkan.nativeCopyTap(handle, tapBytes)
+                    ) {
+                        tapBytes.copyOf()
+                    } else {
+                        null
+                    }
+                val histoCopy =
+                    if (packed == null) {
+                        OpcVulkan.nativeCopyHisto(handle, histo)
+                        histo.copyOf()
+                    } else {
+                        null
+                    }
+                val scopes = policy.activeScopeCount
+                val loggedIntervalNs = intervalNs
+                sampleExecutor.execute {
+                    try {
+                        val bundle =
+                            if (packed != null) {
+                                PocketScopeSampler.sample(
+                                    bytes = packed,
+                                    width = TAP_W,
+                                    height = TAP_H,
+                                    bytesPerRow = TAP_W * 4,
+                                    transfer = transfer,
+                                    includePoints = includePoints,
+                                    includeVectorPoints = includeVectorPoints,
+                                    look = look,
+                                    previous = previous,
+                                    iso = iso,
+                                )
+                            } else {
+                                val bins = histoCopy ?: IntArray(1024)
+                                val y = bins.copyOfRange(0, 256)
+                                val rr = bins.copyOfRange(256, 512)
+                                val gg = bins.copyOfRange(512, 768)
+                                val bb = bins.copyOfRange(768, 1024)
+                                val samples = ScopeSamples(y, rr, gg, bb, emptyList())
+                                ScopeAssistBundle(
+                                    revision = previous.revision + 1,
+                                    samples = samples,
+                                    traffic =
+                                        ScopeTrafficLights.reading(
+                                            red = rr,
+                                            green = gg,
+                                            blue = bb,
+                                            transfer = transfer,
+                                            luma = y,
+                                        ),
+                                    histogramDisplay =
+                                        PocketScopeSampler.histogramDisplay(
+                                            samples,
+                                            previous.histogramDisplay,
+                                            transfer,
+                                            iso,
+                                        ),
+                                    transfer = transfer,
+                                    iso = iso,
+                                )
+                            }
+                        previousBundle = bundle
+                        main.post { LiveScopeSampleBus.publish(bundle) }
+                        ScopeTapHzLog.note(TAG, scopes = scopes, intervalNs = loggedIntervalNs)
+                    } finally {
+                        sampleBusy.set(false)
+                    }
                 }
             },
             imageHandler,

@@ -313,6 +313,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live WAVE / PARADE / HISTO / VECTOR tracked the picture at 15 Hz (10 Hz
+  with three or more), so traces held about two SoftAP frames. Nominal tap
+  is 25 Hz with 1–2 scopes; dense 3+ stays 10 Hz; thermal still ×3 / ×5.
+  Downsample is 200-wide (213×120 on 720p). Android Vulkan walks the tap
+  off the image thread so 25 Hz cannot stall the well.
 - Disconnected library Auto LUT keeps the clip's D-Log / D-Log2 cube. Opening
   the LUT sheet no longer restamps Auto from a missing live SET (that showed
   “No matching look for this color / camera” on a log clip). Color is
