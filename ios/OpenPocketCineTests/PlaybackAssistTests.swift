@@ -94,7 +94,7 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertTrue(landed.overlay)
     }
 
-    func testLUTHandoffKeepsThePlayerUntilMetalOwnsThePicture() {
+    func testLUTHandoffHidesThePlayerOnceMetalOwnsThePicture() {
         let cube = BuiltInLook.mono.cube()
         var fx = LiveImageEffects()
         fx.lutDimension = cube.size
@@ -109,14 +109,56 @@ final class PlaybackAssistTests: XCTestCase {
 
         let landed = PlaybackFeedHandoff.plan(
             effects: fx, overlayOnly: false, unmanagedBake: true, metalHasPresented: true)
-        XCTAssertTrue(
+        XCTAssertFalse(
             landed.showPlayer,
-            "player stays under LUT — hiding it after a black plate is the well")
+            "live hides the identity layer once Metal owns LUT replace; a second HEVC present is the hitch"
+        )
         XCTAssertTrue(landed.showFeed)
         XCTAssertFalse(landed.overlay)
         XCTAssertTrue(
             landed.unmanaged,
             "LUT cube product presents unmanaged, same as live HevcDecoder")
+    }
+
+    func testPlaybackDisplayLinkDoesNotCapTheCubeAtTwentyFour() {
+        XCTAssertGreaterThanOrEqual(
+            PlaybackDisplayLink.pollRange.maximum, 60,
+            "max 30 preferred 24 is the 22–23 fps LUT hitch; LUT-off is AVPlayerLayer at clip rate")
+        XCTAssertNotEqual(PlaybackDisplayLink.pollRange.preferred, 24)
+        XCTAssertGreaterThan(PlaybackDisplayLink.pollRange.minimum, 15)
+        XCTAssertTrue(
+            PlaybackDisplayLink.shouldPull(itemHasPresented: false, hasNewPixelBuffer: false),
+            "until the first cube lands, keep pulling even without a new buffer")
+        XCTAssertFalse(
+            PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: false),
+            "after present, the cube only bakes a new player frame")
+        XCTAssertTrue(
+            PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
+    }
+
+    func testPlaybackVideoOutputGradesNativeYUVNotBGRA() {
+        XCTAssertFalse(
+            PlaybackVideoOutput.forcesRGBConversion,
+            "32BGRA from AVPlayerItemVideoOutput converts every HEVC frame; live grades 420")
+        XCTAssertEqual(
+            PlaybackVideoOutput.pixelFormat,
+            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+        XCTAssertEqual(
+            PlaybackVideoOutput.pixelBufferAttributes[
+                kCVPixelBufferMetalCompatibilityKey as String] as? Bool,
+            true)
+    }
+
+    @MainActor
+    func testPreviewLUTDoesNotInstallAVideoComposition() {
+        let session = PlaybackFeedSession()
+        let item = AVPlayerItem(url: URL(fileURLWithPath: "/tmp/openpocketcine-preview-lut.mp4"))
+        session.prepare(item)
+        XCTAssertNil(
+            item.videoComposition,
+            "preview LUT grades AVPlayerItemVideoOutput on Metal; AVVideoComposition is export-only"
+        )
+        session.shutdown()
     }
 
     func testPresentPolicyDrivesHandoffOwnership() {
@@ -376,6 +418,57 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertTrue(feed.isHidden)
         feed.resetPresentation()
         XCTAssertNotEqual(feed.debugPresentGeneration, generation)
+    }
+
+    func testUnmanagedLUTBakeOfRec709Tagged420KeepsLuma() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal required")
+        }
+        let cube = BuiltInLook.mono.cube()
+        var fx = LiveImageEffects()
+        fx.lutDimension = cube.size
+        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
+        let buffer = ScopeTestBuffers.make420v(width: 32, height: 32, leftY: 128, rightY: 128)
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2,
+            .shouldPropagate)
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2,
+            .shouldPropagate)
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2,
+            .shouldPropagate)
+        let source = CIImage(cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
+        let identity = CIImage(cvPixelBuffer: buffer)
+        let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
+        XCTAssertTrue(product.unmanagedBake)
+
+        let baker = FeedFrameBaker(device: device)
+        let drawable = CGSize(width: 32, height: 32)
+        let done = expectation(description: "420 lut bake")
+        baker.scheduleBake(
+            image: product.image, drawableSize: drawable, pixelFormat: .bgra8Unorm,
+            unmanaged: true
+        ) {
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        guard let texture = baker.bakedTexture(for: drawable, pixelFormat: .bgra8Unorm) else {
+            XCTFail("baker must publish the 420 LUT texture")
+            return
+        }
+        defer { baker.releaseBakedTexture(texture) }
+        guard
+            let wrapped = CIImage(
+                mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
+        else {
+            XCTFail("CIImage(mtlTexture:) must wrap the bake")
+            return
+        }
+        XCTAssertGreaterThan(
+            Self.sampleLuma(wrapped), 0.04,
+            "unmanaged LUT of Rec.709-tagged 420 (live-shaped player output) must not present black"
+        )
     }
 
     func testUnmanagedLUTBakeOfRec709TaggedBGRAKeepsLuma() throws {

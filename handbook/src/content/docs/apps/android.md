@@ -32,7 +32,9 @@ rolling — the chip grays and tap/pinch toast; idle still hops to D-Log
 off 1×.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Next/prev with LUT on keeps the grade on
-the same GLES host. Auto on a clip reads `com.dji.camera.ColorGammaSxS`
+the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /
+ZEBRA grade in `LiveFeedEffectsSession` like live — TextureView is only the
+window). Auto on a clip reads `com.dji.camera.ColorGammaSxS`
 from the original take like iOS — not the LRF/XRF sidecar (Rec.709 even
 for log). Shot color is stored with the cached clip. A **Proxy** tag means
 only the 720p sidecar is on the phone. Storage **Full Resolution Caching**

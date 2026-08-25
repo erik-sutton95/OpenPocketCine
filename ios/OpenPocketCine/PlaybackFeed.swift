@@ -6,8 +6,9 @@ import QuartzCore
 import UIKit
 
 /// Present order for clip assists — same contract as live `HevcDecoder.applyAssistResult`.
-/// Identity stays on `AVPlayerLayer`. `CIFeedView` unhides only after a bake presents;
-/// an unpresented CAMetalLayer is an opaque black plate over a working picture.
+/// Identity stays on `AVPlayerLayer` until Metal owns LUT replace; then the player
+/// hides (live hides the VT layer the same way). Overlay (PEAK / FALSE / ZEBRA)
+/// keeps the player. `CIFeedView` unhides only after a bake presents.
 enum PlaybackFeedHandoff {
     struct Plan: Equatable {
         var showPlayer: Bool
@@ -29,11 +30,11 @@ enum PlaybackFeedHandoff {
             return Plan(
                 showPlayer: true, showFeed: metalHasPresented, overlay: true, unmanaged: true)
         }
-        // Keep the player as underlay. Hiding it after a stale or empty
-        // CAMetalLayer present is the black well — Rec.709 identity through
-        // NSNull is the same well. Metal covers the player once the cube lands.
+        // Same as live `HevcDecoder.adoptReplacingMetalFeed`: identity until
+        // Metal owns the cube, then hide the HEVC layer so AVPlayer is not a
+        // second present under the grade.
         return Plan(
-            showPlayer: true,
+            showPlayer: !metalHasPresented,
             showFeed: metalHasPresented,
             overlay: false,
             unmanaged: presentUnmanaged(overlay: false, unmanagedBake: unmanagedBake))
@@ -80,6 +81,42 @@ enum PlaybackFeedHandoff {
     }
 }
 
+/// Pull clock for preview LUT. LUT-off is `AVPlayerLayer` at the clip rate.
+/// A 15–30 Hz display link preferred 24 is the 22–23 fps hitch: 30p proxies
+/// get pulldown, and the system may shed to 15. Poll the display; the cube
+/// only bakes when `hasNewPixelBuffer` (or until the first present).
+enum PlaybackDisplayLink {
+    static let pollRange = CAFrameRateRange(minimum: 24, maximum: 120, preferred: 120)
+
+    static func shouldPull(itemHasPresented: Bool, hasNewPixelBuffer: Bool) -> Bool {
+        if !itemHasPresented { return true }
+        return hasNewPixelBuffer
+    }
+}
+
+/// Pixel buffers pulled from the player for the live compositor.
+///
+/// Preview LUT is `CIColorCube` on this buffer, not `AVVideoComposition`.
+/// 32BGRA forces an HEVC→RGB conversion every frame; live grades 420 IOSurface.
+enum PlaybackVideoOutput {
+    static let pixelBufferAttributes: [String: Any] = [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        kCVPixelBufferMetalCompatibilityKey as String: true,
+        kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
+    ]
+
+    static var pixelFormat: OSType? {
+        let value = pixelBufferAttributes[kCVPixelBufferPixelFormatTypeKey as String]
+        if let number = value as? NSNumber { return number.uint32Value }
+        return value as? OSType
+    }
+
+    /// True when the output asks AVPlayer to author RGB instead of native YUV.
+    static var forcesRGBConversion: Bool {
+        pixelFormat == kCVPixelFormatType_32BGRA
+    }
+}
+
 /// Player → pixel buffer → `LiveAssistEngine` → `CIFeedView`.
 ///
 /// `AVVideoComposition` after `replaceCurrentItem` never called the compositor on
@@ -90,6 +127,8 @@ final class PlaybackFeedSession: NSObject {
     let output: AVPlayerItemVideoOutput
     private let assistEngine = LiveAssistEngine()
     private let linkTarget = DisplayLinkTarget()
+    private let pullQueue = DispatchQueue(
+        label: "opv.playback-pull", qos: .userInteractive)
     private var displayLink: CADisplayLink?
     private weak var boundItem: AVPlayerItem?
     private weak var player: AVPlayer?
@@ -103,20 +142,26 @@ final class PlaybackFeedSession: NSObject {
     private var lastUnmanagedBake = false
     private var pendingKick = false
     private var loggedRaster = false
+    private var lastPresentHealthLogAt: Date?
     private var hostGeneration = 0
     /// Bumped in `prepare`. `presentedEpoch` catches up in `adoptPresentedFeed`.
     private var itemEpoch: UInt64 = 0
     private var presentedEpoch: UInt64 = 0
 
     override init() {
-        output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferMetalCompatibilityKey as String: true,
-        ])
+        output = AVPlayerItemVideoOutput(
+            pixelBufferAttributes: PlaybackVideoOutput.pixelBufferAttributes)
         super.init()
-        output.setDelegate(self, queue: .main)
+        output.setDelegate(self, queue: pullQueue)
         linkTarget.handler = { [weak self] in
-            Task { @MainActor in self?.tick() }
+            guard let self else { return }
+            let time = self.outputTime()
+            let hasNew = self.output.hasNewPixelBuffer(forItemTime: time)
+            guard
+                PlaybackDisplayLink.shouldPull(
+                    itemHasPresented: self.itemHasPresented, hasNewPixelBuffer: hasNew)
+            else { return }
+            self.schedulePull(force: self.effects.needsSample && !self.itemHasPresented)
         }
     }
 
@@ -144,7 +189,7 @@ final class PlaybackFeedSession: NSObject {
         if host != nil {
             applyLayerPlan(metalHasPresented: false)
         }
-        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.04)
+        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
     }
 
     func reserveHostGeneration() -> Int {
@@ -237,7 +282,7 @@ final class PlaybackFeedSession: NSObject {
                 metalHasPresented: host?.ciFeed.hasPresentedFrame ?? false,
                 itemHasPresented: itemHasPresented)
             {
-                pull(force: true)
+                schedulePull(force: true)
             }
         } else if changed {
             stopLink()
@@ -268,7 +313,7 @@ final class PlaybackFeedSession: NSObject {
     private func startLink() {
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: linkTarget, selector: #selector(DisplayLinkTarget.tick))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 24)
+        link.preferredFrameRateRange = PlaybackDisplayLink.pollRange
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
@@ -283,22 +328,22 @@ final class PlaybackFeedSession: NSObject {
     @MainActor
     func noteItemReady() {
         guard effects.needsSample else { return }
-        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.04)
-        pull(force: true)
+        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
+        schedulePull(force: true)
     }
 
-    @MainActor
-    private func tick() {
-        pull(force: effects.needsSample && !itemHasPresented)
+    private func schedulePull(force: Bool) {
+        pullQueue.async { [weak self] in
+            self?.pull(force: force)
+        }
     }
 
     @MainActor
     private func pullIfMetalWaiting() {
         guard effects.needsSample, !itemHasPresented else { return }
-        pull(force: true)
+        schedulePull(force: true)
     }
 
-    @MainActor
     private func pull(force: Bool) {
         guard effects.needsSample else { return }
         let time = outputTime()
@@ -331,10 +376,8 @@ final class PlaybackFeedSession: NSObject {
             let seekTime = player.currentTime()
             player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) {
                 [weak self] _ in
-                Task { @MainActor in
-                    self?.pendingKick = false
-                    self?.pull(force: true)
-                }
+                self?.pendingKick = false
+                self?.schedulePull(force: true)
             }
         }
     }
@@ -411,11 +454,21 @@ final class PlaybackFeedSession: NSObject {
     private func adoptPresentedFeed() {
         presentedEpoch = itemEpoch
         guard let feed = host?.ciFeed else { return }
+        maybeLogPresentHealth()
         if lastOverlayOnly || effects.needsOverlayFeed {
             applyLayerPlan(metalHasPresented: feed.hasPresentedFrame)
             return
         }
         applyLayerPlan(metalHasPresented: replaceOwnsPicture)
+    }
+
+    @MainActor
+    private func maybeLogPresentHealth() {
+        guard effects.needsGPUFeed, let feed = host?.ciFeed else { return }
+        let now = Date()
+        if let last = lastPresentHealthLogAt, now.timeIntervalSince(last) < 2 { return }
+        lastPresentHealthLogAt = now
+        ControlLiveLog.line("media: \(feed.debugLine)")
     }
 
     private var replaceOwnsPicture: Bool {
@@ -490,9 +543,7 @@ final class PlaybackFeedHostView: UIView {
 
 extension PlaybackFeedSession: AVPlayerItemOutputPullDelegate {
     nonisolated func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
-        Task { @MainActor in
-            self.pull(force: true)
-        }
+        pull(force: true)
     }
 }
 

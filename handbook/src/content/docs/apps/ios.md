@@ -27,8 +27,11 @@ project with XcodeGen — see [Setup](../guides/setup/).
   tap/pinch toast instead of changing color.
 - Media library, playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
-  GPU latest-wins, freeze keeps the last frame). Next/prev with LUT on keeps
-  the grade without cycling the chip. Auto LUT remembers shot color with the
+  GPU latest-wins, freeze keeps the last frame). Preview LUT grades the
+  decoded 420 frame on Metal at 1440 px — not `AVVideoComposition` (that
+  path is export bake). LUT replace hides the player once Metal owns the
+  picture. Next/prev with LUT on keeps the grade without cycling the chip.
+  Auto LUT remembers shot color with the
   cached clip, so it still binds when the camera is disconnected. A **Proxy**
   tag means only the 720p sidecar is on the phone — connect to share the
   original. Storage **Full Resolution Caching** (on by default) also caches

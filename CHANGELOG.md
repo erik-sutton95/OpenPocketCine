@@ -43,14 +43,20 @@ All notable changes to this project are documented here. The format is based on
   still pulls the original 4K file.
 
 - iOS playback LUT / PEAK / FALSE / ZEBRA follow live present order on the 720p
-  proxy (`AVPlayerItemVideoOutput` → `LiveAssistEngine` → `CIFeedView` as a
-  sibling of `AVPlayerLayer`). Nesting Metal inside `AVPlayerLayer` presented
-  LUT replace as a black plate (zebra / peaking still showed through). The
-  look unhides only after a bake lands — attaching an `AVVideoComposition`
-  after `replaceCurrentItem` never painted the picture. SwiftUI `attach` no
-  longer invalidates the in-flight cube. Auto LUT uses the last live color
-  mode so a disconnected library clip still binds the D-Log / D-Log2 cube.
-  Grade is GPU-only (no per-frame CPU blit).
+  proxy (`AVPlayerItemVideoOutput` 420 IOSurface → `LiveAssistEngine` →
+  `CIFeedView` as a sibling of `AVPlayerLayer`). Preview LUT is not
+  `AVVideoComposition` (export bake still is). The output asks for Metal
+  420, not 32BGRA, so AVPlayer does not convert every HEVC frame to RGB.
+  LUT replace hides the player once Metal owns the cube, matching live;
+  overlay stripes keep the identity layer. Nesting Metal inside
+  `AVPlayerLayer` presented LUT replace as a black plate (zebra / peaking
+  still showed through). The look unhides only after a bake lands. SwiftUI
+  `attach` no longer invalidates the in-flight cube. Auto LUT uses the last
+  live color mode so a disconnected library clip still binds the D-Log /
+  D-Log2 cube. Grade is GPU-only (no per-frame CPU blit). Pixel-buffer
+  pulls run on `opv.playback-pull`. The LUT display link follows the
+  display (24–120 Hz) and only bakes a new player frame — it is not
+  capped at 24 fps.
 
 - Shared `FeedPresentPolicy` (Swift core + Android lockstep): skip duplicate
   GPU timestamps, latest-wins if a bake is busy, freeze is a 2 s flag (keep

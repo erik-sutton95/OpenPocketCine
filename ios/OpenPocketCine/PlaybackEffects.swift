@@ -15,9 +15,10 @@ enum MediaLUT {
         .highQualityDownsample: true,
     ])
 
-    /// Live view downscales the compositor to 1440 px. `AVVideoComposition` still
-    /// renders at the source raster — without this scale-back the picture sits in
-    /// the bottom-left and the rest of the buffer is green.
+    /// Export bake stays at the source raster. Preview LUT does not use this
+    /// composition — it grades `AVPlayerItemVideoOutput` at `maxWorkingWidth`.
+    /// Fitting a downscaled CI output into the composition buffer without this
+    /// transform parks the picture in the bottom-left and fills the rest green.
     static func transformFitting(_ source: CGRect, to target: CGRect) -> CGAffineTransform {
         guard source.width > 1, source.height > 1, target.width > 1, target.height > 1 else {
             return .identity
