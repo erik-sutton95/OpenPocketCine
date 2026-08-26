@@ -907,7 +907,7 @@ class CameraControlTest {
         assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
         assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
-        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_SELFIE_FLIP))
+        assertEquals(0, SwiftCore.waitKey(SwiftCore.CMD_GET_SELFIE_FLIP))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_ISO_LIMIT))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))

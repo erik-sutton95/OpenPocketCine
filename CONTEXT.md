@@ -63,7 +63,8 @@ TT180. On: encoder is true-to-scene — skip extra-mirror. Extra-mirror
 holds the last picture ~3 frames before X-flipping (no in-place swap).
 File follows Flip; Mimo live stays readable. GET is untracked on the live
 UDP ACK pump (~1 Hz) and must not complete audio / glamour `0x8E` waiters (same
-opcode, other pids). Replies are datalink pktType `0x03` — same command
+opcode, other pids). Keepalive BLE GET when UDP replies go stale (≥2 s).
+Replies are datalink pktType `0x03` — same command
 window as record/stop, zoom ACK, and every other GET/SET. The 40 Hz window
 ACK must echo that seq in group 1 (not handshake `baseSeq`) or the
 command downlink goes stale while HEVC keeps moving.

@@ -74,6 +74,7 @@ object SwiftCore {
     const val CMD_DELETE_MEDIA = 58
     const val CMD_SET_MEDIA_FAVORITE = 59
     const val CMD_NANO_LIVE_VIEW_GATE = 60
+    /** Untracked pid `0x38` GET. `waitKey` is 0 so it cannot steal other `0x8E` waiters. */
     const val CMD_GET_SELFIE_FLIP = 61
 
     /** DUML set/cmd key the camera ACKs for [kind]. */
@@ -90,7 +91,7 @@ object SwiftCore {
             CMD_GET_VOCAL_BOOST, CMD_SET_VOCAL_BOOST,
             CMD_SET_ISO_LIMIT, CMD_GET_ISO_LIMIT, CMD_SET_FOV,
             CMD_SET_FOCUS_TRACK, CMD_GET_FOCUS_TRACK,
-            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR, CMD_GET_SELFIE_FLIP,
+            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR,
             -> 0x028E
             CMD_AUDIO_DSP_GET -> 0x02A0
             CMD_AUDIO_DSP_SET, CMD_AUDIO_DSP_PATCH_WIND, CMD_AUDIO_DSP_PATCH_DIRECTIONAL -> 0x029F

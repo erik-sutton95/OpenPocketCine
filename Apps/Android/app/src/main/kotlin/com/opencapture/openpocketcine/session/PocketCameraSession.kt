@@ -154,6 +154,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var formatPin: FormatPin? = null
     private var colorPin: ColorPin? = null
     private var gimbalStickMapping = GimbalStickMapping()
+    /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
+    @Volatile private var lastSelfieFlipReplyElapsed = 0L
     @Volatile private var lastAssistMirror = false
     private var teleColorSent = false
     private var restoreDLog2OnWide = false
@@ -330,6 +332,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         formatPin = null
         colorPin = null
         gimbalStickMapping = GimbalStickMapping()
+        lastSelfieFlipReplyElapsed = 0L
         lastAssistMirror = false
         syncGimbalPose()
         teleColorSent = false
@@ -529,6 +532,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     if (frame.cmdSet == 0x07 && frame.cmdId == 0x46 && frame.flags == SwiftCore.FLAG_REQUEST) {
                         ble.send(SwiftCore.command(SwiftCore.CMD_PAIR_APPROVAL_ACK, frame.seq))
                     }
+                    // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter
+                    // here stole Flip replies as audio/glamour ACKs.
+                    if (CameraCommands.isSelfieFlipGetReply(frame.cmdSet, frame.cmdId, frame.payload)) {
+                        ingestDatalinkFrame(frame)
+                        return@collect
+                    }
                     val waiter = waiters[frame.key]
                     if (waiter != null) {
                         waiter.keys.forEach { waiters.remove(it) }
@@ -604,6 +613,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     if (live && !isBrowsingMedia) {
                         publishPipelineStats()
                         recoverLiveViewIfNeeded()
+                    }
+                    if (ssid != null && !holdsMonitor && live && !isBrowsingMedia) {
+                        val rxAge =
+                            lastSelfieFlipReplyElapsed.takeIf { it > 0 }?.let {
+                                SystemClock.elapsedRealtime() - it
+                            }
+                        if (rxAge == null || rxAge >= 2_000L) {
+                            ble.send(SwiftCore.command(SwiftCore.CMD_GET_SELFIE_FLIP))
+                        }
                     }
                     delay(1_000)
                 }
@@ -1241,7 +1259,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun ingestDatalinkFrame(frame: DumlFrame) {
         // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter here
         // stole Flip replies as audio/glamour ACKs after first picture.
-        if (!CameraCommands.isSelfieFlipGetReply(frame.cmdSet, frame.cmdId, frame.payload)) {
+        if (CameraCommands.isSelfieFlipGetReply(frame.cmdSet, frame.cmdId, frame.payload)) {
+            lastSelfieFlipReplyElapsed = SystemClock.elapsedRealtime()
+        } else {
             val waiter = waiters[frame.key]
             if (waiter != null) {
                 waiter.keys.forEach { waiters.remove(it) }

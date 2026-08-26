@@ -16,7 +16,7 @@ Fixes
 - After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
 - The live feed comes up as soon as the camera answers. If the picture dies while the camera is still talking, the app asks for a fresh frame instead of sitting black.
 - Live WAVE follows the picture instead of stepping every other frame. PARADE / HISTO / VECTOR share that tap.
-- Stick and zoom stay together (zoom above the stick), not glued to record. Rotate-180 inverts stick L/R when the turn finishes; joystick-only 180 does not. Live extra-mirrors at 180 when Control Center Selfie Flip is off; Flip on skips it. A hideable debug plate shows TT180 / Flip.
+- Stick and zoom stay together (zoom above the stick), not glued to record. Rotate-180 inverts stick L/R when the turn finishes; joystick-only 180 does not. Live extra-mirrors at 180 when Control Center Selfie Flip is off; Flip on skips it.
 
 What to test
 
@@ -24,4 +24,4 @@ What to test
 - Share that clip with Bake LUT on. Bake exposure should be on by default — a −1.0 pull should land in the file, matching the monitor. Turn Bake exposure off to keep the cube at 0.0. Share without Bake LUT still sends the original camera clip, not a small preview.
 - Leave the clip and confirm live view returns in a couple of seconds — not a long black well.
 - Color D-Log2, hit REC: zoom chip should gray. Tap and pinch should toast and stay at 1×. Stop — idle D-Log2 should still hop and zoom. D-Log while rolling should still zoom. In DISP 1 the toast sits under the top bar; DISP 2 it sits on the feed edge.
-- On live, turn WAVE on and pan the Pocket. Traces should move with the picture, not hold two frames. Then triple-tap 180: stick L/R should match the picture. Flip off extra-mirrors; Flip on does not. Toggle Flip several times — the debug plate Flip line should keep tracking. HIDE puts the plate away.
+- On live, turn WAVE on and pan the Pocket. Traces should move with the picture, not hold two frames. Then triple-tap 180: stick L/R should match the picture. Flip off extra-mirrors; Flip on does not. Toggle Flip several times while at 180 — extra-mirror should follow Flip, and record/zoom should keep answering.

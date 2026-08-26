@@ -823,14 +823,6 @@ import Testing
         desync.applyAttitude(attitude(100))
         #expect(!desync.commanded180)
         #expect(desync.pendingRotateCount == 0)
-        #expect(GimbalStickDebugSlot.current(commanded180: true) == .rotate180)
-        #expect(GimbalStickDebugSlot.current(commanded180: false) == .front)
-        var dbg = GimbalStickDebug()
-        dbg[.rotate180].mirror = .on
-        dbg[.rotate180].invert = .off
-        #expect(dbg.mirror(commanded180: true, auto: false))
-        #expect(!dbg.invert(commanded180: true, auto: true))
-        #expect(!dbg.mirror(commanded180: false, auto: false))
         let tt180 = GimbalStickMapping(commanded180: true)
         #expect(tt180.poseViewFlip, "TT180 Flip off extra-mirrors")
         #expect(tt180.invertPan)

@@ -34,8 +34,7 @@ Selfie Flip is off; Flip on skips extra-mirror. The last picture stays
 for a couple of frames before that X-flip so the feed does not swap in
 place. Invert is the rotate-180 button at settle, not joystick 180.
 Reconnect-at-180 seeds TT180 from settled attitude (a 0° stub does not
-lock front). iOS has the debug plate; Android has the invert field and
-the XOR mapping. D-Log2 cannot zoom while rolling — the chip grays and
+lock front). D-Log2 cannot zoom while rolling — the chip grays and
 tap/pinch toast; idle still hops to D-Log off 1×.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Next/prev with LUT on keeps the grade on

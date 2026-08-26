@@ -399,7 +399,6 @@ struct LiveViewScreen: View {
                 feed: layout.onFeed,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
-            LiveGimbalDebugOverlay(feed: layout.onFeed)
 
             if model.chromeSectionMounts(.toolBar) {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -568,7 +567,6 @@ struct LiveViewScreen: View {
                 feed: picture,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
-            LiveGimbalDebugOverlay(feed: picture)
 
             Rectangle()
                 .fill(LiveDesign.glass)

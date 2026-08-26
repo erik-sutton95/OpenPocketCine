@@ -64,7 +64,7 @@ final class DatalinkDriver {
     nonisolated private let videoAssembler = SoftAPVideoAssembler()
     /// Session/socket snapshot for the 40 Hz ACK pump (UDP queue, not MainActor).
     nonisolated private let wire = OSAllocatedUnfairLock(initialState: WireState())
-    /// Last pid `0x38` GET write / reply. Debug plate reads these; UDP queue stamps reply.
+    /// Last pid `0x38` GET write / reply. Keepalive BLE fallback reads these; UDP queue stamps reply.
     private(set) var lastSelfieFlipSendAt: Date?
     nonisolated private let lastSelfieFlipReply = OSAllocatedUnfairLock(initialState: Date?.none)
     var lastSelfieFlipReplyAt: Date? { lastSelfieFlipReply.withLock { $0 } }

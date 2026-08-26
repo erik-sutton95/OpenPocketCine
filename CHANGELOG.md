@@ -317,6 +317,11 @@ All notable changes to this project are documented here. The format is based on
 - Rewrite public protocol and capture docs so intercept cookbooks stay out of the
   tracked tree.
 
+### Removed
+
+- iOS live gimbal debug plate (TT180 / yaw / Flip / invert forces). Stick
+  invert and extra-mirror follow `GimbalStickMapping` only, same as Android.
+
 ### Fixed
 
 - Zoom while recording in D-Log2: the chip now grays (same 0.4 as interface
@@ -337,14 +342,14 @@ All notable changes to this project are documented here. The format is based on
   to 180 does not invert. Extra-mirror live HEVC when TT180 and Control
   Center Selfie Flip is off (`0x8E` pid `0x0038` `00`); Flip on skips
   extra-mirror so the monitor stays readable like Mimo. Invert latches at
-  the end of the 180, not at the 90° midpoint. XOR the MIRROR chip. iOS
-  live view shows a gimbal debug plate (TT180 / yaw180 / Flip / invert).
+  the end of the 180, not at the 90° midpoint. XOR the MIRROR chip.
   Reconnect at 180 seeds TT180 from attitude (a 0° stub does not lock
   front) and inverts without another triple-tap. Pid `0x38` GET is
   untracked on the live UDP ACK pump (~1 Hz) and does not complete
   audio / glamour `0x8E` waiters (a session Task plus a `.ready`-only
   write used to freeze Flip after a few seconds while video kept
-  moving). Window ACK group 1 echoes the latest pktType-`0x03`
+  moving). Keepalive BLE Flip GET when UDP replies go stale (≥2 s).
+  Window ACK group 1 echoes the latest pktType-`0x03`
   transport seq (Mimo). That window is every command reply (Flip
   GET, other `0x8E`, record/stop, zoom ACK), not Flip alone;
   repeating handshake `baseSeq` there filled it while HEVC and

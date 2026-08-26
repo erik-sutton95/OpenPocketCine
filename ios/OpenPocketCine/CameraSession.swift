@@ -94,7 +94,7 @@ final class CameraSession {
     @ObservationIgnored var datalink: DatalinkDriver?
     @ObservationIgnored private var frameRouter: Task<Void, Never>?
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
-    /// Last pid `0x38` GET reply. Debug plate shows stale when this stops advancing.
+    /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
     @ObservationIgnored private var lastSelfieFlipReplyAt: Date?
     @ObservationIgnored private var waiters: [UInt16: FrameWaiter] = [:]
     /// Handshake replies can land in the same notification before the next waiter is registered.
@@ -131,21 +131,10 @@ final class CameraSession {
     private(set) var controlBusy = false
     /// Last camera-control reply (empty when the last command succeeded).
     var controlNote: String?
-    /// Live extra-mirror after debug overrides (TT180 && Flip off).
+    /// Live extra-mirror (TT180 && Flip off). Shell XORs MIRROR assist.
     private(set) var gimbalPoseViewFlip = false
-    /// Pose-only stick invert after debug overrides. Shell XORs MIRROR assist.
+    /// Pose-only stick invert (TT180). Shell XORs MIRROR assist.
     private(set) var gimbalPoseInvertPan = false
-    /// Per-pose invert overrides for live stick UAT.
-    var gimbalStickDebug = CameraSession.loadGimbalStickDebug() {
-        didSet {
-            CameraSession.saveGimbalStickDebug(gimbalStickDebug)
-            syncGimbalPose()
-        }
-    }
-    /// Live TT180 / yaw / invert for the on-feed debug plate.
-    private(set) var gimbalDebugState = LiveGimbalDebugState()
-    /// Hide the gimbal debug plate for screenshots. DBG chip brings it back.
-    var showsGimbalDebugOverlay = true
     /// Camera-library listing while the Media page is open.
     var mediaFiles: [MediaFile] = []
     var mediaFetchInProgress = false
@@ -3738,57 +3727,10 @@ final class CameraSession {
 
     private func syncGimbalPose() {
         gimbalStickMapping.selfieFlip = status.selfieFlip?.isOn ?? false
-        let tt180 = gimbalStickMapping.commanded180
-        let autoMirror = gimbalStickMapping.poseViewFlip
-        let autoInvert = gimbalStickMapping.invertPan
-        gimbalPoseViewFlip = gimbalStickDebug.mirror(commanded180: tt180, auto: autoMirror)
-        gimbalPoseInvertPan = gimbalStickDebug.invert(commanded180: tt180, auto: autoInvert)
+        gimbalPoseViewFlip = gimbalStickMapping.poseViewFlip
+        gimbalPoseInvertPan = gimbalStickMapping.invertPan
         decoder.poseViewFlip = gimbalPoseViewFlip
         decoder.syncPictureFlip()
-        let face: String
-        switch gimbalStickMapping.face {
-        case .front: face = "front"
-        case .selfie: face = "180-wire"
-        case nil: face = "unknown"
-        }
-        gimbalDebugState = LiveGimbalDebugState(
-            commanded180: tt180,
-            rotated180: gimbalStickMapping.rotated180,
-            yawDegrees: gimbalStickMapping.yawTenthDeg.map { Double($0) / 10 },
-            face: face,
-            pending: gimbalStickMapping.pendingRotateCount,
-            autoInvert: autoInvert,
-            appliedInvert: gimbalPoseInvertPan,
-            selfieFlip: gimbalStickMapping.selfieFlip,
-            lastFlipReplyAt: datalink?.lastSelfieFlipReplyAt ?? lastSelfieFlipReplyAt,
-            lastFlipSendAt: datalink?.lastSelfieFlipSendAt,
-            autoMirror: autoMirror,
-            appliedMirror: gimbalPoseViewFlip
-        )
-    }
-
-    func cycleGimbalDebugInvert(slot: GimbalStickDebugSlot) {
-        var next = gimbalStickDebug
-        next[slot].invert.cycle()
-        gimbalStickDebug = next
-        ControlLiveLog.line(
-            "control: gimbal debug \(slot.title) invert=\(next[slot].invert.label)"
-        )
-    }
-
-    private static let gimbalStickDebugKey = "opc.gimbalStick.debug"
-
-    private static func loadGimbalStickDebug() -> GimbalStickDebug {
-        guard let data = UserDefaults.standard.data(forKey: gimbalStickDebugKey),
-            let decoded = try? JSONDecoder().decode(GimbalStickDebug.self, from: data)
-        else { return GimbalStickDebug() }
-        return decoded
-    }
-
-    private static func saveGimbalStickDebug(_ value: GimbalStickDebug) {
-        if let data = try? JSONEncoder().encode(value) {
-            UserDefaults.standard.set(data, forKey: gimbalStickDebugKey)
-        }
     }
 
     var hasMediaDatalink: Bool { datalink != nil }
