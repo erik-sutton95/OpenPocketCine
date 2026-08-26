@@ -87,6 +87,37 @@ import Testing
                 disconnecting: false, layerFailed: true, nextFrameReady: true))
     }
 
+    @Test func extraMirrorHoldsThreePresentsThenCommits() {
+        #expect(FeedPresentPolicy.extraMirrorHoldFrames == 3)
+        #expect(FeedPresentPolicy.shouldHoldPictureAcrossMirror(framesHeld: 1, secondsHeld: 0.04))
+        #expect(FeedPresentPolicy.shouldHoldPictureAcrossMirror(framesHeld: 3, secondsHeld: 0.12))
+        #expect(
+            !FeedPresentPolicy.shouldHoldPictureAcrossMirror(framesHeld: 4, secondsHeld: 0.16))
+        #expect(
+            !FeedPresentPolicy.shouldHoldPictureAcrossMirror(framesHeld: 1, secondsHeld: 0.2),
+            "stalled decoder must not freeze extra-mirror")
+        var hold = ExtraMirrorHold()
+        #expect(hold.step(want: false, now: 0) == .commit(false))
+        #expect(hold.step(want: false, now: 0.04) == .unchanged)
+        #expect(hold.step(want: true, now: 0.08) == .hold)
+        #expect(hold.step(want: true, now: 0.12) == .hold)
+        #expect(hold.step(want: true, now: 0.16) == .hold)
+        #expect(hold.step(want: true, now: 0.20) == .commit(true))
+        #expect(hold.step(want: true, now: 0.24) == .unchanged)
+        #expect(hold.step(want: false, now: 0.28) == .hold)
+        hold.reset()
+        #expect(
+            hold.step(want: true, now: 1) == .commit(true), "first present after reset is immediate"
+        )
+    }
+
+    @Test func extraMirrorHoldCancelsIfWantReturns() {
+        var hold = ExtraMirrorHold()
+        _ = hold.step(want: false, now: 0)
+        #expect(hold.step(want: true, now: 0.04) == .hold)
+        #expect(hold.step(want: false, now: 0.08) == .unchanged)
+    }
+
     @Test func serialGateRefusesOverlap() {
         var gate = SerialSessionGate()
         let first = gate.begin()

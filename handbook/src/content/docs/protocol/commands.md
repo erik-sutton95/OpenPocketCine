@@ -28,7 +28,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x02/0x02` | **record start/stop** | `[01]` start / `[00]` stop (Osmosis Nano; Pocket 4 uses `rcv=0x01`) |
 | `0x02/0x01` | **photo shutter** | `[01]`; `d9` in Video mode |
 | `0x02/0xE1` | **shooting mode** | sparse enum — do not enumerate |
-| `0x02/0x8E` | **param GET/SET** | ISO limit `0x000f`, audio channel `0x0020` (`02`/`01`/`03`), **Vocal Boost `0x004C`** (`00` Off / `01` On), **App Glamour `0x0039`** (62 B blob, enable `@5`), **AF-C track `0x003B`** (`01 <00 Default / 01 Showcase / 02 Lock / 03 Priority>`). Pid `0x0009` (Osmosis FOV) **never GET/SET** on Pocket 4 Pro zoom or res-fps takes |
+| `0x02/0x8E` | **param GET/SET** | ISO limit `0x000f`, audio channel `0x0020` (`02`/`01`/`03`), **Selfie Flip `0x0038`** (`00` Off / `01` On, Mimo GETs ~1 Hz, body Control Center only — no app SET; replies are datalink pktType `0x03` and need that seq in window-ACK group 1; OPC GET is untracked on the live UDP ACK pump so audio/glamour waiters cannot steal the reply), **Vocal Boost `0x004C`** (`00` Off / `01` On), **App Glamour `0x0039`** (62 B blob, enable `@5`), **AF-C track `0x003B`** (`01 <00 Default / 01 Showcase / 02 Lock / 03 Priority>`). Pid `0x0009` (Osmosis FOV) **never GET/SET** on Pocket 4 Pro zoom or res-fps takes |
 | `0x02/0x1E` | **exposure auto/manual** | SET `04 00` manual / `01 00` auto; no GET — `cam_expo_param` `@7` |
 | `0x02/0x28` | **shutter** | `01 <denom\|0x8000 u16-LE> 00 00 00 40`; no GET — expo `@2–3` |
 | `0x02/0x2A` | **ISO index** | `00` Auto, `03`=100 … `0B`=25600; no GET — expo `@5` index / `@16` value |
@@ -40,8 +40,10 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x02/0x2C` | **white balance** | `[mode][K/100 u16][tint i16]`; `00` Auto / `06` Custom; no GET — `cam_image_effect` `@4–8` |
 | `0x02/0xA0` | **audio DSP GET** | empty; reply `00` + 26 B blob |
 | `0x02/0x9F` | **audio DSP SET** | same blob; `@2` wind `1A`/`18`, directional `DA` All / `3A` Front / `BA` Front+back |
-| `0x04/0x4C` | **gimbal command** | `FE 09` flip toggle; `FE 08` Mimo recenter-gimbal button (`mimo-gimbal-recenter-20260819`; OPC maps this to stick double-tap); `02 08` Follow / Tilt Locked; `01 08` FPV; ACK flags `0x80` `00`. Flip read: `0x04/0x27` `@2` bit `0x40`. `0x03/0xDA` is register / post-FPV, not recenter |
-| `0x04/0x01` | **gimbal stick** | flags `0x00`, 10 B: two u16-LE axes @0/@4, center 1024 ±550, trailer `00 80 22 00`; no ACK |
+| `0x04/0x4C` | **gimbal command** | `FE 09` is a 180 rotate (stick triple-tap); `FE 08` Mimo recenter-gimbal button (`mimo-gimbal-recenter-20260819`; OPC maps this to stick double-tap); `02 08` Follow / Tilt Locked; `01 08` FPV; ACK flags `0x80` `00`. `0x03/0xDA` is register / post-FPV, not recenter. `FE 09` also XORs `0x04/0x27` `@2` bit `0x40` ~1 s later |
+| `0x04/0x27` | **gimbal face push** | unsolicited ~10 Hz, flags `0x00`, sender `0x04`. `@2` bit `0x40` tracks 180 / `FE 09`, not Control Center Selfie Flip |
+| `0x04/0x05` | **gimbal attitude** | unsolicited ~10 Hz, 50 B. i16-LE @4 in 0.1°; absolute yaw > 90° is the selfie-facing pose. Joystick pan and `FE 09` both move it |
+| `0x04/0x01` | **gimbal stick** | flags `0x00`, 10 B: two u16-LE axes @0/@4, center 1024 ±550, trailer `00 80 22 00`; no ACK. Extra live X-flip is the rotate-180 button `FE 09` only, latched when the 180 settles (~165°), not at the 90° midpoint. Joystick yaw to 180 is not that 180. Invert pan on TT180. Tilt is not inverted |
 | `0x04/0x50` | **gimbal params** | GET `01 04 05` → `00 01 04 01 <tilt> 05 01 <speed>`; SET `00 <id> 01 <v>`; param `04` tilt lock `00` Follow / `01` Tilt Locked; param `05` speed `00` Fast / `01` Default / `02` Slow; ACK flags `0x80` `00 00`. FPV does not write param `04` — leftover can stay `01` |
 | `0x02/0x22` `0x30` `0x68` `0x32` | **tap to focus** | Mimo burst (`mimo-tap-focus-20260818`): spot `22 [02]`, focus region `30`, AE hint `68 [08]`, AE region `32`. AF-S and AF-C identical. Each ACK `00`. `30`+`32` alone times out. App Glamour is **`0x8E` pid `0x0039`**, not `0x68` |
 | `0x02/0xA6` | **tracking box SET** | `01 00 00` + u16 + 4×f32 **centre + size**; all-zero clears |

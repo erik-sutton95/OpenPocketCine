@@ -290,7 +290,7 @@ class AppModel(context: Context) {
 
     fun updateGimbalStick(x: Float, y: Float) {
         if (uiLocked) return
-        session.updateGimbalStick(x, y, gimbalStickSensitivity)
+        session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirror)
     }
 
     fun endGimbalStick() = session.endGimbalStick()

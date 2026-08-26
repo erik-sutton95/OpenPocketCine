@@ -46,6 +46,10 @@ class DatalinkDriver(
     private var cmdCounter = 0
     /** Latest video transport seq — ACK pump must echo this (iOS `videoAssembler.peerCursor`). */
     private val peerCursor = AtomicInteger(0)
+    /** pktType 0x03 command-reply window (every GET/SET ACK). Mimo ACK group 1. */
+    private val ackedDataCursor = AtomicInteger(0)
+    /** Third ACK group, seeded from 34-byte pktType 0x01 telemetry. */
+    private val extraCursor = AtomicInteger(0)
     private var camChannel = 0
     @Volatile private var handshakeAcked = false
     @Volatile private var liveViewEnabled = false
@@ -301,6 +305,8 @@ class DatalinkDriver(
         dumlSeq = 0xA000
         cmdCounter = 0
         peerCursor.set(0)
+        ackedDataCursor.set(0)
+        extraCursor.set(0)
         handshakeAcked = false
     }
 
@@ -340,8 +346,14 @@ class DatalinkDriver(
         ackThread =
             Thread(
                 {
+                    var flipTicks = 0
                     while (running.get()) {
                         sendWindowAck()
+                        flipTicks += 1
+                        if (flipTicks >= 40) {
+                            flipTicks = 0
+                            sendCommand(SwiftCore.CMD_GET_SELFIE_FLIP)
+                        }
                         try {
                             Thread.sleep(ACK_INTERVAL_MS)
                         } catch (_: InterruptedException) {
@@ -408,14 +420,17 @@ class DatalinkDriver(
     }
 
     fun sendCommand(kind: Int, extra: String? = null) {
-        cmdCounter = (cmdCounter + 1) and 0xFF
-        val frameBytes = SwiftCore.command(kind, dumlSeq, extra)
-        dumlSeq = (dumlSeq + 1) and 0xFFFF
-        val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
-        val header =
-            SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq) ?: return
-        write(header + routing + frameBytes)
-        udpSeq = (udpSeq + 8) and 0xFFFF
+        synchronized(sendLock) {
+            cmdCounter = (cmdCounter + 1) and 0xFF
+            val frameBytes = SwiftCore.command(kind, dumlSeq, extra)
+            dumlSeq = (dumlSeq + 1) and 0xFFFF
+            val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
+            val header =
+                SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq)
+                    ?: return
+            write(header + routing + frameBytes)
+            udpSeq = (udpSeq + 8) and 0xFFFF
+        }
     }
 
     /** `0x04/0x01` flags `0x00`, no ACK. Built with `encodeDuml` so it works on the shipped core. */
@@ -445,10 +460,31 @@ class DatalinkDriver(
         sendWindowAck()
     }
 
-    /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing the video seq. */
+    /** Handbook / iOS `noteAckWindows`: 0x03 seq in ACK group 1, 0x01 seeds extra. */
+    private fun noteAckWindows(datagram: ByteArray) {
+        if (datagram.size < 8) return
+        when (datagram[6].toInt() and 0xFF) {
+            0x01 -> if (datagram.size >= 34) {
+                val acked =
+                    (datagram[18].toInt() and 0xFF) or ((datagram[19].toInt() and 0xFF) shl 8)
+                val extra =
+                    (datagram[26].toInt() and 0xFF) or ((datagram[27].toInt() and 0xFF) shl 8)
+                ackedDataCursor.compareAndSet(0, acked)
+                extraCursor.set(extra)
+            }
+            0x03 -> {
+                val seq = SwiftCore.transportSeq(datagram)
+                if (seq >= 0) ackedDataCursor.set(seq)
+            }
+        }
+    }
+
+    /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing video + 0x03 cursors. */
     private fun sendWindowAck() {
         val cursor = peerCursor.get()
-        val payload = SwiftCore.ackPayload(cursor, baseSeq) ?: return
+        val acked = ackedDataCursor.get().let { if (it == 0) baseSeq else it }
+        val extra = extraCursor.get().let { if (it == 0) baseSeq else it }
+        val payload = SwiftCore.ackPayload(cursor, acked, extra) ?: return
         val header = SwiftCore.transportHeader(0x04, payload.size, sessionId, 0) ?: return
         write(header + payload)
     }
@@ -517,6 +553,7 @@ class DatalinkDriver(
             if (ch != 0) camChannel = ch
         }
         if (datagram.size >= 8 && datagram[6] == 0x00.toByte()) handshakeAcked = true
+        noteAckWindows(datagram)
         if (datagram.size == 34 && datagram[6] == 0x01.toByte()) {
             peerCursor.set((datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8))
         } else if (datagram.size >= 6 && datagram[6] == 0x02.toByte()) {

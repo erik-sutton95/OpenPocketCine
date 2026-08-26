@@ -389,7 +389,7 @@ struct LiveViewScreen: View {
                 LiveTrackingCancelButton()
                     .liveModuleFrame(
                         LiveTrackingChrome.cancelRect(
-                            box: box, feed: layout.onFeed, mirrored: model.assist.isVisible(.mirror)
+                            box: box, feed: layout.onFeed, mirrored: model.livePictureViewFlip
                         )
                     )
                     .zIndex(4)
@@ -399,6 +399,7 @@ struct LiveViewScreen: View {
                 feed: layout.onFeed,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
+            LiveGimbalDebugOverlay(feed: layout.onFeed)
 
             if model.chromeSectionMounts(.toolBar) {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -567,6 +568,7 @@ struct LiveViewScreen: View {
                 feed: picture,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
+            LiveGimbalDebugOverlay(feed: picture)
 
             Rectangle()
                 .fill(LiveDesign.glass)
@@ -749,12 +751,19 @@ struct LiveViewScreen: View {
 private struct LiveFeedPane: View {
     @Environment(AppModel.self) private var model
 
+    private var liveEffects: LiveImageEffects {
+        var fx = model.assist.effects.withFaceAF(model.session.wantsFaceAF)
+        fx.mirror = model.assist.isVisible(.mirror)
+        return fx
+    }
+
     var body: some View {
         VideoView(
             decoder: model.session.decoder,
-            effects: model.assist.effects.withFaceAF(model.session.wantsFaceAF),
+            effects: liveEffects,
             sampleBus: model.frameSamples,
-            transfer: model.session.status.monitorTransfer
+            transfer: model.session.status.monitorTransfer,
+            pictureFlip: model.livePictureViewFlip
         )
         .onChange(of: model.assist.effects) { _, fx in
             model.session.decoder.effects = fx.withFaceAF(model.session.wantsFaceAF)
@@ -809,7 +818,8 @@ private struct LiveFeedAssistsPane: View {
                 overlay: model.session.focusOverlay,
                 sceneFaces: showBox ? model.session.dimmedFaces : [],
                 showFocusChrome: showBox,
-                showTapFocusBox: model.session.supportsTapFocus
+                showTapFocusBox: model.session.supportsTapFocus,
+                pictureMirrored: model.livePictureViewFlip
             )
             .opacity(dimmed ? 0.3 : 1)
 
@@ -820,7 +830,7 @@ private struct LiveFeedAssistsPane: View {
                         overlay: model.session.focusOverlay,
                         faces: model.session.dimmedFaces,
                         focusPoint: model.session.focusPoint,
-                        mirrored: model.assist.isVisible(.mirror),
+                        mirrored: model.livePictureViewFlip,
                         in: feed
                     )
                     Color.clear
@@ -988,6 +998,6 @@ extension LiveViewScreen {
     fileprivate func trackingCancelRect(in layout: LiveMonitorLayout) -> CGRect {
         guard case .subject(let box) = model.session.focusOverlay else { return .zero }
         return LiveTrackingChrome.cancelRect(
-            box: box, feed: layout.onFeed, mirrored: model.assist.isVisible(.mirror))
+            box: box, feed: layout.onFeed, mirrored: model.livePictureViewFlip)
     }
 }

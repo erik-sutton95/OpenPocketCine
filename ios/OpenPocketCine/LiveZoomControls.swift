@@ -231,7 +231,7 @@ struct LiveZoomPinchModifier: ViewModifier {
                     model.setDisplayMode(clean: false)
                 case .tap:
                     let point = LiveFeedFocusGesture.cameraPoint(
-                        value.location, in: feedSize, mirrored: model.assist.isVisible(.mirror))
+                        value.location, in: feedSize, mirrored: model.livePictureViewFlip)
                     model.session.handleFeedTap(at: CGPoint(x: point.x, y: point.y))
                     focusTick += 1
                 case .track:
@@ -240,7 +240,7 @@ struct LiveZoomPinchModifier: ViewModifier {
                             from: value.startLocation,
                             to: value.location,
                             in: feedSize,
-                            mirrored: model.assist.isVisible(.mirror)
+                            mirrored: model.livePictureViewFlip
                         )
                     )
                     focusTick += 1

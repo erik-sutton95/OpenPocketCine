@@ -9,6 +9,13 @@ package com.opencapture.openpocketcine.feed
 object FeedPresentPolicy {
     const val FREEZE_THRESHOLD_SECONDS = 2.0
     const val MAX_WORKING_WIDTH = 1440
+    const val EXTRA_MIRROR_HOLD_FRAMES = 3
+    const val EXTRA_MIRROR_HOLD_SECONDS = 0.2
+    /** 3 frames at 25 fps. Compose delay while the last orientation stays on screen. */
+    const val EXTRA_MIRROR_HOLD_MS = 120L
+
+    fun shouldHoldPictureAcrossMirror(framesHeld: Int, secondsHeld: Double): Boolean =
+        framesHeld <= EXTRA_MIRROR_HOLD_FRAMES && secondsHeld < EXTRA_MIRROR_HOLD_SECONDS
 
     fun shouldRender(
         attached: Boolean,
@@ -58,5 +65,66 @@ class SerialSessionGate {
 
     fun end() {
         inFlight = false
+    }
+}
+
+/** Delays extra-mirror so the on-screen orientation is not X-flipped in place. */
+class ExtraMirrorHold {
+    enum class Step {
+        UNCHANGED,
+        HOLD,
+        COMMIT,
+    }
+
+    data class Result(val step: Step, val mirrored: Boolean)
+
+    var displayed: Boolean? = null
+        private set
+    private var pending: Boolean? = null
+    private var framesHeld = 0
+    private var startedAt: Double? = null
+
+    fun reset() {
+        displayed = null
+        pending = null
+        framesHeld = 0
+        startedAt = null
+    }
+
+    fun step(want: Boolean, now: Double): Result {
+        val shown = displayed
+        if (shown == null) {
+            displayed = want
+            pending = null
+            framesHeld = 0
+            startedAt = null
+            return Result(Step.COMMIT, want)
+        }
+        if (pending == null) {
+            if (want == shown) return Result(Step.UNCHANGED, shown)
+            pending = want
+            framesHeld = 0
+            startedAt = now
+        } else if (pending != want) {
+            if (want == shown) {
+                pending = null
+                framesHeld = 0
+                startedAt = null
+                return Result(Step.UNCHANGED, shown)
+            }
+            pending = want
+            framesHeld = 0
+            startedAt = now
+        }
+        framesHeld += 1
+        val age = now - (startedAt ?: now)
+        if (FeedPresentPolicy.shouldHoldPictureAcrossMirror(framesHeld, age)) {
+            return Result(Step.HOLD, shown)
+        }
+        displayed = want
+        pending = null
+        framesHeld = 0
+        startedAt = null
+        return Result(Step.COMMIT, want)
     }
 }

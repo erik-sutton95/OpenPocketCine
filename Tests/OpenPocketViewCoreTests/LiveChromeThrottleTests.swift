@@ -62,6 +62,13 @@ struct LiveChromeThrottleTests {
         #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
     }
 
+    @Test func selfieFlipIsImmediate() {
+        var next = CameraStatus()
+        next.selfieFlip = .on
+        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
+        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
+    }
+
     @Test func audioOperatorFieldsAreImmediate() {
         var next = CameraStatus()
         next.audioChannel = .stereo

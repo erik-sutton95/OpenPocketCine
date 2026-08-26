@@ -85,6 +85,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
+import com.opencapture.openpocketcine.feed.FeedPresentPolicy
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.feed.LiveVulkanSession
@@ -97,6 +98,7 @@ import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.ControlHud
 import com.opencapture.openpocketcine.session.FocusOverlay
+import com.opencapture.openpocketcine.session.TrackingBox
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -111,11 +113,19 @@ fun LiveViewScreen(model: AppModel) {
     val zoomReadout by model.session.zoomReadout.collectAsState()
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
+    val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
     var uiLocked by remember { mutableStateOf(model.uiLocked) }
     var sheet by remember { mutableStateOf<LiveSheet?>(null) }
     val context = LocalContext.current
     val assist = model.assist
+    val wantedViewFlip = CameraCommands.liveViewFlip(poseViewFlip, assist.mirror)
+    var liveViewFlip by remember { mutableStateOf(wantedViewFlip) }
+    LaunchedEffect(wantedViewFlip) {
+        if (liveViewFlip == wantedViewFlip) return@LaunchedEffect
+        delay(FeedPresentPolicy.EXTRA_MIRROR_HOLD_MS)
+        liveViewFlip = wantedViewFlip
+    }
     var chromeNote by remember { mutableStateOf<String?>(null) }
     var showStorageDuration by remember { mutableStateOf(false) }
     val recovery by model.session.recoveryState.collectAsState()
@@ -448,6 +458,7 @@ fun LiveViewScreen(model: AppModel) {
             platesGen,
             layout.onFeed,
             density.density,
+            liveViewFlip,
         ) {
             val session = vulkanSession ?: return@LaunchedEffect
             if (!useVulkan) return@LaunchedEffect
@@ -469,6 +480,7 @@ fun LiveViewScreen(model: AppModel) {
                 histoRect = GpuOverlayBus.histo,
                 vector = GpuOverlayBus.vector,
                 uiScale = density.density,
+                pictureMirrored = liveViewFlip,
             )
         }
         CompositionLocalProvider(
@@ -523,7 +535,7 @@ fun LiveViewScreen(model: AppModel) {
                     .clipToBounds(),
             ) {
                 LiveFeedPresenter(
-                    mirrored = assist.mirror,
+                    mirrored = liveViewFlip,
                     captureFrames = glass.tier == GlassTier.FULL,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
@@ -546,11 +558,16 @@ fun LiveViewScreen(model: AppModel) {
                 LiveFeedGestureWell(
                     enabled = !uiLocked && model.liveOperatorPanel == null && chromeInteractive,
                     feed = ChromeRect(0f, 0f, layout.onFeed.width, layout.onFeed.height),
-                    onTap = { point -> model.session.handleFeedTap(point.x, point.y) },
+                    onTap = { point ->
+                        val x = if (liveViewFlip) 1f - point.x else point.x
+                        model.session.handleFeedTap(x, point.y)
+                    },
                     onSwipeClean = { clean -> if (!uiLocked) setClean(clean) },
                     onPinch = { mag -> model.session.updateZoomPinch(mag.toDouble()) },
                     onPinchEnd = { model.session.endZoomPinch() },
-                    onTrack = { box -> model.session.startTracking(box) },
+                    onTrack = { box ->
+                        model.session.startTracking(if (liveViewFlip) box.mirrored() else box)
+                    },
                 )
             }
 
@@ -565,6 +582,7 @@ fun LiveViewScreen(model: AppModel) {
                             model.session.supportsTapFocus,
                     locked = uiLocked,
                     feedFrame = layout.onFeed,
+                    pictureMirrored = liveViewFlip,
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame
                         assist.configureTool = tool
@@ -603,7 +621,7 @@ fun LiveViewScreen(model: AppModel) {
                         box = subject.box,
                         feedWidth = layout.onFeed.width,
                         feedHeight = layout.onFeed.height,
-                        mirrored = assist.mirror,
+                        mirrored = liveViewFlip,
                         onClick = { model.session.cancelSubjectTracking() },
                     )
                 }

@@ -29,8 +29,21 @@ object CameraCommands {
     const val CMD_TAP_COMMIT = 0x32
 
     const val PID_AUDIO_CHANNEL = 0x0020
+    const val PID_SELFIE_FLIP = 0x0038
     const val PID_FOCUS_TRACK = 0x003B
     const val PID_VOCAL_BOOST = 0x004C
+
+    /** Untracked pid `0x38` GET reply. Must not complete other `0x8E` waiters. */
+    fun isSelfieFlipGetReply(cmdSet: Int, cmdId: Int, payload: ByteArray): Boolean {
+        if ((cmdSet and 0xFF) != SET || (cmdId and 0xFF) != CMD_PARAM) return false
+        if (payload.size < 7) return false
+        if (payload[0] != 0.toByte() || payload[1] != 0.toByte() || payload[2] != 1.toByte()) {
+            return false
+        }
+        if (payload[5] != 1.toByte()) return false
+        val pid = (payload[3].toInt() and 0xFF) or ((payload[4].toInt() and 0xFF) shl 8)
+        return pid == PID_SELFIE_FLIP
+    }
 
     const val RES_1080 = 0x0A
     const val RES_4K = 0x10
@@ -377,6 +390,49 @@ object CameraCommands {
     const val GIMBAL_STICK_DEADZONE = 0.08f
 
     const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
+    const val GIMBAL_FACE_UNKNOWN = -1
+    const val GIMBAL_FACE_FRONT = 0
+    const val GIMBAL_FACE_SELFIE = 1
+
+    /** Screen-relative pan: invert for triple-tap 180. Unknown keeps front. */
+    fun invertGimbalPan(gimbalFace: Int): Boolean = gimbalFace == GIMBAL_FACE_SELFIE
+
+    /** View-space X flip: TT180 extra-mirror XOR MIRROR assist. */
+    fun liveViewFlip(poseViewFlip: Boolean, assistMirror: Boolean): Boolean =
+        poseViewFlip != assistMirror
+
+    /** Stick invert follows the visible picture (TT180 XOR MIRROR). */
+    fun liveInvertPan(poseInvert: Boolean, assistMirror: Boolean): Boolean =
+        poseInvert != assistMirror
+
+    /** `0x04/0x05` i16-LE @4 in 0.1°. |angle| > 90° is the selfie-facing pose. */
+    const val ROTATED_180_TENTH_DEG = 900
+    /** Invert latch like Mimo: end of the 180, not the midpoint. */
+    const val SETTLE_180_TENTH_DEG = 1650
+    const val SETTLE_FRONT_TENTH_DEG = 150
+    const val POSE_SEED_FRONT_VOTES = 3
+
+    fun yawTenthDeg(payload: ByteArray): Int? {
+        if (payload.size < 6) return null
+        val raw = (payload[4].toInt() and 0xFF) or (payload[5].toInt() shl 8)
+        return raw.toShort().toInt()
+    }
+
+    fun rotated180(payload: ByteArray): Boolean? {
+        val tenth = yawTenthDeg(payload) ?: return null
+        return kotlin.math.abs(tenth) > ROTATED_180_TENTH_DEG
+    }
+
+    fun rotationSettled(yawTenthDeg: Int, want180: Boolean): Boolean {
+        val angle = kotlin.math.abs(yawTenthDeg)
+        return if (want180) angle >= SETTLE_180_TENTH_DEG else angle <= SETTLE_FRONT_TENTH_DEG
+    }
+
+    /** Pocket `FE 09` destination: front half (`|yaw| ≤ 90°`) goes to ±180°. */
+    fun fe09GoesTo180(yawTenthDeg: Int?): Boolean {
+        val yaw = yawTenthDeg ?: return true
+        return kotlin.math.abs(yaw) <= ROTATED_180_TENTH_DEG
+    }
 
     /** 4 = 1.0 (captured ±550 throw). 5 saturates earlier; 1–3 never reach full throw. */
     fun gimbalSensitivityGain(sensitivity: Int): Float =
@@ -392,6 +448,7 @@ object CameraCommands {
             .coerceIn(GIMBAL_STICK_MIN, GIMBAL_STICK_MAX)
     }
 
+    /** Invert pan in selfie so the throw stays screen-relative. Tilt is unchanged. */
     fun gimbalAxes(
         x: Float,
         y: Float,

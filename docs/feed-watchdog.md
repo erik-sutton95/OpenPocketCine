@@ -21,6 +21,7 @@ A freeze that keeps the last picture is a stall (`feed: freeze` when UDP is stil
 | **iOS Wi-Fi power save** | SoftAP has no internet. After minutes, viability / idle policy can stall `NWConnection` even though `192.168.2.x` is still on the path. |
 | **Main-thread / baker** | Less likely if a **clean** feed (assists off) also freezes. Receive is already re-armed off main; ingest still hops to MainActor per packet. |
 | **TCP 7001 vs UDP 9004** | TCP poke is kept open for the session (camera `0x21/0x06`). Video is **only** UDP 9004. One can stay up while the other dies — log `flow` vs `tcp=` vs `lastVideo` / `lastStatus`. |
+| **Un-ACKed pktType `0x03`** | Command replies share one window. Video ACK of `0x02` does not cover it. HUD from `0x01` and HEVC can look “Connected” while record/ISO/zoom/Flip GET stop. Watchdog `udpReceiveAlive` is true, so it will not rebuild. SET timeouts with `videoFresh` also leave the socket. A session-preserving UDP rebuild does not reset the camera’s `0x03` window — only echoing that seq (or a new handshake) does. |
 
 Previous recover (`recoverLiveViewIfNeeded`) only re-enabled when **cumulative** `videoPackets == 0` or format never landed. After a successful start those conditions are false forever.
 

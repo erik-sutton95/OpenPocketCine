@@ -140,6 +140,8 @@ object StatusExtras {
             CameraCommands.PID_VOCAL_BOOST -> status.copy(vocalBoost = value)
             CameraCommands.PID_ISO_LIMIT ->
                 if (value in 0x02..0x09) status.copy(isoLimit = value) else status
+            CameraCommands.PID_SELFIE_FLIP ->
+                if (value == 0 || value == 1) status.copy(selfieFlip = value == 1) else status
             else -> status
         }
     }

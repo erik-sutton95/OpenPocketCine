@@ -88,8 +88,16 @@ final class HevcDecoder {
     }
     /// Fired on the main actor after a picture is presented (live VT, layer enqueue, or simulator).
     var onPresentedFrame: (() -> Void)?
-    /// VT source buffer after assist present. Face AF / Vision only — not the display layer path.
+    /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// View-space X flip applied on the host view at present time (not SwiftUI).
+    var poseViewFlip = false
+    var assistMirror = false
+    /// Set by `VideoView` so MIRROR assist commits in the same tick as enqueue.
+    var applyPictureMirror: ((Bool) -> Void)?
+    private var presentedPictureFlip: Bool?
+    /// Holds the last picture across extra-mirror so the current frame is not X-flipped in place.
+    private var extraMirrorHold = ExtraMirrorHold()
     /// First time VT takes HEVC this session. Mid-GOP P-frames cannot start a
     /// new decoder — one `0x09/0xa8`. Later assist toggles must not fire this.
     var onHandoffNeedsIDR: (() -> Void)?
@@ -189,6 +197,19 @@ final class HevcDecoder {
         displayLayer.videoGravity = .resizeAspect
         // OpenZCine: fused-peaking self-check is ~0.5 s. Do it before the first PEAK frame.
         Task.detached(priority: .utility) { _ = LiveMonitorCompositor.fusedPeakingAvailable }
+    }
+
+    var pictureFlip: Bool { poseViewFlip != assistMirror }
+
+    func syncPictureFlip() {
+        // Extra-mirror commits on the next present, not on the pose edge —
+        // flipping the last frame in place is the jarring swap.
+    }
+
+    /// New live host view — do not keep a presented flag from a torn-down layer.
+    func invalidatePictureFlipPresentation() {
+        presentedPictureFlip = nil
+        extraMirrorHold.reset()
     }
 
     /// Layer is in the view hierarchy with a real size — safe to enqueue the first IDR.
@@ -345,7 +366,11 @@ final class HevcDecoder {
         }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
         if !displayLayer.isReadyForMoreMediaData { displayLayer.flush() }
+        guard commitPictureFlipIfNeeded() else { return true }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         displayLayer.enqueue(sample)
+        CATransaction.commit()
         if displayLayer.status == .failed {
             displayLayer.flush()
             if displayLayer.status == .failed {
@@ -409,6 +434,8 @@ final class HevcDecoder {
         hardwareDecoderUnlocked = false
         lastDecodedBuffer = nil
         lastPresentHealthLogAt = nil
+        presentedPictureFlip = nil
+        extraMirrorHold.reset()
         builtVPS = nil
         builtSPS = nil
         builtPPS = nil
@@ -716,6 +743,9 @@ final class HevcDecoder {
             return
         }
         guard let feed = processedFeed else { return }
+        if metalOwnsPicture, !commitPictureFlipIfNeeded() {
+            return
+        }
 
         if result.overlayOnly, !replaceIdentity, !prefersPixelBufferDisplay {
             // Transparent stripes on top of the layer. Do not unhide here —
@@ -993,11 +1023,31 @@ final class HevcDecoder {
         }
     }
 
+    /// Extra-mirror the host view with the next present. `false` keeps the last picture.
+    @discardableResult
+    private func commitPictureFlipIfNeeded() -> Bool {
+        switch extraMirrorHold.step(want: pictureFlip, now: CFAbsoluteTimeGetCurrent()) {
+        case .unchanged:
+            if presentedPictureFlip != pictureFlip, let apply = applyPictureMirror {
+                apply(pictureFlip)
+                presentedPictureFlip = pictureFlip
+            }
+            return true
+        case .hold:
+            return false
+        case .commit(let mirrored):
+            applyPictureMirror?(mirrored)
+            presentedPictureFlip = mirrored
+            return true
+        }
+    }
+
     /// Zero-copy present of a VT frame. Uncompressed — the layer must not start a second HEVC decoder.
     @discardableResult
     private func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
         -> Bool
     {
+        guard commitPictureFlipIfNeeded() else { return true }
         guard Self.isPresentable(imageBuffer) else { return false }
         var format: CMVideoFormatDescription?
         guard
@@ -1038,7 +1088,10 @@ final class HevcDecoder {
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
         if !displayLayer.isReadyForMoreMediaData { displayLayer.flush() }
         releaseLayerDecoderIfNeeded()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         displayLayer.enqueue(sample)
+        CATransaction.commit()
         if displayLayer.status == .failed {
             if recoverOnFailure {
                 displayedImageRemoved = true

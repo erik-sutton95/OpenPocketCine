@@ -53,6 +53,9 @@ public enum CameraParam: UInt16, Sendable {
     case fov = 0x0009
     case isoLimit = 0x000F
     case audioChannel = 0x0020
+    /// Control Center Selfie Flip. Mimo GETs ~1 Hz (`00` off / `01` on).
+    /// Body switch only — no app SET. Timed Flip take `mimo-flip-timed-20260825-235315`.
+    case selfieFlip = 0x0038
     case glamour = 0x0039
     case focusTrack = 0x003B
     case vocalBoost = 0x004C
@@ -65,6 +68,12 @@ public enum CameraParam: UInt16, Sendable {
         else { return nil }
         let pid = UInt16(payload[3]) | (UInt16(payload[4]) << 8)
         return (pid, payload[6])
+    }
+
+    /// Untracked pid `0x38` GET reply. Must not complete audio / glamour / AF-C
+    /// `0x8E` waiters — those are other pids on the same opcode.
+    public static func isSelfieFlipGetReply(set: UInt8, cmd: UInt8, payload: [UInt8]) -> Bool {
+        set == 0x02 && cmd == 0x8E && parseGetReply(payload)?.pid == selfieFlip.rawValue
     }
 
     /// GET reply `00 00 01 <pid u16-LE> <len> <blob>`. Used by glamour (`len = 0x3E`).
@@ -176,6 +185,7 @@ public enum ControlHud {
         }
         return edge + toastOffsetFromFeedTop
     }
+
 }
 
 public enum FovSetting: UInt8, CaseIterable, Sendable {
@@ -705,6 +715,21 @@ public enum VocalBoost: UInt8, CaseIterable, Sendable {
     }
 }
 
+/// `0x02/0x8E` pid `0x0038`. Off `00`, On `01`. Control Center Selfie Flip.
+public enum SelfieFlip: UInt8, CaseIterable, Sendable {
+    case off = 0x00
+    case on = 0x01
+
+    public var isOn: Bool { self == .on }
+
+    public var label: String {
+        switch self {
+        case .off: "Off"
+        case .on: "On"
+        }
+    }
+}
+
 /// Wind NR lives in audio-DSP blob `@2` (`1A` On / `18` Off). Shares the byte with directional.
 public enum WindNoiseReduction: UInt8, CaseIterable, Sendable {
     case off = 0x18
@@ -953,14 +978,252 @@ public struct GimbalParamState: Equatable, Sendable {
     }
 }
 
-/// `0x04/0x27` `@2` bit `0x40` set = selfie, clear = front.
-public enum GimbalFace: Equatable, Sendable {
-    case front
-    case selfie
+/// Gimbal face from `0x04/0x27` `@2` bit `0x40`: set = 180 / `FE 09`, clear =
+/// front. Wire JSON is `0` front / `1` 180 / `-1` unknown. Not Selfie Flip
+/// (`0x8E` pid `0x0038`).
+public enum GimbalFace: Int, Equatable, Sendable {
+    case front = 0
+    case selfie = 1
 
     public static func parse(_ payload: [UInt8]) -> GimbalFace? {
         guard payload.count > 2 else { return nil }
         return (payload[2] & 0x40) != 0 ? .selfie : .front
+    }
+}
+
+/// Screen-relative pan follows the **live** picture.
+///
+/// Invert is TT180: `FE 09` to the **selfie pole**. Joystick yaw never sets
+/// or clears it. `FE 08` recenter does not touch it. The Pocket picks `FE 09`
+/// destination from current `|yaw|` (front half → ±180°, back half → 0°).
+/// Live extra-mirror matches Mimo: TT180 and Selfie Flip **off** (pid `0x38`
+/// `00` — encoder is mirrored). Flip **on** (`01`) already encodes
+/// true-to-scene, so skip extra-mirror. Shell XORs MIRROR assist.
+public struct GimbalStickMapping: Equatable, Sendable {
+    public var face: GimbalFace?
+    public var wireFace: GimbalFace?
+    public var rotated180: Bool
+    public var holdFace: Bool
+    public var seenFront: Bool
+    public var rotateParity: Bool
+    /// Invert / extra-mirror latch: last `FE 09` arrived at selfie, or connect
+    /// seed while `|yaw| > 90°`. Not joystick 180.
+    public var commanded180: Bool
+    /// Control Center Selfie Flip (`0x8E` pid `0x0038`). On → skip extra-mirror.
+    public var selfieFlip: Bool
+    /// Queued `FE 09` destinations (`true` = settle at 180 / invert on).
+    public var pendingWant180: [Bool]
+    public var pendingRotateCount: Int { pendingWant180.count }
+    /// Last `0x04/0x05` i16-LE @4 in 0.1°.
+    public var yawTenthDeg: Int16?
+    /// First settled attitude adopted as TT180 so reconnect-at-180 inverts
+    /// without another triple-tap.
+    public var poseSeeded: Bool
+    /// Settled-front votes before locking a front seed. One 0° stub must not
+    /// beat a following 180 on reconnect.
+    public var poseSeedFrontCount: Int
+
+    public init(
+        face: GimbalFace? = nil, wireFace: GimbalFace? = nil, rotated180: Bool = false,
+        holdFace: Bool = false, seenFront: Bool = false, rotateParity: Bool = false,
+        commanded180: Bool = false, selfieFlip: Bool = false,
+        pendingWant180: [Bool] = [], yawTenthDeg: Int16? = nil, poseSeeded: Bool = false,
+        poseSeedFrontCount: Int = 0
+    ) {
+        self.face = face
+        self.wireFace = wireFace
+        self.rotated180 = rotated180
+        self.holdFace = holdFace
+        self.seenFront = seenFront
+        self.rotateParity = rotateParity
+        self.commanded180 = commanded180
+        self.selfieFlip = selfieFlip
+        self.pendingWant180 = pendingWant180
+        self.yawTenthDeg = yawTenthDeg
+        self.poseSeeded = poseSeeded
+        self.poseSeedFrontCount = poseSeedFrontCount
+    }
+
+    /// Extra-mirror live HEVC like Mimo: TT180 and Flip off.
+    public var poseViewFlip: Bool { commanded180 && !selfieFlip }
+
+    /// Invert pan with TT180 so stick pan stays picture-relative.
+    public var invertPan: Bool { commanded180 }
+
+    public mutating func noteRotate180() {
+        noteRotate180(fromBody: false)
+    }
+
+    /// Queue a settle for app `FE 09`. Destination is current `|yaw|`, same as
+    /// the Pocket. Holds the next `0x27` XOR so we do not treat our echo as body.
+    public mutating func noteRotate180(fromBody: Bool) {
+        if !fromBody { holdFace = true }
+        pendingWant180.append(GimbalStick.fe09GoesTo180(yawTenthDeg: yawTenthDeg))
+    }
+
+    /// Body `FE 09`: `0x27` bit `0x40` tracks the invert latch, not physical yaw.
+    /// Joystick 180 does not XOR this bit. Latch the bit; do not queue a dest.
+    @discardableResult
+    public mutating func noteBodyFace(_ new: GimbalFace?) -> Bool {
+        let previous = wireFace
+        let wasHold = holdFace
+        _ = applyFace(new)
+        guard !wasHold, let previous, let new, new != previous else { return false }
+        commanded180 = new == .selfie
+        poseSeeded = true
+        poseSeedFrontCount = 0
+        return true
+    }
+
+    /// Apply 0x27. Returns false when ignored (leftover selfie or `FE 09` echo).
+    @discardableResult
+    public mutating func applyFace(_ new: GimbalFace?) -> Bool {
+        guard let new else { return false }
+        if new == .front { seenFront = true }
+        if new == .selfie, !seenFront { return false }
+        if holdFace {
+            if wireFace == nil {
+                wireFace = new
+                return false
+            }
+            if new == wireFace { return false }
+            wireFace = new
+            rotateParity.toggle()
+            holdFace = false
+            return false
+        }
+        wireFace = new
+        let decoded: GimbalFace = (new == .selfie) != rotateParity ? .selfie : .front
+        let changed = face != decoded
+        face = decoded
+        return changed
+    }
+
+    public mutating func applyAttitude(_ payload: [UInt8]) {
+        guard let yaw = GimbalStick.yawTenthDeg(payload) else { return }
+        let rotated = abs(Int(yaw)) > GimbalStick.rotated180TenthDeg
+        if let want180 = pendingWant180.first {
+            if GimbalStick.rotationSettled(yawTenthDeg: yaw, want180: want180) {
+                commanded180 = want180
+                pendingWant180.removeFirst()
+                poseSeeded = true
+                poseSeedFrontCount = 0
+            }
+        } else if !poseSeeded {
+            if rotated {
+                commanded180 = true
+                poseSeeded = true
+                poseSeedFrontCount = 0
+            } else if GimbalStick.rotationSettled(yawTenthDeg: yaw, want180: false) {
+                poseSeedFrontCount += 1
+                if poseSeedFrontCount >= GimbalStick.poseSeedFrontVotes {
+                    commanded180 = false
+                    poseSeeded = true
+                }
+            } else {
+                poseSeedFrontCount = 0
+            }
+        }
+        rotated180 = rotated
+        yawTenthDeg = yaw
+    }
+}
+
+/// Force invert for front or TT180. `auto` keeps mapping. Extra-mirror on the
+/// slot is unused (live HEVC stays stock).
+public enum GimbalStickForce: Int, Equatable, Sendable, Codable {
+    case auto = 0
+    case on = 1
+    case off = 2
+
+    public var label: String {
+        switch self {
+        case .auto: "A"
+        case .on: "ON"
+        case .off: "OFF"
+        }
+    }
+
+    public mutating func cycle() {
+        self =
+            switch self {
+            case .auto: .on
+            case .on: .off
+            case .off: .auto
+            }
+    }
+
+    public func applied(auto: Bool) -> Bool {
+        switch self {
+        case .auto: auto
+        case .on: true
+        case .off: false
+        }
+    }
+}
+
+/// Front vs triple-tap 180. Joystick 180 stays `front` unless TT latched.
+public enum GimbalStickDebugSlot: Int, Equatable, Sendable, CaseIterable, Codable, Hashable {
+    case front = 0
+    case rotate180 = 1
+
+    public var title: String {
+        switch self {
+        case .front: "front"
+        case .rotate180: "180"
+        }
+    }
+
+    public static func current(commanded180: Bool) -> Self {
+        commanded180 ? .rotate180 : .front
+    }
+}
+
+public struct GimbalStickSlotOverride: Equatable, Sendable, Codable {
+    public var mirror: GimbalStickForce
+    public var invert: GimbalStickForce
+
+    public init(mirror: GimbalStickForce = .auto, invert: GimbalStickForce = .auto) {
+        self.mirror = mirror
+        self.invert = invert
+    }
+}
+
+/// Per-pose L/R invert overrides for live stick UAT. Extra-mirror is unused
+/// (Mimo never X-flips live HEVC).
+public struct GimbalStickDebug: Equatable, Sendable, Codable {
+    public var front: GimbalStickSlotOverride
+    public var rotate180: GimbalStickSlotOverride
+
+    public init(
+        front: GimbalStickSlotOverride = .init(),
+        rotate180: GimbalStickSlotOverride = .init()
+    ) {
+        self.front = front
+        self.rotate180 = rotate180
+    }
+
+    public subscript(slot: GimbalStickDebugSlot) -> GimbalStickSlotOverride {
+        get {
+            switch slot {
+            case .front: front
+            case .rotate180: rotate180
+            }
+        }
+        set {
+            switch slot {
+            case .front: front = newValue
+            case .rotate180: rotate180 = newValue
+            }
+        }
+    }
+
+    public func mirror(commanded180: Bool, auto: Bool) -> Bool {
+        self[GimbalStickDebugSlot.current(commanded180: commanded180)].mirror.applied(auto: auto)
+    }
+
+    public func invert(commanded180: Bool, auto: Bool) -> Bool {
+        self[GimbalStickDebugSlot.current(commanded180: commanded180)].invert.applied(auto: auto)
     }
 }
 
@@ -1085,13 +1348,66 @@ public enum GimbalStick {
         return UInt16(clamped)
     }
 
+    /// Screen-relative pan from 0x27 face. Unknown bit keeps the front mapping.
+    public static func invertPan(for face: GimbalFace?) -> Bool {
+        face == .selfie
+    }
+
+    /// View-space X flip: TT180 extra-mirror XOR MIRROR assist.
+    public static func liveViewFlip(poseViewFlip: Bool, assistMirror: Bool) -> Bool {
+        poseViewFlip != assistMirror
+    }
+
+    /// Stick invert follows the visible picture (TT180 XOR MIRROR).
+    public static func liveInvertPan(poseInvert: Bool, assistMirror: Bool) -> Bool {
+        poseInvert != assistMirror
+    }
+
+    /// `0x04/0x05` i16-LE @4 in 0.1°. |angle| > 90° is the selfie-facing pose.
+    /// Short payloads fail closed (`nil`).
+    public static let rotated180TenthDeg = 900
+    /// Invert latch like Mimo: end of the 180, not the midpoint.
+    public static let settle180TenthDeg = 1650
+    public static let settleFrontTenthDeg = 150
+    /// Reconnect often pushes a 0° stub before the real 180. Do not lock front yet.
+    public static let poseSeedFrontVotes = 3
+
+    public static func yawTenthDeg(_ payload: [UInt8]) -> Int16? {
+        guard payload.count >= 6 else { return nil }
+        return Int16(bitPattern: UInt16(payload[4]) | UInt16(payload[5]) << 8)
+    }
+
+    public static func rotated180(_ payload: [UInt8]) -> Bool? {
+        guard let yaw = yawTenthDeg(payload) else { return nil }
+        return abs(Int(yaw)) > rotated180TenthDeg
+    }
+
+    public static func rotationSettled(yawTenthDeg: Int16, want180: Bool) -> Bool {
+        let angle = abs(Int(yawTenthDeg))
+        return want180 ? angle >= settle180TenthDeg : angle <= settleFrontTenthDeg
+    }
+
+    /// Pocket `FE 09` destination: front half (`|yaw| ≤ 90°`) goes to ±180°.
+    /// Unknown yaw assumes front (first live, no `0x05` yet).
+    public static func fe09GoesTo180(yawTenthDeg: Int16?) -> Bool {
+        guard let yaw = yawTenthDeg else { return true }
+        return abs(Int(yaw)) <= rotated180TenthDeg
+    }
+
     /// `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0).
-    /// Tracking uses the same pan as the free stick (`invertPan` stays false).
+    /// Tracking uses the same pan invert as the free stick.
     public static func encode(
         x: Double, y: Double, invertPan: Bool = false,
         sensitivity: Int = defaultSensitivity
     ) -> (axis0: UInt16, axis1: UInt16) {
         (axis(y, sensitivity: sensitivity), axis(invertPan ? -x : x, sensitivity: sensitivity))
+    }
+
+    public static func encode(
+        x: Double, y: Double, face: GimbalFace?,
+        sensitivity: Int = defaultSensitivity
+    ) -> (axis0: UInt16, axis1: UInt16) {
+        encode(x: x, y: y, invertPan: invertPan(for: face), sensitivity: sensitivity)
     }
 }
 

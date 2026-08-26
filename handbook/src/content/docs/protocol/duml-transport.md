@@ -34,4 +34,6 @@ On the UDP datalink each DUML frame is wrapped in an **8-byte transport header**
 
 Live view is **not** a separate port. Video is datalink `pktType 0x02` on the same UDP 9004 socket. See [live view](../live-view/).
 
+pktType `0x04` window ACK is 34 bytes: 8-byte transport header + 26-byte payload of three duplicated-u16 groups (video seq, `0x03` ackedData seq, extra). Mimo copies the `0x03` seq into group 1; command GET replies including Selfie Flip pid `0x38` use `0x03`.
+
 Transport parsing lives in `Sources/OpenPocketViewCore/DumlTransport.swift`.

@@ -87,17 +87,69 @@ public enum DumlTransport {
         return p
     }
 
-    /// The 26-byte pktType-0x04 ACK payload: `grp(peerCursor) + grp(baseSeq) + grp(baseSeq) + [0,0]`,
+    /// Three window cursors in a pktType-0x04 ACK (and in 34-byte pktType-0x01 telemetry).
+    /// Mimo echoes video (`0x02`) in group 0, ackedData (`0x03`) in group 1, and a third
+    /// channel in group 2. Command replies — including Selfie Flip GET `0x02/0x8E` pid
+    /// `0x38` — ride `0x03`. Repeating handshake `baseSeq` in group 1 leaves that window
+    /// un-ACKed; the camera then stops `0x03` after a few dozen packets.
+    public struct AckWindows: Equatable, Sendable {
+        public var video: UInt16
+        public var ackedData: UInt16
+        public var extra: UInt16
+        public init(video: UInt16 = 0, ackedData: UInt16 = 0, extra: UInt16 = 0) {
+            self.video = video
+            self.ackedData = ackedData
+            self.extra = extra
+        }
+
+        /// Advance group 1 from pktType `0x03` and seed/refresh groups 1–2 from
+        /// 34-byte `0x01` telemetry. Video (`0x02`) is tracked separately.
+        public func advancing(datagram: [UInt8]) -> AckWindows {
+            var next = self
+            guard datagram.count >= 8 else { return next }
+            switch datagram[6] {
+            case PktType.telemetry.rawValue:
+                if let w = DumlTransport.ackWindows(fromTelemetry: datagram) {
+                    if next.ackedData == 0 { next.ackedData = w.ackedData }
+                    next.extra = w.extra
+                }
+            case PktType.ackedData.rawValue:
+                if let seq = DumlTransport.transportSeq(datagram) {
+                    next.ackedData = seq
+                }
+            default:
+                break
+            }
+            return next
+        }
+    }
+
+    /// 34-byte pktType-0x01 telemetry uses the ACK window layout as payload. Each group
+    /// stores a duplicated u16; the second slot is the cursor Mimo copies (`bytes 10/18/26`).
+    public static func ackWindows(fromTelemetry datagram: [UInt8]) -> AckWindows? {
+        guard datagram.count >= 34, datagram[6] == PktType.telemetry.rawValue else { return nil }
+        func u16(_ i: Int) -> UInt16 { UInt16(datagram[i]) | (UInt16(datagram[i + 1]) << 8) }
+        return AckWindows(video: u16(10), ackedData: u16(18), extra: u16(26))
+    }
+
+    /// The 26-byte pktType-0x04 ACK payload: `grp(video) + grp(ackedData) + grp(extra) + [0,0]`,
     /// where `grp(v) = [v_lo, v_hi, v_lo, v_hi, 0,0,0,0]`. With the 8-byte transport header the whole
-    /// packet is 34 bytes. The peer holds its downlink until it sees its own cursor echoed here.
+    /// packet is 34 bytes. The two-argument form repeats `baseSeq` in groups 1 and 2 (handshake
+    /// seed before any `0x03` / telemetry).
     public static func ackPayload(peerCursor: UInt16, baseSeq: UInt16) -> [UInt8] {
+        ackPayload(peerCursor: peerCursor, ackedDataCursor: baseSeq, extraCursor: baseSeq)
+    }
+
+    public static func ackPayload(
+        peerCursor: UInt16, ackedDataCursor: UInt16, extraCursor: UInt16
+    ) -> [UInt8] {
         func grp(_ v: UInt16) -> [UInt8] {
             [
                 UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), 0,
                 0, 0, 0,
             ]
         }
-        return grp(peerCursor) + grp(baseSeq) + grp(baseSeq) + [0, 0]
+        return grp(peerCursor) + grp(ackedDataCursor) + grp(extraCursor) + [0, 0]
     }
 
     /// Every CRC-valid DUML frame in `raw`, scanning byte-at-a-time so it finds frames inside the

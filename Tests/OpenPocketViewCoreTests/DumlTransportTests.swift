@@ -68,6 +68,56 @@ import Testing
         #expect(Array(p.suffix(2)) == [0, 0])
     }
 
+    /// Mimo's 40 Hz pktType-0x04 is three window groups, not video+baseSeq+baseSeq.
+    /// Group 1 is the latest pktType-0x03 (ackedData) transport seq — Flip GET
+    /// replies are 0x03, and echoing handshake baseSeq there fills the camera's
+    /// command-reply window after ~25 GETs / a few body Flip presses.
+    @Test func ackPayloadEchoesAckedDataCursor() {
+        let p = DumlTransport.ackPayload(
+            peerCursor: 0xA9D8, ackedDataCursor: 0xCD38, extraCursor: 0xDDA0)
+        #expect(p.count == 26)
+        #expect(Array(p[0..<8]) == [0xD8, 0xA9, 0xD8, 0xA9, 0, 0, 0, 0])
+        #expect(Array(p[8..<16]) == [0x38, 0xCD, 0x38, 0xCD, 0, 0, 0, 0])
+        #expect(Array(p[16..<24]) == [0xA0, 0xDD, 0xA0, 0xDD, 0, 0, 0, 0])
+        #expect(Array(p.suffix(2)) == [0, 0])
+    }
+
+    /// 34-byte pktType-0x01 telemetry uses the same 26-byte window layout. Mimo
+    /// copies groups 1–2 from it until 0x02 / 0x03 packets advance those cursors.
+    @Test func ackWindowsFromTelemetry() {
+        let tel: [UInt8] = [
+            0x22, 0x80, 0xB7, 0x11, 0xB8, 0xFF, 0x01, 0x42,
+            0x60, 0xA9, 0xD8, 0xA9, 0, 0, 0, 0,
+            0x38, 0xCD, 0x38, 0xCD, 0, 0, 0, 0,
+            0xA0, 0xDD, 0xA0, 0xDD, 0, 0, 0, 0, 0, 0,
+        ]
+        let w = DumlTransport.ackWindows(fromTelemetry: tel)
+        #expect(w?.video == 0xA9D8)
+        #expect(w?.ackedData == 0xCD38)
+        #expect(w?.extra == 0xDDA0)
+        #expect(DumlTransport.ackWindows(fromTelemetry: Array(tel[0..<8])) == nil)
+    }
+
+    @Test func ackWindowsAdvanceFromTelemetryThenAckedData() {
+        let tel: [UInt8] = [
+            0x22, 0x80, 0xB7, 0x11, 0xB8, 0xFF, 0x01, 0x42,
+            0x60, 0xA9, 0xD8, 0xA9, 0, 0, 0, 0,
+            0x38, 0xCD, 0x38, 0xCD, 0, 0, 0, 0,
+            0xA0, 0xDD, 0xA0, 0xDD, 0, 0, 0, 0, 0, 0,
+        ]
+        var w = DumlTransport.AckWindows()
+        w = w.advancing(datagram: tel)
+        #expect(w.ackedData == 0xCD38 && w.extra == 0xDDA0)
+        let reply = DumlTransport.transportHeader(
+            pktType: 0x03, payloadLen: 0, sessionId: 1, seq: 0xF740)
+        w = w.advancing(datagram: reply)
+        #expect(w.ackedData == 0xF740 && w.extra == 0xDDA0)
+        let video = DumlTransport.transportHeader(
+            pktType: 0x02, payloadLen: 8, sessionId: 1, seq: 0xA9D8)
+        let afterVideo = w.advancing(datagram: video)
+        #expect(afterVideo == w)
+    }
+
     // scanFrames must find the DUML frame buried under the transport + routing wrapper.
     @Test func scanFindsWrappedFrame() {
         let packet: [UInt8] = [

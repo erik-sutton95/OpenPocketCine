@@ -54,6 +54,8 @@ final class BleLink: NSObject {
     private var pairingArmed = false
     private var fff4NotifySettled = false
     private var fff5NotifySettled = false
+    /// After DUML GATT is up, walk every service/char and log values (Flip hunt).
+    private var gattDumpStarted = false
 
     private var writeQueue: [Data] = []
     private var writing = false
@@ -120,6 +122,7 @@ final class BleLink: NSObject {
         pairingArmed = false
         fff4NotifySettled = false
         fff5NotifySettled = false
+        gattDumpStarted = false
         fff4 = nil
         fff5 = nil
         p.delegate = self
@@ -172,6 +175,7 @@ final class BleLink: NSObject {
         pairingArmed = false
         fff4NotifySettled = false
         fff5NotifySettled = false
+        gattDumpStarted = false
         disconnectForeignDJI(keeping: nil)
     }
 
@@ -191,6 +195,7 @@ final class BleLink: NSObject {
             pairingArmed = false
             fff4NotifySettled = false
             fff5NotifySettled = false
+            gattDumpStarted = false
         }
         for (id, p) in peripherals where id != keep {
             p.delegate = nil
@@ -237,6 +242,51 @@ final class BleLink: NSObject {
     }
 
     /// `setNotifyValue` is a no-op (no callback) when the char has neither notify nor indicate.
+    private func startGattDump(_ peripheral: CBPeripheral) {
+        guard !gattDumpStarted else { return }
+        gattDumpStarted = true
+        persistGatt("ble: gatt dump start")
+        peripheral.discoverServices(nil)
+    }
+
+    private func logGattChar(_ c: CBCharacteristic, service: CBUUID) {
+        var props: [String] = []
+        if c.properties.contains(.read) { props.append("r") }
+        if c.properties.contains(.write) { props.append("w") }
+        if c.properties.contains(.writeWithoutResponse) { props.append("wnr") }
+        if c.properties.contains(.notify) { props.append("n") }
+        if c.properties.contains(.indicate) { props.append("i") }
+        persistGatt(
+            "ble: gatt char \(service.uuidString) \(c.uuid.uuidString) [\(props.joined(separator: ","))]"
+        )
+    }
+
+    private func logGattValue(_ c: CBCharacteristic, _ value: Data) {
+        let hex = value.prefix(64).map { String(format: "%02x", $0) }.joined()
+        let more = value.count > 64 ? "+\(value.count - 64)B" : ""
+        persistGatt("ble: gatt val \(c.uuid.uuidString) \(value.count)B \(hex)\(more)")
+    }
+
+    private func persistGatt(_ text: String) {
+        ControlLiveLog.line(text)
+        DispatchQueue.global(qos: .utility).async {
+            guard
+                let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                    .first?.appendingPathComponent("ble-gatt.log")
+            else { return }
+            let row = Data("\(ISO8601DateFormatter().string(from: Date())) \(text)\n".utf8)
+            if FileManager.default.fileExists(atPath: url.path) {
+                if let handle = try? FileHandle(forWritingTo: url) {
+                    defer { try? handle.close() }
+                    _ = try? handle.seekToEnd()
+                    try? handle.write(contentsOf: row)
+                }
+            } else {
+                try? row.write(to: url)
+            }
+        }
+    }
+
     private func requestNotify(_ c: CBCharacteristic, on peripheral: CBPeripheral) {
         if c.properties.contains(.notify) || c.properties.contains(.indicate) {
             peripheral.setNotifyValue(true, for: c)
@@ -349,7 +399,18 @@ extension BleLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard isSelected(peripheral) else { return }
         if let error {
+            if gattDumpStarted {
+                persistGatt("ble: gatt dump services error \(error.localizedDescription)")
+                return
+            }
             finishConnect(error)
+            return
+        }
+        if gattDumpStarted {
+            for svc in peripheral.services ?? [] {
+                persistGatt("ble: gatt svc \(svc.uuid.uuidString)")
+                peripheral.discoverCharacteristics(nil, for: svc)
+            }
             return
         }
         guard let svc = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
@@ -364,7 +425,24 @@ extension BleLink: CBPeripheralDelegate {
     ) {
         guard isSelected(peripheral) else { return }
         if let error {
+            if gattDumpStarted {
+                persistGatt(
+                    "ble: gatt dump chars error \(service.uuid.uuidString) \(error.localizedDescription)"
+                )
+                return
+            }
             finishConnect(error)
+            return
+        }
+        if gattDumpStarted {
+            for c in service.characteristics ?? [] {
+                logGattChar(c, service: service.uuid)
+                if c.uuid == fff4UUID || c.uuid == fff5UUID { continue }
+                requestNotify(c, on: peripheral)
+                if c.properties.contains(.read) {
+                    peripheral.readValue(for: c)
+                }
+            }
             return
         }
         for c in service.characteristics ?? [] {
@@ -403,6 +481,7 @@ extension BleLink: CBPeripheralDelegate {
         guard isSelected(peripheral) else { return }
         if characteristic.uuid == fff4UUID {  // the arm-pairing write completed -> ready
             finishConnect(error)
+            if error == nil { startGattDump(peripheral) }
         }
     }
 
@@ -412,6 +491,12 @@ extension BleLink: CBPeripheralDelegate {
     ) {
         guard isSelected(peripheral) else { return }
         guard let value = characteristic.value else { return }
+        let isDumlPipe = characteristic.uuid == fff4UUID || characteristic.uuid == fff5UUID
+        if !isDumlPipe {
+            logGattValue(characteristic, value)
+        } else if DumlTransport.scanFrames([UInt8](value)).isEmpty {
+            logGattValue(characteristic, value)
+        }
         for frame in DumlTransport.scanFrames([UInt8](value)) {
             if !Self.isSessionPing(frame) {
                 log.debug(

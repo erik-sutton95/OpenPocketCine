@@ -1094,11 +1094,14 @@ struct FeedAlignedAssists: View {
     /// When set (letterboxed clip playback), framing overlays align to this rect
     /// instead of the full geometry — OpenZCine `FeedAlignedAssists(feed:)`.
     var feed: CGRect? = nil
+    /// Live 180 / MIRROR compose. Nil uses the assist chip only (playback).
+    var pictureMirrored: Bool? = nil
     @Environment(AppModel.self) private var model
 
     var body: some View {
         GeometryReader { proxy in
             let assist = model.assist
+            let mirrored = pictureMirrored ?? assist.isVisible(.mirror)
             // Live: framing aids sit on the de-squeezed picture. Playback already
             // letterboxes the raster (`feed`); do not re-apply live desqueeze there.
             let feed = self.feed ?? overlayFeedRect(CGRect(origin: .zero, size: proxy.size), assist)
@@ -1120,7 +1123,7 @@ struct FeedAlignedAssists: View {
                 }
                 ForEach(Array(sceneFaces.enumerated()), id: \.offset) { _, box in
                     TrackingBracketView(
-                        rect: feedRect(mirroredBox(box, assist.isVisible(.mirror)), in: feed),
+                        rect: feedRect(mirroredBox(box, mirrored), in: feed),
                         color: LiveDesign.text.opacity(SceneFacePolicy.dimOpacity),
                         lineWidth: 1.6
                     )
@@ -1129,18 +1132,18 @@ struct FeedAlignedAssists: View {
                     switch overlay {
                     case .search(let box):
                         TrackingBoxView(
-                            feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
+                            feed: feed, box: mirroredBox(box, mirrored))
                         FocusBoxView(
                             feed: feed,
-                            normalized: assist.isVisible(.mirror)
+                            normalized: mirrored
                                 ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
                                 : focusPoint
                         )
                     case .subject(let box):
-                        SubjectBoxView(feed: feed, box: mirroredBox(box, assist.isVisible(.mirror)))
+                        SubjectBoxView(feed: feed, box: mirroredBox(box, mirrored))
                     case .face(let box):
                         TrackingBracketView(
-                            rect: feedRect(mirroredBox(box, assist.isVisible(.mirror)), in: feed),
+                            rect: feedRect(mirroredBox(box, mirrored), in: feed),
                             color: LiveDesign.text.opacity(0.92),
                             lineWidth: 1.6
                         )
@@ -1148,7 +1151,7 @@ struct FeedAlignedAssists: View {
                         if showTapFocusBox {
                             FocusBoxView(
                                 feed: feed,
-                                normalized: assist.isVisible(.mirror)
+                                normalized: mirrored
                                     ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
                                     : focusPoint
                             )

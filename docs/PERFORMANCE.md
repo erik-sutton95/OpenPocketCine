@@ -15,7 +15,7 @@ the same PR.
 | --- | --- | --- |
 | Live picture | Present at the camera’s live rate. Typical Pocket/Nano SoftAP is ~25 fps 720p. Do not pace decode at 30 fps. A 4K 50p body may present 50 Hz 720p. Skip duplicate timestamps; latest-wins if a LUT bake is busy. Runtime grade cap 1440 px (`FeedPresentPolicy.maxWorkingWidth`). | [`live-session.md`](live-session.md), `FeedPresentPolicy` |
 | Playback LUT | 720p proxy with the official cube stays at a usable rate on iPhone 13-class (picture first; same class as LUT-off). Native 420 IOSurface → GPU cube at `maxWorkingWidth`. Pull clock follows the display (24–120 Hz); `hasNewPixelBuffer` gates the cube — do not cap the display link at 24. No `AVVideoComposition` for preview. Scope tap stays off the present thread. Android playback is the live GLES session (OES → cube); no TextureView `getBitmap`. | `PlaybackFeedSession`, `PlaybackFeedView` |
-| Window ACK | pktType `0x04` at **40 Hz**, cursor = latest video transport seq | [`live-session.md`](live-session.md) |
+| Window ACK | pktType `0x04` at **40 Hz**, three groups: video `0x02` seq, ackedData `0x03` seq, telemetry extra | [`live-session.md`](live-session.md) |
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
 | Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md) |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
@@ -32,7 +32,9 @@ must not stop the socket.
 Depacketize and scope accumulation stay off the UI thread. Compose/SwiftUI
 invalidates at the HUD budget, not per video packet.
 
-Keep the last decoded frame through recover. Empty samples and
+Keep the last decoded frame through recover, and across extra-mirror
+(3 frames / 120 ms) so TT180 does not X-flip the on-screen picture in
+place. Empty samples and
 `flushAndRemoveImage` before the next picture are a black well, not a stall.
 A 2 s gap with no present is a **freeze** (`FeedPresentPolicy.isFrozen`) —
 UDP still alive means do not send `0x09/0xa8`. Skip duplicate timestamps

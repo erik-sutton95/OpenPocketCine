@@ -130,3 +130,104 @@ data class ColorPin(val expected: Int, val deadlineElapsedRealtime: Long) {
         }
     }
 }
+
+/** iOS `GimbalStickMapping` — invert on TT180; extra-mirror = TT180 && Flip off. */
+data class GimbalStickMapping(
+    val face: Int = CameraCommands.GIMBAL_FACE_UNKNOWN,
+    val wireFace: Int = CameraCommands.GIMBAL_FACE_UNKNOWN,
+    val rotated180: Boolean = false,
+    val holdFace: Boolean = false,
+    val seenFront: Boolean = false,
+    val rotateParity: Boolean = false,
+    val commanded180: Boolean = false,
+    val selfieFlip: Boolean = false,
+    val pendingWant180: List<Boolean> = emptyList(),
+    val yawTenthDeg: Int? = null,
+    val poseSeeded: Boolean = false,
+    val poseSeedFrontCount: Int = 0,
+) {
+    val pendingRotateCount: Int
+        get() = pendingWant180.size
+
+    val poseViewFlip: Boolean
+        get() = commanded180 && !selfieFlip
+
+    val invertPan: Boolean
+        get() = commanded180
+
+    fun noteRotate180(): GimbalStickMapping = noteRotate180(fromBody = false)
+
+    fun noteRotate180(fromBody: Boolean): GimbalStickMapping =
+        copy(
+            holdFace = if (fromBody) holdFace else true,
+            pendingWant180 = pendingWant180 + CameraCommands.fe09GoesTo180(yawTenthDeg),
+        )
+
+    fun noteBodyFace(newFace: Int): GimbalStickMapping {
+        val previous = wireFace
+        val wasHold = holdFace
+        val next = applyFace(newFace)
+        if (wasHold || previous < 0 || newFace < 0 || newFace == previous) return next
+        return next.copy(
+            commanded180 = newFace == CameraCommands.GIMBAL_FACE_SELFIE,
+            poseSeeded = true,
+            poseSeedFrontCount = 0,
+        )
+    }
+
+    fun applyFace(newFace: Int): GimbalStickMapping {
+        if (newFace < 0) return this
+        var next = this
+        if (newFace == CameraCommands.GIMBAL_FACE_FRONT) {
+            next = next.copy(seenFront = true)
+        }
+        if (newFace == CameraCommands.GIMBAL_FACE_SELFIE && !next.seenFront) return next
+        if (next.holdFace) {
+            if (next.wireFace < 0) return next.copy(wireFace = newFace)
+            if (newFace == next.wireFace) return next
+            return next.copy(
+                wireFace = newFace,
+                rotateParity = !next.rotateParity,
+                holdFace = false,
+            )
+        }
+        val decoded =
+            if ((newFace == CameraCommands.GIMBAL_FACE_SELFIE) != next.rotateParity) {
+                CameraCommands.GIMBAL_FACE_SELFIE
+            } else {
+                CameraCommands.GIMBAL_FACE_FRONT
+            }
+        return next.copy(face = decoded, wireFace = newFace, holdFace = false)
+    }
+
+    fun applyAttitude(payload: ByteArray): GimbalStickMapping {
+        val yaw = CameraCommands.yawTenthDeg(payload) ?: return this
+        val rotated = kotlin.math.abs(yaw) > CameraCommands.ROTATED_180_TENTH_DEG
+        var next = copy(rotated180 = rotated, yawTenthDeg = yaw)
+        val want180 = next.pendingWant180.firstOrNull()
+        if (want180 != null) {
+            if (CameraCommands.rotationSettled(yaw, want180)) {
+                next = next.copy(
+                    commanded180 = want180,
+                    pendingWant180 = next.pendingWant180.drop(1),
+                    poseSeeded = true,
+                    poseSeedFrontCount = 0,
+                )
+            }
+        } else if (!next.poseSeeded) {
+            if (rotated) {
+                next = next.copy(commanded180 = true, poseSeeded = true, poseSeedFrontCount = 0)
+            } else if (CameraCommands.rotationSettled(yaw, false)) {
+                val votes = next.poseSeedFrontCount + 1
+                next = if (votes >= CameraCommands.POSE_SEED_FRONT_VOTES) {
+                    next.copy(commanded180 = false, poseSeeded = true, poseSeedFrontCount = votes)
+                } else {
+                    next.copy(poseSeedFrontCount = votes)
+                }
+            } else {
+                next = next.copy(poseSeedFrontCount = 0)
+            }
+        }
+        return next
+    }
+}

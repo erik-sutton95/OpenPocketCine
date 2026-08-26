@@ -191,13 +191,14 @@
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_ackPayload")
     public func swiftCoreAckPayload(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
-        peerCursor: jint, baseSeq: jint
+        peerCursor: jint, ackedDataCursor: jint, extraCursor: jint
     ) -> jbyteArray? {
         javaByteArray(
             env,
             DumlTransport.ackPayload(
                 peerCursor: UInt16(truncatingIfNeeded: peerCursor),
-                baseSeq: UInt16(truncatingIfNeeded: baseSeq)
+                ackedDataCursor: UInt16(truncatingIfNeeded: ackedDataCursor),
+                extraCursor: UInt16(truncatingIfNeeded: extraCursor)
             )
         )
     }
@@ -324,12 +325,13 @@
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_gimbalStickEncode")
     public func swiftCoreGimbalStickEncode(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
-        x: jdouble, y: jdouble, sensitivity: jint
+        x: jdouble, y: jdouble, invertPan: jboolean, sensitivity: jint
     ) -> jstring? {
         javaString(
             env,
             AndroidSessionWire.gimbalStickEncode(
-                x: Double(x), y: Double(y), sensitivity: Int(sensitivity)))
+                x: Double(x), y: Double(y), invertPan: invertPan != 0,
+                sensitivity: Int(sensitivity)))
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_camFovChipWrite")

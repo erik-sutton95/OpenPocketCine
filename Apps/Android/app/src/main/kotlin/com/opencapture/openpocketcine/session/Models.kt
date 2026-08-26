@@ -156,6 +156,10 @@ data class CameraStatus(
     val zoomFactor: Double? = null,
     /** Last `0x8E` pid `0x0039` blob `@5` non-zero. Null unknown. */
     val glamourEnabled: Boolean? = null,
+    /** `0x8E` pid `0x0038` (`00`/`01`). Control Center Selfie Flip. */
+    val selfieFlip: Boolean? = null,
+    /** `0x04/0x27` `@2` bit `0x40`. `0` front / `1` selfie / `-1` unknown. */
+    val gimbalFace: Int = CameraCommands.GIMBAL_FACE_UNKNOWN,
     /** Live VU from `cam_audio_status_v2`, dBFS. Floor is −60. */
     val audioMetersLeft: Double = -60.0,
     val audioMetersRight: Double = -60.0,
@@ -238,7 +242,8 @@ data class CameraStatus(
                 focusTrack >= 0 ||
                 zoomLens >= 0 ||
                 zoomFactor != null ||
-                glamourEnabled != null
+                glamourEnabled != null ||
+                selfieFlip != null
 
     val storageLabel: String
         get() {
@@ -306,6 +311,8 @@ data class CameraStatus(
             zoomLens = prev.zoomLens,
             zoomFactor = prev.zoomFactor,
             glamourEnabled = prev.glamourEnabled,
+            selfieFlip = prev.selfieFlip,
+            gimbalFace = prev.gimbalFace,
             audioMetersLeft = prev.audioMetersLeft,
             audioMetersRight = prev.audioMetersRight,
             audioPeakLeft = prev.audioPeakLeft,
@@ -361,6 +368,8 @@ data class CameraStatus(
             .put("zoomLens", zoomLens)
             .put("zoomFactor", zoomFactor ?: JSONObject.NULL)
             .put("glamourEnabled", glamourEnabled ?: JSONObject.NULL)
+            .put("selfieFlip", selfieFlip ?: JSONObject.NULL)
+            .put("gimbalFace", gimbalFace)
             .put("windNR", windNRJson())
             .put("directionalAudio", directionalAudioJson())
             .put("audioMetersLeft", audioMetersLeft)
@@ -442,6 +451,8 @@ data class CameraStatus(
                     zoomLens = obj.optInt("zoomLens", -1),
                     zoomFactor = optionalDouble(obj, "zoomFactor"),
                     glamourEnabled = optionalBoolean(obj, "glamourEnabled"),
+                    selfieFlip = optionalBoolean(obj, "selfieFlip"),
+                    gimbalFace = obj.optInt("gimbalFace", CameraCommands.GIMBAL_FACE_UNKNOWN),
                     windNr = mapWindNr(obj),
                     directionalAudio = mapDirectionalAudio(obj),
                     audioMetersLeft = obj.optDouble("audioMetersLeft", -60.0),

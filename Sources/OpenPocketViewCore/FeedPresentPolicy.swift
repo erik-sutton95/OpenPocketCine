@@ -17,6 +17,19 @@ public enum FeedPresentPolicy: Sendable {
     /// convolution graphs must not run at a 4K original when the monitor is 720p.
     public static let maxWorkingWidth: Int = 1440
 
+    /// Keep the current-orientation picture this many presents before extra-mirror
+    /// X-flips. Instant scaleX on the last frame is the jarring flip-flip.
+    public static let extraMirrorHoldFrames: Int = 3
+    /// Cap so a stalled decoder cannot freeze extra-mirror. 3 frames at 25 fps is 120 ms.
+    public static let extraMirrorHoldSeconds: TimeInterval = 0.2
+
+    /// `true` while the last picture should stay on screen (old transform).
+    public static func shouldHoldPictureAcrossMirror(
+        framesHeld: Int, secondsHeld: TimeInterval
+    ) -> Bool {
+        framesHeld <= extraMirrorHoldFrames && secondsHeld < extraMirrorHoldSeconds
+    }
+
     /// Visible, enabled, attached view with a real drawable. Overlay may be hidden
     /// until the first bake — use ``shouldScheduleBake(enabled:hasDrawable:)`` there.
     public static func shouldRender(
@@ -92,5 +105,69 @@ public struct SerialSessionGate: Equatable, Sendable {
 
     public mutating func end() {
         inFlight = false
+    }
+}
+
+/// Delays extra-mirror so the on-screen orientation is not X-flipped in place.
+public struct ExtraMirrorHold: Equatable, Sendable {
+    public enum Step: Equatable, Sendable {
+        case unchanged
+        case hold
+        case commit(Bool)
+    }
+
+    public private(set) var displayed: Bool?
+    public private(set) var pending: Bool?
+    public private(set) var framesHeld = 0
+    public private(set) var startedAt: TimeInterval?
+
+    public init() {}
+
+    public mutating func reset() {
+        displayed = nil
+        pending = nil
+        framesHeld = 0
+        startedAt = nil
+    }
+
+    /// First present commits immediately. A later edge holds
+    /// ``FeedPresentPolicy/extraMirrorHoldFrames`` then commits.
+    public mutating func step(want: Bool, now: TimeInterval) -> Step {
+        if displayed == nil {
+            displayed = want
+            pending = nil
+            framesHeld = 0
+            startedAt = nil
+            return .commit(want)
+        }
+        let shown = displayed!
+        if pending == nil {
+            guard want != shown else { return .unchanged }
+            pending = want
+            framesHeld = 0
+            startedAt = now
+        } else if pending != want {
+            if want == shown {
+                pending = nil
+                framesHeld = 0
+                startedAt = nil
+                return .unchanged
+            }
+            pending = want
+            framesHeld = 0
+            startedAt = now
+        }
+        framesHeld += 1
+        let age = now - (startedAt ?? now)
+        if FeedPresentPolicy.shouldHoldPictureAcrossMirror(
+            framesHeld: framesHeld, secondsHeld: age)
+        {
+            return .hold
+        }
+        displayed = want
+        pending = nil
+        framesHeld = 0
+        startedAt = nil
+        return .commit(want)
     }
 }

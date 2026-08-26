@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine.session
 
 import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.feed.ExtraMirrorHold
+import com.opencapture.openpocketcine.feed.FeedPresentPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -48,6 +50,11 @@ class CameraControlTest {
         assertTrue(
             CameraCommands.paramGet(CameraCommands.PID_ISO_LIMIT).contentEquals(
                 byteArrayOf(0x00, 0x01, 0x0F, 0x00),
+            ),
+        )
+        assertTrue(
+            CameraCommands.paramGet(CameraCommands.PID_SELFIE_FLIP).contentEquals(
+                byteArrayOf(0x00, 0x01, 0x38, 0x00),
             ),
         )
     }
@@ -366,6 +373,15 @@ class CameraControlTest {
         assertEquals(1, decoded.vocalBoost)
         assertEquals(1, decoded.windNr)
         assertTrue(decoded.audioDspBlob.startsWith("c0041a"))
+        val selfie = CameraStatus(gimbalFace = CameraCommands.GIMBAL_FACE_SELFIE)
+        assertEquals(
+            CameraCommands.GIMBAL_FACE_SELFIE,
+            CameraStatus.fromJson(selfie.toJson()).gimbalFace,
+        )
+        assertEquals(
+            CameraCommands.GIMBAL_FACE_UNKNOWN,
+            CameraStatus.fromJson("{}").gimbalFace,
+        )
     }
 
     @Test
@@ -392,6 +408,160 @@ class CameraControlTest {
         val slow = CameraCommands.gimbalAxes(1f, 0f, sensitivity = 1)
         assertTrue(slow.second < CameraCommands.GIMBAL_STICK_MAX)
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, slow.first)
+        assertTrue(!CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_UNKNOWN))
+        assertTrue(!CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_FRONT))
+        assertTrue(CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_SELFIE))
+        val selfieInvert = CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_SELFIE)
+        val selfieRight = CameraCommands.gimbalAxes(1f, 0f, invertPan = selfieInvert)
+        assertEquals(CameraCommands.GIMBAL_STICK_CENTER, selfieRight.first)
+        assertEquals(CameraCommands.GIMBAL_STICK_MIN, selfieRight.second)
+        val selfieUp = CameraCommands.gimbalAxes(0f, 1f, invertPan = selfieInvert)
+        assertEquals(up, selfieUp)
+        fun attitude(tenthDeg: Short): ByteArray {
+            val u = tenthDeg.toInt() and 0xFFFF
+            return byteArrayOf(0, 0, 0, 0, u.toByte(), (u shr 8).toByte())
+        }
+        assertTrue(CameraCommands.rotated180(attitude(0)) == false)
+        assertTrue(CameraCommands.rotated180(attitude(901)) == true)
+        assertTrue(CameraCommands.rotated180(attitude((-1800).toShort())) == true)
+        assertTrue(!CameraCommands.rotationSettled(901, true))
+        assertTrue(CameraCommands.rotationSettled(1650, true))
+        assertTrue(!CameraCommands.rotationSettled(400, false))
+        assertTrue(CameraCommands.rotationSettled(100, false))
+        assertEquals(3, CameraCommands.POSE_SEED_FRONT_VOTES)
+        assertTrue(CameraCommands.fe09GoesTo180(0))
+        assertTrue(CameraCommands.fe09GoesTo180(900))
+        assertTrue(!CameraCommands.fe09GoesTo180(901))
+        var map = GimbalStickMapping().applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+        assertTrue(!map.invertPan)
+        map = map.applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+        assertTrue(!map.invertPan)
+        map = map.applyAttitude(attitude((-1800).toShort()))
+        assertTrue(map.rotated180)
+        assertTrue(map.commanded180)
+        assertTrue(map.poseViewFlip)
+        assertTrue(map.invertPan)
+        map = map.applyAttitude(attitude(0))
+        assertTrue(map.invertPan)
+        map = map.noteRotate180()
+            .applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+            .applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+        assertTrue(map.face == CameraCommands.GIMBAL_FACE_FRONT)
+        assertTrue(map.rotateParity)
+        assertEquals(listOf(true), map.pendingWant180)
+        map = map.applyAttitude(attitude((-1800).toShort()))
+        assertTrue(map.poseViewFlip)
+        assertTrue(map.invertPan)
+        map = map.applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+        assertTrue(map.invertPan)
+        map = map.noteRotate180()
+            .applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+            .applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+        assertTrue(map.face == CameraCommands.GIMBAL_FACE_FRONT)
+        assertTrue(!map.rotateParity)
+        assertEquals(listOf(false), map.pendingWant180)
+        map = map.applyAttitude(attitude(0)).applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+        assertTrue(!map.invertPan)
+        assertTrue(!map.poseViewFlip)
+        map = map.noteRotate180()
+            .applyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+            .applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+            .applyAttitude(attitude((-1800).toShort()))
+        assertTrue(map.poseViewFlip)
+        assertTrue(map.invertPan)
+        map = map.applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+        assertTrue(map.invertPan)
+        var reconnect = GimbalStickMapping().applyAttitude(attitude((-1800).toShort()))
+        assertTrue(reconnect.commanded180)
+        assertTrue(reconnect.poseViewFlip)
+        reconnect = reconnect.applyAttitude(attitude(0))
+        assertTrue(reconnect.commanded180)
+        var stubThen180 = GimbalStickMapping().applyAttitude(attitude(0))
+        assertTrue(!stubThen180.poseSeeded)
+        assertTrue(!stubThen180.commanded180)
+        stubThen180 = stubThen180.applyAttitude(attitude((-1800).toShort()))
+        assertTrue(stubThen180.commanded180)
+        assertTrue(stubThen180.poseViewFlip)
+        assertTrue(stubThen180.invertPan)
+        var frontConnect = GimbalStickMapping().applyAttitude(attitude(0))
+        assertTrue(!frontConnect.commanded180)
+        assertTrue(!frontConnect.poseSeeded)
+        frontConnect = frontConnect.applyAttitude(attitude(0)).applyAttitude(attitude(0))
+        assertTrue(frontConnect.poseSeeded)
+        assertTrue(!frontConnect.commanded180)
+        frontConnect = frontConnect.applyAttitude(attitude(901))
+        assertTrue(!frontConnect.commanded180)
+        frontConnect = frontConnect.applyAttitude(attitude((-1800).toShort()))
+        assertTrue(!frontConnect.commanded180)
+        val yawSeed = GimbalStickMapping().applyAttitude(attitude(901))
+        assertTrue(yawSeed.commanded180)
+        var queued = GimbalStickMapping().applyAttitude(attitude(0)).noteRotate180()
+            .applyAttitude(attitude((-1800).toShort()))
+        assertTrue(queued.commanded180)
+        queued = queued.noteRotate180().applyAttitude(attitude(0))
+        assertTrue(!queued.commanded180)
+        var settle = GimbalStickMapping().applyAttitude(attitude(0)).noteRotate180()
+            .applyAttitude(attitude(901))
+        assertTrue(settle.rotated180)
+        assertTrue(!settle.commanded180)
+        assertTrue(!settle.poseViewFlip)
+        settle = settle.applyAttitude(attitude(1650))
+        assertTrue(settle.commanded180)
+        assertTrue(settle.poseViewFlip)
+        assertTrue(settle.invertPan)
+        settle = settle.noteRotate180().applyAttitude(attitude(899))
+        assertTrue(!settle.rotated180)
+        assertTrue(settle.commanded180)
+        assertTrue(settle.poseViewFlip)
+        assertTrue(settle.invertPan)
+        settle = settle.applyAttitude(attitude(100))
+        assertTrue(!settle.commanded180)
+        assertTrue(!settle.poseViewFlip)
+        var desync = GimbalStickMapping().applyAttitude(attitude(0))
+            .applyAttitude(attitude(0)).applyAttitude(attitude(0))
+            .applyAttitude(attitude((-1800).toShort()))
+        assertTrue(!desync.commanded180)
+        desync = desync.noteRotate180()
+        assertEquals(listOf(false), desync.pendingWant180)
+        desync = desync.applyAttitude(attitude(100))
+        assertTrue(!desync.commanded180)
+        assertEquals(0, desync.pendingRotateCount)
+        var body = GimbalStickMapping().applyAttitude(attitude(0))
+            .applyFace(CameraCommands.GIMBAL_FACE_FRONT)
+        body = body.noteBodyFace(CameraCommands.GIMBAL_FACE_SELFIE)
+        assertEquals(0, body.pendingRotateCount)
+        assertTrue(body.commanded180)
+        assertTrue(body.poseViewFlip)
+        assertTrue(body.invertPan)
+        val tt180 = GimbalStickMapping(commanded180 = true)
+        assertTrue(tt180.poseViewFlip)
+        assertTrue(tt180.invertPan)
+        val flipOn = GimbalStickMapping(commanded180 = true, selfieFlip = true)
+        assertTrue(!flipOn.poseViewFlip)
+        assertTrue(flipOn.invertPan)
+        assertTrue(CameraCommands.liveViewFlip(true, false))
+        assertTrue(!CameraCommands.liveViewFlip(true, true))
+        assertTrue(!CameraCommands.liveInvertPan(true, true))
+    }
+
+    @Test
+    fun extraMirrorHoldsThreePresentsThenCommits() {
+        assertEquals(3, FeedPresentPolicy.EXTRA_MIRROR_HOLD_FRAMES)
+        assertTrue(FeedPresentPolicy.shouldHoldPictureAcrossMirror(1, 0.04))
+        assertTrue(FeedPresentPolicy.shouldHoldPictureAcrossMirror(3, 0.12))
+        assertTrue(!FeedPresentPolicy.shouldHoldPictureAcrossMirror(4, 0.16))
+        assertTrue(!FeedPresentPolicy.shouldHoldPictureAcrossMirror(1, 0.2))
+        val hold = ExtraMirrorHold()
+        assertEquals(ExtraMirrorHold.Step.COMMIT, hold.step(false, 0.0).step)
+        assertEquals(ExtraMirrorHold.Step.UNCHANGED, hold.step(false, 0.04).step)
+        assertEquals(ExtraMirrorHold.Step.HOLD, hold.step(true, 0.08).step)
+        assertEquals(ExtraMirrorHold.Step.HOLD, hold.step(true, 0.12).step)
+        assertEquals(ExtraMirrorHold.Step.HOLD, hold.step(true, 0.16).step)
+        val commit = hold.step(true, 0.20)
+        assertEquals(ExtraMirrorHold.Step.COMMIT, commit.step)
+        assertEquals(true, commit.mirrored)
+        hold.reset()
+        assertEquals(ExtraMirrorHold.Step.COMMIT, hold.step(true, 1.0).step)
     }
 
     @Test
@@ -561,6 +731,7 @@ class CameraControlTest {
                 zoomLens = 217,
                 zoomFactor = 1.0,
                 glamourEnabled = false,
+                selfieFlip = true,
                 windNr = 1,
                 directionalAudio = 0,
                 audioMetersLeft = -12.0,
@@ -582,6 +753,7 @@ class CameraControlTest {
         assertEquals(217, decoded.zoomLens)
         assertEquals(1.0, decoded.zoomFactor ?: 0.0, 1e-6)
         assertEquals(false as Boolean?, decoded.glamourEnabled)
+        assertEquals(true as Boolean?, decoded.selfieFlip)
         assertEquals(1, decoded.windNr)
         assertEquals(0, decoded.directionalAudio)
         assertEquals(-12.0, decoded.audioMetersLeft, 1e-6)
@@ -641,6 +813,20 @@ class CameraControlTest {
         assertEquals(0x05, ack.isoLimit)
         val junk = StatusExtras.applyParamReply(hex("0000010f0001ff"), CameraStatus())
         assertEquals(-1, junk.isoLimit)
+    }
+
+    @Test
+    fun selfieFlipReplyIsPid38() {
+        val on = StatusExtras.applyParamReply(hex("00000138000101"), CameraStatus())
+        assertEquals(true, on.selfieFlip)
+        val off = StatusExtras.applyParamReply(hex("00000138000100"), on)
+        assertEquals(false, off.selfieFlip)
+        val junk = StatusExtras.applyParamReply(hex("00000138000102"), CameraStatus())
+        assertEquals(null, junk.selfieFlip)
+        val onBytes = hex("00000138000101")
+        assertTrue(CameraCommands.isSelfieFlipGetReply(0x02, 0x8E, onBytes))
+        assertTrue(!CameraCommands.isSelfieFlipGetReply(0x02, 0x8E, hex("00000120000102")))
+        assertTrue(!CameraCommands.isSelfieFlipGetReply(0x02, 0xA0, onBytes))
     }
 
     @Test
@@ -721,6 +907,7 @@ class CameraControlTest {
         assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
         assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
+        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_SELFIE_FLIP))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_ISO_LIMIT))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
         assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))

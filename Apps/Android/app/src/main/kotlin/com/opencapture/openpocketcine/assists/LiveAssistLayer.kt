@@ -87,6 +87,8 @@ fun LiveAssistLayer(
     showTapFocusBox: Boolean = true,
     /** Picture well in the same space as [modifier]; defaults to the layer box. */
     feedFrame: ChromeRect? = null,
+    /** Live 180 / MIRROR compose. Defaults to the MIRROR chip. */
+    pictureMirrored: Boolean = state.mirror,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
@@ -142,7 +144,7 @@ fun LiveAssistLayer(
                 com.opencapture.openpocketcine.LiveFocusTrackingLayer(
                     hud = tracking,
                     focus = focus,
-                    mirrored = shown(LiveAssistTool.MIRROR),
+                    mirrored = pictureMirrored,
                     showTapFocusBox = showTapFocusBox && focus != null,
                     modifier = Modifier.fillMaxSize(),
                 )

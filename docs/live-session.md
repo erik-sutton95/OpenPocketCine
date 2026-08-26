@@ -18,8 +18,22 @@ live-entry uses an ephemeral client port.
 
 ## ACK pump
 
-Window ACK is pktType `0x04` at 40 Hz, cursor = latest video transport seq.
-Keep TCP 7001 poke across UDP rebuilds.
+Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
+latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a
+third cursor seeded from 34-byte `0x01` telemetry. Keep TCP 7001 poke
+across UDP rebuilds.
+
+Those are **separate** camera send windows. HEVC (`0x02`) can stay at 25 fps
+while `0x03` is wedged. Unsolicited HUD (subscribe `0x00/0x99`, gimbal
+`0x04/0x05` / `0x04/0x27`, battery) rides **pktType `0x01`**, not `0x03`.
+Every command round-trip — param GET/SET `0x8E` (Flip, audio, glamour,
+AF-C), record/stop, zoom `0xB8` ACK, gimbal params `0x04/0x50`, audio DSP
+`0xA0` — replies as **`0x03`**. Echoing handshake `baseSeq` in group 1
+fills that window (handshake proposes 100). Then SET/GET go silent,
+mailbox retrains, Flip reads stale, and a UDP rebuild that keeps the
+session cannot unstick controls until a fresh handshake. Mimo copies the
+latest `0x03` seq into group 1 (~21 Hz of those packets in a live
+capture). The 40 Hz ACK pump must do the same.
 
 ## Enable write
 

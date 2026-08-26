@@ -332,6 +332,26 @@ All notable changes to this project are documented here. The format is based on
   is 25 Hz with 1–2 scopes; dense 3+ stays 10 Hz; thermal still ×3 / ×5.
   Downsample is 200-wide (213×120 on 720p). Android Vulkan walks the tap
   off the image thread so 25 Hz cannot stall the well.
+- Gimbal stick pan matches the **live** picture. Invert pan on every
+  rotate-180 (`FE 09`), latched when the 180 arrives (Mimo). Joystick yaw
+  to 180 does not invert. Extra-mirror live HEVC when TT180 and Control
+  Center Selfie Flip is off (`0x8E` pid `0x0038` `00`); Flip on skips
+  extra-mirror so the monitor stays readable like Mimo. Invert latches at
+  the end of the 180, not at the 90° midpoint. XOR the MIRROR chip. iOS
+  live view shows a gimbal debug plate (TT180 / yaw180 / Flip / invert).
+  Reconnect at 180 seeds TT180 from attitude (a 0° stub does not lock
+  front) and inverts without another triple-tap. Pid `0x38` GET is
+  untracked on the live UDP ACK pump (~1 Hz) and does not complete
+  audio / glamour `0x8E` waiters (a session Task plus a `.ready`-only
+  write used to freeze Flip after a few seconds while video kept
+  moving). Window ACK group 1 echoes the latest pktType-`0x03`
+  transport seq (Mimo). That window is every command reply (Flip
+  GET, other `0x8E`, record/stop, zoom ACK), not Flip alone;
+  repeating handshake `baseSeq` there filled it while HEVC and
+  `0x01` HUD kept moving, so SET/GET went stale and a session-
+  preserving UDP rebuild could not restore controls. Extra-mirror
+  holds the last picture for three frames (~120 ms) before
+  X-flipping so the current orientation is not mirrored in place.
 - Disconnected library Auto LUT keeps the clip's D-Log / D-Log2 cube. Opening
   the LUT sheet no longer restamps Auto from a missing live SET (that showed
   “No matching look for this color / camera” on a log clip). Color is

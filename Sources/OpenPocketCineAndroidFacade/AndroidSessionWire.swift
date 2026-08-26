@@ -95,8 +95,9 @@ public enum AndroidSessionWire {
         let colorCaps = status.availableColorModes.map { Int($0.rawValue) }
         let zoomFactorJSON = status.zoomFactor.map { String($0) } ?? "null"
         let glamourJSON = status.glamourEnabled.map { bool($0) } ?? "null"
+        let selfieFlipJSON = status.selfieFlip.map { bool($0.isOn) } ?? "null"
         return """
-            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
+            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"selfieFlip":\(selfieFlipJSON),"gimbalFace":\(intOrMinus(status.gimbalFace?.rawValue)),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
             """
     }
 
@@ -286,6 +287,12 @@ public enum AndroidSessionWire {
         let lens = int("zoomLens", default: -1)
         if (0...65_535).contains(lens) { status.zoomLens = UInt16(lens) }
         if let glamour = optionalFlag("glamourEnabled") { status.glamourEnabled = glamour }
+        if let flip = optionalFlag("selfieFlip") {
+            status.selfieFlip = flip ? .on : .off
+        }
+        if let face = GimbalFace(rawValue: int("gimbalFace", default: -1)) {
+            status.gimbalFace = face
+        }
         if let wind = optionalUInt8(int("windNR", default: -1)).flatMap(
             WindNoiseReduction.init(rawValue:))
         {
@@ -375,6 +382,7 @@ public enum AndroidSessionWire {
         case deleteMedia = 58
         case setMediaFavorite = 59
         case nanoLiveViewGate = 60
+        case getSelfieFlip = 61
     }
 
     public static func encodeCommand(kind: CommandKind, seq: UInt16, extra: String?) -> Duml.Frame?
@@ -580,6 +588,8 @@ public enum AndroidSessionWire {
             else { return nil }
             return Commands.setMediaFavorite(
                 handle: handle, on: isOn(parts[1]), counter: counter, seq: seq)
+        case .getSelfieFlip:
+            return Commands.getSelfieFlip(seq: seq)
         case .nanoLiveViewGate:
             guard extra != nil else { return nil }
             return Commands.nanoLiveViewGate(start: isOn(extra), seq: seq)
@@ -715,8 +725,11 @@ public enum AndroidSessionWire {
     }
 
     /// Stick axes as `"axis0,axis1"` (`x` −1…1 right, `y` −1…1 up).
-    public static func gimbalStickEncode(x: Double, y: Double, sensitivity: Int) -> String {
-        let axes = GimbalStick.encode(x: x, y: y, sensitivity: sensitivity)
+    public static func gimbalStickEncode(
+        x: Double, y: Double, invertPan: Bool, sensitivity: Int
+    ) -> String {
+        let axes = GimbalStick.encode(
+            x: x, y: y, invertPan: invertPan, sensitivity: sensitivity)
         return "\(axes.axis0),\(axes.axis1)"
     }
 

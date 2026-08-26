@@ -85,6 +85,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var glamourEnabled: Bool?
     /// Last `0x8E` pid `0x004C` GET reply.
     public var vocalBoost: VocalBoost?
+    /// Last `0x8E` pid `0x0038` GET reply. Control Center Selfie Flip.
+    public var selfieFlip: SelfieFlip?
     /// Last `0xA0` GET blob (26 B). Patch `@2`, SET `0x9F` — do not invent the rest.
     public var audioDspBlob: [UInt8]?
     /// Interpreted audio-DSP blob `@2`.
@@ -97,7 +99,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var audioMeters: AudioMeterLevels = .silent
     /// Last raw `cam_audio_status_v2` value (diagnostics / verify-on-HW).
     public var audioStatusRaw: [UInt8]?
-    /// `0x04/0x27` `@2` bit `0x40`.
+    /// Gimbal 180 wire: `0x04/0x27` `@2` bit `0x40`. Stick triple-tap `FE 09`
+    /// XORs this bit. Not Control Center Selfie Flip.
     public var gimbalFace: GimbalFace?
     /// Last `0x04/0x50` GET reply. Cannot tell FPV from Tilt Locked.
     public var gimbalParams: GimbalParamState?
@@ -217,6 +220,8 @@ public enum CameraStatusDecoder {
                     status.vocalBoost = VocalBoost(rawValue: parsed.value)
                 case CameraParam.isoLimit.rawValue:
                     status.isoLimit = IsoLimit(rawValue: parsed.value)
+                case CameraParam.selfieFlip.rawValue:
+                    status.selfieFlip = SelfieFlip(rawValue: parsed.value)
                 default:
                     break
                 }

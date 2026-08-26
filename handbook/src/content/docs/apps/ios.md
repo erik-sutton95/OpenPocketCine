@@ -22,9 +22,15 @@ project with XcodeGen — see [Setup](../guides/setup/).
   keeps that Auto cube (it does not restamp from a missing live SET).
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
-  picture — the same on iPhone and iPad, portrait and landscape. D-Log2
-  cannot zoom: idle hops to D-Log off 1×; while rolling the chip grays and
-  tap/pinch toast instead of changing color.
+  picture — the same on iPhone and iPad, portrait and landscape. Stick
+  pan stays picture-relative. The rotate-180 button inverts pan at the
+  end of the rotation (like Mimo). Extra-mirror live view when that 180
+  lands and Selfie Flip is off; Flip on skips extra-mirror. The last
+  picture stays for a couple of frames before that X-flip so the feed
+  does not swap in place. Joystick yaw to 180 does not invert. Reconnect
+  while at 180 inverts without another triple-tap. D-Log2 cannot zoom:
+  idle hops to D-Log off 1×; while rolling the chip grays and tap/pinch
+  toast instead of changing color.
 - Media library, playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
   GPU latest-wins, freeze keeps the last frame). Preview LUT grades the

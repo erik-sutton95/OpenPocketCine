@@ -10,9 +10,9 @@ enum ControlLiveLog {
     private static let log = Logger(
         subsystem: "com.opencapture.openpocketcine", category: "session")
     private static let queue = DispatchQueue(label: "opv.control-log", qos: .utility)
-    private static let cap = 200
+    private static let cap = 2500
     /// Trim cadence in appends — not a size stat per line.
-    private static let trimEvery = 64
+    private static let trimEvery = 128
     private static let name = "control-live.log"
 
     nonisolated static func line(_ text: String) {

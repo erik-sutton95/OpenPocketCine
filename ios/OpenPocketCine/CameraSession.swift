@@ -94,6 +94,8 @@ final class CameraSession {
     @ObservationIgnored var datalink: DatalinkDriver?
     @ObservationIgnored private var frameRouter: Task<Void, Never>?
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
+    /// Last pid `0x38` GET reply. Debug plate shows stale when this stops advancing.
+    @ObservationIgnored private var lastSelfieFlipReplyAt: Date?
     @ObservationIgnored private var waiters: [UInt16: FrameWaiter] = [:]
     /// Handshake replies can land in the same notification before the next waiter is registered.
     @ObservationIgnored private var pairingHold: [UInt16: Duml.Frame] = [:]
@@ -129,6 +131,21 @@ final class CameraSession {
     private(set) var controlBusy = false
     /// Last camera-control reply (empty when the last command succeeded).
     var controlNote: String?
+    /// Live extra-mirror after debug overrides (TT180 && Flip off).
+    private(set) var gimbalPoseViewFlip = false
+    /// Pose-only stick invert after debug overrides. Shell XORs MIRROR assist.
+    private(set) var gimbalPoseInvertPan = false
+    /// Per-pose invert overrides for live stick UAT.
+    var gimbalStickDebug = CameraSession.loadGimbalStickDebug() {
+        didSet {
+            CameraSession.saveGimbalStickDebug(gimbalStickDebug)
+            syncGimbalPose()
+        }
+    }
+    /// Live TT180 / yaw / invert for the on-feed debug plate.
+    private(set) var gimbalDebugState = LiveGimbalDebugState()
+    /// Hide the gimbal debug plate for screenshots. DBG chip brings it back.
+    var showsGimbalDebugOverlay = true
     /// Camera-library listing while the Media page is open.
     var mediaFiles: [MediaFile] = []
     var mediaFetchInProgress = false
@@ -284,12 +301,15 @@ final class CameraSession {
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
     @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
+    @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
     @ObservationIgnored let decoder = HevcDecoder()
 
     /// The live-view display layer, for the SwiftUI `VideoView`.
     var videoLayer: AVSampleBufferDisplayLayer { decoder.displayLayer }
 
     init() {
+        gimbalStickMapping = GimbalStickMapping()
+        syncGimbalPose()
         decoder.onPresentedFrame = { [weak self] in
             self?.noteLiveFrame()
         }
@@ -452,6 +472,7 @@ final class CameraSession {
         audioPin = nil
         formatPin = nil
         colorPin = nil
+        resetGimbalPoseForNewStream()
         controlBusy = false
         controlNote = nil
         focusPoint = CGPoint(x: 0.5, y: 0.5)
@@ -516,6 +537,7 @@ final class CameraSession {
         runTask?.cancel()
         runTask = nil
         keepaliveLoop?.cancel()
+        lastSelfieFlipReplyAt = nil
         frameRouter?.cancel()
         failAllWaiters(Fail.disconnected)
         pairingHold.removeAll()
@@ -577,6 +599,7 @@ final class CameraSession {
         resetLinkHealthMeasurements()
         resetFeedWatchdog()
         decoder.reset()
+        resetGimbalPoseForNewStream()
         // Camera is still pushing the last GOP. Hold before UDP opens so
         // leftover P-frames cannot set lastPresentedAt and skip first-picture.
         decoder.beginIDRHold()
@@ -739,6 +762,17 @@ final class CameraSession {
         if frame.cmdSet == 0x07, frame.cmdId == 0x46, frame.flags == Duml.flagRequest {
             ble.send(Commands.pairApprovalAck(seq: frame.seq))
         }
+        // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter here
+        // stole Flip replies as audio/glamour ACKs after first picture.
+        // Apply here so BLE replies still land (UDP-only apply went stale).
+        if applySelfieFlipReply(frame) {
+            return
+        }
+        if frame.cmdSet == 0x02, frame.cmdId == 0x8E {
+            ControlLiveLog.line(
+                "flip: route 0x8E miss seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload))"
+            )
+        }
         let key = Duml.opcodeKey(set: frame.cmdSet, cmd: frame.cmdId)
         if let waiter = waiters[key] {
             noteControlAck(frame, decision: "match")
@@ -754,6 +788,34 @@ final class CameraSession {
             pairingHold[key] = frame
             return
         }
+    }
+
+    /// UDP ACK-pump GET and BLE fallback both land here. Do not complete 0x8E waiters.
+    @discardableResult
+    private func applySelfieFlipReply(_ frame: Duml.Frame) -> Bool {
+        guard
+            CameraParam.isSelfieFlipGetReply(
+                set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload),
+            let parsed = CameraParam.parseGetReply(frame.payload)
+        else { return false }
+        lastSelfieFlipReplyAt = Date()
+        datalink?.noteSelfieFlipReply()
+        let next = SelfieFlip(rawValue: parsed.value)
+        let changed = next != status.selfieFlip
+        ControlLiveLog.line(
+            "flip: rx \(next?.label ?? "nil") seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) changed=\(changed ? 1 : 0)"
+        )
+        if changed {
+            var s = status
+            s.selfieFlip = next
+            status = s
+            ControlLiveLog.line(
+                "control: Selfie Flip \(next?.label ?? "nil") extra-mirror=\(gimbalStickMapping.commanded180 && !(next?.isOn ?? false) ? 1 : 0)"
+            )
+            decoder.invalidatePictureFlipPresentation()
+        }
+        syncGimbalPose()
+        return true
     }
 
     /// Late BLE ACKs for the open seq are success. Superseded / flood seqs drop.
@@ -1826,14 +1888,18 @@ final class CameraSession {
 
     /// Stream `0x04/0x01` while the on-screen stick is held. No ACK — do not
     /// ride `fireCamera`. `x`/`y` are −1…1 (right / up); `GimbalStick.encode`
-    /// maps that onto tilt/pan.
+    /// maps that onto tilt/pan. Invert follows the visible picture (Flip or
+    /// 180, XOR MIRROR assist).
     func updateGimbalStick(
-        x: Double, y: Double, sensitivity: Int = GimbalStick.defaultSensitivity
+        x: Double, y: Double, sensitivity: Int = GimbalStick.defaultSensitivity,
+        assistMirror: Bool = false
     ) {
         guard !isLocked else { return }
         guard datalink != nil else { return }
+        let invert = GimbalStick.liveInvertPan(
+            poseInvert: gimbalPoseInvertPan, assistMirror: assistMirror)
         let axes = GimbalStick.encode(
-            x: x, y: y, invertPan: false, sensitivity: sensitivity)
+            x: x, y: y, invertPan: invert, sensitivity: sensitivity)
         pendingGimbalAxes = axes
         lastGimbalStickAt = Date()
         if !gimbalStickHeld {
@@ -1857,21 +1923,17 @@ final class CameraSession {
         controlNote = "Gimbal re-centered"
     }
 
-    /// Stick triple-tap. Wire is Mimo's flip control: `0x04/0x4C` `FE 09` (toggle).
+    /// Stick triple-tap. `FE 09` is a 180.
     func flipGimbal() {
         guard !isLocked else { return }
         guard datalink != nil else { return }
         endGimbalStick()
+        gimbalStickMapping.noteRotate180()
         let frame = Commands.gimbalFlip()
         let seq = datalink?.send(frame) ?? 0
         ControlLiveLog.line(
-            "control: send Gimbal flip 0x04/0x4C seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
+            "control: send Gimbal flip 0x04/0x4C seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink invert=\(gimbalStickMapping.invertPan ? 1 : 0) face=\(gimbalStickMapping.face == .selfie ? "selfie" : gimbalStickMapping.face == .front ? "front" : "unknown") rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) parity=\(gimbalStickMapping.rotateParity ? 1 : 0)"
         )
-        switch status.gimbalFace {
-        case .selfie: controlNote = "Front"
-        case .front: controlNote = "Selfie"
-        case nil: controlNote = "Gimbal flipped"
-        }
     }
 
     /// Send center and stop the stream. Always fire — the camera needs rest.
@@ -1909,7 +1971,7 @@ final class CameraSession {
         let seq = datalink?.send(frame) ?? 0
         if log {
             ControlLiveLog.line(
-                "control: send Gimbal stick 0x04/0x01 seq=\(seq) flags=0x0 payload=\(Duml.hex(frame.payload)) via=datalink"
+                "control: send Gimbal stick 0x04/0x01 seq=\(seq) flags=0x0 payload=\(Duml.hex(frame.payload)) via=datalink invert=\(gimbalStickMapping.invertPan ? 1 : 0) cmd180=\(gimbalStickMapping.commanded180 ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0)"
             )
         }
     }
@@ -2559,7 +2621,8 @@ final class CameraSession {
     /// caller's chain — never the fire-and-forget SET path.
     @discardableResult
     private func requestCamera(
-        _ frame: Duml.Frame, name: String, timeout: Duration = .seconds(3)
+        _ frame: Duml.Frame, name: String, timeout: Duration = .seconds(3),
+        logSend: Bool = true
     ) async -> Bool {
         guard datalink != nil else {
             controlNote = "not live"
@@ -2578,17 +2641,21 @@ final class CameraSession {
                 consumeHold: false
             ) {
                 let seq = self.datalink?.send(frame) ?? 0
-                ControlLiveLog.line(
-                    "control: send \(name) \(opcode) seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
-                )
+                if logSend {
+                    ControlLiveLog.line(
+                        "control: send \(name) \(opcode) seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
+                    )
+                }
             }
             return finishControlReply(
                 reply, name: name, opcode: opcode, expect: nil, announce: false)
         } catch {
-            if let note = ControlHud.timeoutNote(name: name, announce: false) {
-                controlNote = note
+            if logSend {
+                if let note = ControlHud.timeoutNote(name: name, announce: false) {
+                    controlNote = note
+                }
+                ControlLiveLog.line("control: timeout \(name) \(opcode) — waiter saw no ACK")
             }
-            ControlLiveLog.line("control: timeout \(name) \(opcode) — waiter saw no ACK")
             return false
         }
     }
@@ -2653,6 +2720,22 @@ final class CameraSession {
                     publishPipelineStats()
                     if !isBrowsingMedia {
                         recoverLiveViewIfNeeded()
+                    }
+                    let rxAge = datalink?.lastSelfieFlipReplyAt.map {
+                        Date().timeIntervalSince($0)
+                    }
+                    let txAge = datalink?.lastSelfieFlipSendAt.map {
+                        Date().timeIntervalSince($0)
+                    }
+                    let rx = rxAge.map { String(format: "%.1f", $0) } ?? "—"
+                    let tx = txAge.map { String(format: "%.1f", $0) } ?? "—"
+                    if !isBrowsingMedia, rxAge == nil || rxAge! >= 2 {
+                        ControlLiveLog.line(
+                            "flip: beat tx=\(tx)s rx=\(rx)s ble-fallback=1"
+                        )
+                        ble.send(Commands.getSelfieFlip())
+                    } else {
+                        ControlLiveLog.line("flip: beat tx=\(tx)s rx=\(rx)s ble-fallback=0")
                     }
                 }
                 try? await Task.sleep(for: .seconds(1))
@@ -3589,19 +3672,123 @@ final class CameraSession {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
-        guard CameraStatusDecoder.apply(frame, to: &s) else { return }
+        let applied = CameraStatusDecoder.apply(frame, to: &s)
+        let flipReply = CameraParam.isSelfieFlipGetReply(
+            set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
+        if flipReply, let parsed = CameraParam.parseGetReply(frame.payload) {
+            lastSelfieFlipReplyAt = Date()
+            s.selfieFlip = SelfieFlip(rawValue: parsed.value)
+        }
+        guard applied || flipReply else { return }
         absorbStaleExpo(&s)
         absorbStaleAudio(&s)
         absorbStaleFormat(&s)
         absorbStaleColor(&s)
+        if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
+            let wasTT180 = gimbalStickMapping.commanded180
+            gimbalStickMapping.applyAttitude(frame.payload)
+            syncGimbalPose()
+            if gimbalStickMapping.commanded180 != wasTT180 {
+                ControlLiveLog.line(
+                    "control: gimbal TT180=\(gimbalStickMapping.commanded180 ? 1 : 0) yaw=\(gimbalStickMapping.yawTenthDeg.map { String($0) } ?? "-") seed=\(gimbalStickMapping.poseSeeded ? 1 : 0) view=\(gimbalPoseViewFlip ? 1 : 0)"
+                )
+            }
+        }
+        if frame.cmdSet == 0x04, frame.cmdId == 0x27 {
+            let previousFace = gimbalStickMapping.face
+            let body = gimbalStickMapping.noteBodyFace(s.gimbalFace)
+            syncGimbalPose()
+            if body {
+                ControlLiveLog.line(
+                    "control: gimbal body TT180 invert=\(gimbalStickMapping.invertPan ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0) pend=\(gimbalStickMapping.pendingRotateCount)"
+                )
+            } else if let new = gimbalStickMapping.face, previousFace != new {
+                ControlLiveLog.line(
+                    "control: gimbal face=\(new == .selfie ? "selfie" : "front") invert=\(gimbalStickMapping.invertPan ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0) parity=\(gimbalStickMapping.rotateParity ? 1 : 0)"
+                )
+            }
+        }
         absorbCameraFocus(s)
         noteExpoIfChanged(s)
         noteZoomIfChanged(s)
         // Scope clip ceiling follows the camera's EI; feeding it here keeps the
         // scope view bodies free of session-status reads (5 Hz re-render trap).
         ScopeExposureCeiling.syncISO(s.iso)
+        let flipChanged = s.selfieFlip != status.selfieFlip
         status = s
+        if flipReply || flipChanged {
+            if flipChanged {
+                ControlLiveLog.line(
+                    "control: Selfie Flip \(s.selfieFlip?.label ?? "nil") extra-mirror=\(gimbalStickMapping.commanded180 && !(s.selfieFlip?.isOn ?? false) ? 1 : 0)"
+                )
+                decoder.invalidatePictureFlipPresentation()
+            }
+            syncGimbalPose()
+        }
         settleLateFromSubscribe()
+    }
+
+    private func resetGimbalPoseForNewStream() {
+        gimbalStickMapping = GimbalStickMapping()
+        lastSelfieFlipReplyAt = nil
+        decoder.invalidatePictureFlipPresentation()
+        decoder.poseViewFlip = false
+        syncGimbalPose()
+    }
+
+    private func syncGimbalPose() {
+        gimbalStickMapping.selfieFlip = status.selfieFlip?.isOn ?? false
+        let tt180 = gimbalStickMapping.commanded180
+        let autoMirror = gimbalStickMapping.poseViewFlip
+        let autoInvert = gimbalStickMapping.invertPan
+        gimbalPoseViewFlip = gimbalStickDebug.mirror(commanded180: tt180, auto: autoMirror)
+        gimbalPoseInvertPan = gimbalStickDebug.invert(commanded180: tt180, auto: autoInvert)
+        decoder.poseViewFlip = gimbalPoseViewFlip
+        decoder.syncPictureFlip()
+        let face: String
+        switch gimbalStickMapping.face {
+        case .front: face = "front"
+        case .selfie: face = "180-wire"
+        case nil: face = "unknown"
+        }
+        gimbalDebugState = LiveGimbalDebugState(
+            commanded180: tt180,
+            rotated180: gimbalStickMapping.rotated180,
+            yawDegrees: gimbalStickMapping.yawTenthDeg.map { Double($0) / 10 },
+            face: face,
+            pending: gimbalStickMapping.pendingRotateCount,
+            autoInvert: autoInvert,
+            appliedInvert: gimbalPoseInvertPan,
+            selfieFlip: gimbalStickMapping.selfieFlip,
+            lastFlipReplyAt: datalink?.lastSelfieFlipReplyAt ?? lastSelfieFlipReplyAt,
+            lastFlipSendAt: datalink?.lastSelfieFlipSendAt,
+            autoMirror: autoMirror,
+            appliedMirror: gimbalPoseViewFlip
+        )
+    }
+
+    func cycleGimbalDebugInvert(slot: GimbalStickDebugSlot) {
+        var next = gimbalStickDebug
+        next[slot].invert.cycle()
+        gimbalStickDebug = next
+        ControlLiveLog.line(
+            "control: gimbal debug \(slot.title) invert=\(next[slot].invert.label)"
+        )
+    }
+
+    private static let gimbalStickDebugKey = "opc.gimbalStick.debug"
+
+    private static func loadGimbalStickDebug() -> GimbalStickDebug {
+        guard let data = UserDefaults.standard.data(forKey: gimbalStickDebugKey),
+            let decoded = try? JSONDecoder().decode(GimbalStickDebug.self, from: data)
+        else { return GimbalStickDebug() }
+        return decoded
+    }
+
+    private static func saveGimbalStickDebug(_ value: GimbalStickDebug) {
+        if let data = try? JSONEncoder().encode(value) {
+            UserDefaults.standard.set(data, forKey: gimbalStickDebugKey)
+        }
     }
 
     var hasMediaDatalink: Bool { datalink != nil }

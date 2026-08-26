@@ -74,6 +74,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val controlBusy: StateFlow<Boolean> = _controlBusy.asStateFlow()
     private val _focusPoint = MutableStateFlow(0.5f to 0.5f)
     val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
+    private val _gimbalPoseViewFlip = MutableStateFlow(false)
+    val gimbalPoseViewFlip: StateFlow<Boolean> = _gimbalPoseViewFlip.asStateFlow()
     private var audioDspBlob: ByteArray? = null
     private var audioTail: Job? = null
     private var audioPin: AudioPin? = null
@@ -151,6 +153,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastRecoverSkipReason = ""
     private var formatPin: FormatPin? = null
     private var colorPin: ColorPin? = null
+    private var gimbalStickMapping = GimbalStickMapping()
+    @Volatile private var lastAssistMirror = false
     private var teleColorSent = false
     private var restoreDLog2OnWide = false
     private var zoomStop = 1.0
@@ -325,6 +329,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlBusy.value = false
         formatPin = null
         colorPin = null
+        gimbalStickMapping = GimbalStickMapping()
+        lastAssistMirror = false
+        syncGimbalPose()
         teleColorSent = false
         restoreDLog2OnWide = false
         resetZoomHud()
@@ -1232,16 +1239,20 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun ingestDatalinkFrame(frame: DumlFrame) {
-        val waiter = waiters[frame.key]
-        if (waiter != null) {
-            waiter.keys.forEach { waiters.remove(it) }
-            waiter.resume(frame)
-        } else {
-            val send = inflight[frame.key]
-            if (send != null) {
-                finishInflight(send, frame)
-            } else if (shouldHold(frame)) {
-                pairingHold[frame.key] = frame
+        // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter here
+        // stole Flip replies as audio/glamour ACKs after first picture.
+        if (!CameraCommands.isSelfieFlipGetReply(frame.cmdSet, frame.cmdId, frame.payload)) {
+            val waiter = waiters[frame.key]
+            if (waiter != null) {
+                waiter.keys.forEach { waiters.remove(it) }
+                waiter.resume(frame)
+            } else {
+                val send = inflight[frame.key]
+                if (send != null) {
+                    finishInflight(send, frame)
+                } else if (shouldHold(frame)) {
+                    pairingHold[frame.key] = frame
+                }
             }
         }
         val prev = _status.value
@@ -1261,6 +1272,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         next = CamFov.absorb(next)
         next = absorbStaleFormat(next)
         next = absorbStaleColor(next)
+        if (next.selfieFlip != prev.selfieFlip) {
+            gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
+            syncGimbalPose()
+        }
+        if (frame.cmdSet == 0x04 && frame.cmdId == 0x05) {
+            gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
+            syncGimbalPose()
+        }
+        if (frame.cmdSet == 0x04 && frame.cmdId == 0x27) {
+            gimbalStickMapping = gimbalStickMapping.noteBodyFace(next.gimbalFace)
+            syncGimbalPose()
+        }
         noteZoomIfChanged(prev, next)
         if (frame.cmdSet == 0x02 && frame.cmdId == 0x89) {
             applyLiveTrackingPush(frame.payload)
@@ -1503,13 +1526,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun flipGimbal() {
         endGimbalStick()
+        gimbalStickMapping = gimbalStickMapping.noteRotate180()
         datalink?.sendDuml(
             cmdSet = 0x04,
             cmdId = CameraCommands.CMD_GIMBAL_MODE,
             payload = CameraCommands.gimbalFlip(),
             receiver = CameraCommands.RX_GIMBAL,
         )
-        _controlNote.value = "Gimbal flipped"
     }
 
     val supportsTapFocus: Boolean
@@ -2268,7 +2291,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         x: Float,
         y: Float,
         sensitivity: Int = CameraCommands.GIMBAL_STICK_DEFAULT_SENSITIVITY,
+        assistMirror: Boolean = false,
     ) {
+        lastAssistMirror = assistMirror
         lastGimbalStickAt = SystemClock.elapsedRealtime()
         pendingGimbalAxes = encodedGimbalAxes(x, y, sensitivity)
         if (gimbalStickJob != null) return
@@ -2299,8 +2324,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** Prefer the Swift `GimbalStick.encode` wire; Kotlin copies the same gain/deadzone. */
     private fun encodedGimbalAxes(x: Float, y: Float, sensitivity: Int): Pair<Int, Int> {
+        val invertPan =
+            CameraCommands.liveInvertPan(gimbalStickMapping.invertPan, lastAssistMirror)
         if (SwiftCore.isAvailable) {
-            val packed = SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), sensitivity)
+            val packed =
+                SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), invertPan, sensitivity)
             if (packed != null) {
                 val parts = packed.split(',')
                 if (parts.size == 2) {
@@ -2310,7 +2338,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
             }
         }
-        return CameraCommands.gimbalAxes(x, y, sensitivity = sensitivity)
+        return CameraCommands.gimbalAxes(x, y, invertPan = invertPan, sensitivity = sensitivity)
+    }
+
+    private fun syncGimbalPose() {
+        _gimbalPoseViewFlip.value = gimbalStickMapping.poseViewFlip
     }
 
     fun tapFocus(x: Float, y: Float) {

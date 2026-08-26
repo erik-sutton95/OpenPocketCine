@@ -123,6 +123,7 @@ internal class LiveVulkanSession(
         histoRect: GpuRect?,
         vector: GpuRect?,
         uiScale: Float = 1f,
+        pictureMirrored: Boolean = assist.isVisible(LiveAssistTool.MIRROR),
     ) {
         if (handle == 0L) return
         lastPlan = plan
@@ -164,7 +165,7 @@ internal class LiveVulkanSession(
             } else {
                 0f
             },
-            if (assist.isVisible(LiveAssistTool.MIRROR)) 1f else 0f,
+            if (pictureMirrored) 1f else 0f,
         )
         packScopeSlotsOff()
     }

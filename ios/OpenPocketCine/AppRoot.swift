@@ -9,6 +9,12 @@ import UIKit
 @Observable
 final class AppModel {
     var session = CameraSession()
+    /// Live view-space X flip: TT180 extra-mirror XOR MIRROR assist.
+    var livePictureViewFlip: Bool {
+        GimbalStick.liveViewFlip(
+            poseViewFlip: session.gimbalPoseViewFlip,
+            assistMirror: assist.isVisible(.mirror))
+    }
     var savedCameras: [SavedCamera] = SavedCameraStore.load()
     /// Operator tapped “Pair new camera” from the saved list.
     var isPairingNewCamera = false

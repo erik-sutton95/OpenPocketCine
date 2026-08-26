@@ -47,6 +47,28 @@ trailing-bottom parking spot in every orientation. Zoom stacks above the stick.
 Controls grow leading of the stick without moving it.
 _Avoid_: joystick pack, gimbal HUD
 
+**Triple-tap 180 (TT180)**:
+Mechanical 180 via `FE 09` (app rotate-180 button or Pocket joystick
+triple-press). Invert pan when that 180 settles (~165° / ~15°), not at
+the 90° midpoint. Extra-mirror live HEVC when TT180 and Selfie Flip is
+off (Mimo). Joystick yaw to 180 is not TT180. Reconnect-at-180 seeds
+TT180 from settled attitude; a 0° stub does not lock front. MIRROR
+assist XORs.
+_Avoid_: true selfie, selfie mode (alone), Mimo selfie toggle
+
+**Selfie Flip**:
+Pocket body Control Center. `0x02/0x8E` pid `0x0038` GET ~1 Hz (`00`
+off / `01` on). No app SET. Off: encoder is mirrored — extra-mirror at
+TT180. On: encoder is true-to-scene — skip extra-mirror. Extra-mirror
+holds the last picture ~3 frames before X-flipping (no in-place swap).
+File follows Flip; Mimo live stays readable. GET is untracked on the live
+UDP ACK pump (~1 Hz) and must not complete audio / glamour `0x8E` waiters (same
+opcode, other pids). Replies are datalink pktType `0x03` — same command
+window as record/stop, zoom ACK, and every other GET/SET. The 40 Hz window
+ACK must echo that seq in group 1 (not handshake `baseSeq`) or the
+command downlink goes stale while HEVC keeps moving.
+_Avoid_: treating Flip as HEVC SEI / BLE GATT
+
 **Parity**:
 Operator-visible match to the iOS baseline unless `docs/PARITY.md` lists an exception.
 _Avoid_: pixel-identical, 1:1 clone

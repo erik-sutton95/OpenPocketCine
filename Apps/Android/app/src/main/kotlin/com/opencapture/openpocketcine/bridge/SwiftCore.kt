@@ -74,6 +74,7 @@ object SwiftCore {
     const val CMD_DELETE_MEDIA = 58
     const val CMD_SET_MEDIA_FAVORITE = 59
     const val CMD_NANO_LIVE_VIEW_GATE = 60
+    const val CMD_GET_SELFIE_FLIP = 61
 
     /** DUML set/cmd key the camera ACKs for [kind]. */
     fun waitKey(kind: Int): Int =
@@ -89,7 +90,7 @@ object SwiftCore {
             CMD_GET_VOCAL_BOOST, CMD_SET_VOCAL_BOOST,
             CMD_SET_ISO_LIMIT, CMD_GET_ISO_LIMIT, CMD_SET_FOV,
             CMD_SET_FOCUS_TRACK, CMD_GET_FOCUS_TRACK,
-            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR,
+            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR, CMD_GET_SELFIE_FLIP,
             -> 0x028E
             CMD_AUDIO_DSP_GET -> 0x02A0
             CMD_AUDIO_DSP_SET, CMD_AUDIO_DSP_PATCH_WIND, CMD_AUDIO_DSP_PATCH_DIRECTIONAL -> 0x029F
@@ -147,7 +148,7 @@ object SwiftCore {
 
     external fun handshakePayload(baseSeq: Int): ByteArray?
 
-    external fun ackPayload(peerCursor: Int, baseSeq: Int): ByteArray?
+    external fun ackPayload(peerCursor: Int, ackedDataCursor: Int, extraCursor: Int): ByteArray?
 
     external fun transportSeq(datagram: ByteArray): Int
 
@@ -195,7 +196,12 @@ object SwiftCore {
         midtoneIRE: Float,
     ): FloatArray?
 
-    external fun gimbalStickEncode(x: Double, y: Double, sensitivity: Int): String?
+    external fun gimbalStickEncode(
+        x: Double,
+        y: Double,
+        invertPan: Boolean,
+        sensitivity: Int,
+    ): String?
 
     external fun camFovChipWrite(currentFactor: Double): String?
 

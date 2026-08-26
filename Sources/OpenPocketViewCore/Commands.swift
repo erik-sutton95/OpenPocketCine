@@ -396,6 +396,11 @@ public enum Commands {
         paramSet(.glamour, value: blob, seq: seq)
     }
 
+    /// `0x02/0x8E` pid `0x0038` GET `00 01 38 00`. Control Center Selfie Flip.
+    public static func getSelfieFlip(seq: UInt16 = 0) -> Duml.Frame {
+        paramGet(.selfieFlip, seq: seq)
+    }
+
     /// `0x02/0x8E` pid `0x004C` GET `00 01 4C 00`.
     public static func getVocalBoost(seq: UInt16 = 0) -> Duml.Frame {
         paramGet(.vocalBoost, seq: seq)
