@@ -8,7 +8,7 @@ androidxCore = "1.19.0"
 coreSplashscreen = "1.2.0"
 json = "20260814"
 media3 = "1.8.0"
-okhttp = "5.1.0"
+okhttp = "5.5.0"
 kyantBackdrop = "2.0.0"
 kyantShapes = "1.2.0"
 
