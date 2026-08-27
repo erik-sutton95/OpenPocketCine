@@ -181,7 +181,7 @@ jobs:
       # The runner image does not export ANDROID_NDK_HOME; the install script
       # needs NDK 27 for the Swift Android SDK sysroot.
       - name: Set up Android NDK 27
-        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         with:
           ndk-version: r27c
           link-to-sdk: true
