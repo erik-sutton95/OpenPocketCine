@@ -1881,7 +1881,10 @@ final class CameraSession {
     }
 
     var colorModes: [ColorMode] {
-        CamCapColorMode.wheel(available: status.availableColorModes, family: bodyFamily)
+        if let model = connectedCamera?.model {
+            return CamCapColorMode.wheel(available: status.availableColorModes, model: model)
+        }
+        return CamCapColorMode.wheel(available: status.availableColorModes, family: bodyFamily)
     }
 
     /// `0x02/0x42` via `Commands.setColorMode`.

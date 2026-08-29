@@ -58,6 +58,41 @@ data class CameraModel(
             return n.contains("pocket3") || n.contains("muse")
         }
 
+        /** DJI color wheel. D-Log2 is Pocket 4 Pro only. Pocket 3 is HLG / D-Log M. */
+        fun colorModesFor(name: String, family: String): List<Int> {
+            if (family == "nano") {
+                return listOf(CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_NORMAL10, CameraCommands.COLOR_DLOG_M)
+            }
+            val n = name.lowercase().replace(" ", "")
+            if (n.contains("pocket4p") || n.contains("4pro")) {
+                return listOf(
+                    CameraCommands.COLOR_NORMAL,
+                    CameraCommands.COLOR_HDR,
+                    CameraCommands.COLOR_DLOG,
+                    CameraCommands.COLOR_DLOG2,
+                )
+            }
+            if (n.contains("pocket4")) {
+                return listOf(
+                    CameraCommands.COLOR_NORMAL,
+                    CameraCommands.COLOR_HDR,
+                    CameraCommands.COLOR_DLOG,
+                )
+            }
+            if (n.contains("pocket3") || n.contains("muse")) {
+                return listOf(
+                    CameraCommands.COLOR_NORMAL,
+                    CameraCommands.COLOR_HDR,
+                    CameraCommands.COLOR_DLOG_M,
+                )
+            }
+            return listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG,
+            )
+        }
+
         fun zoomStopsFor(name: String, family: String): List<Double> {
             val n = name.lowercase().replace(" ", "")
             if (n.contains("pocket4p") || n.contains("4pro")) return listOf(1.0, 3.0, 6.0, 12.0)

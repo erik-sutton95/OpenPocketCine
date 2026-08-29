@@ -513,7 +513,7 @@ object CameraCommands {
             COLOR_DLOG -> "D-Log"
             COLOR_DLOG2 -> "D-Log2"
             COLOR_NORMAL10 -> "Normal 10-bit"
-            COLOR_DLOG_M -> "D-Log M 10-bit"
+            COLOR_DLOG_M -> if (family == "nano") "D-Log M 10-bit" else "D-Log M"
             else -> "—"
         }
 

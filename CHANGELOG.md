@@ -361,6 +361,11 @@ All notable changes to this project are documented here. The format is based on
   1×/2×/4× (no second tele); Pocket 3 1×/2×/4× but 4K Video max 2×; Nano 1×.
   SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3× optical).
 
+- COLOR drum follows the connected body. D-Log2 (`0x41`) is Pocket 4 Pro only.
+  Pocket 4 is Normal / HDR / D-Log; Pocket 3 is Normal / HDR (HLG) / D-Log M
+  (`0x00` — `0x17` D-Log showed "colour 4" and crashed the stream). Nano stays
+  the captured 8-bit / 10-bit / D-Log M wheel. (#160)
+
 - Pocket 3 first picture: 4K 25/30 boot with HUD and gimbal live stayed
   black until the operator switched FORMAT to 1080 and back to 4K. Same-tab
   FORMAT is a no-op, so that `0x02/0x18` round-trip never left the wire.

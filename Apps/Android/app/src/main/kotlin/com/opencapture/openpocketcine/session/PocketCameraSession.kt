@@ -2068,8 +2068,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _controlNote.value = ControlHud.RECORDING_COLOR_LOCK_NOTE
             return
         }
-        val family = connectedCamera?.model?.family ?: "pocket"
-        val allowed = CaptureLists.colorWheel(family, live.availableColorModes).map { it.first }
+        val cam = connectedCamera?.model
+        val family = cam?.family ?: "pocket"
+        val allowed =
+            CaptureLists.colorWheel(family, live.availableColorModes, cam?.name ?: "")
+                .map { it.first }
         if (mode !in allowed) return
         pinColor(mode)
         fireKind(

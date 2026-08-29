@@ -132,7 +132,7 @@ class LiveViewEnablePolicyTest {
                 now = now + 5_000,
                 lastEnableAt = now,
                 lastStatusAt = now + 5_000 - 200,
-                lastBleAt = now + 5_000 - 100,
+                lastBleNotifyAt = now + 5_000 - 100,
             )
         assertEquals(
             LiveViewEnablePolicy.Action.RESEND_ENABLE,

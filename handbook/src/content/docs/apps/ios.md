@@ -23,6 +23,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Zoom chips follow
   the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
   with 4K max 2×; Nano 1×). FORMAT only lists `camcap_video_format` pairs.
+  COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
+  Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. Stick

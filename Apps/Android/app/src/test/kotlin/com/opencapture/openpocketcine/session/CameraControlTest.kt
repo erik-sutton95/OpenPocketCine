@@ -271,6 +271,47 @@ class CameraControlTest {
             listOf(1.0),
             pocket4.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_SLOWMO),
         )
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG,
+                CameraCommands.COLOR_DLOG2,
+            ),
+            CameraModel.colorModesFor(pro.name, "pocket"),
+        )
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG,
+            ),
+            CameraModel.colorModesFor(pocket4.name, "pocket"),
+        )
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG_M,
+            ),
+            CameraModel.colorModesFor(pocket3.name, "pocket"),
+        )
+        assertTrue(CameraCommands.COLOR_DLOG2 !in CameraModel.colorModesFor(pocket3.name, "pocket"))
+        assertTrue(CameraCommands.COLOR_DLOG !in CameraModel.colorModesFor(pocket3.name, "pocket"))
+        assertTrue(
+            CameraCommands.COLOR_DLOG2 in CameraModel.colorModesFor("OsmoPocket4P-ABCD", "pocket"),
+        )
+        assertTrue(
+            CameraCommands.COLOR_DLOG2 !in CameraModel.colorModesFor("OsmoPocket4-ABCD", "pocket"),
+        )
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG_M,
+            ),
+            CameraModel.colorModesFor("OsmoPocket3-ABCD", "pocket"),
+        )
         val fromJson =
             CameraModel.fromJson(
                 """{"name":"OsmoPocket4P-ABCD","family":"pocket","zoomStops":[1,3,6,12]}""",

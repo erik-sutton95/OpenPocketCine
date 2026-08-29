@@ -634,10 +634,35 @@ class CaptureSheetTest {
         assertTrue(!CaptureLists.resolutionTabTitles.contains("2.7K"))
         assertTrue(!CaptureLists.fpsDrumLabels.contains("120p"))
         assertEquals(
-            listOf("Normal", "HDR", "D-Log", "D-Log2"),
+            listOf("Normal", "HDR", "D-Log"),
             CaptureLists.colorWheelLabels(CameraStatus()),
         )
+        assertEquals(
+            listOf("Normal", "HDR", "D-Log", "D-Log2"),
+            CaptureLists.colorWheelLabels(
+                CameraStatus(),
+                family = "pocket",
+                name = "Osmo Pocket 4 Pro",
+            ),
+        )
+        assertEquals(
+            listOf("Normal", "HDR", "D-Log M"),
+            CaptureLists.colorWheelLabels(
+                CameraStatus(),
+                family = "pocket",
+                name = "Osmo Pocket 3",
+            ),
+        )
+        assertEquals(
+            listOf("Normal", "HDR", "D-Log"),
+            CaptureLists.colorWheelLabels(
+                CameraStatus(),
+                family = "pocket",
+                name = "Osmo Pocket 4",
+            ),
+        )
         assertEquals(CameraCommands.COLOR_DLOG2, CaptureLists.colorModeFromLabel("D-Log2"))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CaptureLists.colorModeFromLabel("D-Log M"))
         assertEquals(
             listOf("Normal", "HDR", "D-Log", "D-Log2"),
             CaptureLists.colorWheel(
@@ -648,7 +673,32 @@ class CaptureSheetTest {
                     CameraCommands.COLOR_HDR,
                     CameraCommands.COLOR_NORMAL,
                 ),
+                "Osmo Pocket 4 Pro",
             ).map { it.second },
+        )
+        assertTrue(
+            CaptureLists.colorWheel(
+                "pocket",
+                listOf(
+                    CameraCommands.COLOR_DLOG2,
+                    CameraCommands.COLOR_DLOG,
+                    CameraCommands.COLOR_HDR,
+                    CameraCommands.COLOR_NORMAL,
+                ),
+                "Osmo Pocket 3",
+            ).none { it.first == CameraCommands.COLOR_DLOG2 },
+        )
+        assertTrue(
+            CaptureLists.colorWheel(
+                "pocket",
+                listOf(
+                    CameraCommands.COLOR_DLOG2,
+                    CameraCommands.COLOR_DLOG,
+                    CameraCommands.COLOR_HDR,
+                    CameraCommands.COLOR_NORMAL,
+                ),
+                "Osmo Pocket 4",
+            ).none { it.first == CameraCommands.COLOR_DLOG2 },
         )
         assertNull(CaptureLists.colorModeFromLabel("N-Log"))
     }
@@ -922,16 +972,17 @@ class CaptureSheetTest {
 
     @Test
     fun colorDrumHopsNativeIsoAfterColorSetAndRejectsOffFamily() {
+        val pro = "Osmo Pocket 4 Pro"
         val dlog2Native =
             CameraStatus(colorMode = CameraCommands.COLOR_DLOG2, isoIndex = 0x07)
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_DLOG, 0x05),
-            CaptureLists.applyColorDrum("D-Log", "pocket", dlog2Native, hopEnabled = true),
+            CaptureLists.applyColorDrum("D-Log", "pocket", dlog2Native, hopEnabled = true, name = pro),
         )
         val dlogNative = CameraStatus(colorMode = CameraCommands.COLOR_DLOG, isoIndex = 0x05)
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_DLOG2, 0x07),
-            CaptureLists.applyColorDrum("D-Log2", "pocket", dlogNative, hopEnabled = true),
+            CaptureLists.applyColorDrum("D-Log2", "pocket", dlogNative, hopEnabled = true, name = pro),
         )
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_DLOG, null),
@@ -940,11 +991,14 @@ class CaptureSheetTest {
                 "pocket",
                 CameraStatus(colorMode = CameraCommands.COLOR_DLOG2, isoIndex = 0x06),
                 hopEnabled = true,
+                name = pro,
             ),
         )
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_DLOG2, null),
-            CaptureLists.applyColorDrum("D-Log2", "pocket", dlogNative, hopEnabled = false),
+            CaptureLists.applyColorDrum(
+                "D-Log2", "pocket", dlogNative, hopEnabled = false, name = pro,
+            ),
         )
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_DLOG, null),
@@ -953,13 +1007,33 @@ class CaptureSheetTest {
                 "pocket",
                 CameraStatus(colorMode = CameraCommands.COLOR_DLOG2, isoIndex = 0),
                 hopEnabled = true,
+                name = pro,
             ),
         )
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_NORMAL, null),
-            CaptureLists.applyColorDrum("Normal", "pocket", dlog2Native, hopEnabled = true),
+            CaptureLists.applyColorDrum(
+                "Normal", "pocket", dlog2Native, hopEnabled = true, name = pro,
+            ),
         )
         assertNull(CaptureLists.applyColorDrum("D-Log2", "nano", CameraStatus(), hopEnabled = true))
+        assertNull(CaptureLists.applyColorDrum("D-Log2", "pocket", CameraStatus(), hopEnabled = true))
+        assertNull(
+            CaptureLists.applyColorDrum(
+                "D-Log2", "pocket", CameraStatus(), hopEnabled = true, name = "Osmo Pocket 4",
+            ),
+        )
+        assertNull(
+            CaptureLists.applyColorDrum(
+                "D-Log2", "pocket", CameraStatus(), hopEnabled = true, name = "Osmo Pocket 3",
+            ),
+        )
+        assertEquals(
+            ColorDrumCommand(CameraCommands.COLOR_DLOG_M, null),
+            CaptureLists.applyColorDrum(
+                "D-Log M", "pocket", CameraStatus(), hopEnabled = true, name = "Osmo Pocket 3",
+            ),
+        )
         assertNull(CaptureLists.applyColorDrum("N-Log", "pocket", CameraStatus(), hopEnabled = true))
         assertEquals(
             ColorDrumCommand(CameraCommands.COLOR_NORMAL, null),
@@ -983,10 +1057,7 @@ class CaptureSheetTest {
                 availableColorModes =
                     listOf(CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_DLOG),
             )
-        assertEquals(
-            ColorDrumCommand(CameraCommands.COLOR_DLOG, null),
-            CaptureLists.applyColorDrum("D-Log", "nano", nanoWithDLog, hopEnabled = true),
-        )
+        assertNull(CaptureLists.applyColorDrum("D-Log", "nano", nanoWithDLog, hopEnabled = true))
     }
 
     @Test

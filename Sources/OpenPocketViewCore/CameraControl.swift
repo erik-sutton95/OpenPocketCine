@@ -386,10 +386,12 @@ public enum IsoIndex: UInt8, CaseIterable, Sendable {
 
 /// `0x02/0x42` color. No GET — `cam_image_effect` `@2`.
 ///
-/// Pocket: `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2.
+/// Per body (DJI spec; D-Log2 is Pocket 4 Pro only):
+/// 4 Pro `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2.
+/// Pocket 4 `3F` / `3C` / `17` D-Log (no D-Log2).
+/// Pocket 3 `3F` / `3C` HDR (HLG) / `00` D-Log M — `17` showed "colour 4" (#160).
 /// Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D` →
-/// `00` / `3F` / `3D`. Live `@2` was `3D`. `3F` is Pocket Normal (8-bit).
-/// `3D` sits next to `3F` → Normal 10-bit; remaining `00` → D-Log M.
+/// `00` D-Log M / `3F` Normal 8-bit / `3D` Normal 10-bit.
 /// Swap `3D`/`00` if a labeled SET capture says otherwise.
 public enum ColorMode: UInt8, CaseIterable, Sendable {
     case normal = 0x3F
@@ -420,23 +422,42 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
 
     public func label(for family: CameraBodyFamily) -> String {
         if family == .nano, self == .normal { return "Normal 8-bit" }
+        if family == .pocket, self == .dLogM { return "D-Log M" }
         return label
     }
 
     public init?(label: String) {
         switch label {
         case "Normal 8-bit": self = .normal
+        case "D-Log M": self = .dLogM
         default:
             guard let match = Self.allCases.first(where: { $0.label == label }) else { return nil }
             self = match
         }
     }
 
+    /// Family fallback. Pocket 4 Pro is the only body with D-Log2 — use
+    /// `available(for: CameraModel)` when the name is known.
     public static func available(for family: CameraBodyFamily) -> [ColorMode] {
         switch family {
         case .nano: [.normal, .normal10, .dLogM]
-        case .pocket, .other: [.normal, .hdr, .dLog, .dLog2]
+        case .pocket, .other: [.normal, .hdr, .dLog]
         }
+    }
+
+    /// DJI comparison: 4 Pro D-Log2 / D-Log; Pocket 4 D-Log; Pocket 3 HLG / D-Log M.
+    /// Nano is the captured `camcap_color_mode` wheel. D-Log2 is 4 Pro only.
+    public static func available(for model: CameraModel) -> [ColorMode] {
+        if model.family == .nano { return available(for: .nano) }
+        let n = model.name.lowercased().replacingOccurrences(of: " ", with: "")
+        if n.contains("pocket4p") || n.contains("4pro") {
+            return [.normal, .hdr, .dLog, .dLog2]
+        }
+        if n.contains("pocket4") { return [.normal, .hdr, .dLog] }
+        if n.contains("pocket3") || n.contains("muse") {
+            return [.normal, .hdr, .dLogM]
+        }
+        return available(for: model.family)
     }
 
     /// Indices Mimo offered per color in the labeled take. Do not invent others.

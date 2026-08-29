@@ -199,12 +199,20 @@ public enum CamCapColorMode {
     public static func wheel(
         available: [ColorMode], family: CameraBodyFamily
     ) -> [ColorMode] {
-        let order = ColorMode.available(for: family)
+        wheel(available: available, order: ColorMode.available(for: family))
+    }
+
+    public static func wheel(available: [ColorMode], model: CameraModel) -> [ColorMode] {
+        wheel(available: available, order: ColorMode.available(for: model))
+    }
+
+    /// Body order is the legal set. `camcap_color_mode` may subset it.
+    /// It cannot add D-Log2 (or `0x17` D-Log) to a body that does not have them.
+    private static func wheel(available: [ColorMode], order: [ColorMode]) -> [ColorMode] {
         guard !available.isEmpty else { return order }
         let have = Set(available)
         let ranked = order.filter { have.contains($0) }
-        let extras = available.filter { !order.contains($0) }
-        return ranked + extras
+        return ranked.isEmpty ? order : ranked
     }
 }
 

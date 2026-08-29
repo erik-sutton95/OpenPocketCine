@@ -236,6 +236,43 @@ import Testing
             ).map(\.fps) == [24, 25, 30, 48, 50, 60])
     }
 
+    @Test func colorModesFollowTheBody() {
+        let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
+        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        let pocket3 = CameraModel.resolve(modelId: 0x0020, name: nil)
+        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
+        #expect(ColorMode.available(for: pro) == [.normal, .hdr, .dLog, .dLog2])
+        #expect(ColorMode.available(for: pocket4) == [.normal, .hdr, .dLog])
+        #expect(ColorMode.available(for: pocket3) == [.normal, .hdr, .dLogM])
+        #expect(ColorMode.available(for: nano) == [.normal, .normal10, .dLogM])
+        #expect(ColorMode.dLogM.label(for: .pocket) == "D-Log M")
+        #expect(ColorMode(label: "D-Log M") == .dLogM)
+        #expect(!ColorMode.available(for: pocket3).contains(.dLog2))
+        #expect(!ColorMode.available(for: pocket3).contains(.dLog))
+        #expect(!ColorMode.available(for: pocket4).contains(.dLog2))
+        #expect(
+            ColorMode.available(for: CameraModel.resolve(modelId: nil, name: "OsmoPocket4P-ABCD"))
+                .contains(.dLog2))
+        #expect(
+            !ColorMode.available(for: CameraModel.resolve(modelId: nil, name: "OsmoPocket4-ABCD"))
+                .contains(.dLog2))
+        #expect(
+            ColorMode.available(for: CameraModel.resolve(modelId: nil, name: "OsmoPocket3-ABCD"))
+                == [.normal, .hdr, .dLogM])
+        #expect(
+            !CamCapColorMode.wheel(
+                available: [.normal, .hdr, .dLog, .dLog2], model: pocket3
+            ).contains(.dLog2))
+        #expect(
+            !CamCapColorMode.wheel(
+                available: [.normal, .hdr, .dLog, .dLog2], model: pocket4
+            ).contains(.dLog2))
+        #expect(
+            CamCapColorMode.wheel(
+                available: [.normal, .hdr, .dLog, .dLog2], model: pro
+            ) == [.normal, .hdr, .dLog, .dLog2])
+    }
+
     @Test func zoomStopsFollowTheBody() {
         let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
         let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)

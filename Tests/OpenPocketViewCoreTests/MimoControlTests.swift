@@ -510,11 +510,35 @@ import Testing
         #expect(VideoFrameRate(drumLabel: "120p") == nil)
         #expect(
             ColorMode.available(for: .pocket).map(\.label)
+                == ["Normal", "HDR", "D-Log"])
+        #expect(
+            ColorMode.available(for: CameraModel.resolve(modelId: 0x0022, name: nil)).map(\.label)
                 == ["Normal", "HDR", "D-Log", "D-Log2"])
         #expect(
+            ColorMode.available(for: CameraModel.resolve(modelId: 0x0021, name: nil)).map(\.label)
+                == ["Normal", "HDR", "D-Log"])
+        #expect(
+            ColorMode.available(for: CameraModel.resolve(modelId: 0x0020, name: nil)).map {
+                $0.label(for: .pocket)
+            } == ["Normal", "HDR", "D-Log M"])
+        #expect(
             CamCapColorMode.wheel(
-                available: [.dLog2, .dLog, .hdr, .normal], family: .pocket
+                available: [.dLog2, .dLog, .hdr, .normal],
+                model: CameraModel.resolve(modelId: 0x0022, name: nil)
             ).map(\.label) == ["Normal", "HDR", "D-Log", "D-Log2"])
+        #expect(
+            !CamCapColorMode.wheel(
+                available: [.dLog2, .dLog, .hdr, .normal],
+                model: CameraModel.resolve(modelId: 0x0021, name: nil)
+            ).contains(.dLog2))
+        #expect(
+            CamCapColorMode.wheel(
+                available: [], model: CameraModel.resolve(modelId: 0x0020, name: nil)
+            ).map { $0.label(for: .pocket) } == ["Normal", "HDR", "D-Log M"])
+        #expect(
+            !CamCapColorMode.wheel(
+                available: [], model: CameraModel.resolve(modelId: 0x0021, name: nil)
+            ).contains(.dLog2))
         #expect(
             ColorMode.available(for: .nano).map { $0.label(for: .nano) }
                 == ["Normal 8-bit", "Normal 10-bit", "D-Log M 10-bit"])
