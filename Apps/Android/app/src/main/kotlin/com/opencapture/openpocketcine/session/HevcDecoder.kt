@@ -168,7 +168,20 @@ class HevcDecoder {
                     sizeCallback = parsed
                 }
             }
-            if (changing) handleEncoderFormatChangeLocked(idr)
+            val sizeChanged =
+                configuredWidth > 1 &&
+                    configuredHeight > 1 &&
+                    (pictureWidth != configuredWidth || pictureHeight != configuredHeight)
+            if (changing &&
+                EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                    pictureSizeChanged = sizeChanged,
+                    accessUnitHasIDR = idr,
+                )
+            ) {
+                handleEncoderFormatChangeLocked(idr, sizeChanged)
+            } else if (changing) {
+                builtCsd = csd
+            }
             if (sizeCallback != null &&
                 (pictureWidth != configuredWidth || pictureHeight != configuredHeight)
             ) {
@@ -231,12 +244,16 @@ class HevcDecoder {
      * Pocket screen flip / vertical mode restarts the camera encoder. The old
      * MediaCodec session cannot decode the new GOP.
      */
-    private fun handleEncoderFormatChangeLocked(auHasIdr: Boolean) {
+    private fun handleEncoderFormatChangeLocked(auHasIdr: Boolean, pictureSizeChanged: Boolean) {
         Log.i(TAG, "feed: encoder parameter sets changed ${pictureWidth}x$pictureHeight")
         releaseCodecLocked()
         configured = false
         builtCsd = pendingCsd
-        awaitingIdr = true
+        awaitingIdr =
+            EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
+                pictureSizeChanged = pictureSizeChanged,
+                accessUnitHasIDR = auHasIdr,
+            )
         pendingIdr = null
         pendingParameterChangeEnable = !auHasIdr
     }

@@ -52,6 +52,36 @@ class EncoderPresentPathTest {
                 secondsSinceLastEnable = 5.0,
             ),
         )
+        assertFalse(
+            EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                pictureSizeChanged = false,
+                accessUnitHasIDR = false,
+            ),
+        )
+        assertFalse(
+            EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
+                pictureSizeChanged = false,
+                accessUnitHasIDR = false,
+            ),
+        )
+        assertTrue(
+            EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                pictureSizeChanged = true,
+                accessUnitHasIDR = false,
+            ),
+        )
+        assertTrue(
+            EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
+                pictureSizeChanged = true,
+                accessUnitHasIDR = false,
+            ),
+        )
+        assertFalse(
+            EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
+                pictureSizeChanged = true,
+                accessUnitHasIDR = true,
+            ),
+        )
     }
 
     @Test

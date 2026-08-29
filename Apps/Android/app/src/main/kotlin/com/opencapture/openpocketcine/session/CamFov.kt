@@ -29,6 +29,13 @@ object CamFov {
     const val TELE_ENGAGE = 3.0
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — Mimo pinch is 20 Hz. */
     const val SLIDER_COALESCE_MS = 50L
+    /** Camera can pause HEVC while the lens slews. Same 4 s as AF-C. */
+    const val VIDEO_GRACE_SEC = 4.0
+
+    fun shouldHoldWatchdog(secondsSinceSet: Double?): Boolean {
+        val s = secondsSinceSet ?: return false
+        return s >= 0.0 && s < VIDEO_GRACE_SEC
+    }
 
     fun rawAt0(value: ByteArray): Int? {
         if (value.size < 4) return null

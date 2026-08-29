@@ -51,6 +51,10 @@ Pocket 3 can boot 4K 25/30 with chrome and gimbal live while pktType `0x02` neve
 Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug).
 :::
 
+Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not
+IDR-hold those AUs while skipping `0x09/0xa8` — that drops the picture while
+HUD and gimbal stay on 9004.
+
 After a healthy take the feed can still **freeze or go black at ~3–5 min** — cumulative packet counts do not detect that. Staged recover is `docs/feed-watchdog.md` in the repository.
 
 ## Per packet

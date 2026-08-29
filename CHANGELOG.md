@@ -345,6 +345,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Zoom in/out no longer drops the live picture while HUD and gimbal stay up.
+  Same-raster VPS/SPS (zoom / FORMAT) does not tear the decoder or IDR-hold
+  without `0x09/0xa8`, and the watchdog holds 4 s after a zoom SET the way
+  it already does for AF-C.
+
 - First picture ingest pktType `0x02` on UDP handshake ack, not on
   `0x09/0xa8`. Mimo is on-screen ~17 ms after SoftAP DHCP; enable at +3 s
   is a later PLI. Waiting for live view no longer sits through an 8 s IDR

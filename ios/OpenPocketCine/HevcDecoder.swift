@@ -847,6 +847,7 @@ final class HevcDecoder {
         builtVPS = vps
         builtSPS = sps
         builtPPS = pps
+        let previousSize = pictureSize
         let dims = CMVideoFormatDescriptionGetDimensions(fmt)
         let next = CGSize(width: CGFloat(dims.width), height: CGFloat(dims.height))
         if next.width > 1, next.height > 1 {
@@ -854,20 +855,31 @@ final class HevcDecoder {
             isVerticalPicture = EncoderPresentPath.isVertical(
                 width: Int(next.width), height: Int(next.height))
         }
-        if changing { handleEncoderFormatChange() }
+        let sizeChanged =
+            previousSize.width > 1 && previousSize.height > 1 && previousSize != next
+        // Same-raster VPS/SPS (zoom / FORMAT / color) must not tear or IDR-hold.
+        // That hold + skipped 0x09/0xa8 (UDP alive) is a black well with live HUD.
+        if changing,
+            EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                pictureSizeChanged: sizeChanged, accessUnitHasIDR: false)
+        {
+            handleEncoderFormatChange()
+        }
         // Persisted LUT/scopes: start VT on this parameter-set AU. `onHandoffNeedsIDR`
         // still requires a picture, so the first GOP is not cut.
         if effects.needsSample {
             hardwareDecoderUnlocked = true
         }
         if shouldStartVT {
-            rebuildVT(force: changing)
+            rebuildVT(force: changing && sizeChanged)
             lastNeedsSample = true
         }
     }
 
     /// Screen flip / vertical mode restarts the camera encoder. The old VT
     /// session and sample-buffer layer format cannot decode the new GOP.
+    /// Same-raster SPS (zoom) must not call this — IDR-hold without enable
+    /// blacks the well while HUD/gimbal stay up.
     private func handleEncoderFormatChange() {
         log.info(
             "feed: encoder parameter sets changed \(Int(self.pictureSize.width))x\(Int(self.pictureSize.height))"
@@ -877,7 +889,11 @@ final class HevcDecoder {
         }
         invalidateVT()
         vtAttemptedStamp = nil
-        beginIDRHold()
+        if EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
+            pictureSizeChanged: true, accessUnitHasIDR: false)
+        {
+            beginIDRHold()
+        }
         pendingParameterChangeEnable = true
     }
 

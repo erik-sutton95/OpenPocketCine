@@ -161,6 +161,10 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.holdUdpRebuildAfcLog(2_200, 400),
         )
         assertEquals(
+            "feed: hold UDP rebuild — zoom grace lastSet=1.0s lastVideo=0.4s",
+            LiveViewEnablePolicy.holdUdpRebuildZoomLog(1_000, 400),
+        )
+        assertEquals(
             "feed: hold UDP rebuild — GOP-reset grace lastEnable=-1.0s lastVideo=-1.0s",
             LiveViewEnablePolicy.holdUdpRebuildGopLog(null, null),
         )
@@ -198,6 +202,22 @@ class LiveViewEnablePolicyTest {
                 lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
             ).copy(lastFocusTrackAt = now - 2_200)
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+    }
+
+    @Test
+    fun zoomGraceHoldsWatchdog() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 8_000,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+            ).copy(lastZoomAt = now - 1_000)
         assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
     }
 

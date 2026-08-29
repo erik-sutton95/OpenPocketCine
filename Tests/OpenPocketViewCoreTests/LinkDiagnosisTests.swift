@@ -79,6 +79,20 @@ struct LinkDiagnosisTests {
                 == .udpFlowDead)
     }
 
+    @Test func zoomHoldIsNone() {
+        #expect(
+            diagnose(
+                statusAge: 0.3, udpReceiveAlive: false, secondsSinceZoomSet: 1.8)
+                == .none,
+            "zoom 0xB8 SET can pause HEVC")
+        #expect(
+            diagnose(
+                statusAge: 3,
+                udpReceiveAlive: false,
+                secondsSinceZoomSet: CamFov.videoGrace)
+                == .udpFlowDead)
+    }
+
     @Test func bleLostWhenNotifyAndUDPAndStatusAreStale() {
         let failure = diagnose(
             bleNotifyAge: 8.1, statusAge: 3, udpReceiveAlive: false)
@@ -196,6 +210,7 @@ struct LinkDiagnosisTests {
         hadVideo: Bool = true,
         secondsSinceLastEnable: TimeInterval? = 20,
         secondsSinceFocusTrackSet: TimeInterval? = nil,
+        secondsSinceZoomSet: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
         LinkDiagnoser.diagnose(
@@ -209,6 +224,7 @@ struct LinkDiagnosisTests {
             hadVideo: hadVideo,
             secondsSinceLastEnable: secondsSinceLastEnable,
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
+            secondsSinceZoomSet: secondsSinceZoomSet,
             presentAge: presentAge)
     }
 }

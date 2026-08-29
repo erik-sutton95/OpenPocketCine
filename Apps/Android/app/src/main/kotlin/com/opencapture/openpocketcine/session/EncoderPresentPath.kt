@@ -32,4 +32,17 @@ object EncoderPresentPath {
         if (secondsSinceLastEnable != null && secondsSinceLastEnable < 5.0) return false
         return true
     }
+
+    fun shouldRebuildDecoderAfterParameterChange(
+        pictureSizeChanged: Boolean,
+        accessUnitHasIDR: Boolean,
+    ): Boolean = pictureSizeChanged || accessUnitHasIDR
+
+    fun shouldBeginIDRHoldAfterParameterChange(
+        pictureSizeChanged: Boolean,
+        accessUnitHasIDR: Boolean,
+    ): Boolean {
+        if (accessUnitHasIDR) return false
+        return pictureSizeChanged
+    }
 }

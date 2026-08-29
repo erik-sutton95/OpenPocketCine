@@ -51,6 +51,11 @@ live after gallery).
 **Enable-once:** `0x09/0xa8` starts the stream and is the only PLI. After
 picture, further enables follow the [watchdog](feed-watchdog.md) only.
 
+Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET, color hop) is not a screen-flip
+GOP. Do not tear VT/MediaCodec or begin an IDR hold when the 720p size did not
+change. Holding IDR then skipping enable (UDP still alive) drops the picture
+while HUD and gimbal keep moving.
+
 **Pocket 3 first picture:** the body boots 4K 25/30, HUD and gimbal work,
 and the well stays black until the operator SETs 1080 then 4K
 (`0x02/0x18`). Same-tab FORMAT is a no-op, so that round-trip is the

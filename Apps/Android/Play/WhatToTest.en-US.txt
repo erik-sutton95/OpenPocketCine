@@ -6,10 +6,10 @@ New and changed
 
 Fixes
 
-- Live view should come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view. White balance Auto keeps tint. Zoom chips match the body (4 Pro 1×/3×/6×/12×, Pocket 4 1×/2×/4×). FORMAT only lists what this camera can do. COLOR lists what this camera has: D-Log2 only on Pocket 4 Pro; Pocket 3 is D-Log M, not D-Log / D-Log2.
+- Live view should come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view. White balance Auto keeps tint. Zoom chips match the body (4 Pro 1×/3×/6×/12×, Pocket 4 1×/2×/4×). Zoom must keep the live picture, not just HUD and stick. FORMAT only lists what this camera can do. COLOR lists what this camera has: D-Log2 only on Pocket 4 Pro; Pocket 3 is D-Log M, not D-Log / D-Log2.
 
 What to test
 
-- Pair an Osmo Pocket 4 Pro, join its Wi-Fi, and confirm live view fills the monitor in a couple of seconds. COLOR should include D-Log2. On Pocket 3, COLOR is Normal / HDR / D-Log M — not D-Log2.
+- Pair an Osmo Pocket 4 Pro, join its Wi-Fi, and confirm live view fills the monitor in a couple of seconds. Cycle zoom 1×→3×→6×→12× — the picture must stay. COLOR should include D-Log2. On Pocket 3, COLOR is Normal / HDR / D-Log M — not D-Log2.
 - Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.
 - Confirm the app installs on a 64-bit phone running Android 10 or newer.

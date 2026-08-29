@@ -72,6 +72,9 @@ public struct FeedWatchdog: Equatable, Sendable {
         /// Age of the last AF-C `0x8E` pid `0x003B` SET. Switching intelligence
         /// can pause HEVC; that is not a dead socket.
         public var secondsSinceFocusTrackSet: TimeInterval?
+        /// Age of the last zoom `0xB8` SET. Lens slew can pause HEVC the same
+        /// way AF-C does; GOP-cutting mid-zoom blacks the well.
+        public var secondsSinceZoomSet: TimeInterval?
 
         public init(
             now: TimeInterval,
@@ -91,7 +94,8 @@ public struct FeedWatchdog: Equatable, Sendable {
             secondsSinceLastRebuild: TimeInterval? = nil,
             hadVideo: Bool = true,
             secondsSinceLastEnable: TimeInterval? = nil,
-            secondsSinceFocusTrackSet: TimeInterval? = nil
+            secondsSinceFocusTrackSet: TimeInterval? = nil,
+            secondsSinceZoomSet: TimeInterval? = nil
         ) {
             self.now = now
             self.lastDecodedFrameAge = lastDecodedFrameAge
@@ -111,6 +115,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.hadVideo = hadVideo
             self.secondsSinceLastEnable = secondsSinceLastEnable
             self.secondsSinceFocusTrackSet = secondsSinceFocusTrackSet
+            self.secondsSinceZoomSet = secondsSinceZoomSet
         }
     }
 
@@ -280,6 +285,10 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
 
         if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceFocusTrackSet) {
+            return .none
+        }
+
+        if CamFov.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceZoomSet) {
             return .none
         }
 

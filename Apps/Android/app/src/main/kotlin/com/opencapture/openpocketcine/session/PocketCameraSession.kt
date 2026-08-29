@@ -660,6 +660,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             if (FocusTrackMode.shouldHoldWatchdog(lastFocusTrackAt?.let { (now - it) / 1000.0 })) {
                 return false
             }
+            if (CamFov.shouldHoldWatchdog(
+                    lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                )
+            ) {
+                return false
+            }
             val videoFresh = videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS
             return LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
                 flowNeedsRebuild = datalink?.needsRebuild == true,
@@ -894,6 +900,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 live = _phase.value == ConnectionPhase.LIVE,
                 sawPicture = decoder.lastPresentedAt != null,
                 lastFocusTrackAt = lastFocusTrackAt,
+                lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
             coreWatchdog = SwiftCore.feedWatchdogCreate()
@@ -924,6 +931,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(datalink?.lastRebuildAt)?.let { append(",\"secondsSinceLastRebuild\":$it") }
                     age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
+                    age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
                     append("}")
                 }
             when (SwiftCore.feedWatchdogTick(coreWatchdog, json)) {
@@ -999,6 +1007,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 TAG,
                 LiveViewEnablePolicy.holdUdpRebuildAfcLog(
                     LiveViewEnablePolicy.age(snap.now, snap.lastFocusTrackAt),
+                    videoAge,
+                ),
+            )
+        } else if (
+            CamFov.shouldHoldWatchdog(
+                LiveViewEnablePolicy.age(snap.now, snap.lastZoomAt)?.div(1000.0),
+            )
+        ) {
+            Log.i(
+                TAG,
+                LiveViewEnablePolicy.holdUdpRebuildZoomLog(
+                    LiveViewEnablePolicy.age(snap.now, snap.lastZoomAt),
                     videoAge,
                 ),
             )
@@ -3025,6 +3045,7 @@ internal object LiveViewEnablePolicy {
         val live: Boolean,
         val sawPicture: Boolean,
         val lastFocusTrackAt: Long? = null,
+        val lastZoomAt: Long? = null,
     )
 
     fun age(now: Long, at: Long?): Long? = at?.let { now - it }
@@ -3072,6 +3093,9 @@ internal object LiveViewEnablePolicy {
 
     fun holdUdpRebuildAfcLog(sinceSetMs: Long?, videoAgeMs: Long?): String =
         "feed: hold UDP rebuild — AF-C grace lastSet=${ageSec(sinceSetMs)}s lastVideo=${ageSec(videoAgeMs)}s"
+
+    fun holdUdpRebuildZoomLog(sinceSetMs: Long?, videoAgeMs: Long?): String =
+        "feed: hold UDP rebuild — zoom grace lastSet=${ageSec(sinceSetMs)}s lastVideo=${ageSec(videoAgeMs)}s"
 
     private fun ageSec(ageMs: Long?): String {
         val value = if (ageMs == null) -1.0 else ageMs / 1000.0
@@ -3260,6 +3284,9 @@ internal object LiveViewEnablePolicy {
         val videoAge = age(snap.now, snap.lastVideoPacketAt)
         if (shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
         if (FocusTrackMode.shouldHoldWatchdog(age(snap.now, snap.lastFocusTrackAt)?.div(1000.0))) {
+            return Action.NONE
+        }
+        if (CamFov.shouldHoldWatchdog(age(snap.now, snap.lastZoomAt)?.div(1000.0))) {
             return Action.NONE
         }
 

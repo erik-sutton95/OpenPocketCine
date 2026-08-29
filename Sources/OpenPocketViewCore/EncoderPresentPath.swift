@@ -49,4 +49,26 @@ public enum EncoderPresentPath {
         }
         return true
     }
+
+    /// Tear VT / MediaCodec only when the raster flipped (Pocket screen flip)
+    /// or this AU already cut a GOP. Zoom / FORMAT / color hops on a live 720p
+    /// GOP send new VPS/SPS without an IDR. Tearing then holding IDR while
+    /// skipping `0x09/0xa8` (UDP still alive) blacks the well — HUD and gimbal
+    /// stay up because `0x01` and the stick never left 9004.
+    public static func shouldRebuildDecoderAfterParameterChange(
+        pictureSizeChanged: Bool,
+        accessUnitHasIDR: Bool
+    ) -> Bool {
+        pictureSizeChanged || accessUnitHasIDR
+    }
+
+    /// IDR hold is for a decoder rebuild that cannot join mid-GOP. Same-raster
+    /// SPS (zoom) must keep presenting P-frames.
+    public static func shouldBeginIDRHoldAfterParameterChange(
+        pictureSizeChanged: Bool,
+        accessUnitHasIDR: Bool
+    ) -> Bool {
+        if accessUnitHasIDR { return false }
+        return pictureSizeChanged
+    }
 }

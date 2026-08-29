@@ -1412,6 +1412,14 @@ public enum CamFov {
     public static let slewTele: UInt16 = 100
     /// `0x02/0xb8` `03 00 2C 01` — older takes, 1× → 3× detent.
     public static let slewWide: UInt16 = 300
+    /// Camera can pause HEVC while the lens slews. Hold the 2 s stall enable
+    /// so a chip tap / pinch does not GOP-cut the live picture (HUD still alive).
+    public static let videoGrace: TimeInterval = 4
+
+    public static func shouldHoldWatchdog(secondsSinceSet: TimeInterval?) -> Bool {
+        guard let secondsSinceSet else { return false }
+        return secondsSinceSet >= 0 && secondsSinceSet < videoGrace
+    }
 
     public static var wideFactor: Double { minFactor }
     public static var slewDetent: Double { teleEngage }

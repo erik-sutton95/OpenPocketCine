@@ -1090,6 +1090,10 @@ import Testing
         #expect(CamFov.matches(1, 1))
         #expect(CamFov.matches(12, 12))
         #expect(!CamFov.matches(3, 12))
+        #expect(CamFov.shouldHoldWatchdog(secondsSinceSet: 0))
+        #expect(CamFov.shouldHoldWatchdog(secondsSinceSet: 3.9))
+        #expect(!CamFov.shouldHoldWatchdog(secondsSinceSet: 4.0))
+        #expect(!CamFov.shouldHoldWatchdog(secondsSinceSet: nil))
 
         #expect(CamFov.pinchCommand(live: 2.3, preview: 3, slewing: nil) == .slider(651))
         #expect(

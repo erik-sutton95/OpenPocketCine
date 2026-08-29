@@ -28,7 +28,8 @@ Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
 Zoom chips follow the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
-Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). FORMAT only lists
+Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Zoom must not drop the live
+picture. FORMAT only lists
 `camcap_video_format` pairs. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. The gimbal stick and zoom chip sit together as a cluster in the

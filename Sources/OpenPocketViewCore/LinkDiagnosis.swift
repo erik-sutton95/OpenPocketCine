@@ -38,6 +38,7 @@ public enum LinkDiagnoser {
         hadVideo: Bool,
         secondsSinceLastEnable: TimeInterval?,
         secondsSinceFocusTrackSet: TimeInterval?,
+        secondsSinceZoomSet: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
         if !pathReady { return .softAPLost }
@@ -56,6 +57,9 @@ public enum LinkDiagnoser {
             return .none
         }
         if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: secondsSinceFocusTrackSet) {
+            return .none
+        }
+        if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
             return .none
         }
         if hadVideo,
@@ -102,6 +106,7 @@ public enum LinkDiagnoser {
             hadVideo: snap.hadVideo,
             secondsSinceLastEnable: snap.secondsSinceLastEnable,
             secondsSinceFocusTrackSet: snap.secondsSinceFocusTrackSet,
+            secondsSinceZoomSet: snap.secondsSinceZoomSet,
             presentAge: snap.lastDecodedFrameAge
         )
     }

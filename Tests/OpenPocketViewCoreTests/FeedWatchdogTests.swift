@@ -64,6 +64,28 @@ import Testing
         #expect(!FeedWatchdog.udpReceiveAlive(snap))
     }
 
+    @Test func zoomSlewWithFreshStatusDoesNotTearUDP() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 4.2, videoAge: 4.2, statusAge: 0.3, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        snap.secondsSinceZoomSet = 1.0
+        #expect(
+            dog.tick(snap) == .none,
+            "zoom 0xB8 SET can pause HEVC; status still on 9004 is not a dead socket")
+        #expect(dog.stage == .idle)
+        #expect(!dog.isRecovering)
+        #expect(CamFov.shouldHoldWatchdog(secondsSinceSet: 0))
+        #expect(CamFov.shouldHoldWatchdog(secondsSinceSet: 3.9))
+        #expect(!CamFov.shouldHoldWatchdog(secondsSinceSet: 4.0))
+        #expect(!CamFov.shouldHoldWatchdog(secondsSinceSet: nil))
+
+        snap.secondsSinceZoomSet = 4.1
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "past zoom grace with young status is an encoder pause")
+    }
+
     @Test func encoderPauseWithFreshStatusResendsEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(

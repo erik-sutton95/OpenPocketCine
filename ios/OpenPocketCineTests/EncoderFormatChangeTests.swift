@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class EncoderFormatChangeTests: XCTestCase {
-    func testNewParameterSetsFireFormatChange() {
+    func testSameRasterSpsDoesNotHoldIDR() {
         let decoder = HevcDecoder()
         var fired = 0
         decoder.onParameterSetsChanged = { fired += 1 }
@@ -19,8 +19,11 @@ final class EncoderFormatChangeTests: XCTestCase {
         var flippedSPS = Self.sps
         flippedSPS[flippedSPS.count - 1] ^= 0x01
         _ = decoder.decode(accessUnit: Self.annexB([Self.vps, flippedSPS, Self.pps]))
-        XCTAssertEqual(fired, 1)
-        XCTAssertTrue(decoder.awaitingIDR)
+        XCTAssertEqual(
+            fired, 0, "same-raster SPS is zoom/FORMAT — not a GOP reset")
+        XCTAssertFalse(
+            decoder.awaitingIDR,
+            "holding IDR without 0x09/0xa8 blacks the well while HUD/gimbal stay up")
     }
 
     func testIdenticalParameterSetsDoNotRetrigger() {
