@@ -15,6 +15,11 @@ public enum Hevc {
         t == vps || t == sps || t == pps || t == idr
     }
 
+    /// UDP-queue pending cap must not drop the AU that latches format.
+    public static func accessUnitCarriesKeyframe(_ annexB: [UInt8]) -> Bool {
+        nalUnits(annexB).contains { !$0.isEmpty && isKeyframeNal(nalType($0[0])) }
+    }
+
     /// Drop DJI's `00 00 01 ff …` frame marker (NAL type 63): return the buffer from the first
     /// standard NAL onward. If none is found, return the input unchanged.
     public static func stripDjiMarker(_ annexB: [UInt8]) -> [UInt8] {

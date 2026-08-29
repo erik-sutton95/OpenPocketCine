@@ -350,6 +350,11 @@ All notable changes to this project are documented here. The format is based on
   without `0x09/0xa8`, and the watchdog holds 4 s after a zoom SET the way
   it already does for AF-C.
 
+- First picture no longer sits on WAITING FOR LIVE VIEW when persisted LUT
+  or WAVE starts VT: if the identity layer already presented, that VT still
+  gets a PLI. In-flight VPS/IDR access units are not dropped while MainActor
+  is busy with Flip/GET.
+
 - First picture ingest pktType `0x02` on UDP handshake ack, not on
   `0x09/0xa8`. Mimo is on-screen ~17 ms after SoftAP DHCP; enable at +3 s
   is a later PLI. Waiting for live view no longer sits through an 8 s IDR

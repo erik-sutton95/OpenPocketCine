@@ -204,6 +204,19 @@ public struct FeedWatchdog: Equatable, Sendable {
         startingHardwareDecoder && hasFormat && hasPicture
     }
 
+    /// Persist LUT/WAVE starts VT after the identity layer already consumed the
+    /// live-start IDR. Skipping a PLI because that enable was `< 1 s` ago leaves
+    /// a fresh VT with no IDR — WAITING FOR LIVE VIEW while UDP stays live.
+    /// Rapid A/B assist toggles still collapse (`liveViewEnableSends > 1`).
+    public static func shouldSendEnableForAssistVTStart(
+        secondsSinceLastEnable: TimeInterval,
+        hasPresentedPicture: Bool,
+        liveViewEnableSends: Int
+    ) -> Bool {
+        if secondsSinceLastEnable >= 1 { return true }
+        return hasPresentedPicture && liveViewEnableSends <= 1
+    }
+
     /// After one UDP rebuild, do not rebuild again on the 2s stall cadence.
     /// First picture (`hadVideo == false`) is not a live flap — do not hold.
     public static func shouldHoldRebuildAfterRecentUDP(

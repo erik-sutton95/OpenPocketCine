@@ -623,6 +623,11 @@ final class HevcDecoder {
         }
         lastNeedsSample = needVT
         syncAssistPolicy()
+        if vtStarting {
+            // Empty VT cannot join mid-GOP. Hold even if the session skips a
+            // second 0x09/0xa8 because the live-start enable is still in flight.
+            beginIDRHold()
+        }
         if FeedWatchdog.shouldRequestKeyFrameForDecoderStart(
             startingHardwareDecoder: vtStarting,
             hasFormat: hasFormat,

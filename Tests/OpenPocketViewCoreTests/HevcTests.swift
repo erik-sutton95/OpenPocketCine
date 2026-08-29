@@ -26,6 +26,9 @@ private let PPS = hex("4401c17312240890")
         #expect(Hevc.nalType(PPS[0]) == Hevc.pps)  // 34
         #expect(Hevc.isKeyframeNal(Hevc.idr) && Hevc.isKeyframeNal(Hevc.vps))
         #expect(!Hevc.isKeyframeNal(1) && !Hevc.isKeyframeNal(35))
+        let sc: [UInt8] = [0, 0, 1]
+        #expect(Hevc.accessUnitCarriesKeyframe(sc + VPS + sc + SPS + sc + PPS))
+        #expect(!Hevc.accessUnitCarriesKeyframe(sc + [0x02, 0xAA, 0xBB]))
     }
 
     @Test func splitsRealAnnexBIntoNALs() {

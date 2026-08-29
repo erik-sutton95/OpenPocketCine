@@ -325,7 +325,13 @@ final class CameraSession {
         decoder.onHandoffNeedsIDR = { [weak self] in
             guard let self else { return }
             if self.isBrowsingMedia { return }
-            if Date().timeIntervalSince(self.lastIdrRequest) < 1 { return }
+            let since = Date().timeIntervalSince(self.lastIdrRequest)
+            guard
+                FeedWatchdog.shouldSendEnableForAssistVTStart(
+                    secondsSinceLastEnable: since,
+                    hasPresentedPicture: self.decoder.lastPresentedAt != nil,
+                    liveViewEnableSends: self.liveViewEnableSends)
+            else { return }
             self.sendRecoverEnable(force: true, reason: "assist VT start")
         }
         decoder.onParameterSetsChanged = { [weak self] in

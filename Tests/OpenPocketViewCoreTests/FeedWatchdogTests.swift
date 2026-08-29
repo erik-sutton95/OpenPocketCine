@@ -192,6 +192,24 @@ import Testing
             dog.tick(snap) == .reopenDatalink, "past AF-C grace and still silent — then rebuild")
     }
 
+    @Test func assistVTStartSendsEnableWhenIdentityAlreadyPresented() {
+        #expect(
+            FeedWatchdog.shouldSendEnableForAssistVTStart(
+                secondsSinceLastEnable: 0.4, hasPresentedPicture: true, liveViewEnableSends: 1),
+            "identity already consumed the live-start IDR — new VT still needs a PLI")
+        #expect(
+            !FeedWatchdog.shouldSendEnableForAssistVTStart(
+                secondsSinceLastEnable: 0.4, hasPresentedPicture: false, liveViewEnableSends: 1),
+            "first enable still in flight — wait for that IDR")
+        #expect(
+            !FeedWatchdog.shouldSendEnableForAssistVTStart(
+                secondsSinceLastEnable: 0.4, hasPresentedPicture: true, liveViewEnableSends: 2),
+            "rapid A/B assist toggles collapse to one enable")
+        #expect(
+            FeedWatchdog.shouldSendEnableForAssistVTStart(
+                secondsSinceLastEnable: 1.0, hasPresentedPicture: false, liveViewEnableSends: 1))
+    }
+
     @Test func assistDecoderStartRequestsIDROnlyOnce() {
         #expect(
             FeedWatchdog.shouldRequestKeyFrameForDecoderStart(

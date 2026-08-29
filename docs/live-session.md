@@ -50,6 +50,9 @@ live after gallery).
 
 **Enable-once:** `0x09/0xa8` starts the stream and is the only PLI. After
 picture, further enables follow the [watchdog](feed-watchdog.md) only.
+Persisted LUT/WAVE starting VT after the identity layer already presented
+must still PLI — skipping because the live-start enable was `< 1 s` ago
+leaves a fresh VT with no IDR (WAITING FOR LIVE VIEW while `lastVideo=0`).
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET, color hop) is not a screen-flip
 GOP. Do not tear VT/MediaCodec or begin an IDR hold when the 720p size did not

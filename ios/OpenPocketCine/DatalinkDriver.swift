@@ -786,7 +786,7 @@ final class DatalinkDriver {
                     }
                 }
                 if assembled.shouldHop {
-                    Task(priority: .utility) { @MainActor in
+                    Task(priority: .userInitiated) { @MainActor in
                         self?.flushPendingAccessUnits()
                     }
                 }
@@ -1186,7 +1186,16 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
                 state.lastAU = Date()
                 state.pending.append(au)
                 if state.pending.count > 8 {
-                    state.pending.removeFirst(state.pending.count - 8)
+                    // MainActor hop can stall behind Flip/GET. Drop TRAIL only —
+                    // dropping VPS/IDR left format=0 / WAITING FOR LIVE VIEW.
+                    while state.pending.count > 8 {
+                        guard
+                            let i = state.pending.firstIndex(where: {
+                                !Hevc.accessUnitCarriesKeyframe($0)
+                            })
+                        else { break }
+                        state.pending.remove(at: i)
+                    }
                 }
                 if !state.hopScheduled {
                     state.hopScheduled = true

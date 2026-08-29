@@ -30,6 +30,9 @@ Previous recover (`recoverLiveViewIfNeeded`) only re-enabled when **cumulative**
 ## Reconnect policy (feed watchdog)
 
 UDP receive age is the stall signal — not a black or frozen canvas. Packets or AUs still arriving means the socket is alive; LUT / PEAK / WAVE toggles must not send `0x09/0xa8` once VT already owns the session.
+The first time VT starts after the identity layer already presented, that is still
+one PLI — skipping it because the live-start enable was `< 1 s` ago leaves
+WAITING FOR LIVE VIEW while UDP stays live.
 
 A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut), **4 s after an AF-C SET**, and **4 s after a zoom `0xB8` SET**. Zoom / FORMAT VPS on a live 720p GOP must not tear the decoder or IDR-hold while skipping `0x09/0xa8` — that blacks the well while HUD and gimbal stay up. First picture uses that 8 s grace too — do not second-enable or rebuild UDP at 2 s (Mimo first look is 1–2 s). Do not `still holding for IDR` while video packets are still arriving. Log:
 
