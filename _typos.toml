@@ -27,6 +27,8 @@ DA = "DA"
 UDID = "UDID"
 Lucide = "Lucide"
 ND = "ND"
+Resend = "Resend"
+whatsnew = "whatsnew"
 
 [default.extend-identifiers]
 ue = "ue"

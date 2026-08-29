@@ -49,7 +49,8 @@ object LiveZoom {
 
     fun label(factor: Double): String = CamFov.displayLabel(factor)
 
-    fun nextJump(from: Double): Double = CamFov.nextJump(from)
+    fun nextJump(from: Double, stops: List<Double> = CamFov.JUMPS): Double =
+        CamFov.nextJump(from, stops)
 
     fun setZoom(session: PocketCameraSession, factor: Double) {
         session.setZoom(factor)

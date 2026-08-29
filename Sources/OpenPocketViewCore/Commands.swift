@@ -363,12 +363,13 @@ public enum Commands {
     }
 
     /// `0x02/0x2C` white balance. 5 B `[mode][K/100 u16-LE][tint i16-LE]`.
+    /// Auto is kelvin 0 and keeps `tint` (Mimo `00 00 00 14 00` at tint 20).
     public static func setWhiteBalance(_ wb: WhiteBalance, seq: UInt16 = 0) -> Duml.Frame {
         camera(0x2C, wb.setPayload, seq: seq)
     }
 
-    public static func setWhiteBalanceAuto(seq: UInt16 = 0) -> Duml.Frame {
-        setWhiteBalance(.auto, seq: seq)
+    public static func setWhiteBalanceAuto(tint: Int = 0, seq: UInt16 = 0) -> Duml.Frame {
+        setWhiteBalance(.auto(tint: tint), seq: seq)
     }
 
     public static func setWhiteBalanceCustom(kelvin: Int, tint: Int, seq: UInt16 = 0) -> Duml.Frame

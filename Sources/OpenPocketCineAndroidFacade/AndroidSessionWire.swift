@@ -72,8 +72,9 @@ public enum AndroidSessionWire {
         case .nano: family = "nano"
         case .other: family = "other"
         }
+        let zoomStops = model.zoomStops.map { String($0) }.joined(separator: ",")
         return """
-            {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)","family":"\(family)","liveViewEnableReceiver":\(Int(model.liveViewEnableReceiver)),"usesNanoLiveViewGate":\(bool(model.usesNanoLiveViewGate)),"supportsTapFocus":\(bool(model.supportsTapFocus)),"supportsFocusMode":\(bool(model.supportsFocusMode)),"usesCapturedLiveEnable":\(bool(model.usesCapturedLiveEnable))}
+            {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)","family":"\(family)","liveViewEnableReceiver":\(Int(model.liveViewEnableReceiver)),"usesNanoLiveViewGate":\(bool(model.usesNanoLiveViewGate)),"supportsTapFocus":\(bool(model.supportsTapFocus)),"supportsFocusMode":\(bool(model.supportsFocusMode)),"usesCapturedLiveEnable":\(bool(model.usesCapturedLiveEnable)),"needsFirstPictureFormatPoke":\(bool(model.needsFirstPictureFormatPoke)),"zoomStops":[\(zoomStops)]}
             """
     }
 
@@ -93,11 +94,14 @@ public enum AndroidSessionWire {
         }
         let isoCaps = status.availableIsoIndices.map { Int($0.rawValue) }
         let colorCaps = status.availableColorModes.map { Int($0.rawValue) }
+        let formatCaps = status.availableVideoFormats.flatMap {
+            [Int($0.resolution.rawValue), Int($0.frameRate.rawValue)]
+        }
         let zoomFactorJSON = status.zoomFactor.map { String($0) } ?? "null"
         let glamourJSON = status.glamourEnabled.map { bool($0) } ?? "null"
         let selfieFlipJSON = status.selfieFlip.map { bool($0.isOn) } ?? "null"
         return """
-            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"selfieFlip":\(selfieFlipJSON),"gimbalFace":\(intOrMinus(status.gimbalFace?.rawValue)),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
+            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"availableVideoFormats":\(ints(formatCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"selfieFlip":\(selfieFlipJSON),"gimbalFace":\(intOrMinus(status.gimbalFace?.rawValue)),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
             """
     }
 
@@ -276,6 +280,18 @@ public enum AndroidSessionWire {
         status.availableColorModes = intArray("availableColorModes").compactMap {
             ColorMode(rawValue: UInt8(truncatingIfNeeded: $0))
         }
+        let formatFlat = intArray("availableVideoFormats")
+        var formats: [VideoFormat] = []
+        var fi = 0
+        while fi + 1 < formatFlat.count {
+            if let res = VideoResolution(rawValue: UInt8(truncatingIfNeeded: formatFlat[fi])),
+                let rate = VideoFrameRate(rawValue: UInt8(truncatingIfNeeded: formatFlat[fi + 1]))
+            {
+                formats.append(VideoFormat(resolution: res, frameRate: rate))
+            }
+            fi += 2
+        }
+        status.availableVideoFormats = formats
         status.focusX = number("focusX", default: CamLensState.defaultX)
         status.focusY = number("focusY", default: CamLensState.defaultY)
         status.hasCameraFocusPoint = flag("hasCameraFocusPoint")
@@ -442,7 +458,8 @@ public enum AndroidSessionWire {
             let mode: FocusMode = (extra == "2" || extra == "continuous") ? .continuous : .single
             return Commands.setFocusMode(mode, seq: seq)
         case .setWhiteBalanceAuto:
-            return Commands.setWhiteBalanceAuto(seq: seq)
+            let tint = extra.flatMap { Int($0) } ?? 0
+            return Commands.setWhiteBalanceAuto(tint: tint, seq: seq)
         case .setWhiteBalanceCustom:
             let parts = splitExtra(extra)
             guard parts.count >= 2, let kelvin = Int(parts[0]), let tint = Int(parts[1]) else {

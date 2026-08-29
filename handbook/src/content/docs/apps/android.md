@@ -1,12 +1,13 @@
 ---
 title: Android app
-description: Jetpack Compose phone shell on a cross-compiled Swift core. Closed beta waitlist on the site. arm64-v8a only.
+description: Jetpack Compose phone shell on a cross-compiled Swift core. Play closed testing. arm64-v8a only.
 ---
 
 The Android app lives in `Apps/Android/`. It is an early phone shell: pairing,
-HEVC live view, GPU looks, scopes, camera writes, and media. It is **not on
-Google Play yet**. Join the closed-beta waitlist on
-[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver.
+HEVC live view, GPU looks, scopes, camera writes, and media. Closed testing on
+Google Play is the TestFlight analog — join from
+[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. arm64
+phones, Android 10 or newer.
 
 ## How Swift reaches Android
 
@@ -26,7 +27,9 @@ Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
 ## Operator surface
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
-The gimbal stick and zoom chip sit together as a cluster in the
+Zoom chips follow the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
+Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). FORMAT only lists
+`camcap_video_format` pairs. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. Stick pan stays
 picture-relative. Stick triple-tap 180 inverts pan at the end of the
 rotation (like Mimo). Extra-mirror live view when that 180 lands and

@@ -1,0 +1,131 @@
+name: Android Play
+
+# Closed-testing analog of Xcode Cloud → TestFlight. Never runs on pull_request
+# (forks must not see Play or keystore secrets). Secrets live in the
+# **play-closed** GitHub Environment. Auto-upload on main is opt-in via
+# ANDROID_PLAY_UPLOAD — first listing + first AAB stay a human gate.
+#
+# One-time Play Console / signing / secrets: ./scripts/setup-android-play.sh
+# Contract: docs/android-play-ci.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Play track (alpha = closed testing, internal = 100-tester smoke)
+        type: choice
+        options:
+          - alpha
+          - internal
+        default: alpha
+      status:
+        description: Release status on the track
+        type: choice
+        options:
+          - completed
+          - draft
+        default: completed
+      changes_not_sent_for_review:
+        description: Upload without sending the listing for review
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "Apps/Android/**"
+      - "Sources/OpenPocketViewCore/**"
+      - "Sources/OpenPocketCineAndroidFacade/**"
+      - "Sources/CJNI/**"
+      - "Package.swift"
+      - "scripts/android-*.sh"
+      - "scripts/ci-install-swift-android.sh"
+      - "justfile"
+      - ".github/workflows/android-play.yml"
+      - "Apps/Android/Play/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-play-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  play:
+    name: Bundle and upload
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ANDROID_PLAY_UPLOAD == 'true' }}
+    runs-on: ubuntu-latest
+    environment: play-closed
+    env:
+      SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Set up Android NDK 27
+        uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410 # v1.5.0
+        with:
+          ndk-version: r27c
+          link-to-sdk: true
+
+      - name: Install Swift Android SDK
+        run: ./scripts/ci-install-swift-android.sh
+
+      - name: Decode upload keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_KEYSTORE_BASE64}" ]]; then
+            echo "ANDROID_KEYSTORE_BASE64 is empty. Run ./scripts/setup-android-play.sh" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/play-upload.keystore"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/play-upload.keystore" >> "$GITHUB_ENV"
+
+      - name: Stamp versionCode
+        run: |
+          set -euo pipefail
+          base="${{ vars.ANDROID_VERSION_CODE_BASE }}"
+          base="${base:-0}"
+          echo "VERSION_CODE=$((base + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$(sed -n 's/^openpocketcine.versionName=//p' Apps/Android/gradle.properties)" >> "$GITHUB_ENV"
+
+      - name: Bundle release
+        working-directory: Apps/Android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
+
+      - name: Upload to Play
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.opencapture.openpocketcine
+          releaseFiles: Apps/Android/app/build/outputs/bundle/release/app-release.aab
+          tracks: ${{ github.event.inputs.track || 'alpha' }}
+          status: ${{ github.event.inputs.status || 'completed' }}
+          changesNotSentForReview: ${{ github.event.inputs.changes_not_sent_for_review || false }}
+          releaseName: ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
+          whatsNewDirectory: Apps/Android/Play/whatsnew
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## Play closed testing"
+            echo "- versionName: \`${VERSION_NAME}\`"
+            echo "- versionCode: \`${VERSION_CODE}\`"
+            echo "- track: \`${{ github.event.inputs.track || 'alpha' }}\`"
+            echo "- status: \`${{ github.event.inputs.status || 'completed' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

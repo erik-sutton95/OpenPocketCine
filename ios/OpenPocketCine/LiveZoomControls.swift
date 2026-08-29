@@ -179,7 +179,7 @@ struct LiveZoomPinchModifier: ViewModifier {
                 draftEnd = nil
                 model.session.updateZoomPinch(magnification: Double(value.magnification))
                 let preview = model.session.zoomPinchPreview ?? 0
-                if CamFov.isJumpStop(preview) {
+                if CamFov.isJumpStop(preview, stops: model.session.zoomStops) {
                     if detentTick != preview { detentTick = preview }
                 } else if detentTick != 0 {
                     detentTick = 0
@@ -299,14 +299,14 @@ struct LiveZoomChip: View {
     /// D-Log2 while rolling: gray like lock, but keep the tap so we can toast.
     private var zoomBlockedWhileRecording: Bool {
         CamFov.zoomNeedsColorHopWhileRecording(
-            factor: CamFov.nextJump(from: cycleFrom),
+            factor: CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops),
             current: model.session.status.colorMode,
             isRecording: model.session.status.isRecording)
     }
 
     var body: some View {
         Button {
-            let next = CamFov.nextJump(from: cycleFrom)
+            let next = CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops)
             ControlLiveLog.line(
                 "zoom: chip tap \(title) → \(CamFov.displayLabel(factor: next)) locked=\(interfaceLocked)"
             )

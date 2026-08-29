@@ -127,7 +127,8 @@ object CameraCommands {
         )
     }
 
-    fun whiteBalanceAuto(): ByteArray = whiteBalance(WB_AUTO, 0, 0)
+    /** Auto SET is kelvin 0 and keeps tint (Mimo `00 00 00 14 00` at tint 20). */
+    fun whiteBalanceAuto(tint: Int = 0): ByteArray = whiteBalance(WB_AUTO, 0, tint)
 
     fun whiteBalanceCustom(kelvin: Int, tint: Int): ByteArray {
         val (k, t) = clampWhiteBalanceCustom(kelvin, tint)
@@ -283,7 +284,11 @@ object CameraCommands {
     const val ZOOM_SLEW_TELE = 100
     const val ZOOM_SLEW_WIDE = 300
 
+    const val SHOOT_SLOWMO = 0x00
+    const val SHOOT_VIDEO = 0x01
+    const val SHOOT_TIMELAPSE = 0x02
     const val SHOOT_PHOTO = 0x05
+    const val SHOOT_HYPERLAPSE = 0x0A
     const val SHOOT_PHOTO_POCKET4 = 0x17
     const val SHOOT_SUPER_NIGHT = 0x28
 
@@ -314,7 +319,7 @@ object CameraCommands {
 
     fun zoomStop(): ByteArray = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00)
 
-    /** Chip 1× / 3× / 6× / 12× land on 217 / 651 / 1302 / 2604. */
+    /** Chip stops land on slider lens (Pro 217 / 651 / 1302 / 2604; 2× / 4× interpolate). */
     fun lensForZoomFactor(factor: Double): Int =
         when (val write = CamFov.chipWrite(factor)) {
             is CamFov.ChipWrite.Lens -> write.position
@@ -656,9 +661,29 @@ object CameraCommands {
     }
 
     /**
-     * Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D`.
-     * Pocket never published this table in our takes. Unknown bytes dropped.
+     * `camcap_video_format` — legal `[res][fps]` pairs for the current shooting
+     * mode. Pocket 4 Pro Video (`mimo-live-start-20260828`): `01 25 00 0c` then
+     * 12× `[res][fps_idx] 00` — 4K 24–60 then 1080p 60–24.
      */
+    fun parseVideoFormats(value: ByteArray): List<VideoFormat> {
+        if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
+        val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
+        if (inner < 2 || 3 + inner > value.size) return emptyList()
+        val body = value.copyOfRange(3, 3 + inner)
+        val count = body[0].toInt() and 0xFF
+        if (count < 1 || body.size < 1 + count * 3) return emptyList()
+        val out = ArrayList<VideoFormat>(count)
+        var i = 1
+        repeat(count) {
+            if (i + 1 >= body.size) return@repeat
+            val res = body[i].toInt() and 0xFF
+            val fps = body[i + 1].toInt() and 0xFF
+            VideoFormat.parse(res, fps)?.let { if (it !in out) out.add(it) }
+            i += 3
+        }
+        return out
+    }
+
     fun parseColorModes(value: ByteArray): List<Int> {
         if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
         val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)

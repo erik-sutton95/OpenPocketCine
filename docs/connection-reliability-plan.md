@@ -1,8 +1,10 @@
 # Connection reliability — implementation plan
 
-> **For agentic workers:** Independent PRs 1–5 may run in parallel (no shared
-> files). PRs 6–8 wait for 1–5 to merge. Do not edit a file that is not on your
-> allowlist.
+> **Dated.** Types from PRs 1–5 are in tree. Repair wiring is not. The living
+> contract is [`connection-reliability.md`](connection-reliability.md). Do not
+> run this split as if it were current. Independent PRs 1–5 may run in
+> parallel (no shared files). PRs 6–8 wait for 1–5 to merge. Do not edit a
+> file that is not on your allowlist.
 
 **Goal:** Split link / control / media in policy, then make first picture, LUT,
 reconnect, and congested-SoftAP recovery match a diagnose-then-cheapest-repair

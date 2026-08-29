@@ -67,6 +67,9 @@ final class CameraSession {
     @ObservationIgnored private var lastIdrRequest = Date.distantPast
     @ObservationIgnored private var liveViewEnableSent = false
     @ObservationIgnored private var liveViewEnableSends = 0
+    /// Pocket 3: one 1080→boot-4K SET after a black first picture. Not P4.
+    @ObservationIgnored private var firstPictureFormatPoked = false
+    @ObservationIgnored private var firstPictureFormatPokeTask: Task<Void, Never>?
     /// One `0x09/0xa8` write in flight. Overlapping enables are a black well.
     @ObservationIgnored private var liveEnableGate = SerialSessionGate()
     /// `0x09/0xa8` sends while `awaitingIDR` is still true. Caps the mid-session
@@ -230,8 +233,14 @@ final class CameraSession {
     @ObservationIgnored private var lastFacePriorityEVAt = Date.distantPast
     @ObservationIgnored private var facePriorityAcquireAt: Date?
     @ObservationIgnored private var evBeforeFacePriority: EvComp?
-    /// Last 1× / 3× / 6× / 12× stop from the cycle button.
+    /// Last chip stop from the cycle button.
     var zoomStop: Double = 1
+    var zoomStops: [Double] {
+        connectedCamera?.model.activeZoomStops(
+            resolution: status.videoResolution, shootingMode: status.shootingMode)
+            ?? CamFov.jumps
+    }
+    var zoomMax: Double { zoomStops.last ?? 1 }
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
     var zoomPinchPreview: Double?
     /// Chip-tap target until `cam_fov` catches up. Nil when live matches.
@@ -317,7 +326,20 @@ final class CameraSession {
         decoder.onParameterSetsChanged = { [weak self] in
             guard let self else { return }
             if self.isBrowsingMedia { return }
-            self.sendRecoverEnable(force: true, reason: "encoder format change")
+            let now = Date()
+            let videoAge = self.datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
+            let auAge = self.datalink?.lastAccessUnitAt.map { now.timeIntervalSince($0) }
+            let videoAlive =
+                (videoAge ?? .infinity) < FeedWatchdog.stallThreshold
+                || (auAge ?? .infinity) < FeedWatchdog.stallThreshold
+            guard
+                EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                    accessUnitHasIDR: false,
+                    udpReceiveAlive: videoAlive,
+                    secondsSinceLastEnable: now.timeIntervalSince(self.lastIdrRequest)
+                )
+            else { return }
+            self.sendRecoverEnable(force: false, reason: "encoder format change")
         }
     }
 
@@ -497,6 +519,7 @@ final class CameraSession {
         lastKeyframeAge = "—"
         liveViewEnableSent = false
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         audioRefreshPending = false
         glamourClearPending = false
@@ -544,6 +567,7 @@ final class CameraSession {
         ble.disconnect()
         liveViewEnableSent = false
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         audioRefreshPending = false
         glamourClearPending = false
@@ -576,6 +600,7 @@ final class CameraSession {
         lastIdrRequest = Date.distantPast
         liveViewEnableSent = false
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         audioRefreshPending = true
         glamourClearPending = true
@@ -702,7 +727,7 @@ final class CameraSession {
                     guard shouldCommitLiveHandshake(dl) else { return }
                     phase = .live
                     applyLinkPresentation()
-                    decoder.beginIDRHold()
+                    beginIDRHoldIfNeeded()
                     // Do not wait for the layer. First boot spends ~2 s here
                     // while P-frames pile up; 0x09/0xa8 must follow subscribe
                     // immediately so the IDR lands. Handshake is path proof —
@@ -1116,7 +1141,8 @@ final class CameraSession {
             lastPinchLens = nil
             lastPinchLogTenths = nil
         }
-        let factor = CamFov.pinchFactor(anchor: zoomPinchAnchor, magnification: magnification)
+        let factor = CamFov.pinchFactor(
+            anchor: zoomPinchAnchor, magnification: magnification, max: zoomMax)
         if blockZoomColorHopIfRecording(for: factor) { return }
         let first = zoomPinchPreview == nil
         if first { dropDLog2ForZoom(factor) }
@@ -1137,7 +1163,7 @@ final class CameraSession {
         zoomPinchPreview = nil
     }
 
-    /// Cycle button. 1× / 3× / 6× / 12× are sliders (217 / 651 / 1302 / 2604).
+    /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double) {
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
@@ -1606,8 +1632,9 @@ final class CameraSession {
             })
     }
 
-    func setWhiteBalanceAuto() {
-        fireWhiteBalance(.auto)
+    func setWhiteBalanceAuto(tint: Int? = nil) {
+        let next = min(max(tint ?? status.whiteBalanceTint ?? 0, -100), 100)
+        fireWhiteBalance(.auto(tint: next))
     }
 
     func setWhiteBalanceCustom(kelvin: Int, tint: Int) {
@@ -1619,25 +1646,22 @@ final class CameraSession {
     }
 
     private func fireWhiteBalance(_ wb: WhiteBalance) {
-        let previous = status.whiteBalance
-        let previousKelvin = status.whiteBalanceKelvin
-        let previousTint = status.whiteBalanceTint
         status.whiteBalance = wb
-        status.whiteBalanceKelvin = wb.mode == .auto ? -1 : wb.kelvin
-        status.whiteBalanceTint = wb.mode == .auto ? 0 : wb.tint
-        let name = wb.mode == .auto ? "WB Auto" : "WB \(wb.kelvin)K tint \(wb.tint)"
+        if wb.mode == .custom {
+            status.whiteBalanceKelvin = wb.kelvin
+        }
+        status.whiteBalanceTint = wb.tint
+        let name =
+            wb.mode == .auto
+            ? "WB Auto tint \(wb.tint)"
+            : "WB \(wb.kelvin)K tint \(wb.tint)"
         let frame =
             wb.mode == .auto
-            ? Commands.setWhiteBalanceAuto()
+            ? Commands.setWhiteBalanceAuto(tint: wb.tint)
             : Commands.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
         fireCamera(
             frame, name: name, expect: .wb(wb),
-            onFail: { [weak self] in
-                guard let self else { return }
-                self.status.whiteBalance = previous
-                self.status.whiteBalanceKelvin = previousKelvin
-                self.status.whiteBalanceTint = previousTint
-            },
+            coalesce: true,
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "wb: SET \(name) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
@@ -2791,6 +2815,16 @@ final class CameraSession {
         }
     }
 
+    private func beginIDRHoldIfNeeded() {
+        let presented = decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
+        if CameraSoftAP.shouldBeginIDRHoldOnEnable(
+            hasPresentedPicture: CameraSoftAP.isPresentedPictureFresh(
+                secondsSinceLastPresented: presented))
+        {
+            decoder.beginIDRHold()
+        }
+    }
+
     /// Pocket + Nano capture (`0x09/0xa8`). Action live start is uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
         if isBrowsingMedia, reason != "media browse ended" { return false }
@@ -2837,7 +2871,7 @@ final class CameraSession {
             liveViewEnableSends += 1
             lastIdrRequest = Date()
             idrHoldEnableCount = 1
-            decoder.beginIDRHold()
+            beginIDRHoldIfNeeded()
             log.info(
                 "live: sent 0x09/0xa8 once (path ready, display attached) #\(self.liveViewEnableSends, privacy: .public)"
             )
@@ -2851,7 +2885,7 @@ final class CameraSession {
             liveViewEnableSends += 1
             lastIdrRequest = Date()
             idrHoldEnableCount = 1
-            decoder.beginIDRHold()
+            beginIDRHoldIfNeeded()
             log.info(
                 "live: sent 0x09/0xa8 once after display wait (attached=\(displayAttached)) #\(self.liveViewEnableSends, privacy: .public)"
             )
@@ -2995,6 +3029,64 @@ final class CameraSession {
         applyFeedWatchdog()
     }
 
+    private func resetFirstPictureFormatPoke() {
+        firstPictureFormatPokeTask?.cancel()
+        firstPictureFormatPokeTask = nil
+        firstPictureFormatPoked = false
+    }
+
+    /// Pocket 3 operator workaround: SET 1080 then the boot 4K, then one enable.
+    /// Same-tab FORMAT never sends `0x02/0x18`. One shot per connect / rejoin.
+    private func startFirstPictureFormatPoke() {
+        if firstPictureFormatPokeTask != nil { return }
+        firstPictureFormatPoked = true
+        firstPictureFormatPokeTask = Task { @MainActor [weak self] in
+            defer { self?.firstPictureFormatPokeTask = nil }
+            await self?.runFirstPictureFormatPoke()
+        }
+    }
+
+    private func runFirstPictureFormatPoke() async {
+        guard !status.isRecording, !isBrowsingMedia else { return }
+        let original = VideoFormat.firstPictureOriginal(
+            format: status.videoFormat,
+            resolution: status.videoResolution,
+            fps: status.fps)
+        let kick = VideoFormat.firstPictureEncoderKick(from: original)
+        log.info(
+            "live: Pocket 3 first-picture format poke \(original.chipLabel, privacy: .public) → \(kick.chipLabel, privacy: .public) → \(original.chipLabel, privacy: .public)"
+        )
+        ControlLiveLog.line(
+            "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel)"
+        )
+        setVideoFormat(resolution: kick.resolution, frameRate: kick.frameRate)
+        await waitForRecordingFormatPokeSettle()
+        guard !Task.isCancelled else { return }
+        setVideoFormat(resolution: original.resolution, frameRate: original.frameRate)
+        await waitForRecordingFormatPokeSettle()
+        guard !Task.isCancelled, !isBrowsingMedia else { return }
+        guard startCapturedLiveView(reason: "first-picture format poke") else { return }
+        liveViewEnableSends += 1
+        lastIdrRequest = Date()
+        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
+        beginIDRHoldIfNeeded()
+        idrHoldEnableCount += 1
+    }
+
+    private func waitForRecordingFormatPokeSettle() async {
+        let start = Date()
+        let pinWait = CameraSoftAP.firstPictureFormatPokePinWait
+        while formatPin != nil, Date().timeIntervalSince(start) < pinWait {
+            try? await Task.sleep(for: .milliseconds(50))
+            if Task.isCancelled { return }
+        }
+        let minSettle = CameraSoftAP.firstPictureFormatPokeMinSettle
+        let elapsed = Date().timeIntervalSince(start)
+        if elapsed < minSettle {
+            try? await Task.sleep(for: .seconds(minSettle - elapsed))
+        }
+    }
+
     private func recoverFirstPictureIfNeeded() {
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         let packets = datalink?.videoPackets ?? 0
@@ -3006,10 +3098,21 @@ final class CameraSession {
             secondsSinceLastEnable: since,
             secondsSinceLastVideo: videoAge,
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
-            secondsSinceLastStatus: datalink?.lastStatusAt.map { Date().timeIntervalSince($0) }
+            secondsSinceLastStatus: datalink?.lastStatusAt.map { Date().timeIntervalSince($0) },
+            needsRecordingFormatPoke: connectedCamera?.model.needsFirstPictureFormatPoke == true,
+            alreadyPokedRecordingFormat: firstPictureFormatPoked,
+            recordingFormatPokeInFlight: firstPictureFormatPokeTask != nil,
+            isRecording: status.isRecording,
+            hasPresentedPicture: CameraSoftAP.isPresentedPictureFresh(
+                secondsSinceLastPresented: decoder.lastPresentedAt.map {
+                    Date().timeIntervalSince($0)
+                })
         ) {
         case .wait:
             break
+        case .pokeRecordingFormat:
+            startFirstPictureFormatPoke()
+            return
         case .resendEnable:
             // Do not route through sendRecoverEnable — inPlayback / VT-ready
             // holds skipped the only PLI and sat on Waiting for live view.
@@ -3024,7 +3127,7 @@ final class CameraSession {
             liveViewEnableSends += 1
             lastIdrRequest = Date()
             if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-            decoder.beginIDRHold()
+            beginIDRHoldIfNeeded()
             idrHoldEnableCount += 1
             return
         case .rebuildUDP:
@@ -3087,6 +3190,7 @@ final class CameraSession {
                         "feed: freeze lastFrame=\(snap.lastDecodedFrameAge ?? -1, format: .fixed(precision: 1), privacy: .public)s (UDP alive — keep picture)"
                     )
                     ControlLiveLog.line(decoder.processedFeed?.debugLine ?? "feed: freeze")
+                    logFeedObserve(snap: snap, watchdog: action)
                 }
             }
             if !FeedWatchdog.udpReceiveAlive(snap),
@@ -3097,6 +3201,7 @@ final class CameraSession {
                 log.info(
                     "feed: hold UDP rebuild — GOP-reset grace lastEnable=\(snap.secondsSinceLastEnable ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s"
                 )
+                logFeedObserve(snap: snap, watchdog: action)
             } else if !FeedWatchdog.udpReceiveAlive(snap),
                 FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceFocusTrackSet)
             {
@@ -3106,22 +3211,33 @@ final class CameraSession {
                 ControlLiveLog.line(
                     "feed: hold UDP rebuild — AF-C grace lastSet=\(String(format: "%.1f", snap.secondsSinceFocusTrackSet ?? -1))s"
                 )
+                logFeedObserve(snap: snap, watchdog: action)
             }
             return
         case .resendLiveViewEnable:
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            logFeedObserve(snap: snap, watchdog: action)
             sendRecoverEnable(force: true, reason: "watchdog")
         case .rebuildVTSession:
             // UDP pause is not a wedged decoder. Rebuild the socket; keep VT.
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            logFeedObserve(snap: snap, watchdog: action)
             rebuildUDPKeepingVT()
         case .reopenDatalink, .fullSessionRejoin:
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            logFeedObserve(snap: snap, watchdog: action)
             rebuildUDPKeepingVT()
         }
+    }
+
+    /// Classify-then-repair vs what the watchdog actually did. Observation only.
+    private func logFeedObserve(snap: FeedWatchdog.Snapshot, watchdog: FeedWatchdog.Action) {
+        let line = LinkDiagnoser.observeLine(snap: snap, watchdog: watchdog)
+        log.info("\(line, privacy: .public)")
+        ControlLiveLog.line(line)
     }
 
     /// Re-enable only after SoftAP + VT/display are ready. Holds P-frames until IDR.
@@ -3588,6 +3704,7 @@ final class CameraSession {
         decoder.flushForRecovery()
         liveViewEnableSent = false
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         firstPictureSettled = false
         audioRefreshPending = true

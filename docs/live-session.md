@@ -2,6 +2,8 @@
 
 Current I/O facts for the live UDP session and platform decoders. Not a diary.
 Stall and recover policy lives in [`feed-watchdog.md`](feed-watchdog.md).
+Freeze-in-seconds vs ACK windows vs repair owner:
+[`connection-reliability.md`](connection-reliability.md).
 
 ## 5-tuple
 
@@ -37,12 +39,25 @@ capture). The 40 Hz ACK pump must do the same.
 
 ## Enable write
 
-Arm pktType `0x02` ingest on the enable write — do not wait for a DUML ACK
-(VPS is 25–167 ms; a 200 ms wait dropped it). Pocket may send `0x02/0x68`
-payload `08` immediately before `0x09/0xa8` (Mimo first live after gallery).
+Arm pktType `0x02` ingest on UDP handshake ack, not on the enable write.
+Mimo 2026-08-28 live-start: HEVC at join+17 ms, first `0x09/0xa8` at +3 s
+(286 video packets already on the wire). Decoder still latches VPS/SPS
+only, so leftover TRAIL P-frames do not present. Do not wait for a DUML
+ACK (VPS is 25–167 ms; a 200 ms wait dropped it). First arm drops leftover
+GOP counters; re-arm only raises the gate (`liveAccepting`). Pocket may
+send `0x02/0x68` payload `08` immediately before `0x09/0xa8` (Mimo first
+live after gallery).
 
 **Enable-once:** `0x09/0xa8` starts the stream and is the only PLI. After
 picture, further enables follow the [watchdog](feed-watchdog.md) only.
+
+**Pocket 3 first picture:** the body boots 4K 25/30, HUD and gimbal work,
+and the well stays black until the operator SETs 1080 then 4K
+(`0x02/0x18`). Same-tab FORMAT is a no-op, so that round-trip is the
+encoder kick. After one failed enable with no picture, first-picture
+recovery does that SET once, restores the boot format, then one
+`0x09/0xa8`. Pocket 4 / 4 Pro stay on the enable / UDP ladder — do not
+GOP-cut them. (#147)
 
 Media is pktType `0x02`. Disconnect has no live-stop — leftover GOP P-frames
 during handshake are expected until this pair starts a clean VPS.

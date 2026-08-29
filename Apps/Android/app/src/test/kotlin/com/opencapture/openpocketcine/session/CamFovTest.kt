@@ -45,8 +45,13 @@ class CamFovTest {
         assertEquals(6.0, CamFov.nextJump(5.4), 0.0)
         assertEquals(12.0, CamFov.nextJump(6.0), 0.0)
         assertEquals(1.0, CamFov.nextJump(12.0), 0.0)
+        assertEquals(2.0, CamFov.nextJump(1.0, listOf(1.0, 2.0, 4.0)), 0.0)
+        assertEquals(4.0, CamFov.nextJump(2.0, listOf(1.0, 2.0, 4.0)), 0.0)
+        assertEquals(1.0, CamFov.nextJump(4.0, listOf(1.0, 2.0, 4.0)), 0.0)
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_1X), CamFov.chipWrite(1.0))
+        assertEquals(CamFov.ChipWrite.Lens(CamFov.lensPosition(2.0)), CamFov.chipWrite(2.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_3X), CamFov.chipWrite(3.0))
+        assertEquals(CamFov.ChipWrite.Lens(CamFov.lensPosition(4.0)), CamFov.chipWrite(4.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_6X), CamFov.chipWrite(6.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_12X), CamFov.chipWrite(12.0))
         assertEquals(217, CamFov.lensPosition(1.0))
@@ -62,6 +67,7 @@ class CamFovTest {
 
     @Test
     fun pinchHybridMatchesIos() {
+        assertEquals(4.0, CamFov.pinchFactor(2.0, 4.0, max = 4.0), 0.001)
         assertEquals(2.53, CamFov.pinchFactor(2.3, 1.1), 0.001)
         assertEquals(2.5, CamFov.pinchPreview(2.3, 1.1), 0.001)
         assertEquals(2.3, CamFov.pinchPreview(2.3, 1.0), 0.001)

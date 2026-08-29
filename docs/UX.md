@@ -56,6 +56,7 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
 - Operator Setup: seven tabs (Link, Sharing, View Assist, Controls, Display,
   Storage, System).
 - TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
+- Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
 
 ## When this pointer fires
 

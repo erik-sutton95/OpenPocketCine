@@ -255,7 +255,7 @@ class AppModel(context: Context) {
 
     fun setExpoMode(mode: Int) = session.setExpoMode(mode)
 
-    fun setWhiteBalanceAuto() = session.setWhiteBalanceAuto()
+    fun setWhiteBalanceAuto(tint: Int? = null) = session.setWhiteBalanceAuto(tint)
 
     fun setWhiteBalance(kelvin: Int, tint: Int) = session.setWhiteBalance(kelvin, tint)
 

@@ -70,7 +70,8 @@ object CamFov {
         return clamp(3 + t * 9)
     }
 
-    fun clamp(factor: Double): Double = factor.coerceIn(MIN_FACTOR, MAX_FACTOR)
+    fun clamp(factor: Double, max: Double = MAX_FACTOR): Double =
+        factor.coerceIn(MIN_FACTOR, max)
 
     fun lensPosition(factor: Double): Int {
         val f = clamp(factor)
@@ -90,17 +91,18 @@ object CamFov {
         return String.format("%.1f×", shown)
     }
 
-    fun nextJump(from: Double): Double =
-        when {
-            from < TELE_ENGAGE -> 3.0
-            from < 5.5 -> 6.0
-            from < 11.5 -> 12.0
-            else -> 1.0
+    fun nextJump(from: Double, stops: List<Double> = JUMPS): Double {
+        val cycle = if (stops.isEmpty()) JUMPS else stops
+        for (stop in cycle) {
+            if (from < stop - 0.05) return stop
         }
+        return cycle[0]
+    }
 
-    fun isJumpStop(factor: Double): Boolean {
+    fun isJumpStop(factor: Double, stops: List<Double> = JUMPS): Boolean {
         val shown = displayTenths(factor)
-        return JUMPS.any { abs(shown - it) < 0.05 }
+        val cycle = if (stops.isEmpty()) JUMPS else stops
+        return cycle.any { abs(shown - it) < 0.05 }
     }
 
     sealed class ChipWrite {
@@ -111,7 +113,9 @@ object CamFov {
     fun chipWrite(forJump: Double): ChipWrite? =
         when {
             abs(forJump - 1) < 0.1 -> ChipWrite.Lens(LENS_1X)
+            abs(forJump - 2) < 0.1 -> ChipWrite.Lens(lensPosition(2.0))
             abs(forJump - 3) < 0.1 -> ChipWrite.Lens(LENS_3X)
+            abs(forJump - 4) < 0.1 -> ChipWrite.Lens(lensPosition(4.0))
             abs(forJump - 6) < 0.1 -> ChipWrite.Lens(LENS_6X)
             abs(forJump - MAX_FACTOR) < 0.1 -> ChipWrite.Lens(LENS_12X)
             else -> null
@@ -119,8 +123,8 @@ object CamFov {
 
     fun displayTenths(factor: Double): Double = round(clamp(factor) * 10.0) / 10.0
 
-    fun pinchFactor(anchor: Double, magnification: Double): Double =
-        clamp(anchor * magnification)
+    fun pinchFactor(anchor: Double, magnification: Double, max: Double = MAX_FACTOR): Double =
+        clamp(anchor * magnification, max)
 
     fun pinchPreview(anchor: Double, magnification: Double): Double =
         displayTenths(pinchFactor(anchor, magnification))

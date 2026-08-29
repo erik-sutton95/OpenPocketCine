@@ -33,7 +33,7 @@ Put the gate where a mistake is expensive to undo, not on every step:
 - Merge to `main` (PR)
 - Force-push or history rewrite
 - Annotated `v*` tags and GitHub Releases
-- TestFlight / store publish
+- TestFlight / Play closed testing / store publish
 - Security advisory
 - Frame.io keys or any real secret
 

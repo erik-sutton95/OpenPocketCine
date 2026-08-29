@@ -5,9 +5,11 @@ Trunk-based GitHub Flow. One long-lived branch (`main`), short-lived PRs, annota
 standing `release/*`, and no `git-flow` CLI.
 
 This matches how the repo already ships: PRs into `main`, squash merge, linear
-history, **CI gate**, TestFlight from `main`. See
-[`repository-settings.md`](repository-settings.md) and
-[`testflight-ci.md`](testflight-ci.md).
+history, **CI gate**, TestFlight from `main`, Play closed testing from `main`
+once `ANDROID_PLAY_UPLOAD` is on. See
+[`repository-settings.md`](repository-settings.md),
+[`testflight-ci.md`](testflight-ci.md), and
+[`android-play-ci.md`](android-play-ci.md).
 
 ## Branches
 
@@ -30,20 +32,23 @@ One **product** semver for iOS and Android. Two **store** counters.
 | --- | --- | --- |
 | Product version | iOS `MARKETING_VERSION` in `ios/Config/Version.xcconfig` **and** Android `openpocketcine.versionName` in `Apps/Android/gradle.properties` | `0.1.0` |
 | iOS build | Xcode Cloud counter (`CURRENT_PROJECT_VERSION` locally is not the cloud stamp) | `42` |
-| Android build | `openpocketcine.versionCode` in `Apps/Android/gradle.properties` | `7` |
+| Android build | Play workflow stamp (`ANDROID_VERSION_CODE_BASE` + `github.run_number`). Local `openpocketcine.versionCode` is the sideload floor. | `7` |
 
 Keep `MARKETING_VERSION` and `openpocketcine.versionName` equal. Testers see
 `0.1.0 (42)` on iOS and `0.1.0 (7)` on Android — same train, different builds.
 
 Bump the product version only when starting a new train (`0.1.0` → `0.2.0`).
-Daily TestFlight uploads stay on the current train. The first external TestFlight
-build of a new marketing version needs TestFlight App Review.
+Daily TestFlight and Play closed-testing uploads stay on the current train. The
+first external TestFlight build of a new marketing version needs TestFlight App
+Review. The first closed Play release of the app sits in Play review.
 
-Bump `versionCode` when shipping an Android artifact that must exceed a previous
-install (Play / internal testing). iOS build numbers are the cloud counter.
+iOS build numbers are the Xcode Cloud counter. Android Play `versionCode` is the
+Actions stamp — do not bump `openpocketcine.versionCode` for every closed-testing
+upload. Raise `ANDROID_VERSION_CODE_BASE` only to jump over a manual upload.
 
 ```bash
 just ios-version
+just android-version
 ```
 
 ## Tags

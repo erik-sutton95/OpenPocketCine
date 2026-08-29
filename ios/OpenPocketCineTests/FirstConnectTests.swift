@@ -1,6 +1,7 @@
+import OpenPocketViewCore
 import VideoToolbox
 import XCTest
-import OpenPocketViewCore
+
 @testable import OpenPocketCine
 
 @MainActor
@@ -9,27 +10,44 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
                 videoPackets: 0, enableSends: 1, secondsSinceLastEnable: 2),
-            .resendEnable)
+            .wait,
+            "sit in IDR grace — Mimo VPS is 25–167 ms")
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
                 videoPackets: 0, enableSends: 1, secondsSinceLastEnable: 2,
                 secondsSinceLastRebuild: 0.4),
-            .resendEnable,
-            "neverGotVideo — a leftover rebuild must not skip 0x09/0xa8")
+            .wait,
+            "neverGotVideo — a leftover rebuild must not skip IDR grace")
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
                 videoPackets: 0, enableSends: 2, secondsSinceLastEnable: 2),
+            .wait)
+        XCTAssertEqual(
+            CameraSoftAP.firstPictureStep(
+                videoPackets: 0, enableSends: 2, secondsSinceLastEnable: 8),
             .rebuildUDP)
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
-                videoPackets: 0, enableSends: 4, secondsSinceLastEnable: 2),
+                videoPackets: 0, enableSends: 4, secondsSinceLastEnable: 8),
             .rejoin)
+        XCTAssertEqual(
+            CameraSoftAP.firstPictureStep(
+                videoPackets: 0, enableSends: 1, secondsSinceLastEnable: 2,
+                needsRecordingFormatPoke: true),
+            .pokeRecordingFormat,
+            "Pocket 3 black first picture: 1080 then boot 4K, not a second enable")
+        XCTAssertEqual(
+            CameraSoftAP.firstPictureStep(
+                videoPackets: 0, enableSends: 1, secondsSinceLastEnable: 2),
+            .wait,
+            "Pocket 4 must not inherit the Pocket 3 format poke")
         XCTAssertTrue(CameraSoftAP.shouldForceEnableAfterUDPRebuild(hadVideo: false))
         XCTAssertFalse(CameraSoftAP.shouldForceEnableAfterUDPRebuild(hadVideo: true))
-        XCTAssertFalse(
-            CameraSoftAP.shouldIngestLiveVideo(liveViewEnabled: false),
-            "0x02 before 0x09/0xa8 is the previous GOP — do not decode it")
-        XCTAssertTrue(CameraSoftAP.shouldIngestLiveVideo(liveViewEnabled: true))
+        XCTAssertFalse(CameraSoftAP.shouldIngestLiveVideo(ingestArmed: false))
+        XCTAssertTrue(
+            CameraSoftAP.shouldIngestLiveVideo(ingestArmed: true),
+            "Mimo 20260828: HEVC at join+17ms, enable at +3s")
+        XCTAssertFalse(CameraSoftAP.shouldBeginIDRHoldOnEnable(hasPresentedPicture: true))
         XCTAssertTrue(
             CameraSoftAP.shouldRunFirstPictureRecover(
                 secondsSinceLastPresented: 3, alreadySettled: false),
@@ -174,10 +192,12 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertEqual(
             CameraSoftAP.handshakeTimeoutStep(pathReady: false, rebindsUsed: 0),
             .fail)
-        XCTAssertTrue(CameraSoftAP.isHandshakeAck(
-            [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))
-        XCTAssertFalse(CameraSoftAP.isHandshakeAck(
-            [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x02, 0x00]))
+        XCTAssertTrue(
+            CameraSoftAP.isHandshakeAck(
+                [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))
+        XCTAssertFalse(
+            CameraSoftAP.isHandshakeAck(
+                [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x02, 0x00]))
         XCTAssertFalse(
             CameraSoftAP.canSendHandshake(receiveArmed: false, connectionReady: true),
             "bound-but-deaf: do not send 0x00 until receiveMessage is armed")
@@ -247,16 +267,19 @@ final class FirstConnectTests: XCTestCase {
             CameraSoftAP.InterfaceAddress(name: "en2", ipv4: "192.168.2.15"),
         ]
         XCTAssertEqual(CameraSoftAP.cameraLocalIPv4(in: addrs), "192.168.2.15")
-        XCTAssertEqual(CameraSoftAP.preferredInterfaceName(
-            cameraNames: ["en2"], available: ["en0", "en2"]), "en2")
+        XCTAssertEqual(
+            CameraSoftAP.preferredInterfaceName(
+                cameraNames: ["en2"], available: ["en0", "en2"]), "en2")
         XCTAssertTrue(CameraSoftAP.shouldRebuildFlow(.writeRejected))
         XCTAssertTrue(Duml.shouldHoldReply(set: 0x02, cmd: 0xB8))
     }
 
     func testNanoAvcParameterSetsBuildFormat() {
         let decoder = HevcDecoder()
-        let sps: [UInt8] = [0x67, 0x64, 0x00, 0x1f, 0xac, 0xb4, 0x02, 0x80,
-                            0x2d, 0xd3, 0x50, 0x10, 0x40, 0x10, 0x6d, 0x0a, 0x13, 0x50]
+        let sps: [UInt8] = [
+            0x67, 0x64, 0x00, 0x1f, 0xac, 0xb4, 0x02, 0x80,
+            0x2d, 0xd3, 0x50, 0x10, 0x40, 0x10, 0x6d, 0x0a, 0x13, 0x50,
+        ]
         let pps: [UInt8] = [0x68, 0xee, 0x06, 0xf2, 0xc0]
         var au: [UInt8] = [0, 0, 1]
         au += sps
@@ -316,7 +339,8 @@ final class FirstConnectTests: XCTestCase {
         var fx = LiveImageEffects()
         fx.histogram = true
         decoder.effects = fx
-        let sets = Self.startCodes + Self.vps + Self.startCodes + Self.sps + Self.startCodes + Self.pps
+        let sets =
+            Self.startCodes + Self.vps + Self.startCodes + Self.sps + Self.startCodes + Self.pps
         _ = decoder.decode(accessUnit: sets)
         XCTAssertTrue(decoder.hasFormat)
         let created = decoder.vtRebuildCount
@@ -422,26 +446,34 @@ final class FirstConnectTests: XCTestCase {
 
     func testHoldDropsPFramesUntilIDR() {
         let decoder = HevcDecoder()
-        _ = decoder.decode(accessUnit: Self.startCodes + Self.vps + Self.startCodes + Self.sps + Self.startCodes + Self.pps)
+        _ = decoder.decode(
+            accessUnit: Self.startCodes + Self.vps + Self.startCodes + Self.sps + Self.startCodes
+                + Self.pps)
         XCTAssertTrue(decoder.hasFormat, "Pocket VPS/SPS/PPS must build a format")
         decoder.beginIDRHold()
         let trail: [UInt8] = [0, 0, 1, 0x02, 0xAA, 0xBB]
-        XCTAssertFalse(decoder.decode(accessUnit: trail), "P-frame while holding IDR must not enqueue")
+        XCTAssertFalse(
+            decoder.decode(accessUnit: trail), "P-frame while holding IDR must not enqueue")
         XCTAssertTrue(decoder.awaitingIDR)
         XCTAssertFalse(decoder.displayedImageRemoved)
     }
 
     private static let startCodes: [UInt8] = [0, 0, 1]
-    private static let vps = hex("40010c01ffff21600000030000030000030000030096ac0c0000030004000003006540")
-    private static let sps = hex("42010121600000030000030000030000030096a00280802d17aeedc9ae5d4d404040410000030001000003001908")
+    private static let vps = hex(
+        "40010c01ffff21600000030000030000030000030096ac0c0000030004000003006540")
+    private static let sps = hex(
+        "42010121600000030000030000030000030096a00280802d17aeedc9ae5d4d404040410000030001000003001908"
+    )
     private static let pps = hex("4401c17312240890")
 }
 
 private func hex(_ s: String) -> [UInt8] {
-    var out = [UInt8](); var i = s.startIndex
+    var out = [UInt8]()
+    var i = s.startIndex
     while i < s.endIndex {
         let j = s.index(i, offsetBy: 2)
-        out.append(UInt8(s[i..<j], radix: 16)!); i = j
+        out.append(UInt8(s[i..<j], radix: 16)!)
+        i = j
     }
     return out
 }

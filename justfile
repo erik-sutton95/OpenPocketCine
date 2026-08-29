@@ -17,7 +17,7 @@ setup:
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene site-check testflight-notes typos lint-md check-links check-editorconfig lint-actions secrets swift-test
+check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets swift-test
 
 # Reject tracked proprietary, secret-bearing, generated, or machine-specific files.
 hygiene:
@@ -81,6 +81,13 @@ testflight-notes:
     ./scripts/ios-release-notes-check.sh
     ./scripts/ios-release-notes-test.sh
     ./scripts/ios-release-notes.sh
+
+# Validate Play closed-testing notes (What to Test + 500-char what's new) and print them.
+android-play-notes:
+    ./scripts/android-release-notes-check.sh
+    ./scripts/android-release-notes-test.sh
+    ./scripts/prepare-android-testers-test.sh
+    ./scripts/android-release-notes.sh
 
 # Print the committed iOS marketing version and local build number.
 ios-version:
@@ -181,3 +188,33 @@ android-install serial="":
     just android-build
     "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}/platform-tools/adb" {{ if serial == "" { "" } else { "-s " + serial } }} install -r Apps/Android/app/build/outputs/apk/debug/app-debug.apk
     "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}/platform-tools/adb" {{ if serial == "" { "" } else { "-s " + serial } }} shell am start -n com.opencapture.openpocketcine/.MainActivity
+
+# Print the committed Android product version and local versionCode (Play stamps a CI counter).
+android-version:
+    @sed -n 's/^openpocketcine.versionName=/Version: /p; s/^openpocketcine.versionCode=/Build: /p' Apps/Android/gradle.properties
+
+# Signed Play App Bundle (upload keystore from .env). First console upload, then CI.
+android-bundle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .env ]]; then
+        set -a
+        # shellcheck disable=SC1091
+        source .env
+        set +a
+    fi
+    if [[ -z "${ANDROID_KEYSTORE_FILE:-}" ]]; then
+        echo "ANDROID_KEYSTORE_FILE is unset. Run ./scripts/setup-android-play.sh" >&2
+        exit 1
+    fi
+    extra=()
+    if [[ -n "${VERSION_CODE:-}" ]]; then
+        extra+=(-PversionCode="$VERSION_CODE")
+    fi
+    cd Apps/Android
+    JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew bundleRelease "${extra[@]}"
+    echo "AAB: Apps/Android/app/build/outputs/bundle/release/app-release.aab"
+
+# One-time Play Console + signing + GitHub Environment secrets.
+android-play-setup:
+    ./scripts/setup-android-play.sh

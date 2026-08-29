@@ -1376,7 +1376,7 @@ private fun LandscapeChrome(
         if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP) && !zoom.isEmpty) {
             val zoomBlocked =
                 CamFov.zoomNeedsColorHopWhileRecording(
-                    CamFov.nextJump(model.session.zoomCycleFrom()),
+                    model.session.zoomNextJump(),
                     status.colorMode,
                     status.isRecording,
                 )
@@ -1391,7 +1391,7 @@ private fun LandscapeChrome(
                         .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
                         .chromeEditStroke(editing != null, true),
                 onCycle = {
-                    model.session.setZoom(CamFov.nextJump(model.session.zoomCycleFrom()))
+                    model.session.setZoom(model.session.zoomNextJump())
                 },
             )
         }

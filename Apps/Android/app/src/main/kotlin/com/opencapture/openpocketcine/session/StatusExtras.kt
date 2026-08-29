@@ -29,6 +29,7 @@ object StatusExtras {
             "camcap_shutter" -> applyShutterCap(item.value, status)
             "camcap_iso" -> applyIsoCap(item.value, status)
             "camcap_color_mode" -> applyColorCap(item.value, status)
+            "camcap_video_format" -> applyVideoCap(item.value, status)
             else -> status
         }
     }
@@ -87,13 +88,18 @@ object StatusExtras {
         if (value.size >= 9) {
             val mode = value[4].toInt() and 0xFF
             if (mode == CameraCommands.WB_AUTO || mode == CameraCommands.WB_CUSTOM) {
-                val kelvin = u16(value, 5) * 100
+                val tint = i16(value, 7)
                 next =
-                    next.copy(
-                        wbMode = mode,
-                        wbKelvin = if (kelvin > 0) kelvin else -1,
-                        wbTint = i16(value, 7),
-                    )
+                    if (mode == CameraCommands.WB_CUSTOM) {
+                        val kelvin = u16(value, 5) * 100
+                        next.copy(
+                            wbMode = mode,
+                            wbKelvin = if (kelvin in 2_000..10_000) kelvin else next.wbKelvin,
+                            wbTint = tint,
+                        )
+                    } else {
+                        next.copy(wbMode = mode, wbTint = tint)
+                    }
             }
         }
         return next
@@ -112,6 +118,11 @@ object StatusExtras {
     fun applyColorCap(value: ByteArray, status: CameraStatus): CameraStatus {
         val modes = CameraCommands.parseColorModes(value)
         return if (modes.isEmpty()) status else status.copy(availableColorModes = modes)
+    }
+
+    fun applyVideoCap(value: ByteArray, status: CameraStatus): CameraStatus {
+        val formats = CameraCommands.parseVideoFormats(value)
+        return if (formats.isEmpty()) status else status.copy(availableVideoFormats = formats)
     }
 
     fun applyFov(value: ByteArray, status: CameraStatus): CameraStatus {

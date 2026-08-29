@@ -654,6 +654,7 @@ public enum WhiteBalanceMode: UInt8, CaseIterable, Sendable {
 }
 
 /// 5-byte WB: `[mode][K/100 u16-LE][tint i16-LE]`. Kelvin 2000–10000 / 100; tint −100…+100.
+/// Auto SET is kelvin 0 and **keeps tint** (`00 00 00 <tint>`). Mimo never zeros tint on Auto.
 public struct WhiteBalance: Equatable, Sendable {
     public var mode: WhiteBalanceMode
     public var kelvin: Int
@@ -662,28 +663,40 @@ public struct WhiteBalance: Equatable, Sendable {
     public init(mode: WhiteBalanceMode, kelvin: Int, tint: Int) {
         self.mode = mode
         self.kelvin = kelvin
-        self.tint = tint
+        self.tint = min(max(tint, -100), 100)
     }
 
     public static let auto = WhiteBalance(mode: .auto, kelvin: 0, tint: 0)
+
+    /// Auto on the wire: kelvin bytes stay 0; tint is the last two bytes.
+    public static func auto(tint: Int) -> WhiteBalance {
+        WhiteBalance(mode: .auto, kelvin: 0, tint: tint)
+    }
 
     public static func custom(kelvin: Int, tint: Int) -> WhiteBalance {
         WhiteBalance(mode: .custom, kelvin: kelvin, tint: tint)
     }
 
     public var setPayload: [UInt8] {
-        let k = UInt16(clamping: max(kelvin, 0) / 100)
+        let kHundreds: UInt16 = mode == .auto ? 0 : UInt16(clamping: max(kelvin, 0) / 100)
         let t = Int16(clamping: tint)
         let tu = UInt16(bitPattern: t)
-        return [mode.rawValue, UInt8(k & 0xFF), UInt8(k >> 8), UInt8(tu & 0xFF), UInt8(tu >> 8)]
+        return [
+            mode.rawValue, UInt8(kHundreds & 0xFF), UInt8(kHundreds >> 8), UInt8(tu & 0xFF),
+            UInt8(tu >> 8),
+        ]
     }
 
-    /// `cam_image_effect` `@4` mode, `@5–6` K/100, `@7–8` tint. Expo does not carry WB.
+    /// `cam_image_effect` `@4` mode, `@5–6` K/100 (Custom only), `@7–8` tint.
+    /// Auto `@5–6` is live-measured and not a SET kelvin — ignore it.
     public static func parseImageEffect(_ value: [UInt8]) -> WhiteBalance? {
         guard value.count >= 9, let mode = WhiteBalanceMode(rawValue: value[4]) else { return nil }
-        let hundreds = Int(UInt16(value[5]) | (UInt16(value[6]) << 8))
         let tint = Int(Int16(bitPattern: UInt16(value[7]) | (UInt16(value[8]) << 8)))
-        return WhiteBalance(mode: mode, kelvin: hundreds * 100, tint: tint)
+        if mode == .auto {
+            return WhiteBalance.auto(tint: tint)
+        }
+        let hundreds = Int(UInt16(value[5]) | (UInt16(value[6]) << 8))
+        return WhiteBalance.custom(kelvin: hundreds * 100, tint: tint)
     }
 }
 
@@ -900,10 +913,16 @@ public enum VideoFrameRate: UInt8, CaseIterable, Sendable {
         }
         self = match
     }
+
+    /// Labeled Video-mode SET (`0x02/0x18`). SlowMo 100/120/240 is display-only
+    /// until a SlowMo `camcap_video_format` / SET take lands.
+    public static let labeledVideo: [VideoFrameRate] = [
+        .fps24, .fps25, .fps30, .fps48, .fps50, .fps60,
+    ]
 }
 
 /// One 5-byte SET: `[res][fps_idx] 00 00 00`. No GET — `cam_video_param_v2` `@0–1`.
-public struct VideoFormat: Equatable, Sendable {
+public struct VideoFormat: Equatable, Hashable, Sendable {
     public var resolution: VideoResolution
     public var frameRate: VideoFrameRate
 
@@ -927,6 +946,26 @@ public struct VideoFormat: Equatable, Sendable {
             let fps = VideoFrameRate(rawValue: value[1])
         else { return nil }
         return VideoFormat(resolution: res, frameRate: fps)
+    }
+
+    /// Other labeled resolution, same fps. Pocket 3 first picture: the FORMAT
+    /// sheet skips a same-tab SET, so 4K→4K never restarts the live encoder.
+    public static func firstPictureEncoderKick(from original: VideoFormat) -> VideoFormat {
+        VideoFormat(
+            resolution: original.resolution == .p4K ? .p1080 : .p4K,
+            frameRate: original.frameRate)
+    }
+
+    /// Reported P3 boot is 4K 25/30. Unknown falls back to 4K 30, not 1080 24.
+    public static func firstPictureOriginal(
+        format: VideoFormat?,
+        resolution: VideoResolution?,
+        fps: Int
+    ) -> VideoFormat {
+        if let format { return format }
+        let res = resolution ?? .p4K
+        let rate = VideoFrameRate.allCases.first { $0.fps == fps } ?? .fps30
+        return VideoFormat(resolution: res, frameRate: rate)
     }
 }
 
@@ -1402,8 +1441,8 @@ public enum CamFov {
         return clamp(3 + t * 9)
     }
 
-    public static func clamp(_ factor: Double) -> Double {
-        min(max(factor, minFactor), maxFactor)
+    public static func clamp(_ factor: Double, max: Double = maxFactor) -> Double {
+        min(Swift.max(factor, minFactor), max)
     }
 
     private static func lerpLens(_ a: UInt16, _ b: UInt16, _ t: Double) -> UInt16 {
@@ -1438,18 +1477,18 @@ public enum CamFov {
         return String(format: "%.1f×", shown)
     }
 
-    /// Cycle 1 → 3 → 6 → 12 → 1 from the current readout.
-    public static func nextJump(from factor: Double) -> Double {
-        if factor < teleEngage { return 3 }
-        if factor < 5.5 { return 6 }
-        if factor < 11.5 { return 12 }
-        return 1
+    /// Cycle through `stops` (default 4 Pro 1×/3×/6×/12×). Pocket 4 is 1×/2×/4×.
+    public static func nextJump(from factor: Double, stops: [Double] = jumps) -> Double {
+        let stops = stops.isEmpty ? jumps : stops
+        for stop in stops where factor < stop - 0.05 { return stop }
+        return stops[0]
     }
 
-    /// True on a 1× / 3× / 6× / 12× detent (0.1× quantized).
-    public static func isJumpStop(_ factor: Double) -> Bool {
+    /// True on a chip detent (0.1× quantized). Default is 4 Pro 1/3/6/12.
+    public static func isJumpStop(_ factor: Double, stops: [Double] = jumps) -> Bool {
         let shown = displayTenths(factor)
-        return jumps.contains { abs(shown - $0) < 0.05 }
+        let stops = stops.isEmpty ? jumps : stops
+        return stops.contains { abs(shown - $0) < 0.05 }
     }
 
     /// Older chip takes used slews. The 1×–3×–12× pinch take did not.
@@ -1458,7 +1497,7 @@ public enum CamFov {
         return nil
     }
 
-    /// Cycle-button write. 1× / 3× / 6× / 12× sliders.
+    /// Cycle-button write. 1× / 2× / 3× / 4× / 6× / 12× sliders.
     public enum ChipWrite: Equatable, Sendable {
         case slew(UInt16)
         case lens(UInt16)
@@ -1466,9 +1505,11 @@ public enum CamFov {
 
     public static func chipWrite(forJump factor: Double) -> ChipWrite? {
         if abs(factor - 1) < 0.1 { return .lens(lens1x) }
+        if abs(factor - 2) < 0.1 { return .lens(lensPosition(for: 2)) }
         if abs(factor - 3) < 0.1 { return .lens(lens3x) }
+        if abs(factor - 4) < 0.1 { return .lens(lensPosition(for: 4)) }
         if abs(factor - 6) < 0.1 { return .lens(lens6x) }
-        if abs(factor - maxFactor) < 0.1 { return .lens(lens12x) }
+        if abs(factor - 12) < 0.1 { return .lens(lens12x) }
         return nil
     }
 
@@ -1501,8 +1542,10 @@ public enum CamFov {
     }
 
     /// Unquantized pinch target. The chip still shows `displayTenths`.
-    public static func pinchFactor(anchor: Double, magnification: Double) -> Double {
-        clamp(anchor * magnification)
+    public static func pinchFactor(
+        anchor: Double, magnification: Double, max: Double = maxFactor
+    ) -> Double {
+        clamp(anchor * magnification, max: max)
     }
 
     /// Pinch HUD between status pushes. 0.1× quantized; 2.9× stays 2.9×.

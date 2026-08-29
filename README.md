@@ -32,9 +32,8 @@ OpenPocketCine is a production monitor and remote for the **DJI Osmo** series. L
 captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (AVC). Other Osmo
 bodies can show up in Bluetooth scan; Action and 360 live view is not captured yet.
 
-iOS (iPhone and iPad) is the daily driver. Android lives in this repository as an early phone shell
-and is not on Google Play yet. The closed-beta waitlist is on
-[openpocketcine.app](https://openpocketcine.app/).
+iOS (iPhone and iPad) is the daily driver. Android is a Play closed-testing beta
+(waitlist on [openpocketcine.app](https://openpocketcine.app/)).
 
 - **Read the image like a colorist.** Waveform, RGB parade, histogram, and vectorscope run live on
   the iOS monitor.
@@ -135,9 +134,9 @@ when Camera to Cloud is configured.
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
 The native Android implementation lives in this repository as a phone shell with live pairing,
-HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. It is not on Google Play
-yet; the closed-beta waitlist is on [openpocketcine.app](https://openpocketcine.app/).
-Clip export LUT bake and GPU scopes are iOS today.
+HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Play closed testing is
+the waitlist path on [openpocketcine.app](https://openpocketcine.app/). Clip export LUT bake and
+GPU scopes are iOS today.
 
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may
 appear in scan. Action and 360 live view is not captured yet.
@@ -227,6 +226,7 @@ just test          # run Swift package tests
 just native-check  # run Swift tests and build the native iOS app
 just android-build # build the Android app and staged Swift runtime
 just android-check # build, test, and lint Android
+just android-play-setup # one-time Play Console + signing (closed testing)
 ```
 
 The iOS Xcode project is generated:
@@ -245,6 +245,14 @@ iOS beta: [TestFlight](https://testflight.apple.com/join/1tmt3aEB). Archives com
 ```
 
 See [`docs/testflight-ci.md`](docs/testflight-ci.md).
+
+Android closed testing: signed AAB from GitHub Actions onto Play. One-time Play Console / signing:
+
+```bash
+./scripts/setup-android-play.sh
+```
+
+See [`docs/android-play-ci.md`](docs/android-play-ci.md).
 
 ## Contributing
 

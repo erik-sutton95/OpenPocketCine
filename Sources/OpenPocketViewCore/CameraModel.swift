@@ -58,6 +58,13 @@ public struct CameraModel: Equatable, Sendable {
     /// Mimo Nano pairs `0x02/0x09 …03` with enable. Pocket never sent it.
     public var usesNanoLiveViewGate: Bool { family == .nano }
 
+    /// Pocket 3 first picture needs a 1080→boot-4K `0x02/0x18` after enable.
+    /// Pocket 4 / 4 Pro first picture is captured — do not GOP-cut them.
+    public var needsFirstPictureFormatPoke: Bool {
+        let n = name.lowercased().replacingOccurrences(of: " ", with: "")
+        return n.contains("pocket3") || n.contains("muse")
+    }
+
     /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF.
     public var supportsTapFocus: Bool { family != .nano }
 
@@ -66,6 +73,39 @@ public struct CameraModel: Equatable, Sendable {
 
     public var family: CameraBodyFamily {
         CameraBodyFamily.resolve(modelId: nil, name: name)
+    }
+
+    /// Video-mode chip stops (DJI spec). SlowMo / 4K Pocket 3 clamp in
+    /// `activeZoomStops(resolution:shootingMode:)`.
+    public var zoomStops: [Double] { activeZoomStops(resolution: nil, shootingMode: -1) }
+
+    public var zoomMax: Double { zoomStops.last ?? 1 }
+
+    /// Chip cycle for this body, current FORMAT, and shooting mode.
+    ///
+    /// DJI Video: Pocket 4 Pro 1×/3×/6×/12× (60 mm tele). Pocket 4 1×/2×/4×
+    /// (single 20 mm; 4K still 4×). Pocket 3 1×/2×/4×, but 4K Video max 2×.
+    /// Nano 1×. SlowMo / TimeLapse / SuperNight: digital zoom off — Pro keeps
+    /// 1×/3× optical; everyone else 1×.
+    public func activeZoomStops(resolution: VideoResolution?, shootingMode: Int) -> [Double] {
+        let n = name.lowercased().replacingOccurrences(of: " ", with: "")
+        let isPro = n.contains("pocket4p") || n.contains("4pro")
+        let isPocket4 = n.contains("pocket4")
+        let isPocket3 = n.contains("pocket3") || n.contains("muse")
+        let digitalLocked: Bool = {
+            switch ShootingMode(rawValue: UInt8(truncatingIfNeeded: shootingMode)) {
+            case .slowMo, .timeLapse, .superNight: return true
+            default: return false
+            }
+        }()
+        if isPro { return digitalLocked ? [1, 3] : [1, 3, 6, 12] }
+        if digitalLocked { return [1] }
+        if isPocket4 { return [1, 2, 4] }
+        if isPocket3 { return resolution == .p4K ? [1, 2] : [1, 2, 4] }
+        switch family {
+        case .pocket: return [1, 2, 4]
+        case .nano, .other: return [1]
+        }
     }
 
     /// The other datalink config to try when `datalinkPort` never answers (9004+poke <-> 10004).

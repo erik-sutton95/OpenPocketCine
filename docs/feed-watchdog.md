@@ -2,6 +2,8 @@
 
 _Registered 2026-08-15. Device report: the live HEVC feed dies after a few minutes. Updated the same day: the picture goes **black**, not a frozen last frame._
 
+TestFlight 0.1.0 also freezes in **seconds** ([#148](https://github.com/erik-sutton95/OpenPocketCine/issues/148)) — not this 3–5 min well. Classify on a physical take before changing stall numbers: [`connection-reliability.md`](connection-reliability.md). Console: `feed: observe`.
+
 ## Symptom
 
 On a physical iPhone, after a healthy take of **~3–5 minutes**, the live canvas **goes black**. Status chrome may still look “Connected”. Cumulative HUD counters (`videoPackets`, `accessUnits`) can keep their last totals — they do not go back to zero — so the old “packets == 0” recover path never fires.
@@ -29,7 +31,7 @@ Previous recover (`recoverLiveViewIfNeeded`) only re-enabled when **cumulative**
 
 UDP receive age is the stall signal — not a black or frozen canvas. Packets or AUs still arriving means the socket is alive; LUT / PEAK / WAVE toggles must not send `0x09/0xa8` once VT already owns the session.
 
-A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut) and **4 s after an AF-C SET**. Log:
+A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut) and **4 s after an AF-C SET**. First picture uses that 8 s grace too — do not second-enable or rebuild UDP at 2 s (Mimo first look is 1–2 s). Do not `still holding for IDR` while video packets are still arriving. Log:
 
 `feed: stall lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=0`
 
@@ -37,20 +39,21 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 `feed: black lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=1`
 
-If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C grace, that is an encoder pause — one `0x09/0xa8` (`resendLiveViewEnable`), not a UDP rebuild. Wait `escalateAfter` (5 s) between enables; do not 1 Hz loop.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C grace, that is an encoder pause — one `0x09/0xa8` (`resendLiveViewEnable`), not a UDP rebuild. Wait `escalateAfter` (5 s) between enables; do not 1 Hz loop. A 2 s reopen while status is still on 9004 left `lastVideo=none` and Flip `notLive` (physical #148).
 
-If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket.
+If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild).
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 
 Watch Console (`com.opencapture.openpocketcine`) and `Documents/control-live.log` for:
 
+- `feed: observe diagnose=… repair=… watchdog=… disagree=…` (classifier vs live repair; does not change the repair)
 - `feed: start VT for assist — one 0x09/0xa8` (first look/scope only)
 - `feed: assist off — keep VT, no 0x09/0xa8`
 - `feed: recover 0x09/0xa8 reason=…`
 - `feed: hold UDP rebuild — GOP-reset grace`
 - `datalink: rebuilding UDP (…)`
-- `feed: stall` / `feed: black`
+- `feed: stall` / `feed: black` / `feed: freeze`
 
 The live canvas shows a brief **Reconnecting** chip while UDP rebuilds. The last picture stays under that chip. SoftAP interface binding is unchanged (do not pin only `requiredInterfaceType = .wifi`).
 

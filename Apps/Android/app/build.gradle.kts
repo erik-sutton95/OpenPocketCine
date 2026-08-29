@@ -44,6 +44,29 @@ android {
         }
     }
 
+    // Play closed testing signs with the upload keystore from the environment.
+    // Debug and unsigned local release stay possible when the env is unset.
+    // See docs/android-play-ci.md.
+    val uploadKeystorePath = System.getenv("ANDROID_KEYSTORE_FILE").orEmpty()
+    if (uploadKeystorePath.isNotEmpty()) {
+        val uploadKeystore = file(uploadKeystorePath)
+        require(uploadKeystore.isFile) {
+            "ANDROID_KEYSTORE_FILE is set but not a file: $uploadKeystorePath"
+        }
+        signingConfigs {
+            create("release") {
+                storeFile = uploadKeystore
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                    ?: error("ANDROID_KEYSTORE_PASSWORD is required when ANDROID_KEYSTORE_FILE is set")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                    ?: error("ANDROID_KEY_ALIAS is required when ANDROID_KEYSTORE_FILE is set")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                    ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                    ?: error("ANDROID_KEY_PASSWORD is required when ANDROID_KEYSTORE_FILE is set")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -51,6 +74,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (uploadKeystorePath.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -206,14 +206,15 @@ final class DatalinkDriver {
                 register()
                 subscribe()
                 startAckPump()
+                // Mimo 20260828: HEVC 17 ms after DHCP, 0xa8 at +3 s. Arm ingest
+                // on handshake ack. Decoder still latches VPS only.
+                armLiveVideo()
                 // Disconnect can land on this await. Publishing LIVE here after
                 // `close()` is why in-app reconnect sat on Waiting for live view
                 // until process death.
                 try throwIfClosed()
                 if let afterHandshake { await afterHandshake() }
                 try throwIfClosed()
-                // Enable first, then accept 0x02. Arming earlier ingested the
-                // leftover GOP (videoPkts=125, first picture never recovered).
                 armLiveVideo()
                 return
             }
@@ -310,12 +311,18 @@ final class DatalinkDriver {
         log.info(
             "datalink: sent 0x09/0xa8 rcv=0x\(String(receiver, radix: 16), privacy: .public) seq=\(seq, privacy: .public) ready=\(self.isConnectionReady ? 1 : 0) videoPkts=\(self.videoPackets, privacy: .public)"
         )
+        // Re-arm on recover enable after rebuildUDP (physical #148).
+        armLiveVideo()
     }
 
-    /// Drop leftover GOP counters and accept 0x02. Call after `0x09/0xa8`.
+    /// Accept pktType 0x02 after UDP handshake. First arm drops leftover GOP
+    /// counters. Re-arm after UDP rebuild / enable only raises the gate.
     func armLiveVideo() {
         if closed { return }
-        videoAssembler.reset()
+        let first = videoGate.withLock { !$0.accepting }
+        if first {
+            videoAssembler.reset()
+        }
         videoGate.withLock {
             $0.accepting = true
             $0.loggedDrop = false
@@ -754,7 +761,7 @@ final class DatalinkDriver {
             let video = bytes.count > 6 && bytes[6] == 0x02
             if video {
                 let accept = gate.withLock { $0.accepting }
-                if !CameraSoftAP.shouldIngestLiveVideo(liveViewEnabled: accept) {
+                if !CameraSoftAP.shouldIngestLiveVideo(ingestArmed: accept) {
                     let logDrop = gate.withLock { state -> Bool in
                         if state.loggedDrop { return false }
                         state.loggedDrop = true
@@ -764,7 +771,7 @@ final class DatalinkDriver {
                         let count = bytes.count
                         Task { @MainActor in
                             self?.log.info(
-                                "datalink: drop leftover video before enable bytes=\(count, privacy: .public)"
+                                "datalink: drop leftover video before ingest bytes=\(count, privacy: .public)"
                             )
                         }
                     }

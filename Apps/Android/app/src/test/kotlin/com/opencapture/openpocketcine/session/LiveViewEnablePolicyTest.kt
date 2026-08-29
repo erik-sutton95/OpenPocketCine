@@ -129,7 +129,7 @@ class LiveViewEnablePolicyTest {
         )
         val fiveSecondsLater = snap.copy(now = now + 5_000, lastEnableAt = now)
         assertEquals(
-            LiveViewEnablePolicy.Action.REBUILD_UDP,
+            LiveViewEnablePolicy.Action.RESEND_ENABLE,
             LiveViewEnablePolicy.tick(state, fiveSecondsLater),
         )
     }
@@ -258,7 +258,7 @@ class LiveViewEnablePolicyTest {
     @Test
     fun firstPictureEscalatesToRejoinNotEndlessUdpRebuild() {
         assertEquals(
-            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
             LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = 0,
                 enableSends = 2,
@@ -268,11 +268,21 @@ class LiveViewEnablePolicyTest {
             ),
         )
         assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 2,
+                sinceEnableMs = 8_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
             LiveViewEnablePolicy.FirstPictureStep.REJOIN,
             LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = 0,
                 enableSends = 4,
-                sinceEnableMs = 2_000,
+                sinceEnableMs = 8_000,
                 videoAgeMs = null,
                 sinceRebuildMs = null,
             ),
@@ -310,6 +320,19 @@ class LiveViewEnablePolicyTest {
         assertEquals(
             LiveViewEnablePolicy.FirstPictureStep.WAIT,
             LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 800,
+                enableSends = 1,
+                sinceEnableMs = 5_000,
+                videoAgeMs = 200,
+                sinceRebuildMs = null,
+                hasPresentedPicture = true,
+            ),
+        )
+        assertTrue(!LiveViewEnablePolicy.shouldBeginIDRHoldOnEnable(true))
+        assertTrue(LiveViewEnablePolicy.shouldBeginIDRHoldOnEnable(false))
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = 370,
                 enableSends = 2,
                 sinceEnableMs = 2_000,
@@ -320,9 +343,79 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun firstPicturePokesRecordingFormatOnPocket3() {
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 1,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+                needsRecordingFormatPoke = true,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 1,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+            "Pocket 4 IDR grace — not a 2s second enable",
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 2,
+                sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+                needsRecordingFormatPoke = true,
+            ),
+            "poke before tearing UDP",
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 800,
+                enableSends = 1,
+                sinceEnableMs = 3_000,
+                videoAgeMs = 200,
+                sinceRebuildMs = null,
+                needsRecordingFormatPoke = true,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 800,
+                enableSends = 1,
+                sinceEnableMs = 5_000,
+                videoAgeMs = 200,
+                sinceRebuildMs = null,
+                needsRecordingFormatPoke = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldPokeRecordingFormat(
+                needsPoke = false,
+                alreadyPoked = false,
+                isRecording = false,
+                hadVideo = false,
+                enableSends = 1,
+                sinceEnableMs = 2_000,
+            ),
+        )
+    }
+
+    @Test
     fun neverGotVideoRebuildsEvenWhenStatusIsFresh() {
         assertEquals(
-            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
             LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = 0,
                 enableSends = 2,
@@ -330,7 +423,17 @@ class LiveViewEnablePolicyTest {
                 videoAgeMs = null,
                 sinceRebuildMs = null,
             ),
-            "fresh status must not skip the iOS rebuild — that sat on WAITING FOR LIVE VIEW",
+            "IDR grace — a 2s rebuild is the 30–45s Waiting for live view",
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 2,
+                sinceEnableMs = 8_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
         )
     }
 
@@ -420,11 +523,21 @@ class LiveViewEnablePolicyTest {
             ),
         )
         assertEquals(
-            LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE,
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
             LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = 0,
                 enableSends = 1,
                 sinceEnableMs = 2_000,
+                videoAgeMs = null,
+                sinceRebuildMs = null,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 0,
+                enableSends = 1,
+                sinceEnableMs = 8_000,
                 videoAgeMs = null,
                 sinceRebuildMs = null,
             ),
@@ -513,7 +626,9 @@ class LiveViewEnablePolicyTest {
     @Test
     fun zoomChipLensesMatchCamFovStops() {
         assertEquals(217, CameraCommands.lensForZoomFactor(1.0))
+        assertEquals(CamFov.lensPosition(2.0), CameraCommands.lensForZoomFactor(2.0))
         assertEquals(651, CameraCommands.lensForZoomFactor(3.0))
+        assertEquals(CamFov.lensPosition(4.0), CameraCommands.lensForZoomFactor(4.0))
         assertEquals(1302, CameraCommands.lensForZoomFactor(6.0))
         assertEquals(2604, CameraCommands.lensForZoomFactor(12.0))
         val payload = CameraCommands.zoomLens(217)

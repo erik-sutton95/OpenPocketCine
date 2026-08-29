@@ -1,9 +1,10 @@
 # Android — sharing Swift the OpenZCine way
 
 OpenPocketCine’s Android app lives in this repository (`Apps/Android/`,
-`Sources/OpenPocketCineAndroidFacade/`). It is **not on Google Play yet**. The
-closed-beta waitlist is on [openpocketcine.app](https://openpocketcine.app/). iOS
-is the daily driver.
+`Sources/OpenPocketCineAndroidFacade/`). Closed testing is the TestFlight analog:
+signed AAB from GitHub Actions onto Play, waitlist on
+[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. Setup:
+[`docs/android-play-ci.md`](docs/android-play-ci.md).
 
 Business logic stays in **`OpenPocketViewCore`** (UI-free, I/O-free Foundation).
 Android follows the public [OpenZCine](https://github.com/erik-sutton95/OpenZCine)

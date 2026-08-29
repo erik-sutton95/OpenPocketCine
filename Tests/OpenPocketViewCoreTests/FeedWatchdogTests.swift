@@ -81,15 +81,16 @@ import Testing
         #expect(dog.stage == .resendEnable)
     }
 
-    @Test func enableThatProducesNoHEVCRebuildsUDP() {
+    @Test func enableThatProducesNoHEVCDoesNotRebuildUDPWhileStatusIsYoung() {
         var dog = FeedWatchdog()
         var snap = Self.snap(
-            now: 10, frameAge: 2.8, videoAge: 2.8, statusAge: 0.0, bleAge: 232)
+            now: 10, frameAge: 2.8, videoAge: 2.8, statusAge: 0.0, bleAge: 70)
         snap.secondsSinceLastEnable = 20
         #expect(dog.tick(snap) == .resendLiveViewEnable)
         #expect(dog.stage == .resendEnable)
 
-        // Same stall as the field log: enable #7, videoPkts frozen, status still young.
+        // Physical #148: 2 s later status still 0.0 s. Diagnoser stays
+        // encoderPaused / resendEnable. Reopening UDP here left lastVideo=none.
         snap.now = 12.1
         snap.lastDecodedFrameAge = 4.9
         snap.lastVideoPacketAge = 4.9
@@ -100,15 +101,26 @@ import Testing
             !FeedWatchdog.shouldHoldForGOPReset(
                 secondsSinceLastEnable: 2.1, lastVideoPacketAge: 4.9))
         #expect(
-            dog.tick(snap) == .reopenDatalink,
-            "enable produced no HEVC — reopen UDP instead of 8s IDR hold")
-        #expect(dog.stage == .reopenDatalink)
+            dog.tick(snap) == .none,
+            "young status means the 9004 socket is alive — do not rebuild UDP at 2s")
+        #expect(dog.stage == .resendEnable)
+
+        snap.now = 15.1
+        snap.lastDecodedFrameAge = 7.9
+        snap.lastVideoPacketAge = 7.9
+        snap.lastAccessUnitAge = 7.9
+        snap.lastStatusAge = 0.0
+        snap.secondsSinceLastEnable = 5.1
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "still encoder-paused after escalateAfter — one more enable, not a 5-tuple tear")
+        #expect(dog.stage == .resendEnable)
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 2.1,
                 secondsSinceLastRebuild: nil,
                 pathReady: true,
-                lastBleNotifyAge: 232,
+                lastBleNotifyAge: 70,
                 hadVideo: true,
                 holdEnableCount: 1,
                 lastVideoPacketAge: 4.9),
@@ -319,11 +331,17 @@ import Testing
                 pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true),
             "one recover 0x09/0xa8 is enough after a rebuild")
         #expect(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
+                secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
+                pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
+                holdEnableCount: 1, lastVideoPacketAge: 0.2),
+            "UDP video flowing — 0x09/0xa8 GOP-cuts a live picture (still holding for IDR)")
+        #expect(
             FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
                 pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
-                holdEnableCount: 1),
-            "missed IDR while UDP is alive — one extra enable at 5s")
+                holdEnableCount: 1, lastVideoPacketAge: 5),
+            "missed IDR and HEVC silent — one extra enable at 5s")
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,

@@ -16,7 +16,8 @@ Issues are for bugs only.
 
 - Camera control writes (record, ISO, white balance, tap-to-focus) proven on hardware
 - Landing-page screenshots (reviewed, faces blurred)
-- Play internal testing when Android is operator-ready
+- Play closed testing (waitlist → `alpha` track) when Android is operator-ready;
+  GitHub Actions upload is in-tree (`docs/android-play-ci.md`)
 
 ## Later
 

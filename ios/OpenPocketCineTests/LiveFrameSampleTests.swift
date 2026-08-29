@@ -792,7 +792,8 @@ final class LiveFrameSampleTests: XCTestCase {
         let metal = ScopeTestBuffers.makeIOSurfaceBGRA(
             width: width, height: height, left: 40, right: 210)
         if metal.filled, let filled = usable(metal.buffer) { return filled }
-        return usable(ScopeTestBuffers.make420v(width: width, height: height, leftY: 48, rightY: 200))
+        return usable(
+            ScopeTestBuffers.make420v(width: width, height: height, leftY: 48, rightY: 200))
     }
 
     private static func maxChannelDelta(output: CIImage, source: CIImage, context: CIContext)

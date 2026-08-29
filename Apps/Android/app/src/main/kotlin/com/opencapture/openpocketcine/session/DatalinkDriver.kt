@@ -129,6 +129,9 @@ class DatalinkDriver(
                 register()
                 subscribe()
                 startAckPump()
+                // Mimo 20260828: HEVC 17 ms after DHCP, 0xa8 at +3 s. Arm ingest
+                // on handshake ack — do not wait subscribe settle or enable.
+                armLiveVideo()
                 // Subscribe is fire-and-forget. Enable in the same 9 ms burst is
                 // ignored (iOS hops to MainActor after subscribe; Mimo comes
                 // from gallery). Always wait the settle — leftover 0x01 must
@@ -138,10 +141,6 @@ class DatalinkDriver(
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
                 afterHandshake?.invoke()
-                // iOS arms immediately after the 0x09/0xa8 write. Mimo's VPS
-                // lands 25–167 ms later. Waiting for a DUML ACK (often absent)
-                // dropped that IDR as "leftover GOP" and the HUD stayed on
-                // WAITING FOR LIVE VIEW with videoPkts=0.
                 armLiveVideo()
                 return
             }
@@ -201,7 +200,7 @@ class DatalinkDriver(
         Log.i(TAG, "datalink: sent exit playback")
     }
 
-    /** iOS `armLiveVideo`: accept pktType 0x02 only after `0x09/0xa8`. Idempotent. */
+    /** iOS `armLiveVideo`: accept pktType 0x02 after UDP handshake. Idempotent. */
     fun armLiveVideo() {
         if (liveViewEnabled) return
         liveViewEnabled = true
@@ -566,7 +565,7 @@ class DatalinkDriver(
                 if (loggedLeftoverGop.compareAndSet(false, true) || dropped <= 8) {
                     Log.i(
                         TAG,
-                        "datalink: drop leftover video before enable #$dropped bytes=${datagram.size}",
+                        "datalink: drop leftover video before ingest #$dropped bytes=${datagram.size}",
                     )
                 }
                 return

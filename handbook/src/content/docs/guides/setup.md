@@ -38,9 +38,10 @@ just android-core     # cross-compile OpenPocketViewCore → jniLibs
 just android-check    # assembleDebug, unit tests, lint
 ```
 
-The Compose app is **arm64-v8a only** and is not on Google Play yet. The
-closed-beta waitlist is on [openpocketcine.app](https://openpocketcine.app/).
-Pairing and live view need a physical phone. More: [Android app](../apps/android/).
+The Compose app is **arm64-v8a only**. Play closed testing is the distribution
+path ([openpocketcine.app](https://openpocketcine.app/)). Pairing and live view
+need a physical phone. More: [Android app](../apps/android/). Maintainer
+upload: `just android-play-setup`.
 
 ## This handbook
 

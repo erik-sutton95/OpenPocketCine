@@ -47,6 +47,13 @@ import Testing
         #expect(CameraModel.resolve(modelId: 0x22, name: nil).usesCapturedLiveEnable)
         #expect(CameraModel.default.usesCapturedLiveEnable)
         #expect(!CameraModel.resolve(modelId: 0x15, name: nil).usesCapturedLiveEnable)
+        #expect(CameraModel.resolve(modelId: 0x20, name: nil).needsFirstPictureFormatPoke)
+        #expect(
+            CameraModel.resolve(modelId: nil, name: "OsmoPocket3-A1B2")
+                .needsFirstPictureFormatPoke)
+        #expect(!CameraModel.resolve(modelId: 0x21, name: nil).needsFirstPictureFormatPoke)
+        #expect(!CameraModel.resolve(modelId: 0x22, name: nil).needsFirstPictureFormatPoke)
+        #expect(!CameraModel.resolve(modelId: 0x19, name: nil).needsFirstPictureFormatPoke)
     }
 }
 

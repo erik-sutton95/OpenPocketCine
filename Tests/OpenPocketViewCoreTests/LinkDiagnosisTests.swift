@@ -112,6 +112,79 @@ struct LinkDiagnosisTests {
                 == .udpFlowDead)
     }
 
+    @Test func diagnoseReadsWatchdogSnapshot() {
+        var snap = encoderPauseSnapshot()
+        #expect(LinkDiagnoser.diagnose(snap) == .encoderPaused)
+        #expect(LinkDiagnoser.repair(for: LinkDiagnoser.diagnose(snap)) == .resendEnable)
+
+        snap.lastVideoPacketAge = 0.1
+        snap.lastAccessUnitAge = 0.1
+        snap.lastDecodedFrameAge = 3.0
+        #expect(
+            LinkDiagnoser.diagnose(snap) == .presentStalled,
+            "UDP alive + stale present is a canvas freeze, not a link repair")
+    }
+
+    @Test func observeLineNamesDiagnoserAndWatchdog() {
+        let snap = encoderPauseSnapshot()
+        var dog = FeedWatchdog()
+        let action = dog.tick(snap)
+        #expect(action == .resendLiveViewEnable)
+        let line = LinkDiagnoser.observeLine(snap: snap, watchdog: action)
+        #expect(line.hasPrefix("feed: observe "))
+        #expect(line.contains("diagnose=encoderPaused"))
+        #expect(line.contains("repair=resendEnable"))
+        #expect(line.contains("watchdog=resendLiveViewEnable"))
+        #expect(line.contains("lastVideo=4.2"))
+        #expect(line.contains("lastStatus=0.3"))
+    }
+
+    @Test func observeLineFlagsDisagreementWhenFlowUnhealthyButUDPAlive() {
+        let snap = FeedWatchdog.Snapshot(
+            now: 10,
+            lastDecodedFrameAge: 0.2,
+            lastVideoPacketAge: 0.1,
+            lastAccessUnitAge: 0.1,
+            lastStatusAge: 0.1,
+            flowHealthy: false,
+            pathReady: true,
+            hasFormat: true,
+            decoderFailed: false,
+            live: true,
+            sawPicture: true,
+            lastBleNotifyAge: 0.2,
+            hadVideo: true,
+            secondsSinceLastEnable: 20
+        )
+        var dog = FeedWatchdog()
+        let action = dog.tick(snap)
+        #expect(action == .none, "UDP alive short-circuits the watchdog")
+        #expect(LinkDiagnoser.diagnose(snap) == .udpFlowDead)
+        #expect(LinkDiagnoser.repair(for: .udpFlowDead) == .rebindUDP)
+        let line = LinkDiagnoser.observeLine(snap: snap, watchdog: action)
+        #expect(line.contains("disagree=1"))
+        #expect(line.contains("diagnose=udpFlowDead"))
+        #expect(line.contains("watchdog=none"))
+    }
+
+    private func encoderPauseSnapshot() -> FeedWatchdog.Snapshot {
+        FeedWatchdog.Snapshot(
+            now: 10,
+            lastDecodedFrameAge: 4.2,
+            lastVideoPacketAge: 4.2,
+            lastStatusAge: 0.3,
+            flowHealthy: true,
+            pathReady: true,
+            hasFormat: true,
+            decoderFailed: false,
+            live: true,
+            sawPicture: true,
+            lastBleNotifyAge: 0.2,
+            hadVideo: true,
+            secondsSinceLastEnable: 20
+        )
+    }
+
     private func diagnose(
         pathReady: Bool = true,
         bleNotifyAge: TimeInterval? = 0.2,

@@ -8,14 +8,14 @@ import Foundation
 /// is why the feed appears after disconnect/reconnect.
 public enum CameraSoftAP: Sendable {
     public static let host = "192.168.2.1"
-    public static let invalidVTSessionStatus: Int32 = -12903   // kVTInvalidSessionErr
+    public static let invalidVTSessionStatus: Int32 = -12903  // kVTInvalidSessionErr
 
     /// Phone address on the camera AP. `.1` is the camera; `.0` / `.255` are not hosts.
     public static func isAssociatedIPv4(_ ip: String) -> Bool {
         let parts = ip.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 4,
-              parts[0] == "192", parts[1] == "168", parts[2] == "2",
-              let host = Int(parts[3]), (2...254).contains(host)
+            parts[0] == "192", parts[1] == "168", parts[2] == "2",
+            let host = Int(parts[3]), (2...254).contains(host)
         else { return false }
         return true
     }
@@ -81,7 +81,8 @@ extension CameraSoftAP {
     }
 
     /// First path interface that owns `192.168.2.2…254`. `en0` is not enough.
-    public static func preferredInterfaceName(cameraNames: [String], available: [String]) -> String? {
+    public static func preferredInterfaceName(cameraNames: [String], available: [String]) -> String?
+    {
         available.first { cameraNames.contains($0) }
     }
 
@@ -195,6 +196,9 @@ extension CameraSoftAP {
     public enum FirstPictureStep: String, Equatable, Sendable {
         case wait
         case resendEnable
+        /// Pocket 3 only: SET 1080 then the boot 4K (`0x02/0x18`) so the live
+        /// encoder actually starts. HUD/gimbal already work; enable does not.
+        case pokeRecordingFormat
         case rebuildUDP
         case rejoin
     }
@@ -205,6 +209,10 @@ extension CameraSoftAP {
     public static let firstPictureIDRGrace: TimeInterval = 8
     /// One extra IDR request if P-frames keep arriving with no picture.
     public static let firstPictureResendWhileLive: TimeInterval = 5
+    /// Floor after each first-picture `0x02/0x18` so the encoder can cut a GOP.
+    public static let firstPictureFormatPokeMinSettle: TimeInterval = 0.8
+    /// Pin wait for that SET. Matches `CameraSetMailbox` settle.
+    public static let firstPictureFormatPokePinWait: TimeInterval = 2
 
     /// `enableSends` counts every `0x09/0xa8` including the initial one.
     /// A non-zero `videoPackets` is not alive — the first burst can freeze
@@ -219,17 +227,38 @@ extension CameraSoftAP {
         secondsSinceLastEnable: TimeInterval,
         secondsSinceLastVideo: TimeInterval? = nil,
         secondsSinceLastRebuild: TimeInterval? = nil,
-        secondsSinceLastStatus _: TimeInterval? = nil
+        secondsSinceLastStatus _: TimeInterval? = nil,
+        needsRecordingFormatPoke: Bool = false,
+        alreadyPokedRecordingFormat: Bool = false,
+        recordingFormatPokeInFlight: Bool = false,
+        isRecording: Bool = false,
+        hasPresentedPicture: Bool = false
     ) -> FirstPictureStep {
         // Handshake succeeded but 0x09/0xa8 never left (pathReady flickered).
         // Waiting here is the black LINK canvas until the operator reconnects.
         if enableSends < 1 { return .resendEnable }
+        if hasPresentedPicture { return .wait }
+        if recordingFormatPokeInFlight { return .wait }
         guard secondsSinceLastEnable >= 2 else { return .wait }
         let hadVideo = FeedWatchdog.hadVideo(
             videoPackets: videoPackets, lastVideoPacketAge: secondsSinceLastVideo)
-        let videoFresh = hadVideo
+        if shouldPokeRecordingFormat(
+            needsPoke: needsRecordingFormatPoke,
+            alreadyPoked: alreadyPokedRecordingFormat,
+            isRecording: isRecording,
+            hadVideo: hadVideo,
+            enableSends: enableSends,
+            secondsSinceLastEnable: secondsSinceLastEnable)
+        {
+            return .pokeRecordingFormat
+        }
+        let videoFresh =
+            hadVideo
             && (secondsSinceLastVideo ?? .infinity) < FeedWatchdog.stallThreshold
         if !hadVideo {
+            // Mimo first picture is 1–2 s. A 2 s second-enable / UDP rebuild
+            // kills the IDR in flight and is the 30–45 s Waiting for live view.
+            if secondsSinceLastEnable < firstPictureIDRGrace { return .wait }
             if enableSends >= 4 { return .rejoin }
             if enableSends >= 2 {
                 if let since = secondsSinceLastRebuild, since < rebuildCooldown {
@@ -266,19 +295,41 @@ extension CameraSoftAP {
         return .rebuildUDP
     }
 
+    /// Pocket 3 boots 4K 25/30 with chrome live and no HEVC until the operator
+    /// SETs 1080 then 4K. Same-tab FORMAT is a no-op, so the boot 4K never
+    /// leaves the wire. One poke, before UDP rebuild. Not Pocket 4.
+    public static func shouldPokeRecordingFormat(
+        needsPoke: Bool,
+        alreadyPoked: Bool,
+        isRecording: Bool,
+        hadVideo: Bool,
+        enableSends: Int,
+        secondsSinceLastEnable: TimeInterval
+    ) -> Bool {
+        guard needsPoke, !alreadyPoked, !isRecording, enableSends >= 1 else { return false }
+        guard secondsSinceLastEnable >= 2 else { return false }
+        if !hadVideo { return true }
+        return secondsSinceLastEnable >= firstPictureResendWhileLive
+    }
+
     /// After a UDP rebuild, first picture must put `0x09/0xa8` on the new
     /// socket. After live video, the enable already rode with the rebuild.
     public static func shouldForceEnableAfterUDPRebuild(hadVideo: Bool) -> Bool {
         !hadVideo
     }
 
-    /// Camera keeps the last GOP running after Disconnect. Those pktType `0x02`
-    /// packets land during handshake — device logs show `first video` and
-    /// `videoPkts=125` *before* `0x09/0xa8`. Decoding them sets
-    /// `lastPresentedAt` so first-picture recovery never runs and the
-    /// reconnect canvas freezes on a stale P-frame.
-    public static func shouldIngestLiveVideo(liveViewEnabled: Bool) -> Bool {
-        liveViewEnabled
+    /// Mimo 2026-08-28 live-start: HEVC at join+17 ms, `0x09/0xa8` at +3 s.
+    /// Ingest pktType `0x02` once the UDP handshake is acked. Decoder still
+    /// latches VPS/SPS only, so leftover TRAIL P-frames do not present.
+    /// Enable is PLI for a dead encoder, not a gate to look.
+    public static func shouldIngestLiveVideo(ingestArmed: Bool) -> Bool {
+        ingestArmed
+    }
+
+    /// Skip GOP-reset IDR hold when a picture is already on the layer.
+    /// Mimo's enable at +3 s must not black a feed that started at +17 ms.
+    public static func shouldBeginIDRHoldOnEnable(hasPresentedPicture: Bool) -> Bool {
+        !hasPresentedPicture
     }
 
     /// `0x09/0xa8` once path is up. Do not wait for the display layer —
@@ -343,13 +394,14 @@ extension CameraSoftAP {
         return !isPresentedPictureFresh(secondsSinceLastPresented: secondsSinceLastPresented)
     }
 
-    /// Rolling picture past the first IDR grace — later stalls belong to the watchdog.
+    /// Rolling picture is first picture. Do not wait the 8 s IDR grace after
+    /// enable — Mimo is on-screen in tens of ms once UDP is up.
     public static func shouldMarkFirstPictureSettled(
         secondsSinceLastPresented: TimeInterval?,
         secondsSinceLastEnable: TimeInterval
     ) -> Bool {
-        isPresentedPictureFresh(secondsSinceLastPresented: secondsSinceLastPresented)
-            && secondsSinceLastEnable >= firstPictureIDRGrace
+        _ = secondsSinceLastEnable
+        return isPresentedPictureFresh(secondsSinceLastPresented: secondsSinceLastPresented)
     }
 
     /// Rebuild the VT session. Do not treat this as an enable/IDR trigger.

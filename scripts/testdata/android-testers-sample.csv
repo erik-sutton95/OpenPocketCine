@@ -1,0 +1,8 @@
+Email Address,Osmo,Phone
+alpha@example.com,Pocket 4 Pro,Pixel 9
+beta@example.com,Pocket 4,Galaxy S24
+alpha@example.com,Pocket 4 Pro,Pixel 8
+  GAMMA@EXAMPLE.COM  ,Pocket 3,unused
+not-an-email,x,y
+,empty,
+"quoted@example.com",Pocket 4 Pro,Pixel

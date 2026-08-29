@@ -21,6 +21,21 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func setWhiteBalanceAutoExtraKeepsTint() {
+        let zero = AndroidSessionWire.encodeCommand(
+            kind: .setWhiteBalanceAuto, seq: 1, extra: nil)
+        let tint20 = AndroidSessionWire.encodeCommand(
+            kind: .setWhiteBalanceAuto, seq: 1, extra: "20")
+        let custom = AndroidSessionWire.encodeCommand(
+            kind: .setWhiteBalanceCustom, seq: 1, extra: "4200\u{1f}20")
+        #expect(zero?.cmdId == 0x2C)
+        #expect(zero?.payload == [0x00, 0x00, 0x00, 0x00, 0x00])
+        #expect(tint20?.payload == [0x00, 0x00, 0x00, 0x14, 0x00])
+        #expect(custom?.payload == [0x06, 0x2A, 0x00, 0x14, 0x00])
+        #expect(tint20?.payload == Commands.setWhiteBalanceAuto(tint: 20, seq: 1).payload)
+    }
+
+    @Test
     func gimbalStickEncodeInvertsPanWhenAsked() {
         let front = AndroidSessionWire.gimbalStickEncode(
             x: 1, y: 0, invertPan: false, sensitivity: 4)
@@ -58,11 +73,35 @@ struct AndroidSessionWireTests {
 
         var off = CameraStatus()
         off.selfieFlip = .off
-        #expect(AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(off)).selfieFlip == .off)
+        #expect(
+            AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(off)).selfieFlip
+                == .off)
 
         #expect(AndroidSessionWire.status(fromJSON: "{}").selfieFlip == nil)
         #expect(
             AndroidSessionWire.encodeCommand(kind: .getSelfieFlip, seq: 1, extra: nil)?.payload
                 == Commands.getSelfieFlip(seq: 1).payload)
+    }
+
+    @Test
+    func cameraModelJSONCarriesZoomStops() {
+        let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
+        #expect(pro.contains("\"zoomStops\":[1.0,3.0,6.0,12.0]") || pro.contains("\"zoomStops\":[1,3,6,12]"))
+        let pocket4 = AndroidSessionWire.cameraModelJSON(modelId: 0x0021, name: nil)
+        #expect(pocket4.contains("\"zoomStops\":[1.0,2.0,4.0]") || pocket4.contains("\"zoomStops\":[1,2,4]"))
+        let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
+        #expect(nano.contains("\"zoomStops\":[1.0]") || nano.contains("\"zoomStops\":[1]"))
+    }
+
+    @Test
+    func statusJSONRoundTripsAvailableVideoFormats() {
+        var status = CameraStatus()
+        status.availableVideoFormats = [
+            VideoFormat(resolution: .p4K, frameRate: .fps24),
+            VideoFormat(resolution: .p1080, frameRate: .fps60),
+        ]
+        let json = AndroidSessionWire.statusJSON(status)
+        let decoded = AndroidSessionWire.status(fromJSON: json)
+        #expect(decoded.availableVideoFormats == status.availableVideoFormats)
     }
 }

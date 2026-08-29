@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.Continuation
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -46,7 +47,25 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val joiner = CameraApJoiner(context)
     val decoder = HevcDecoder().also { dec ->
         dec.onParameterSetsChanged = {
-            scope.launch { sendRecoverEnable(force = true, reason = "encoder format change") }
+            scope.launch {
+                val now = SystemClock.elapsedRealtime()
+                val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
+                val auAge = datalink?.lastAccessUnitAt?.let { now - it }
+                val videoAlive =
+                    (videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS) ||
+                        (auAge != null && auAge < LiveViewEnablePolicy.STALL_MS)
+                val since =
+                    if (lastIdrRequest == 0L) null else (now - lastIdrRequest) / 1000.0
+                if (!EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                        accessUnitHasIDR = false,
+                        udpReceiveAlive = videoAlive,
+                        secondsSinceLastEnable = since,
+                    )
+                ) {
+                    return@launch
+                }
+                sendRecoverEnable(force = false, reason = "encoder format change")
+            }
         }
     }
     private val wifiCache = CameraWifiCredentialStore(appContext)
@@ -115,6 +134,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var rawAccessUnits = 0
     private var lastIdrRequest = 0L
     private var liveViewEnableSends = 0
+    private var firstPictureFormatPoked = false
+    private var firstPictureFormatPokeJob: Job? = null
     private val liveEnableGate = SerialSessionGate()
     private var idrHoldEnableCount = 0
     private var firstPictureSettled = false
@@ -365,6 +386,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         lastKeyframeAge = "—"
         streamStartedAt = null
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         firstPictureSettled = false
         focusTrackPending = false
@@ -388,6 +410,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         rawAccessUnits = 0
         lastIdrRequest = 0L
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         firstPictureSettled = false
         focusTrackPending = true
@@ -489,7 +512,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                                     return@open
                                 }
                                 publishPhase(ConnectionPhase.LIVE)
-                                decoder.beginIDRHold()
                                 sendCapturedLiveView("first picture")
                                 if (holdsMonitor) {
                                     _recoveryState.value = SessionRecoveryUi.Idle
@@ -742,6 +764,56 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         applyFeedWatchdog(now, packets)
     }
 
+    private fun resetFirstPictureFormatPoke() {
+        firstPictureFormatPokeJob?.cancel()
+        firstPictureFormatPokeJob = null
+        firstPictureFormatPoked = false
+    }
+
+    private fun startFirstPictureFormatPoke() {
+        if (firstPictureFormatPokeJob?.isActive == true) return
+        firstPictureFormatPoked = true
+        firstPictureFormatPokeJob =
+            scope.launch {
+                try {
+                    runFirstPictureFormatPoke()
+                } finally {
+                    firstPictureFormatPokeJob = null
+                }
+            }
+    }
+
+    private suspend fun runFirstPictureFormatPoke() {
+        val live = _status.value
+        if (live.isRecording || isBrowsingMedia) return
+        val original = VideoFormat.firstPictureOriginal(live)
+        val kick = VideoFormat.firstPictureEncoderKick(original)
+        Log.i(
+            TAG,
+            "live: Pocket 3 first-picture format poke ${original.chipLabel} → " +
+                "${kick.chipLabel} → ${original.chipLabel}",
+        )
+        setVideoFormat(kick)
+        waitForRecordingFormatPokeSettle()
+        if (!coroutineContext.isActive) return
+        setVideoFormat(original)
+        waitForRecordingFormatPokeSettle()
+        if (!coroutineContext.isActive || isBrowsingMedia) return
+        sendCapturedLiveView("first-picture format poke")
+    }
+
+    private suspend fun waitForRecordingFormatPokeSettle() {
+        val start = SystemClock.elapsedRealtime()
+        while (formatPin != null &&
+            SystemClock.elapsedRealtime() - start < LiveViewEnablePolicy.FORMAT_STALL_MS
+        ) {
+            delay(50)
+        }
+        val elapsed = SystemClock.elapsedRealtime() - start
+        val min = LiveViewEnablePolicy.FORMAT_POKE_MIN_SETTLE_MS
+        if (elapsed < min) delay(min - elapsed)
+    }
+
     private fun recoverFirstPictureIfNeeded(now: Long, packets: Int) {
         if (datalink?.isRebuilding == true || feedRecoveryJob != null) return
         when (
@@ -751,10 +823,21 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sinceEnableMs = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest,
                 videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it },
                 sinceRebuildMs = datalink?.lastRebuildAt?.let { now - it },
+                needsRecordingFormatPoke =
+                    connectedCamera?.model?.needsFirstPictureFormatPoke == true,
+                alreadyPokedRecordingFormat = firstPictureFormatPoked,
+                recordingFormatPokeInFlight = firstPictureFormatPokeJob?.isActive == true,
+                isRecording = _status.value.isRecording,
+                hasPresentedPicture =
+                    decoder.lastPresentedAt?.let { now - it }?.let { it >= 0 && it < LiveViewEnablePolicy.STALL_MS }
+                        == true,
             )
         ) {
             LiveViewEnablePolicy.FirstPictureStep.WAIT ->
                 logFirstPicture(now, packets)
+            LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT -> {
+                startFirstPictureFormatPoke()
+            }
             LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE -> {
                 // Do not route through sendRecoverEnable — inPlayback / decoder-ready
                 // holds skipped the only PLI and sat on WAITING FOR LIVE VIEW.
@@ -1026,6 +1109,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         disposeDatalink()
         decoder.flushForRecovery()
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         firstPictureSettled = false
         focusTrackPending = true
@@ -1056,7 +1140,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             lastIdrRequest = now
             liveViewEnableSends += 1
             if (!decoder.awaitingIdr) idrHoldEnableCount = 0
-            decoder.beginIDRHold()
+            val presentedAge = decoder.lastPresentedAt?.let { now - it }
+            if (LiveViewEnablePolicy.shouldBeginIDRHoldOnEnable(
+                    hasPresentedPicture = presentedAge != null && presentedAge < LiveViewEnablePolicy.STALL_MS,
+                )
+            ) {
+                decoder.beginIDRHold()
+            }
             idrHoldEnableCount += 1
             Log.i(
                 TAG,
@@ -1145,6 +1235,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         hasVideoFormat = false
         streamStartedAt = null
         liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
         idrHoldEnableCount = 0
         firstPictureSettled = false
         focusTrackPending = false
@@ -1449,6 +1540,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun zoomCycleFrom(): Double =
         zoomPinchPreview ?: zoomOptimistic ?: _status.value.zoomFactor ?: zoomStop
 
+    fun zoomStops(): List<Double> {
+        val model = connectedCamera?.model ?: CameraModel.default
+        return model.activeZoomStops(_status.value.resolutionCode, _status.value.shootingMode)
+    }
+
+    fun zoomMax(): Double = zoomStops().lastOrNull() ?: 1.0
+
+    fun zoomNextJump(): Double = CamFov.nextJump(zoomCycleFrom(), zoomStops())
+
     fun setZoomLens(position: Int) {
         fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
     }
@@ -1505,7 +1605,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             lastPinchLens = null
             lastPinchLogTenths = null
         }
-        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification)
+        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax())
         if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
         // iOS `dropDLog2ForZoom` before every 0xB8. D-Log2 rejects zoom; any
@@ -1887,36 +1987,25 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         )
     }
 
-    fun setWhiteBalanceAuto() {
-        val previous = _status.value
-        _status.value = previous.copy(wbMode = CameraCommands.WB_AUTO, wbKelvin = -1, wbTint = 0)
+    fun setWhiteBalanceAuto(tint: Int? = null) {
+        val next = (tint ?: _status.value.wbTint).coerceIn(-100, 100)
+        _status.value = _status.value.copy(wbMode = CameraCommands.WB_AUTO, wbTint = next)
         fireKind(
             SwiftCore.CMD_SET_WB_AUTO,
-            null,
-            "WB Auto",
-            onFail = {
-                val cur = _status.value
-                if (cur.wbMode == CameraCommands.WB_AUTO && cur.wbKelvin == -1) {
-                    _status.value = previous
-                }
-            },
+            "$next",
+            "WB Auto tint $next",
+            coalesce = true,
         )
     }
 
     fun setWhiteBalance(kelvin: Int, tint: Int) {
         val (k, t) = CameraCommands.clampWhiteBalanceCustom(kelvin, tint)
-        val previous = _status.value
-        _status.value = previous.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = k, wbTint = t)
+        _status.value = _status.value.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = k, wbTint = t)
         fireKind(
             SwiftCore.CMD_SET_WB_CUSTOM,
             "$k\u001f$t",
             "WB ${k}K tint $t",
-            onFail = {
-                val cur = _status.value
-                if (cur.wbMode == CameraCommands.WB_CUSTOM && cur.wbKelvin == k && cur.wbTint == t) {
-                    _status.value = previous
-                }
-            },
+            coalesce = true,
         )
     }
 
@@ -2884,6 +2973,7 @@ internal object LiveViewEnablePolicy {
     const val COOLDOWN_MS = 15_000L
     const val REBUILD_COOLDOWN_MS = 5_000L
     const val FIRST_PICTURE_RESEND_MS = 2_000L
+    const val FORMAT_POKE_MIN_SETTLE_MS = 800L
     const val STALLED_FORMAT_RESEND_MS = 5_000L
     const val FORMAT_STALL_MS = 2_000L
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
@@ -2899,7 +2989,13 @@ internal object LiveViewEnablePolicy {
 
     enum class Stage { IDLE, RESEND_ENABLE, REBUILD_UDP, COOLDOWN }
 
-    enum class FirstPictureStep { WAIT, RESEND_ENABLE, REBUILD_UDP, REJOIN }
+    enum class FirstPictureStep {
+        WAIT,
+        RESEND_ENABLE,
+        POKE_RECORDING_FORMAT,
+        REBUILD_UDP,
+        REJOIN,
+    }
 
     class State {
         var stage: Stage = Stage.IDLE
@@ -3009,6 +3105,7 @@ internal object LiveViewEnablePolicy {
         videoAgeMs: Long?,
     ): Boolean {
         if (hadVideo && videoAgeMs != null && videoAgeMs > sinceEnableMs + STALL_MS) return false
+        if (hadVideo && videoAgeMs != null && videoAgeMs < STALL_MS) return false
         if (!hadVideo) return sinceEnableMs >= STALL_MS
         if (shouldHoldRebuildAfterRecentUdp(sinceRebuildMs, pathReady, bleAgeMs, true)) return false
         if (holdEnableCount < 2) return sinceEnableMs >= ESCALATE_MS
@@ -3022,8 +3119,10 @@ internal object LiveViewEnablePolicy {
 
     fun shouldMarkFirstPictureSettled(presentedAgeMs: Long?, sinceEnableMs: Long): Boolean {
         val presented = presentedAgeMs ?: return false
-        return presented >= 0 && presented < STALL_MS && sinceEnableMs >= GOP_GRACE_MS
+        return presented >= 0 && presented < STALL_MS
     }
+
+    fun shouldBeginIDRHoldOnEnable(hasPresentedPicture: Boolean): Boolean = !hasPresentedPicture
 
     fun firstPictureStep(
         videoPackets: Int,
@@ -3031,12 +3130,31 @@ internal object LiveViewEnablePolicy {
         sinceEnableMs: Long,
         videoAgeMs: Long?,
         sinceRebuildMs: Long?,
+        needsRecordingFormatPoke: Boolean = false,
+        alreadyPokedRecordingFormat: Boolean = false,
+        recordingFormatPokeInFlight: Boolean = false,
+        isRecording: Boolean = false,
+        hasPresentedPicture: Boolean = false,
     ): FirstPictureStep {
         if (enableSends < 1) return FirstPictureStep.RESEND_ENABLE
+        if (hasPresentedPicture) return FirstPictureStep.WAIT
+        if (recordingFormatPokeInFlight) return FirstPictureStep.WAIT
         if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return FirstPictureStep.WAIT
         val had = hadVideo(videoPackets, videoAgeMs)
+        if (shouldPokeRecordingFormat(
+                needsPoke = needsRecordingFormatPoke,
+                alreadyPoked = alreadyPokedRecordingFormat,
+                isRecording = isRecording,
+                hadVideo = had,
+                enableSends = enableSends,
+                sinceEnableMs = sinceEnableMs,
+            )
+        ) {
+            return FirstPictureStep.POKE_RECORDING_FORMAT
+        }
         val videoFresh = had && (videoAgeMs ?: Long.MAX_VALUE) < STALL_MS
         if (!had) {
+            if (sinceEnableMs < GOP_GRACE_MS) return FirstPictureStep.WAIT
             if (enableSends >= 4) return FirstPictureStep.REJOIN
             if (enableSends >= 2) {
                 if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) {
@@ -3060,6 +3178,21 @@ internal object LiveViewEnablePolicy {
         if (enableSends >= 4) return FirstPictureStep.REJOIN
         if (sinceRebuildMs != null) return FirstPictureStep.REJOIN
         return FirstPictureStep.REBUILD_UDP
+    }
+
+    /** Pocket 3: SET 1080 then boot 4K before tearing UDP. Not Pocket 4. */
+    fun shouldPokeRecordingFormat(
+        needsPoke: Boolean,
+        alreadyPoked: Boolean,
+        isRecording: Boolean,
+        hadVideo: Boolean,
+        enableSends: Int,
+        sinceEnableMs: Long,
+    ): Boolean {
+        if (!needsPoke || alreadyPoked || isRecording || enableSends < 1) return false
+        if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return false
+        if (!hadVideo) return true
+        return sinceEnableMs >= ESCALATE_MS
     }
 
     /**
@@ -3088,9 +3221,7 @@ internal object LiveViewEnablePolicy {
     fun shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Boolean): Boolean = !hasPicture
 
     /**
-     * Mimo / iOS: arm pktType 0x02 ingest on the enable write. A DUML ACK wait
-     * (Android used 200 ms) drops the 25–167 ms VPS and the HUD never leaves
-     * WAITING FOR LIVE VIEW.
+     * Mimo 20260828: HEVC at join+17 ms. Do not wait a DUML ACK before arming.
      */
     fun shouldWaitForLiveViewAckBeforeArm(): Boolean = false
 
@@ -3146,12 +3277,6 @@ internal object LiveViewEnablePolicy {
         }
 
         if (controlReceiveAlive(snap) && !udpReceiveAlive(snap)) {
-            if (state.stage == Stage.RESEND_ENABLE &&
-                !enableRestartedVideo(sinceEnable, videoAge) &&
-                snap.now - state.lastActionAt >= STALL_MS
-            ) {
-                return fire(state, Action.REBUILD_UDP, snap.now)
-            }
             if (state.stage == Stage.IDLE || snap.now - state.lastActionAt >= ESCALATE_MS) {
                 return fire(state, Action.RESEND_ENABLE, snap.now)
             }

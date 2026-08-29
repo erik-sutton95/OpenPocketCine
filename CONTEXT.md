@@ -34,8 +34,20 @@ _Avoid_: media port, stream
 _Avoid_: IDR loop, live-start (alone)
 
 **Watchdog**:
-Portable stall-and-recover policy (`FeedWatchdog`).
+Portable stall-and-recover policy (`FeedWatchdog`). Production repair for live UDP.
 _Avoid_: keepalive, heartbeat
+
+**Repair owner**:
+The one production policy that maps a classified live-link failure to a
+single repair. `FeedWatchdog` acts today. `LinkDiagnoser` classifies and is
+logged (`feed: observe`) but is not wired to repair.
+_Avoid_: dual watchdog, diagnoser (alone)
+
+**ACK window**:
+Three independent camera send windows in pktType `0x04`: video `0x02`,
+ackedData `0x03` (command replies, including Flip GET), extra from `0x01`.
+Stale group 1 stops GET/SET while HEVC continues.
+_Avoid_: ACK (alone) when you mean a DUML command ACK
 
 **Chrome**:
 Operator HUD around the picture (bars, chips, DISP), not the picture.
@@ -113,3 +125,9 @@ _Avoid_: perf tweak, optimization (alone)
 **FTUE**:
 The first-run pairing wizard: BLE → approve → SoftAP → live picture.
 _Avoid_: onboarding, tutorial, splash (the splash is not the wizard)
+
+**Closed testing**:
+Google Play track for the Android waitlist (`alpha`). Email list, opt-in URL,
+Play-delivered updates. Internal testing is the 100-tester smoke track, not the
+waitlist.
+_Avoid_: TestFlight (for Android), Firebase App Distribution, open testing (until we mean that)

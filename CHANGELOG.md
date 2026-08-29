@@ -8,6 +8,22 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Play closed-testing pipeline (GitHub Actions signed AAB → `alpha` track)
+  and tester notes under `Apps/Android/Play/`. Wizard:
+  `just android-play-setup`. Contract: `docs/android-play-ci.md`.
+
+- Live feed **observe** line (`feed: observe diagnose=… watchdog=… disagree=…`)
+  so a physical take can classify freeze-in-seconds (#148) against
+  `LinkDiagnoser` without changing repair. Contract:
+  `docs/connection-reliability.md`.
+
+- Live recover no longer re-enables on every recording-format VPS hop, no
+  longer rebuilds UDP 2 s after an encoder pause while status is still
+  arriving, and re-arms pktType `0x02` ingest on the enable write (including
+  after a UDP rebuild). First picture waits the GOP-reset grace before a
+  second enable or UDP rebuild, and does not GOP-cut a live picture with
+  `still holding for IDR`.
+
 - LUT exposure compensation in the LUT popup (live and playback, iOS and
   Android): plus/minus in half-stops from −3 to +3, applied as input-referred
   gain before the Rec.709 cube. Pull 1–2 after ETTR so the cube's mid-grey
@@ -103,6 +119,11 @@ All notable changes to this project are documented here. The format is based on
   identification mark on Camera-to-Cloud delivery.
 
 ### Changed
+
+- Landing-page camera matrix: Pocket 4P and Pocket 4 working, Pocket 3 and
+  Nano partial, Action 5 and 6 untested. Press cards for CineD and Gadget
+  Pilipinas use each article's thumbnail. Operator quotes from Reddit and
+  The Verge. Footer coffee link to buymeacoffee.com/eriksutton.
 
 - Agent instructions are a thin [`AGENTS.md`](AGENTS.md) index. Operator-visible
   contract lives in [`docs/PARITY.md`](docs/PARITY.md); live UDP and decoder
@@ -323,6 +344,29 @@ All notable changes to this project are documented here. The format is based on
   invert and extra-mirror follow `GimbalStickMapping` only, same as Android.
 
 ### Fixed
+
+- First picture ingest pktType `0x02` on UDP handshake ack, not on
+  `0x09/0xa8`. Mimo is on-screen ~17 ms after SoftAP DHCP; enable at +3 s
+  is a later PLI. Waiting for live view no longer sits through an 8 s IDR
+  grace on an already-rolling feed.
+
+- White balance Auto keeps tint (`0x02/0x2C` `00 00 00 <tint>`), matching Mimo.
+  Auto no longer zeros tint, and a missed ACK no longer reverts the WB HUD.
+  Kelvin/tint drums are latest-wins (one SET in flight, 100 ms coalesce) so a
+  scrub cannot flood unacked writes. Tint while Auto stays Auto.
+
+- FORMAT and zoom chips follow the connected body. FORMAT tabs/drum come from
+  `camcap_video_format` (Pocket 4 Pro Video is 4K/1080 24–60; SlowMo 100/120/240
+  is not a labeled Video SET). Zoom chips: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4
+  1×/2×/4× (no second tele); Pocket 3 1×/2×/4× but 4K Video max 2×; Nano 1×.
+  SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3× optical).
+
+- Pocket 3 first picture: 4K 25/30 boot with HUD and gimbal live stayed
+  black until the operator switched FORMAT to 1080 and back to 4K. Same-tab
+  FORMAT is a no-op, so that `0x02/0x18` round-trip never left the wire.
+  After one failed enable, first-picture recovery now SETs the other labeled
+  resolution, restores the boot 4K, then sends one `0x09/0xa8`. Pocket 4 /
+  4 Pro stay on the enable / UDP ladder. (#147)
 
 - Zoom while recording in D-Log2: the chip now grays (same 0.4 as interface
   lock) but stays hittable. Chip tap and pinch toast

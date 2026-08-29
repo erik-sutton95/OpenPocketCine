@@ -38,6 +38,7 @@ re-run the checklist.
   SoftAP passphrase. Keep them under `captures/` (gitignored).
 - **Personal information (PII).** Real email addresses (other than the project's public commit
   identity), legal names, home addresses, phone numbers, device identifiers, and account handles.
+  Waitlist exports and Play tester CSVs stay in `.local/` — never commit them.
   Route contact through GitHub-native channels (Security Advisories, maintainer profiles).
 - **Vendor / proprietary protocol material.** Any vendor SDK, specification PDF, header, binary, or
   network capture (`*.pcap`, `*.pcapng`). Protocol facts must be attributable to public sources in

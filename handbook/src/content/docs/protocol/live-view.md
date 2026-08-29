@@ -22,7 +22,15 @@ The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 90
 
 Pocket live-entry also sends DUML **`0x02/0x68`** payload `08` (AE Lock Status Set, same bytes as the tap-focus hint) **immediately before** `0x09/0xa8`. Mimo `mimo-disconnect-20260822-105228`: first live after gallery is `0x68` then an `0xa8` burst then a 137 B VPS (NAL 32/33/34). Return-from-gallery on the same 5-tuple can skip `0x68` and still start on VPS. There is **no** live-stop command — Disconnect leaves the last GOP running, which is why handshake can see leftover TRAIL P-frames (`nals=1,35,40`) before enable. Nano has no captured `0x68` pair.
 
-Drop leftover `0x02` **until the enable write**, then ingest immediately. Do **not** wait for a DUML `0x09/0xa8` ACK — Mimo does not, and the VPS often arrives first (25–167 ms). A 200 ms ACK wait on Android dropped that IDR as leftover GOP (`videoPkts=0`, HUD stuck on Waiting for live view). The client 5-tuple uses an **ephemeral local port**; binding local `:9004` (camera's listen port) keeps `0x01` telemetry and drops HEVC.
+Ingest pktType `0x02` as soon as the UDP handshake is acked. Mimo
+`mimo-live-start-20260828`: first HEVC 17 ms after SoftAP DHCP; first
+`0x09/0xa8` at +3 s (286 video packets already received). Enable is PLI for
+a dead encoder, not a gate to look. Decoder latches VPS/SPS only, so leftover
+TRAIL P-frames from the previous GOP do not present. Do **not** wait for a
+DUML `0x09/0xa8` ACK. A 200 ms ACK wait on Android dropped that IDR as leftover
+GOP (`videoPkts=0`, HUD stuck on Waiting for live view). The client 5-tuple
+uses an **ephemeral local port**; binding local `:9004` (camera's listen port)
+keeps `0x01` telemetry and drops HEVC.
 
 In-app Disconnect is not process death. The camera keeps the last GOP running, and the phone must still drop its own UDP driver (generation / closed flag, callbacks, ACK pump) and decoder (VideoToolbox session + display-layer flush on iOS; MediaCodec output thread + Surface unbind on Android). A cancelled handshake `open()` must not publish LIVE after the operator already left. Leaving those live is why reconnect hung on Waiting for live view until the app was killed.
 
@@ -36,6 +44,8 @@ DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
 Sending Pocket `0x08` to Nano ACKs **`E0`** with **zero** pktType-`0x02`. Mimo first got `E0`/`D6` while still in playback, then `00` after exit. Nano also pairs enable with **`0x02/0x09`** `00…03` (stop `00…04`), ACK `00`, `rcv=0x01`. Do not send `0x02/0x0c` to start live view. (App → camera).
 
 This **is** the IDR request — there is no separate PLI opcode. Each send is followed by VPS/SPS/PPS + IDR in ~25–167 ms. There is **no periodic GOP**; a 30 s stretch of ~25 fps P-frames is normal until the next enable. Recording 4K 50p does not raise the SoftAP monitor rate — Mimo `mimo-disconnect-20260822-105228` / `mimo-settings-1` measure ~20–25 HEVC frames/s with the same `0xa8` payload `00 04 02 00…`.
+
+Pocket 3 can boot 4K 25/30 with chrome and gimbal live while pktType `0x02` never starts. Operators unstick that by SETting 1080 then 4K (`0x02/0x18`). OpenPocketCine does that round-trip once on first picture (restore the boot format, then one `0x09/0xa8`). Pocket 4 / 4 Pro do not. The live monitor is still 720p; this is an encoder kick, not a 4K SoftAP stream.
 
 :::caution[Do not re-enable every second]
 Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug).

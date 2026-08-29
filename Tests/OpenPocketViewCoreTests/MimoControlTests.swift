@@ -234,9 +234,22 @@ import Testing
     @Test func whiteBalancePackAndParse() {
         #expect(Commands.setWhiteBalanceAuto().cmdId == 0x2C)
         #expect(Commands.setWhiteBalanceAuto().payload == [0x00, 0x00, 0x00, 0x00, 0x00])
+        // Mimo Auto keeps tint (capture mimo-wb-20260828): `00 00 00 14 00`.
+        #expect(
+            Commands.setWhiteBalanceAuto(tint: 20).payload == [0x00, 0x00, 0x00, 0x14, 0x00])
+        #expect(
+            Commands.setWhiteBalanceAuto(tint: -25).payload == [0x00, 0x00, 0x00, 0xE7, 0xFF])
+        #expect(
+            WhiteBalance.auto(tint: 20).setPayload == [0x00, 0x00, 0x00, 0x14, 0x00])
+        #expect(
+            WhiteBalance(mode: .auto, kelvin: 5600, tint: 20).setPayload
+                == [0x00, 0x00, 0x00, 0x14, 0x00])
         #expect(
             Commands.setWhiteBalanceCustom(kelvin: 3000, tint: 0).payload
                 == [0x06, 0x1E, 0x00, 0x00, 0x00])
+        #expect(
+            Commands.setWhiteBalanceCustom(kelvin: 4200, tint: 20).payload
+                == [0x06, 0x2A, 0x00, 0x14, 0x00])
         #expect(
             Commands.setWhiteBalanceCustom(kelvin: 2000, tint: -5).payload
                 == [0x06, 0x14, 0x00, 0xFB, 0xFF])
@@ -262,6 +275,20 @@ import Testing
         #expect(s.whiteBalance == WhiteBalance.custom(kelvin: 3000, tint: -5))
         #expect(s.whiteBalanceKelvin == 3000)
         #expect(s.whiteBalanceTint == -5)
+
+        var autoEffect = [UInt8](repeating: 0, count: 16)
+        autoEffect[2] = 0x3F
+        autoEffect[4] = 0x00
+        autoEffect[5] = 0x2E
+        autoEffect[6] = 0x01  // 0x012e would be 30200K if we trusted Auto @5–6
+        autoEffect[7] = 0x14
+        autoEffect[8] = 0x00
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_image_effect", value: autoEffect), to: &s))
+        #expect(s.whiteBalance == WhiteBalance.auto(tint: 20))
+        #expect(s.whiteBalanceKelvin == 3000)
+        #expect(s.whiteBalanceTint == 20)
     }
 
     @Test func audioChannel8E() {
@@ -519,6 +546,21 @@ import Testing
         }
         #expect(VideoResolution.allCases.count == 2)
         #expect(VideoFrameRate.allCases.count == 6)
+        let boot = VideoFormat(resolution: .p4K, frameRate: .fps25)
+        let kick = VideoFormat.firstPictureEncoderKick(from: boot)
+        #expect(kick == VideoFormat(resolution: .p1080, frameRate: .fps25))
+        #expect(VideoFormat.firstPictureEncoderKick(from: kick) == boot)
+        #expect(
+            VideoFormat.firstPictureOriginal(
+                format: boot, resolution: nil, fps: 0) == boot)
+        #expect(
+            VideoFormat.firstPictureOriginal(
+                format: nil, resolution: .p4K, fps: 30)
+                == VideoFormat(resolution: .p4K, frameRate: .fps30))
+        #expect(
+            VideoFormat.firstPictureOriginal(format: nil, resolution: nil, fps: 0)
+                == VideoFormat(resolution: .p4K, frameRate: .fps30),
+            "unknown falls back to 4K 30, not 1080 24")
     }
 
     @Test func timecodeAt3to6() {
@@ -1117,6 +1159,7 @@ import Testing
         let key = CameraSetMailbox.zoomOpcodeKey
         #expect(CameraSetMailbox.pipelinesWhileOpen(key))
         #expect(!CameraSetMailbox.pipelinesWhileOpen(Duml.opcodeKey(set: 0x02, cmd: 0x28)))
+        #expect(!CameraSetMailbox.pipelinesWhileOpen(Duml.opcodeKey(set: 0x02, cmd: 0x2C)))
         #expect(zoom.offer(key: key, urgent: false, now: 0) == .launch)
         zoom.beginLaunch(key: key, now: 0)
         zoom.noteTransmit(key: key, seq: 1)
@@ -1134,6 +1177,18 @@ import Testing
         #expect(zoom.decideAck(key: key, seq: 3) == .accept)
         #expect(!CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate, key: key))
         #expect(CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate))
+    }
+
+    @Test func mailboxHoldsWhiteBalanceOneInFlight() {
+        var box = CameraSetMailbox()
+        let key = Duml.opcodeKey(set: 0x02, cmd: 0x2C)
+        #expect(box.offer(key: key, urgent: false, now: 0) == .launch)
+        box.beginLaunch(key: key, now: 0)
+        box.noteTransmit(key: key, seq: 1)
+        #expect(box.offer(key: key, urgent: false, now: 0.05) == .coalescePending)
+        #expect(box.offer(key: key, urgent: true, now: 0.05) == .coalescePending)
+        #expect(box.decideAck(key: key, seq: 1) == .accept)
+        #expect(box.pendingLaunch(key: key, now: 0.05) == .immediate)
     }
 
     @Test func mailboxAcceptsLateAckForOpenSeq() {

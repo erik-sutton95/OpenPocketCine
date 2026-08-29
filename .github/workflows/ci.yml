@@ -50,15 +50,38 @@ jobs:
           ./scripts/ios-release-notes-check.sh
           ./scripts/ios-release-notes-test.sh
 
+      - name: Play closed-testing notes
+        run: |
+          ./scripts/android-release-notes-check.sh
+          ./scripts/android-release-notes-test.sh
+          ./scripts/prepare-android-testers-test.sh
+
       - name: Require reviewed notes for TestFlight-triggering pull requests
         if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           changed_files="$(git diff --name-only "$BASE_SHA"...HEAD)"
-          if grep -Eq '^(Sources/|Tests/|ios/|Package\.swift$|scripts/|justfile$)' <<< "$changed_files"; then
+          if grep -Eq '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files"; then
             if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update ios/TestFlight/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Require reviewed notes for Play-triggering pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed_files="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          if grep -Eq '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files"; then
+            if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
+              echo "Update Apps/Android/Play/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
+              exit 1
+            fi
+            if ! grep -Fxq 'Apps/Android/Play/whatsnew/whatsnew-en-US' <<< "$changed_files"; then
+              echo "Update Apps/Android/Play/whatsnew/whatsnew-en-US (Play allows 500 characters)." >&2
               exit 1
             fi
           fi

@@ -487,6 +487,10 @@ class CaptureSheetTest {
         assertEquals(7, CaptureLists.currentTint(unknownKelvin))
         assertEquals("5600K", CaptureLists.wbDrumSelection(autoCleared))
         assertEquals("3200K", CaptureLists.wbDrumSelection(custom))
+        val autoKeepsLast =
+            CameraStatus(wbMode = CameraCommands.WB_AUTO, wbKelvin = 4200, wbTint = 20)
+        assertEquals(4200 to 20, CaptureLists.wbCustomFromStatus(autoKeepsLast))
+        assertEquals("4200K", CaptureLists.wbDrumSelection(autoKeepsLast))
     }
 
     @Test
@@ -514,6 +518,13 @@ class CaptureSheetTest {
         val status = CameraStatus(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = 5600, wbTint = 0)
         assertEquals(5600 to -10, CaptureLists.wbCustomFromTint(-10f, status))
         assertEquals(5600 to 100, CaptureLists.wbCustomFromTint(140f, status))
+        assertTrue(
+            !CaptureLists.wbTintStaysAuto(
+                CameraStatus(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = 5600),
+            ),
+        )
+        assertTrue(CaptureLists.wbTintStaysAuto(CameraStatus(wbMode = CameraCommands.WB_AUTO)))
+        assertTrue(CaptureLists.wbTintStaysAuto(CameraStatus()))
     }
 
     @Test
@@ -1134,11 +1145,57 @@ class CaptureSheetTest {
             VideoFormat.nextForDrum(live, tab = 0, drum = "60p"),
         )
         assertNull(VideoFormat.nextForDrum(live, tab = 0, drum = "120p"))
+        val boot = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25)
+        assertEquals(
+            VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS25),
+            VideoFormat.firstPictureEncoderKick(boot),
+        )
+        assertEquals(
+            boot,
+            VideoFormat.firstPictureOriginal(
+                CameraStatus(
+                    fps = 25,
+                    resolutionCode = CameraCommands.RES_4K,
+                    fpsIndex = 2,
+                ),
+            ),
+        )
+        assertEquals(
+            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS30),
+            VideoFormat.firstPictureOriginal(CameraStatus()),
+            "unknown falls back to 4K 30, not 1080 24",
+        )
         assertEquals(VideoResolution.P4K, VideoResolution.fromTabIndex(1))
         assertEquals(VideoResolution.P1080, VideoResolution.fromTabIndex(0))
         assertEquals(
             listOf("1080", "4K"),
             CaptureLists.modeTabs(LiveSheet.FORMAT, expoMode = -1, offersIsoAuto = false),
+        )
+        val fourKOnly =
+            live.copy(
+                resolutionCode = CameraCommands.RES_4K,
+                fpsIndex = 1,
+                fps = 24,
+                availableVideoFormats =
+                    listOf(
+                        VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS24),
+                        VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25),
+                    ),
+            )
+        assertEquals(
+            listOf("4K"),
+            CaptureLists.modeTabs(LiveSheet.FORMAT, fourKOnly, offersIsoAuto = false),
+        )
+        assertEquals(
+            listOf("24p", "25p"),
+            CaptureLists.fpsDrumLabels(fourKOnly, tab = 0),
+        )
+        assertEquals(
+            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25),
+            CaptureLists.nextVideoFormat(fourKOnly, tab = 0, drum = "25p", fromDrum = true),
+        )
+        assertNull(
+            CaptureLists.nextVideoFormat(fourKOnly, tab = 0, drum = "60p", fromDrum = true),
         )
     }
 

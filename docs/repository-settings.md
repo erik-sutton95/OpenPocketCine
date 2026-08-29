@@ -22,7 +22,13 @@ changes through the API or
 - Actions on. Default `GITHUB_TOKEN` is read-only. SHA-1 pinning required.
 - Workflows may not create or approve pull requests.
 - First-time contributors' fork workflows need approval (set at publish).
-- No repository secrets. Optional Pages variable: `TESTFLIGHT_URL`.
+- No secrets on `pull_request` workflows (forks would see them). Optional Pages
+  variable: `TESTFLIGHT_URL`.
+- Play closed testing uses Environment **play-closed** secrets
+  (`PLAY_SERVICE_ACCOUNT_JSON`, `ANDROID_KEYSTORE_*`), consumed only by
+  `.github/workflows/android-play.yml` (`workflow_dispatch` and `push` to
+  `main`). Auto-upload is the repository variable `ANDROID_PLAY_UPLOAD`.
+  See [`android-play-ci.md`](android-play-ci.md).
 - Hosted runners only. Do not add a self-hosted runner — CI executes pull
   request code.
 

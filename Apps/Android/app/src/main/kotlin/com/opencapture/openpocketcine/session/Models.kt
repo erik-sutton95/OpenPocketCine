@@ -19,16 +19,67 @@ data class CameraModel(
     val supportsTapFocus: Boolean = true,
     val supportsFocusMode: Boolean = true,
     val usesCapturedLiveEnable: Boolean = true,
+    /** Pocket 3 first picture: SET 1080 then boot 4K. Not Pocket 4. */
+    val needsFirstPictureFormatPoke: Boolean = false,
+    /** Video-mode chip cycle. 4 Pro 1/3/6/12; Pocket 4/3 1/2/4; Nano 1. */
+    val zoomStops: List<Double> = listOf(1.0, 2.0, 4.0),
 ) {
+    val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
+
+    /**
+     * Chip cycle for this body, current FORMAT, and shooting mode.
+     * SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3×).
+     * Pocket 3 4K Video max is 2× (DJI spec).
+     */
+    fun activeZoomStops(resolutionCode: Int = -1, shootingMode: Int = -1): List<Double> {
+        val n = name.lowercase().replace(" ", "")
+        val isPro = n.contains("pocket4p") || n.contains("4pro")
+        val isPocket4 = n.contains("pocket4")
+        val isPocket3 = n.contains("pocket3") || n.contains("muse")
+        val digitalLocked =
+            shootingMode == CameraCommands.SHOOT_SLOWMO ||
+                shootingMode == CameraCommands.SHOOT_TIMELAPSE ||
+                shootingMode == CameraCommands.SHOOT_SUPER_NIGHT
+        if (isPro) return if (digitalLocked) listOf(1.0, 3.0) else listOf(1.0, 3.0, 6.0, 12.0)
+        if (digitalLocked) return listOf(1.0)
+        if (isPocket4) return listOf(1.0, 2.0, 4.0)
+        if (isPocket3) {
+            return if (resolutionCode == CameraCommands.RES_4K) listOf(1.0, 2.0) else listOf(1.0, 2.0, 4.0)
+        }
+        if (family != "pocket") return listOf(1.0)
+        return zoomStops.ifEmpty { listOf(1.0, 2.0, 4.0) }
+    }
+
     companion object {
         val default = CameraModel(name = "DJI Osmo camera")
+
+        fun looksLikePocket3(name: String): Boolean {
+            val n = name.lowercase().replace(" ", "")
+            return n.contains("pocket3") || n.contains("muse")
+        }
+
+        fun zoomStopsFor(name: String, family: String): List<Double> {
+            val n = name.lowercase().replace(" ", "")
+            if (n.contains("pocket4p") || n.contains("4pro")) return listOf(1.0, 3.0, 6.0, 12.0)
+            if (n.contains("pocket4") || n.contains("pocket3") || n.contains("muse")) {
+                return listOf(1.0, 2.0, 4.0)
+            }
+            return if (family == "pocket") listOf(1.0, 2.0, 4.0) else listOf(1.0)
+        }
+
+        private fun zoomStopsFromJson(obj: JSONObject, name: String, family: String): List<Double> {
+            val arr = obj.optJSONArray("zoomStops") ?: return zoomStopsFor(name, family)
+            if (arr.length() == 0) return zoomStopsFor(name, family)
+            return (0 until arr.length()).map { arr.optDouble(it) }.filter { it >= 1.0 }
+        }
 
         fun fromJson(raw: String?): CameraModel {
             if (raw.isNullOrBlank()) return default
             return runCatching {
                 val obj = JSONObject(raw)
+                val name = obj.optString("name", default.name)
                 CameraModel(
-                    name = obj.optString("name", default.name),
+                    name = name,
                     datalinkPort = obj.optInt("datalinkPort", 9004),
                     tcpPoke = obj.optBoolean("tcpPoke", true),
                     wpa3 = obj.optBoolean("wpa3", false),
@@ -41,6 +92,9 @@ data class CameraModel(
                     supportsTapFocus = obj.optBoolean("supportsTapFocus", true),
                     supportsFocusMode = obj.optBoolean("supportsFocusMode", true),
                     usesCapturedLiveEnable = obj.optBoolean("usesCapturedLiveEnable", true),
+                    needsFirstPictureFormatPoke =
+                        obj.optBoolean("needsFirstPictureFormatPoke", looksLikePocket3(name)),
+                    zoomStops = zoomStopsFromJson(obj, name, obj.optString("family", "pocket")),
                 )
             }.getOrElse { default }
         }
@@ -116,6 +170,7 @@ data class CameraStatus(
     val fpsIndex: Int = -1,
     /** `cam_image_effect` `@4` — `00` Auto / `06` Custom. `-1` unknown. */
     val wbMode: Int = -1,
+    /** Last Custom Kelvin. Auto does not clear this. `-1` unknown. */
     val wbKelvin: Int = -1,
     val wbTint: Int = 0,
     /** `01` Single / `02` Continuous from `cam_lens_state` `@0` `B1`/`B2`. `-1` unknown. */
@@ -144,6 +199,8 @@ data class CameraStatus(
     val isoLimit: Int = -1,
     /** Legal `0x02/0x42` values from `camcap_color_mode`. */
     val availableColorModes: List<Int> = emptyList(),
+    /** Legal `0x02/0x18` pairs from `camcap_video_format`. Empty until that push. */
+    val availableVideoFormats: List<VideoFormat> = emptyList(),
     /** AF point from `cam_lens_state`. 0.5, 0.5 until a tap. */
     val focusX: Double = 0.5,
     val focusY: Double = 0.5,
@@ -238,6 +295,7 @@ data class CameraStatus(
                 evComp >= 0 ||
                 isoLimit >= 0 ||
                 availableColorModes.isNotEmpty() ||
+                availableVideoFormats.isNotEmpty() ||
                 hasCameraFocusPoint ||
                 focusTrack >= 0 ||
                 zoomLens >= 0 ||
@@ -304,6 +362,7 @@ data class CameraStatus(
             evComp = prev.evComp,
             isoLimit = prev.isoLimit,
             availableColorModes = prev.availableColorModes,
+            availableVideoFormats = prev.availableVideoFormats,
             focusX = prev.focusX,
             focusY = prev.focusY,
             hasCameraFocusPoint = prev.hasCameraFocusPoint,
@@ -361,6 +420,7 @@ data class CameraStatus(
             .put("evComp", evComp)
             .put("isoLimit", isoLimit)
             .put("availableColorModes", JSONArray(availableColorModes))
+            .put("availableVideoFormats", videoFormatsJson())
             .put("focusX", focusX)
             .put("focusY", focusY)
             .put("hasCameraFocusPoint", hasCameraFocusPoint)
@@ -377,6 +437,16 @@ data class CameraStatus(
             .put("audioPeakLeft", audioPeakLeft)
             .put("audioPeakRight", audioPeakRight)
             .toString()
+
+    /** Interleaved `[res, fps, …]` matching JNI `statusJSON`. */
+    private fun videoFormatsJson(): JSONArray {
+        val arr = JSONArray()
+        for (format in availableVideoFormats) {
+            arr.put(format.resolution.rawValue)
+            arr.put(format.frameRate.rawValue)
+        }
+        return arr
+    }
 
     /** Core `WindNoiseReduction` raw (`1A`/`18`); Kotlin HUD keeps `windNr` as 0/1. */
     private fun windNRJson(): Int =
@@ -444,6 +514,7 @@ data class CameraStatus(
                     evComp = obj.optInt("evComp", -1),
                     isoLimit = obj.optInt("isoLimit", -1),
                     availableColorModes = intList(obj.optJSONArray("availableColorModes")),
+                    availableVideoFormats = videoFormatList(obj.optJSONArray("availableVideoFormats")),
                     focusX = obj.optDouble("focusX", 0.5),
                     focusY = obj.optDouble("focusY", 0.5),
                     hasCameraFocusPoint = obj.optBoolean("hasCameraFocusPoint", false),
@@ -467,6 +538,20 @@ data class CameraStatus(
             if (arr == null) return emptyList()
             return buildList(arr.length()) {
                 for (i in 0 until arr.length()) add(arr.optInt(i))
+            }
+        }
+
+        /** Interleaved `[res, fps, res, fps, …]` from the JNI status JSON. */
+        private fun videoFormatList(arr: JSONArray?): List<VideoFormat> {
+            if (arr == null) return emptyList()
+            val flat = intList(arr)
+            if (flat.size < 2) return emptyList()
+            return buildList(flat.size / 2) {
+                var i = 0
+                while (i + 1 < flat.size) {
+                    VideoFormat.parse(flat[i], flat[i + 1])?.let { add(it) }
+                    i += 2
+                }
             }
         }
 

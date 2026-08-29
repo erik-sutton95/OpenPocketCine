@@ -137,7 +137,7 @@ fun LiveControlSheet(
     var drumJob by remember { mutableStateOf<Job?>(null) }
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
     val isAngleSheet = CaptureLists.isAngleSheet(sheet, status.expoMode, selectedMode)
-    val tabs = CaptureLists.modeTabs(sheet, status.expoMode, offersIsoAuto)
+    val tabs = CaptureLists.modeTabs(sheet, status, offersIsoAuto)
     val bodyFamily = model.session.connectedCamera?.model?.family ?: "pocket"
 
     fun enqueueDrumSend(send: () -> Unit) {
@@ -192,7 +192,8 @@ fun LiveControlSheet(
 
     fun reseatResolution() {
         val format = VideoFormat.current(status)
-        selectedMode = VideoResolution.entries.indexOf(format.resolution).coerceAtLeast(0)
+        val tabs = CaptureLists.formatResolutions(status)
+        selectedMode = tabs.indexOf(format.resolution).coerceAtLeast(0)
         val label = format.frameRate.drumLabel
         drumSelection = label
         lastApplied = label
@@ -225,12 +226,7 @@ fun LiveControlSheet(
     }
 
     fun applyVideoFormat(tab: Int, drum: String, fromDrum: Boolean) {
-        val next =
-            if (fromDrum) {
-                VideoFormat.nextForDrum(status, tab, drum)
-            } else {
-                VideoFormat.nextForTab(status, tab, drum)
-            } ?: return
+        val next = CaptureLists.nextVideoFormat(status, tab, drum, fromDrum) ?: return
         model.setVideoFormat(next)
     }
 
@@ -360,7 +356,7 @@ fun LiveControlSheet(
     LaunchedEffect(sheet, status.evComp, model.facePriorityExposureEnabled) {
         if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
     }
-    LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex) {
+    LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.availableVideoFormats) {
         if (sheet == LiveSheet.FORMAT) reseatResolution()
     }
     LaunchedEffect(sheet, status.colorMode) {
@@ -532,9 +528,14 @@ fun LiveControlSheet(
                                 enabled = enabled,
                                 onTint = { tintDraft = it },
                                 onCommit = { value ->
-                                    val custom = CaptureLists.wbCustomFromTint(value, status)
-                                    tintDraft = custom.second.toFloat()
-                                    model.setWhiteBalance(custom.first, custom.second)
+                                    val tint = CaptureLists.roundedTint(value)
+                                    tintDraft = tint.toFloat()
+                                    if (CaptureLists.wbTintStaysAuto(status)) {
+                                        model.setWhiteBalanceAuto(tint)
+                                    } else {
+                                        val custom = CaptureLists.wbCustomFromTint(value, status)
+                                        model.setWhiteBalance(custom.first, custom.second)
+                                    }
                                 },
                             )
                         }
@@ -574,7 +575,7 @@ fun LiveControlSheet(
                 LiveSheet.FORMAT ->
                     androidx.compose.runtime.key(selectedMode) {
                         CaptureDrumWheel(
-                            options = CaptureLists.fpsDrumLabels,
+                            options = CaptureLists.fpsDrumLabels(status, selectedMode),
                             selection = drumSelection,
                             interactive = enabled,
                             maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = true),
@@ -1211,8 +1212,10 @@ private fun initialSelectedMode(
             if (CaptureLists.offersIsoAuto(status) && status.isoIndex != 0) 1 else 0
         LiveSheet.SHUTTER -> if (!isEvSheet && model.shutterUsesAngle) 1 else 0
         LiveSheet.WB -> CaptureLists.wbInitialTab(status)
-        LiveSheet.FORMAT ->
-            VideoResolution.entries.indexOf(VideoFormat.current(status).resolution).coerceAtLeast(0)
+        LiveSheet.FORMAT -> {
+            val format = VideoFormat.current(status)
+            CaptureLists.formatResolutions(status).indexOf(format.resolution).coerceAtLeast(0)
+        }
         else -> 0
     }
 
@@ -1493,14 +1496,52 @@ object CaptureLists {
         }
 
     fun modeTabs(sheet: LiveSheet, expoMode: Int, offersIsoAuto: Boolean): List<String> =
+        modeTabs(sheet, CameraStatus(expoMode = expoMode), offersIsoAuto)
+
+    fun modeTabs(sheet: LiveSheet, status: CameraStatus, offersIsoAuto: Boolean): List<String> =
         when {
             sheet == LiveSheet.ISO && offersIsoAuto -> listOf("Auto", "Manual")
-            sheet == LiveSheet.SHUTTER -> shutterModeTabs(isEvSheet(sheet, expoMode))
+            sheet == LiveSheet.SHUTTER -> shutterModeTabs(isEvSheet(sheet, status.expoMode))
             sheet == LiveSheet.WB -> CaptureLists.wbTabs
             sheet == LiveSheet.AUDIO -> CaptureLists.audioTabs
-            sheet == LiveSheet.FORMAT -> VideoResolution.tabTitles
+            sheet == LiveSheet.FORMAT -> formatResolutions(status).map { it.tabTitle }
             else -> emptyList()
         }
+
+    fun formatResolutions(status: CameraStatus): List<VideoResolution> =
+        VideoFormat.resolutions(status.availableVideoFormats, VideoFormat.current(status).resolution)
+
+    fun formatRates(status: CameraStatus, resolution: VideoResolution): List<VideoFrameRate> =
+        VideoFormat.frameRates(
+            status.availableVideoFormats,
+            resolution,
+            VideoFormat.current(status).frameRate,
+        )
+
+    fun fpsDrumLabels(status: CameraStatus, tab: Int): List<String> {
+        val res = formatResolutions(status).getOrNull(tab) ?: VideoFormat.current(status).resolution
+        return formatRates(status, res).map { it.drumLabel }
+    }
+
+    fun nextVideoFormat(
+        status: CameraStatus,
+        tab: Int,
+        drum: String,
+        fromDrum: Boolean,
+    ): VideoFormat? {
+        val resolutions = formatResolutions(status)
+        val res = resolutions.getOrNull(tab) ?: return null
+        val rates = formatRates(status, res)
+        val parsed = VideoFrameRate.fromDrumLabel(drum)
+        val rate =
+            when {
+                fromDrum -> parsed?.takeIf { it in rates } ?: return null
+                parsed != null && parsed in rates -> parsed
+                else -> rates.firstOrNull() ?: return null
+            }
+        val next = VideoFormat(res, rate)
+        return next.takeIf { it != VideoFormat.current(status) }
+    }
 
     val audioTabs: List<String> = listOf("Channel", "Wind", "Dir", "Vocal")
     val audioChannelLabels: List<String> = listOf("Stereo", "Mono", "Spatial")
@@ -1863,6 +1904,9 @@ object CaptureLists {
 
     fun wbCustomFromTint(tint: Float, status: CameraStatus): Pair<Int, Int> =
         currentKelvin(status) to roundedTint(tint)
+
+    fun wbTintStaysAuto(status: CameraStatus): Boolean =
+        status.wbMode != CameraCommands.WB_CUSTOM
 
     fun fpsDrumLabel(status: CameraStatus): String = VideoFormat.current(status).frameRate.drumLabel
 

@@ -9,19 +9,19 @@ New and changed
 
 Fixes
 
+- Live view should come up in a couple of seconds after Wi-Fi joins — not a long Waiting for live view. If the picture dies while the camera is still talking, it asks for a fresh frame instead of sitting black.
+- White balance Auto keeps tint. Scrubbing Kelvin or tint should not flood the camera. Tint while Auto stays Auto.
+- Zoom chips match the body: Pocket 4 Pro 1× / 3× / 6× / 12×; Pocket 4 1× / 2× / 4×. FORMAT only lists what this camera can do (Video is 4K / 1080 24–60).
 - Turning LUT on in library playback no longer stutters. Play and scrub should feel like LUT off.
 - While recording in D-Log2 the zoom chip grays out. Tap or pinch explains that color cannot change while recording — D-Log2 cannot zoom — and stays at 1×. D-Log still zooms while rolling. Idle D-Log2 still hops. The toast sits under the top bar in DISP 1 and on the picture edge in DISP 2.
-- Traffic Lights crush/clip compensation starts at 0 stops. Long-press LIGHTS if you want the old ¼-stop tolerance.
-- First connect no longer sits on Waiting for live-view when a few video packets arrive and then freeze.
 - After leaving a clip, a dead picture with live camera status rebuilds the socket in about two seconds instead of sitting black for 15.
-- The live feed comes up as soon as the camera answers. If the picture dies while the camera is still talking, the app asks for a fresh frame instead of sitting black.
 - Live WAVE follows the picture instead of stepping every other frame. PARADE / HISTO / VECTOR share that tap.
 - Stick and zoom stay together (zoom above the stick), not glued to record. Rotate-180 inverts stick L/R when the turn finishes; joystick-only 180 does not. Live extra-mirrors at 180 when Control Center Selfie Flip is off; Flip on skips it.
 
 What to test
 
+- Pair and join camera Wi-Fi. Picture should fill the monitor in a couple of seconds. WB Auto: change tint, switch Custom / Auto. On a 4 Pro, cycle zoom 1×→3×→6×→12×. FORMAT should offer 4K and 1080 at 24–60, not 120p in Video.
 - Open a 720p clip, play with LUT off, then turn on the official D-Log2 cube. Play and scrub should stay as smooth as LUT off. Auto LUT should pick D-Log vs D-Log2 from the original take (not the 720p preview). Disconnect, reopen that clip — Auto should still pick the same cube. Proxy tag on 720p-only cache. Long-press LUT, pull −1.0 / −2.0. With LUT on, tap next clip — the look should already be on the new picture.
 - Share that clip with Bake LUT on. Bake exposure should be on by default — a −1.0 pull should land in the file, matching the monitor. Turn Bake exposure off to keep the cube at 0.0. Share without Bake LUT still sends the original camera clip, not a small preview.
-- Leave the clip and confirm live view returns in a couple of seconds — not a long black well.
 - Color D-Log2, hit REC: zoom chip should gray. Tap and pinch should toast and stay at 1×. Stop — idle D-Log2 should still hop and zoom. D-Log while rolling should still zoom. In DISP 1 the toast sits under the top bar; DISP 2 it sits on the feed edge.
 - On live, turn WAVE on and pan the Pocket. Traces should move with the picture, not hold two frames. Then triple-tap 180: stick L/R should match the picture. Flip off extra-mirrors; Flip on does not. Toggle Flip several times while at 180 — extra-mirror should follow Flip, and record/zoom should keep answering.

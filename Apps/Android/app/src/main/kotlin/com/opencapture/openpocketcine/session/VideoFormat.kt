@@ -38,6 +38,9 @@ enum class VideoFrameRate(val rawValue: Int, val fps: Int) {
             entries.firstOrNull { it.drumLabel == label }
 
         val drumLabels: List<String> get() = entries.map { it.drumLabel }
+
+        /** Labeled Video-mode SET. SlowMo 100/120/240 is display-only. */
+        val labeledVideo: List<VideoFrameRate> get() = entries
     }
 }
 
@@ -61,6 +64,22 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
             return parse(value[0].toInt() and 0xFF, value[1].toInt() and 0xFF)
         }
 
+        /** Other labeled resolution, same fps. iOS `VideoFormat.firstPictureEncoderKick`. */
+        fun firstPictureEncoderKick(original: VideoFormat): VideoFormat =
+            VideoFormat(
+                if (original.resolution == VideoResolution.P4K) VideoResolution.P1080
+                else VideoResolution.P4K,
+                original.frameRate,
+            )
+
+        /** Reported P3 boot is 4K 25/30. Unknown falls back to 4K 30, not 1080 24. */
+        fun firstPictureOriginal(status: CameraStatus): VideoFormat {
+            parse(status.resolutionCode, status.fpsIndex)?.let { return it }
+            val res = VideoResolution.fromRaw(status.resolutionCode) ?: VideoResolution.P4K
+            val rate = VideoFrameRate.fromFps(status.fps) ?: VideoFrameRate.FPS30
+            return VideoFormat(res, rate)
+        }
+
         /** iOS `LiveTopChrome.recFormatLabel`. */
         fun chipLabel(status: CameraStatus): String {
             parse(status.resolutionCode, status.fpsIndex)?.let { return it.chipLabel }
@@ -75,6 +94,32 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
             val res = VideoResolution.fromRaw(status.resolutionCode) ?: VideoResolution.P1080
             val rate = VideoFrameRate.fromFps(status.fps) ?: VideoFrameRate.FPS24
             return VideoFormat(res, rate)
+        }
+
+        /** iOS `CamCapVideoFormat.resolutions`. Empty camcap → 1080 / 4K tabs. */
+        fun resolutions(available: List<VideoFormat>, current: VideoResolution?): List<VideoResolution> {
+            if (available.isEmpty()) return VideoResolution.entries
+            val out = ArrayList<VideoResolution>()
+            val seen = HashSet<VideoResolution>()
+            for (format in available) {
+                if (seen.add(format.resolution)) out.add(format.resolution)
+            }
+            if (current != null && current !in seen) out.add(0, current)
+            return out
+        }
+
+        /** iOS `CamCapVideoFormat.frameRates`. Empty Video camcap → 24–60. */
+        fun frameRates(
+            available: List<VideoFormat>,
+            resolution: VideoResolution,
+            current: VideoFrameRate?,
+        ): List<VideoFrameRate> {
+            val rates = available.filter { it.resolution == resolution }.map { it.frameRate }
+            if (rates.isEmpty()) {
+                if (current != null && current !in VideoFrameRate.labeledVideo) return listOf(current)
+                return VideoFrameRate.labeledVideo
+            }
+            return rates
         }
 
         /** Tab change: skip the SET when res+fps already match. */

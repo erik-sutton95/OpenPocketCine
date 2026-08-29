@@ -32,6 +32,26 @@ class EncoderPresentPathTest {
         assertFalse(EncoderPresentPath.isVertical(0, 1920))
         assertTrue(EncoderPresentPath.shouldRequestEnableAfterParameterChange(false))
         assertFalse(EncoderPresentPath.shouldRequestEnableAfterParameterChange(true))
+        assertFalse(
+            EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR = false,
+                udpReceiveAlive = true,
+            ),
+        )
+        assertFalse(
+            EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR = false,
+                udpReceiveAlive = false,
+                secondsSinceLastEnable = 2.0,
+            ),
+        )
+        assertTrue(
+            EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR = false,
+                udpReceiveAlive = false,
+                secondsSinceLastEnable = 5.0,
+            ),
+        )
     }
 
     @Test

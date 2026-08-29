@@ -20,7 +20,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Last live D-Log / D-Log2 is the fallback when that atom is missing —
   `colr`/`nclx` is Rec.709 even for log. Opening LUT on a disconnected clip
   keeps that Auto cube (it does not restamp from a missing live SET).
-- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). The gimbal stick
+- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Zoom chips follow
+  the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+  with 4K max 2×; Nano 1×). FORMAT only lists `camcap_video_format` pairs.
+  The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. Stick
   pan stays picture-relative. The rotate-180 button inverts pan at the

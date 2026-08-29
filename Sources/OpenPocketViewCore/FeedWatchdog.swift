@@ -239,6 +239,10 @@ public struct FeedWatchdog: Equatable, Sendable {
             // the watchdog should reopen UDP instead.
             return false
         }
+        if hadVideo, let video = lastVideoPacketAge, video < stallThreshold {
+            // Physical: 25 fps live, then "still holding for IDR" GOP-cut it.
+            return false
+        }
         if !hadVideo {
             return secondsSinceLastEnable >= stallThreshold
         }
@@ -299,18 +303,11 @@ public struct FeedWatchdog: Equatable, Sendable {
             }
         }
 
-        // Encoder pause: status still on 9004, HEVC silent. One enable.
-        // If that enable produced no video packets, the encoder is still
-        // paused — reopen UDP instead of sitting in GOP-reset grace.
+        // Encoder pause: status still on 9004, HEVC silent. One enable,
+        // then escalateAfter between enables. Status on this socket means
+        // the 5-tuple is alive — do not rebuild UDP (physical #148: 2 s
+        // reopen left lastVideo=none and flip notLive).
         if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
-            if stage == .resendEnable,
-                !Self.enableRestartedVideo(
-                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
-                    lastVideoPacketAge: snap.lastVideoPacketAge),
-                snap.now - lastActionAt >= Self.stallThreshold
-            {
-                return fire(.reopenDatalink, at: snap.now)
-            }
             if stage == .idle || snap.now - lastActionAt >= Self.escalateAfter {
                 return fire(.resendLiveViewEnable, at: snap.now)
             }

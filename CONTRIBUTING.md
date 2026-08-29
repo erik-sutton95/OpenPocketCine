@@ -56,6 +56,10 @@ GitHub-specific:
 - Changes that can trigger a TestFlight build must update
   [`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt). See
   [`docs/testflight-ci.md`](docs/testflight-ci.md).
+- Changes that can trigger a Play closed-testing upload must update
+  [`Apps/Android/Play/WhatToTest.en-US.txt`](Apps/Android/Play/WhatToTest.en-US.txt)
+  and the 500-character [`whatsnew-en-US`](Apps/Android/Play/whatsnew/whatsnew-en-US).
+  See [`docs/android-play-ci.md`](docs/android-play-ci.md).
 
 ## Code standards
 

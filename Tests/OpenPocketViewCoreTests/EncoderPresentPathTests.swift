@@ -47,4 +47,22 @@ import Testing
             !EncoderPresentPath.shouldRequestEnableAfterParameterChange(accessUnitHasIDR: true),
             "camera already cut the GOP — a second enable hangs the hold")
     }
+
+    @Test func parameterChangeDoesNotEnableWhileUDPVideoIsAlive() {
+        #expect(
+            !EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR: false, udpReceiveAlive: true),
+            "format SET VPS on a live socket is not a dead encoder — 0x09/0xa8 cuts the GOP")
+        #expect(
+            !EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR: false,
+                udpReceiveAlive: false,
+                secondsSinceLastEnable: 2.0),
+            "debounce to escalateAfter so a SET storm is one enable, not one per hop")
+        #expect(
+            EncoderPresentPath.shouldRequestEnableAfterParameterChange(
+                accessUnitHasIDR: false,
+                udpReceiveAlive: false,
+                secondsSinceLastEnable: 5.0))
+    }
 }

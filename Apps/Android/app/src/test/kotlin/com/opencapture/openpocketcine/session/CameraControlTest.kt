@@ -66,8 +66,20 @@ class CameraControlTest {
         assertEquals(0x06, CameraCommands.WB_CUSTOM)
         assertTrue(CameraCommands.whiteBalanceAuto().contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)))
         assertTrue(
+            CameraCommands.whiteBalanceAuto(20).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x14, 0x00)),
+        )
+        assertTrue(
+            CameraCommands.whiteBalanceAuto(-25).contentEquals(
+                byteArrayOf(0x00, 0x00, 0x00, 0xE7.toByte(), 0xFF.toByte()),
+            ),
+        )
+        assertTrue(
             CameraCommands.whiteBalanceCustom(3000, 0)
                 .contentEquals(byteArrayOf(0x06, 0x1E, 0x00, 0x00, 0x00)),
+        )
+        assertTrue(
+            CameraCommands.whiteBalanceCustom(4200, 20)
+                .contentEquals(byteArrayOf(0x06, 0x2A, 0x00, 0x14, 0x00)),
         )
         assertTrue(
             CameraCommands.whiteBalanceCustom(2000, -5)
@@ -106,10 +118,13 @@ class CameraControlTest {
         val autoBytes = ByteArray(16)
         autoBytes[2] = 0x3F
         autoBytes[4] = CameraCommands.WB_AUTO.toByte()
+        autoBytes[5] = 0x2E
+        autoBytes[6] = 0x01
+        autoBytes[7] = 0x14
         val auto = StatusExtras.applyImageEffect(autoBytes, custom)
         assertEquals(CameraCommands.WB_AUTO, auto.wbMode)
-        assertEquals(-1, auto.wbKelvin)
-        assertEquals(0, auto.wbTint)
+        assertEquals(3000, auto.wbKelvin)
+        assertEquals(20, auto.wbTint)
 
         val unknown = ByteArray(16)
         unknown[2] = 0x3F
@@ -195,6 +210,72 @@ class CameraControlTest {
         assertEquals(120, highRate.fps)
         assertEquals(7, highRate.fpsIndex)
         assertNull(highRate.videoFormat)
+    }
+
+    @Test
+    fun camcapVideoFormatIsResFpsPairs() {
+        val blob =
+            byteArrayOf(
+                0x01, 0x25, 0x00, 0x0C,
+                0x10, 0x01, 0x00, 0x10, 0x02, 0x00, 0x10, 0x03, 0x00,
+                0x10, 0x04, 0x00, 0x10, 0x05, 0x00, 0x10, 0x06, 0x00,
+                0x0A, 0x06, 0x00, 0x0A, 0x05, 0x00, 0x0A, 0x04, 0x00,
+                0x0A, 0x03, 0x00, 0x0A, 0x02, 0x00, 0x0A, 0x01, 0x00,
+            )
+        val formats = CameraCommands.parseVideoFormats(blob)
+        assertEquals(12, formats.size)
+        assertEquals(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS24), formats.first())
+        assertTrue(formats.contains(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60)))
+        assertTrue(formats.contains(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS24)))
+        assertTrue(formats.none { it.frameRate.fps > 60 })
+        val packed = StatusExtras.packSubscribe("camcap_video_format", blob)
+        val next = StatusExtras.applySubscribe(packed, CameraStatus())
+        assertEquals(12, next.availableVideoFormats.size)
+        assertEquals(
+            listOf(VideoResolution.P4K, VideoResolution.P1080),
+            VideoFormat.resolutions(next.availableVideoFormats, VideoResolution.P4K),
+        )
+        assertEquals(
+            listOf(24, 25, 30, 48, 50, 60),
+            VideoFormat.frameRates(
+                next.availableVideoFormats,
+                VideoResolution.P4K,
+                VideoFrameRate.FPS25,
+            ).map { it.fps },
+        )
+    }
+
+    @Test
+    fun zoomStopsFollowTheBody() {
+        val pro = CameraModel(name = "Osmo Pocket 4 Pro", family = "pocket")
+        val pocket4 = CameraModel(name = "Osmo Pocket 4", family = "pocket")
+        val pocket3 = CameraModel(name = "Osmo Pocket 3", family = "pocket")
+        val nano = CameraModel(name = "Osmo Nano", family = "nano")
+        assertEquals(listOf(1.0, 3.0, 6.0, 12.0), pro.activeZoomStops())
+        assertEquals(listOf(1.0, 2.0, 4.0), pocket4.activeZoomStops())
+        assertEquals(listOf(1.0, 2.0, 4.0), pocket3.activeZoomStops())
+        assertEquals(listOf(1.0), nano.activeZoomStops())
+        assertEquals(
+            listOf(1.0, 2.0),
+            pocket3.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_VIDEO),
+        )
+        assertEquals(
+            listOf(1.0, 2.0, 4.0),
+            pocket4.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_VIDEO),
+        )
+        assertEquals(
+            listOf(1.0, 3.0),
+            pro.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_SLOWMO),
+        )
+        assertEquals(
+            listOf(1.0),
+            pocket4.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_SLOWMO),
+        )
+        val fromJson =
+            CameraModel.fromJson(
+                """{"name":"OsmoPocket4P-ABCD","family":"pocket","zoomStops":[1,3,6,12]}""",
+            )
+        assertEquals(listOf(1.0, 3.0, 6.0, 12.0), fromJson.zoomStops)
     }
 
     @Test
@@ -787,6 +868,7 @@ class CameraControlTest {
         assertEquals(true, parsed.supportsTapFocus)
         assertEquals(true, parsed.supportsFocusMode)
         assertEquals(true, parsed.usesCapturedLiveEnable)
+        assertEquals(false, parsed.needsFirstPictureFormatPoke)
     }
 
     @Test
@@ -800,6 +882,23 @@ class CameraControlTest {
         assertEquals(true, parsed.usesNanoLiveViewGate)
         assertEquals(false, parsed.supportsTapFocus)
         assertEquals(false, parsed.supportsFocusMode)
+        assertEquals(false, parsed.needsFirstPictureFormatPoke)
+    }
+
+    @Test
+    fun cameraModelJsonParsesPocket3FormatPoke() {
+        val parsed =
+            CameraModel.fromJson(
+                """{"name":"Osmo Pocket 3","family":"pocket","needsFirstPictureFormatPoke":true}""",
+            )
+        assertEquals(true, parsed.needsFirstPictureFormatPoke)
+        val byName =
+            CameraModel.fromJson(
+                """{"name":"OsmoPocket3-AAAA","family":"pocket"}""",
+            )
+        assertEquals(true, byName.needsFirstPictureFormatPoke)
+        assertEquals(true, CameraModel.looksLikePocket3("Osmo Pocket 3"))
+        assertEquals(false, CameraModel.looksLikePocket3("Osmo Pocket 4"))
     }
 
     @Test

@@ -379,7 +379,7 @@ fun LivePortraitChrome(
             val zoomPinching by model.session.zoomPinching.collectAsState()
             val zoomBlocked =
                 CamFov.zoomNeedsColorHopWhileRecording(
-                    CamFov.nextJump(model.session.zoomCycleFrom()),
+                    model.session.zoomNextJump(),
                     status.colorMode,
                     status.isRecording,
                 )
@@ -394,7 +394,7 @@ fun LivePortraitChrome(
                         .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
                         .chromeEditStroke(editing != null, true),
                 onCycle = {
-                    model.session.setZoom(CamFov.nextJump(model.session.zoomCycleFrom()))
+                    model.session.setZoom(model.session.zoomNextJump())
                 },
             )
         }

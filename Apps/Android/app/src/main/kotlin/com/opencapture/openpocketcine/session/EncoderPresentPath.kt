@@ -22,5 +22,14 @@ object EncoderPresentPath {
 
     fun isVertical(width: Int, height: Int): Boolean = width > 1 && height > 1 && height > width
 
-    fun shouldRequestEnableAfterParameterChange(accessUnitHasIDR: Boolean): Boolean = !accessUnitHasIDR
+    fun shouldRequestEnableAfterParameterChange(
+        accessUnitHasIDR: Boolean,
+        udpReceiveAlive: Boolean = false,
+        secondsSinceLastEnable: Double? = null,
+    ): Boolean {
+        if (accessUnitHasIDR) return false
+        if (udpReceiveAlive) return false
+        if (secondsSinceLastEnable != null && secondsSinceLastEnable < 5.0) return false
+        return true
+    }
 }

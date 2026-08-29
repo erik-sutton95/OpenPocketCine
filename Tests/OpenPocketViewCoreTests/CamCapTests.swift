@@ -185,6 +185,7 @@ import Testing
         #expect(Commands.subscriptionKeys.contains(CamCapShutter.subscribeKey))
         #expect(Commands.subscriptionKeys.contains(CamCapIso.subscribeKey))
         #expect(Commands.subscriptionKeys.contains(CamCapColorMode.subscribeKey))
+        #expect(Commands.subscriptionKeys.contains(CamCapVideoFormat.subscribeKey))
     }
 
     @Test func nanoColorCapListsThreeCapturedModes() {
@@ -209,6 +210,56 @@ import Testing
         #expect(CamCapShutter.wheelDenoms(available: [], current: -1).isEmpty)
     }
 
+    @Test func videoFormatTableIsResFpsPairs() {
+        let formats = CamCapVideoFormat.parse(Self.videoFormatPocket4Pro)
+        #expect(formats.count == 12)
+        #expect(formats.first == VideoFormat(resolution: .p4K, frameRate: .fps24))
+        #expect(formats.contains(VideoFormat(resolution: .p4K, frameRate: .fps60)))
+        #expect(formats.contains(VideoFormat(resolution: .p1080, frameRate: .fps24)))
+        #expect(!formats.contains(where: { $0.frameRate.fps > 60 }))
+        #expect(
+            CamCapVideoFormat.resolutions(available: formats, current: .p4K)
+                == [.p4K, .p1080])
+        #expect(
+            CamCapVideoFormat.frameRates(
+                available: formats, resolution: .p4K, current: .fps25
+            ).map(\.fps) == [24, 25, 30, 48, 50, 60])
+        var s = CameraStatus()
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: CamCapVideoFormat.subscribeKey, value: Self.videoFormatPocket4Pro),
+                to: &s))
+        #expect(s.availableVideoFormats.count == 12)
+        #expect(
+            CamCapVideoFormat.frameRates(
+                available: [], resolution: .p4K, current: .fps24
+            ).map(\.fps) == [24, 25, 30, 48, 50, 60])
+    }
+
+    @Test func zoomStopsFollowTheBody() {
+        let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
+        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        let pocket3 = CameraModel.resolve(modelId: 0x0020, name: nil)
+        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
+        #expect(pro.zoomStops == [1, 3, 6, 12])
+        #expect(pocket4.zoomStops == [1, 2, 4])
+        #expect(pocket3.zoomStops == [1, 2, 4])
+        #expect(nano.zoomStops == [1])
+        #expect(pocket3.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2])
+        #expect(pocket3.activeZoomStops(resolution: .p1080, shootingMode: 0x01) == [1, 2, 4])
+        #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2, 4])
+        #expect(pro.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1, 3])
+        #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1])
+        #expect(CamFov.nextJump(from: 1, stops: [1, 2, 4]) == 2)
+        #expect(CamFov.nextJump(from: 2, stops: [1, 2, 4]) == 4)
+        #expect(CamFov.nextJump(from: 4, stops: [1, 2, 4]) == 1)
+        #expect(CamFov.chipWrite(forJump: 2) == .lens(CamFov.lensPosition(for: 2)))
+        #expect(CamFov.chipWrite(forJump: 4) == .lens(CamFov.lensPosition(for: 4)))
+        #expect(CamFov.clamp(12, max: 4) == 4)
+        #expect(CamFov.isJumpStop(2, stops: [1, 2, 4]))
+        #expect(!CamFov.isJumpStop(2))
+    }
+
     private static let shutter25p = hex(
         "016d000002000101001e00052180be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280002880001e80001980000c80000a8000088000068000058000048000"
     )
@@ -222,6 +273,10 @@ import Testing
         0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
     ]
     private static let isoAutoOnly: [UInt8] = [0x01, 0x03, 0x00, 0x00, 0x01, 0x00]
+    /// `camcap_video_format` Pocket 4 Pro Video mode (`mimo-live-start-20260828`).
+    private static let videoFormatPocket4Pro = hex(
+        "0125000c1001001002001003001004001005001006000a06000a05000a04000a03000a02000a0100"
+    )
 
     private static func hex(_ s: String) -> [UInt8] {
         stride(from: 0, to: s.count, by: 2).map {

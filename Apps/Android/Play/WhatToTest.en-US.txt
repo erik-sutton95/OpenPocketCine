@@ -1,0 +1,15 @@
+New and changed
+
+- Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform, parade, and assists.
+- Record, ISO, white balance, and zoom from the phone. The gimbal stick sits with zoom.
+- Open clips from the camera. LUT, false colour, peaking, and zebra grade the small preview. Share and Save still use the original camera file.
+
+Fixes
+
+- Live view should come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view. White balance Auto keeps tint. Zoom chips match the body (4 Pro 1×/3×/6×/12×, Pocket 4 1×/2×/4×). FORMAT only lists what this camera can do.
+
+What to test
+
+- Pair an Osmo Pocket 4 Pro, join its Wi-Fi, and confirm live view fills the monitor in a couple of seconds.
+- Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.
+- Confirm the app installs on a 64-bit phone running Android 10 or newer.

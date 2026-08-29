@@ -46,6 +46,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **JNI** — Gradle, Swift-for-Android, `.so`, facade, OpenZCine pattern: [`ANDROID.md`](ANDROID.md)
 - **live-session** — freeze, black feed, reconnect, UDP bind, ACK, decoder: [`docs/live-session.md`](docs/live-session.md)
 - **watchdog** — stall, GOP-reset grace, recover `0x09/0xa8`: [`docs/feed-watchdog.md`](docs/feed-watchdog.md)
+- **reliability** — freeze-in-seconds, ACK windows, repair owner: [`docs/connection-reliability.md`](docs/connection-reliability.md)
 - **protocol** — DUML, BLE, opcode, pktType, HEVC/AVC payload: `handbook/src/content/docs/protocol/`
 - **handbook** — public docs at openpocketcine.app/docs, setup, iOS/Android app pages: `handbook/src/content/docs/`
 - **hygiene** — commit/PR that might touch secrets, LUTs, captures, identity: [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
@@ -55,6 +56,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **ux** — FTUE, first-run, wizard, operator copy, help, empty/error: [`docs/UX.md`](docs/UX.md)
 - **workflow** — parallel, subagent, loop, verify in a fresh context, graphify: [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 - **release** — tag, version bump, TestFlight train, `develop` / Git Flow: [`docs/RELEASE.md`](docs/RELEASE.md)
+- **play** — Android closed testing, AAB upload, Play CI: [`docs/android-play-ci.md`](docs/android-play-ci.md)
 
 ## Verification
 
@@ -69,4 +71,4 @@ A task is not done until `just check` is green for the paths touched, docs that 
 
 ## Sediment
 
-`STATUS.md`, `OVERNIGHT.md`, and `.planning/` are local or dated notes. They are not current architecture. `docs/connection-reliability-plan.md` is a dated PR plan, not a contract.
+`STATUS.md`, `OVERNIGHT.md`, and `.planning/` are local or dated notes. They are not current architecture. `docs/connection-reliability-plan.md` is a dated PR plan, not a contract. Live reliability is [`docs/connection-reliability.md`](docs/connection-reliability.md).

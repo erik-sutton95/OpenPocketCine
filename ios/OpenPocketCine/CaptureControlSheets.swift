@@ -197,6 +197,14 @@ struct CapturePickerPanel: View {
             guard sheet == .iso else { return }
             reseatIso()
         }
+        .onChange(of: model.session.status.availableVideoFormats) { _, _ in
+            guard sheet == .resolution else { return }
+            seed()
+        }
+        .onChange(of: model.session.status.videoFormat) { _, _ in
+            guard sheet == .resolution else { return }
+            seed()
+        }
         .onChange(of: drumSelection) { _, newValue in
             applyDrum(newValue)
         }
@@ -303,7 +311,7 @@ struct CapturePickerPanel: View {
             }
         case .resolution:
             CaptureDrumWheel(
-                options: VideoFrameRate.allCases.map(\.drumLabel), selection: $drumSelection
+                options: formatRates.map(\.drumLabel), selection: $drumSelection
             )
             .id(selectedMode)
         case .color:
@@ -444,9 +452,7 @@ struct CapturePickerPanel: View {
                 .buttonStyle(.zcTapTarget)
                 Slider(value: $tintDraft, in: -100...100, step: 1) { editing in
                     if !editing {
-                        model.session.setWhiteBalanceCustom(
-                            kelvin: currentKelvin, tint: Int(tintDraft.rounded())
-                        )
+                        applyTint(Int(tintDraft.rounded()))
                     }
                 }
                 .tint(LiveDesign.accent)
@@ -464,8 +470,7 @@ struct CapturePickerPanel: View {
                 .buttonStyle(.zcTapTarget)
             }
             Button("Apply tint \(Int(tintDraft.rounded()))") {
-                model.session.setWhiteBalanceCustom(
-                    kelvin: currentKelvin, tint: Int(tintDraft.rounded()))
+                applyTint(Int(tintDraft.rounded()))
             }
             .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(LiveDesign.accent)
@@ -606,7 +611,7 @@ struct CapturePickerPanel: View {
         case .shutter where !isEvSheet: ["Speed", "Angle"]
         case .wb: ["Mode", "Kelvin", "Tint"]
         case .audio: ["Channel", "Wind", "Dir", "Vocal"]
-        case .resolution: VideoResolution.allCases.map(\.tabTitle)
+        case .resolution: formatResolutions.map(\.tabTitle)
         default: []
         }
     }
@@ -706,7 +711,8 @@ struct CapturePickerPanel: View {
             Task { await model.session.refreshAudioState() }
         case .resolution:
             let format = currentVideoFormat
-            selectedMode = format.resolution == .p4K ? 1 : 0
+            let tabs = formatResolutions
+            selectedMode = tabs.firstIndex(of: format.resolution) ?? 0
             drumSelection = format.frameRate.drumLabel
             lastApplied = drumSelection
         case .color:
@@ -744,8 +750,15 @@ struct CapturePickerPanel: View {
                 // Mode tab only; write happens on row tap.
             }
         case .resolution:
-            let rate = VideoFrameRate(drumLabel: drumSelection) ?? currentVideoFormat.frameRate
-            let next = VideoFormat(resolution: resolutionForTab(index), frameRate: rate)
+            let res = resolutionForTab(index)
+            let rates = CamCapVideoFormat.frameRates(
+                available: model.session.status.availableVideoFormats,
+                resolution: res,
+                current: currentVideoFormat.frameRate)
+            let rate = VideoFrameRate(drumLabel: drumSelection).flatMap { rates.contains($0) ? $0 : nil }
+                ?? rates.first
+                ?? currentVideoFormat.frameRate
+            let next = VideoFormat(resolution: res, frameRate: rate)
             guard next != currentVideoFormat else { return }
             applyVideoFormat(resolution: next.resolution, frameRate: next.frameRate)
         default:
@@ -799,7 +812,9 @@ struct CapturePickerPanel: View {
             guard selectedMode == 1, let kelvin = CaptureLists.kelvin(from: value) else { return }
             model.session.setWhiteBalanceCustom(kelvin: kelvin, tint: currentTint)
         case .resolution:
-            guard let rate = VideoFrameRate(drumLabel: value) else { return }
+            guard let rate = VideoFrameRate(drumLabel: value),
+                formatRates.contains(rate)
+            else { return }
             applyVideoFormat(resolution: resolutionForTab(selectedMode), frameRate: rate)
         case .color:
             guard let mode = ColorMode(label: value) else { return }
@@ -826,8 +841,23 @@ struct CapturePickerPanel: View {
         return VideoFormat(resolution: res, frameRate: rate)
     }
 
+    private var formatResolutions: [VideoResolution] {
+        CamCapVideoFormat.resolutions(
+            available: model.session.status.availableVideoFormats,
+            current: currentVideoFormat.resolution)
+    }
+
+    private var formatRates: [VideoFrameRate] {
+        CamCapVideoFormat.frameRates(
+            available: model.session.status.availableVideoFormats,
+            resolution: resolutionForTab(selectedMode),
+            current: currentVideoFormat.frameRate)
+    }
+
     private func resolutionForTab(_ index: Int) -> VideoResolution {
-        index == 1 ? .p4K : .p1080
+        let tabs = formatResolutions
+        guard tabs.indices.contains(index) else { return currentVideoFormat.resolution }
+        return tabs[index]
     }
 
     private func applyVideoFormat(resolution: VideoResolution, frameRate: VideoFrameRate) {
@@ -836,7 +866,16 @@ struct CapturePickerPanel: View {
 
     private func nudgeTint(_ delta: Int) {
         tintDraft = min(max(tintDraft + Double(delta), -100), 100)
-        model.session.setWhiteBalanceCustom(kelvin: currentKelvin, tint: Int(tintDraft.rounded()))
+        applyTint(Int(tintDraft.rounded()))
+    }
+
+    /// Auto SET keeps tint (Mimo). Tint pad must not kick Auto into Custom.
+    private func applyTint(_ tint: Int) {
+        if model.session.status.whiteBalance?.mode == .custom {
+            model.session.setWhiteBalanceCustom(kelvin: currentKelvin, tint: tint)
+        } else {
+            model.session.setWhiteBalanceAuto(tint: tint)
+        }
     }
 
     private func reseatIso() {

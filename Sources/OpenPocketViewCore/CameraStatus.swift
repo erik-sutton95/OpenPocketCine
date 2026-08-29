@@ -48,6 +48,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var videoResolution: VideoResolution?
     /// Packed res+fps when both `@0–1` are labeled values.
     public var videoFormat: VideoFormat?
+    /// Legal `0x02/0x18` pairs from `camcap_video_format`. Empty until that push.
+    public var availableVideoFormats: [VideoFormat] = []
     /// Color from `cam_image_effect` `@2`.
     public var colorMode: ColorMode?
     /// Legal `0x02/0x42` values from `camcap_color_mode`. Empty until that push.
@@ -56,7 +58,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var monitorTransfer: MonitorTransfer? { colorMode.map(MonitorTransfer.init) }
     /// WB from `cam_image_effect` `@4–8`. Expo does not carry WB.
     public var whiteBalance: WhiteBalance?
-    /// Kelvin from `whiteBalance` when custom and > 0; `-1` unknown / Auto.
+    /// Last Custom Kelvin (2000…10000). Auto does not clear this — Custom tap
+    /// restores it. `-1` unknown (never seen Custom).
     public var whiteBalanceKelvin: Int = -1
     /// Tint from `whiteBalance` (`−100…+100`). nil unknown.
     public var whiteBalanceTint: Int?
@@ -277,6 +280,10 @@ public enum CameraStatusDecoder {
             let modes = CamCapColorMode.parse(item.value)
             if !modes.isEmpty { status.availableColorModes = modes }
             return !modes.isEmpty
+        case CamCapVideoFormat.subscribeKey:
+            let formats = CamCapVideoFormat.parse(item.value)
+            if !formats.isEmpty { status.availableVideoFormats = formats }
+            return !formats.isEmpty
         case "cam_expo_param" where item.value.count >= 8:
             if let mode = ExpoMode.parseExpoParam(item.value) { status.expoMode = mode }
             if let denom = ExpoParam.shutterDenom(item.value) { status.shutterDenom = denom }
@@ -295,7 +302,9 @@ public enum CameraStatusDecoder {
             if let color = ColorMode.parseImageEffect(item.value) { status.colorMode = color }
             if let wb = WhiteBalance.parseImageEffect(item.value) {
                 status.whiteBalance = wb
-                status.whiteBalanceKelvin = wb.kelvin > 0 ? wb.kelvin : -1
+                if wb.mode == .custom, (2_000...10_000).contains(wb.kelvin) {
+                    status.whiteBalanceKelvin = wb.kelvin
+                }
                 status.whiteBalanceTint = wb.tint
             }
             return true
