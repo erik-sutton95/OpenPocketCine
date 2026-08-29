@@ -127,7 +127,13 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.Action.NONE,
             LiveViewEnablePolicy.tick(state, oneSecondLater),
         )
-        val fiveSecondsLater = snap.copy(now = now + 5_000, lastEnableAt = now)
+        val fiveSecondsLater =
+            snap.copy(
+                now = now + 5_000,
+                lastEnableAt = now,
+                lastStatusAt = now + 5_000 - 200,
+                lastBleAt = now + 5_000 - 100,
+            )
         assertEquals(
             LiveViewEnablePolicy.Action.RESEND_ENABLE,
             LiveViewEnablePolicy.tick(state, fiveSecondsLater),
