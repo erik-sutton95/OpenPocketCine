@@ -197,32 +197,8 @@ experimental history along.
 
 ## Contributors
 
-This project is a camera in someone's hands, then a patch. The people below did that.
-
-<p align="center">
-  <a href="https://github.com/KonradIT">
-    <img src="https://github.com/KonradIT.png?size=240" width="120" height="120" alt="Konrad Iturbe">
-  </a>
-</p>
-
-<p align="center">
-  <strong><a href="https://github.com/KonradIT">Konrad Iturbe</a></strong><br>
-  First outside contributor. Thank you.
-</p>
-
-Konrad arrived with an Osmo on the desk and a stack of focused Android (and core) pull
-requests. He made cold start work on Android 10. He put the clock back on pairing and
-setup. He stopped a Nano from tearing its decoder once a second. He taught the app that
-Xtra bodies speak UDP 10004. He made shooting mode actually reach the camera.
-
-That is the kind of contribution this repository is for. OpenPocketCine is lucky he
-showed up, and it is better because he did.
-
-He also built [Osmosis](https://github.com/KonradIT/osmosis). If you care about talking
-to Osmo cameras, look at that work too.
-
-Want your name here? See [Contributing](#contributing). Bring a camera if you can.
-Physical proof is how we know a patch is real.
+<a href="https://github.com/erik-sutton95"><img src="https://images.weserv.nl/?url=github.com/erik-sutton95.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@erik-sutton95" /></a>
+<a href="https://github.com/KonradIT"><img src="https://images.weserv.nl/?url=github.com/KonradIT.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@KonradIT" /></a>
 
 ## Credits
 
