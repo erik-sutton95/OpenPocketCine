@@ -18,6 +18,11 @@ data class MediaFile(
     val storage: Int = 0,
     val group: Int = 0,
     val handleShared: Boolean = false,
+    /**
+     * The handle read at the marker fixed position, before the base+step fit has vouched for it.
+     * Untrusted on its own — see `MediaManifest.withCmdHandles`. Zero when the record has no marker.
+     */
+    val handleCandidate: Long = 0L,
 ) {
     val id: String get() = path
     val filename: String get() = path.substringAfterLast('/')

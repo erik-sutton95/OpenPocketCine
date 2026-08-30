@@ -131,7 +131,8 @@ object MediaManifest {
             val hi = if (k + 1 < medias.size) medias[k + 1].pos else bytes.size
             val group = if (boundary > 0 && k >= boundary) 1 else 0
             if (!byPath.containsKey(media.path)) {
-                val file = resolveRecord(bytes, media.path, lo, hi).copy(group = group)
+                val file =
+                    resolveRecord(bytes, media.path, media.pos, lo, hi).copy(group = group)
                 byPath[media.path] = file
                 order.add(media.path)
             }
@@ -159,7 +160,13 @@ object MediaManifest {
         return if (declared in 1 until records) declared else -1
     }
 
-    private fun resolveRecord(bytes: ByteArray, mediaDir: String, lo: Int, hi: Int): MediaFile {
+    private fun resolveRecord(
+        bytes: ByteArray,
+        mediaDir: String,
+        selfPos: Int,
+        lo: Int,
+        hi: Int,
+    ): MediaFile {
         val base = mediaDir.substringAfterLast('/')
         var thumb: String? = null
         var t = lo
@@ -250,6 +257,19 @@ object MediaManifest {
                 }
         val thumbPath = "$thumbBase.scr"
         val handle = if (hasMarker) u32(bytes, head).toLong() else 0L
+        // The handle at the marker fixed position — u32-LE at (19 06) - 10, the same tag the media
+        // type is read from. Unlike the scan above this needs no guard byte and cannot run into the
+        // next record, so it finds the stills a Pocket 3 writes with f6/c7 guard bytes that the scan
+        // walks straight past. Untrusted here: withCmdHandles promotes it only where the independent
+        // base+step fit agrees. Osmosis CameraSession.kt (#22).
+        val handleCandidate =
+            if (selfPos >= 17 && selfPos <= bytes.size &&
+                u8(bytes, selfPos - 7) == 0x19 && u8(bytes, selfPos - 6) == 0x06
+            ) {
+                u32(bytes, selfPos - 17).toLong()
+            } else {
+                0L
+            }
         val size =
             if (isVideo && hasMarker && head >= 4) {
                 u32(bytes, head - 4).toLong()
@@ -275,14 +295,53 @@ object MediaManifest {
             handle = handle,
             sizeBytes = size,
             durationSeconds = duration,
-            isStarred = starFlag(bytes, lo, hi),
+            // Prefer the signature read where the record has one: it is the only thing that works
+            // on a body whose stills carry no marker, and it agreed with the marker read everywhere
+            // both fired.
+            isStarred = starFlagBySignature(bytes, if (selfPos >= 0) selfPos else lo, hi)
+                ?: starFlag(bytes, lo, hi),
             resolution = resolution,
             fps = fps,
             proxyPath = proxyExt?.let { "$mediaDir.$it" },
+            handleCandidate = handleCandidate,
         )
     }
 
-    /** Star byte 9 past `[ff|fe] 19 06`. Trust only `== 1` (Nano). 44/48 on Action is a length. */
+    /**
+     * The favourite flag as a Pocket 3 writes it: a `00`/`01` byte after a fixed 12-byte signature
+     * that sits *after* the record own media path, present once per record whatever the media type.
+     *
+     * [starFlag] cannot work on that body: it anchors on `[ff|fe] 19 06`, and a Pocket 3 still
+     * carries no such marker, so a favourited photo could never show a heart at any offset. Returns
+     * null where the signature is absent so the caller can fall back.
+     *
+     * Established in Osmosis by a controlled A/B on one card (2026-08-17): two dumps of the same nine
+     * files differing in exactly three bytes, all three being the favourites changed between them.
+     */
+    private fun starFlagBySignature(bytes: ByteArray, lo: Int, hi: Int): Boolean? {
+        var q = if (lo > 0) lo else 0
+        val end = minOf(hi, bytes.size - STAR_SIG.size - 1)
+        while (q <= end) {
+            var k = 0
+            while (k < STAR_SIG.size && bytes[q + k] == STAR_SIG[k]) k += 1
+            if (k == STAR_SIG.size) return u8(bytes, q + STAR_SIG.size) == 1
+            q += 1
+        }
+        return null
+    }
+
+    /** See [starFlagBySignature]. Constant across every Pocket 3 record dumped, once per record. */
+    private val STAR_SIG =
+        byteArrayOf(0x1b, 0x0a, 0x00, 0x00, 0x00, 0x02, 0x02, 0x01, 0x14, 0x02, 0x15, 0x03)
+
+    /**
+     * Star byte 9 past `[ff|fe] 19 06`. Trust only `== 1` (Nano). 44/48 on Action is a length.
+     *
+     * On an Xtra that offset lands on a *length* byte, so anything other than 0 or 1 means this is
+     * not the layout the offset was derived from. Say "not starred" rather than guess: reading a
+     * length as a flag would put a heart on every file at once. Xtra favourites therefore do not
+     * survive a re-list; reading them needs the camera own 0x00/0x26 favourites filter.
+     */
     private fun starFlag(bytes: ByteArray, lo: Int, hi: Int): Boolean {
         var q = lo
         while (q < hi - 9) {
@@ -299,12 +358,19 @@ object MediaManifest {
 
     private fun resolutionForIndex(code: Int): String? =
         when (code) {
-            10 -> "1920x1080"
-            12 -> "1920x1440"
-            16 -> "3840x2160"
-            45 -> "2688x1512"
-            95 -> "2688x2016"
-            103 -> "3840x2880"
+            10 -> "1920x1080" // 0x0A  1080p 16:9 (Xtra-verified)
+            12 -> "1920x1440" // 0x0C  1080p 4:3
+            16 -> "3840x2160" // 0x10  4K 16:9
+            45 -> "2688x1512" // 0x2D  2.7K 16:9
+            66 -> "1080x1920" // 0x42  1080p 9:16 vertical
+            67 -> "1512x2688" // 0x43  2.7K 9:16 vertical
+            95 -> "2688x2016" // 0x5F  2.7K 4:3
+            103 -> "3840x2880" // 0x67  4K 4:3
+            105 -> "1080x1080" // 0x69  1080p 1:1
+            106 -> "2160x2160" // 0x6A  2160p 1:1
+            107 -> "3072x3072" // 0x6B  3K 1:1
+            108 -> "1728x3072" // 0x6C  3K 9:16 vertical
+            125 -> "3840x3840" // 0x7D  4K 1:1, aka OpenGate
             else -> null
         }
 
@@ -362,9 +428,24 @@ object MediaManifest {
             if (fit == null || file.sequenceNumber <= 0) {
                 file
             } else {
-                file.copy(
-                    cmdHandle = wrappingAdd32(fit.first, wrappingMul32(file.sequenceNumber.toLong(), fit.second)),
-                )
+                val fitted =
+                    wrappingAdd32(fit.first, wrappingMul32(file.sequenceNumber.toLong(), fit.second))
+                when {
+                    // Two independent sources agree: the bytes at the record fixed marker position,
+                    // and a formula fitted to the handles the OTHER records exposed. That is the bar
+                    // for a command that destroys a file — and it is how a Pocket 3 stills become
+                    // deletable without inventing anything, since the handle was always in the record
+                    // and only the guard-byte scan refused to read it.
+                    file.handle == 0L && file.handleCandidate != 0L && file.handleCandidate == fitted ->
+                        file.copy(handle = file.handleCandidate, cmdHandle = fitted)
+                    // The scan produced a handle the fit contradicts. Something is being read out of
+                    // the wrong place — a record-boundary overrun once handed a photo the neighbouring
+                    // video handle — and there is no way to tell which is right. Drop it: losing
+                    // delete on one file is recoverable, deleting whatever else lives at that handle
+                    // is not.
+                    file.handle != 0L && file.handle != fitted -> file.copy(handle = 0L, cmdHandle = fitted)
+                    else -> file.copy(cmdHandle = fitted)
+                }
             }
         }
     }

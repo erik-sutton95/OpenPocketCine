@@ -15,6 +15,9 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
     public var storage: Int
     public var group: Int
     public var handleShared: Bool
+    /// The handle read at the marker's fixed position, before the base+step fit has vouched for it.
+    /// Untrusted on its own — see `withCmdHandles`. Zero when the record carries no marker.
+    public var handleCandidate: UInt32
 
     public init(
         path: String,
@@ -29,7 +32,8 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
         proxyPath: String? = nil,
         storage: Int = 0,
         group: Int = 0,
-        handleShared: Bool = false
+        handleShared: Bool = false,
+        handleCandidate: UInt32 = 0
     ) {
         self.path = path
         self.thumbPath = thumbPath
@@ -44,6 +48,7 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
         self.storage = storage
         self.group = group
         self.handleShared = handleShared
+        self.handleCandidate = handleCandidate
     }
 
     public var id: String { path }
@@ -430,7 +435,8 @@ public enum MediaManifest {
             let hi = k + 1 < medias.count ? medias[k + 1].pos : bytes.count
             let group = (boundary > 0 && k >= boundary) ? 1 : 0
             if byPath[media.path] == nil {
-                var file = resolveRecord(bytes, mediaDir: media.path, lo: lo, hi: hi)
+                var file = resolveRecord(
+                    bytes, mediaDir: media.path, selfPos: media.pos, lo: lo, hi: hi)
                 file.group = group
                 byPath[media.path] = file
                 order.append(media.path)
@@ -466,7 +472,7 @@ public enum MediaManifest {
     }
 
     private static func resolveRecord(
-        _ bytes: [UInt8], mediaDir: String, lo: Int, hi: Int
+        _ bytes: [UInt8], mediaDir: String, selfPos: Int, lo: Int, hi: Int
     ) -> MediaFile {
         let base = (mediaDir as NSString).lastPathComponent
         var thumb: String?
@@ -523,6 +529,18 @@ public enum MediaManifest {
         let hasMarker = head >= 0
         let isVideo = videoExtensions.contains(ext)
 
+        // The handle at the marker's FIXED position — `u32-LE` at `(19 06) − 10`, the same tag the
+        // media type is read from. Unlike the scan above this needs no guard byte to match and
+        // cannot run into the next record, so it finds the stills a Pocket 3 writes with `f6`/`c7`
+        // guard bytes that the scan walks straight past. Untrusted here: `withCmdHandles` promotes
+        // it only where the independent base+step fit agrees. Osmosis `CameraSession.kt` (#22).
+        let handleCandidate: UInt32 = {
+            guard selfPos >= 17, selfPos <= bytes.count,
+                bytes[selfPos - 7] == 0x19, bytes[selfPos - 6] == 0x06
+            else { return 0 }
+            return u32(bytes, selfPos - 17)
+        }()
+
         var photoSize: UInt64 = 0
         var photoRes: String?
         if !isVideo {
@@ -573,14 +591,51 @@ public enum MediaManifest {
             handle: handle,
             sizeBytes: size,
             durationSeconds: duration,
-            isStarred: starFlag(bytes, lo: lo, hi: hi),
+            // Prefer the signature read where the record has one: it is the only thing that works
+            // on a body whose stills carry no marker, and it agreed with the marker read
+            // everywhere both fired.
+            isStarred: starFlagBySignature(bytes, lo: selfPos >= 0 ? selfPos : lo, hi: hi)
+                ?? starFlag(bytes, lo: lo, hi: hi),
             resolution: resolution,
             fps: fps,
-            proxyPath: proxyExt.map { "\(mediaDir).\($0)" }
+            proxyPath: proxyExt.map { "\(mediaDir).\($0)" },
+            handleCandidate: handleCandidate
         )
     }
 
+    /// The favourite flag as a Pocket 3 writes it: a `00`/`01` byte after a fixed 12-byte
+    /// signature that sits *after* the record's own media path, present once per record whatever
+    /// the media type.
+    ///
+    /// `starFlag` cannot work on that body: it anchors on `[ff|fe] 19 06`, and a Pocket 3 still
+    /// carries no such marker, so a favourited photo could never show a heart at any offset.
+    /// Returns nil where the signature is absent, so the caller can fall back.
+    ///
+    /// Established in Osmosis by a controlled A/B on one card (2026-08-17): two dumps of the same
+    /// nine files differing in exactly three bytes, all three being the favourites changed between
+    /// them, across eighteen records agreeing with the camera's own gallery.
+    private static func starFlagBySignature(_ bytes: [UInt8], lo: Int, hi: Int) -> Bool? {
+        let sig: [UInt8] = [
+            0x1B, 0x0A, 0x00, 0x00, 0x00, 0x02, 0x02, 0x01, 0x14, 0x02, 0x15, 0x03,
+        ]
+        var q = max(0, lo)
+        let end = min(hi, bytes.count - sig.count - 1)
+        while q <= end {
+            var k = 0
+            while k < sig.count, bytes[q + k] == sig[k] { k += 1 }
+            if k == sig.count { return bytes[q + sig.count] == 1 }
+            q += 1
+        }
+        return nil
+    }
+
     /// Star byte 9 past `[ff|fe] 19 06`. Trust only `== 1` (Nano). 44/48 on Action is a length.
+    ///
+    /// On an Xtra that offset lands on a *length* byte — its records run `1a <len> 00 00 00 01
+    /// DCIM/…` — so anything other than 0 or 1 means this is not the layout the offset was derived
+    /// from. Say "not starred" rather than guess: reading a length as a flag would put a heart on
+    /// every file at once. Xtra favourites therefore still do not survive a re-list; reading them
+    /// needs the camera's own `0x00/0x26` favourites filter, not this decode.
     private static func starFlag(_ bytes: [UInt8], lo: Int, hi: Int) -> Bool {
         var q = lo
         while q < hi - 9 {
@@ -596,12 +651,19 @@ public enum MediaManifest {
 
     private static func resolutionForIndex(_ code: Int) -> String? {
         switch code {
-        case 10: "1920x1080"
-        case 12: "1920x1440"
-        case 16: "3840x2160"
-        case 45: "2688x1512"
-        case 95: "2688x2016"
-        case 103: "3840x2880"
+        case 10: "1920x1080"  // 0x0A  1080p 16:9 (Xtra-verified)
+        case 12: "1920x1440"  // 0x0C  1080p 4:3
+        case 16: "3840x2160"  // 0x10  4K 16:9
+        case 45: "2688x1512"  // 0x2D  2.7K 16:9
+        case 66: "1080x1920"  // 0x42  1080p 9:16 vertical
+        case 67: "1512x2688"  // 0x43  2.7K 9:16 vertical
+        case 95: "2688x2016"  // 0x5F  2.7K 4:3
+        case 103: "3840x2880"  // 0x67  4K 4:3
+        case 105: "1080x1080"  // 0x69  1080p 1:1
+        case 106: "2160x2160"  // 0x6A  2160p 1:1
+        case 107: "3072x3072"  // 0x6B  3K 1:1
+        case 108: "1728x3072"  // 0x6C  3K 9:16 vertical
+        case 125: "3840x3840"  // 0x7D  4K 1:1, aka OpenGate
         default: nil
         }
     }
@@ -657,7 +719,23 @@ public enum MediaManifest {
         return files.map { file in
             guard let fit = fits[file.group], file.sequenceNumber > 0 else { return file }
             var next = file
-            next.cmdHandle = fit.base &+ UInt32(file.sequenceNumber) &* fit.step
+            let fitted = fit.base &+ UInt32(file.sequenceNumber) &* fit.step
+            next.cmdHandle = fitted
+            if file.handle == 0, file.handleCandidate != 0, file.handleCandidate == fitted {
+                // Two independent sources agree: the bytes at the record's fixed marker position,
+                // and a formula fitted to the handles the OTHER records exposed. That is the bar
+                // for a command that destroys a file — and it is how a Pocket 3's stills become
+                // deletable without inventing anything, since the handle was always in the record
+                // and only the guard-byte scan refused to read it.
+                next.handle = file.handleCandidate
+            } else if file.handle != 0, file.handle != fitted {
+                // The scan produced a handle the fit contradicts. Something is being read out of
+                // the wrong place — a record-boundary overrun once handed a photo the neighbouring
+                // video's handle — and there is no way to tell which of the two is right. Drop it:
+                // losing delete on one file is recoverable, deleting whatever else lives at that
+                // handle is not.
+                next.handle = 0
+            }
             return next
         }
     }
