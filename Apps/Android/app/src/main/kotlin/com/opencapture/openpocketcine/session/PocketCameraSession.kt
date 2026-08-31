@@ -687,6 +687,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
             if (CameraCommands.shouldHoldGimbalWatchdog(
                     lastGimbalThrowAt?.let { (now - it) / 1000.0 },
+                    videoAge?.div(1000.0),
                 )
             ) {
                 return false
@@ -2596,14 +2597,26 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         sensitivity: Int = CameraCommands.GIMBAL_STICK_DEFAULT_SENSITIVITY,
         assistMirror: Boolean = false,
     ) {
+        val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
+        if (videoAge != null && videoAge >= 1_600L) {
+            endGimbalStick()
+            return
+        }
         lastAssistMirror = assistMirror
         lastGimbalStickAt = SystemClock.elapsedRealtime()
         lastGimbalCommand = x to y
-        if (x != 0f || y != 0f) lastGimbalThrowAt = lastGimbalStickAt
         pendingGimbalAxes = encodedGimbalAxes(x, y, sensitivity)
+        val axes = pendingGimbalAxes
+        if (axes.first == CameraCommands.GIMBAL_STICK_CENTER &&
+            axes.second == CameraCommands.GIMBAL_STICK_CENTER
+        ) {
+            endGimbalStick()
+            return
+        }
+        lastGimbalThrowAt = lastGimbalStickAt
         tickGimbalLimit()
         if (gimbalStickJob != null) return
-        datalink?.sendGimbalStick(pendingGimbalAxes.first, pendingGimbalAxes.second)
+        datalink?.sendGimbalStick(axes.first, axes.second)
         gimbalStickJob =
             scope.launch {
                 while (true) {
@@ -3489,6 +3502,7 @@ internal object LiveViewEnablePolicy {
         }
         if (CameraCommands.shouldHoldGimbalWatchdog(
                 age(snap.now, snap.lastGimbalThrowAt)?.div(1000.0),
+                videoAge?.div(1000.0),
             )
         ) {
             return Action.NONE

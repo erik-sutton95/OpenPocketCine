@@ -1233,9 +1233,20 @@ public enum GimbalStick {
     /// stall enable so a stick throw does not GOP-cut the live picture.
     public static let videoGrace: TimeInterval = 3
 
-    public static func shouldHoldWatchdog(secondsSinceThrow: TimeInterval?) -> Bool {
+    public static func shouldHoldWatchdog(
+        secondsSinceThrow: TimeInterval?,
+        lastVideoPacketAge: TimeInterval? = nil
+    ) -> Bool {
         guard let secondsSinceThrow else { return false }
-        return secondsSinceThrow >= 0 && secondsSinceThrow < videoGrace
+        guard secondsSinceThrow >= 0, secondsSinceThrow < videoGrace else { return false }
+        // Held analog/head-track refreshes throw every 40 ms. Do not block
+        // recover forever: once HEVC has been dead stall+grace, lift the hold.
+        if let video = lastVideoPacketAge,
+            video >= FeedWatchdog.stallThreshold + videoGrace
+        {
+            return false
+        }
+        return true
     }
 
     /// Held emits at `streamInterval`. Rest emits once, then silence.

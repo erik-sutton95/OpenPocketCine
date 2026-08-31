@@ -2040,6 +2040,10 @@ final class CameraSession {
     ) {
         guard !isLocked else { return }
         guard datalink != nil else { return }
+        if isLiveVideoStale {
+            endGimbalStick()
+            return
+        }
         let invert = GimbalStick.liveInvertPan(
             poseInvert: gimbalPoseInvertPan, assistMirror: assistMirror)
         let axes = GimbalStick.encode(
@@ -2047,7 +2051,9 @@ final class CameraSession {
         pendingGimbalAxes = axes
         lastGimbalCommand = (x, y)
         lastGimbalStickAt = Date()
-        if x != 0 || y != 0 { lastGimbalThrowAt = Date() }
+        if axes.axis0 != GimbalStick.center || axes.axis1 != GimbalStick.center {
+            lastGimbalThrowAt = Date()
+        }
         if !gimbalStickHeld {
             gimbalStickHeld = true
             ControlLiveLog.line(
@@ -3124,7 +3130,10 @@ final class CameraSession {
             log.info("control: SET timeouts during zoom grace — leave UDP")
             return
         }
-        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: secondsSinceGimbalThrow) {
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
             log.info("control: SET timeouts during gimbal grace — leave UDP")
             return
         }
@@ -3158,7 +3167,10 @@ final class CameraSession {
         if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
             return false
         }
-        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: secondsSinceGimbalThrow) {
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
             return false
         }
         let videoFresh =

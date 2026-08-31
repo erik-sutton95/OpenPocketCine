@@ -1004,6 +1004,8 @@ class CameraControlTest {
         assertTrue(CameraCommands.shouldHoldGimbalWatchdog(2.9))
         assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(3.0))
         assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(null))
+        assertTrue(CameraCommands.shouldHoldGimbalWatchdog(0.1, 4.2))
+        assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(0.1, 5.1))
     }
 
     @Test

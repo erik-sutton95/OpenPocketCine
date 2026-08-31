@@ -63,7 +63,10 @@ public enum LinkDiagnoser {
         if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
             return .none
         }
-        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: secondsSinceGimbalThrow) {
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: videoAge)
+        {
             return .none
         }
         if hadVideo,

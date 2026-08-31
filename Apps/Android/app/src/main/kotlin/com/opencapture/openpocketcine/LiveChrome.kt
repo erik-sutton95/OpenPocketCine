@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.session.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -1965,7 +1966,7 @@ fun LiveGimbalStick(
                         if (change.pressed) {
                             translation += change.positionChange()
                             val mag = hypot(translation.x, translation.y)
-                            if (mag > 10f) {
+                            if (travel > 0f && mag / travel > CameraCommands.GIMBAL_STICK_TAP_SLOP) {
                                 dragged = true
                                 taps = 0
                                 recenterJob?.cancel()

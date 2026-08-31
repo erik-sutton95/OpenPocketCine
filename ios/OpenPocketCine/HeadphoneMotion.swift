@@ -377,13 +377,16 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         // second — that chatter paused HEVC (22:24:19 rest/throw/rest).
         if cmd.rest {
             restFor += max(dt, 0)
-            if restFor < 0.3, driving { return }
             if driving {
                 ControlLiveLog.line(
                     String(
                         format: "head-track: stick rest head Y=%.1f P=%.1f", lookRight, lookUp))
+                stopDrive()
             }
-            stopDrive()
+            return
+        }
+        if restFor > 0, restFor < 0.3 {
+            restFor += max(dt, 0)
             return
         }
         restFor = 0

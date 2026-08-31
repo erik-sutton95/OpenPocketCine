@@ -99,10 +99,25 @@ import Testing
         #expect(GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 2.9))
         #expect(!GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 3.0))
         #expect(!GimbalStick.shouldHoldWatchdog(secondsSinceThrow: nil))
+        #expect(
+            GimbalStick.shouldHoldWatchdog(
+                secondsSinceThrow: 0.1, lastVideoPacketAge: 4.2))
+        #expect(
+            !GimbalStick.shouldHoldWatchdog(
+                secondsSinceThrow: 0.1, lastVideoPacketAge: 5.1),
+            "held stick must not block recover once HEVC has been dead stall+grace")
         snap.secondsSinceGimbalThrow = 3.1
         #expect(
             dog.tick(snap) == .resendLiveViewEnable,
             "past gimbal grace with young status is an encoder pause")
+        var held = Self.snap(
+            now: 10, frameAge: 5.1, videoAge: 5.1, statusAge: 0.3, bleAge: 0.2)
+        held.secondsSinceLastEnable = 20
+        held.secondsSinceGimbalThrow = 0.1
+        var heldDog = FeedWatchdog()
+        #expect(
+            heldDog.tick(held) == .resendLiveViewEnable,
+            "25 Hz throw stamp must not freeze recover after 5s of dead HEVC")
     }
 
     @Test func encoderPauseWithFreshStatusResendsEnable() {

@@ -358,6 +358,10 @@ final class DatalinkDriver {
     /// Latest `0x04/0x01` axes. The ACK pump emits them on the UDP queue.
     func noteGimbalStick(axis0: UInt16, axis1: UInt16) {
         if closed { return }
+        if axis0 == GimbalStick.center, axis1 == GimbalStick.center {
+            restGimbalStick()
+            return
+        }
         wire.withLock {
             $0.gimbalAxis0 = axis0
             $0.gimbalAxis1 = axis1

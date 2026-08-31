@@ -311,7 +311,10 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: snap.secondsSinceGimbalThrow) {
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: snap.secondsSinceGimbalThrow,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
             return .none
         }
 

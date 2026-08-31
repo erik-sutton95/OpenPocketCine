@@ -446,12 +446,23 @@ object CameraCommands {
     const val GIMBAL_STICK_ANALOG_EXPO = 2.0
 
     const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
+    const val GIMBAL_STICK_TAP_SLOP = 0.18f
     /** Stick throw can pause HEVC the same way zoom/AF-C do. */
     const val GIMBAL_STICK_VIDEO_GRACE_SEC = 3.0
+    const val STALL_SEC = 2.0
 
-    fun shouldHoldGimbalWatchdog(secondsSinceThrow: Double?): Boolean {
+    fun shouldHoldGimbalWatchdog(
+        secondsSinceThrow: Double?,
+        lastVideoPacketAgeSec: Double? = null,
+    ): Boolean {
         val s = secondsSinceThrow ?: return false
-        return s >= 0.0 && s < GIMBAL_STICK_VIDEO_GRACE_SEC
+        if (s < 0.0 || s >= GIMBAL_STICK_VIDEO_GRACE_SEC) return false
+        if (lastVideoPacketAgeSec != null &&
+            lastVideoPacketAgeSec >= STALL_SEC + GIMBAL_STICK_VIDEO_GRACE_SEC
+        ) {
+            return false
+        }
+        return true
     }
 
     const val GIMBAL_FACE_UNKNOWN = -1

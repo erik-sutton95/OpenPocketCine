@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- A held gimbal stick no longer blocks recover forever (throw stamp was
+  refreshing every 40 ms). Grace caps at stall+3 s of dead HEVC. Analog
+  and head-track lift when video is stale. Center encode is rest, not a
+  25 Hz center stream. Android stick tap-slop matches iOS (0.18).
+
 - Encoder-pause recover: two enables, then one UDP rebuild; do not
   GOP-cut every 5 s for a minute when BLE notify is stale. Rebuild
   backoff is 60 s even if `lastBle` is old.

@@ -48,7 +48,10 @@ catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it,
 and hold the previous throw 0.3 s so grab/release chatter does not cut
-GOP. Look-at throw is full Mimo stick until close. After a 1:1 close, live-yaw
+GOP. Look-at throw is full Mimo stick until close. Analog/head-track rest when
+HEVC is stale so a held stick cannot block recover. Gimbal grace is at
+most stall+3 s after the last video packet, even if throw is still
+refreshing. After a 1:1 close, live-yaw
 wiggle must not re-grab. Two failed encoder-pause enables rebuild UDP
 once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
