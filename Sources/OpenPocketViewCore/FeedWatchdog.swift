@@ -12,8 +12,8 @@ import Foundation
 /// the socket paused. SoftAP bind stays.
 ///
 /// Encoder pause: DUML status still landing, HEVC silent, past GOP/AF-C
-/// grace. One `0x09/0xa8`, never a UDP rebuild. `escalateAfter` between
-/// enables — do not 1 Hz loop.
+/// grace. Two `0x09/0xa8`, then one UDP rebuild. Keepalive must not flap
+/// while status is young. `escalateAfter` between actions — do not 1 Hz loop.
 ///
 /// Mid-session recover must not paint black: keep the last frame until a
 /// new decoded picture is in hand, and do not enqueue empty samples.
@@ -75,6 +75,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         /// Age of the last zoom `0xB8` SET. Lens slew can pause HEVC the same
         /// way AF-C does; GOP-cutting mid-zoom blacks the well.
         public var secondsSinceZoomSet: TimeInterval?
+        /// Age of the last non-rest gimbal stick throw. Motion can pause HEVC.
+        public var secondsSinceGimbalThrow: TimeInterval?
 
         public init(
             now: TimeInterval,
@@ -95,7 +97,8 @@ public struct FeedWatchdog: Equatable, Sendable {
             hadVideo: Bool = true,
             secondsSinceLastEnable: TimeInterval? = nil,
             secondsSinceFocusTrackSet: TimeInterval? = nil,
-            secondsSinceZoomSet: TimeInterval? = nil
+            secondsSinceZoomSet: TimeInterval? = nil,
+            secondsSinceGimbalThrow: TimeInterval? = nil
         ) {
             self.now = now
             self.lastDecodedFrameAge = lastDecodedFrameAge
@@ -116,11 +119,14 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.secondsSinceLastEnable = secondsSinceLastEnable
             self.secondsSinceFocusTrackSet = secondsSinceFocusTrackSet
             self.secondsSinceZoomSet = secondsSinceZoomSet
+            self.secondsSinceGimbalThrow = secondsSinceGimbalThrow
         }
     }
 
     public var stage: Stage = .idle
     public private(set) var lastActionAt: TimeInterval = 0
+    /// Encoder-pause `0x09/0xa8`s this stall. Two then one UDP rebuild.
+    private var encoderPauseEnables = 0
 
     public init() {}
 
@@ -305,6 +311,10 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
+        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: snap.secondsSinceGimbalThrow) {
+            return .none
+        }
+
         // First connect: no video packet yet. Resend enable — do not treat
         // “already rebuilt / no clocks” as a post-video flap.
         if !snap.hadVideo {
@@ -325,15 +335,30 @@ public struct FeedWatchdog: Equatable, Sendable {
             }
         }
 
-        // Encoder pause: status still on 9004, HEVC silent. One enable,
-        // then escalateAfter between enables. Status on this socket means
-        // the 5-tuple is alive — do not rebuild UDP (physical #148: 2 s
-        // reopen left lastVideo=none and flip notLive).
+        // Encoder pause: status still on 9004, HEVC silent. Two enables,
+        // then one UDP rebuild (22:16 brought the picture back). Keepalive
+        // must not flap that socket (`statusFresh`). #148 was a 2 s-too-fast
+        // rebuild; this is after ~10 s of pause. Do not sit in cooldown
+        // forever with a frozen frame — that *is* the operator “drop.”
         if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
-            if stage == .idle || snap.now - lastActionAt >= Self.escalateAfter {
+            if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
+                return .none
+            }
+            if encoderPauseEnables < 2 {
+                encoderPauseEnables += 1
                 return fire(.resendLiveViewEnable, at: snap.now)
             }
-            return .none
+            if Self.shouldHoldRebuildAfterRecentUDP(
+                secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
+                pathReady: snap.pathReady,
+                lastBleNotifyAge: snap.lastBleNotifyAge,
+                hadVideo: snap.hadVideo
+            ) {
+                encoderPauseEnables = 0
+                return fire(.resendLiveViewEnable, at: snap.now)
+            }
+            encoderPauseEnables = 0
+            return fire(.reopenDatalink, at: snap.now)
         }
 
         if Self.shouldHoldRebuildAfterRecentUDP(
@@ -431,5 +456,6 @@ public struct FeedWatchdog: Equatable, Sendable {
     private mutating func resetIdle() {
         stage = .idle
         lastActionAt = 0
+        encoderPauseEnables = 0
     }
 }

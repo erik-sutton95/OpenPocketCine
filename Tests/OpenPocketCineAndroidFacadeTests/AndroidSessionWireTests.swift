@@ -84,11 +84,27 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func watchdogJSONHoldsGimbalThrowGrace() {
+        let json =
+            "{\"now\":10,\"lastDecodedFrameAge\":4.2,\"lastVideoPacketAge\":4.2,\"lastAccessUnitAge\":4.2,\"lastStatusAge\":0.3,\"flowHealthy\":true,\"pathReady\":true,\"hasFormat\":true,\"decoderFailed\":false,\"live\":true,\"sawPicture\":true,\"tcpPokeReady\":true,\"hadVideo\":true,\"secondsSinceLastEnable\":20,\"secondsSinceGimbalThrow\":1.0}"
+        #expect(
+            AndroidSessionWire.feedWatchdogAction(snapshotJSON: json) == "none",
+            "JNI must parse secondsSinceGimbalThrow or Android GOP-cuts mid-stick")
+        let past =
+            "{\"now\":10,\"lastDecodedFrameAge\":4.2,\"lastVideoPacketAge\":4.2,\"lastAccessUnitAge\":4.2,\"lastStatusAge\":0.3,\"flowHealthy\":true,\"pathReady\":true,\"hasFormat\":true,\"decoderFailed\":false,\"live\":true,\"sawPicture\":true,\"tcpPokeReady\":true,\"hadVideo\":true,\"secondsSinceLastEnable\":20,\"secondsSinceGimbalThrow\":3.1}"
+        #expect(AndroidSessionWire.feedWatchdogAction(snapshotJSON: past) == "resendLiveViewEnable")
+    }
+
+    @Test
     func cameraModelJSONCarriesZoomStops() {
         let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
-        #expect(pro.contains("\"zoomStops\":[1.0,3.0,6.0,12.0]") || pro.contains("\"zoomStops\":[1,3,6,12]"))
+        #expect(
+            pro.contains("\"zoomStops\":[1.0,3.0,6.0,12.0]")
+                || pro.contains("\"zoomStops\":[1,3,6,12]"))
         let pocket4 = AndroidSessionWire.cameraModelJSON(modelId: 0x0021, name: nil)
-        #expect(pocket4.contains("\"zoomStops\":[1.0,2.0,4.0]") || pocket4.contains("\"zoomStops\":[1,2,4]"))
+        #expect(
+            pocket4.contains("\"zoomStops\":[1.0,2.0,4.0]")
+                || pocket4.contains("\"zoomStops\":[1,2,4]"))
         let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
         #expect(nano.contains("\"zoomStops\":[1.0]") || nano.contains("\"zoomStops\":[1]"))
     }

@@ -77,6 +77,37 @@ struct LiveFocusResetButton: View {
     }
 }
 
+/// Calibrate Head Lock starts tracking; STOP ends it.
+struct LiveHeadTrackCalibrateButton: View {
+    static let calibrateTitle = "Calibrate Head Lock"
+    static let stopTitle = "STOP"
+
+    var title: String
+    var onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(title)
+                .font(LiveType.ui(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(LiveDesign.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black.opacity(0.55), in: Capsule())
+                .overlay(Capsule().strokeBorder(LiveDesign.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.zcTapTarget)
+        .accessibilityLabel(
+            title == Self.stopTitle ? "Stop head tracking" : "Calibrate Head Lock"
+        )
+        .accessibilityHint(
+            title == Self.stopTitle
+                ? "Stops AirPods gimbal tracking" : "Sets the current heading as forward"
+        )
+        .accessibilityIdentifier("monitor.system.headTrackCalibrate")
+    }
+}
+
 /// Rail circle with a Lucide glyph (no copyrighted rail assets, no SF Symbols).
 private struct LiveRailCircle: View {
     let icon: OpcIcon

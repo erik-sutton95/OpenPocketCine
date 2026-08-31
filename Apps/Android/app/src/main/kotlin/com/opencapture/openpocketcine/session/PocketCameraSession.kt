@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.CaptureLists
+import com.opencapture.openpocketcine.GamepadOperatorAction
 import com.opencapture.openpocketcine.EvComp
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.bridge.SwiftCore
@@ -95,6 +96,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
     private val _gimbalPoseViewFlip = MutableStateFlow(false)
     val gimbalPoseViewFlip: StateFlow<Boolean> = _gimbalPoseViewFlip.asStateFlow()
+    private val gimbalLimitWatch = GimbalLimitWatch()
+    private var lastGimbalCommand = 0f to 0f
+    private val _gimbalLimitPulse = MutableStateFlow(0)
+    val gimbalLimitPulse: StateFlow<Int> = _gimbalLimitPulse.asStateFlow()
+    @Volatile var lastGimbalLimitContact = GimbalLimitContact()
+        private set
+    @Volatile var lastGimbalLimitPanSign = 0.0
+        private set
+    @Volatile var lastGimbalLimitTiltSign = 0.0
+        private set
+    val browsingMedia: Boolean
+        get() = isBrowsingMedia
     private var audioDspBlob: ByteArray? = null
     private var audioTail: Job? = null
     private var audioPin: AudioPin? = null
@@ -180,6 +193,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     @Volatile private var lastAssistMirror = false
     private var teleColorSent = false
     private var restoreDLog2OnWide = false
+    @Volatile var zoomColorHopPending = false
+        private set
+    private var zoomColorHopUntilElapsed = 0L
+    private var zoomColorHopGeneration = 0L
+    private var pendingZoomAfterHop: Double? = null
     private var zoomStop = 1.0
     private var zoomStopTouched = false
     var zoomPinchPreview: Double? = null
@@ -216,6 +234,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastSubjectPushAt: Long? = null
     private var lastLiveTrackingAt: Long? = null
     private var lastGimbalStickAt: Long? = null
+    private var lastGimbalThrowAt: Long? = null
     private var trackingPollJob: Job? = null
     private val _trackingHud = MutableStateFlow(TrackingHud())
     val trackingHud: StateFlow<TrackingHud> = _trackingHud.asStateFlow()
@@ -358,6 +377,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         syncGimbalPose()
         teleColorSent = false
         restoreDLog2OnWide = false
+        zoomColorHopPending = false
+        zoomColorHopUntilElapsed = 0L
+        zoomColorHopGeneration += 1
+        pendingZoomAfterHop = null
         resetZoomHud()
         clearLocalTracking()
         clearFaceAF()
@@ -615,15 +638,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                                 val hadVideo =
                                     LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
                                 val force = LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)
-                                if (liveViewEnableSends > 0) {
-                                    if (force) {
-                                        Log.i(TAG, "live: first-picture enable after UDP rebuild (neverGotVideo)")
-                                    }
+                                if (liveViewEnableSends > 0 && force) {
+                                    Log.i(TAG, "live: first-picture enable after UDP rebuild (neverGotVideo)")
                                     sendRecoverEnable(
-                                        force = force,
-                                        reason =
-                                            if (force) "first-picture after UDP rebuild"
-                                            else "keepalive after UDP rebuild",
+                                        force = true,
+                                        reason = "first-picture after UDP rebuild",
                                     )
                                 }
                             }
@@ -666,13 +685,22 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             ) {
                 return false
             }
+            if (CameraCommands.shouldHoldGimbalWatchdog(
+                    lastGimbalThrowAt?.let { (now - it) / 1000.0 },
+                )
+            ) {
+                return false
+            }
             val videoFresh = videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS
+            val statusFresh =
+                datalink?.lastStatusAt?.let { now - it < LiveViewEnablePolicy.STALL_MS } == true
             return LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
                 flowNeedsRebuild = datalink?.needsRebuild == true,
                 rebuildInFlight = datalink?.isRebuilding == true || feedRecoveryJob != null,
                 sinceRebuildMs = datalink?.lastRebuildAt?.let { now - it },
                 videoFresh = videoFresh,
                 sawPicture = hasStableLivePicture,
+                statusFresh = statusFresh,
             )
         }
 
@@ -901,6 +929,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sawPicture = decoder.lastPresentedAt != null,
                 lastFocusTrackAt = lastFocusTrackAt,
                 lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
+                lastGimbalThrowAt = lastGimbalThrowAt,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
             coreWatchdog = SwiftCore.feedWatchdogCreate()
@@ -932,32 +961,41 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
                     age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
+                    age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
                     append("}")
                 }
             when (SwiftCore.feedWatchdogTick(coreWatchdog, json)) {
-                "resendLiveViewEnable" ->
+                "resendLiveViewEnable" -> {
+                    endGimbalStick()
                     sendRecoverEnable(force = true, reason = "watchdog")
+                }
                 "rebuildVTSession",
                 "reopenDatalink",
                 "fullSessionRejoin",
-                ->
+                -> {
+                    endGimbalStick()
                     startFeedRecovery {
                         withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
                         sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                     }
+                }
                 else -> logWatchdogHold(snap)
             }
             return
         }
         when (LiveViewEnablePolicy.tick(feedWatchdog, snap)) {
             LiveViewEnablePolicy.Action.NONE -> logWatchdogHold(snap)
-            LiveViewEnablePolicy.Action.RESEND_ENABLE ->
+            LiveViewEnablePolicy.Action.RESEND_ENABLE -> {
+                endGimbalStick()
                 sendRecoverEnable(force = true, reason = "watchdog")
-            LiveViewEnablePolicy.Action.REBUILD_UDP ->
+            }
+            LiveViewEnablePolicy.Action.REBUILD_UDP -> {
+                endGimbalStick()
                 startFeedRecovery {
                     withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
                     sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                 }
+            }
         }
     }
 
@@ -1410,6 +1448,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (frame.cmdSet == 0x04 && frame.cmdId == 0x05) {
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
             syncGimbalPose()
+            tickGimbalLimit()
         }
         if (frame.cmdSet == 0x04 && frame.cmdId == 0x27) {
             gimbalStickMapping = gimbalStickMapping.noteBodyFace(next.gimbalFace)
@@ -1443,6 +1482,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _status.value = next
             publishFaceDetectWanted()
         }
+        confirmZoomColorHopIfReady()
     }
 
     fun pressRecord() {
@@ -1586,6 +1626,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (blockZoomColorHopIfRecording(factor)) return
         zoomPinchPreview = null
         dropDLog2ForZoom(factor)
+        if (CamFov.holdZoomWrite(factor, _status.value.colorMode, zoomColorHopPending)) {
+            pendingZoomAfterHop = factor
+            return
+        }
         zoomOptimistic = factor
         markZoomStop(factor)
         val name = "Zoom $to"
@@ -1607,6 +1651,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             Log.i(TAG, "zoom: setZoomSlider ${CamFov.displayLabel(factor)} lens=$position")
         }
         if (blockZoomColorHopIfRecording(factor)) return
+        dropDLog2ForZoom(factor)
+        if (CamFov.holdZoomWrite(factor, _status.value.colorMode, zoomColorHopPending)) {
+            pendingZoomAfterHop = factor
+            return
+        }
         fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
     }
 
@@ -1628,10 +1677,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax())
         if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
-        // iOS `dropDLog2ForZoom` before every 0xB8. D-Log2 rejects zoom; any
-        // step off 1× hops to D-Log first. Do not gate on `first` — the pinch
-        // begin event is magnification 1.0, so the hop must run on later ticks.
         dropDLog2ForZoom(factor)
+        if (CamFov.holdZoomWrite(factor, _status.value.colorMode, zoomColorHopPending)) {
+            pendingZoomAfterHop = factor
+            return
+        }
+        pendingZoomAfterHop = null
         zoomPinchPreview = factor
         val lens = CamFov.pinchLens(factor)
         refreshZoomHud()
@@ -1642,6 +1693,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun endZoomPinch() {
+        pendingZoomAfterHop = null
         flushPendingZoom()
         val preview = zoomPinchPreview
         if (preview != null) {
@@ -1743,6 +1795,65 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun cancelTracking() {
         cancelTracking(sendClear = true)
+    }
+
+    fun presentControlNote(note: String) {
+        _controlNote.value = note
+    }
+
+    fun handleGamepadAction(action: GamepadOperatorAction) {
+        when (action) {
+            GamepadOperatorAction.RECORD -> {
+                if (_controlBusy.value) return
+                pressShutter()
+            }
+            GamepadOperatorAction.RECENTER -> recenterGimbal()
+            GamepadOperatorAction.FLIP -> flipGimbal()
+            GamepadOperatorAction.TRACK -> handleGamepadTrackToggle()
+            GamepadOperatorAction.ZOOM_CHIP_IN ->
+                setZoom(CamFov.nextJump(zoomCycleFrom(), zoomStops()))
+            GamepadOperatorAction.ZOOM_CHIP_OUT ->
+                setZoom(CamFov.previousJump(zoomCycleFrom(), zoomStops()))
+            GamepadOperatorAction.ISO_UP -> nudgeGamepadIso(1)
+            GamepadOperatorAction.ISO_DOWN -> nudgeGamepadIso(-1)
+            GamepadOperatorAction.SHUTTER_OPEN -> nudgeGamepadShutter(1)
+            GamepadOperatorAction.SHUTTER_CLOSE -> nudgeGamepadShutter(-1)
+        }
+    }
+
+    private fun nudgeGamepadIso(steps: Int) {
+        val current = _status.value.isoIndex
+        if (current < 0) return
+        val available =
+            _status.value.availableIsoIndices.ifEmpty { CameraCommands.ISO_INDEX_ALL }
+        val next = CameraCommands.isoStepped(current, steps, available) ?: return
+        setIsoIndex(next)
+    }
+
+    private fun nudgeGamepadShutter(steps: Int) {
+        val next =
+            CameraCommands.shutterSteppedDenom(
+                _status.value.shutterDenom,
+                steps,
+                _status.value.availableShutterDenoms,
+            ) ?: return
+        setShutterDenom(next)
+    }
+
+    /** Triangle/Y: track the AF-C face in frame, or cancel if already tracking. */
+    fun handleGamepadTrackToggle() {
+        when (
+            val action =
+                GamepadFaceTrack.action(
+                    isTrackingActive,
+                    _trackingHud.value.overlay,
+                    sceneFaces,
+                )
+        ) {
+            GamepadFaceTrack.Action.Cancel -> cancelSubjectTracking()
+            is GamepadFaceTrack.Action.Track -> startTracking(action.box)
+            GamepadFaceTrack.Action.None -> Unit
+        }
     }
 
     fun resetFocusPoint() {
@@ -2094,6 +2205,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             CaptureLists.colorWheel(family, live.availableColorModes, cam?.name ?: "")
                 .map { it.first }
         if (mode !in allowed) return
+        if (mode == CameraCommands.COLOR_DLOG2) {
+            teleColorSent = false
+            zoomColorHopPending = false
+            zoomColorHopUntilElapsed = 0L
+            zoomColorHopGeneration += 1
+        }
         pinColor(mode)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
@@ -2102,6 +2219,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             onFail = { colorPin = null },
         )
         hopNativeISO(from, mode, hopEnabled)
+        if (mode == CameraCommands.COLOR_DLOG) confirmZoomColorHopIfReady()
     }
 
     /**
@@ -2212,7 +2330,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (blockZoomColorHopIfRecording(factor)) return
         val next = CamFov.colorModeForZoom(factor, _status.value.colorMode)
         if (next == null) {
-            restoreDLog2IfNeeded(factor)
+            if (zoomPinchPreview == null && pendingZoomAfterHop == null && !zoomColorHopPending) {
+                restoreDLog2IfNeeded(factor)
+            }
             return
         }
         sendZoomColorOnce(next)
@@ -2223,24 +2343,75 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _controlNote.value = ControlHud.RECORDING_COLOR_LOCK_NOTE
             return
         }
-        if (teleColorSent) return
+        val now = SystemClock.elapsedRealtime()
+        if (zoomColorHopPending) {
+            if (zoomColorHopUntilElapsed > 0L && now >= zoomColorHopUntilElapsed) {
+                Log.i(TAG, "zoom: D-Log hop timed out — resend 0x42")
+                zoomColorHopPending = false
+                teleColorSent = false
+            } else {
+                return
+            }
+        }
         teleColorSent = true
+        zoomColorHopPending = true
+        zoomColorHopUntilElapsed = now + 2_000L
+        zoomColorHopGeneration += 1
+        val hopGen = zoomColorHopGeneration
         restoreDLog2OnWide = true
         val from = _status.value.colorMode
-        pinColor(next)
+        // Do not pin color — holdZoomWrite must see live D-Log2 until the body hops.
+        colorPin = null
         _controlNote.value = "D-Log — D-Log2 cannot zoom"
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
             "$next",
             "D-Log (zoom)",
-            onFail = {
+            onFail = hopFail@{
+                if (zoomColorHopGeneration != hopGen) return@hopFail
                 colorPin = null
                 restoreDLog2OnWide = false
                 teleColorSent = false
+                zoomColorHopPending = false
+                zoomColorHopUntilElapsed = 0L
+            },
+            onSettle = hopSettle@{ ok ->
+                Log.i(TAG, "zoom: D-Log2 → D-Log ack=${if (ok) "ok" else "failed"}")
+                if (zoomColorHopGeneration != hopGen) return@hopSettle
+                if (ok) {
+                    confirmZoomColorHopIfReady()
+                } else {
+                    teleColorSent = false
+                    zoomColorHopPending = false
+                    zoomColorHopUntilElapsed = 0L
+                }
             },
         )
         hopNativeISO(from, next, OperatorPrefs.nativeISOHopEnabled(appContext))
-        Log.i(TAG, "zoom: D-Log2 → D-Log (from $from)")
+        Log.i(TAG, "zoom: hold 0xB8 until D-Log2 → D-Log (from $from)")
+    }
+
+    private fun confirmZoomColorHopIfReady() {
+        if (!zoomColorHopPending) return
+        if (_status.value.colorMode != CameraCommands.COLOR_DLOG) return
+        zoomColorHopPending = false
+        zoomColorHopUntilElapsed = 0L
+        pinColor(CameraCommands.COLOR_DLOG)
+        Log.i(TAG, "zoom: D-Log2 → D-Log body confirmed")
+        flushZoomAfterColorHop()
+    }
+
+    private fun flushZoomAfterColorHop() {
+        val factor = pendingZoomAfterHop ?: return
+        pendingZoomAfterHop = null
+        if (CamFov.holdZoomWrite(factor, _status.value.colorMode, zoomColorHopPending)) {
+            pendingZoomAfterHop = factor
+            return
+        }
+        zoomPinchPreview = factor
+        markZoomStop(factor)
+        refreshZoomHud()
+        setZoomSlider(factor)
     }
 
     private fun restoreDLog2IfNeeded(factor: Double) {
@@ -2427,7 +2598,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     ) {
         lastAssistMirror = assistMirror
         lastGimbalStickAt = SystemClock.elapsedRealtime()
+        lastGimbalCommand = x to y
+        if (x != 0f || y != 0f) lastGimbalThrowAt = lastGimbalStickAt
         pendingGimbalAxes = encodedGimbalAxes(x, y, sensitivity)
+        tickGimbalLimit()
         if (gimbalStickJob != null) return
         datalink?.sendGimbalStick(pendingGimbalAxes.first, pendingGimbalAxes.second)
         gimbalStickJob =
@@ -2444,6 +2618,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val wasHeld = gimbalStickJob != null
         gimbalStickJob?.cancel()
         gimbalStickJob = null
+        lastGimbalCommand = 0f to 0f
+        gimbalLimitWatch.reset()
         pendingGimbalAxes =
             CameraCommands.GIMBAL_STICK_CENTER to CameraCommands.GIMBAL_STICK_CENTER
         if (wasHeld) {
@@ -2475,6 +2651,23 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun syncGimbalPose() {
         _gimbalPoseViewFlip.value = gimbalStickMapping.poseViewFlip
+    }
+
+    private fun tickGimbalLimit() {
+        val pulse =
+            gimbalLimitWatch.tick(
+                x = lastGimbalCommand.first.toDouble(),
+                y = lastGimbalCommand.second.toDouble(),
+                yawTenthDeg = gimbalStickMapping.yawTenthDeg,
+                pitchTenthDeg = gimbalStickMapping.pitchTenthDeg,
+                now = SystemClock.elapsedRealtime() / 1000.0,
+                settling180 = gimbalStickMapping.pendingWant180.isNotEmpty(),
+            )
+        if (pulse.isEmpty) return
+        lastGimbalLimitContact = pulse
+        lastGimbalLimitPanSign = gimbalLimitWatch.lastPanSign
+        lastGimbalLimitTiltSign = gimbalLimitWatch.lastTiltSign
+        _gimbalLimitPulse.value = _gimbalLimitPulse.value + 1
     }
 
     fun tapFocus(x: Float, y: Float) {
@@ -3023,10 +3216,12 @@ internal object LiveViewEnablePolicy {
     class State {
         var stage: Stage = Stage.IDLE
         var lastActionAt: Long = 0
+        var encoderPauseEnables: Int = 0
 
         fun reset() {
             stage = Stage.IDLE
             lastActionAt = 0
+            encoderPauseEnables = 0
         }
     }
 
@@ -3046,6 +3241,7 @@ internal object LiveViewEnablePolicy {
         val sawPicture: Boolean,
         val lastFocusTrackAt: Long? = null,
         val lastZoomAt: Long? = null,
+        val lastGimbalThrowAt: Long? = null,
     )
 
     fun age(now: Long, at: Long?): Long? = at?.let { now - it }
@@ -3258,9 +3454,11 @@ internal object LiveViewEnablePolicy {
         sinceRebuildMs: Long?,
         videoFresh: Boolean = false,
         sawPicture: Boolean = true,
+        statusFresh: Boolean = false,
     ): Boolean {
         if (!sawPicture) return false
         if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return false
+        if (statusFresh) return false
         if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return false
         return true
     }
@@ -3289,6 +3487,12 @@ internal object LiveViewEnablePolicy {
         if (CamFov.shouldHoldWatchdog(age(snap.now, snap.lastZoomAt)?.div(1000.0))) {
             return Action.NONE
         }
+        if (CameraCommands.shouldHoldGimbalWatchdog(
+                age(snap.now, snap.lastGimbalThrowAt)?.div(1000.0),
+            )
+        ) {
+            return Action.NONE
+        }
 
         val had = hadVideo(snap.videoPackets, videoAge)
         if (!had) {
@@ -3307,10 +3511,21 @@ internal object LiveViewEnablePolicy {
         }
 
         if (controlReceiveAlive(snap) && !udpReceiveAlive(snap)) {
-            if (state.stage == Stage.IDLE || snap.now - state.lastActionAt >= ESCALATE_MS) {
+            if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
+                return Action.NONE
+            }
+            if (state.encoderPauseEnables < 2) {
+                state.encoderPauseEnables += 1
                 return fire(state, Action.RESEND_ENABLE, snap.now)
             }
-            return Action.NONE
+            val bleAge = age(snap.now, snap.lastBleNotifyAt)
+            val sinceRebuild = age(snap.now, snap.lastRebuildAt)
+            if (shouldHoldRebuildAfterRecentUdp(sinceRebuild, snap.pathReady, bleAge, had)) {
+                state.encoderPauseEnables = 0
+                return fire(state, Action.RESEND_ENABLE, snap.now)
+            }
+            state.encoderPauseEnables = 0
+            return fire(state, Action.REBUILD_UDP, snap.now)
         }
 
         val bleAge = age(snap.now, snap.lastBleNotifyAt)

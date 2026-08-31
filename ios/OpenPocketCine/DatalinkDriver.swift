@@ -18,6 +18,9 @@ final class DatalinkDriver {
     private let tcpPoke: Bool
     private let pairingToken: String
     private let q = DispatchQueue(label: "opv.datalink.udp")
+    /// All UDP TX (ACK, stick, Flip GET, SET) serializes here. MainActor
+    /// `conn.send` interleaved with this pump starved window ACK.
+    private static let qKey = DispatchSpecificKey<UInt8>()
     private var conn: NWConnection?
     private var pokeConn: NWConnection?  // kept open for the session; Mimo does not RST 7001
     private var ackTimer: DispatchSourceTimer?
@@ -84,6 +87,11 @@ final class DatalinkDriver {
         var ackedDataCursor: UInt16 = 0
         var extraCursor: UInt16 = 0
         var lastAckedDataLogAt: TimeInterval = 0
+        var gimbalAxis0: UInt16 = GimbalStick.center
+        var gimbalAxis1: UInt16 = GimbalStick.center
+        var gimbalStickHeld = false
+        var gimbalSendRest = false
+        var lastGimbalStickAt: TimeInterval = 0
     }
 
     /// Called (on the main actor) for every DUML frame the camera pushes.
@@ -138,6 +146,7 @@ final class DatalinkDriver {
         self.port = port
         self.tcpPoke = tcpPoke
         self.pairingToken = pairingToken
+        q.setSpecific(key: Self.qKey, value: 1)
     }
 
     private var handshakeAcked: Bool {
@@ -346,12 +355,37 @@ final class DatalinkDriver {
         return sendDuml(frame, trackCommand: false)
     }
 
+    /// Latest `0x04/0x01` axes. The ACK pump emits them on the UDP queue.
+    func noteGimbalStick(axis0: UInt16, axis1: UInt16) {
+        if closed { return }
+        wire.withLock {
+            $0.gimbalAxis0 = axis0
+            $0.gimbalAxis1 = axis1
+            $0.gimbalStickHeld = true
+            $0.gimbalSendRest = false
+        }
+    }
+
+    /// One center packet, then silence. Same UDP queue as ACK.
+    func restGimbalStick() {
+        wire.withLock {
+            $0.gimbalAxis0 = GimbalStick.center
+            $0.gimbalAxis1 = GimbalStick.center
+            $0.gimbalStickHeld = false
+            $0.gimbalSendRest = true
+        }
+    }
+
     func close() {
         closed = true
         onAccessUnit = nil
         onStatusFrame = nil
         ackTimer?.cancel()
         ackTimer = nil
+        wire.withLock {
+            $0.gimbalStickHeld = false
+            $0.gimbalSendRest = false
+        }
         pathMonitor?.cancel()
         pathMonitor = nil
         // Bump `udpGeneration` so in-flight receive/write completions cannot
@@ -380,6 +414,7 @@ final class DatalinkDriver {
         defer { rebuilding = false }
         log.info("datalink: rebuilding UDP (\(reason, privacy: .public))")
         ControlLiveLog.line("datalink: rebuilding UDP (\(reason))")
+        let wasAccepting = wire.withLock { $0.liveAccepting }
         discardUDP()
         writeHealthy = true
         lastCommandWriteLanded = nil
@@ -395,6 +430,7 @@ final class DatalinkDriver {
         }
         writeHealthy = true
         syncWire()
+        if wasAccepting { armLiveVideo() }
         sendAck()
         sendDuml(Commands.appPresenceFrame(seq: 0))
     }
@@ -440,13 +476,20 @@ final class DatalinkDriver {
             DumlTransport.transportHeader(
                 pktType: pktType, payloadLen: payload.count,
                 sessionId: sessionId, seq: udpSeq) + payload
-        write(pkt)
+        onUDPQueueSync { self.writeOnQueue(pkt) }
         udpSeq = udpSeq &+ 8
     }
 
     /// Wrap a DUML frame in the transport + routing headers and send it (pktType 0x05).
+    /// Stamp + send run on the UDP queue so SET cannot overtake stick/ACK seq.
     @discardableResult
     private func sendDuml(_ frame: Duml.Frame, trackCommand: Bool = false) -> UInt16 {
+        var seq: UInt16 = 0
+        onUDPQueueSync { seq = self.sendDumlOnQueue(frame, trackCommand: trackCommand) }
+        return seq
+    }
+
+    private func sendDumlOnQueue(_ frame: Duml.Frame, trackCommand: Bool) -> UInt16 {
         let sid = sessionId
         let (stamped, pkt): (UInt16, [UInt8]) = wire.withLock { w in
             w.sessionId = sid
@@ -465,8 +508,16 @@ final class DatalinkDriver {
             return (seq, out)
         }
         dumlSeq = stamped &+ 1
-        write(pkt, trackCommand: trackCommand)
+        writeOnQueue(pkt, trackCommand: trackCommand)
         return stamped
+    }
+
+    private func onUDPQueueSync(_ body: () -> Void) {
+        if DispatchQueue.getSpecific(key: Self.qKey) != nil {
+            body()
+        } else {
+            q.sync(execute: body)
+        }
     }
 
     /// pktType-0x04 window ACK, sent with seq 0 (echoes the peer's cursor so it opens its downlink).
@@ -484,10 +535,15 @@ final class DatalinkDriver {
             DumlTransport.transportHeader(
                 pktType: 0x04, payloadLen: payload.count,
                 sessionId: sessionId, seq: 0) + payload
-        write(pkt)
+        onUDPQueueSync { self.writeOnQueue(pkt) }
     }
 
     private func write(_ bytes: [UInt8], trackCommand: Bool = false) {
+        onUDPQueueSync { self.writeOnQueue(bytes, trackCommand: trackCommand) }
+    }
+
+    /// Must run on `q`. ACK/stick/Flip already do; SET hops here.
+    private func writeOnQueue(_ bytes: [UInt8], trackCommand: Bool = false) {
         if closed { return }
         guard let conn else {
             writeHealthy = false
@@ -560,6 +616,7 @@ final class DatalinkDriver {
         t.setEventHandler { [weak self] in
             self?.sendWindowAck()
             self?.tickSelfieFlipGET()
+            self?.tickGimbalStick()
         }
         t.resume()
         ackTimer = t
@@ -637,6 +694,52 @@ final class DatalinkDriver {
             Task { @MainActor [weak self] in
                 self?.lastSelfieFlipSendAt = Date()
             }
+        }
+    }
+
+    /// Stick notify on the ACK queue. MainActor `sendUntracked` shared the
+    /// socket with this pump and starved window ACK while AirPods IMU hopped
+    /// main at ~100 Hz.
+    nonisolated private func tickGimbalStick() {
+        enum Built {
+            case wait
+            case send(NWConnection, [UInt8])
+        }
+        let now = CFAbsoluteTimeGetCurrent()
+        let built: Built = wire.withLock { w in
+            guard
+                GimbalStick.shouldEmit(
+                    held: w.gimbalStickHeld, restPending: w.gimbalSendRest, now: now,
+                    lastEmitted: w.lastGimbalStickAt)
+            else { return .wait }
+            guard w.liveAccepting, let conn = w.conn else { return .wait }
+            let rest = w.gimbalSendRest
+            let axis0 = rest ? GimbalStick.center : w.gimbalAxis0
+            let axis1 = rest ? GimbalStick.center : w.gimbalAxis1
+            w.lastGimbalStickAt = now
+            if rest {
+                w.gimbalSendRest = false
+                w.gimbalStickHeld = false
+            }
+            w.cmdCounter &+= 1
+            var f = Commands.gimbalStick(axis0: axis0, axis1: axis1)
+            f.seq = w.dumlSeq
+            w.dumlSeq &+= 1
+            let routing = DumlTransport.routingHeader(seq: w.udpSeq, cmdCounter: w.cmdCounter)
+            let duml = Duml.encode(f)
+            let pkt =
+                DumlTransport.transportHeader(
+                    pktType: 0x05, payloadLen: routing.count + duml.count,
+                    sessionId: w.sessionId, seq: w.udpSeq) + routing + duml
+            w.udpSeq &+= 8
+            return .send(conn, pkt)
+        }
+        guard case .send(let conn, let pkt) = built else { return }
+        switch conn.state {
+        case .cancelled, .failed:
+            return
+        default:
+            conn.send(content: Data(pkt), completion: .idempotent)
         }
     }
 
@@ -738,87 +841,90 @@ final class DatalinkDriver {
                         "datalink: UDP receive error #\(self.receiveErrors, privacy: .public) (\(message, privacy: .public)) — re-arm"
                     )
                 }
-            }
-        ) { [weak self] bytes in
-            let awaitingAck = !handshake.withLock { $0 }
-            if awaitingAck {
-                inbound.withLock { $0 += 1 }
-                let count = bytes.count
-                let pktType = count > 6 ? bytes[6] : 0xFF
-                Task { @MainActor in
-                    self?.log.info(
-                        "datalink: handshake inbound bytes=\(count, privacy: .public) pktType=0x\(String(format: "%02x", pktType), privacy: .public)"
-                    )
-                }
-            }
-            if DumlTransport.isHandshake(bytes) {
-                handshake.withLock { $0 = true }
-                Task { @MainActor in
-                    self?.log.info("datalink: handshake reply pktType=0x00")
-                }
-            }
-            self?.noteAckWindows(bytes)
-            let video = bytes.count > 6 && bytes[6] == 0x02
-            if video {
-                let accept = gate.withLock { $0.accepting }
-                if !CameraSoftAP.shouldIngestLiveVideo(ingestArmed: accept) {
-                    let logDrop = gate.withLock { state -> Bool in
-                        if state.loggedDrop { return false }
-                        state.loggedDrop = true
-                        return true
+            },
+            ingest: { [weak self] bytes in
+                let awaitingAck = !handshake.withLock { $0 }
+                if awaitingAck {
+                    inbound.withLock { $0 += 1 }
+                    let count = bytes.count
+                    let pktType = count > 6 ? bytes[6] : 0xFF
+                    Task { @MainActor in
+                        self?.log.info(
+                            "datalink: handshake inbound bytes=\(count, privacy: .public) pktType=0x\(String(format: "%02x", pktType), privacy: .public)"
+                        )
                     }
-                    if logDrop {
+                }
+                if DumlTransport.isHandshake(bytes) {
+                    handshake.withLock { $0 = true }
+                    Task { @MainActor in
+                        self?.log.info("datalink: handshake reply pktType=0x00")
+                    }
+                }
+                self?.noteAckWindows(bytes)
+                let video = bytes.count > 6 && bytes[6] == 0x02
+                if video {
+                    let accept = gate.withLock { $0.accepting }
+                    if !CameraSoftAP.shouldIngestLiveVideo(ingestArmed: accept) {
+                        let logDrop = gate.withLock { state -> Bool in
+                            if state.loggedDrop { return false }
+                            state.loggedDrop = true
+                            return true
+                        }
+                        if logDrop {
+                            let count = bytes.count
+                            Task { @MainActor in
+                                self?.log.info(
+                                    "datalink: drop leftover video before ingest bytes=\(count, privacy: .public)"
+                                )
+                            }
+                        }
+                        return
+                    }
+                    let assembled = assembler.ingest(bytes)
+                    if assembled.firstPacket {
                         let count = bytes.count
                         Task { @MainActor in
                             self?.log.info(
-                                "datalink: drop leftover video before ingest bytes=\(count, privacy: .public)"
+                                "datalink: first video pktType=0x02 bytes=\(count, privacy: .public)"
                             )
+                        }
+                    }
+                    if assembled.shouldHop {
+                        Task(priority: .userInitiated) { @MainActor in
+                            self?.flushPendingAccessUnits()
                         }
                     }
                     return
                 }
-                let assembled = assembler.ingest(bytes)
-                if assembled.firstPacket {
-                    let count = bytes.count
-                    Task { @MainActor in
-                        self?.log.info(
-                            "datalink: first video pktType=0x02 bytes=\(count, privacy: .public)")
+                let pktType = bytes.count > 6 ? bytes[6] : 0xFF
+                let frames = DumlTransport.scanFrames(bytes)
+                for frame in frames where frame.cmdSet == 0x02 && frame.cmdId == 0x8E {
+                    let pid: String
+                    if let parsed = CameraParam.parseGetReply(frame.payload) {
+                        pid = String(format: "0x%04X", parsed.pid)
+                    } else if frame.payload.count >= 5 {
+                        let raw =
+                            UInt16(frame.payload[3]) | (UInt16(frame.payload[4]) << 8)
+                        pid = String(format: "0x%04X?", raw)
+                    } else {
+                        pid = "—"
                     }
+                    ControlLiveLog.line(
+                        "flip: udp 0x8E pkt=0x\(String(format: "%02x", pktType)) seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) pid=\(pid) payload=\(Duml.hex(frame.payload))"
+                    )
                 }
-                if assembled.shouldHop {
-                    Task(priority: .userInitiated) { @MainActor in
-                        self?.flushPendingAccessUnits()
-                    }
+                let flipReply = frames.contains {
+                    CameraParam.isSelfieFlipGetReply(
+                        set: $0.cmdSet, cmd: $0.cmdId, payload: $0.payload)
                 }
-                return
-            }
-            let pktType = bytes.count > 6 ? bytes[6] : 0xFF
-            let frames = DumlTransport.scanFrames(bytes)
-            for frame in frames where frame.cmdSet == 0x02 && frame.cmdId == 0x8E {
-                let pid: String
-                if let parsed = CameraParam.parseGetReply(frame.payload) {
-                    pid = String(format: "0x%04X", parsed.pid)
-                } else if frame.payload.count >= 5 {
-                    let raw =
-                        UInt16(frame.payload[3]) | (UInt16(frame.payload[4]) << 8)
-                    pid = String(format: "0x%04X?", raw)
-                } else {
-                    pid = "—"
+                if flipReply {
+                    flipReplyAt.withLock { $0 = Date() }
                 }
-                ControlLiveLog.line(
-                    "flip: udp 0x8E pkt=0x\(String(format: "%02x", pktType)) seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) pid=\(pid) payload=\(Duml.hex(frame.payload))"
-                )
+                Task(priority: .high) { @MainActor in
+                    self?.ingest(bytes)
+                }
             }
-            let flipReply = frames.contains {
-                CameraParam.isSelfieFlipGetReply(set: $0.cmdSet, cmd: $0.cmdId, payload: $0.payload)
-            }
-            if flipReply {
-                flipReplyAt.withLock { $0 = Date() }
-            }
-            Task(priority: .high) { @MainActor in
-                self?.ingest(bytes)
-            }
-        }
+        )
     }
 
     /// First-connect path updates used to stop `receiveMessage` on the first

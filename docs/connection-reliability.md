@@ -92,9 +92,17 @@ Physical take 2026-08-28 (`es_iphone16`): first `feed: observe` was
 `lastVideo=nones` and `flip: skip udp notLive`.
 
 Repairs (this branch): skip parameter-set enable while UDP video is alive
-(debounce `escalateAfter`); encoder-pause never rebuilds UDP while status
-is young; arm `0x02` ingest on UDP handshake ack (Mimo HEVC at join+17 ms;
-`0x09/0xa8` at +3 s is PLI, not the start gate).
+(debounce `escalateAfter`); encoder-pause sends two `0x09/0xa8` then one
+UDP rebuild (22:16 brought HEVC back; #148 was a 2 s-too-fast reopen).
+Keepalive must not flap that socket while status is young. SET ACK
+timeout with young status is the same — do not rebuild UDP. After a
+keepalive rebuild, do not enable if HEVC had already existed. Sitting in
+cooldown forever with a frozen frame *was* the operator drop. Arm `0x02`
+ingest on UDP handshake ack (Mimo HEVC at join+17 ms; `0x09/0xa8` at +3 s
+is PLI, not the start gate). Re-arm ingest after a session-preserving
+UDP rebuild. All UDP writes serialize on the datalink queue. Android JNI
+watchdog JSON includes gimbal-throw grace. Head-track lifts the stick on
+rest and does not re-grab from live-yaw wiggle after a 1:1 close.
 
 First picture: sit in GOP-reset grace (8 s) before a second enable or UDP
 rebuild only when no picture is up. Do not `still holding for IDR` while

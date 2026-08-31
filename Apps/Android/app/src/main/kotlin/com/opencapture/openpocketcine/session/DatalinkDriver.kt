@@ -435,6 +435,12 @@ class DatalinkDriver(
     /** `0x04/0x01` flags `0x00`, no ACK. Built with `encodeDuml` so it works on the shipped core. */
     fun sendGimbalStick(axis0: Int, axis1: Int) {
         if (!SwiftCore.isAvailable) return
+        synchronized(sendLock) {
+            sendGimbalStickLocked(axis0, axis1)
+        }
+    }
+
+    private fun sendGimbalStickLocked(axis0: Int, axis1: Int) {
         val payload = CameraCommands.gimbalStickPayload(axis0, axis1)
         val frame =
             SwiftCore.encodeDuml(

@@ -1,9 +1,12 @@
 package com.opencapture.openpocketcine
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -81,6 +84,7 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { !composeFirstFrameDrawn.get() }
         super.onCreate(savedInstanceState)
         model = AppModel(applicationContext)
+        model.gimbalGamepad.ensureListening(this, model)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -112,12 +116,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::model.isInitialized) model.session.noteSceneBecameActive()
+        if (::model.isInitialized) {
+            model.session.noteSceneBecameActive()
+            model.gimbalGamepad.ensureListening(this, model)
+        }
     }
 
     override fun onDestroy() {
         if (::model.isInitialized) model.close()
         super.onDestroy()
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (::model.isInitialized && model.gimbalGamepad.onMotion(event, model)) return true
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (::model.isInitialized && model.gimbalGamepad.onKey(event, model)) return true
+        return super.dispatchKeyEvent(event)
     }
 }
 

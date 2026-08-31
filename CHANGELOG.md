@@ -6,7 +6,87 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Live UDP writes (SET, ACK, stick, Flip GET) serialize on the datalink
+  queue so a MainActor SET cannot starve the 40 Hz window ACK. SET ACK
+  timeout no longer tears UDP while DUML status is young (encoder pause
+  looked like a dead uplink). Keepalive rebuild no longer GOP-cuts with
+  `0x09/0xa8` when video had already existed. After UDP rebuild, re-arm
+  pktType `0x02` ingest if live view was already accepting. Android JNI
+  watchdog now parses gimbal-throw grace (`secondsSinceGimbalThrow`) so
+  a stick throw does not GOP-cut the feed.
+
+- Head tracking lifts the gimbal stick when catch-up rests (Mimo: `0x04/0x01`
+  only while thrown). Streaming center at 25 Hz after a 1:1 close paused
+  HEVC at 15–30 s; two enables then a UDP rebuild plus keepalive flaps
+  looked like a dropped connection while status stayed live. Encoder-pause
+  with young DUML status no longer rebuilds UDP; keepalive does not flap
+  the 5-tuple. A leftover `y=-0.01` after close encodes as center
+  (`axisLinear` snap) — treat it as rest, debounce the lift 0.3 s so
+  grab/release chatter does not cut GOP, and stop commanding tilt if live
+  pitch `@6` never leaves SET. After a 1:1 close, live-yaw wiggle must
+  not re-grab the stick. Two failed encoder-pause enables now rebuild
+  UDP once (22:16 brought the picture back); keepalive still will not
+  flap while status is live. Look-at throw is full Mimo stick (±550)
+  with `0x04/0x50` Fast + Follow (tilt unlocked) at Calibrate Head Lock
+  — half-stick plus a 0.8 s pitch-stuck park was the crawl / limited nod.
+  Catch-up is full stick until close (not error/10°, which was a 10× crawl).
+
+- Head tracking yaw and pitch follow the head (AirPods `+rotationRate.y`
+  is look-left; `+pitch` is nod down — both inverted onto stick right/up).
+  Catch-up throw is capped at half stick so a 90° look does not hold full
+  `0x04/0x01` and pause HEVC. Rest the stick when video goes silent; if two
+  encoder-pause enables leave the picture dead, rebuild UDP after 15 s
+  (status staying young used to sit in cooldown forever).
+
+- AirPods head tracking pan integrates head-turn gyro from Calibrate Head
+  Lock (attitude yaw and nose-vector lookRight both topped out ~5–10° on
+  a 90° turn). Nod is inverted attitude pitch onto stick tilt-up.
+
+- AirPods head tracking no longer lifts the gimbal stick every time the
+  head is still. Rest is center while calibrated. Lift/grab chatter was
+  pausing HEVC (status stayed live, watchdog `encoderPaused`, then
+  `0x09/0xa8` RECOV about a second after Calibrate Head Lock).
+
+- AirPods head tracking takes look from the SET-relative nose vector
+  (quaternion). A vertical nod no longer zigzags pan from Euler yaw
+  coupling. Looking past a mechanical stop still rests the stick.
+
+- AirPods head tracking projects unbounded look onto the Pocket
+  controllable pan/tilt box (−235°…+58° pan, −120°…+70° tilt). Looking
+  past a mechanical stop rests the stick; looking back is 1:1 from SET
+  again — it does not keep throwing and walk the center.
+
+- Live gimbal stick (on-screen, gamepad, and iOS AirPods look-at) no longer
+  writes `0x04/0x01` from the main thread. Stick notify rides the 40 Hz UDP
+  ACK queue at 25 Hz; AirPods IMU stays off main and applies at that rate.
+  MainActor stick + 100 Hz headphone motion was starving window ACK so the
+  picture dropped and did not recover.
+
 ### Added
+
+- Head tracking (iOS, experimental): Operator Setup → Controls
+  **Head Tracking (Experimental)**, off by default. **Calibrate Head
+  Lock** is shared identity: that AirPods pose and that gimbal pose are
+  zero. Δatt yaw/pitch from SET are pan/tilt in degrees (physical take:
+  a 90° head turn is attitude yaw, not quaternion look-right; yaw is
+  inverted onto stick right). Stick
+  throw closes live `0x04/0x05` onto that pose. Roll is shown only —
+  `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and a
+  game controller win while held. Android has no AirPods IMU.
+
+- Game controller (discussion #159): left stick pans and tilts with the
+  same expo throw as the on-screen stick. Cross/A records (skips the
+  rec-confirmation sheet). Circle/B recenters. Square/X is rotate-180.
+  Triangle/Y tracks a face in frame or cancels. L1/R1 jump the zoom chip
+  (out does not wrap to tele). L2/R2 hold-to-zoom (deeper trigger is
+  faster). D-pad up/down ISO, left/right shutter. Toast Gamepad
+  connected/disconnected; unplug rests the stick. Controls **Gamepad**
+  row shows Connected / Not connected. Joystick Sensitivity 1–5 is the
+  same gain as the on-screen stick. A mechanical stop pulses the phone
+  and rumbles the pad only after that axis moves then stalls (Haptics
+  setting). iOS and Android.
 
 - Play closed-testing pipeline (GitHub Actions signed AAB → `alpha` track)
   and tester notes under `Apps/Android/Play/`. Wizard:
@@ -119,6 +199,12 @@ All notable changes to this project are documented here. The format is based on
   identification mark on Camera-to-Cloud delivery.
 
 ### Changed
+
+- Idle D-Log2 zoom hops to D-Log (`0x02/0x42`) on the first step off 1×
+  and holds every zoom `0xB8` until `cam_image_effect` is D-Log. The chip
+  stays at live 1× until that hop lands (R2/L2, pinch, and the cycle
+  chip). An optimistic color pin no longer lets the multiplier move
+  while the body is still D-Log2. iOS and Android.
 
 - Landing-page camera matrix: Pocket 4P and Pocket 4 working, Pocket 3 and
   Nano partial, Action 5 and 6 untested. Press cards for CineD and Gadget

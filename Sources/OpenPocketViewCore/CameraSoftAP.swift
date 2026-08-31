@@ -129,7 +129,8 @@ extension CameraSoftAP {
         rebuildInFlight: Bool,
         secondsSinceLastRebuild: TimeInterval?,
         videoFresh: Bool = false,
-        sawPicture: Bool = true
+        sawPicture: Bool = true,
+        statusFresh: Bool = false
     ) -> Bool {
         // First picture owns the socket. Keepalive rebuild here canceled the
         // new UDP and RST'd TCP 7001 — black canvas, 2 s flap.
@@ -137,6 +138,9 @@ extension CameraSoftAP {
         // A late SET write reject while HEVC is still arriving is not a dead
         // socket. Tearing UDP here is the “toggle LUT / pinch zoom” dropout.
         guard flowNeedsRebuild, !rebuildInFlight, !videoFresh else { return false }
+        // Gimbal throw can pause HEVC while DUML status stays on 9004.
+        // Keepalive 6 s UDP flaps were the 15–30 s “connection drop.”
+        if statusFresh { return false }
         if let since = secondsSinceLastRebuild, since < rebuildCooldown { return false }
         return true
     }
@@ -154,9 +158,13 @@ extension CameraSoftAP {
         downlinkFresh: Bool,
         videoFresh: Bool,
         rebuildInFlight: Bool,
-        secondsSinceLastRebuild: TimeInterval?
+        secondsSinceLastRebuild: TimeInterval?,
+        statusFresh: Bool = false
     ) -> Bool {
         guard !videoFresh else { return false }
+        // Status on 9004 is encoder-pause, not a dead uplink. Tearing UDP
+        // here GOP-cuts HEVC and does not unstick a wedged 0x03 window.
+        guard !statusFresh else { return false }
         guard timeoutsInWindow >= commandTimeoutRebuildCount, downlinkFresh, !rebuildInFlight
         else { return false }
         if let since = secondsSinceLastRebuild, since < rebuildCooldown { return false }

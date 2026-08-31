@@ -7,6 +7,8 @@ import SwiftUI
 struct LiveViewScreen: View {
     @Environment(AppModel.self) private var model
     @State private var interfaceLocked = false
+    @State private var gamepad = GimbalGamepadBridge()
+    @State private var headphones = HeadphoneMotionBridge()
     @State private var orientationObserver = InterfaceOrientationObserver()
     @State private var topMenu: LiveTopMenu?
     @State private var topPickerFrames: [LiveTopMenu: CGRect] = [:]
@@ -87,12 +89,45 @@ struct LiveViewScreen: View {
                 cameraName: model.session.connectedCamera?.model.name)
             model.session.decoder.startSimulatorSampleIfNeeded()
             model.session.isLocked = interfaceLocked
+            gamepad.attach(model: model)
+            headphones.attach(model: model)
         }
         .onDisappear {
+            headphones.detach()
+            gamepad.detach()
             model.session.decoder.stopSimulatorSample()
         }
         .onChange(of: interfaceLocked) { _, locked in
             model.session.isLocked = locked
+            if locked {
+                gamepad.noteBlocked()
+                headphones.noteBlocked()
+            }
+        }
+        .onChange(of: model.liveOperatorPanel) { _, panel in
+            if panel != nil {
+                gamepad.noteBlocked()
+                headphones.noteBlocked()
+            } else {
+                headphones.sync()
+            }
+        }
+        .onChange(of: model.headTrackingEnabled) { _, _ in
+            headphones.sync()
+        }
+        .onChange(of: model.isEditingChrome) { _, editing in
+            if editing {
+                headphones.noteBlocked()
+            } else {
+                headphones.sync()
+            }
+        }
+        .onChange(of: model.session.gimbalLimitPulse) { _, _ in
+            gamepad.pulseLimit(
+                model.session.gimbalLimitContact,
+                panSign: model.session.gimbalLimitPanSign,
+                tiltSign: model.session.gimbalLimitTiltSign,
+                enabled: model.hapticsEnabled)
         }
         .onChange(of: model.assist.clean) { _, clean in
             if clean {
@@ -306,6 +341,7 @@ struct LiveViewScreen: View {
                 stick: layout.gimbalStick,
                 reset: model.session.isFocusResetAvailable ? layout.focusReset : .zero,
                 cancel: trackingCancelRect(in: layout),
+                calibrate: model.headTrackingEnabled ? layout.gimbalCalibrate : .zero,
                 enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive
             )
 
@@ -373,6 +409,16 @@ struct LiveViewScreen: View {
                 )
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(layout.gimbalStick)
+                .zIndex(3)
+            }
+
+            if model.headTrackingEnabled, !interfaceLocked, chromeInteractive,
+                model.liveOperatorPanel == nil
+            {
+                LiveHeadTrackCalibrateButton(
+                    title: model.headTrackControlTitle, onTap: { headphones.tapControl() }
+                )
+                .liveModuleFrame(layout.gimbalCalibrate)
                 .zIndex(3)
             }
 
@@ -454,6 +500,11 @@ struct LiveViewScreen: View {
                 stick: stickFrame,
                 reset: .zero,
                 cancel: trackingCancelRect(in: layout),
+                calibrate: model.headTrackingEnabled
+                    ? LiveMonitorLayout.headTrackCalibrateFrame(
+                        canvasWidth: layout.viewport.width,
+                        barTopY: CGFloat(Self.portraitBelowFeedFloor(fill: isFill, zones: zones)))
+                    : .zero,
                 enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive
             )
 
@@ -549,6 +600,20 @@ struct LiveViewScreen: View {
                 )
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(stickFrame)
+                .zIndex(3)
+            }
+
+            if model.headTrackingEnabled, !interfaceLocked, chromeInteractive,
+                model.liveOperatorPanel == nil
+            {
+                LiveHeadTrackCalibrateButton(
+                    title: model.headTrackControlTitle, onTap: { headphones.tapControl() }
+                )
+                .liveModuleFrame(
+                    LiveMonitorLayout.headTrackCalibrateFrame(
+                        canvasWidth: layout.viewport.width,
+                        barTopY: CGFloat(Self.portraitBelowFeedFloor(fill: isFill, zones: zones)))
+                )
                 .zIndex(3)
             }
 
@@ -925,6 +990,18 @@ private struct LiveSessionBanners: View {
                         guard !Task.isCancelled, model.session.controlNote == note else { return }
                         model.session.controlNote = nil
                     }
+            }
+            if model.headTrackingEnabled, !model.headTrackImuReadout.isEmpty {
+                Text(model.headTrackImuReadout)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(LiveDesign.text)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .liveChromeCapsule()
+                    .position(x: feed.minX + 148, y: feed.minY + 64)
+                    .zIndex(5)
+                    .allowsHitTesting(false)
             }
         }
         .animation(.easeOut(duration: 0.18), value: model.session.controlNote)

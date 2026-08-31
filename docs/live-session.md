@@ -37,6 +37,25 @@ session cannot unstick controls until a fresh handshake. Mimo copies the
 latest `0x03` seq into group 1 (~21 Hz of those packets in a live
 capture). The 40 Hz ACK pump must do the same.
 
+Gimbal stick `0x04/0x01` is notify (no ACK) and must ride **that same UDP
+queue** at 25 Hz while held — Flip GET already does. **Every** UDP write
+(SET mailbox, ACK, stick, Flip GET) serializes on the datalink queue;
+MainActor `conn.send` interleaved with the 40 Hz pump starved window ACK.
+Latest axes live in the wire lock; the pump emits, and lift sends one center.
+Head-track rest **lifts**
+(Mimo: `0x04/0x01` only while thrown). Streaming center at 25 Hz after
+catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
+looked like a dropped connection (status stayed young). A leftover throw
+below the linear snap (`y=-0.01`) is the same center stream — rest it,
+and hold the previous throw 0.3 s so grab/release chatter does not cut
+GOP. Look-at throw is full Mimo stick until close. After a 1:1 close, live-yaw
+wiggle must not re-grab. Two failed encoder-pause enables rebuild UDP
+once (that brought the picture back); keepalive must not flap the
+5-tuple while DUML status is live. SET ACK timeout with young status is
+the same encoder-pause — do not rebuild UDP. After a keepalive rebuild,
+do not `0x09/0xa8` if HEVC had already existed (watchdog owns enable).
+Android JNI watchdog JSON must include `secondsSinceGimbalThrow`.
+
 ## Enable write
 
 Arm pktType `0x02` ingest on UDP handshake ack, not on the enable write.

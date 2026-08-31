@@ -367,6 +367,11 @@ import Testing
                 flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: nil,
                 sawPicture: false),
             "first picture owns the socket")
+        #expect(
+            !CameraSoftAP.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
+                videoFresh: false, sawPicture: true, statusFresh: true),
+            "DUML status on 9004 is encoder pause — keepalive must not flap UDP")
         #expect(CameraSoftAP.rebuildCooldown == 5)
     }
 
@@ -445,13 +450,21 @@ import Testing
                 rebuildInFlight: false, secondsSinceLastRebuild: CameraSoftAP.rebuildCooldown))
     }
 
+    @Test func commandTimeoutsWithFreshStatusDoNotRebuild() {
+        #expect(
+            !CameraSoftAP.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow: 2, downlinkFresh: true, videoFresh: false,
+                rebuildInFlight: false, secondsSinceLastRebuild: nil, statusFresh: true),
+            "status on 9004 is encoder-pause — SET timeout must not tear UDP")
+    }
+
     /// Video already silent: enough genuine SET timeouts may rebuild once.
     /// The receive watchdog still owns a quiet downlink.
     @Test func commandTimeoutsWithStaleVideoMayRebuild() {
         #expect(
             CameraSoftAP.shouldRebuildAfterCommandTimeouts(
                 timeoutsInWindow: 2, downlinkFresh: true, videoFresh: false,
-                rebuildInFlight: false, secondsSinceLastRebuild: nil))
+                rebuildInFlight: false, secondsSinceLastRebuild: nil, statusFresh: false))
         #expect(
             CameraSoftAP.shouldRebuildAfterCommandTimeouts(
                 timeoutsInWindow: 3, downlinkFresh: true, videoFresh: false,

@@ -59,6 +59,37 @@ trailing-bottom parking spot in every orientation. Zoom stacks above the stick.
 Controls grow leading of the stick without moving it.
 _Avoid_: joystick pack, gimbal HUD
 
+**Gimbal pad**:
+Connected extended gamepad (discussion #159). Left stick is the gimbal
+stick (same expo throw and picture-relative invert as the on-screen stick).
+Cross/A records (skips the rec-confirmation sheet). Circle/B recenters.
+Square/X is rotate-180. Triangle/Y tracks a face in frame or cancels.
+L1/R1 jump the zoom chip (out does not wrap to tele). L2/R2 hold-to-zoom
+(deeper trigger is faster). D-pad up/down ISO, left/right shutter
+(left opens / slower, right closes / faster). Toast Gamepad
+connected/disconnected. Unplug rests the stick and zoom. On-screen stick
+wins while held. Controls **Gamepad** row shows Connected / Not connected.
+Limit haptic fires only after that axis moves, then stalls at a stop.
+_Avoid_: DualSense (alone) in operator copy
+
+**Head tracking**:
+iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
+Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
+shared identity: AirPods Δatt yaw/pitch from that pose are gimbal pan/tilt
+in degrees (physical take: 90° head turn is Δatt yaw, inverted onto
+stick right; not quat look-right).
+Stick throw closes live `0x04/0x05` onto that pose at full Mimo stick
+(±550, bang-bang until close; `0x04/0x50` Fast + tilt unlocked). Rest
+**lifts** the stick (Mimo: notify only while thrown). Streaming center at
+25 Hz paused HEVC at 15–30 s — including a leftover throw below the
+linear snap (`y=-0.01`). Debounce the lift 0.3 s. After a 1:1 close, live-yaw wiggle must not
+re-grab. Encoder-pause: two enables then one UDP rebuild; keepalive
+must not flap while status is young. Close tilt on live pitch `@6` only;
+stop tilt throw if that field never leaves SET. Roll is readout only —
+`0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and gimbal
+pad win while thrown. Android has no AirPods IMU.
+_Avoid_: spatial audio in operator copy
+
 **Triple-tap 180 (TT180)**:
 Mechanical 180 via `FE 09` (app rotate-180 button or Pocket joystick
 triple-press). Invert pan when that 180 settles (~165° / ~15°), not at

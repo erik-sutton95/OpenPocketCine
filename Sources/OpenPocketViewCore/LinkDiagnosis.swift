@@ -39,6 +39,7 @@ public enum LinkDiagnoser {
         secondsSinceLastEnable: TimeInterval?,
         secondsSinceFocusTrackSet: TimeInterval?,
         secondsSinceZoomSet: TimeInterval? = nil,
+        secondsSinceGimbalThrow: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
         if !pathReady { return .softAPLost }
@@ -60,6 +61,9 @@ public enum LinkDiagnoser {
             return .none
         }
         if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
+            return .none
+        }
+        if GimbalStick.shouldHoldWatchdog(secondsSinceThrow: secondsSinceGimbalThrow) {
             return .none
         }
         if hadVideo,
@@ -107,6 +111,7 @@ public enum LinkDiagnoser {
             secondsSinceLastEnable: snap.secondsSinceLastEnable,
             secondsSinceFocusTrackSet: snap.secondsSinceFocusTrackSet,
             secondsSinceZoomSet: snap.secondsSinceZoomSet,
+            secondsSinceGimbalThrow: snap.secondsSinceGimbalThrow,
             presentAge: snap.lastDecodedFrameAge
         )
     }

@@ -24,6 +24,8 @@ interface OperatorHaptics {
 
     fun longPress()
 
+    fun limit()
+
     companion object {
         val None: OperatorHaptics =
             object : OperatorHaptics {
@@ -34,6 +36,8 @@ interface OperatorHaptics {
                 override fun confirm() = Unit
 
                 override fun longPress() = Unit
+
+                override fun limit() = Unit
             }
     }
 }
@@ -73,6 +77,16 @@ private class ViewOperatorHaptics(
             preferred = HapticFeedbackConstants.LONG_PRESS,
             fallback = HapticFeedbackConstants.KEYBOARD_TAP,
         )
+    }
+
+    override fun limit() {
+        val preferred =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.REJECT
+            } else {
+                HapticFeedbackConstants.LONG_PRESS
+            }
+        perform(preferred = preferred, fallback = HapticFeedbackConstants.LONG_PRESS)
     }
 
     private fun perform(preferred: Int, fallback: Int) {

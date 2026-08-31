@@ -79,6 +79,20 @@ struct LinkDiagnosisTests {
                 == .udpFlowDead)
     }
 
+    @Test func gimbalThrowHoldIsNone() {
+        #expect(
+            diagnose(
+                statusAge: 0.3, udpReceiveAlive: false, secondsSinceGimbalThrow: 1.0)
+                == .none,
+            "gimbal throw can pause HEVC")
+        #expect(
+            diagnose(
+                statusAge: 3,
+                udpReceiveAlive: false,
+                secondsSinceGimbalThrow: GimbalStick.videoGrace)
+                == .udpFlowDead)
+    }
+
     @Test func zoomHoldIsNone() {
         #expect(
             diagnose(
@@ -211,6 +225,7 @@ struct LinkDiagnosisTests {
         secondsSinceLastEnable: TimeInterval? = 20,
         secondsSinceFocusTrackSet: TimeInterval? = nil,
         secondsSinceZoomSet: TimeInterval? = nil,
+        secondsSinceGimbalThrow: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
         LinkDiagnoser.diagnose(
@@ -225,6 +240,7 @@ struct LinkDiagnosisTests {
             secondsSinceLastEnable: secondsSinceLastEnable,
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
+            secondsSinceGimbalThrow: secondsSinceGimbalThrow,
             presentAge: presentAge)
     }
 }

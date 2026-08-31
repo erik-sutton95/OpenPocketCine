@@ -40,6 +40,18 @@ public enum CamCapShutter {
         return denoms.min(by: { abs($0 - current) < abs($1 - current) })
     }
 
+    /// Next / previous 1/N in camera order. nil at the end.
+    public static func steppedDenom(from current: Int, steps: Int, available: [Int]) -> Int? {
+        let list = wheelDenoms(available: available, current: current)
+        let idx =
+            list.firstIndex(of: current)
+            ?? list.firstIndex(of: nearestDenom(current, in: list) ?? -1)
+        guard let idx else { return nil }
+        let next = idx + steps
+        guard list.indices.contains(next), next != idx else { return nil }
+        return list[next]
+    }
+
     public static func label(_ denom: Int) -> String { "1/\(denom)" }
 
     public static func denom(from label: String) -> Int? {

@@ -888,7 +888,8 @@ public enum AndroidSessionWire {
             hadVideo: jsonBool(json, key: "hadVideo", default: true),
             secondsSinceLastEnable: jsonOptionalNumber(json, key: "secondsSinceLastEnable"),
             secondsSinceFocusTrackSet: jsonOptionalNumber(json, key: "secondsSinceFocusTrackSet"),
-            secondsSinceZoomSet: jsonOptionalNumber(json, key: "secondsSinceZoomSet")
+            secondsSinceZoomSet: jsonOptionalNumber(json, key: "secondsSinceZoomSet"),
+            secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow")
         )
         switch watchdog.tick(snap) {
         case .none: return "none"

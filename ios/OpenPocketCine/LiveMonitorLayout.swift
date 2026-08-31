@@ -612,6 +612,28 @@ extension LiveMonitorLayout {
 
     var gimbalStick: CGRect { Self.cgRect(gimbalCluster.stick) }
 
+    /// Centered above the bottom bars (assist + capture). Feed floor when those are off.
+    var gimbalCalibrate: CGRect {
+        var barTop = CGFloat.greatestFiniteMagnitude
+        if showsBottomBars {
+            if assist.height > 1 { barTop = min(barTop, assist.minY) }
+            if capture.height > 1 { barTop = min(barTop, capture.minY) }
+        }
+        if barTop == .greatestFiniteMagnitude { barTop = feed.maxY }
+        return Self.headTrackCalibrateFrame(canvasWidth: viewport.width, barTopY: barTop)
+    }
+
+    static func headTrackCalibrateFrame(canvasWidth: CGFloat, barTopY: CGFloat) -> CGRect {
+        let width = LiveChromeMetrics.headTrackCalibrateWidth
+        let height = LiveChromeMetrics.headTrackCalibrateHeight
+        let gap = LiveChromeMetrics.gimbalStickGap
+        return CGRect(
+            x: (canvasWidth - width) / 2,
+            y: barTopY - gap - height,
+            width: width,
+            height: height)
+    }
+
     private static func cgRect(_ region: MonitorLayoutRegion) -> CGRect {
         CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
     }

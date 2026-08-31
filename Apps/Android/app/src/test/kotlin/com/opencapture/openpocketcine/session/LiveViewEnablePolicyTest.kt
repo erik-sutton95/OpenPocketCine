@@ -138,6 +138,40 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.Action.RESEND_ENABLE,
             LiveViewEnablePolicy.tick(state, fiveSecondsLater),
         )
+        val tenSecondsLater =
+            snap.copy(
+                now = now + 10_000,
+                lastEnableAt = now + 5_000,
+                lastStatusAt = now + 10_000 - 200,
+                lastBleNotifyAt = now + 10_000 - 100,
+            )
+        assertEquals(
+            LiveViewEnablePolicy.Action.REBUILD_UDP,
+            LiveViewEnablePolicy.tick(state, tenSecondsLater),
+        )
+    }
+
+    @Test
+    fun gimbalThrowHoldsEncoderPauseEnable() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+                lastGimbalThrowAt = now - 1_000,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        val pastGrace =
+            snap.copy(lastGimbalThrowAt = now - 3_100)
+        assertEquals(
+            LiveViewEnablePolicy.Action.RESEND_ENABLE,
+            LiveViewEnablePolicy.tick(state, pastGrace),
+        )
     }
 
     @Test
@@ -524,6 +558,16 @@ class LiveViewEnablePolicyTest {
                 sawPicture = true,
             ),
         )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild = true,
+                rebuildInFlight = false,
+                sinceRebuildMs = 10_000,
+                videoFresh = false,
+                sawPicture = true,
+                statusFresh = true,
+            ),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = true))
         assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = false))
         assertTrue(!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = false))
@@ -671,6 +715,7 @@ class LiveViewEnablePolicyTest {
             lastStatusAt: Long?,
             lastBleAt: Long?,
             lastRebuildAt: Long?,
+            lastGimbalThrowAt: Long? = null,
         ): LiveViewEnablePolicy.Snapshot =
             LiveViewEnablePolicy.Snapshot(
                 now = now,
@@ -686,6 +731,7 @@ class LiveViewEnablePolicyTest {
                 decoderErrors = 0,
                 live = true,
                 sawPicture = true,
+                lastGimbalThrowAt = lastGimbalThrowAt,
             )
     }
 }

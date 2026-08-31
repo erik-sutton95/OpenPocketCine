@@ -1092,6 +1092,8 @@ public struct GimbalStickMapping: Equatable, Sendable {
     public var pendingRotateCount: Int { pendingWant180.count }
     /// Last `0x04/0x05` i16-LE @4 in 0.1°.
     public var yawTenthDeg: Int16?
+    /// Last `0x04/0x05` i16-LE @6 in 0.1°. Next field after proven yaw; tilt.
+    public var pitchTenthDeg: Int16?
     /// First settled attitude adopted as TT180 so reconnect-at-180 inverts
     /// without another triple-tap.
     public var poseSeeded: Bool
@@ -1103,8 +1105,8 @@ public struct GimbalStickMapping: Equatable, Sendable {
         face: GimbalFace? = nil, wireFace: GimbalFace? = nil, rotated180: Bool = false,
         holdFace: Bool = false, seenFront: Bool = false, rotateParity: Bool = false,
         commanded180: Bool = false, selfieFlip: Bool = false,
-        pendingWant180: [Bool] = [], yawTenthDeg: Int16? = nil, poseSeeded: Bool = false,
-        poseSeedFrontCount: Int = 0
+        pendingWant180: [Bool] = [], yawTenthDeg: Int16? = nil, pitchTenthDeg: Int16? = nil,
+        poseSeeded: Bool = false, poseSeedFrontCount: Int = 0
     ) {
         self.face = face
         self.wireFace = wireFace
@@ -1116,6 +1118,7 @@ public struct GimbalStickMapping: Equatable, Sendable {
         self.selfieFlip = selfieFlip
         self.pendingWant180 = pendingWant180
         self.yawTenthDeg = yawTenthDeg
+        self.pitchTenthDeg = pitchTenthDeg
         self.poseSeeded = poseSeeded
         self.poseSeedFrontCount = poseSeedFrontCount
     }
@@ -1202,6 +1205,9 @@ public struct GimbalStickMapping: Equatable, Sendable {
         }
         rotated180 = rotated
         yawTenthDeg = yaw
+        if let pitch = GimbalStick.pitchTenthDeg(payload) {
+            pitchTenthDeg = pitch
+        }
     }
 }
 
@@ -1215,11 +1221,32 @@ public enum GimbalStick {
     public static let max: UInt16 = 1574
     /// Rest snap. Inside this, both axes stay 1024.
     public static let deadzone: Double = 0.08
+    /// Ease-in on remaining throw after the deadzone. 2 = square; half stick crawls.
+    public static let analogExpo: Double = 2
     /// Operator ticks. 4 is the captured ±550 throw.
     public static let sensitivityRange: ClosedRange<Int> = 1...5
     public static let defaultSensitivity = 4
     /// Mimo streamed `0x04/0x01` only while the on-screen stick was held.
+    /// UDP-queue pump — never MainActor `sendUntracked` (that starved ACK).
     public static let streamInterval: TimeInterval = 0.04
+    /// Gimbal motion can pause HEVC the same way zoom/AF-C do. Hold the 2 s
+    /// stall enable so a stick throw does not GOP-cut the live picture.
+    public static let videoGrace: TimeInterval = 3
+
+    public static func shouldHoldWatchdog(secondsSinceThrow: TimeInterval?) -> Bool {
+        guard let secondsSinceThrow else { return false }
+        return secondsSinceThrow >= 0 && secondsSinceThrow < videoGrace
+    }
+
+    /// Held emits at `streamInterval`. Rest emits once, then silence.
+    public static func shouldEmit(
+        held: Bool, restPending: Bool, now: TimeInterval, lastEmitted: TimeInterval
+    ) -> Bool {
+        if restPending { return true }
+        guard held else { return false }
+        if lastEmitted == 0 { return true }
+        return now - lastEmitted >= streamInterval
+    }
     /// Stay inside this (as a fraction of travel) and the press is a tap.
     public static let tapSlop: Double = 0.18
     /// Second tap inside this window recenters; a third tap in the same
@@ -1316,12 +1343,38 @@ public enum GimbalStick {
         Double(clampedSensitivity(value)) / Double(defaultSensitivity)
     }
 
+    /// Deadzone, then linear remainder onto −1…1. Zoom stick uses this (no expo).
+    public static func linearThrow(_ normalized: Double) -> Double {
+        let n = Swift.min(Swift.max(normalized, -1), 1)
+        let magnitude = abs(n)
+        if magnitude < deadzone { return 0 }
+        let t = (magnitude - deadzone) / (1 - deadzone)
+        return n < 0 ? -t : t
+    }
+
+    /// Deadzone, then expo ease-in onto −1…1. Full throw stays 1. Rest stays 0.
+    public static func analogCurve(_ normalized: Double) -> Double {
+        let t = linearThrow(normalized)
+        if t == 0 { return 0 }
+        let curved = pow(abs(t), analogExpo)
+        return t < 0 ? -curved : curved
+    }
+
     /// Clamp a unit axis (−1…1) onto 1024 ± 550, then apply sensitivity.
     public static func axis(_ normalized: Double, sensitivity: Int = defaultSensitivity) -> UInt16 {
-        let n = Swift.min(Swift.max(normalized, -1), 1)
-        if abs(n) < deadzone { return center }
-        let scaled = Swift.min(Swift.max(n * sensitivityGain(sensitivity), -1), 1)
+        let curved = analogCurve(normalized)
+        if curved == 0 { return center }
+        let scaled = Swift.min(Swift.max(curved * sensitivityGain(sensitivity), -1), 1)
         let raw = Double(center) + scaled * Double(travel)
+        let clamped = Swift.min(Swift.max(raw.rounded(), Double(min)), Double(max))
+        return UInt16(clamped)
+    }
+
+    /// Look-at servo: no expo, no operator sensitivity. Tiny rest so 1:1 can settle.
+    public static func axisLinear(_ normalized: Double) -> UInt16 {
+        let n = Swift.min(Swift.max(normalized, -1), 1)
+        if abs(n) < 0.02 { return center }
+        let raw = Double(center) + n * Double(travel)
         let clamped = Swift.min(Swift.max(raw.rounded(), Double(min)), Double(max))
         return UInt16(clamped)
     }
@@ -1355,6 +1408,12 @@ public enum GimbalStick {
         return Int16(bitPattern: UInt16(payload[4]) | UInt16(payload[5]) << 8)
     }
 
+    /// Consecutive 0.1° i16 after yaw `@4`. Tilt. Short payloads fail closed.
+    public static func pitchTenthDeg(_ payload: [UInt8]) -> Int16? {
+        guard payload.count >= 8 else { return nil }
+        return Int16(bitPattern: UInt16(payload[6]) | UInt16(payload[7]) << 8)
+    }
+
     public static func rotated180(_ payload: [UInt8]) -> Bool? {
         guard let yaw = yawTenthDeg(payload) else { return nil }
         return abs(Int(yaw)) > rotated180TenthDeg
@@ -1373,12 +1432,17 @@ public enum GimbalStick {
     }
 
     /// `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0).
-    /// Tracking uses the same pan invert as the free stick.
+    /// Tracking uses the same pan invert as the free stick. `linear` skips expo
+    /// (head-tracking look-at; expo is why that path crawled).
     public static func encode(
         x: Double, y: Double, invertPan: Bool = false,
-        sensitivity: Int = defaultSensitivity
+        sensitivity: Int = defaultSensitivity, linear: Bool = false
     ) -> (axis0: UInt16, axis1: UInt16) {
-        (axis(y, sensitivity: sensitivity), axis(invertPan ? -x : x, sensitivity: sensitivity))
+        let pan = invertPan ? -x : x
+        if linear {
+            return (axisLinear(y), axisLinear(pan))
+        }
+        return (axis(y, sensitivity: sensitivity), axis(pan, sensitivity: sensitivity))
     }
 
     public static func encode(
@@ -1386,6 +1450,107 @@ public enum GimbalStick {
         sensitivity: Int = defaultSensitivity
     ) -> (axis0: UInt16, axis1: UInt16) {
         encode(x: x, y: y, invertPan: invertPan(for: face), sensitivity: sensitivity)
+    }
+}
+
+/// Rising-edge pulse when a commanded axis *moves* then stops — a mechanical end,
+/// not a mid-range hold or a stick that never produced motion.
+public struct GimbalLimitWatch: Equatable, Sendable {
+    public struct Contact: OptionSet, Equatable, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        public static let pan = Contact(rawValue: 1 << 0)
+        public static let tilt = Contact(rawValue: 1 << 1)
+    }
+
+    public static let stallSeconds: TimeInterval = 0.35
+    public static let stallTenthDeg = 3
+
+    public private(set) var lastPanSign: Double = 0
+    public private(set) var lastTiltSign: Double = 0
+
+    private struct Axis: Equatable, Sendable {
+        var active = false
+        var sign: Double = 0
+        var lastAttitude: Int16?
+        var lastMovedAt: TimeInterval?
+        var seenMotion = false
+        var contacting = false
+    }
+
+    private var pan = Axis()
+    private var tilt = Axis()
+
+    public init() {}
+
+    public mutating func reset() {
+        pan = Axis()
+        tilt = Axis()
+        lastPanSign = 0
+        lastTiltSign = 0
+    }
+
+    /// Returns contacts that *started* this tick. Empty while moving, at rest, or already buzzing.
+    public mutating func tick(
+        x: Double,
+        y: Double,
+        yawTenthDeg: Int16?,
+        pitchTenthDeg: Int16?,
+        now: TimeInterval,
+        settling180: Bool
+    ) -> Contact {
+        var pulse = Contact()
+        let (nextPan, panHit) = Self.tickAxis(
+            pan, command: settling180 ? 0 : x, attitude: yawTenthDeg, now: now)
+        pan = nextPan
+        if panHit {
+            pulse.insert(.pan)
+            lastPanSign = pan.sign
+        }
+        let (nextTilt, tiltHit) = Self.tickAxis(
+            tilt, command: y, attitude: pitchTenthDeg, now: now)
+        tilt = nextTilt
+        if tiltHit {
+            pulse.insert(.tilt)
+            lastTiltSign = tilt.sign
+        }
+        return pulse
+    }
+
+    private static func tickAxis(
+        _ axis: Axis,
+        command: Double,
+        attitude: Int16?,
+        now: TimeInterval
+    ) -> (Axis, Bool) {
+        var axis = axis
+        let curved = GimbalStick.analogCurve(command)
+        if curved == 0 { return (Axis(), false) }
+        let sign = curved > 0 ? 1.0 : -1.0
+        if !axis.active || axis.sign != sign {
+            return (
+                Axis(
+                    active: true, sign: sign, lastAttitude: attitude, lastMovedAt: nil,
+                    seenMotion: false, contacting: false),
+                false
+            )
+        }
+        guard let attitude else { return (axis, false) }
+        if let last = axis.lastAttitude, abs(Int(attitude) - Int(last)) > stallTenthDeg {
+            axis.lastMovedAt = now
+            axis.lastAttitude = attitude
+            axis.seenMotion = true
+            axis.contacting = false
+            return (axis, false)
+        }
+        axis.lastAttitude = attitude
+        guard axis.seenMotion else { return (axis, false) }
+        guard let movedAt = axis.lastMovedAt, now - movedAt >= stallSeconds else {
+            return (axis, false)
+        }
+        if axis.contacting { return (axis, false) }
+        axis.contacting = true
+        return (axis, true)
     }
 }
 
@@ -1529,6 +1694,13 @@ public enum CamFov {
         return stops[0]
     }
 
+    /// Next lower chip stop. Stays on the wide end — does not wrap to tele.
+    public static func previousJump(from factor: Double, stops: [Double] = jumps) -> Double {
+        let stops = stops.isEmpty ? jumps : stops
+        for stop in stops.reversed() where factor > stop + 0.05 { return stop }
+        return stops[0]
+    }
+
     /// True on a chip detent (0.1× quantized). Default is 4 Pro 1/3/6/12.
     public static func isJumpStop(_ factor: Double, stops: [Double] = jumps) -> Bool {
         let shown = displayTenths(factor)
@@ -1593,6 +1765,27 @@ public enum CamFov {
         clamp(anchor * magnification, max: max)
     }
 
+    /// Right trigger minus left trigger onto −1…1 (positive = zoom in).
+    public static func triggerZoomAxis(left: Double, right: Double) -> Double {
+        let l = Swift.min(Swift.max(left, 0), 1)
+        let r = Swift.min(Swift.max(right, 0), 1)
+        return r - l
+    }
+
+    /// Full R2/L2: this many operator × per second. Light press crawls.
+    public static let zoomRatePerSecond = 3.0
+    /// Trigger zoom pump. Matches pinch slider coalesce (~20 Hz).
+    public static let zoomStepInterval: TimeInterval = 0.05
+
+    /// Hold-to-zoom: `y` is R2−L2 (−1…1). Integrate `dt` seconds of analog rate.
+    public static func zoomStep(
+        current: Double, y: Double, dt: Double, max: Double = maxFactor
+    ) -> Double {
+        guard dt > 0 else { return clamp(current, max: max) }
+        let t = GimbalStick.linearThrow(y)
+        return clamp(current + t * zoomRatePerSecond * dt, max: max)
+    }
+
     /// Pinch HUD between status pushes. 0.1× quantized; 2.9× stays 2.9×.
     public static func pinchPreview(anchor: Double, magnification: Double) -> Double {
         displayTenths(pinchFactor(anchor: anchor, magnification: magnification))
@@ -1629,10 +1822,21 @@ public enum CamFov {
         displayTenths(factor) >= teleEngage
     }
 
-    /// D-Log2 cannot zoom at all. Any step off 1× must hop to D-Log first.
+    /// D-Log2 rejects every zoom SET. Hop to D-Log on the first step off 1× —
+    /// do not wait for 1.1×, or the first lens ticks go out while still D-Log2.
+    /// `current` must be unpinned live color, not an optimistic HUD pin.
     public static func colorMode(forZoom factor: Double, current: ColorMode?) -> ColorMode? {
-        guard current == .dLog2, displayTenths(factor) > 1.05 else { return nil }
+        guard current == .dLog2, factor > minFactor else { return nil }
         return .dLog
+    }
+
+    /// Hold `0xB8` until D-Log2→D-Log is on the body. A color ACK is not enough
+    /// if `cam_image_effect` is still D-Log2 — the body ignores zoom until then.
+    public static func holdZoomWrite(
+        factor: Double, current: ColorMode?, hopPending: Bool
+    ) -> Bool {
+        if hopPending { return true }
+        return colorMode(forZoom: factor, current: current) != nil
     }
 
     /// Body will not change color while rolling, so D-Log2 cannot leave 1×.

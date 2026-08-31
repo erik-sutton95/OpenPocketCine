@@ -122,6 +122,11 @@ final class FirstConnectTests: XCTestCase {
                 flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: nil,
                 sawPicture: false),
             "keepalive must not tear UDP before the first picture")
+        XCTAssertFalse(
+            CameraSoftAP.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
+                videoFresh: false, sawPicture: true, statusFresh: true),
+            "status live + HEVC silent is encoder pause — do not keepalive-rebuild")
         XCTAssertTrue(
             FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: 2.5),
             "LUT-toggle enable pause is the GOP cut")

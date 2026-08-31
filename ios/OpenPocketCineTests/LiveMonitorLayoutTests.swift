@@ -76,6 +76,37 @@ final class LiveMonitorLayoutTests: XCTestCase {
             stick.intersects(layout.record),
             "gimbal stick stays clear of record"
         )
+
+        let calibrate = layout.gimbalCalibrate
+        XCTAssertEqual(calibrate.midX, layout.viewport.width / 2, accuracy: 0.5)
+        XCTAssertEqual(
+            calibrate.maxY + LiveChromeMetrics.gimbalStickGap,
+            min(layout.assist.minY, layout.capture.minY),
+            accuracy: 0.5)
+        XCTAssertEqual(calibrate.width, LiveChromeMetrics.headTrackCalibrateWidth, accuracy: 0.05)
+        XCTAssertFalse(
+            calibrate.intersects(stick.insetBy(dx: -1, dy: -1)),
+            "Calibrate Head Lock stays clear of the gimbal stick")
+    }
+
+    func testHeadTrackCalibrateCenteredAboveFeedWhenBarsOff() {
+        let layout = LiveMonitorLayout.fit(
+            viewportWidth: 874,
+            viewportHeight: 402,
+            safeLeading: 59,
+            safeTrailing: 0,
+            showsBottomBars: false,
+            mirrored: false
+        )
+        let calibrate = layout.gimbalCalibrate
+        XCTAssertEqual(calibrate.midX, layout.viewport.width / 2, accuracy: 0.5)
+        XCTAssertEqual(
+            calibrate.maxY + LiveChromeMetrics.gimbalStickGap, layout.feed.maxY, accuracy: 0.5)
+        let portrait = LiveMonitorLayout.headTrackCalibrateFrame(
+            canvasWidth: 390, barTopY: 720)
+        XCTAssertEqual(portrait.midX, 195, accuracy: 0.05)
+        XCTAssertEqual(
+            portrait.maxY, 720 - LiveChromeMetrics.gimbalStickGap, accuracy: 0.05)
     }
 
     func testChromeScaleFloorsCompactPhonesAndLeavesProMaxAlone() {

@@ -1,8 +1,9 @@
 New and changed
 
+- A connected game controller's left stick drives the gimbal. Small throws crawl; full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face, or cancels tracking. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (press harder for faster). D-pad up/down ISO, left/right shutter. Connect and unplug should toast Gamepad connected / disconnected and rest the stick. Operator Setup → Controls → Gamepad shows Connected while the pad is on. A gimbal stop taps once after the head moves then stalls (Haptics off is silent).
+- The on-screen gimbal stick uses the same gradual speed.
 - While live, Operator Setup then Controls has a Shooting Mode row. Switch Video, Photo, and the time-based modes from there. The row follows a mode changed on the body itself.
 - Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform, parade, and assists.
-- Record, ISO, white balance, and zoom from the phone. The gimbal stick sits with zoom.
 
 Fixes
 
@@ -11,6 +12,6 @@ Fixes
 
 What to test
 
+- Pair a Pocket, go live, and pan with the on-screen stick: half throw should be slower than a full push. Connect a game controller if you have one — left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch should switch COLOR to D-Log first, then zoom — the chip must not run ahead of the lens.
 - Pair a Nano, go live, open Operator Setup, Controls. Switch Video to Photo and back. The body should follow; Photo should take a still.
-- If you have a Pocket 4, do the same Video to Photo check. On a Nano, stay on Video and Photo only; skip SuperNight, HyperLapse, SlowMo, and TimeLapse until those are proven.
 - Record a short take in Video, then open it in the library. Share should send the original file, not a small preview.

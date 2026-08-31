@@ -86,6 +86,25 @@ import Testing
             "past zoom grace with young status is an encoder pause")
     }
 
+    @Test func gimbalThrowHoldsEncoderPauseEnable() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 4.2, videoAge: 4.2, statusAge: 0.3, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        snap.secondsSinceGimbalThrow = 1.0
+        #expect(
+            dog.tick(snap) == .none,
+            "gimbal throw can pause HEVC; status still on 9004 is not a dead socket")
+        #expect(GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 0))
+        #expect(GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 2.9))
+        #expect(!GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 3.0))
+        #expect(!GimbalStick.shouldHoldWatchdog(secondsSinceThrow: nil))
+        snap.secondsSinceGimbalThrow = 3.1
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "past gimbal grace with young status is an encoder pause")
+    }
+
     @Test func encoderPauseWithFreshStatusResendsEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(
@@ -103,7 +122,7 @@ import Testing
         #expect(dog.stage == .resendEnable)
     }
 
-    @Test func enableThatProducesNoHEVCDoesNotRebuildUDPWhileStatusIsYoung() {
+    @Test func enableThatProducesNoHEVCRebuildsUDPAfterTwoEnables() {
         var dog = FeedWatchdog()
         var snap = Self.snap(
             now: 10, frameAge: 2.8, videoAge: 2.8, statusAge: 0.0, bleAge: 70)
@@ -137,6 +156,24 @@ import Testing
             dog.tick(snap) == .resendLiveViewEnable,
             "still encoder-paused after escalateAfter — one more enable, not a 5-tuple tear")
         #expect(dog.stage == .resendEnable)
+        snap.now = 20.2
+        snap.lastDecodedFrameAge = 13.0
+        snap.lastVideoPacketAge = 13.0
+        snap.lastAccessUnitAge = 13.0
+        snap.secondsSinceLastEnable = 5.1
+        #expect(
+            dog.tick(snap) == .reopenDatalink,
+            "two failed enables: 22:16 UDP rebuild brought the picture back")
+        #expect(dog.isRecovering)
+        snap.now = 25.3
+        snap.lastDecodedFrameAge = 18.1
+        snap.lastVideoPacketAge = 18.1
+        snap.lastAccessUnitAge = 18.1
+        snap.secondsSinceLastEnable = 10.2
+        snap.secondsSinceLastRebuild = 5.1
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "recent rebuild: keep enabling, do not flap UDP")
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 2.1,
