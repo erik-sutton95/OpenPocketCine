@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android UDP rebuild lowers the 0x02 ingest gate and re-arms after
+  enable (leftover TRAIL P mixed into the new GOP). SoftAP reassociate
+  rebuilds the 5-tuple without a force `0x09/0xa8` if HEVC already
+  existed. DUML SET/stick seq+write take `sendLock`.
+
 - A held gimbal stick no longer blocks recover forever (throw stamp was
   refreshing every 40 ms). Grace caps at stall+3 s of dead HEVC. Analog
   and head-track lift when video is stale. Center encode is rest, not a

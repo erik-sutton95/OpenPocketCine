@@ -200,14 +200,15 @@ class DatalinkDriver(
         Log.i(TAG, "datalink: sent exit playback")
     }
 
-    /** iOS `armLiveVideo`: accept pktType 0x02 after UDP handshake. Idempotent. */
+    /** iOS `armLiveVideo`: first arm resets leftover GOP; re-arm only raises the gate. */
     fun armLiveVideo() {
-        if (liveViewEnabled) return
-        liveViewEnabled = true
-        if (depacketizer != 0L && SwiftCore.isAvailable) {
+        val first = !liveViewEnabled
+        if (first && depacketizer != 0L && SwiftCore.isAvailable) {
             runCatching { SwiftCore.depacketizerReset(depacketizer) }
         }
-        Log.i(TAG, "datalink: armed pktType 0x02 ingest")
+        liveViewEnabled = true
+        loggedLeftoverGop.set(false)
+        if (first) Log.i(TAG, "datalink: armed pktType 0x02 ingest")
     }
 
     /** Nano `0x02/0x09` start/stop. No CMD kind yet — encodeDuml. */
@@ -269,6 +270,7 @@ class DatalinkDriver(
         sender: Int = CameraCommands.SENDER_APP,
     ) {
         if (!SwiftCore.isAvailable) return
+        synchronized(sendLock) {
         cmdCounter = (cmdCounter + 1) and 0xFF
         val frameBytes =
             SwiftCore.encodeDuml(sender, receiver, dumlSeq, flags, cmdSet, cmdId, payload) ?: return
@@ -278,6 +280,7 @@ class DatalinkDriver(
             SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq) ?: return
         write(header + routing + frameBytes)
         udpSeq = (udpSeq + 8) and 0xFFFF
+        }
     }
 
     fun close() {
@@ -366,6 +369,7 @@ class DatalinkDriver(
 
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
+        liveViewEnabled = false
         running.set(false)
         val rx = receiver
         val ack = ackThread

@@ -260,7 +260,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             Log.i(TAG, "wifi: SoftAP reassociated — rebuild UDP, keep LIVE")
             startFeedRecovery {
                 withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                sendRecoverEnable(force = true, reason = "wifi reassociated")
+                val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
+                val hadVideo =
+                    LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
+                if (LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)) {
+                    sendRecoverEnable(force = true, reason = "wifi reassociated")
+                }
             }
         }
     }
