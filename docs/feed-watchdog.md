@@ -42,7 +42,7 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 `feed: black lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=1`
 
-If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. Do not sit in cooldown forever with a frozen frame — that is the operator “connection drop.” After a recent rebuild, keep enabling, do not flap.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. After that rebuild, do not enable-storm for `rebuildBackoff` (60 s) — BLE age must not disable that hold. A second rebuild is allowed only after the backoff.
 
 If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild).
 

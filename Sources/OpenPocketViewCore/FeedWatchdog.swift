@@ -336,10 +336,10 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
 
         // Encoder pause: status still on 9004, HEVC silent. Two enables,
-        // then one UDP rebuild (22:16 brought the picture back). Keepalive
-        // must not flap that socket (`statusFresh`). #148 was a 2 s-too-fast
-        // rebuild; this is after ~10 s of pause. Do not sit in cooldown
-        // forever with a frozen frame — that *is* the operator “drop.”
+        // then one UDP rebuild (22:16 brought the picture back). Do not
+        // reset the enable cap or ignore rebuildBackoff when BLE is stale
+        // — that flapped UDP while status was young (#148). The shell
+        // already rides one enable with the rebuild.
         if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
             if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
                 return .none
@@ -348,16 +348,9 @@ public struct FeedWatchdog: Equatable, Sendable {
                 encoderPauseEnables += 1
                 return fire(.resendLiveViewEnable, at: snap.now)
             }
-            if Self.shouldHoldRebuildAfterRecentUDP(
-                secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
-                pathReady: snap.pathReady,
-                lastBleNotifyAge: snap.lastBleNotifyAge,
-                hadVideo: snap.hadVideo
-            ) {
-                encoderPauseEnables = 0
-                return fire(.resendLiveViewEnable, at: snap.now)
+            if let since = snap.secondsSinceLastRebuild, since < Self.rebuildBackoff {
+                return .none
             }
-            encoderPauseEnables = 0
             return fire(.reopenDatalink, at: snap.now)
         }
 

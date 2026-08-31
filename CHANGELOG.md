@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Encoder-pause recover: two enables, then one UDP rebuild; do not
+  GOP-cut every 5 s for a minute when BLE notify is stale. Rebuild
+  backoff is 60 s even if `lastBle` is old.
+
 - Live UDP writes (SET, ACK, stick, Flip GET) serialize on the datalink
   queue so a MainActor SET cannot starve the 40 Hz window ACK. SET ACK
   timeout no longer tears UDP while DUML status is young (encoder pause

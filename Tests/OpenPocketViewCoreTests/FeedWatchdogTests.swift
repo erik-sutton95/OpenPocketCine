@@ -172,8 +172,18 @@ import Testing
         snap.secondsSinceLastEnable = 10.2
         snap.secondsSinceLastRebuild = 5.1
         #expect(
-            dog.tick(snap) == .resendLiveViewEnable,
-            "recent rebuild: keep enabling, do not flap UDP")
+            dog.tick(snap) == .none,
+            "recent rebuild: do not GOP-cut or flap UDP; shell already enabled")
+        snap.now = 25.3 + FeedWatchdog.rebuildBackoff
+        snap.lastDecodedFrameAge = 18.1 + FeedWatchdog.rebuildBackoff
+        snap.lastVideoPacketAge = 18.1 + FeedWatchdog.rebuildBackoff
+        snap.lastAccessUnitAge = 18.1 + FeedWatchdog.rebuildBackoff
+        snap.lastStatusAge = 0.0
+        snap.secondsSinceLastEnable = 10.2 + FeedWatchdog.rebuildBackoff
+        snap.secondsSinceLastRebuild = FeedWatchdog.rebuildBackoff
+        #expect(
+            dog.tick(snap) == .reopenDatalink,
+            "after 60s still paused — one more rebuild, not an enable storm")
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 2.1,
@@ -184,6 +194,30 @@ import Testing
                 holdEnableCount: 1,
                 lastVideoPacketAge: 4.9),
             "do not spam 0x09/0xa8 while videoPkts are frozen")
+    }
+
+    @Test func encoderPauseDoesNotFlapUDPWhenBleIsStale() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 4.2, videoAge: 4.2, statusAge: 0.0, bleAge: 70)
+        snap.secondsSinceLastEnable = 20
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        snap.now = 15.1
+        snap.lastDecodedFrameAge = 9.3
+        snap.lastVideoPacketAge = 9.3
+        snap.lastAccessUnitAge = 9.3
+        snap.lastStatusAge = 0.0
+        snap.secondsSinceLastEnable = 5.1
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        snap.now = 20.2
+        snap.lastDecodedFrameAge = 14.4
+        snap.lastVideoPacketAge = 14.4
+        snap.lastAccessUnitAge = 14.4
+        snap.secondsSinceLastEnable = 5.1
+        snap.secondsSinceLastRebuild = 2.0
+        #expect(
+            dog.tick(snap) == .none,
+            "status young + recent rebuild: BLE age must not disable the 60s backoff")
     }
 
     @Test func gopResetSilenceDoesNotRebuildUDP() {
