@@ -89,6 +89,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         didToastLive = false
         model?.headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
         model?.headTrackImuReadout = ""
+        model?.headTrackAxisPose = nil
         motion.delegate = nil
         model = nil
     }
@@ -113,6 +114,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             didToastLive = false
             model.headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
             model.headTrackImuReadout = ""
+            model.headTrackAxisPose = nil
             return
         }
         publishTitle()
@@ -228,6 +230,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             self.track.reset()
             self.stopDrive()
             self.model?.headTrackImuReadout = ""
+            self.model?.headTrackAxisPose = nil
             self.publishTitle()
             if self.model?.headTrackingEnabled == true {
                 self.model?.session.controlNote = "Head tracking needs AirPods in your ears"
@@ -311,6 +314,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         lastPitch = sample.pitch
         lastRoll = sample.roll
         lastQuat = sample.quat
+        if !haveHead {
+            resetRelative()
+        }
         haveHead = true
         didToastNeedPods = false
         let now = Date()
@@ -427,8 +433,15 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private func publishReadout(now: Date?) {
         guard let model, model.headTrackingEnabled, haveHead else {
             model?.headTrackImuReadout = ""
+            model?.headTrackAxisPose = nil
             return
         }
+        let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
+        let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
+        model.headTrackAxisPose = HeadTrackAxisPose(
+            yawDeg: HeadTrack.yawDialDeg(lookRightDeg: lookRight),
+            pitchDeg: HeadTrack.pitchDialDeg(lookUpDeg: lookUp),
+            locked: calibratedByUser)
         let hudDue: Bool
         if let now, let last = lastHudAt {
             hudDue = now.timeIntervalSince(last) >= LiveChromeThrottle.statusInterval
@@ -443,19 +456,10 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         }
         guard hudDue || logDue else { return }
 
-        let dY: Double
-        let dP: Double
-        let dR: Double
-        if calibratedByUser {
-            dY = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
-            dP = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
-            dR = HeadTrack.wrapDeg(
-                HeadTrack.radToDeg(lastRoll) - HeadTrack.radToDeg(originRoll))
-        } else {
-            dY = 0
-            dP = 0
-            dR = 0
-        }
+        let dY = lookRight
+        let dP = lookUp
+        let dR = HeadTrack.wrapDeg(
+            HeadTrack.radToDeg(lastRoll) - HeadTrack.radToDeg(originRoll))
         let bodyY: Double
         let bodyP: Double
         let rawY = model.session.gimbalYawTenthDeg.map { String($0) } ?? "-"

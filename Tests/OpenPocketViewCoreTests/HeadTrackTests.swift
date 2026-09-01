@@ -4,6 +4,14 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct HeadTrackTests {
+    @Test func axisDialsFollowLook() {
+        #expect(HeadTrack.yawDialDeg(lookRightDeg: 90) == 90)
+        #expect(HeadTrack.yawDialDeg(lookRightDeg: -45) == -45)
+        #expect(HeadTrack.pitchDialDeg(lookUpDeg: 30) == -30, "nod up is counter-clockwise")
+        #expect(HeadTrack.pitchDialDeg(lookUpDeg: -20) == 20, "nod down is clockwise")
+        #expect(abs(HeadTrack.yawDialDeg(lookRightDeg: 270) - -90) < 0.001)
+    }
+
     @Test func tickIsNilUntilCentered() {
         var track = HeadTrack()
         #expect(

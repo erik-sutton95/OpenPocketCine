@@ -77,6 +77,13 @@ struct LiveFocusResetButton: View {
     }
 }
 
+/// SET-relative yaw/pitch for the live debug rings.
+struct HeadTrackAxisPose: Equatable {
+    var yawDeg: Double
+    var pitchDeg: Double
+    var locked: Bool
+}
+
 /// Calibrate Head Lock starts tracking; STOP ends it.
 struct LiveHeadTrackCalibrateButton: View {
     static let calibrateTitle = "Calibrate Head Lock"

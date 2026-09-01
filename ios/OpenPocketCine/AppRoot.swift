@@ -43,6 +43,8 @@ final class AppModel {
     var headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
     /// Raw AirPods attitude / gyro / SET-relative look. Empty when Head Tracking is off.
     var headTrackImuReadout = ""
+    /// SET-relative (or first-sample) yaw/pitch for the live axis rings. `nil` without IMU.
+    var headTrackAxisPose: HeadTrackAxisPose?
     /// On-screen gimbal stick is thrown. Head tracking yields.
     var gimbalScreenHeld = false
     /// Gamepad left stick is thrown. Head tracking yields.

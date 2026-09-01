@@ -991,17 +991,23 @@ private struct LiveSessionBanners: View {
                         model.session.controlNote = nil
                     }
             }
-            if model.headTrackingEnabled, !model.headTrackImuReadout.isEmpty {
-                Text(model.headTrackImuReadout)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text)
-                    .multilineTextAlignment(.leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .liveChromeCapsule()
-                    .position(x: feed.minX + 148, y: feed.minY + 64)
-                    .zIndex(5)
-                    .allowsHitTesting(false)
+            if model.headTrackingEnabled, let pose = model.headTrackAxisPose {
+                VStack(alignment: .leading, spacing: 6) {
+                    LiveHeadTrackAxisDials(pose: pose)
+                    if !model.headTrackImuReadout.isEmpty {
+                        Text(model.headTrackImuReadout)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(LiveDesign.text)
+                            .multilineTextAlignment(.leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .liveChromeCapsule()
+                    }
+                }
+                .position(x: feed.minX + 118, y: feed.minY + 92)
+                .zIndex(5)
+                .allowsHitTesting(false)
+                .transaction { $0.animation = nil }
             }
         }
         .animation(.easeOut(duration: 0.18), value: model.session.controlNote)

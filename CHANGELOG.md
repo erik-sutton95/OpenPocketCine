@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Live head-tracking debug: yaw and pitch rings with a forward arrow
+  (12 o'clock is SET). iOS only.
+
 ### Fixed
 
 - ACK groups 1–2 treat seq `0` as a real cursor: 34-byte `0x01` no longer
