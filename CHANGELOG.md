@@ -16,11 +16,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Head-track is a position close on the rate stick (Pocket has no angle
-  SET): throw until live `0x04/0x05` matches the look, not 3° short.
-  8° error is full stick. Pitch-dead latch only arms on a full-stick nod
-  so a slow nod is not killed. Looking back toward SET reverses onto the
-  new look.
+- Head-track does not reverse-hunt when the head is still (delayed
+  `0x04/0x05` was flipping full stick ±10°). Park after a still rest.
+  Throw until live attitude matches the look while approaching; looking
+  back toward SET still reverses onto the new look.
 
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0

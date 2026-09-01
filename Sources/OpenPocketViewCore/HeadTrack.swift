@@ -6,9 +6,9 @@ import Foundation
 /// meridian. The Pocket stick is pan+tilt only — roll is not on `0x04/0x01`.
 /// Encode **linear**. Pocket has no absolute pan/tilt SET — only rate
 /// stick `0x04/0x01`. Look is the target pose; throw closes live
-/// `0x04/0x05` onto it (error/`fullThrowDeg` up to full stick) until
-/// `|error| ≤ restDeg`. Park after that close so live-yaw wiggle does
-/// not re-grab.
+/// `0x04/0x05` onto it. Do not reverse while the nose is still that
+/// way (delayed `0x04/0x05` hunt). When the head is still and throw
+/// is rest, park so live-yaw wiggle does not re-grab.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
     public static let engageDeg = 1.8
@@ -30,6 +30,8 @@ public struct HeadTrack: Equatable, Sendable {
     /// Full-stick tilt with live `@20` stuck: rest tilt (do not slam).
     /// Only arms at `|errTilt| ≥ fullThrowDeg` so a slow nod is not killed.
     public static let pitchLiveTimeout: TimeInterval = 0.55
+    /// Walk-back toward SET that is a new look, not delayed overshoot jitter.
+    public static let overshootLookBackDeg = 1.0
     /// Mimo virtual joystick full throw is 1024 ±550 (`GimbalStick.max`).
     public static let maxThrow = 1.0
     /// Below `GimbalStick.axisLinear` snap (0.02) both axes encode as center.
@@ -200,11 +202,14 @@ public struct HeadTrack: Equatable, Sendable {
     private var gimbalPitch0Deg = 0.0
     private var lookRightDeg = 0.0
     private var lookUpDeg = 0.0
+    private var lastSignX = 0.0
+    private var lastSignY = 0.0
     private var engaged = false
     /// Rested after a throw. Stay silent until the *head* moves `reengageDeg`.
     private var parked = false
     private var restLookRight = 0.0
     private var restLookUp = 0.0
+    private var stillFor: TimeInterval = 0
     private var tiltThrowElapsed: TimeInterval = 0
     private var pitchWhenTiltBegan: Double?
     private var tiltTelemetryDead = false
@@ -219,6 +224,9 @@ public struct HeadTrack: Equatable, Sendable {
         lookUpDeg = 0
         restLookRight = 0
         restLookUp = 0
+        lastSignX = 0
+        lastSignY = 0
+        stillFor = 0
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
@@ -240,8 +248,11 @@ public struct HeadTrack: Equatable, Sendable {
         lookUpDeg = 0
         restLookRight = 0
         restLookUp = 0
+        lastSignX = 0
+        lastSignY = 0
         engaged = false
         parked = false
+        stillFor = 0
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
@@ -256,7 +267,11 @@ public struct HeadTrack: Equatable, Sendable {
         gyroYaw: Double = 0
     ) -> Command? {
         guard isCentered, let gimbalYawTenth else { return nil }
-        _ = (gyroLookRight, gyroLookUp, gyroYaw)
+        let gyroMag = Self.gyroMagnitude(
+            lookRight: gyroLookRight, lookUp: gyroLookUp, yaw: gyroYaw)
+        let still = gyroMag < Self.gyroStillRadPerSec
+        let previousRight = lookRightDeg
+        let previousUp = lookUpDeg
         lookRightDeg = Self.unwrap(wrappedRight, previous: lookRightDeg)
         lookUpDeg = Self.unwrap(wrappedUp, previous: lookUpDeg)
         let target = Reach.project(
@@ -273,11 +288,28 @@ public struct HeadTrack: Equatable, Sendable {
         noteFrozenTilt(
             liveTilt: liveTilt, errTilt: &errTilt, dt: dt,
             tracking: engaged || preMag >= Self.engageDeg)
+        if still {
+            stillFor += max(dt, 0)
+        } else {
+            stillFor = 0
+        }
         var x: Double
         var y: Double
         (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt)
+        x = holdOvershoot(
+            x, look: lookRightDeg, lastSign: lastSignX, previousLook: previousRight)
+        y = holdOvershoot(
+            y, look: lookUpDeg, lastSign: lastSignY, previousLook: previousUp)
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
+        if stillFor >= Self.stillHold, x == 0, y == 0 {
+            parked = true
+            engaged = false
+            restLookRight = lookRightDeg
+            restLookUp = lookUpDeg
+        }
+        if x != 0 { lastSignX = x < 0 ? -1 : 1 }
+        if y != 0 { lastSignY = y < 0 ? -1 : 1 }
         return Command(x: x, y: y)
     }
 
@@ -330,6 +362,21 @@ public struct HeadTrack: Equatable, Sendable {
         if abs(errorDeg) < 0.5 { return 0 }
         let n = errorDeg / Self.fullThrowDeg
         return min(max(n, -Self.maxThrow), Self.maxThrow)
+    }
+
+    /// Delayed live overshoot must not reverse while the nose is still that
+    /// way — that is the hunt (physical take: head still −3°/−5°, body ±10°).
+    /// A look that walks back toward SET is a new command — reverse onto it.
+    private func holdOvershoot(
+        _ throw: Double, look: Double, lastSign: Double, previousLook: Double
+    ) -> Double {
+        guard lastSign != 0, `throw` * lastSign < 0 else { return `throw` }
+        if look * lastSign > 0,
+            abs(look) + Self.overshootLookBackDeg >= abs(previousLook)
+        {
+            return 0
+        }
+        return `throw`
     }
 
     /// `@20` stuck during a *full-stick* nod: rest tilt so we do not slam.

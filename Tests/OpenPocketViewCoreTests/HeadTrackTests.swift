@@ -74,7 +74,7 @@ import Testing
         #expect(caught?.rest == true)
     }
 
-    @Test func twoDegPastLookReversesOntoTheLook() {
+    @Test func twoDegPastLookDoesNotReverseHunt() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         let first = track.tick(
@@ -86,8 +86,8 @@ import Testing
             dt: 0.04)
         #expect(past != nil)
         #expect(
-            past!.x < 0,
-            "2° past a 20° look must reverse onto 20° — that is the position close")
+            past!.x >= 0,
+            "2° delayed overshoot must not reverse — that is the hunt")
     }
 
     @Test func sphereKeepsLookPastTheStopThenPicksUpFromAnotherAngle() {
@@ -416,6 +416,27 @@ import Testing
         #expect(
             cmd!.x > 0,
             "3° short of a 20° look must not park at reengageDeg — drive until restDeg")
+    }
+
+    @Test func stillHeadParksInsteadOfHunting() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let go = track.tick(
+            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(go != nil && go!.x < 0 && go!.y < 0)
+        var cmd: HeadTrack.Command?
+        for _ in 0..<10 {
+            cmd = track.tick(
+                lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
+                dt: 0.04)
+        }
+        #expect(cmd?.rest == true, "head still + delayed overshoot must rest, not reverse")
+        let otherWay = track.tick(
+            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 100, gimbalPitchTenth: 80,
+            dt: 0.04)
+        #expect(
+            otherWay?.rest == true,
+            "physical take: head still −3/−5 must not bob body ±10°")
     }
 
     @Test func nodKeepsThrowingUntilLivePitchCatches() {
