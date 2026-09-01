@@ -89,6 +89,7 @@ final class DatalinkDriver {
         var ackedDataCursor: UInt16 = 0
         var sawAckedData = false
         var extraCursor: UInt16 = 0
+        var sawExtra = false
         var lastAckedDataLogAt: TimeInterval = 0
         var gimbalAxis0: UInt16 = GimbalStick.center
         var gimbalAxis1: UInt16 = GimbalStick.center
@@ -451,7 +452,9 @@ final class DatalinkDriver {
         }
         writeHealthy = true
         syncWire()
-        if wasAccepting { armLiveVideo() }
+        if CameraSoftAP.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: wasAccepting) {
+            armLiveVideo()
+        }
         sendAck()
         sendDuml(Commands.appPresenceFrame(seq: 0), trackCommand: false)
     }
@@ -509,6 +512,18 @@ final class DatalinkDriver {
     }
 
     private func sendDumlOnQueue(_ frame: Duml.Frame, trackCommand: Bool) -> UInt16 {
+        let ready: Bool
+        switch conn?.state {
+        case .ready: ready = true
+        default: ready = false
+        }
+        guard
+            CameraSoftAP.shouldStampCommandSeq(
+                hasConnection: conn != nil, connectionReady: ready, trackCommand: trackCommand)
+        else {
+            if trackCommand { lastCommandWriteLanded = false }
+            return 0
+        }
         let sid = sessionId
         let (stamped, pkt): (UInt16, [UInt8]) = wire.withLock { w in
             w.sessionId = sid
@@ -546,7 +561,8 @@ final class DatalinkDriver {
             (
                 DumlTransport.AckWindows.windowCursor(
                     stored: $0.ackedDataCursor, seen: $0.sawAckedData, fallback: $0.baseSeq),
-                $0.extraCursor == 0 ? $0.baseSeq : $0.extraCursor
+                DumlTransport.AckWindows.windowCursor(
+                    stored: $0.extraCursor, seen: $0.sawExtra, fallback: $0.baseSeq)
             )
         }
         let payload = DumlTransport.ackPayload(
@@ -649,7 +665,8 @@ final class DatalinkDriver {
                 $0.sessionId, $0.baseSeq, $0.conn,
                 DumlTransport.AckWindows.windowCursor(
                     stored: $0.ackedDataCursor, seen: $0.sawAckedData, fallback: $0.baseSeq),
-                $0.extraCursor == 0 ? $0.baseSeq : $0.extraCursor
+                DumlTransport.AckWindows.windowCursor(
+                    stored: $0.extraCursor, seen: $0.sawExtra, fallback: $0.baseSeq)
             )
         }
         guard let conn else { return }
@@ -732,9 +749,13 @@ final class DatalinkDriver {
                     held: w.gimbalStickHeld, restPending: w.gimbalSendRest, now: now,
                     lastEmitted: w.lastGimbalStickAt)
             else { return .wait }
+            guard
+                GimbalStick.shouldEmitOnSocket(
+                    rest: w.gimbalSendRest, liveAccepting: w.liveAccepting,
+                    hasConnection: w.conn != nil)
+            else { return .wait }
             guard let conn = w.conn else { return .wait }
             let rest = w.gimbalSendRest
-            if !rest, !w.liveAccepting { return .wait }
             let axis0 = rest ? GimbalStick.center : w.gimbalAxis0
             let axis1 = rest ? GimbalStick.center : w.gimbalAxis1
             w.lastGimbalStickAt = now
@@ -798,6 +819,7 @@ final class DatalinkDriver {
             $0.ackedDataCursor = 0
             $0.sawAckedData = false
             $0.extraCursor = 0
+            $0.sawExtra = false
             $0.lastAckedDataLogAt = 0
         }
     }
@@ -808,13 +830,13 @@ final class DatalinkDriver {
         let next = wire.withLock { w -> (DumlTransport.AckWindows, Bool) in
             let prev = w.ackedDataCursor
             let advanced = DumlTransport.AckWindows(
-                ackedData: w.ackedDataCursor, extra: w.extraCursor
+                ackedData: w.ackedDataCursor, extra: w.extraCursor,
+                hasAckedData: w.sawAckedData, hasExtra: w.sawExtra
             ).advancing(datagram: bytes)
             w.ackedDataCursor = advanced.ackedData
-            if datagram.count > 6, datagram[6] == DumlTransport.PktType.ackedData.rawValue {
-                w.sawAckedData = true
-            }
+            w.sawAckedData = advanced.hasAckedData
             w.extraCursor = advanced.extra
+            w.sawExtra = advanced.hasExtra
             let now = CFAbsoluteTimeGetCurrent()
             let logIt =
                 advanced.ackedData != prev
@@ -1303,6 +1325,9 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
         var loggedFirst = false
         var peerCursor: UInt16 = 0
         var hasVideoSeq = false
+        /// Telemetry-seeded group 0 before the first `0x02`. Distinct from
+        /// `hasVideoSeq` so later `0x01` cannot rewind after video is seen.
+        var hasGroup0 = false
         var pending: [[UInt8]] = []
         var hopScheduled = false
     }
@@ -1316,6 +1341,7 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
             if let seq = DumlTransport.transportSeq(datagram) {
                 state.peerCursor = seq
                 state.hasVideoSeq = true
+                state.hasGroup0 = true
             }
             let first = !state.loggedFirst
             if first { state.loggedFirst = true }
@@ -1374,7 +1400,7 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
     func peerCursor(fallback: UInt16) -> UInt16 {
         lock.withLock { state in
             DumlTransport.AckWindows.windowCursor(
-                stored: state.peerCursor, seen: state.hasVideoSeq, fallback: fallback)
+                stored: state.peerCursor, seen: state.hasGroup0, fallback: fallback)
         }
     }
 
@@ -1387,6 +1413,7 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
                     hasVideoSeq: state.hasVideoSeq)
             else { return false }
             state.peerCursor = cursor
+            state.hasGroup0 = true
             return true
         }
     }
@@ -1401,9 +1428,11 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
         lock.withLock { state in
             let cursor = state.peerCursor
             let has = state.hasVideoSeq
+            let group0 = state.hasGroup0
             state = State()
             state.peerCursor = cursor
             state.hasVideoSeq = has
+            state.hasGroup0 = group0
         }
     }
 

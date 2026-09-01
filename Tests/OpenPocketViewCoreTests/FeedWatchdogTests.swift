@@ -408,6 +408,12 @@ import Testing
             dog.tick(Self.snap(now: now, frameAge: 25, statusAge: 25, bleAge: 0.2)) == .none,
             "BLE + SoftAP still up — do not flap UDP after cooldown")
         #expect(dog.stage == .cooldown)
+
+        var aged = Self.snap(now: now + 1, frameAge: 70, statusAge: 70, bleAge: 0.2)
+        aged.secondsSinceLastRebuild = FeedWatchdog.rebuildBackoff + 1
+        #expect(
+            dog.tick(aged) == .reopenDatalink,
+            "fully silent 9004 after rebuildBackoff — one more bind even if BLE is fresh")
     }
 
     /// Command-timeout rebuild tears video, stamps a fake lastPacket, watchdog
@@ -567,6 +573,21 @@ import Testing
         #expect(
             !FeedWatchdog.shouldPresentSample(
                 hasPicture: false, awaitingIDR: false, isIDR: false))
+        #expect(
+            !FeedWatchdog.shouldReleaseIDRHold(
+                awaitingIDR: true, udpReceiveAlive: true, secondsSinceLastEnable: 2,
+                hasPresentedPicture: true),
+            "still inside GOP grace")
+        #expect(
+            FeedWatchdog.shouldReleaseIDRHold(
+                awaitingIDR: true, udpReceiveAlive: true, secondsSinceLastEnable: 8,
+                hasPresentedPicture: true),
+            "mid-session hold with UDP alive must not freeze the last frame forever")
+        #expect(
+            !FeedWatchdog.shouldReleaseIDRHold(
+                awaitingIDR: true, udpReceiveAlive: true, secondsSinceLastEnable: 8,
+                hasPresentedPicture: false),
+            "first picture stays held until IRAP")
         #expect(
             !FeedWatchdog.shouldPresentSample(
                 hasPicture: true, awaitingIDR: true, isIDR: false))

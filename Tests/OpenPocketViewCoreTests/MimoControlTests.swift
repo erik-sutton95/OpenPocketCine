@@ -694,6 +694,19 @@ import Testing
         #expect(GimbalStick.shouldEmit(held: true, restPending: false, now: 1.04, lastEmitted: 1))
         #expect(GimbalStick.shouldEmit(held: false, restPending: true, now: 1.01, lastEmitted: 1))
         #expect(!GimbalStick.shouldEmit(held: false, restPending: false, now: 2, lastEmitted: 1))
+        #expect(
+            GimbalStick.shouldEmitOnSocket(
+                rest: true, liveAccepting: false, hasConnection: true),
+            "rest still leaves while ingest is down")
+        #expect(
+            !GimbalStick.shouldEmitOnSocket(
+                rest: false, liveAccepting: false, hasConnection: true))
+        #expect(
+            !GimbalStick.shouldEmitOnSocket(
+                rest: true, liveAccepting: true, hasConnection: false))
+        #expect(
+            GimbalStick.shouldEmitOnSocket(
+                rest: false, liveAccepting: true, hasConnection: true))
         #expect(Commands.gimbalRecenter().cmdSet == 0x04)
         #expect(Commands.gimbalRecenter().cmdId == 0x4C)
         #expect(Commands.gimbalRecenter().payload == [0xFE, 0x08])

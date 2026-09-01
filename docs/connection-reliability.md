@@ -83,7 +83,8 @@ is a finding, not a license to wire `LinkDiagnoser` blindly.
 4. **BLE drop** → session recovery, not the watchdog. `session: drop`.
 5. **ACK group 0 stuck** (video cursor 0 or clobbered by 34-byte `0x01`).
    Low likelihood if 40 Hz group 0 is echoing `0x02`. Confirm on a take;
-   do not lead with it.
+   do not lead with it. Group 1 has the same seq-`0` trap: telemetry must
+   not overwrite a seen `0x03` cursor of `0` (controls mute, picture fine).
 
 Physical take 2026-08-28 (`es_iphone16`): first `feed: observe` was
 `diagnose=encoderPaused watchdog=resendLiveViewEnable`, then 2 s later

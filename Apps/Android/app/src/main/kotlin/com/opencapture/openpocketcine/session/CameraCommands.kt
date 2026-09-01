@@ -465,6 +465,17 @@ object CameraCommands {
         return nowMs - lastEmittedMs >= GIMBAL_STICK_STREAM_INTERVAL_MS
     }
 
+    /** iOS `GimbalStick.shouldEmitOnSocket`. Rest still leaves while ingest is down. */
+    fun shouldEmitGimbalStickOnSocket(
+        rest: Boolean,
+        liveAccepting: Boolean,
+        hasConnection: Boolean,
+    ): Boolean {
+        if (!hasConnection) return false
+        if (rest) return true
+        return liveAccepting
+    }
+
     fun shouldHoldGimbalWatchdog(
         secondsSinceThrow: Double?,
         lastVideoPacketAgeSec: Double? = null,

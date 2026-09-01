@@ -76,7 +76,7 @@ Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `
 
 ## Window ACK
 
-Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop.
+Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop. Seq `0` is a valid cursor once seen; telemetry must not rewind group 0 after the first `0x02`, or group 1 after the first `0x03`. A session-preserving UDP rebuild must re-arm `0x02` ingest even when it skips another `0x09/0xa8`.
 
 ## Depacketizer
 

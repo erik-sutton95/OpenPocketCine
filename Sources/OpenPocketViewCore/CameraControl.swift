@@ -606,9 +606,18 @@ public enum FocusTrackMode: UInt8, CaseIterable, Sendable {
     /// 2 s stall rebuild so a chip tap does not flash Reconnecting.
     public static let videoGrace: TimeInterval = 4
 
-    public static func shouldHoldWatchdog(secondsSinceSet: TimeInterval?) -> Bool {
+    public static func shouldHoldWatchdog(
+        secondsSinceSet: TimeInterval?,
+        lastVideoPacketAge: TimeInterval? = nil
+    ) -> Bool {
         guard let secondsSinceSet else { return false }
-        return secondsSinceSet >= 0 && secondsSinceSet < videoGrace
+        guard secondsSinceSet >= 0, secondsSinceSet < videoGrace else { return false }
+        if let video = lastVideoPacketAge,
+            video >= FeedWatchdog.stallThreshold + videoGrace
+        {
+            return false
+        }
+        return true
     }
 
     public static func parseReply(_ payload: [UInt8]) -> FocusTrackMode? {
@@ -1258,6 +1267,16 @@ public enum GimbalStick {
         if lastEmitted == 0 { return true }
         return now - lastEmitted >= streamInterval
     }
+
+    /// Rest must still leave while ingest is down (UDP rebuild). A held throw
+    /// waits for `liveAccepting` so leftover axes cannot GOP-cut the new bind.
+    public static func shouldEmitOnSocket(
+        rest: Bool, liveAccepting: Bool, hasConnection: Bool
+    ) -> Bool {
+        guard hasConnection else { return false }
+        if rest { return true }
+        return liveAccepting
+    }
     /// Stay inside this (as a fraction of travel) and the press is a tap.
     public static let tapSlop: Double = 0.18
     /// Second tap inside this window recenters; a third tap in the same
@@ -1608,9 +1627,18 @@ public enum CamFov {
     /// so a chip tap / pinch does not GOP-cut the live picture (HUD still alive).
     public static let videoGrace: TimeInterval = 4
 
-    public static func shouldHoldWatchdog(secondsSinceSet: TimeInterval?) -> Bool {
+    public static func shouldHoldWatchdog(
+        secondsSinceSet: TimeInterval?,
+        lastVideoPacketAge: TimeInterval? = nil
+    ) -> Bool {
         guard let secondsSinceSet else { return false }
-        return secondsSinceSet >= 0 && secondsSinceSet < videoGrace
+        guard secondsSinceSet >= 0, secondsSinceSet < videoGrace else { return false }
+        if let video = lastVideoPacketAge,
+            video >= FeedWatchdog.stallThreshold + videoGrace
+        {
+            return false
+        }
+        return true
     }
 
     public static var wideFactor: Double { minFactor }

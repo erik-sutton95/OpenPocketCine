@@ -290,6 +290,22 @@ import Testing
                 videoPackets: 80, enableSends: 0, secondsSinceLastEnable: 10) == .resendEnable)
         #expect(CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: false))
         #expect(!CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: true))
+        #expect(CameraSoftAP.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: true))
+        #expect(!CameraSoftAP.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: false))
+        #expect(
+            !CameraSoftAP.shouldStampCommandSeq(
+                hasConnection: false, connectionReady: false, trackCommand: true))
+        #expect(
+            !CameraSoftAP.shouldStampCommandSeq(
+                hasConnection: true, connectionReady: false, trackCommand: true),
+            "tracked SET skips .waiting without burning seq")
+        #expect(
+            CameraSoftAP.shouldStampCommandSeq(
+                hasConnection: true, connectionReady: false, trackCommand: false),
+            "untracked enable still leaves on .waiting")
+        #expect(
+            CameraSoftAP.shouldStampCommandSeq(
+                hasConnection: true, connectionReady: true, trackCommand: true))
     }
 
     @Test func firstPictureResendsEnableAfterRebuildWhenNeverGotVideo() {
@@ -392,6 +408,11 @@ import Testing
                 videoFresh: false, sawPicture: true, statusFresh: false,
                 secondsSinceLastEnable: 2.5),
             "GOP-reset grace — keepalive must not tear the new bind")
+        #expect(
+            !CameraSoftAP.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
+                pathReady: false),
+            "SoftAP gone is SessionRecovery — do not discardUDP")
         #expect(CameraSoftAP.rebuildCooldown == 5)
         #expect(
             CameraSoftAP.firstPictureStep(

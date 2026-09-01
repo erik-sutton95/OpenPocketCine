@@ -24,8 +24,12 @@ Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
 latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a
 third cursor seeded from 34-byte `0x01` telemetry. After the first `0x02`,
 telemetry must not rewind group 0 — that closed HEVC while HUD stayed
-live. Seq `0` is a valid cursor once seen. Keep TCP 7001 poke
-across UDP rebuilds.
+live. After the first `0x03`, telemetry must not rewind group 1 either
+(seq `0` is a valid 8-aligned cursor). Keep TCP 7001 poke
+across UDP rebuilds. Session-preserving UDP rebuild must re-arm `0x02`
+ingest even when it skips a second `0x09/0xa8` (keepalive / reassociate
+with `hadVideo`). Tracked SETs skip a not-ready socket without burning
+seq; untracked enable still leaves on `.waiting`.
 
 Those are **separate** camera send windows. HEVC (`0x02`) can stay at 25 fps
 while `0x03` is wedged. Unsolicited HUD (subscribe `0x00/0x99`, gimbal

@@ -148,11 +148,14 @@ extension CameraSoftAP {
         videoFresh: Bool = false,
         sawPicture: Bool = true,
         statusFresh: Bool = false,
-        secondsSinceLastEnable: TimeInterval? = nil
+        secondsSinceLastEnable: TimeInterval? = nil,
+        pathReady: Bool = true
     ) -> Bool {
         // First picture owns the socket. Keepalive rebuild here canceled the
         // new UDP and RST'd TCP 7001 — black canvas, 2 s flap.
         guard sawPicture else { return false }
+        // SoftAP gone is SessionRecovery, not a keepalive discardUDP.
+        guard pathReady else { return false }
         // A late SET write reject while HEVC is still arriving is not a dead
         // socket. Tearing UDP here is the “toggle LUT / pinch zoom” dropout.
         guard flowNeedsRebuild, !rebuildInFlight, !videoFresh else { return false }
@@ -348,6 +351,23 @@ extension CameraSoftAP {
     /// socket. After live video, the enable already rode with the rebuild.
     public static func shouldForceEnableAfterUDPRebuild(hadVideo: Bool) -> Bool {
         !hadVideo
+    }
+
+    /// Discard lowers the `0x02` gate so leftover GOP cannot mix. Keepalive /
+    /// reassociate skip enable when HEVC already existed — they must still
+    /// raise ingest or the new socket drops every video packet as leftover.
+    public static func shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: Bool) -> Bool {
+        wasAccepting
+    }
+
+    /// Tracked SETs skip a missing / not-ready socket without burning seq.
+    /// Untracked writes (enable, presence) still leave on `.waiting`.
+    public static func shouldStampCommandSeq(
+        hasConnection: Bool, connectionReady: Bool, trackCommand: Bool
+    ) -> Bool {
+        guard hasConnection else { return false }
+        if trackCommand { return connectionReady }
+        return true
     }
 
     /// Mimo 2026-08-28 live-start: HEVC at join+17 ms, `0x09/0xa8` at +3 s.

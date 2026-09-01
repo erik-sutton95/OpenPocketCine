@@ -124,6 +124,28 @@ import Testing
                 == 0x1000)
     }
 
+    /// Seq `0` is a valid 8-aligned cursor. Telemetry must not rewind group 1
+    /// after `0x03` has been seen — that muted SET/Flip while HEVC stayed live.
+    @Test func ackWindowsDoNotRewindAckedDataSeqZeroFromTelemetry() {
+        let reply = DumlTransport.transportHeader(
+            pktType: 0x03, payloadLen: 0, sessionId: 1, seq: 0)
+        var w = DumlTransport.AckWindows().advancing(datagram: reply)
+        #expect(w.ackedData == 0 && w.hasAckedData)
+        let tel: [UInt8] = [
+            0x22, 0x80, 0xB7, 0x11, 0xB8, 0xFF, 0x01, 0x42,
+            0x60, 0xA9, 0xD8, 0xA9, 0, 0, 0, 0,
+            0x38, 0xCD, 0x38, 0xCD, 0, 0, 0, 0,
+            0xA0, 0xDD, 0xA0, 0xDD, 0, 0, 0, 0, 0, 0,
+        ]
+        w = w.advancing(datagram: tel)
+        #expect(w.ackedData == 0 && w.hasAckedData)
+        #expect(w.extra == 0xDDA0 && w.hasExtra)
+        #expect(DumlTransport.AckWindows.windowCursor(stored: 0, seen: true, fallback: 0x1000) == 0)
+        #expect(
+            DumlTransport.AckWindows.windowCursor(stored: 0, seen: false, fallback: 0x1000)
+                == 0x1000)
+    }
+
     // scanFrames must find the DUML frame buried under the transport + routing wrapper.
     @Test func scanFindsWrappedFrame() {
         let packet: [UInt8] = [

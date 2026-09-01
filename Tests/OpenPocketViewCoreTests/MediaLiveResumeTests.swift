@@ -28,14 +28,15 @@ import Testing
                 == .done)
     }
 
-    @Test func stillEnablesAfterTheExitBudget() {
+    @Test func stillExitsAfterTheExitBudgetWhileInPlayback() {
         #expect(
             MediaLiveResume.action(
                 attempt: MediaLiveResume.maxExitAttempts + 1,
                 inPlayback: true,
                 exitAcknowledged: false,
                 pictureFresh: false)
-                == .enableLiveView)
+                == .exitPlayback,
+            "0x09/0xa8 in gallery ACKs E0 — keep exiting")
     }
 
     @Test func strayPlaybackOnLiveViewSendsExit() {

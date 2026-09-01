@@ -44,7 +44,7 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. After that rebuild, do not enable-storm for `rebuildBackoff` (60 s) — BLE age must not disable that hold. A second rebuild is allowed only after the backoff.
 
-If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild).
+If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild). Keepalive / SoftAP reassociate that skip enable (HEVC already existed) must still raise ingest — discard lowers the gate so leftover GOP cannot mix, and leaving it down drops every `0x02` as leftover.
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 

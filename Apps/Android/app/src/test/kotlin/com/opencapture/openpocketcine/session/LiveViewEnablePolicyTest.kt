@@ -566,6 +566,14 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun rebuildRearmsIngestWhenItWasAccepting() {
+        assertTrue(LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(true))
+        assertTrue(!LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(false))
+        assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(true))
+        assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(false))
+    }
+
+    @Test
     fun keepaliveDoesNotTearUdpDuringFirstPicture() {
         assertTrue(
             !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(

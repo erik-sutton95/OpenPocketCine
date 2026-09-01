@@ -214,6 +214,17 @@ private let PPS = hex("4401c17312240890")
         #expect(dp.feed(cmd) == nil)
     }
 
+    @Test func reusedFrameNumberStartsANewAccessUnit() {
+        var dp = HevcDepacketizer()
+        let frame = marker + slice
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 0, Array(frame[0..<10]))) == nil)
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 1, Array(frame[10...]))) == nil)
+        // GOP restart reuses frame 0x10 at pos 0 — close the previous AU.
+        let au = dp.feed(videoPacket(frame: 0x10, pos: 0, marker + slice))
+        #expect(au == slice)
+        #expect(dp.droppedIncomplete == 0)
+    }
+
     @Test func duplicateFragmentDoesNotCorruptTheAU() {
         var dp = HevcDepacketizer()
         let frame = marker + slice

@@ -815,6 +815,7 @@ final class CameraSession {
                 lastBleNotifyAt = Date()
                 route(frame)
             }
+            guard !Task.isCancelled else { return }
             failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
                 beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
@@ -2728,7 +2729,11 @@ final class CameraSession {
     private func transmit(_ send: InflightSend, kind: String) {
         let seq = datalink?.send(send.frame) ?? 0
         let key = Duml.opcodeKey(set: send.frame.cmdSet, cmd: send.frame.cmdId)
-        setMailbox.noteTransmit(key: key, seq: seq)
+        // A skipped UDP write returns seq 0 and lastWriteLanded=false — do
+        // not journal that seq as on the wire (timeout then looked like death).
+        if datalink?.lastWriteLanded != false {
+            setMailbox.noteTransmit(key: key, seq: seq)
+        }
         ControlLiveLog.line(
             "control: \(kind) \(send.name) \(send.opcode) seq=\(seq) flags=0x\(String(send.frame.flags, radix: 16)) payload=\(Duml.hex(send.frame.payload)) via=datalink"
         )
@@ -2921,21 +2926,25 @@ final class CameraSession {
                 if ssid != nil, !holdsMonitor {
                     if !isBrowsingMedia, shouldStartUDPRebuild {
                         endGimbalStick()
-                        try? await datalink?.rebuildUDP(reason: "keepalive")
-                        guard !Task.isCancelled else { return }
-                        if liveViewEnableSent {
-                            let hadVideo = FeedWatchdog.hadVideo(
-                                videoPackets: datalink?.videoPackets ?? 0,
-                                lastVideoPacketAge: datalink?.lastVideoPacketAt.map {
-                                    Date().timeIntervalSince($0)
-                                })
-                            let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
-                                hadVideo: hadVideo)
-                            if force {
-                                log.info(
-                                    "live: first-picture enable after UDP rebuild (neverGotVideo)")
-                                sendRecoverEnable(
-                                    force: true, reason: "first-picture after UDP rebuild")
+                        startFeedRecovery { [weak self] in
+                            guard let self else { return }
+                            try? await self.datalink?.rebuildUDP(reason: "keepalive")
+                            guard !Task.isCancelled else { return }
+                            if self.liveViewEnableSent {
+                                let hadVideo = FeedWatchdog.hadVideo(
+                                    videoPackets: self.datalink?.videoPackets ?? 0,
+                                    lastVideoPacketAge: self.datalink?.lastVideoPacketAt.map {
+                                        Date().timeIntervalSince($0)
+                                    })
+                                let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
+                                    hadVideo: hadVideo)
+                                if force {
+                                    self.log.info(
+                                        "live: first-picture enable after UDP rebuild (neverGotVideo)"
+                                    )
+                                    self.sendRecoverEnable(
+                                        force: true, reason: "first-picture after UDP rebuild")
+                                }
                             }
                         }
                     }
@@ -3210,7 +3219,8 @@ final class CameraSession {
             videoFresh: videoFresh,
             sawPicture: hasStableLivePicture,
             statusFresh: statusFresh,
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest)
+            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            pathReady: WiFiJoiner.isCameraPathReady()
         )
     }
 
@@ -3408,6 +3418,16 @@ final class CameraSession {
         feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
         switch action {
         case .none:
+            if decoder.awaitingIDR,
+                FeedWatchdog.shouldReleaseIDRHold(
+                    awaitingIDR: true,
+                    udpReceiveAlive: FeedWatchdog.udpReceiveAlive(snap),
+                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
+                    hasPresentedPicture: decoder.lastPresentedAt != nil)
+            {
+                decoder.endIDRHold()
+                log.info("feed: release IDR hold — UDP alive, picture on layer")
+            }
             if FeedWatchdog.udpReceiveAlive(snap), decoder.isPresentFrozen {
                 let now = Date()
                 if lastFeedFreezeLogAt.map({ now.timeIntervalSince($0) >= 2 }) ?? true {
@@ -3510,12 +3530,12 @@ final class CameraSession {
         if !force, Date().timeIntervalSince(lastIdrRequest) < FeedWatchdog.escalateAfter {
             return
         }
-        lastIdrRequest = Date()
-        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-        decoder.beginIDRHold()
-        idrHoldEnableCount += 1
         guard startCapturedLiveView(reason: reason) else { return }
+        lastIdrRequest = Date()
         liveViewEnableSends += 1
+        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
+        beginIDRHoldIfNeeded()
+        idrHoldEnableCount += 1
         log.info(
             "live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(self.liveViewEnableSends, privacy: .public)"
         )

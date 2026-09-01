@@ -96,18 +96,31 @@ public enum DumlTransport {
         public var video: UInt16
         public var ackedData: UInt16
         public var extra: UInt16
-        public init(video: UInt16 = 0, ackedData: UInt16 = 0, extra: UInt16 = 0) {
+        /// Group 1 has been seeded (telemetry) or advanced (`0x03`). Seq `0` is valid.
+        public var hasAckedData: Bool
+        /// Group 2 has been seeded from 34-byte `0x01`. Seq `0` is valid.
+        public var hasExtra: Bool
+        public init(
+            video: UInt16 = 0, ackedData: UInt16 = 0, extra: UInt16 = 0,
+            hasAckedData: Bool = false, hasExtra: Bool = false
+        ) {
             self.video = video
             self.ackedData = ackedData
             self.extra = extra
+            self.hasAckedData = hasAckedData
+            self.hasExtra = hasExtra
         }
 
         /// Advance group 1 from pktType `0x03` and seed/refresh groups 1–2 from
         /// 34-byte `0x01` telemetry. Video (`0x02`) is tracked separately.
         /// Group 0 is latest `0x02` seq. A 34-byte `0x01` must not rewind it
         /// after video has been seen (that closed HEVC while HUD stayed live).
+        public static func shouldSeedCursorFromTelemetry(hasSeq: Bool) -> Bool {
+            !hasSeq
+        }
+
         public static func shouldSeedVideoCursorFromTelemetry(hasVideoSeq: Bool) -> Bool {
-            !hasVideoSeq
+            shouldSeedCursorFromTelemetry(hasSeq: hasVideoSeq)
         }
 
         /// `0` is a valid 8-aligned seq. Do not treat it as "missing" once seen.
@@ -121,12 +134,20 @@ public enum DumlTransport {
             switch datagram[6] {
             case PktType.telemetry.rawValue:
                 if let w = DumlTransport.ackWindows(fromTelemetry: datagram) {
-                    if next.ackedData == 0 { next.ackedData = w.ackedData }
+                    // Same class of bug as group 0: `ackedData == 0` is a real
+                    // 8-aligned seq. Telemetry must not rewind group 1 after
+                    // `0x03` has been seen (that muted SET/Flip while HEVC lived).
+                    if Self.shouldSeedCursorFromTelemetry(hasSeq: next.hasAckedData) {
+                        next.ackedData = w.ackedData
+                        next.hasAckedData = true
+                    }
                     next.extra = w.extra
+                    next.hasExtra = true
                 }
             case PktType.ackedData.rawValue:
                 if let seq = DumlTransport.transportSeq(datagram) {
                     next.ackedData = seq
+                    next.hasAckedData = true
                 }
             default:
                 break

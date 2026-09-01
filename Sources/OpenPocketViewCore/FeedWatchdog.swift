@@ -261,6 +261,33 @@ public struct FeedWatchdog: Equatable, Sendable {
         !rebuildInFlight
     }
 
+    /// BLE session keepalive keeps `lastBle` young. After one UDP rebuild the
+    /// cooldown used to sit forever while 9004 stayed silent. Retry once the
+    /// 60 s backoff has elapsed — not on the 2 s stall cadence.
+    public static func shouldRetrySilentSocketAfterRebuildBackoff(
+        secondsSinceLastRebuild: TimeInterval?,
+        udpReceiveAlive: Bool,
+        controlReceiveAlive: Bool
+    ) -> Bool {
+        guard !udpReceiveAlive, !controlReceiveAlive else { return false }
+        guard let since = secondsSinceLastRebuild else { return false }
+        return since >= rebuildBackoff
+    }
+
+    /// Mid-session IDR hold with UDP alive and a picture already on the layer
+    /// froze the last frame forever when the PLI did not cut a GOP (no periodic
+    /// IDR). First picture stays held until IRAP.
+    public static func shouldReleaseIDRHold(
+        awaitingIDR: Bool,
+        udpReceiveAlive: Bool,
+        secondsSinceLastEnable: TimeInterval?,
+        hasPresentedPicture: Bool
+    ) -> Bool {
+        guard awaitingIDR, udpReceiveAlive, hasPresentedPicture else { return false }
+        guard let since = secondsSinceLastEnable else { return false }
+        return since >= CameraSoftAP.firstPictureIDRGrace
+    }
+
     /// First picture (`hadVideo == false`) may resend `0x09/0xa8` after stall.
     /// Mid-session extra enable while `awaitingIDR` GOP-cuts a live or
     /// encoder-paused picture — `tick` already owns that ladder.
@@ -301,11 +328,17 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceFocusTrackSet) {
+        if FocusTrackMode.shouldHoldWatchdog(
+            secondsSinceSet: snap.secondsSinceFocusTrackSet,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
             return .none
         }
 
-        if CamFov.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceZoomSet) {
+        if CamFov.shouldHoldWatchdog(
+            secondsSinceSet: snap.secondsSinceZoomSet,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
             return .none
         }
 
@@ -372,6 +405,15 @@ public struct FeedWatchdog: Equatable, Sendable {
             if Self.shouldHoldBind(
                 pathReady: snap.pathReady, lastBleNotifyAge: snap.lastBleNotifyAge)
             {
+                // BLE keepalive keeps lastBle young. After rebuildBackoff a
+                // fully silent 9004 is still a dead UDP — one more bind.
+                if Self.shouldRetrySilentSocketAfterRebuildBackoff(
+                    secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
+                    udpReceiveAlive: false,
+                    controlReceiveAlive: Self.controlReceiveAlive(snap))
+                {
+                    return fire(.reopenDatalink, at: snap.now)
+                }
                 return .none
             }
             if snap.now - lastActionAt >= Self.cooldownDuration {

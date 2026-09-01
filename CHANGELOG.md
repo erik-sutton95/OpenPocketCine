@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- ACK groups 1–2 treat seq `0` as a real cursor: 34-byte `0x01` no longer
+  rewinds group 1 after `0x03` has been seen (that muted SET/Flip while
+  HEVC stayed live). Android UDP rebuild re-arms `0x02` ingest so keepalive
+  / SoftAP reassociate cannot drop every video packet as leftover GOP.
+  Tracked SETs no longer burn seq on a skipped write; Android seq+send
+  serializes off Main. Same-raster BLA/IDR no longer tears MediaCodec.
+  Watchdog retries a silent 9004 after the 60 s rebuild backoff even if
+  BLE keepalive is young. Mid-session IDR hold releases once UDP is alive
+  and a picture is on the layer. Gallery resume never `0x09/0xa8` while
+  still in playback.
+
 - Window ACK group 0 is latest `0x02` seq: 34-byte `0x01` no longer rewinds
   it after video has been seen, and seq `0` is not treated as missing.
   Live-view enable is untracked so `0xa8` still leaves on UDP `.waiting`.

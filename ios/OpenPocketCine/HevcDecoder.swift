@@ -496,6 +496,12 @@ final class HevcDecoder {
         awaitingIDR = true
     }
 
+    /// UDP is alive and the last picture is still on the layer — do not wait
+    /// forever for an IRAP that a PLI did not cut.
+    func endIDRHold() {
+        awaitingIDR = false
+    }
+
     private func dropFormatForRecovery() {
         format = nil
         liveCodec = nil

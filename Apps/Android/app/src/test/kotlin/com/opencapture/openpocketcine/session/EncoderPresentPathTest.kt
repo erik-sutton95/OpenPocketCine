@@ -59,6 +59,12 @@ class EncoderPresentPathTest {
             ),
         )
         assertFalse(
+            EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                pictureSizeChanged = false,
+                accessUnitHasIDR = true,
+            ),
+        )
+        assertFalse(
             EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
                 pictureSizeChanged = false,
                 accessUnitHasIDR = false,

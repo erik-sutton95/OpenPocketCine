@@ -44,7 +44,21 @@ public struct HevcDepacketizer {
         currentFrame = frameNo
         if let last = lastPosition {
             if position == last { return completed }  // UDP dup — do not mark the AU corrupt
-            if position != last + 1 { corrupt = true }  // lost / reordered fragment
+            if position < last {
+                // Same frameNo after a GOP restart / encoder pause. Closing the
+                // leftover AU and starting over beats splicing P-frames onto it.
+                if !buffer.isEmpty {
+                    if corrupt {
+                        droppedIncomplete += 1
+                    } else {
+                        completed = Hevc.stripDjiMarker(buffer)
+                    }
+                }
+                buffer.removeAll(keepingCapacity: true)
+                corrupt = false
+            } else if position != last + 1 {
+                corrupt = true  // lost / reordered fragment
+            }
         }
         lastPosition = position
         buffer.append(contentsOf: payload[20...])
