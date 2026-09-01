@@ -148,6 +148,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android clip playback no longer copies the LRF/XRF sidecar into RAM.
+  A missing Content-Length used to grow `ByteArrayOutputStream` until
+  `OutOfMemoryError` (Play Vitals, #188). Proxies stream to disk like
+  originals; RAM GETs (thumbs) cap at 8 MiB.
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —
