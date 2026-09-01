@@ -149,7 +149,10 @@ class GimbalLimitWatchTest {
         assertTrue(CamFov.zoomStep(6.0, -1.0, 1.0, 12.0) < 6.0)
         assertEquals(1.0, CamFov.triggerZoomAxis(0.0, 1.0), 0.001)
         assertEquals(-1.0, CamFov.triggerZoomAxis(1.0, 0.0), 0.001)
-        assertEquals(1000, CameraCommands.pitchTenthDeg(byteArrayOf(0, 0, 0, 0, 0, 0, 0xE8.toByte(), 0x03)))
-        assertEquals(null, CameraCommands.pitchTenthDeg(byteArrayOf(0, 0, 0, 0, 0, 0)))
+        assertEquals(1000, CameraCommands.pitchTenthDeg(byteArrayOf(0, 0, 0xE8.toByte(), 0x03, 0, 0)))
+        assertEquals(null, CameraCommands.pitchTenthDeg(byteArrayOf(0, 0, 0)))
+        val lookDown = byteArrayOf(0x10, 0x06, 0x7C.toByte(), 0xFC.toByte(), 0x27, 0xFB.toByte(), 0x82.toByte(), 0x00)
+        assertEquals(-1241, CameraCommands.yawTenthDeg(lookDown))
+        assertEquals(-900, CameraCommands.pitchTenthDeg(lookDown))
     }
 }

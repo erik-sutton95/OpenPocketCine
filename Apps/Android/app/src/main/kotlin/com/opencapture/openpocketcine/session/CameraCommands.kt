@@ -518,10 +518,10 @@ object CameraCommands {
         return raw.toShort().toInt()
     }
 
-    /** Consecutive 0.1° i16 after yaw `@4`. Tilt. Short payloads fail closed. */
+    /** Tilt 0.1° i16-LE `@2`. `@6` after yaw is not tilt (held ~13° while `@2` hit −90°). */
     fun pitchTenthDeg(payload: ByteArray): Int? {
-        if (payload.size < 8) return null
-        val raw = (payload[6].toInt() and 0xFF) or (payload[7].toInt() shl 8)
+        if (payload.size < 4) return null
+        val raw = (payload[2].toInt() and 0xFF) or (payload[3].toInt() shl 8)
         return raw.toShort().toInt()
     }
 

@@ -83,7 +83,7 @@ Stick throw closes live `0x04/0x05` onto that pose at full Mimo stick
 25 Hz paused HEVC at 15–30 s — including a leftover throw below the
 linear snap (`y=-0.01`). Debounce the lift 0.3 s. After a 1:1 close, live-yaw wiggle must not
 re-grab. Encoder-pause: two enables then one UDP rebuild; keepalive
-must not flap while status is young. Close tilt on live pitch `@6` only;
+must not flap while status is young. Close tilt on live pitch `@2` only;
 stop tilt throw if that field never leaves SET. Roll is readout only —
 `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and gimbal
 pad win while thrown. Android has no AirPods IMU.

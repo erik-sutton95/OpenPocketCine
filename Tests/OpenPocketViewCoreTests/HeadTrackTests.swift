@@ -405,7 +405,7 @@ import Testing
         }
         #expect(
             cmd?.y == HeadTrack.maxThrow,
-            "pitch must keep throwing at full stick until live @6 catches — not park")
+            "pitch must keep throwing at full stick until live @2 catches — not park")
         let caught = track.tick(
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
         #expect(caught?.rest == true)

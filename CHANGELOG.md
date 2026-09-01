@@ -16,6 +16,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Head-track gimbal pitch ring reads `0x04/0x05` i16 `@2` (tilt). `@6` after
+  yaw is not pitch — a live take held it at ~13° while looking down hit
+  −90° at `@2`, so the sky arrow looked like roll.
+
 - ACK groups 1–2 treat seq `0` as a real cursor: 34-byte `0x01` no longer
   rewinds group 1 after `0x03` has been seen (that muted SET/Flip while
   HEVC stayed live). Android UDP rebuild re-arms `0x02` ingest so keepalive

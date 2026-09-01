@@ -648,10 +648,16 @@ import Testing
         #expect(GimbalStick.axisLinear(-1) == GimbalStick.min)
         #expect(GimbalStick.axisLinear(0.5) == linearHalf)
         #expect(GimbalStick.axisLinear(0.5) > GimbalStick.axis(0.5))
-        #expect(GimbalStick.pitchTenthDeg([0, 0, 0, 0, 0, 0, 0xE8, 0x03]) == 1000)
-        #expect(GimbalStick.pitchTenthDeg([0, 0, 0, 0, 0, 0]) == nil)
+        #expect(GimbalStick.pitchTenthDeg([0, 0, 0xE8, 0x03, 0, 0]) == 1000)
+        #expect(GimbalStick.pitchTenthDeg([0, 0, 0]) == nil)
+        // Live Pocket 4 `0x04/0x05`: yaw @4, pitch @2. @6 stayed 13.0° looking down.
+        let lookDown: [UInt8] = [0x10, 0x06, 0x7C, 0xFC, 0x27, 0xFB, 0x82, 0x00]
+        #expect(GimbalStick.yawTenthDeg(lookDown) == -1241)
+        #expect(GimbalStick.pitchTenthDeg(lookDown) == -900)
+        #expect(
+            GimbalStick.pitchTenthDeg(lookDown) != 130, "i16 @6 is not tilt")
         var pitched = GimbalStickMapping()
-        pitched.applyAttitude([0, 0, 0, 0, 0xE8, 0x03, 0xD0, 0x07])
+        pitched.applyAttitude([0, 0, 0xD0, 0x07, 0xE8, 0x03, 0x86, 0x00])
         #expect(pitched.yawTenthDeg == 1000)
         #expect(pitched.pitchTenthDeg == 2000)
         let right = GimbalStick.encode(x: 1, y: 0)
