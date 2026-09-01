@@ -40,6 +40,10 @@ All notable changes to this project are documented here. The format is based on
   and tester notes under `Apps/Android/Play/`. Wizard:
   `just android-play-setup`. Contract: `docs/android-play-ci.md`.
 
+- Play CI matches OpenZCine: fail-closed `play-closed` secrets, signed AAB
+  artifact, auto-upload on `main` once `ANDROID_PLAY_UPLOAD=true`. Dispatch
+  can attach the first Console AAB before the Play API robot exists.
+
 - Live feed **observe** line (`feed: observe diagnose=… watchdog=… disagree=…`)
   so a physical take can classify freeze-in-seconds (#148) against
   `LinkDiagnoser` without changing repair. Contract:
