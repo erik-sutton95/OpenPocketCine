@@ -84,8 +84,9 @@ grids, and crosshairs sit on the iOS assist rail — including in portrait.
 </p>
 
 **Camera control.** On iOS: record, ISO, EV, zoom, and related writes, plus gimbal on
-Pocket. On Pocket 4 Pro, zoom while you're in D-Log2 hops to D-Log automatically so you
-keep moving.
+Pocket (on-screen stick, a connected game controller, or iOS AirPods head
+tracking). On Pocket 4 Pro, zoom while
+you're in D-Log2 hops to D-Log automatically so you keep moving.
 
 <p align="center">
   <a href="https://openpocketcine.app/#controls">
@@ -127,8 +128,9 @@ when Camera to Cloud is configured.
 
 - Bluetooth pairing, camera Wi-Fi join, saved-camera profiles, and reconnect
 - Live-view monitoring, timecode, battery, storage, and camera status readouts
-- Record, ISO, EV, zoom, and related camera writes on iOS, plus gimbal on Pocket (Android live
-  control is a thinner set: record, ISO, shutter, white balance, tap-focus, gimbal stick)
+- Record, ISO, EV, zoom, and related camera writes on iOS, plus gimbal on Pocket (on-screen
+  stick or a connected game controller; Android live control is a thinner set: record, ISO,
+  shutter, white balance, tap-focus, gimbal stick)
 - Scopes, exposure and focus assists, framing tools, and customizable DISP chrome on iOS
 - Clip browsing, playback, LUT preview, LUT bake on export, and optional Frame.io on iOS
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)

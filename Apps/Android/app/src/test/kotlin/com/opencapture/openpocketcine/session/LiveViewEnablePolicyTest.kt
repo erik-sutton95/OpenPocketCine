@@ -138,6 +138,40 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.Action.RESEND_ENABLE,
             LiveViewEnablePolicy.tick(state, fiveSecondsLater),
         )
+        val tenSecondsLater =
+            snap.copy(
+                now = now + 10_000,
+                lastEnableAt = now + 5_000,
+                lastStatusAt = now + 10_000 - 200,
+                lastBleNotifyAt = now + 10_000 - 100,
+            )
+        assertEquals(
+            LiveViewEnablePolicy.Action.REBUILD_UDP,
+            LiveViewEnablePolicy.tick(state, tenSecondsLater),
+        )
+    }
+
+    @Test
+    fun gimbalThrowHoldsEncoderPauseEnable() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+                lastGimbalThrowAt = now - 1_000,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        val pastGrace =
+            snap.copy(lastGimbalThrowAt = now - 3_100)
+        assertEquals(
+            LiveViewEnablePolicy.Action.RESEND_ENABLE,
+            LiveViewEnablePolicy.tick(state, pastGrace),
+        )
     }
 
     @Test
@@ -145,9 +179,35 @@ class LiveViewEnablePolicyTest {
         assertTrue(!LiveViewEnablePolicy.shouldRecoverAfterForeground(0.4))
         assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(2.0))
         assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(null))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRecoverAfterForeground(3.0, videoFresh = true),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldEscalateForegroundRecover(0.5))
-        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(2.0))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldEscalateForegroundRecover(2.0),
+            "2s is still GOP-reset grace",
+        )
+        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(8.0))
         assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(null))
+        assertEquals(
+            LiveViewEnablePolicy.HandshakeTimeoutStep.KEEP_SOCKET,
+            LiveViewEnablePolicy.handshakeTimeoutStep(
+                pathReady = true,
+                rebindsUsed = 0,
+                inboundDatagrams = 12,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 80,
+                enableSends = 0,
+                sinceEnableMs = 0,
+                videoAgeMs = 40,
+                sinceRebuildMs = null,
+                hasPresentedPicture = true,
+            ),
+        )
     }
 
     @Test
@@ -506,6 +566,14 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun rebuildRearmsIngestWhenItWasAccepting() {
+        assertTrue(LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(true))
+        assertTrue(!LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(false))
+        assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(true))
+        assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(false))
+    }
+
+    @Test
     fun keepaliveDoesNotTearUdpDuringFirstPicture() {
         assertTrue(
             !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
@@ -524,8 +592,92 @@ class LiveViewEnablePolicyTest {
                 sawPicture = true,
             ),
         )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild = true,
+                rebuildInFlight = false,
+                sinceRebuildMs = 10_000,
+                videoFresh = false,
+                sawPicture = true,
+                statusFresh = true,
+            ),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = true))
         assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = false))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldStartFeedRecovery(rebuildInFlight = true),
+            "do not cancel a live UDP rebuild to start another",
+        )
+        assertTrue(LiveViewEnablePolicy.shouldStartFeedRecovery(rebuildInFlight = false))
+        assertTrue(
+            LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = null,
+                hadVideo = true,
+            ),
+            "rebuild wiped lastVideo — analog must lift",
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = null,
+                hadVideo = false,
+            ),
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = 1_600L,
+                hadVideo = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = 400L,
+                hadVideo = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRepeatRecoverEnable(
+                sinceEnableMs = 5_000L,
+                sinceRebuildMs = null,
+                pathReady = true,
+                bleAgeMs = 200L,
+                hadVideo = true,
+                holdEnableCount = 1,
+                videoAgeMs = 5_000L,
+            ),
+            "encoder-pause is FeedWatchdog.tick — extra 0x09/0xa8 GOP-cuts",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldRepeatRecoverEnable(
+                sinceEnableMs = 2_000L,
+                sinceRebuildMs = 400L,
+                pathReady = true,
+                bleAgeMs = 200L,
+                hadVideo = false,
+                holdEnableCount = 1,
+                videoAgeMs = null,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow = 2,
+                downlinkFresh = true,
+                videoFresh = false,
+                rebuildInFlight = false,
+                sinceRebuildMs = null,
+                statusFresh = true,
+            ),
+            "status on 9004 is encoder-pause — SET timeout must not tear UDP",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow = 2,
+                downlinkFresh = true,
+                videoFresh = false,
+                rebuildInFlight = false,
+                sinceRebuildMs = null,
+                statusFresh = false,
+            ),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = false))
         assertTrue(LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = true))
         assertTrue(LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = false))
@@ -671,6 +823,7 @@ class LiveViewEnablePolicyTest {
             lastStatusAt: Long?,
             lastBleAt: Long?,
             lastRebuildAt: Long?,
+            lastGimbalThrowAt: Long? = null,
         ): LiveViewEnablePolicy.Snapshot =
             LiveViewEnablePolicy.Snapshot(
                 now = now,
@@ -686,6 +839,7 @@ class LiveViewEnablePolicyTest {
                 decoderErrors = 0,
                 live = true,
                 sawPicture = true,
+                lastGimbalThrowAt = lastGimbalThrowAt,
             )
     }
 }

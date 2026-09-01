@@ -73,6 +73,7 @@ struct LiveZoomPinchWell: View {
     var stick: CGRect = .zero
     var reset: CGRect = .zero
     var cancel: CGRect = .zero
+    var calibrate: CGRect = .zero
     var enabled: Bool
     @State private var draftStart: CGPoint?
     @State private var draftEnd: CGPoint?
@@ -82,6 +83,7 @@ struct LiveZoomPinchWell: View {
         let stickInFeed = stick.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let resetInFeed = reset.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let cancelInFeed = cancel.offsetBy(dx: -feed.minX, dy: -feed.minY)
+        let calibrateInFeed = calibrate.offsetBy(dx: -feed.minX, dy: -feed.minY)
         ZStack {
             Color.white.opacity(0.001)
             if let start = draftStart, let end = draftEnd {
@@ -91,7 +93,9 @@ struct LiveZoomPinchWell: View {
         .frame(width: feed.width, height: feed.height)
         .contentShape(
             .interaction,
-            LiveZoomPinchHitShape(holes: [chipInFeed, stickInFeed, resetInFeed, cancelInFeed]),
+            LiveZoomPinchHitShape(holes: [
+                chipInFeed, stickInFeed, resetInFeed, cancelInFeed, calibrateInFeed,
+            ]),
             eoFill: true
         )
         .modifier(

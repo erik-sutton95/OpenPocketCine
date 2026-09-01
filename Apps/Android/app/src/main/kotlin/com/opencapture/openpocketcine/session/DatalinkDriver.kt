@@ -46,10 +46,13 @@ class DatalinkDriver(
     private var cmdCounter = 0
     /** Latest video transport seq — ACK pump must echo this (iOS `videoAssembler.peerCursor`). */
     private val peerCursor = AtomicInteger(0)
+    private val hasVideoSeq = AtomicBoolean(false)
     /** pktType 0x03 command-reply window (every GET/SET ACK). Mimo ACK group 1. */
     private val ackedDataCursor = AtomicInteger(0)
+    private val hasAckedData = AtomicBoolean(false)
     /** Third ACK group, seeded from 34-byte pktType 0x01 telemetry. */
     private val extraCursor = AtomicInteger(0)
+    private val hasExtra = AtomicBoolean(false)
     private var camChannel = 0
     @Volatile private var handshakeAcked = false
     @Volatile private var liveViewEnabled = false
@@ -68,6 +71,12 @@ class DatalinkDriver(
     @Volatile private var rebuilding = false
     private val sendFailLogs = AtomicInteger(0)
     private val writeRejected = AtomicBoolean(false)
+    private val gimbalLock = Any()
+    @Volatile private var gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+    @Volatile private var gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+    @Volatile private var gimbalStickHeld = false
+    @Volatile private var gimbalSendRest = false
+    private val lastGimbalStickElapsed = AtomicLong(0)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -109,9 +118,14 @@ class DatalinkDriver(
         else runCatching { SwiftCore.depacketizerReset(depacketizer) }
 
         var rebinds = 0
+        var keepBind = false
         while (true) {
-            resetHandshakeSession()
-            startUdpReceiver()
+            if (closed.get() || Thread.currentThread().isInterrupted) return
+            if (!keepBind) {
+                resetHandshakeSession()
+                startUdpReceiver()
+            }
+            keepBind = false
             val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
             for (send in 1..HANDSHAKE_SENDS_PER_BIND) {
                 sendRaw(0x00, handshake)
@@ -140,16 +154,38 @@ class DatalinkDriver(
                 // Stay on this IO thread. Posting 0x09/0xa8 to Main trips
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
+                if (closed.get() || Thread.currentThread().isInterrupted) return
                 afterHandshake?.invoke()
                 armLiveVideo()
                 return
             }
-            if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
-            if (rebinds >= HANDSHAKE_REBIND_LIMIT) error("camera never answered the datalink handshake")
-            rebinds += 1
-            Log.i(TAG, "datalink: handshake miss — SoftAP up, rebind UDP ($rebinds/$HANDSHAKE_REBIND_LIMIT)")
-            discardUdp(keepPoke = true)
-            Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
+            val inbound = inboundLogs.get()
+            when (
+                LiveViewEnablePolicy.handshakeTimeoutStep(
+                    pathReady = joiner.isProcessBound(),
+                    rebindsUsed = rebinds,
+                    inboundDatagrams = inbound,
+                    rebindLimit = HANDSHAKE_REBIND_LIMIT,
+                )
+            ) {
+                LiveViewEnablePolicy.HandshakeTimeoutStep.KEEP_SOCKET -> {
+                    Log.i(TAG, "datalink: handshake miss inbound=$inbound — keep UDP, retry sends")
+                    keepBind = true
+                    continue
+                }
+                LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL ->
+                    error("camera never answered the datalink handshake")
+                LiveViewEnablePolicy.HandshakeTimeoutStep.REBIND_UDP -> {
+                    rebinds += 1
+                    Log.i(
+                        TAG,
+                        "datalink: handshake miss inbound=$inbound — SoftAP up, rebind UDP " +
+                            "($rebinds/$HANDSHAKE_REBIND_LIMIT)",
+                    )
+                    discardUdp(keepPoke = true)
+                    Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
+                }
+            }
         }
     }
 
@@ -200,14 +236,15 @@ class DatalinkDriver(
         Log.i(TAG, "datalink: sent exit playback")
     }
 
-    /** iOS `armLiveVideo`: accept pktType 0x02 after UDP handshake. Idempotent. */
+    /** iOS `armLiveVideo`: first arm resets leftover GOP; re-arm only raises the gate. */
     fun armLiveVideo() {
-        if (liveViewEnabled) return
-        liveViewEnabled = true
-        if (depacketizer != 0L && SwiftCore.isAvailable) {
+        val first = !liveViewEnabled
+        if (first && depacketizer != 0L && SwiftCore.isAvailable) {
             runCatching { SwiftCore.depacketizerReset(depacketizer) }
         }
-        Log.i(TAG, "datalink: armed pktType 0x02 ingest")
+        liveViewEnabled = true
+        loggedLeftoverGop.set(false)
+        if (first) Log.i(TAG, "datalink: armed pktType 0x02 ingest")
     }
 
     /** Nano `0x02/0x09` start/stop. No CMD kind yet — encodeDuml. */
@@ -245,9 +282,18 @@ class DatalinkDriver(
         lastRebuildElapsed.set(SystemClock.elapsedRealtime())
         try {
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
+            val wasAccepting = liveViewEnabled
             discardUdp(keepPoke = true)
+            // Pre-rebuild clocks are the old 5-tuple. Leaving lastStatus young
+            // looks like encoder-pause on the new bind (iOS noteRebuild).
+            lastVideoElapsed.set(0)
+            lastAccessUnitElapsed.set(0)
+            lastStatusElapsed.set(0)
             startUdpReceiver()
             startAckPump()
+            if (LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting)) {
+                armLiveVideo()
+            }
             sendAck()
             sendCommand(SwiftCore.CMD_APP_PRESENCE)
         } finally {
@@ -268,16 +314,32 @@ class DatalinkDriver(
         receiver: Int = CameraCommands.RX_CAMERA,
         sender: Int = CameraCommands.SENDER_APP,
     ) {
-        if (!SwiftCore.isAvailable) return
-        cmdCounter = (cmdCounter + 1) and 0xFF
-        val frameBytes =
-            SwiftCore.encodeDuml(sender, receiver, dumlSeq, flags, cmdSet, cmdId, payload) ?: return
-        dumlSeq = (dumlSeq + 1) and 0xFFFF
-        val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
-        val header =
-            SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq) ?: return
-        write(header + routing + frameBytes)
-        udpSeq = (udpSeq + 8) and 0xFFFF
+        if (closed.get() || !SwiftCore.isAvailable) return
+        onSendThread { sendDumlLocked(cmdSet, cmdId, payload, flags, receiver, sender) }
+    }
+
+    private fun sendDumlLocked(
+        cmdSet: Int,
+        cmdId: Int,
+        payload: ByteArray,
+        flags: Int,
+        receiver: Int,
+        sender: Int,
+    ) {
+        synchronized(sendLock) {
+            if (socket == null) return
+            val frameBytes =
+                SwiftCore.encodeDuml(sender, receiver, dumlSeq, flags, cmdSet, cmdId, payload)
+                    ?: return
+            cmdCounter = (cmdCounter + 1) and 0xFF
+            val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
+            val header =
+                SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq)
+                    ?: return
+            writeOnNetwork(header + routing + frameBytes)
+            dumlSeq = (dumlSeq + 1) and 0xFFFF
+            udpSeq = (udpSeq + 8) and 0xFFFF
+        }
     }
 
     fun close() {
@@ -304,8 +366,11 @@ class DatalinkDriver(
         dumlSeq = 0xA000
         cmdCounter = 0
         peerCursor.set(0)
+        hasVideoSeq.set(false)
         ackedDataCursor.set(0)
+        hasAckedData.set(false)
         extraCursor.set(0)
+        hasExtra.set(false)
         handshakeAcked = false
     }
 
@@ -348,6 +413,7 @@ class DatalinkDriver(
                     var flipTicks = 0
                     while (running.get()) {
                         sendWindowAck()
+                        tickGimbalStick()
                         flipTicks += 1
                         if (flipTicks >= 40) {
                             flipTicks = 0
@@ -366,6 +432,7 @@ class DatalinkDriver(
 
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
+        liveViewEnabled = false
         running.set(false)
         val rx = receiver
         val ack = ackThread
@@ -412,29 +479,108 @@ class DatalinkDriver(
     }
 
     private fun sendRaw(pktType: Int, payload: ByteArray) {
-        val header =
-            SwiftCore.transportHeader(pktType, payload.size, sessionId, udpSeq) ?: return
-        write(header + payload)
-        udpSeq = (udpSeq + 8) and 0xFFFF
+        onSendThread {
+            synchronized(sendLock) {
+                if (socket == null) return@synchronized
+                val header =
+                    SwiftCore.transportHeader(pktType, payload.size, sessionId, udpSeq)
+                        ?: return@synchronized
+                writeOnNetwork(header + payload)
+                udpSeq = (udpSeq + 8) and 0xFFFF
+            }
+        }
     }
 
     fun sendCommand(kind: Int, extra: String? = null) {
+        if (closed.get()) return
+        onSendThread { sendCommandLocked(kind, extra) }
+    }
+
+    private fun sendCommandLocked(kind: Int, extra: String?) {
         synchronized(sendLock) {
-            cmdCounter = (cmdCounter + 1) and 0xFF
+            if (socket == null) return
             val frameBytes = SwiftCore.command(kind, dumlSeq, extra)
-            dumlSeq = (dumlSeq + 1) and 0xFFFF
-            val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
+            val routing = SwiftCore.routingHeader(udpSeq, (cmdCounter + 1) and 0xFF, false) ?: return
             val header =
                 SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq)
                     ?: return
-            write(header + routing + frameBytes)
+            cmdCounter = (cmdCounter + 1) and 0xFF
+            writeOnNetwork(header + routing + frameBytes)
+            dumlSeq = (dumlSeq + 1) and 0xFFFF
             udpSeq = (udpSeq + 8) and 0xFFFF
         }
+    }
+
+    /** Latest `0x04/0x01` axes. The ACK pump emits them on the UDP send lock. */
+    fun noteGimbalStick(axis0: Int, axis1: Int) {
+        if (closed.get()) return
+        if (axis0 == CameraCommands.GIMBAL_STICK_CENTER &&
+            axis1 == CameraCommands.GIMBAL_STICK_CENTER
+        ) {
+            restGimbalStick()
+            return
+        }
+        synchronized(gimbalLock) {
+            gimbalAxis0 = axis0
+            gimbalAxis1 = axis1
+            gimbalStickHeld = true
+            gimbalSendRest = false
+        }
+    }
+
+    /** One center packet, then silence. Same ACK thread as window ACK. */
+    fun restGimbalStick() {
+        synchronized(gimbalLock) {
+            gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+            gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+            gimbalStickHeld = false
+            gimbalSendRest = true
+        }
+    }
+
+    private fun tickGimbalStick() {
+        val now = SystemClock.elapsedRealtime()
+        val packet: Pair<Int, Int>? =
+            synchronized(gimbalLock) {
+                val last = lastGimbalStickElapsed.get()
+                if (!CameraCommands.shouldEmitGimbalStick(
+                        gimbalStickHeld, gimbalSendRest, now, last,
+                    )
+                ) {
+                    return@synchronized null
+                }
+                if (!CameraCommands.shouldEmitGimbalStickOnSocket(
+                        rest = gimbalSendRest,
+                        liveAccepting = liveViewEnabled,
+                        hasConnection = socket != null,
+                    )
+                ) {
+                    return@synchronized null
+                }
+                lastGimbalStickElapsed.set(now)
+                val rest = gimbalSendRest
+                val axis0 = if (rest) CameraCommands.GIMBAL_STICK_CENTER else gimbalAxis0
+                val axis1 = if (rest) CameraCommands.GIMBAL_STICK_CENTER else gimbalAxis1
+                if (rest) {
+                    gimbalSendRest = false
+                    gimbalStickHeld = false
+                }
+                axis0 to axis1
+            }
+        val axes = packet ?: return
+        sendGimbalStick(axes.first, axes.second)
     }
 
     /** `0x04/0x01` flags `0x00`, no ACK. Built with `encodeDuml` so it works on the shipped core. */
     fun sendGimbalStick(axis0: Int, axis1: Int) {
         if (!SwiftCore.isAvailable) return
+        synchronized(sendLock) {
+            sendGimbalStickLocked(axis0, axis1)
+        }
+    }
+
+    private fun sendGimbalStickLocked(axis0: Int, axis1: Int) {
+        if (socket == null) return
         val payload = CameraCommands.gimbalStickPayload(axis0, axis1)
         val frame =
             SwiftCore.encodeDuml(
@@ -446,12 +592,12 @@ class DatalinkDriver(
                 0x01,
                 payload,
             ) ?: return
-        cmdCounter = (cmdCounter + 1) and 0xFF
-        dumlSeq = (dumlSeq + 1) and 0xFFFF
-        val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
+        val routing = SwiftCore.routingHeader(udpSeq, (cmdCounter + 1) and 0xFF, false) ?: return
         val header =
             SwiftCore.transportHeader(0x05, routing.size + frame.size, sessionId, udpSeq) ?: return
-        write(header + routing + frame)
+        cmdCounter = (cmdCounter + 1) and 0xFF
+        writeOnNetwork(header + routing + frame)
+        dumlSeq = (dumlSeq + 1) and 0xFFFF
         udpSeq = (udpSeq + 8) and 0xFFFF
     }
 
@@ -468,12 +614,19 @@ class DatalinkDriver(
                     (datagram[18].toInt() and 0xFF) or ((datagram[19].toInt() and 0xFF) shl 8)
                 val extra =
                     (datagram[26].toInt() and 0xFF) or ((datagram[27].toInt() and 0xFF) shl 8)
-                ackedDataCursor.compareAndSet(0, acked)
+                if (!hasAckedData.get()) {
+                    ackedDataCursor.set(acked)
+                    hasAckedData.set(true)
+                }
                 extraCursor.set(extra)
+                hasExtra.set(true)
             }
             0x03 -> {
                 val seq = SwiftCore.transportSeq(datagram)
-                if (seq >= 0) ackedDataCursor.set(seq)
+                if (seq >= 0) {
+                    ackedDataCursor.set(seq)
+                    hasAckedData.set(true)
+                }
             }
         }
     }
@@ -481,8 +634,8 @@ class DatalinkDriver(
     /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing video + 0x03 cursors. */
     private fun sendWindowAck() {
         val cursor = peerCursor.get()
-        val acked = ackedDataCursor.get().let { if (it == 0) baseSeq else it }
-        val extra = extraCursor.get().let { if (it == 0) baseSeq else it }
+        val acked = if (hasAckedData.get()) ackedDataCursor.get() else baseSeq
+        val extra = if (hasExtra.get()) extraCursor.get() else baseSeq
         val payload = SwiftCore.ackPayload(cursor, acked, extra) ?: return
         val header = SwiftCore.transportHeader(0x04, payload.size, sessionId, 0) ?: return
         write(header + payload)
@@ -490,12 +643,17 @@ class DatalinkDriver(
 
     private fun write(bytes: ByteArray) {
         if (closed.get()) return
+        onSendThread { writeOnNetwork(bytes) }
+    }
+
+    /** Seq stamp + send must not run on Main (NetworkOnMainThread + seq/ACK races). */
+    private fun onSendThread(body: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             if (sendExecutor.isShutdown) return
-            sendExecutor.execute { writeOnNetwork(bytes) }
+            sendExecutor.execute(body)
             return
         }
-        writeOnNetwork(bytes)
+        body()
     }
 
     private fun writeOnNetwork(bytes: ByteArray) {
@@ -554,10 +712,17 @@ class DatalinkDriver(
         if (datagram.size >= 8 && datagram[6] == 0x00.toByte()) handshakeAcked = true
         noteAckWindows(datagram)
         if (datagram.size == 34 && datagram[6] == 0x01.toByte()) {
-            peerCursor.set((datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8))
+            if (!hasVideoSeq.get()) {
+                peerCursor.set(
+                    (datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8),
+                )
+            }
         } else if (datagram.size >= 6 && datagram[6] == 0x02.toByte()) {
             val seq = SwiftCore.transportSeq(datagram)
-            if (seq >= 0) peerCursor.set(seq)
+            if (seq >= 0) {
+                peerCursor.set(seq)
+                hasVideoSeq.set(true)
+            }
         }
         if (datagram.size > 20 && datagram[6] == 0x02.toByte()) {
             if (!liveViewEnabled) {

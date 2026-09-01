@@ -89,6 +89,7 @@ struct LiveGimbalStick: View {
                 if !GimbalStick.isTap(normalizedMagnitude: mag) {
                     cancelTaps()
                     dragging = true
+                    model.gimbalScreenHeld = true
                     knobOffset = limited
                     let nx = Double(limited.width / max(travel, 1))
                     let ny = Double(-limited.height / max(travel, 1))
@@ -175,6 +176,7 @@ struct LiveGimbalStick: View {
 
     private func release() {
         dragging = false
+        model.gimbalScreenHeld = false
         knobOffset = .zero
         model.session.endGimbalStick()
     }

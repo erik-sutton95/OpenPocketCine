@@ -72,6 +72,10 @@ import Testing
                 pictureSizeChanged: false, accessUnitHasIDR: false),
             "zoom/FORMAT VPS on a live 720p GOP must not tear the decoder")
         #expect(
+            !EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(
+                pictureSizeChanged: false, accessUnitHasIDR: true),
+            "same-raster BLA/IDR AU must not tear MediaCodec / VT")
+        #expect(
             !EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
                 pictureSizeChanged: false, accessUnitHasIDR: false),
             "holding IDR without 0x09/0xa8 blacks the well while HUD/gimbal stay up")

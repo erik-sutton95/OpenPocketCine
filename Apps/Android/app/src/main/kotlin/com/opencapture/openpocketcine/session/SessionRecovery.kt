@@ -49,6 +49,15 @@ sealed class SessionRecoveryDecision {
     data object Stop : SessionRecoveryDecision()
 }
 
+enum class SessionRecoveryTrigger {
+    BLE_DROPPED,
+    SOFTAP_LOST,
+    OPERATOR_RETRY,
+    FEED_WATCHDOG,
+    COMMAND_TIMEOUT,
+    FIRST_PICTURE,
+}
+
 /**
  * Jittered exponential backoff for reconnect retries.
  * Attempt 0 is [baseMs]; each step doubles up to [maxMs].
@@ -99,6 +108,18 @@ class SessionRecoveryPolicy(
 
     companion object {
         val monitor = SessionRecoveryPolicy()
+
+        fun shouldBegin(trigger: SessionRecoveryTrigger): Boolean =
+            when (trigger) {
+                SessionRecoveryTrigger.BLE_DROPPED,
+                SessionRecoveryTrigger.SOFTAP_LOST,
+                SessionRecoveryTrigger.OPERATOR_RETRY,
+                -> true
+                SessionRecoveryTrigger.FEED_WATCHDOG,
+                SessionRecoveryTrigger.COMMAND_TIMEOUT,
+                SessionRecoveryTrigger.FIRST_PICTURE,
+                -> false
+            }
     }
 }
 

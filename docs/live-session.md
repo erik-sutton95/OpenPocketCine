@@ -22,8 +22,14 @@ live-entry uses an ephemeral client port.
 
 Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
 latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a
-third cursor seeded from 34-byte `0x01` telemetry. Keep TCP 7001 poke
-across UDP rebuilds.
+third cursor seeded from 34-byte `0x01` telemetry. After the first `0x02`,
+telemetry must not rewind group 0 — that closed HEVC while HUD stayed
+live. After the first `0x03`, telemetry must not rewind group 1 either
+(seq `0` is a valid 8-aligned cursor). Keep TCP 7001 poke
+across UDP rebuilds. Session-preserving UDP rebuild must re-arm `0x02`
+ingest even when it skips a second `0x09/0xa8` (keepalive / reassociate
+with `hadVideo`). Tracked SETs skip a not-ready socket without burning
+seq; untracked enable still leaves on `.waiting`.
 
 Those are **separate** camera send windows. HEVC (`0x02`) can stay at 25 fps
 while `0x03` is wedged. Unsolicited HUD (subscribe `0x00/0x99`, gimbal
@@ -36,6 +42,39 @@ mailbox retrains, Flip reads stale, and a UDP rebuild that keeps the
 session cannot unstick controls until a fresh handshake. Mimo copies the
 latest `0x03` seq into group 1 (~21 Hz of those packets in a live
 capture). The 40 Hz ACK pump must do the same.
+
+Gimbal stick `0x04/0x01` is notify (no ACK) and must ride **that same UDP
+queue** at 25 Hz while held — Flip GET already does. **Every** UDP write
+(SET mailbox, ACK, stick, Flip GET) serializes on the datalink queue;
+MainActor `conn.send` interleaved with the 40 Hz pump starved window ACK.
+Latest axes live in the wire lock; the pump emits, and lift sends one center.
+Head-track rest **lifts**
+(Mimo: `0x04/0x01` only while thrown). Streaming center at 25 Hz after
+catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
+looked like a dropped connection (status stayed young). A leftover throw
+below the linear snap (`y=-0.01`) is the same center stream — rest it.
+Head-track look is the SET-relative nose azimuth/elevation. Throw closes a
+dead-reckoned gimbal model onto the look (live `0x04/0x05` is ~0.25 s
+stale — closing on it hunted); arrival streams center ~1 s, then lifts
+(rest/throw the same second paused HEVC — 22:24 and the 18:29 stall
+with 4 recovers + UDP rebuilds). Analog/head-track rest when
+HEVC is stale so a held stick cannot block recover. After a UDP rebuild
+`lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
+Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
+Gimbal grace is at
+most stall+3 s after the last video packet, even if throw is still
+refreshing. Two failed encoder-pause enables rebuild UDP
+once (that brought the picture back); keepalive must not flap the
+5-tuple while DUML status is live. SET ACK timeout with young status is
+the same encoder-pause — do not rebuild UDP. After a keepalive rebuild,
+do not `0x09/0xa8` if HEVC had already existed (watchdog owns enable).
+Do not send a third `0x09/0xa8` because the decoder is still `awaitingIDR`
+— watchdog already ladders that stall. One feed-repair Task at a time:
+do not cancel a live rebuild; a cancelled body must not force-enable after
+`await`. Rebuild nils `lastVideo` / `lastAU` / `lastStatus` so the old
+5-tuple cannot look like encoder-pause on the new bind. Android stick
+ticks on the ACK thread (`noteGimbalStick`); JNI watchdog JSON must include
+`secondsSinceGimbalThrow`.
 
 ## Enable write
 
@@ -85,7 +124,9 @@ Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
 decoder from VPS/SPS/PPS (`0x40/0x42/0x44`) or Nano AVC SPS/PPS (`0x67/0x68`).
 Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 `nal_ref_idc=1`) must not latch AVC — that threw `MediaCodec.configure` and
-left Waiting for live view up.
+left Waiting for live view up. Pocket IRAP is often **BLA_W_LP (16)**
+(`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
+IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 
 ## Foreground / SoftAP flap
 
@@ -97,6 +138,12 @@ reimplement the ladder in `LiveViewEnablePolicy`.
 Mid-session SoftAP `onLost` is a Network-object replace until the grace
 expires — do not `bindProcessToNetwork(null)` while `isProcessBound` still
 reads true, or UDP rebuilds on home Wi-Fi.
+
+Foreground recover is VT-only while HEVC or DUML status is still on 9004.
+A Control Center peek must not rebuild UDP. After a parked-app rebuild,
+wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was
+still inside the IDR gap. Handshake inbound `0x02`/`0x01` without a
+`0x00` ACK keeps that bind (`keepSocket`); rebind dumps the first IDR.
 
 ## Pointers
 

@@ -28,14 +28,31 @@ project with XcodeGen — see [Setup](../guides/setup/).
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. Stick
+  throw is analog with an ease-in curve (small push crawls; full throw is
+  fastest). Head tracking is experimental (Operator Setup → Controls,
+  off by default). With AirPods that report motion, Calibrate Head Lock —
+  centered above the bottom bars — is shared forward: that head pose and
+  that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.
+  The gimbal follows that look. Roll is shown, not driven. Fast + tilt
+  unlocked at calibrate. STOP clears the
+  lock. A connected game controller's left stick drives the same path.
+  Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
+  tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
+  hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter.
+  A toast says Gamepad connected or disconnected; unplug rests the
+  stick. Operator Setup → Controls → Gamepad shows Connected / Not
+  connected. A gimbal stop pulses only after the head moves then stalls
+  (Haptics setting). Stick
   pan stays picture-relative. The rotate-180 button inverts pan at the
   end of the rotation (like Mimo). Extra-mirror live view when that 180
   lands and Selfie Flip is off; Flip on skips extra-mirror. The last
   picture stays for a couple of frames before that X-flip so the feed
   does not swap in place. Joystick yaw to 180 does not invert. Reconnect
   while at 180 inverts without another triple-tap. D-Log2 cannot zoom:
-  idle hops to D-Log off 1×; while rolling the chip grays and tap/pinch
-  toast instead of changing color.
+  idle hops to D-Log on the first step off 1× and waits for that color
+  SET before any zoom write (the chip stays at 1× until D-Log lands);
+  while rolling the chip grays and tap/pinch toast instead of changing
+  color.
 - Media library, playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
   GPU latest-wins, freeze keeps the last frame). Preview LUT grades the

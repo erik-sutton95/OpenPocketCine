@@ -322,7 +322,7 @@ final class HevcDecoder {
         let hasIDR =
             avc
             ? slices.contains { !$0.isEmpty && Avc.nalType($0[0]) == Avc.idr }
-            : slices.contains { !$0.isEmpty && Hevc.nalType($0[0]) == Hevc.idr }
+            : slices.contains { !$0.isEmpty && Hevc.isIRAP(Hevc.nalType($0[0])) }
         if pendingParameterChangeEnable {
             pendingParameterChangeEnable = false
             if EncoderPresentPath.shouldRequestEnableAfterParameterChange(
@@ -365,7 +365,8 @@ final class HevcDecoder {
             processedFeed?.isHidden = true
         }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
-        if !displayLayer.isReadyForMoreMediaData { displayLayer.flush() }
+        // Backpressure is not a failed layer. flush() here hitch-blacked a live GOP.
+        guard displayLayer.isReadyForMoreMediaData else { return false }
         guard commitPictureFlipIfNeeded() else { return true }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -493,6 +494,12 @@ final class HevcDecoder {
     /// After a GOP-reset enable, ignore P-frames until the IDR AU.
     func beginIDRHold() {
         awaitingIDR = true
+    }
+
+    /// UDP is alive and the last picture is still on the layer — do not wait
+    /// forever for an IRAP that a PLI did not cut.
+    func endIDRHold() {
+        awaitingIDR = false
     }
 
     private func dropFormatForRecovery() {
@@ -1107,7 +1114,7 @@ final class HevcDecoder {
                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
         }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
-        if !displayLayer.isReadyForMoreMediaData { displayLayer.flush() }
+        guard displayLayer.isReadyForMoreMediaData else { return false }
         releaseLayerDecoderIfNeeded()
         CATransaction.begin()
         CATransaction.setDisableActions(true)

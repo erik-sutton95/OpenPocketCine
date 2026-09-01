@@ -31,6 +31,28 @@ private let PPS = hex("4401c17312240890")
         #expect(!Hevc.accessUnitCarriesKeyframe(sc + [0x02, 0xAA, 0xBB]))
     }
 
+    @Test func pocketBLAIsGOPStartNotTRAIL() {
+        #expect(Hevc.isIRAP(Hevc.blaWLP) && Hevc.isIRAP(Hevc.idr) && Hevc.isIRAP(Hevc.craNut))
+        #expect(!Hevc.isIRAP(1) && !Hevc.isIRAP(35) && !Hevc.isIRAP(Hevc.vps))
+        #expect(Hevc.isKeyframeNal(Hevc.blaWLP), "Pocket live GOP is often BLA_W_LP (16)")
+        let sc: [UInt8] = [0, 0, 1]
+        // First byte 0x20 ⇒ type 16 (handbook BLA_W_LP).
+        #expect(Hevc.nalType(0x20) == Hevc.blaWLP)
+        let bla: [UInt8] = sc + [0x20, 0x01, 0xAA]
+        #expect(Hevc.accessUnitCarriesKeyframe(bla))
+        var leftoverTrail: [UInt8] = sc
+        leftoverTrail += [0x02, 0xAA]
+        leftoverTrail += sc
+        leftoverTrail += [0x46, 0x01]
+        leftoverTrail += sc
+        leftoverTrail += [0x50, 0x01]
+        #expect(
+            !Hevc.accessUnitCarriesKeyframe(leftoverTrail),
+            "leftover TRAIL/AUD/SEI 1,35,40 must not look like a GOP start")
+        let idrNlp: [UInt8] = sc + [0x28, 0x01]
+        #expect(Hevc.accessUnitCarriesKeyframe(idrNlp), "IDR_N_LP 0x28 still counts")
+    }
+
     @Test func splitsRealAnnexBIntoNALs() {
         let sc: [UInt8] = [0, 0, 1]
         let stream = sc + VPS + sc + SPS + sc + PPS
@@ -190,5 +212,27 @@ private let PPS = hex("4401c17312240890")
         var cmd = [UInt8](repeating: 0, count: 30)
         cmd[6] = 0x05  // a command packet
         #expect(dp.feed(cmd) == nil)
+    }
+
+    @Test func reusedFrameNumberStartsANewAccessUnit() {
+        var dp = HevcDepacketizer()
+        let frame = marker + slice
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 0, Array(frame[0..<10]))) == nil)
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 1, Array(frame[10...]))) == nil)
+        // GOP restart reuses frame 0x10 at pos 0 — close the previous AU.
+        let au = dp.feed(videoPacket(frame: 0x10, pos: 0, marker + slice))
+        #expect(au == slice)
+        #expect(dp.droppedIncomplete == 0)
+    }
+
+    @Test func duplicateFragmentDoesNotCorruptTheAU() {
+        var dp = HevcDepacketizer()
+        let frame = marker + slice
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 0, Array(frame[0..<10]))) == nil)
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 0, Array(frame[0..<10]))) == nil)
+        #expect(dp.feed(videoPacket(frame: 0x10, pos: 1, Array(frame[10...]))) == nil)
+        let au = dp.feed(videoPacket(frame: 0x11, pos: 0, marker))
+        #expect(au == slice)
+        #expect(dp.droppedIncomplete == 0)
     }
 }

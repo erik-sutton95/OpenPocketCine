@@ -300,6 +300,40 @@ import Testing
         #expect(FaceTrackTap.trackingBox(from: large) == large)
     }
 
+    @Test func gamepadCrossTracksFaceOrCancels() {
+        let face = TrackingBox(x: 0.30, y: 0.20, width: 0.20, height: 0.28)
+        let extra = TrackingBox(x: 0.70, y: 0.20, width: 0.10, height: 0.12)
+        #expect(
+            GamepadFaceTrack.action(
+                trackingActive: true, overlay: .face(face), sceneFaces: [])
+                == .cancel)
+        #expect(
+            GamepadFaceTrack.action(
+                trackingActive: true, overlay: .subject(face), sceneFaces: [extra])
+                == .cancel)
+        #expect(
+            GamepadFaceTrack.action(
+                trackingActive: false, overlay: .face(face), sceneFaces: [extra])
+                == .track(face))
+        #expect(
+            GamepadFaceTrack.action(
+                trackingActive: false, overlay: .focus, sceneFaces: [extra, face])
+                == .track(face))
+        #expect(
+            GamepadFaceTrack.action(
+                trackingActive: false, overlay: .focus, sceneFaces: [])
+                == .none)
+        let tiny = TrackingBox(x: 0.46, y: 0.46, width: 0.06, height: 0.07)
+        if case .track(let box) =
+            GamepadFaceTrack.action(
+                trackingActive: false, overlay: .face(tiny), sceneFaces: [])
+        {
+            #expect(!box.isTooSmall)
+        } else {
+            Issue.record("expected track")
+        }
+    }
+
     @Test func nanoFeedTapDoesNotFirePocketFocusBurst() {
         #expect(
             LiveFeedTapPolicy.action(supportsTapFocus: false, tappedFace: false) == .ignore)

@@ -71,6 +71,8 @@ class AppModel(context: Context) {
     var phoneCharging by mutableStateOf(false)
         private set
     var uiLocked by mutableStateOf(false)
+    val gimbalGamepad = GimbalGamepadDriver()
+    var gamepadConnected by mutableStateOf(false)
 
     val currentDispMode: PocketDispMode
         get() = if (assistClean) PocketDispMode.CLEAN else PocketDispMode.LIVE
@@ -301,6 +303,13 @@ class AppModel(context: Context) {
     val isLive: Boolean
         get() = session.phaseFlow.value == ConnectionPhase.LIVE || session.holdsMonitor
 
+    fun canDriveGimbalPad(): Boolean =
+        isLive &&
+            !uiLocked &&
+            liveOperatorPanel == null &&
+            !isEditingChrome &&
+            !session.browsingMedia
+
     val isBusy: Boolean
         get() = session.phase.isBusy() || session.isReconnecting.value
 
@@ -370,6 +379,7 @@ class AppModel(context: Context) {
     }
 
     fun close() {
+        gimbalGamepad.stopListening()
         session.close()
     }
 }

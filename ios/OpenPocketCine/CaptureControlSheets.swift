@@ -755,7 +755,8 @@ struct CapturePickerPanel: View {
                 available: model.session.status.availableVideoFormats,
                 resolution: res,
                 current: currentVideoFormat.frameRate)
-            let rate = VideoFrameRate(drumLabel: drumSelection).flatMap { rates.contains($0) ? $0 : nil }
+            let rate =
+                VideoFrameRate(drumLabel: drumSelection).flatMap { rates.contains($0) ? $0 : nil }
                 ?? rates.first
                 ?? currentVideoFormat.frameRate
             let next = VideoFormat(resolution: res, frameRate: rate)

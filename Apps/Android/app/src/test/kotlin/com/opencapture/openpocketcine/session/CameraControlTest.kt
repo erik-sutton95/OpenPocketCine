@@ -32,6 +32,24 @@ class CameraControlTest {
     }
 
     @Test
+    fun isoStepsSkipAutoAndStopAtEnds() {
+        assertEquals(0x04, CameraCommands.isoStepped(0x03, 1, CameraCommands.ISO_INDEX_ALL))
+        assertNull(CameraCommands.isoStepped(0x0B, 1, CameraCommands.ISO_INDEX_ALL))
+        assertNull(CameraCommands.isoStepped(0x00, 1, CameraCommands.ISO_INDEX_ALL))
+        assertEquals(0x04, CameraCommands.isoStepped(0x05, -1, listOf(0x04, 0x05, 0x06)))
+    }
+
+    @Test
+    fun shutterStepsOpenTowardSlower() {
+        val denoms = listOf(16_000, 8_000, 100, 50, 25, 4)
+        assertEquals(25, CameraCommands.shutterSteppedDenom(50, 1, denoms))
+        assertEquals(100, CameraCommands.shutterSteppedDenom(50, -1, denoms))
+        assertNull(CameraCommands.shutterSteppedDenom(16_000, -1, denoms))
+        assertNull(CameraCommands.shutterSteppedDenom(4, 1, denoms))
+        assertEquals(25, CameraCommands.shutterSteppedDenom(48, 1, denoms))
+    }
+
+    @Test
     fun isoIsIndexNotNumber() {
         assertEquals(1, CameraCommands.isoIndex(0x07).size)
         assertEquals(0x07, CameraCommands.isoIndex(0x07)[0].toInt() and 0xFF)
@@ -518,6 +536,15 @@ class CameraControlTest {
             ),
         )
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.gimbalAxis(0f))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(true, false, 1_000L, 0L))
+        assertTrue(!CameraCommands.shouldEmitGimbalStick(true, false, 1_020L, 1_000L))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(true, false, 1_040L, 1_000L))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(false, true, 1_010L, 1_000L))
+        assertTrue(!CameraCommands.shouldEmitGimbalStick(false, false, 2_000L, 1_000L))
+        assertTrue(CameraCommands.shouldEmitGimbalStickOnSocket(true, false, true))
+        assertTrue(!CameraCommands.shouldEmitGimbalStickOnSocket(false, false, true))
+        assertTrue(!CameraCommands.shouldEmitGimbalStickOnSocket(true, true, false))
+        assertTrue(CameraCommands.shouldEmitGimbalStickOnSocket(false, true, true))
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.gimbalAxis(0.04f))
         assertEquals(CameraCommands.GIMBAL_STICK_MAX, CameraCommands.gimbalAxis(1f))
         assertEquals(CameraCommands.GIMBAL_STICK_MIN, CameraCommands.gimbalAxis(-1f))
@@ -982,6 +1009,12 @@ class CameraControlTest {
         assertTrue(FocusTrackMode.shouldHoldWatchdog(2.2))
         assertTrue(!FocusTrackMode.shouldHoldWatchdog(4.0))
         assertTrue(!FocusTrackMode.shouldHoldWatchdog(null))
+        assertTrue(CameraCommands.shouldHoldGimbalWatchdog(0.0))
+        assertTrue(CameraCommands.shouldHoldGimbalWatchdog(2.9))
+        assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(3.0))
+        assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(null))
+        assertTrue(CameraCommands.shouldHoldGimbalWatchdog(0.1, 4.2))
+        assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(0.1, 5.1))
     }
 
     @Test

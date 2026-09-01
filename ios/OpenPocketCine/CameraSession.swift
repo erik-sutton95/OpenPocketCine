@@ -91,6 +91,11 @@ final class CameraSession {
     private var secondsSinceZoomSet: TimeInterval? {
         lastZoomSetAt.map { Date().timeIntervalSince($0) }
     }
+    /// Last non-rest gimbal throw. Motion can pause HEVC.
+    @ObservationIgnored private var lastGimbalThrowAt: Date?
+    private var secondsSinceGimbalThrow: TimeInterval? {
+        lastGimbalThrowAt.map { Date().timeIntervalSince($0) }
+    }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
@@ -141,8 +146,18 @@ final class CameraSession {
     var controlNote: String?
     /// Live extra-mirror (TT180 && Flip off). Shell XORs MIRROR assist.
     private(set) var gimbalPoseViewFlip = false
+    var gimbalYawTenthDeg: Int16? { gimbalStickMapping.yawTenthDeg }
+    var gimbalPitchTenthDeg: Int16? { gimbalStickMapping.pitchTenthDeg }
+    /// Last `0x04/0x05` hex + i16 dump (pitch-field hunt; payload is ~50 B).
+    @ObservationIgnored var lastGimbalAttitudeHex = ""
+    @ObservationIgnored var lastGimbalAttitudeDump = ""
     /// Pose-only stick invert (TT180). Shell XORs MIRROR assist.
     private(set) var gimbalPoseInvertPan = false
+    /// Increments on a rising-edge gimbal-limit contact. Shell plays haptics.
+    var gimbalLimitPulse: UInt = 0
+    var gimbalLimitContact: GimbalLimitWatch.Contact = []
+    var gimbalLimitPanSign: Double = 0
+    var gimbalLimitTiltSign: Double = 0
     /// Camera-library listing while the Media page is open.
     var mediaFiles: [MediaFile] = []
     var mediaFetchInProgress = false
@@ -209,9 +224,18 @@ final class CameraSession {
     }
     /// Side-rail lock (OpenZCine `interfaceLocked`). Disables capture-bar tiles.
     var isLocked = false
+    /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.
+    var isLiveVideoStale: Bool {
+        let recovering =
+            feedRecovering || feedRecoveryTask != nil || datalink?.isRebuilding == true
+        let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
+        let had = FeedWatchdog.hadVideo(
+            videoPackets: datalink?.videoPackets ?? 0, lastVideoPacketAge: videoAge)
+        return FeedWatchdog.shouldTreatLiveVideoAsStale(
+            lastVideoPacketAge: videoAge, hadVideo: had, recovering: recovering)
+    }
     /// Latest held gimbal stick. Nil when the operator is not touching it.
     @ObservationIgnored private var pendingGimbalAxes: (UInt16, UInt16)?
-    @ObservationIgnored private var gimbalStickPump: Task<Void, Never>?
     @ObservationIgnored private var gimbalStickHeld = false
     @ObservationIgnored private var lastGimbalStickAt: Date?
     @ObservationIgnored private var nextTrackingId: UInt16 = 1
@@ -288,6 +312,11 @@ final class CameraSession {
     @ObservationIgnored private var restoreDLog2OnWide = false
     /// One tele color SET per engage — do not retry-storm 0x42.
     @ObservationIgnored private var teleColorSent = false
+    /// True from D-Log2→D-Log send until `cam_image_effect` is D-Log. Hold `0xB8`.
+    private(set) var zoomColorHopPending = false
+    @ObservationIgnored private var zoomColorHopUntil: Date?
+    @ObservationIgnored private var zoomColorHopGeneration: UInt64 = 0
+    @ObservationIgnored private var pendingZoomAfterHop: Double?
     @ObservationIgnored private var zoomStopTouched = false
 
     @ObservationIgnored private var zoomPinchAnchor = 1.0
@@ -305,6 +334,8 @@ final class CameraSession {
     @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
     @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
+    @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
+    @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
     @ObservationIgnored let decoder = HevcDecoder()
 
     /// The live-view display layer, for the SwiftUI `VideoView`.
@@ -481,6 +512,10 @@ final class CameraSession {
         firstPictureSettled = false
         restoreDLog2OnWide = false
         teleColorSent = false
+        zoomColorHopPending = false
+        zoomColorHopUntil = nil
+        zoomColorHopGeneration += 1
+        pendingZoomAfterHop = nil
         zoomStop = 1
         zoomStopTouched = false
         zoomPinchPreview = nil
@@ -516,10 +551,13 @@ final class CameraSession {
         lastFacePriorityEVAt = .distantPast
         facePriorityAcquireAt = nil
         isLocked = false
-        stopGimbalStickPump()
+        datalink?.restGimbalStick()
         pendingGimbalAxes = nil
         gimbalStickHeld = false
         lastGimbalStickAt = nil
+        lastGimbalThrowAt = nil
+        lastGimbalCommand = (0, 0)
+        gimbalLimitWatch.reset()
         videoPackets = 0
         accessUnits = 0
         framesEnqueued = 0
@@ -570,10 +608,13 @@ final class CameraSession {
         lateWait.removeAll()
         setMailbox.reset()
         commandTimeoutsAt.removeAll()
-        stopGimbalStickPump()
+        datalink?.restGimbalStick()
         pendingGimbalAxes = nil
         gimbalStickHeld = false
         lastGimbalStickAt = nil
+        lastGimbalThrowAt = nil
+        lastGimbalCommand = (0, 0)
+        gimbalLimitWatch.reset()
         disposeDatalink()
         ble.disconnect()
         liveViewEnableSent = false
@@ -775,9 +816,10 @@ final class CameraSession {
                 lastBleNotifyAt = Date()
                 route(frame)
             }
+            guard !Task.isCancelled else { return }
             failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
-                beginSessionRecovery(reason: "BLE dropped")
+                beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
             }
         }
     }
@@ -799,6 +841,12 @@ final class CameraSession {
             )
         }
         let key = Duml.opcodeKey(set: frame.cmdSet, cmd: frame.cmdId)
+        // Mailbox seq match first. A 0x8E GET waiter used to steal FOV/ISO-limit
+        // SET ACKs; the SET then waitLate-counted as a dead uplink.
+        if isLiveControlOpcode(frame), setMailbox.isOpenSeq(key, seq: frame.seq) {
+            routeLiveControlAck(frame, key: key)
+            return
+        }
         if let waiter = waiters[key] {
             noteControlAck(frame, decision: "match")
             for k in waiter.keys { waiters.removeValue(forKey: k) }
@@ -1155,8 +1203,15 @@ final class CameraSession {
         let factor = CamFov.pinchFactor(
             anchor: zoomPinchAnchor, magnification: magnification, max: zoomMax)
         if blockZoomColorHopIfRecording(for: factor) { return }
+        dropDLog2ForZoom(factor)
+        if CamFov.holdZoomWrite(
+            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
+        {
+            pendingZoomAfterHop = factor
+            return
+        }
+        pendingZoomAfterHop = nil
         let first = zoomPinchPreview == nil
-        if first { dropDLog2ForZoom(factor) }
         zoomPinchPreview = factor
         let lens = CamFov.pinchLens(for: factor)
         if lastPinchLens == lens { return }
@@ -1167,6 +1222,7 @@ final class CameraSession {
 
     func endZoomPinch() {
         zoomPinchSlew = nil
+        pendingZoomAfterHop = nil
         if let preview = zoomPinchPreview {
             markZoomStop(preview)
             restoreDLog2IfNeeded(afterZoom: preview)
@@ -1193,6 +1249,12 @@ final class CameraSession {
         zoomPinchPreview = nil
         zoomPinchSlew = nil
         dropDLog2ForZoom(factor)
+        if CamFov.holdZoomWrite(
+            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
+        {
+            pendingZoomAfterHop = factor
+            return
+        }
         zoomOptimistic = factor
         markZoomStop(factor)
         controlNote = "Zoom \(to)"
@@ -1214,6 +1276,13 @@ final class CameraSession {
             return
         }
         if blockZoomColorHopIfRecording(for: factor) { return }
+        dropDLog2ForZoom(factor)
+        if CamFov.holdZoomWrite(
+            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
+        {
+            pendingZoomAfterHop = factor
+            return
+        }
         zoomPinchSlew = nil
         fireZoom(.lens(position), target: tenths, announce: false)
     }
@@ -1260,7 +1329,7 @@ final class CameraSession {
     }
 
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
-    /// for ACK (Mimo). D-Log2→D-Log is sent first so 0xB8 is not ignored.
+    /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
     private func fireZoom(_ write: CamFov.ChipWrite, target: Double?, announce: Bool) {
         let frame: Duml.Frame
         let name: String
@@ -1314,12 +1383,14 @@ final class CameraSession {
         return true
     }
 
-    /// D-Log2 rejects every zoom SET. Hop to D-Log on the first pinch / chip,
-    /// before `0xB8`, and restore only when parked back at 1×.
+    /// D-Log2 rejects every zoom SET. Hop to D-Log before `0xB8`, and restore
+    /// only when parked back at 1× after the gesture — not mid-pinch.
     private func dropDLog2ForZoom(_ factor: Double) {
         if blockZoomColorHopIfRecording(for: factor) { return }
         guard let next = CamFov.colorMode(forZoom: factor, current: status.colorMode) else {
-            restoreDLog2IfNeeded(afterZoom: factor)
+            if zoomPinchPreview == nil, pendingZoomAfterHop == nil, !zoomColorHopPending {
+                restoreDLog2IfNeeded(afterZoom: factor)
+            }
             return
         }
         sendZoomColorOnce(next)
@@ -1330,24 +1401,74 @@ final class CameraSession {
             controlNote = ControlHud.recordingColorLockNote
             return
         }
-        guard !teleColorSent else { return }
+        if zoomColorHopPending {
+            if let until = zoomColorHopUntil, Date() >= until {
+                ControlLiveLog.line("zoom: D-Log hop timed out — resend 0x42")
+                zoomColorHopPending = false
+                teleColorSent = false
+            } else {
+                return
+            }
+        }
         teleColorSent = true
+        zoomColorHopPending = true
+        zoomColorHopUntil = Date().addingTimeInterval(2)
+        zoomColorHopGeneration += 1
+        let hopGen = zoomColorHopGeneration
         restoreDLog2OnWide = true
         let from = status.colorMode
-        status.colorMode = next
-        colorPin = (next, Date().addingTimeInterval(2))
+        // Do not pin color — holdZoomWrite must see live D-Log2 until the body hops.
+        colorPin = nil
         controlNote = "D-Log — D-Log2 cannot zoom"
+        ControlLiveLog.line("zoom: hold 0xB8 until D-Log2 → D-Log")
         fireCamera(
             Commands.setColorMode(next), name: "D-Log (zoom)", expect: .color(next),
             onFail: { [weak self] in
-                self?.colorPin = nil
-                self?.restoreDLog2OnWide = false
-                self?.teleColorSent = false
+                guard let self, self.zoomColorHopGeneration == hopGen else { return }
+                self.colorPin = nil
+                self.restoreDLog2OnWide = false
+                self.teleColorSent = false
+                self.zoomColorHopPending = false
+                self.zoomColorHopUntil = nil
             },
-            onSettle: { ok in
+            onSettle: { [weak self] ok in
                 ControlLiveLog.line("zoom: D-Log2 → D-Log ack=\(ok ? "ok" : "failed")")
+                guard let self, self.zoomColorHopGeneration == hopGen else { return }
+                if ok {
+                    self.confirmZoomColorHopIfReady()
+                } else {
+                    self.teleColorSent = false
+                    self.zoomColorHopPending = false
+                    self.zoomColorHopUntil = nil
+                }
             })
         hopNativeISO(from: from, to: next)
+    }
+
+    /// Body `cam_image_effect` is D-Log — the hop that unlocks 0xB8 has landed.
+    private func confirmZoomColorHopIfReady() {
+        guard zoomColorHopPending else { return }
+        guard status.colorMode == .dLog else { return }
+        zoomColorHopPending = false
+        zoomColorHopUntil = nil
+        colorPin = (.dLog, Date().addingTimeInterval(2))
+        ControlLiveLog.line("zoom: D-Log2 → D-Log body confirmed")
+        flushZoomAfterColorHop()
+    }
+
+    /// Color hop landed — send the zoom SET that was waiting, if any.
+    private func flushZoomAfterColorHop() {
+        guard let factor = pendingZoomAfterHop else { return }
+        pendingZoomAfterHop = nil
+        if CamFov.holdZoomWrite(
+            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
+        {
+            pendingZoomAfterHop = factor
+            return
+        }
+        zoomPinchPreview = factor
+        markZoomStop(factor)
+        applyPinchWrite(preview: factor)
     }
 
     private func restoreDLog2IfNeeded(afterZoom factor: Double) {
@@ -1908,11 +2029,18 @@ final class CameraSession {
         }
         guard colorModes.contains(mode) else { return }
         let from = status.colorMode
+        if mode == .dLog2 {
+            teleColorSent = false
+            zoomColorHopPending = false
+            zoomColorHopUntil = nil
+            zoomColorHopGeneration += 1
+        }
         colorPin = (mode, Date().addingTimeInterval(2))
         fireCamera(
             Commands.setColorMode(mode), name: mode.label(for: bodyFamily), expect: .color(mode),
             onFail: { [weak self] in self?.colorPin = nil })
         hopNativeISO(from: from, to: mode)
+        if mode == .dLog { confirmZoomColorHopIfReady() }
     }
 
     /// Stream `0x04/0x01` while the on-screen stick is held. No ACK — do not
@@ -1921,21 +2049,45 @@ final class CameraSession {
     /// 180, XOR MIRROR assist).
     func updateGimbalStick(
         x: Double, y: Double, sensitivity: Int = GimbalStick.defaultSensitivity,
-        assistMirror: Bool = false
+        assistMirror: Bool = false, linear: Bool = false
     ) {
         guard !isLocked else { return }
         guard datalink != nil else { return }
+        if isLiveVideoStale {
+            endGimbalStick()
+            return
+        }
         let invert = GimbalStick.liveInvertPan(
             poseInvert: gimbalPoseInvertPan, assistMirror: assistMirror)
         let axes = GimbalStick.encode(
-            x: x, y: y, invertPan: invert, sensitivity: sensitivity)
+            x: x, y: y, invertPan: invert, sensitivity: sensitivity, linear: linear)
         pendingGimbalAxes = axes
+        lastGimbalCommand = (x, y)
         lastGimbalStickAt = Date()
+        if axes.axis0 != GimbalStick.center || axes.axis1 != GimbalStick.center {
+            lastGimbalThrowAt = Date()
+        }
         if !gimbalStickHeld {
             gimbalStickHeld = true
-            sendGimbalStick(axes, log: true)
-            startGimbalStickPump()
+            ControlLiveLog.line(
+                "control: gimbal stick stream invert=\(gimbalStickMapping.invertPan ? 1 : 0)"
+            )
         }
+        datalink?.noteGimbalStick(axis0: axes.axis0, axis1: axes.axis1)
+        tickGimbalLimit()
+    }
+
+    /// Mimo Fast + tilt unlocked. Untracked — a tracked SET can skip while UDP
+    /// is `.waiting`, and `0x4C` Follow can damp the stick.
+    func prepHeadTrackGimbal() {
+        guard !isLocked, datalink != nil else { return }
+        let unlock = Commands.setGimbalTiltLock(.unlocked)
+        let fast = Commands.setGimbalSpeed(.fast)
+        let unlockSeq = datalink?.sendUntracked(unlock) ?? 0
+        let fastSeq = datalink?.sendUntracked(fast) ?? 0
+        ControlLiveLog.line(
+            "head-track: gimbal Fast+unlock unlock seq=\(unlockSeq) fast seq=\(fastSeq)"
+        )
     }
 
     /// Stick double-tap (hardware joystick). Wire is Mimo's recenter button:
@@ -1967,42 +2119,14 @@ final class CameraSession {
 
     /// Send center and stop the stream. Always fire — the camera needs rest.
     func endGimbalStick() {
-        stopGimbalStickPump()
         pendingGimbalAxes = nil
+        lastGimbalCommand = (0, 0)
+        gimbalLimitWatch.reset()
         if gimbalStickHeld { lastGimbalStickAt = Date() }
         guard gimbalStickHeld else { return }
         gimbalStickHeld = false
-        sendGimbalStick((GimbalStick.center, GimbalStick.center), log: true)
-    }
-
-    private func startGimbalStickPump() {
-        gimbalStickPump?.cancel()
-        let interval = GimbalStick.streamInterval
-        gimbalStickPump = Task { @MainActor [weak self] in
-            let delay = Duration.milliseconds(Int((interval * 1_000).rounded(.up)))
-            while !Task.isCancelled {
-                try? await Task.sleep(for: delay)
-                guard let self, self.gimbalStickHeld, !Task.isCancelled else { return }
-                let axes = self.pendingGimbalAxes ?? (GimbalStick.center, GimbalStick.center)
-                self.sendGimbalStick(axes, log: false)
-            }
-        }
-    }
-
-    private func stopGimbalStickPump() {
-        gimbalStickPump?.cancel()
-        gimbalStickPump = nil
-    }
-
-    private func sendGimbalStick(_ axes: (axis0: UInt16, axis1: UInt16), log: Bool) {
-        guard datalink != nil else { return }
-        let frame = Commands.gimbalStick(axis0: axes.axis0, axis1: axes.axis1)
-        let seq = datalink?.send(frame) ?? 0
-        if log {
-            ControlLiveLog.line(
-                "control: send Gimbal stick 0x04/0x01 seq=\(seq) flags=0x0 payload=\(Duml.hex(frame.payload)) via=datalink invert=\(gimbalStickMapping.invertPan ? 1 : 0) cmd180=\(gimbalStickMapping.commanded180 ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0)"
-            )
-        }
+        ControlLiveLog.line("control: gimbal stick rest")
+        datalink?.restGimbalStick()
     }
 
     /// Feed tap: inside the AF-C face box → ActiveTrack SET with that rect.
@@ -2051,7 +2175,7 @@ final class CameraSession {
     private func sendTapFocusBurst(x: Float, y: Float) async {
         guard datalink != nil, !Task.isCancelled else { return }
         let prepare = Commands.tapFocusPrepare()
-        let seq = datalink?.send(prepare) ?? 0
+        let seq = datalink?.sendUntracked(prepare) ?? 0
         ControlLiveLog.line(
             "control: send AE spot 0x02/0x22 seq=\(seq) flags=0x\(String(prepare.flags, radix: 16)) payload=\(Duml.hex(prepare.payload)) via=datalink"
         )
@@ -2104,6 +2228,72 @@ final class CameraSession {
 
     func cancelSubjectTracking() {
         cancelTracking(sendClear: true)
+    }
+
+    func handleGamepadAction(_ action: GamepadOperatorAction) {
+        switch action {
+        case .record:
+            guard !controlBusy else { return }
+            pressShutter()
+        case .recenter:
+            recenterGimbal()
+        case .flip:
+            flipGimbal()
+        case .track:
+            handleGamepadTrackToggle()
+        case .zoomChipIn:
+            setZoom(CamFov.nextJump(from: zoomCycleFrom, stops: zoomStops))
+        case .zoomChipOut:
+            setZoom(CamFov.previousJump(from: zoomCycleFrom, stops: zoomStops))
+        case .isoUp:
+            nudgeGamepadIso(steps: 1)
+        case .isoDown:
+            nudgeGamepadIso(steps: -1)
+        case .shutterOpen:
+            nudgeGamepadShutter(steps: 1)
+        case .shutterClose:
+            nudgeGamepadShutter(steps: -1)
+        }
+    }
+
+    private var zoomCycleFrom: Double {
+        zoomPinchPreview ?? zoomOptimistic ?? status.zoomFactor ?? zoomStop
+    }
+
+    private func nudgeGamepadIso(steps: Int) {
+        guard let current = status.isoIndex else { return }
+        let available =
+            status.availableIsoIndices.isEmpty ? IsoIndex.allCases : status.availableIsoIndices
+        guard let next = IsoIndex.stepped(from: current, stops: steps, available: available) else {
+            return
+        }
+        setISO(next)
+    }
+
+    private func nudgeGamepadShutter(steps: Int) {
+        let current = status.shutterDenom
+        guard
+            let next = CamCapShutter.steppedDenom(
+                from: current, steps: steps, available: status.availableShutterDenoms)
+        else { return }
+        setShutterDenom(next)
+    }
+
+    /// Triangle/Y (discussion #159 left that face free): track the AF-C face, or cancel.
+    func handleGamepadTrackToggle() {
+        guard !isLocked else { return }
+        switch GamepadFaceTrack.action(
+            trackingActive: isTrackingActive,
+            overlay: focusOverlay,
+            sceneFaces: sceneFaces)
+        {
+        case .cancel:
+            cancelSubjectTracking()
+        case .track(let box):
+            startTracking(box)
+        case .none:
+            break
+        }
     }
 
     func noteFrameTooSmall() {
@@ -2540,7 +2730,11 @@ final class CameraSession {
     private func transmit(_ send: InflightSend, kind: String) {
         let seq = datalink?.send(send.frame) ?? 0
         let key = Duml.opcodeKey(set: send.frame.cmdSet, cmd: send.frame.cmdId)
-        setMailbox.noteTransmit(key: key, seq: seq)
+        // A skipped UDP write returns seq 0 and lastWriteLanded=false — do
+        // not journal that seq as on the wire (timeout then looked like death).
+        if datalink?.lastWriteLanded != false {
+            setMailbox.noteTransmit(key: key, seq: seq)
+        }
         ControlLiveLog.line(
             "control: \(kind) \(send.name) \(send.opcode) seq=\(seq) flags=0x\(String(send.frame.flags, radix: 16)) payload=\(Duml.hex(send.frame.payload)) via=datalink"
         )
@@ -2579,11 +2773,16 @@ final class CameraSession {
             datalink?.lastVideoPacketAt.map {
                 Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
+        let writeSkipped = datalink?.lastWriteLanded == false
         if CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
             if videoFresh {
                 log.info("control: SET timeout with video flowing — leave UDP")
                 ControlLiveLog.line(
                     "control: \(send.name) \(send.opcode) — SET timeout, video flowing, leave UDP")
+            } else if writeSkipped {
+                log.info("control: SET timeout after skipped UDP write — leave UDP")
+                ControlLiveLog.line(
+                    "control: \(send.name) \(send.opcode) — SET timeout, write skipped, leave UDP")
             } else {
                 noteCommandTimeout()
             }
@@ -2597,6 +2796,8 @@ final class CameraSession {
         case .waitLate:
             lateWait[key] = send
             ControlLiveLog.line("control: \(send.name) \(send.opcode) — awaiting late ACK")
+            // Rec-lamp / Photo busy must not stick until a late ACK. HUD stays.
+            send.onSettle?(true)
         case .launchPending:
             send.onSettle?(false)
             launchPendingAfterSettle(key)
@@ -2725,24 +2926,27 @@ final class CameraSession {
                 ble.send(Commands.sessionKeepalive())
                 if ssid != nil, !holdsMonitor {
                     if !isBrowsingMedia, shouldStartUDPRebuild {
-                        try? await datalink?.rebuildUDP(reason: "keepalive")
-                        if liveViewEnableSent {
-                            let hadVideo = FeedWatchdog.hadVideo(
-                                videoPackets: datalink?.videoPackets ?? 0,
-                                lastVideoPacketAge: datalink?.lastVideoPacketAt.map {
-                                    Date().timeIntervalSince($0)
-                                })
-                            let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
-                                hadVideo: hadVideo)
-                            if force {
-                                log.info(
-                                    "live: first-picture enable after UDP rebuild (neverGotVideo)")
+                        endGimbalStick()
+                        startFeedRecovery { [weak self] in
+                            guard let self else { return }
+                            try? await self.datalink?.rebuildUDP(reason: "keepalive")
+                            guard !Task.isCancelled else { return }
+                            if self.liveViewEnableSent {
+                                let hadVideo = FeedWatchdog.hadVideo(
+                                    videoPackets: self.datalink?.videoPackets ?? 0,
+                                    lastVideoPacketAge: self.datalink?.lastVideoPacketAt.map {
+                                        Date().timeIntervalSince($0)
+                                    })
+                                let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
+                                    hadVideo: hadVideo)
+                                if force {
+                                    self.log.info(
+                                        "live: first-picture enable after UDP rebuild (neverGotVideo)"
+                                    )
+                                    self.sendRecoverEnable(
+                                        force: true, reason: "first-picture after UDP rebuild")
+                                }
                             }
-                            sendRecoverEnable(
-                                force: force,
-                                reason: force
-                                    ? "first-picture after UDP rebuild"
-                                    : "keepalive after UDP rebuild")
                         }
                     }
                     datalink?.keepalive()
@@ -2924,6 +3128,10 @@ final class CameraSession {
             datalink?.lastVideoPacketAt.map {
                 now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
+        let statusFresh =
+            datalink?.lastStatusAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
         let downlinkFresh = [datalink?.lastStatusAt, datalink?.lastVideoPacketAt]
             .compactMap { $0 }
             .contains { now.timeIntervalSince($0) < CameraSoftAP.commandTimeoutWindow }
@@ -2933,7 +3141,8 @@ final class CameraSession {
                 downlinkFresh: downlinkFresh,
                 videoFresh: videoFresh,
                 rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
-                secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild
+                secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
+                statusFresh: statusFresh
             )
         else { return }
         if FeedWatchdog.shouldHoldForGOPReset(
@@ -2951,12 +3160,21 @@ final class CameraSession {
             log.info("control: SET timeouts during zoom grace — leave UDP")
             return
         }
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
+            log.info("control: SET timeouts during gimbal grace — leave UDP")
+            return
+        }
         commandTimeoutsAt.removeAll()
         log.info("control: SET timeouts with video stale — rebuild UDP")
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
+        endGimbalStick()
         startFeedRecovery { [weak self] in
             guard let self else { return }
             try? await self.datalink?.rebuildUDP(reason: "command timeouts")
+            guard !Task.isCancelled else { return }
             // Re-fire nothing — state reconciles via subscribe pushes. Video may
             // need a fresh enable on the new socket; the gate below rate-limits it.
             if self.liveViewEnableSent {
@@ -2981,8 +3199,18 @@ final class CameraSession {
         if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
             return false
         }
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
+            return false
+        }
         let videoFresh =
             datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        let statusFresh =
+            datalink?.lastStatusAt.map {
                 now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
         return CameraSoftAP.shouldKeepaliveRebuildUDP(
@@ -2990,7 +3218,10 @@ final class CameraSession {
             rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
             videoFresh: videoFresh,
-            sawPicture: hasStableLivePicture
+            sawPicture: hasStableLivePicture,
+            statusFresh: statusFresh,
+            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            pathReady: WiFiJoiner.isCameraPathReady()
         )
     }
 
@@ -3000,6 +3231,7 @@ final class CameraSession {
     private func recoverLiveViewIfNeeded() {
         guard !isBrowsingMedia, !holdsMonitor else { return }
         if needsForegroundRecover { return }
+        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         guard WiFiJoiner.isCameraPathReady() else { return }
         if MediaLiveResume.strayPlaybackAction(
             browsing: isBrowsingMedia, inPlayback: status.inPlayback) != nil
@@ -3025,29 +3257,6 @@ final class CameraSession {
         {
             recoverFirstPictureIfNeeded()
             return
-        }
-        // A live receive keeps the watchdog idle, so a lost 0x09/0xa8 during an
-        // IDR hold would freeze the canvas on the held frame. One extra enable
-        // at 5s if this hold has only fired once; then the 60s backoff.
-        if decoder.awaitingIDR {
-            let bleAge = lastBleNotifyAt.map { Date().timeIntervalSince($0) }
-            let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
-            let hadVideo = FeedWatchdog.hadVideo(
-                videoPackets: datalink?.videoPackets ?? 0,
-                lastVideoPacketAge: videoAge)
-            if FeedWatchdog.shouldRepeatRecoverEnable(
-                secondsSinceLastEnable: Date().timeIntervalSince(lastIdrRequest),
-                secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
-                pathReady: true,
-                lastBleNotifyAge: bleAge,
-                hadVideo: hadVideo,
-                holdEnableCount: idrHoldEnableCount,
-                lastVideoPacketAge: videoAge
-            ) {
-                log.info("live: still holding for IDR — re-request enable")
-                sendRecoverEnable(force: true, reason: "still holding for IDR")
-                return
-            }
         }
         applyFeedWatchdog()
     }
@@ -3160,7 +3369,9 @@ final class CameraSession {
             startFeedRecovery { [weak self] in
                 guard let self else { return }
                 try? await self.datalink?.rebuildUDP(reason: "first picture")
+                guard !Task.isCancelled else { return }
                 _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+                guard !Task.isCancelled else { return }
                 self.sendRecoverEnable(force: true, reason: "first-picture after UDP rebuild")
             }
             return
@@ -3175,6 +3386,7 @@ final class CameraSession {
 
     private func applyFeedWatchdog() {
         if needsForegroundRecover { return }
+        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         let now = Date()
         let live: Bool
         if case .live = phase { live = true } else { live = false }
@@ -3200,12 +3412,23 @@ final class CameraSession {
                 lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }),
             secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
-            secondsSinceZoomSet: secondsSinceZoomSet
+            secondsSinceZoomSet: secondsSinceZoomSet,
+            secondsSinceGimbalThrow: secondsSinceGimbalThrow
         )
         let action = feedWatchdog.tick(snap)
         feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
         switch action {
         case .none:
+            if decoder.awaitingIDR,
+                FeedWatchdog.shouldReleaseIDRHold(
+                    awaitingIDR: true,
+                    udpReceiveAlive: FeedWatchdog.udpReceiveAlive(snap),
+                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
+                    hasPresentedPicture: decoder.lastPresentedAt != nil)
+            {
+                decoder.endIDRHold()
+                log.info("feed: release IDR hold — UDP alive, picture on layer")
+            }
             if FeedWatchdog.udpReceiveAlive(snap), decoder.isPresentFrozen {
                 let now = Date()
                 if lastFeedFreezeLogAt.map({ now.timeIntervalSince($0) >= 2 }) ?? true {
@@ -3246,11 +3469,23 @@ final class CameraSession {
                     "feed: hold UDP rebuild — zoom grace lastSet=\(String(format: "%.1f", snap.secondsSinceZoomSet ?? -1))s"
                 )
                 logFeedObserve(snap: snap, watchdog: action)
+            } else if !FeedWatchdog.udpReceiveAlive(snap),
+                GimbalStick.shouldHoldWatchdog(
+                    secondsSinceThrow: snap.secondsSinceGimbalThrow,
+                    lastVideoPacketAge: snap.lastVideoPacketAge)
+            {
+                ControlLiveLog.line(
+                    "feed: hold enable — gimbal grace lastThrow=\(String(format: "%.1f", snap.secondsSinceGimbalThrow ?? -1))s"
+                )
+                logFeedObserve(snap: snap, watchdog: action)
             }
             return
         case .resendLiveViewEnable:
-            log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
-            ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            endGimbalStick()
+            let line =
+                feedWatchdog.stallLogLine(snap) + " stickHeld=\(gimbalStickHeld ? 1 : 0)"
+            log.info("\(line, privacy: .public)")
+            ControlLiveLog.line(line)
             logFeedObserve(snap: snap, watchdog: action)
             sendRecoverEnable(force: true, reason: "watchdog")
         case .rebuildVTSession:
@@ -3260,6 +3495,7 @@ final class CameraSession {
             logFeedObserve(snap: snap, watchdog: action)
             rebuildUDPKeepingVT()
         case .reopenDatalink, .fullSessionRejoin:
+            endGimbalStick()
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
@@ -3276,6 +3512,7 @@ final class CameraSession {
 
     /// Re-enable only after SoftAP + VT/display are ready. Holds P-frames until IDR.
     private func sendRecoverEnable(force: Bool, reason: String = "recover") {
+        endGimbalStick()
         if isBrowsingMedia { return }
         if status.inPlayback {
             sendExitPlayback()
@@ -3294,12 +3531,12 @@ final class CameraSession {
         if !force, Date().timeIntervalSince(lastIdrRequest) < FeedWatchdog.escalateAfter {
             return
         }
-        lastIdrRequest = Date()
-        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-        decoder.beginIDRHold()
-        idrHoldEnableCount += 1
         guard startCapturedLiveView(reason: reason) else { return }
+        lastIdrRequest = Date()
         liveViewEnableSends += 1
+        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
+        beginIDRHoldIfNeeded()
+        idrHoldEnableCount += 1
         log.info(
             "live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(self.liveViewEnableSends, privacy: .public)"
         )
@@ -3497,19 +3734,35 @@ final class CameraSession {
     /// UDP and VT die while suspended. Watchdog will not fire if packets still
     /// arrive but the present path is dead — that is the frozen resume canvas.
     private func recoverAfterForeground() {
-        let presentedAge = decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
-        if !CameraSoftAP.shouldRecoverAfterForeground(secondsSinceLastPresented: presentedAge) {
-            log.info("live: foreground — picture still fresh, skip rebuild")
+        let now = Date()
+        let presentedAge = decoder.lastPresentedAt.map { now.timeIntervalSince($0) }
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        let statusFresh =
+            datalink?.lastStatusAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        if !CameraSoftAP.shouldRecoverAfterForeground(
+            secondsSinceLastPresented: presentedAge, videoFresh: videoFresh,
+            statusFresh: statusFresh)
+        {
+            log.info("live: foreground — picture or 9004 still fresh, skip rebuild")
             return
         }
         log.info("live: recover after foreground")
         firstPictureSettled = false
         decoder.prepareAfterForeground()
+        endGimbalStick()
         startFeedRecovery { [weak self] in
             guard let self else { return }
             try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+            guard !Task.isCancelled else { return }
             try? await self.datalink?.rebuildUDP(reason: "foreground")
+            guard !Task.isCancelled else { return }
             _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+            guard !Task.isCancelled else { return }
             if self.liveViewEnableSent {
                 self.sendRecoverEnable(force: true, reason: "foreground")
             } else {
@@ -3518,10 +3771,19 @@ final class CameraSession {
             }
             try? await Task.sleep(for: .seconds(CameraSoftAP.foregroundPictureGrace))
             guard !Task.isCancelled else { return }
+            let now = Date()
+            let videoFresh =
+                self.datalink?.lastVideoPacketAt.map {
+                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
+            let statusFresh =
+                self.datalink?.lastStatusAt.map {
+                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
             let stillFrozen = CameraSoftAP.shouldEscalateForegroundRecover(
                 secondsSinceLastPresented: self.decoder.lastPresentedAt.map {
-                    Date().timeIntervalSince($0)
-                })
+                    now.timeIntervalSince($0)
+                }, videoFresh: videoFresh, statusFresh: statusFresh)
             if stillFrozen {
                 self.log.info("live: foreground still frozen — full datalink rejoin")
                 await self.rejoinDatalinkKeepingLive()
@@ -3533,15 +3795,19 @@ final class CameraSession {
     private func rebuildUDPKeepingVT() {
         startFeedRecovery { [weak self] in
             guard let self else { return }
+            self.endGimbalStick()
             try? await self.datalink?.rebuildUDP(reason: "feed watchdog")
+            guard !Task.isCancelled else { return }
             _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+            guard !Task.isCancelled else { return }
             self.liveViewEnableSent = true
             self.sendRecoverEnable(force: true, reason: "feed watchdog UDP rebuild")
         }
     }
 
     private func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
-        feedRecoveryTask?.cancel()
+        let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
+        guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
         feedRecovering = true
         feedRecoveryTask = Task { @MainActor in
             await work()
@@ -3556,7 +3822,10 @@ final class CameraSession {
 
     /// Recovers an established live session that dropped — camera power-off, BLE gone —
     /// without leaving the last frame. Bounded automatic attempts, then the operator chooses.
-    func beginSessionRecovery(reason: String) {
+    func beginSessionRecovery(
+        reason: String, trigger: SessionRecoveryTrigger = .bleDropped
+    ) {
+        guard SessionRecoveryPolicy.shouldBegin(trigger) else { return }
         if case .pausedAfterRepeatedDrops = sessionRecovery { return }
         if case .waitingForOperator = sessionRecovery { return }
         if sessionRecoveryTask != nil { return }
@@ -3610,7 +3879,7 @@ final class CameraSession {
     func retrySessionRecovery() {
         sessionDropStormGuard.reset()
         cancelSessionRecovery(clearHoldsMonitor: false)
-        beginSessionRecovery(reason: "operator retry")
+        beginSessionRecovery(reason: "operator retry", trigger: .operatorRetry)
     }
 
     func cancelSessionRecovery(clearHoldsMonitor: Bool = true) {
@@ -3825,9 +4094,12 @@ final class CameraSession {
         absorbStaleFormat(&s)
         absorbStaleColor(&s)
         if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
+            lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
+            lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
             let wasTT180 = gimbalStickMapping.commanded180
             gimbalStickMapping.applyAttitude(frame.payload)
             syncGimbalPose()
+            tickGimbalLimit()
             if gimbalStickMapping.commanded180 != wasTT180 {
                 ControlLiveLog.line(
                     "control: gimbal TT180=\(gimbalStickMapping.commanded180 ? 1 : 0) yaw=\(gimbalStickMapping.yawTenthDeg.map { String($0) } ?? "-") seed=\(gimbalStickMapping.poseSeeded ? 1 : 0) view=\(gimbalPoseViewFlip ? 1 : 0)"
@@ -3856,6 +4128,7 @@ final class CameraSession {
         ScopeExposureCeiling.syncISO(s.iso)
         let flipChanged = s.selfieFlip != status.selfieFlip
         status = s
+        confirmZoomColorHopIfReady()
         if flipReply || flipChanged {
             if flipChanged {
                 ControlLiveLog.line(
@@ -3870,6 +4143,8 @@ final class CameraSession {
 
     private func resetGimbalPoseForNewStream() {
         gimbalStickMapping = GimbalStickMapping()
+        lastGimbalCommand = (0, 0)
+        gimbalLimitWatch.reset()
         lastSelfieFlipReplyAt = nil
         decoder.invalidatePictureFlipPresentation()
         decoder.poseViewFlip = false
@@ -3882,6 +4157,21 @@ final class CameraSession {
         gimbalPoseInvertPan = gimbalStickMapping.invertPan
         decoder.poseViewFlip = gimbalPoseViewFlip
         decoder.syncPictureFlip()
+    }
+
+    private func tickGimbalLimit() {
+        let pulse = gimbalLimitWatch.tick(
+            x: lastGimbalCommand.x,
+            y: lastGimbalCommand.y,
+            yawTenthDeg: gimbalStickMapping.yawTenthDeg,
+            pitchTenthDeg: gimbalStickMapping.pitchTenthDeg,
+            now: Date().timeIntervalSinceReferenceDate,
+            settling180: !gimbalStickMapping.pendingWant180.isEmpty)
+        guard !pulse.isEmpty else { return }
+        gimbalLimitContact = pulse
+        gimbalLimitPanSign = gimbalLimitWatch.lastPanSign
+        gimbalLimitTiltSign = gimbalLimitWatch.lastTiltSign
+        gimbalLimitPulse += 1
     }
 
     var hasMediaDatalink: Bool { datalink != nil }

@@ -82,6 +82,24 @@ import Testing
         #expect(s.availableShutterDenoms == before)
     }
 
+    @Test func isoStepsSkipAutoAndStopAtEnds() {
+        #expect(IsoIndex.stepped(from: .iso100, stops: 1, available: IsoIndex.allCases) == .iso200)
+        #expect(IsoIndex.stepped(from: .iso25600, stops: 1, available: IsoIndex.allCases) == nil)
+        #expect(IsoIndex.stepped(from: .auto, stops: 1, available: IsoIndex.allCases) == nil)
+        #expect(
+            IsoIndex.stepped(from: .iso400, stops: -1, available: [.iso200, .iso400, .iso800])
+                == .iso200)
+    }
+
+    @Test func shutterStepsOpenTowardSlower() {
+        let denoms = [16_000, 8_000, 100, 50, 25, 4]
+        #expect(CamCapShutter.steppedDenom(from: 50, steps: 1, available: denoms) == 25)
+        #expect(CamCapShutter.steppedDenom(from: 50, steps: -1, available: denoms) == 100)
+        #expect(CamCapShutter.steppedDenom(from: 16_000, steps: -1, available: denoms) == nil)
+        #expect(CamCapShutter.steppedDenom(from: 4, steps: 1, available: denoms) == nil)
+        #expect(CamCapShutter.steppedDenom(from: 48, steps: 1, available: denoms) == 25)
+    }
+
     @Test func isoAutoOnlyAndFallback() {
         #expect(CamCapIso.parseIndices(Self.isoAutoOnly) == [.auto])
         #expect(CamCapIso.wheelIndices(available: [.auto], fallback: IsoIndex.allCases) == [.auto])
@@ -227,7 +245,8 @@ import Testing
         var s = CameraStatus()
         #expect(
             CameraStatusDecoder.applySubscribePush(
-                SubscribePush.pack(name: CamCapVideoFormat.subscribeKey, value: Self.videoFormatPocket4Pro),
+                SubscribePush.pack(
+                    name: CamCapVideoFormat.subscribeKey, value: Self.videoFormatPocket4Pro),
                 to: &s))
         #expect(s.availableVideoFormats.count == 12)
         #expect(
@@ -290,6 +309,11 @@ import Testing
         #expect(CamFov.nextJump(from: 1, stops: [1, 2, 4]) == 2)
         #expect(CamFov.nextJump(from: 2, stops: [1, 2, 4]) == 4)
         #expect(CamFov.nextJump(from: 4, stops: [1, 2, 4]) == 1)
+        #expect(CamFov.previousJump(from: 1, stops: [1, 2, 4]) == 1)
+        #expect(CamFov.previousJump(from: 2, stops: [1, 2, 4]) == 1)
+        #expect(CamFov.previousJump(from: 4, stops: [1, 2, 4]) == 2)
+        #expect(CamFov.previousJump(from: 3) == 1)
+        #expect(CamFov.previousJump(from: 12) == 6)
         #expect(CamFov.chipWrite(forJump: 2) == .lens(CamFov.lensPosition(for: 2)))
         #expect(CamFov.chipWrite(forJump: 4) == .lens(CamFov.lensPosition(for: 4)))
         #expect(CamFov.clamp(12, max: 4) == 4)

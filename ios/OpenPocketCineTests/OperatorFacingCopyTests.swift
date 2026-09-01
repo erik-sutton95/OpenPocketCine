@@ -5,6 +5,14 @@ import XCTest
 
 /// Operator-facing copy must never name a sister app or another camera brand.
 final class OperatorFacingCopyTests: XCTestCase {
+    func testHeadTrackingIsExperimentalAndCalibrateIsOperatorFacing() {
+        XCTAssertEqual(LiveHeadTrackCalibrateButton.calibrateTitle, "Calibrate Head Lock")
+        XCTAssertEqual(LiveHeadTrackCalibrateButton.stopTitle, "STOP")
+        XCTAssertTrue(
+            SettingsHelpCopy.headTracking.hasPrefix("Experimental."),
+            "Settings help must lead with Experimental")
+    }
+
     func testHelpCopyDoesNotNameSisterApps() {
         let facing = Self.operatorFacingCopy
         XCTAssertFalse(facing.isEmpty)
@@ -69,7 +77,11 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.controlRequests,
             SettingsHelpCopy.recordConfirmation,
             SettingsHelpCopy.haptics,
+            SettingsHelpCopy.headTracking,
+            LiveHeadTrackCalibrateButton.calibrateTitle,
+            "Head Tracking (Experimental)",
             SettingsHelpCopy.joystickSensitivity,
+            SettingsHelpCopy.gamepad,
             SettingsHelpCopy.keepScreenAwake,
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,

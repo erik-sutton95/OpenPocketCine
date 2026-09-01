@@ -53,6 +53,15 @@ struct SessionRecoveryPolicyTests {
         #expect(SessionRecoveryState.waitingForOperator(attemptsMade: 8).isRecovering)
         #expect(SessionRecoveryState.pausedAfterRepeatedDrops(drops: 3).isRecovering)
     }
+
+    @Test func onlyBleAndSoftAPStartSessionRecovery() {
+        #expect(SessionRecoveryPolicy.shouldBegin(.bleDropped))
+        #expect(SessionRecoveryPolicy.shouldBegin(.softAPLost))
+        #expect(SessionRecoveryPolicy.shouldBegin(.operatorRetry))
+        #expect(!SessionRecoveryPolicy.shouldBegin(.feedWatchdogStall))
+        #expect(!SessionRecoveryPolicy.shouldBegin(.commandTimeout))
+        #expect(!SessionRecoveryPolicy.shouldBegin(.firstPicture))
+    }
 }
 
 @Suite("Session drop storm guard")

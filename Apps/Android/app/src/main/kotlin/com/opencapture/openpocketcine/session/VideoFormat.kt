@@ -188,6 +188,7 @@ data class GimbalStickMapping(
     val selfieFlip: Boolean = false,
     val pendingWant180: List<Boolean> = emptyList(),
     val yawTenthDeg: Int? = null,
+    val pitchTenthDeg: Int? = null,
     val poseSeeded: Boolean = false,
     val poseSeedFrontCount: Int = 0,
 ) {
@@ -248,7 +249,12 @@ data class GimbalStickMapping(
     fun applyAttitude(payload: ByteArray): GimbalStickMapping {
         val yaw = CameraCommands.yawTenthDeg(payload) ?: return this
         val rotated = kotlin.math.abs(yaw) > CameraCommands.ROTATED_180_TENTH_DEG
-        var next = copy(rotated180 = rotated, yawTenthDeg = yaw)
+        var next =
+            copy(
+                rotated180 = rotated,
+                yawTenthDeg = yaw,
+                pitchTenthDeg = CameraCommands.pitchTenthDeg(payload) ?: pitchTenthDeg,
+            )
         val want180 = next.pendingWant180.firstOrNull()
         if (want180 != null) {
             if (CameraCommands.rotationSettled(yaw, want180)) {

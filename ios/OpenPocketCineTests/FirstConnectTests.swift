@@ -122,6 +122,11 @@ final class FirstConnectTests: XCTestCase {
                 flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: nil,
                 sawPicture: false),
             "keepalive must not tear UDP before the first picture")
+        XCTAssertFalse(
+            CameraSoftAP.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
+                videoFresh: false, sawPicture: true, statusFresh: true),
+            "status live + HEVC silent is encoder pause — do not keepalive-rebuild")
         XCTAssertTrue(
             FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: 2.5),
             "LUT-toggle enable pause is the GOP cut")
@@ -192,6 +197,10 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertEqual(
             CameraSoftAP.handshakeTimeoutStep(pathReady: false, rebindsUsed: 0),
             .fail)
+        XCTAssertEqual(
+            CameraSoftAP.handshakeTimeoutStep(
+                pathReady: true, rebindsUsed: 0, inboundDatagrams: 12),
+            .keepSocket)
         XCTAssertTrue(
             CameraSoftAP.isHandshakeAck(
                 [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))

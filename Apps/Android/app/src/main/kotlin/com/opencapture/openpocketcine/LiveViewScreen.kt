@@ -114,6 +114,8 @@ fun LiveViewScreen(model: AppModel) {
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
     val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
+    val gimbalLimitPulse by model.session.gimbalLimitPulse.collectAsState()
+    val operatorHaptics = LocalOperatorHaptics.current
     var tick by remember { mutableIntStateOf(0) }
     var uiLocked by remember { mutableStateOf(model.uiLocked) }
     var sheet by remember { mutableStateOf<LiveSheet?>(null) }
@@ -166,10 +168,21 @@ fun LiveViewScreen(model: AppModel) {
         model.session.clearControlNoteIf(note)
     }
 
+    LaunchedEffect(gimbalLimitPulse) {
+        if (gimbalLimitPulse == 0) return@LaunchedEffect
+        model.gimbalGamepad.pulseLimit(model, operatorHaptics)
+    }
+    LaunchedEffect(model.liveOperatorPanel, model.chromeEditorMode) {
+        if (model.liveOperatorPanel != null || model.chromeEditorMode != null) {
+            model.gimbalGamepad.noteBlocked(model)
+        }
+    }
+
     fun setLocked(value: Boolean) {
         uiLocked = value
         model.uiLocked = value
         if (value) {
+            model.gimbalGamepad.noteBlocked(model)
             model.endGimbalStick()
             sheet = null
         }

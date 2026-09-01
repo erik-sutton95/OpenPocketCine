@@ -48,7 +48,7 @@ This **is** the IDR request — there is no separate PLI opcode. Each send is fo
 Pocket 3 can boot 4K 25/30 with chrome and gimbal live while pktType `0x02` never starts. Operators unstick that by SETting 1080 then 4K (`0x02/0x18`). OpenPocketCine does that round-trip once on first picture (restore the boot format, then one `0x09/0xa8`). Pocket 4 / 4 Pro do not. The live monitor is still 720p; this is an encoder kick, not a 4K SoftAP stream.
 
 :::caution[Do not re-enable every second]
-Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug).
+Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug). A decoder still waiting for IDR is not a license for another `0x09/0xa8` — the stall watchdog already ladders that.
 :::
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not
@@ -72,11 +72,11 @@ Fragments arrive in order — capture order is correct.
 
 A DJI private marker `00 00 01 ff …` (~17 B, NAL type 63) precedes the standard Annex-B NALs. VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
 
-Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or Nano AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view.
+Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or Nano AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view. IDR hold and the pending-AU cap must treat IRAP 16–21 as a GOP start (Pocket live is often BLA, not type 20).
 
 ## Window ACK
 
-Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop.
+Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop. Seq `0` is a valid cursor once seen; telemetry must not rewind group 0 after the first `0x02`, or group 1 after the first `0x03`. A session-preserving UDP rebuild must re-arm `0x02` ingest even when it skips another `0x09/0xa8`.
 
 ## Depacketizer
 

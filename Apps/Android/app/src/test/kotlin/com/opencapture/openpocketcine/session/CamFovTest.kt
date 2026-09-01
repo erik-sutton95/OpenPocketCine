@@ -52,6 +52,13 @@ class CamFovTest {
         assertEquals(2.0, CamFov.nextJump(1.0, listOf(1.0, 2.0, 4.0)), 0.0)
         assertEquals(4.0, CamFov.nextJump(2.0, listOf(1.0, 2.0, 4.0)), 0.0)
         assertEquals(1.0, CamFov.nextJump(4.0, listOf(1.0, 2.0, 4.0)), 0.0)
+        assertEquals(1.0, CamFov.previousJump(1.0), 0.0)
+        assertEquals(1.0, CamFov.previousJump(3.0), 0.0)
+        assertEquals(3.0, CamFov.previousJump(6.0), 0.0)
+        assertEquals(6.0, CamFov.previousJump(12.0), 0.0)
+        assertEquals(1.0, CamFov.previousJump(2.0, listOf(1.0, 2.0, 4.0)), 0.0)
+        assertEquals(2.0, CamFov.previousJump(4.0, listOf(1.0, 2.0, 4.0)), 0.0)
+        assertEquals(1.0, CamFov.previousJump(1.0, listOf(1.0, 2.0, 4.0)), 0.0)
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_1X), CamFov.chipWrite(1.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.lensPosition(2.0)), CamFov.chipWrite(2.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_3X), CamFov.chipWrite(3.0))
@@ -99,9 +106,18 @@ class CamFovTest {
         )
         assertEquals(
             CameraCommands.COLOR_DLOG,
+            CamFov.colorModeForZoom(1.02, CameraCommands.COLOR_DLOG2),
+        )
+        assertEquals(
+            CameraCommands.COLOR_DLOG,
             CamFov.colorModeForZoom(2.9, CameraCommands.COLOR_DLOG2),
         )
         assertNull(CamFov.colorModeForZoom(1.0, CameraCommands.COLOR_DLOG2))
+        assertTrue(CamFov.holdZoomWrite(1.1, CameraCommands.COLOR_DLOG2, false))
+        assertTrue(CamFov.holdZoomWrite(1.02, CameraCommands.COLOR_DLOG2, false))
+        assertTrue(CamFov.holdZoomWrite(1.1, CameraCommands.COLOR_DLOG, true))
+        assertTrue(!CamFov.holdZoomWrite(1.1, CameraCommands.COLOR_DLOG, false))
+        assertTrue(!CamFov.holdZoomWrite(1.0, CameraCommands.COLOR_DLOG2, false))
         assertEquals(
             CameraCommands.COLOR_DLOG,
             CamFov.colorModeForZoom(1.06, CameraCommands.COLOR_DLOG2),

@@ -59,6 +59,41 @@ trailing-bottom parking spot in every orientation. Zoom stacks above the stick.
 Controls grow leading of the stick without moving it.
 _Avoid_: joystick pack, gimbal HUD
 
+**Gimbal pad**:
+Connected extended gamepad (discussion #159). Left stick is the gimbal
+stick (same expo throw and picture-relative invert as the on-screen stick).
+Cross/A records (skips the rec-confirmation sheet). Circle/B recenters.
+Square/X is rotate-180. Triangle/Y tracks a face in frame or cancels.
+L1/R1 jump the zoom chip (out does not wrap to tele). L2/R2 hold-to-zoom
+(deeper trigger is faster). D-pad up/down ISO, left/right shutter
+(left opens / slower, right closes / faster). Toast Gamepad
+connected/disconnected. Unplug rests the stick and zoom. On-screen stick
+wins while held. Controls **Gamepad** row shows Connected / Not connected.
+Limit haptic fires only after that axis moves, then stalls at a stop.
+_Avoid_: DualSense (alone) in operator copy
+
+**Head tracking**:
+iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
+Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
+shared identity. Look is the SET-relative nose azimuth/elevation
+(quaternion, +Y forward) — Euler Δatt yaw wobbles during a nod at a
+yawed heading (diagonal drift). Pocket has no angle SET — only rate
+stick `0x04/0x01`. Throw closes a **dead-reckoned model** (full linear
+stick ≈ 40°/s, Fast) onto the look, plus target-rate feed-forward;
+live `0x04/0x05` is ~0.25 s stale at ~10 Hz and closing on it
+limit-cycled (bobbing). Stale telemetry only bleeds drift out of the
+model; it is adopted once provably stationary, and ignored while dead
+(`@20` froze mid-nod; yaw froze 8 s in the 18:29 take). Fast + tilt
+unlocked at calibrate. Arrival streams **center for ~1 s** before the
+lift — rest/throw grab cycles in the same second paused HEVC (22:24
+and 18:29). Sustained center still lifts: 25 Hz center paused HEVC at
+15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
+Encoder-pause: two enables then one UDP rebuild; keepalive must not
+flap while status is young. Roll is readout only. STOP clears SET.
+On-screen stick and gimbal pad win while thrown. Android has no
+AirPods IMU.
+_Avoid_: spatial audio in operator copy
+
 **Triple-tap 180 (TT180)**:
 Mechanical 180 via `FE 09` (app rotate-180 button or Pocket joystick
 triple-press). Invert pan when that 180 settles (~165° / ~15°), not at

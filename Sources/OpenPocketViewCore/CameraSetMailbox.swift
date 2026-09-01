@@ -15,6 +15,8 @@ public struct CameraSetMailbox: Equatable, Sendable {
     public static let zoomCoalesceHold: TimeInterval = 0.05
     /// `0x02/0xB8` slider / pinch. Other sliders keep `coalesceHold`.
     public static let zoomOpcodeKey: UInt16 = Duml.opcodeKey(set: 0x02, cmd: 0xB8)
+    /// Track poll `0x02/0xA5`. A missing GET is not a dead uplink.
+    public static let trackingPollOpcodeKey: UInt16 = Duml.opcodeKey(set: 0x02, cmd: 0xA5)
 
     public static func coalesceHold(for key: UInt16) -> TimeInterval {
         key == zoomOpcodeKey ? zoomCoalesceHold : coalesceHold
@@ -51,7 +53,7 @@ public struct CameraSetMailbox: Equatable, Sendable {
     /// is latest-wins, not a half-dead socket. Zoom sliders are fire-and-forget
     /// — a missing 0xB8 ACK is not a dead uplink.
     public static func timeoutImpliesUplinkFailure(_ result: Timeout, key: UInt16 = 0) -> Bool {
-        result == .waitLate && !pipelinesWhileOpen(key)
+        result == .waitLate && !pipelinesWhileOpen(key) && key != trackingPollOpcodeKey
     }
 
     public enum PendingLaunch: Equatable, Sendable {
@@ -81,6 +83,10 @@ public struct CameraSetMailbox: Equatable, Sendable {
     }
 
     public func hasOpen(_ key: UInt16) -> Bool { open[key] != nil }
+
+    public func isOpenSeq(_ key: UInt16, seq: UInt16) -> Bool {
+        open[key]?.seqs.contains(seq) == true
+    }
 
     public func isAwaitingLate(_ key: UInt16) -> Bool { open[key]?.awaitingLate == true }
 
@@ -133,7 +139,7 @@ public struct CameraSetMailbox: Equatable, Sendable {
     }
 
     public mutating func noteTransmit(key: UInt16, seq: UInt16) {
-        if open[key] == nil { open[key] = Generation() }
+        guard open[key] != nil else { return }
         open[key]?.seqs.insert(seq)
         superseded[key]?.remove(seq)
     }

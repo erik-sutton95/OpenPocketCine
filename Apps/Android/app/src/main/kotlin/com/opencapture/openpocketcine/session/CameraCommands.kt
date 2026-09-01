@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -442,8 +443,53 @@ object CameraCommands {
     const val GIMBAL_STICK_MIN = 474
     const val GIMBAL_STICK_MAX = 1574
     const val GIMBAL_STICK_DEADZONE = 0.08f
+    const val GIMBAL_STICK_ANALOG_EXPO = 2.0
 
     const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
+    const val GIMBAL_STICK_TAP_SLOP = 0.18f
+    /** iOS `GimbalStick.streamInterval` — ACK pump emits while held. */
+    const val GIMBAL_STICK_STREAM_INTERVAL_MS = 40L
+    /** Stick throw can pause HEVC the same way zoom/AF-C do. */
+    const val GIMBAL_STICK_VIDEO_GRACE_SEC = 3.0
+    const val STALL_SEC = 2.0
+
+    fun shouldEmitGimbalStick(
+        held: Boolean,
+        restPending: Boolean,
+        nowMs: Long,
+        lastEmittedMs: Long,
+    ): Boolean {
+        if (restPending) return true
+        if (!held) return false
+        if (lastEmittedMs == 0L) return true
+        return nowMs - lastEmittedMs >= GIMBAL_STICK_STREAM_INTERVAL_MS
+    }
+
+    /** iOS `GimbalStick.shouldEmitOnSocket`. Rest still leaves while ingest is down. */
+    fun shouldEmitGimbalStickOnSocket(
+        rest: Boolean,
+        liveAccepting: Boolean,
+        hasConnection: Boolean,
+    ): Boolean {
+        if (!hasConnection) return false
+        if (rest) return true
+        return liveAccepting
+    }
+
+    fun shouldHoldGimbalWatchdog(
+        secondsSinceThrow: Double?,
+        lastVideoPacketAgeSec: Double? = null,
+    ): Boolean {
+        val s = secondsSinceThrow ?: return false
+        if (s < 0.0 || s >= GIMBAL_STICK_VIDEO_GRACE_SEC) return false
+        if (lastVideoPacketAgeSec != null &&
+            lastVideoPacketAgeSec >= STALL_SEC + GIMBAL_STICK_VIDEO_GRACE_SEC
+        ) {
+            return false
+        }
+        return true
+    }
+
     const val GIMBAL_FACE_UNKNOWN = -1
     const val GIMBAL_FACE_FRONT = 0
     const val GIMBAL_FACE_SELFIE = 1
@@ -472,6 +518,13 @@ object CameraCommands {
         return raw.toShort().toInt()
     }
 
+    /** Tilt 0.1° from i16-LE `@20`, negated so look-up is positive (Mimo stick-down → `@20` +). */
+    fun pitchTenthDeg(payload: ByteArray): Int? {
+        if (payload.size < 22) return null
+        val raw = ((payload[20].toInt() and 0xFF) or (payload[21].toInt() shl 8)).toShort().toInt()
+        return -raw
+    }
+
     fun rotated180(payload: ByteArray): Boolean? {
         val tenth = yawTenthDeg(payload) ?: return null
         return kotlin.math.abs(tenth) > ROTATED_180_TENTH_DEG
@@ -492,11 +545,28 @@ object CameraCommands {
     fun gimbalSensitivityGain(sensitivity: Int): Float =
         sensitivity.coerceIn(1, 5) / GIMBAL_STICK_DEFAULT_SENSITIVITY.toFloat()
 
+    /** Deadzone, then linear remainder onto −1…1. Zoom stick uses this (no expo). */
+    fun gimbalLinearThrow(normalized: Float): Float {
+        val n = normalized.coerceIn(-1f, 1f)
+        val magnitude = kotlin.math.abs(n)
+        if (magnitude < GIMBAL_STICK_DEADZONE) return 0f
+        val t = (magnitude - GIMBAL_STICK_DEADZONE) / (1f - GIMBAL_STICK_DEADZONE)
+        return if (n < 0f) -t else t
+    }
+
+    /** Deadzone, then expo ease-in onto −1…1. Full throw stays 1. Rest stays 0. */
+    fun gimbalAnalogCurve(normalized: Float): Float {
+        val t = gimbalLinearThrow(normalized)
+        if (t == 0f) return 0f
+        val curved = kotlin.math.abs(t).toDouble().pow(GIMBAL_STICK_ANALOG_EXPO).toFloat()
+        return if (t < 0f) -curved else curved
+    }
+
     /** `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0). */
     fun gimbalAxis(normalized: Float, sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY): Int {
-        val n = normalized.coerceIn(-1f, 1f)
-        if (kotlin.math.abs(n) < GIMBAL_STICK_DEADZONE) return GIMBAL_STICK_CENTER
-        val scaled = (n * gimbalSensitivityGain(sensitivity)).coerceIn(-1f, 1f)
+        val curved = gimbalAnalogCurve(normalized)
+        if (curved == 0f) return GIMBAL_STICK_CENTER
+        val scaled = (curved * gimbalSensitivityGain(sensitivity)).coerceIn(-1f, 1f)
         return (GIMBAL_STICK_CENTER + scaled * GIMBAL_STICK_TRAVEL)
             .roundToInt()
             .coerceIn(GIMBAL_STICK_MIN, GIMBAL_STICK_MAX)
@@ -567,7 +637,8 @@ object CameraCommands {
         }
 
     /** `IsoIndex.allCases` raw bytes. Unknown camcap entries are dropped. */
-    val ISO_INDEX_BYTES = setOf(0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B)
+    val ISO_INDEX_ALL = listOf(0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B)
+    val ISO_INDEX_BYTES = ISO_INDEX_ALL.toSet()
 
     fun isoLabel(index: Int): String =
         when (index) {
@@ -758,6 +829,26 @@ object CameraCommands {
     fun shutterWheelDenoms(available: List<Int>, current: Int): List<Int> {
         if (available.isNotEmpty()) return available
         return if (current in 1..16_000) listOf(current) else emptyList()
+    }
+
+    /** Next / previous 1/N in camera order (fast-first). nil at the end. */
+    fun shutterSteppedDenom(from: Int, steps: Int, available: List<Int>): Int? {
+        val list = shutterWheelDenoms(available, from)
+        val nearest = list.minByOrNull { kotlin.math.abs(it - from) } ?: return null
+        val idx = list.indexOf(from).takeIf { it >= 0 } ?: list.indexOf(nearest)
+        val next = idx + steps
+        if (next !in list.indices || next == idx) return null
+        return list[next]
+    }
+
+    /** Next / previous full-stop ISO. Skips Auto. nil at the end. */
+    fun isoStepped(from: Int, steps: Int, available: List<Int>): Int? {
+        val list = available.filter { it != 0x00 }
+        val idx = list.indexOf(from)
+        if (from == 0x00 || idx < 0) return null
+        val next = idx + steps
+        if (next !in list.indices || next == idx) return null
+        return list[next]
     }
 
     val kelvinPresets = listOf(2000, 3200, 4000, 5000, 5600, 6500, 8000, 10000)

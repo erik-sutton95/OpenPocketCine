@@ -26,9 +26,13 @@ enum SettingsHelpCopy {
     static let recordConfirmation =
         "Ask before starting or stopping recording to prevent mistaps."
     static let haptics =
-        "Short confirmation pulses for critical switches and setting changes."
+        "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
+    static let headTracking =
+        "Experimental. Calibrate Head Lock (centered above the bottom bars) is shared forward: that AirPods pose and that gimbal pose are zero. A 53° head turn pans the Pocket 53°. Nod is tilt. Roll is shown only — the Pocket stick has no roll axis. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. STOP clears the lock. On-screen stick and a game controller win while you hold them."
     static let joystickSensitivity =
-        "How far a stick throw moves the gimbal. 4 is the current feel. 5 reaches full speed sooner; 1 is the slowest."
+        "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    static let gamepad =
+        "A connected game controller. Left stick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     static let keepScreenAwake =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. iOS may still dim when the device overheats."
     static let themeHelp =
@@ -579,6 +583,11 @@ struct SettingsRootView: View {
                 help: SettingsHelpCopy.haptics,
                 isOn: model.hapticsEnabled
             ) { model.hapticsEnabled.toggle() }
+            SettingsSwitchInlineRow(
+                title: "Head Tracking (Experimental)",
+                help: SettingsHelpCopy.headTracking,
+                isOn: model.headTrackingEnabled
+            ) { model.headTrackingEnabled.toggle() }
             SettingsInlineRow(
                 title: "Joystick Sensitivity",
                 help: SettingsHelpCopy.joystickSensitivity,
@@ -586,6 +595,12 @@ struct SettingsRootView: View {
             ) {
                 GimbalStickSensitivitySlider(
                     value: Bindable(model).gimbalStickSensitivity)
+            }
+            SettingsInlineRow(
+                title: "Gamepad",
+                help: SettingsHelpCopy.gamepad
+            ) {
+                SettingsValueText(value: model.gamepadConnected ? "Connected" : "Not connected")
             }
             SettingsSwitchInlineRow(
                 title: "Keep Screen Awake",

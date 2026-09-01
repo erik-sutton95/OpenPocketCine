@@ -103,6 +103,23 @@ class TrackingBoxTest {
         assertEquals(LiveFeedTapPolicy.Action.TRACK_FACE, LiveFeedTapPolicy.action(false, true))
         assertEquals(LiveFeedTapPolicy.Action.TAP_FOCUS, LiveFeedTapPolicy.action(true, false))
         assertEquals(LiveFeedTapPolicy.Action.TRACK_FACE, LiveFeedTapPolicy.action(true, true))
+        val extra = TrackingBox(0.70, 0.20, 0.10, 0.12)
+        assertEquals(
+            GamepadFaceTrack.Action.Cancel,
+            GamepadFaceTrack.action(true, FocusOverlay.Face(face), emptyList()),
+        )
+        assertEquals(
+            GamepadFaceTrack.Action.Track(face),
+            GamepadFaceTrack.action(false, FocusOverlay.Face(face), listOf(extra)),
+        )
+        assertEquals(
+            GamepadFaceTrack.Action.Track(face),
+            GamepadFaceTrack.action(false, FocusOverlay.Focus, listOf(extra, face)),
+        )
+        assertEquals(
+            GamepadFaceTrack.Action.None,
+            GamepadFaceTrack.action(false, FocusOverlay.Focus, emptyList()),
+        )
         assertTrue(!FocusResetPolicy.isAvailable(0.50, 0.50, tracking = false))
         assertTrue(FocusResetPolicy.isAvailable(0.55, 0.50, tracking = false))
         assertTrue(FocusResetPolicy.isAvailable(0.50, 0.50, tracking = true))

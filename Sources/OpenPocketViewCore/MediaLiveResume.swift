@@ -22,10 +22,12 @@ public enum MediaLiveResume: Sendable {
         pictureFresh: Bool
     ) -> Action {
         if pictureFresh, !inPlayback { return .done }
+        if inPlayback || !exitAcknowledged {
+            return .exitPlayback
+        }
         if attempt > maxExitAttempts {
             return pictureFresh ? .done : .enableLiveView
         }
-        if inPlayback || !exitAcknowledged { return .exitPlayback }
         return .enableLiveView
     }
 

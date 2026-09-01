@@ -633,6 +633,48 @@ import Testing
         #expect(GimbalStick.encode(x: 0.04, y: -0.04) == (GimbalStick.center, GimbalStick.center))
         #expect(GimbalStick.axis(1) == GimbalStick.max)
         #expect(GimbalStick.axis(-1) == GimbalStick.min)
+        let linearHalf = UInt16(
+            (Double(GimbalStick.center) + 0.5 * Double(GimbalStick.travel)).rounded())
+        #expect(GimbalStick.axis(0.5) < linearHalf, "half throw is slower than linear")
+        #expect(GimbalStick.axis(0.5) > GimbalStick.center)
+        #expect(GimbalStick.analogCurve(0) == 0)
+        #expect(GimbalStick.analogCurve(0.04) == 0)
+        #expect(GimbalStick.analogCurve(1) == 1)
+        #expect(GimbalStick.analogCurve(-1) == -1)
+        #expect(abs(GimbalStick.analogCurve(0.5)) < 0.5)
+        #expect(GimbalStick.analogCurve(-0.5) == -GimbalStick.analogCurve(0.5))
+        #expect(GimbalStick.axisLinear(0) == GimbalStick.center)
+        #expect(GimbalStick.axisLinear(1) == GimbalStick.max)
+        #expect(GimbalStick.axisLinear(-1) == GimbalStick.min)
+        #expect(GimbalStick.axisLinear(0.5) == linearHalf)
+        #expect(GimbalStick.axisLinear(0.5) > GimbalStick.axis(0.5))
+        #expect(GimbalStick.i16LE([0xE8, 0x03], at: 0) == 1000)
+        #expect(GimbalStick.pitchTenthDeg([0, 0, 0]) == nil)
+        #expect(
+            GimbalStick.attitudeAngleDump([0x10, 0x06, 0x00, 0x00, 0x13, 0x00]).contains("@4=19"))
+        // Mimo tilt take: stick down → i16@20 = +435; look-up is −@20.
+        let lookDown: [UInt8] = [
+            0xB7, 0xFA, 0x00, 0x00, 0x01, 0x00, 0x86, 0x00, 0x02, 0x00, 0x00, 0x02,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x01,
+        ]
+        #expect(GimbalStick.yawTenthDeg(lookDown) == 1)
+        #expect(GimbalStick.pitchTenthDeg(lookDown) == -435)
+        #expect(GimbalStick.i16LE(lookDown, at: 2) == 0, "@2 is not tilt")
+        #expect(GimbalStick.i16LE(lookDown, at: 6) == 134, "@6 is not tilt")
+        let nearLevel: [UInt8] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3, 0xFF,
+        ]
+        #expect(GimbalStick.pitchTenthDeg(nearLevel) == 13)
+        var pitched = GimbalStickMapping()
+        var att = [UInt8](repeating: 0, count: 22)
+        att[4] = 0xE8
+        att[5] = 0x03
+        att[20] = 0x30
+        att[21] = 0xF8
+        pitched.applyAttitude(att)
+        #expect(pitched.yawTenthDeg == 1000)
+        #expect(pitched.pitchTenthDeg == 2000)
         let right = GimbalStick.encode(x: 1, y: 0)
         #expect(right.axis0 == GimbalStick.center && right.axis1 == GimbalStick.max)
         let up = GimbalStick.encode(x: 0, y: 1)
@@ -667,6 +709,25 @@ import Testing
         let full = Commands.gimbalStick(axis0: GimbalStick.max, axis1: GimbalStick.min)
         #expect(full.payload == [0x26, 0x06, 0x00, 0x00, 0xDA, 0x01, 0x00, 0x80, 0x22, 0x00])
         #expect(GimbalStick.streamInterval == 0.04)
+        #expect(GimbalStick.shouldEmit(held: true, restPending: false, now: 1, lastEmitted: 0))
+        #expect(
+            !GimbalStick.shouldEmit(held: true, restPending: false, now: 1.02, lastEmitted: 1))
+        #expect(GimbalStick.shouldEmit(held: true, restPending: false, now: 1.04, lastEmitted: 1))
+        #expect(GimbalStick.shouldEmit(held: false, restPending: true, now: 1.01, lastEmitted: 1))
+        #expect(!GimbalStick.shouldEmit(held: false, restPending: false, now: 2, lastEmitted: 1))
+        #expect(
+            GimbalStick.shouldEmitOnSocket(
+                rest: true, liveAccepting: false, hasConnection: true),
+            "rest still leaves while ingest is down")
+        #expect(
+            !GimbalStick.shouldEmitOnSocket(
+                rest: false, liveAccepting: false, hasConnection: true))
+        #expect(
+            !GimbalStick.shouldEmitOnSocket(
+                rest: true, liveAccepting: true, hasConnection: false))
+        #expect(
+            GimbalStick.shouldEmitOnSocket(
+                rest: false, liveAccepting: true, hasConnection: true))
         #expect(Commands.gimbalRecenter().cmdSet == 0x04)
         #expect(Commands.gimbalRecenter().cmdId == 0x4C)
         #expect(Commands.gimbalRecenter().payload == [0xFE, 0x08])
@@ -714,6 +775,7 @@ import Testing
 
         #expect(Commands.gimbalParamsGet().payload == [0x01, 0x04, 0x05])
         #expect(Commands.setGimbalSpeed(.fast).payload == [0x00, 0x05, 0x01, 0x00])
+        #expect(Commands.gimbalFollowFamily().payload == [0x02, 0x08])
         #expect(Commands.setGimbalSpeed(.defaultSpeed).payload == [0x00, 0x05, 0x01, 0x01])
         #expect(Commands.setGimbalSpeed(.slow).payload == [0x00, 0x05, 0x01, 0x02])
         #expect(Commands.setGimbalTiltLock(.unlocked).payload == [0x00, 0x04, 0x01, 0x00])
@@ -947,6 +1009,9 @@ import Testing
         #expect(CamFov.nextJump(from: 3) == 6)
         #expect(CamFov.nextJump(from: 6) == 12)
         #expect(CamFov.nextJump(from: 12) == 1)
+        #expect(CamFov.previousJump(from: 1) == 1)
+        #expect(CamFov.previousJump(from: 3) == 1)
+        #expect(CamFov.previousJump(from: 12) == 6)
         #expect(CamFov.lensPosition(for: 1) == 217)
         #expect(CamFov.lensPosition(for: 3) == 651)
         #expect(CamFov.lensPosition(for: 12) == 2604)
@@ -975,6 +1040,12 @@ import Testing
         #expect(CamFov.usesTelephoto(2.9) == false)
         #expect(CamFov.usesTelephoto(3) == true)
         #expect(CamFov.usesTelephoto(12) == true)
+        #expect(CamFov.holdZoomWrite(factor: 1.1, current: .dLog2, hopPending: false))
+        #expect(CamFov.holdZoomWrite(factor: 1.02, current: .dLog2, hopPending: false))
+        #expect(CamFov.holdZoomWrite(factor: 1.1, current: .dLog, hopPending: true))
+        #expect(!CamFov.holdZoomWrite(factor: 1.1, current: .dLog, hopPending: false))
+        #expect(!CamFov.holdZoomWrite(factor: 1, current: .dLog2, hopPending: false))
+        #expect(CamFov.colorMode(forZoom: 1.02, current: .dLog2) == .dLog)
         #expect(CamFov.colorMode(forZoom: 1.1, current: .dLog2) == .dLog)
         #expect(CamFov.colorMode(forZoom: 2.9, current: .dLog2) == .dLog)
         #expect(CamFov.colorMode(forZoom: 3, current: .dLog2) == .dLog)
@@ -1205,6 +1276,23 @@ import Testing
         #expect(zoom.decideAck(key: key, seq: 3) == .accept)
         #expect(!CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate, key: key))
         #expect(CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate))
+        #expect(
+            !CameraSetMailbox.timeoutImpliesUplinkFailure(
+                .waitLate, key: CameraSetMailbox.trackingPollOpcodeKey),
+            "missing 0xA5 poll ACK is not half-dead uplink")
+    }
+
+    @Test func mailboxNoteTransmitDoesNotReopenClosedGeneration() {
+        var box = CameraSetMailbox()
+        let key = Duml.opcodeKey(set: 0x02, cmd: 0x2A)
+        #expect(box.offer(key: key, urgent: true, now: 0) == .launch)
+        box.beginLaunch(key: key, now: 0)
+        box.noteTransmit(key: key, seq: 8)
+        #expect(box.isOpenSeq(key, seq: 8))
+        #expect(box.decideAck(key: key, seq: 8) == .accept)
+        box.noteTransmit(key: key, seq: 9)
+        #expect(!box.hasOpen(key))
+        #expect(!box.isOpenSeq(key, seq: 9))
     }
 
     @Test func mailboxHoldsWhiteBalanceOneInFlight() {

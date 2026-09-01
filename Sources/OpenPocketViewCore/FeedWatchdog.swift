@@ -12,8 +12,8 @@ import Foundation
 /// the socket paused. SoftAP bind stays.
 ///
 /// Encoder pause: DUML status still landing, HEVC silent, past GOP/AF-C
-/// grace. One `0x09/0xa8`, never a UDP rebuild. `escalateAfter` between
-/// enables — do not 1 Hz loop.
+/// grace. Two `0x09/0xa8`, then one UDP rebuild. Keepalive must not flap
+/// while status is young. `escalateAfter` between actions — do not 1 Hz loop.
 ///
 /// Mid-session recover must not paint black: keep the last frame until a
 /// new decoded picture is in hand, and do not enqueue empty samples.
@@ -24,6 +24,9 @@ public struct FeedWatchdog: Equatable, Sendable {
     /// After one UDP rebuild, do not flap the bind on the 2s stall cadence.
     /// Thirty rebuilds in a minute is what dropped SoftAP.
     public static let rebuildBackoff: TimeInterval = 60
+    /// Analog / head-track lift. Shorter than stall so a held stick cannot
+    /// keep throwing into an encoder-pause recover.
+    public static let analogLiftStale: TimeInterval = 1.6
 
     public enum Stage: String, Equatable, Sendable {
         case idle
@@ -75,6 +78,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         /// Age of the last zoom `0xB8` SET. Lens slew can pause HEVC the same
         /// way AF-C does; GOP-cutting mid-zoom blacks the well.
         public var secondsSinceZoomSet: TimeInterval?
+        /// Age of the last non-rest gimbal stick throw. Motion can pause HEVC.
+        public var secondsSinceGimbalThrow: TimeInterval?
 
         public init(
             now: TimeInterval,
@@ -95,7 +100,8 @@ public struct FeedWatchdog: Equatable, Sendable {
             hadVideo: Bool = true,
             secondsSinceLastEnable: TimeInterval? = nil,
             secondsSinceFocusTrackSet: TimeInterval? = nil,
-            secondsSinceZoomSet: TimeInterval? = nil
+            secondsSinceZoomSet: TimeInterval? = nil,
+            secondsSinceGimbalThrow: TimeInterval? = nil
         ) {
             self.now = now
             self.lastDecodedFrameAge = lastDecodedFrameAge
@@ -116,11 +122,14 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.secondsSinceLastEnable = secondsSinceLastEnable
             self.secondsSinceFocusTrackSet = secondsSinceFocusTrackSet
             self.secondsSinceZoomSet = secondsSinceZoomSet
+            self.secondsSinceGimbalThrow = secondsSinceGimbalThrow
         }
     }
 
     public var stage: Stage = .idle
     public private(set) var lastActionAt: TimeInterval = 0
+    /// Encoder-pause `0x09/0xa8`s this stall. Two then one UDP rebuild.
+    private var encoderPauseEnables = 0
 
     public init() {}
 
@@ -233,13 +242,55 @@ public struct FeedWatchdog: Equatable, Sendable {
         return since < rebuildBackoff
     }
 
-    /// One `0x09/0xa8` rides with the rebuild. Do not re-request every 5s
-    /// after live video existed. First picture still needs a resend if
-    /// `videoPkts` is still 0.
-    ///
-    /// Mid-session IDR hold (assist VT start): if the IDR is missed, UDP
-    /// stays alive so the watchdog never fires and a 60s wait is a frozen
-    /// canvas. One extra enable at 5s, then the 60s backoff.
+    /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.
+    /// `lastVideoPacketAge == nil` after `hadVideo` is a rebuild (`lastVideo=none`
+    /// on physical #148) — treating that as fresh re-grabs the stick into a GOP cut.
+    public static func shouldTreatLiveVideoAsStale(
+        lastVideoPacketAge: TimeInterval?,
+        hadVideo: Bool,
+        recovering: Bool = false
+    ) -> Bool {
+        if recovering { return true }
+        guard let age = lastVideoPacketAge else { return hadVideo }
+        return age >= analogLiftStale
+    }
+
+    /// One feed-repair Task at a time. Cancelling a live rebuild left the
+    /// cancelled body force-enabling after `await` while a new rebuild started.
+    public static func shouldStartFeedRecovery(rebuildInFlight: Bool) -> Bool {
+        !rebuildInFlight
+    }
+
+    /// BLE session keepalive keeps `lastBle` young. After one UDP rebuild the
+    /// cooldown used to sit forever while 9004 stayed silent. Retry once the
+    /// 60 s backoff has elapsed — not on the 2 s stall cadence.
+    public static func shouldRetrySilentSocketAfterRebuildBackoff(
+        secondsSinceLastRebuild: TimeInterval?,
+        udpReceiveAlive: Bool,
+        controlReceiveAlive: Bool
+    ) -> Bool {
+        guard !udpReceiveAlive, !controlReceiveAlive else { return false }
+        guard let since = secondsSinceLastRebuild else { return false }
+        return since >= rebuildBackoff
+    }
+
+    /// Mid-session IDR hold with UDP alive and a picture already on the layer
+    /// froze the last frame forever when the PLI did not cut a GOP (no periodic
+    /// IDR). First picture stays held until IRAP.
+    public static func shouldReleaseIDRHold(
+        awaitingIDR: Bool,
+        udpReceiveAlive: Bool,
+        secondsSinceLastEnable: TimeInterval?,
+        hasPresentedPicture: Bool
+    ) -> Bool {
+        guard awaitingIDR, udpReceiveAlive, hasPresentedPicture else { return false }
+        guard let since = secondsSinceLastEnable else { return false }
+        return since >= CameraSoftAP.firstPictureIDRGrace
+    }
+
+    /// First picture (`hadVideo == false`) may resend `0x09/0xa8` after stall.
+    /// Mid-session extra enable while `awaitingIDR` GOP-cuts a live or
+    /// encoder-paused picture — `tick` already owns that ladder.
     public static func shouldRepeatRecoverEnable(
         secondsSinceLastEnable: TimeInterval,
         secondsSinceLastRebuild: TimeInterval?,
@@ -249,33 +300,13 @@ public struct FeedWatchdog: Equatable, Sendable {
         holdEnableCount: Int = 1,
         lastVideoPacketAge: TimeInterval? = nil
     ) -> Bool {
-        if hadVideo,
-            let video = lastVideoPacketAge,
-            video > secondsSinceLastEnable + stallThreshold
-        {
-            // Last enable produced no HEVC. Another 0x09/0xa8 blacks the well;
-            // the watchdog should reopen UDP instead.
-            return false
-        }
-        if hadVideo, let video = lastVideoPacketAge, video < stallThreshold {
-            // Physical: 25 fps live, then "still holding for IDR" GOP-cut it.
-            return false
-        }
-        if !hadVideo {
-            return secondsSinceLastEnable >= stallThreshold
-        }
-        if shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: secondsSinceLastRebuild,
-            pathReady: pathReady,
-            lastBleNotifyAge: lastBleNotifyAge,
-            hadVideo: true
-        ) {
-            return false
-        }
-        if holdEnableCount < 2 {
-            return secondsSinceLastEnable >= CameraSoftAP.firstPictureResendWhileLive
-        }
-        return secondsSinceLastEnable >= rebuildBackoff
+        _ = secondsSinceLastRebuild
+        _ = pathReady
+        _ = lastBleNotifyAge
+        _ = holdEnableCount
+        _ = lastVideoPacketAge
+        if hadVideo { return false }
+        return secondsSinceLastEnable >= stallThreshold
     }
 
     public mutating func tick(_ snap: Snapshot) -> Action {
@@ -297,11 +328,24 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceFocusTrackSet) {
+        if FocusTrackMode.shouldHoldWatchdog(
+            secondsSinceSet: snap.secondsSinceFocusTrackSet,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
             return .none
         }
 
-        if CamFov.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceZoomSet) {
+        if CamFov.shouldHoldWatchdog(
+            secondsSinceSet: snap.secondsSinceZoomSet,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
+            return .none
+        }
+
+        if GimbalStick.shouldHoldWatchdog(
+            secondsSinceThrow: snap.secondsSinceGimbalThrow,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
             return .none
         }
 
@@ -325,15 +369,23 @@ public struct FeedWatchdog: Equatable, Sendable {
             }
         }
 
-        // Encoder pause: status still on 9004, HEVC silent. One enable,
-        // then escalateAfter between enables. Status on this socket means
-        // the 5-tuple is alive — do not rebuild UDP (physical #148: 2 s
-        // reopen left lastVideo=none and flip notLive).
+        // Encoder pause: status still on 9004, HEVC silent. Two enables,
+        // then one UDP rebuild (22:16 brought the picture back). Do not
+        // reset the enable cap or ignore rebuildBackoff when BLE is stale
+        // — that flapped UDP while status was young (#148). The shell
+        // already rides one enable with the rebuild.
         if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
-            if stage == .idle || snap.now - lastActionAt >= Self.escalateAfter {
+            if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
+                return .none
+            }
+            if encoderPauseEnables < 2 {
+                encoderPauseEnables += 1
                 return fire(.resendLiveViewEnable, at: snap.now)
             }
-            return .none
+            if let since = snap.secondsSinceLastRebuild, since < Self.rebuildBackoff {
+                return .none
+            }
+            return fire(.reopenDatalink, at: snap.now)
         }
 
         if Self.shouldHoldRebuildAfterRecentUDP(
@@ -353,6 +405,15 @@ public struct FeedWatchdog: Equatable, Sendable {
             if Self.shouldHoldBind(
                 pathReady: snap.pathReady, lastBleNotifyAge: snap.lastBleNotifyAge)
             {
+                // BLE keepalive keeps lastBle young. After rebuildBackoff a
+                // fully silent 9004 is still a dead UDP — one more bind.
+                if Self.shouldRetrySilentSocketAfterRebuildBackoff(
+                    secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
+                    udpReceiveAlive: false,
+                    controlReceiveAlive: Self.controlReceiveAlive(snap))
+                {
+                    return fire(.reopenDatalink, at: snap.now)
+                }
                 return .none
             }
             if snap.now - lastActionAt >= Self.cooldownDuration {
@@ -431,5 +492,6 @@ public struct FeedWatchdog: Equatable, Sendable {
     private mutating func resetIdle() {
         stage = .idle
         lastActionAt = 0
+        encoderPauseEnables = 0
     }
 }

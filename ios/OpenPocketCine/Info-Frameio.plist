@@ -21,6 +21,10 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>GCSupportsControllerUserInteraction</key>
+	<true/>
+	<key>NSMotionUsageDescription</key>
+	<string>OpenPocketCine uses headphone motion so AirPods can aim the gimbal.</string>
 	<key>UIStatusBarHidden</key>
 	<true/>
 	<key>UIStatusBarHidden~ipad</key>

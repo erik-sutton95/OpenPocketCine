@@ -35,8 +35,8 @@ object EncoderPresentPath {
 
     fun shouldRebuildDecoderAfterParameterChange(
         pictureSizeChanged: Boolean,
-        accessUnitHasIDR: Boolean,
-    ): Boolean = pictureSizeChanged || accessUnitHasIDR
+        @Suppress("UNUSED_PARAMETER") accessUnitHasIDR: Boolean,
+    ): Boolean = pictureSizeChanged
 
     fun shouldBeginIDRHoldAfterParameterChange(
         pictureSizeChanged: Boolean,

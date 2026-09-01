@@ -1120,6 +1120,28 @@ public enum FaceTrackTap {
     }
 }
 
+/// Triangle/Y: track a face in frame, or cancel if already tracking.
+public enum GamepadFaceTrack {
+    public enum Action: Equatable, Sendable {
+        case cancel
+        case track(TrackingBox)
+        case none
+    }
+
+    public static func action(
+        trackingActive: Bool,
+        overlay: FocusOverlay,
+        sceneFaces: [TrackingBox]
+    ) -> Action {
+        if trackingActive { return .cancel }
+        if case .face(let face) = overlay {
+            return .track(FaceTrackTap.trackingBox(from: face))
+        }
+        guard let face = sceneFaces.max(by: { $0.area < $1.area }) else { return .none }
+        return .track(FaceTrackTap.trackingBox(from: face))
+    }
+}
+
 /// Vision `boundingBox` is normalized, origin bottom-left. Feed overlays are top-left.
 public enum VisionFaceBox {
     public static let minimumSide: Double = 0.05

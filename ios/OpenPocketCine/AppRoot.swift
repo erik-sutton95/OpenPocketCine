@@ -36,6 +36,22 @@ final class AppModel {
     var hapticsEnabled: Bool = OperatorPrefs.hapticsEnabled {
         didSet { OperatorPrefs.hapticsEnabled = hapticsEnabled }
     }
+    var headTrackingEnabled: Bool = OperatorPrefs.headTrackingEnabled {
+        didSet { OperatorPrefs.headTrackingEnabled = headTrackingEnabled }
+    }
+    /// Live SET / STOP chip. SET starts tracking and locks forward; STOP ends it.
+    var headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
+    /// Raw AirPods attitude / gyro / SET-relative look. Empty when Head Tracking is off.
+    var headTrackImuReadout = ""
+    /// SET-relative (or first-sample) yaw/pitch for the live axis rings. `nil` without IMU.
+    var headTrackAxisPose: HeadTrackAxisPose?
+    /// On-screen gimbal stick is thrown. Head tracking yields.
+    var gimbalScreenHeld = false
+    /// Gamepad left stick is thrown. Head tracking yields.
+    var gimbalPadHeld = false
+    var gimbalAnalogHeld: Bool { gimbalScreenHeld || gimbalPadHeld }
+    /// Extended gamepad is bound. Toast on rising/falling edge.
+    var gamepadConnected = false
     var gimbalStickSensitivity: Int = OperatorPrefs.gimbalStickSensitivity {
         didSet {
             let clamped = GimbalStick.clampedSensitivity(gimbalStickSensitivity)

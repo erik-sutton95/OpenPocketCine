@@ -90,6 +90,7 @@ final class LiveZoomReadoutTests: XCTestCase {
         XCTAssertFalse(CamFov.usesTelephoto(2.9))
         XCTAssertFalse(CamFov.usesTelephoto(2.89))
         XCTAssertEqual(CamFov.colorMode(forZoom: 1.1, current: .dLog2), .dLog)
+        XCTAssertEqual(CamFov.colorMode(forZoom: 1.02, current: .dLog2), .dLog)
         XCTAssertEqual(CamFov.colorMode(forZoom: 2.9, current: .dLog2), .dLog)
         XCTAssertEqual(CamFov.colorMode(forZoom: 3, current: .dLog2), .dLog)
         XCTAssertNil(CamFov.colorMode(forZoom: 1, current: .dLog2))

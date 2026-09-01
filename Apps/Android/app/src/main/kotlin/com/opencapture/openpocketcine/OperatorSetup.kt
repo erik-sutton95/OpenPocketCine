@@ -120,9 +120,12 @@ object SettingsHelpCopy {
     const val SHOOTING_MODE =
         "Switch the camera between Video, Photo and the time-based modes. The camera reports " +
             "the mode back, so this follows a change made on the body itself."
-    const val HAPTICS = "Short confirmation pulses for critical switches and setting changes."
+    const val HAPTICS =
+        "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     const val JOYSTICK_SENSITIVITY =
-        "How far a stick throw moves the gimbal. 4 is the current feel. 5 reaches full speed sooner; 1 is the slowest."
+        "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    const val GAMEPAD =
+        "A connected game controller. Left stick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     const val KEEP_SCREEN_AWAKE =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. Android may still dim when the device overheats."
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
@@ -1309,6 +1312,9 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
                     modifier = Modifier.width(24.dp),
                 )
             }
+        }
+        SettingsInlineRow("Gamepad", SettingsHelpCopy.GAMEPAD) {
+            SettingsValueText(if (model.gamepadConnected) "Connected" else "Not connected")
         }
         SettingsSwitchInlineRow(
             title = "Keep Screen Awake",

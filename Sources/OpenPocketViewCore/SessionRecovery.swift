@@ -41,6 +41,17 @@ public enum SessionRecoveryDecision: Equatable, Sendable {
     case stop
 }
 
+/// What started bounded session recovery. Feed stall / SET timeout / first
+/// picture are `FeedWatchdog` — starting this on those GOP-cuts a live well.
+public enum SessionRecoveryTrigger: Equatable, Sendable {
+    case bleDropped
+    case softAPLost
+    case operatorRetry
+    case feedWatchdogStall
+    case commandTimeout
+    case firstPicture
+}
+
 /// Shared reconnect rule: when to retry a dropped camera session, how long to back off,
 /// and when to stop and ask the operator.
 public struct SessionRecoveryPolicy: Sendable, Equatable {
@@ -59,6 +70,13 @@ public struct SessionRecoveryPolicy: Sendable, Equatable {
     /// Long enough to ride out a camera power cycle; short enough that a
     /// camera that is gone stops burning the radio.
     public static let monitor = SessionRecoveryPolicy()
+
+    public static func shouldBegin(_ trigger: SessionRecoveryTrigger) -> Bool {
+        switch trigger {
+        case .bleDropped, .softAPLost, .operatorRetry: true
+        case .feedWatchdogStall, .commandTimeout, .firstPicture: false
+        }
+    }
 
     public func decision(afterFailedAttempts failures: Int, jitter: Double)
         -> SessionRecoveryDecision

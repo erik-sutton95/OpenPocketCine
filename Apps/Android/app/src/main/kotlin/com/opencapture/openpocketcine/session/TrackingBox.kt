@@ -373,6 +373,28 @@ object FaceTrackTap {
     }
 }
 
+/** Triangle/Y: track a face in frame, or cancel if already tracking. */
+object GamepadFaceTrack {
+    sealed class Action {
+        data object Cancel : Action()
+
+        data class Track(val box: TrackingBox) : Action()
+
+        data object None : Action()
+    }
+
+    fun action(
+        trackingActive: Boolean,
+        overlay: FocusOverlay,
+        sceneFaces: List<TrackingBox>,
+    ): Action {
+        if (trackingActive) return Action.Cancel
+        if (overlay is FocusOverlay.Face) return Action.Track(FaceTrackTap.trackingBox(overlay.box))
+        val face = sceneFaces.maxByOrNull { it.area } ?: return Action.None
+        return Action.Track(FaceTrackTap.trackingBox(face))
+    }
+}
+
 object FocusResetPolicy {
     const val OFF_CENTER_THRESHOLD = 0.04
 

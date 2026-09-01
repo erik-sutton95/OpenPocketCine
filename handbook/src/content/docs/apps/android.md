@@ -33,7 +33,17 @@ picture. FORMAT only lists
 `camcap_video_format` pairs. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. The gimbal stick and zoom chip sit together as a cluster in the
-trailing-bottom of the picture, same as iOS. Stick pan stays
+trailing-bottom of the picture, same as iOS. Stick throw is analog with
+an ease-in curve (small push crawls; full throw is fastest). A connected
+game controller's left stick drives the same path. Cross/A records.
+Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
+in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
+(deeper is faster). D-pad up/down ISO, left/right shutter. A toast
+says Gamepad connected or disconnected; unplug rests the stick.
+Operator Setup → Controls → Gamepad shows Connected / Not connected.
+A gimbal stop pulses only after the head moves then stalls (Haptics
+setting). AirPods head tracking is iPhone-only (no headphone IMU
+on Android). Stick pan stays
 picture-relative. Stick triple-tap 180 inverts pan at the end of the
 rotation (like Mimo). Extra-mirror live view when that 180 lands and
 Selfie Flip is off; Flip on skips extra-mirror. The last picture stays
@@ -41,7 +51,9 @@ for a couple of frames before that X-flip so the feed does not swap in
 place. Invert is the rotate-180 button at settle, not joystick 180.
 Reconnect-at-180 seeds TT180 from settled attitude (a 0° stub does not
 lock front). D-Log2 cannot zoom while rolling — the chip grays and
-tap/pinch toast; idle still hops to D-Log off 1×.
+tap/pinch toast; idle hops to D-Log on the first step off 1× and waits
+for that color SET before any zoom write (the chip stays at 1× until
+D-Log lands).
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Next/prev with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /

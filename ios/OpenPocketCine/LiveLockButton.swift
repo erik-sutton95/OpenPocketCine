@@ -35,6 +35,8 @@ enum LiveChromeMetrics {
     static var gimbalKnobSize: CGFloat { 36 * scale }
     static var gimbalStickInset: CGFloat { 16 * scale }
     static var gimbalStickGap: CGFloat { 8 * scale }
+    static var headTrackCalibrateWidth: CGFloat { 172 * scale }
+    static var headTrackCalibrateHeight: CGFloat { 32 * scale }
     /// On-feed stick. Light on dark picture, dark on bright picture.
     static let gimbalStickOpacity: CGFloat = 0.55
     static var focusResetSize: CGFloat { 40 * scale }

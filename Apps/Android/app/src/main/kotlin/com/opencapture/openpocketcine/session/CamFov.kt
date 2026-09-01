@@ -106,6 +106,15 @@ object CamFov {
         return cycle[0]
     }
 
+    /** Next lower chip stop. Stays on the wide end — does not wrap to tele. */
+    fun previousJump(from: Double, stops: List<Double> = JUMPS): Double {
+        val cycle = if (stops.isEmpty()) JUMPS else stops
+        for (stop in cycle.asReversed()) {
+            if (from > stop + 0.05) return stop
+        }
+        return cycle[0]
+    }
+
     fun isJumpStop(factor: Double, stops: List<Double> = JUMPS): Boolean {
         val shown = displayTenths(factor)
         val cycle = if (stops.isEmpty()) JUMPS else stops
@@ -132,6 +141,24 @@ object CamFov {
 
     fun pinchFactor(anchor: Double, magnification: Double, max: Double = MAX_FACTOR): Double =
         clamp(anchor * magnification, max)
+
+    /** Right trigger minus left trigger onto −1…1 (positive = zoom in). */
+    fun triggerZoomAxis(left: Double, right: Double): Double {
+        val l = left.coerceIn(0.0, 1.0)
+        val r = right.coerceIn(0.0, 1.0)
+        return r - l
+    }
+
+    /** Full R2/L2: this many operator × per second. Light press crawls. */
+    const val ZOOM_RATE_PER_SECOND = 3.0
+    const val ZOOM_STEP_INTERVAL_MS = 50L
+
+    /** Hold-to-zoom: `y` is R2−L2 (−1…1). Integrate `dt` seconds of analog rate. */
+    fun zoomStep(current: Double, y: Double, dt: Double, max: Double = MAX_FACTOR): Double {
+        if (dt <= 0.0) return clamp(current, max)
+        val t = CameraCommands.gimbalLinearThrow(y.toFloat()).toDouble()
+        return clamp(current + t * ZOOM_RATE_PER_SECOND * dt, max)
+    }
 
     fun pinchPreview(anchor: Double, magnification: Double): Double =
         displayTenths(pinchFactor(anchor, magnification))
@@ -160,9 +187,19 @@ object CamFov {
 
     fun usesTelephoto(factor: Double): Boolean = displayTenths(factor) >= TELE_ENGAGE
 
+    /**
+     * D-Log2 rejects every zoom SET. Hop on the first step off 1×.
+     * `current` is unpinned live color, not an optimistic HUD pin.
+     */
     fun colorModeForZoom(factor: Double, current: Int): Int? {
         if (current != CameraCommands.COLOR_DLOG2) return null
-        return if (displayTenths(factor) > 1.05) CameraCommands.COLOR_DLOG else null
+        return if (factor > MIN_FACTOR) CameraCommands.COLOR_DLOG else null
+    }
+
+    /** Hold 0xB8 until D-Log2→D-Log is on the body, not only until the color ACK. */
+    fun holdZoomWrite(factor: Double, current: Int, hopPending: Boolean): Boolean {
+        if (hopPending) return true
+        return colorModeForZoom(factor, current) != null
     }
 
     /** Body will not change color while rolling, so D-Log2 cannot leave 1×. */
