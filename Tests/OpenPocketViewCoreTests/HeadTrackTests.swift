@@ -62,13 +62,13 @@ import Testing
         #expect(start!.x == HeadTrack.maxThrow)
         #expect(start!.y == 0)
         var cmd = start
-        for _ in 0..<3 {
+        for _ in 0..<8 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
                 dt: 0.04, gyroYaw: 0.4)
         }
         #expect(cmd != nil)
-        #expect(cmd!.x > 0, "held look keeps throwing until the predicted nose arrives")
+        #expect(cmd!.x > 0, "held look keeps throwing until live yaw is 20°")
         let caught = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true)
@@ -418,39 +418,50 @@ import Testing
             "3° short of a 20° look must not park at reengageDeg — drive until restDeg")
     }
 
-    @Test func stillHeadParksInsteadOfHunting() {
+    @Test func delayedOvershootDoesNotReverseUntilLiveSettles() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         let go = track.tick(
             lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 0, gimbalPitchTenth: 0)
         #expect(go != nil && go!.x < 0 && go!.y < 0)
         var cmd: HeadTrack.Command?
+        for _ in 0..<4 {
+            cmd = track.tick(
+                lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
+                dt: 0.04)
+        }
+        #expect(cmd?.rest == true, "mid-throw delayed overshoot must rest, not reverse-hunt")
+    }
+
+    @Test func afterSettleOvershootComesBackToTheLook() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var cmd: HeadTrack.Command?
         for _ in 0..<10 {
             cmd = track.tick(
                 lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
                 dt: 0.04)
         }
-        #expect(cmd?.rest == true, "head still + delayed overshoot must rest, not reverse")
-        let otherWay = track.tick(
-            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 100, gimbalPitchTenth: 80,
-            dt: 0.04)
+        #expect(cmd != nil)
         #expect(
-            otherWay?.rest == true,
-            "physical take: head still −3/−5 must not bob body ±10°")
+            cmd!.x > 0 && cmd!.y > 0,
+            "stable live 8° past a −8° look must nudge back — 1:1 is live matching the look")
     }
 
     @Test func stillHeadKeepsClosingOnCommittedLook() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         var cmd: HeadTrack.Command?
-        for _ in 0..<3 {
+        for _ in 0..<10 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
                 dt: 0.04)
         }
         #expect(
             cmd?.x == HeadTrack.maxThrow,
-            "head still: keep closing the committed 20° look until the predicted nose arrives")
+            "head still: keep throwing until live yaw is 20°, not a predicted rest")
         let caught = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true)
@@ -476,14 +487,14 @@ import Testing
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04)
         #expect(cmd != nil)
         #expect(cmd!.y == HeadTrack.maxThrow)
-        for _ in 0..<2 {
+        for _ in 0..<8 {
             cmd = track.tick(
                 lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04,
                 gyroLookUp: 0.3)
         }
         #expect(
             cmd?.y == HeadTrack.maxThrow,
-            "pitch must keep throwing at full stick until the predicted nose arrives")
+            "pitch must keep throwing at full stick until live @20 is 20°")
         let caught = track.tick(
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
         #expect(caught?.rest == true)
@@ -704,19 +715,28 @@ import Testing
                 < 0.001)
     }
 
-    @Test func predictedCloseRestsWhileLiveIsStuck() {
+    @Test func afterSettleLiveShortOfLookNudges() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<20 {
-            cmd = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+        _ = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
+        for _ in 0..<8 {
+            _ = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
                 dt: 0.04)
         }
+        var cmd: HeadTrack.Command?
+        for _ in 0..<8 {
+            cmd = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 170, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        #expect(cmd != nil)
         #expect(
-            cmd?.rest == true,
-            "after ~0.8 s the predicted nose has arrived — do not slam live=0 until 0x04/0x05 catches"
-        )
+            cmd!.x > 0,
+            "stable live 17° vs a 20° look must nudge — the sky arrow has to reach 20°")
     }
 
     @Test func swingCloseDoesNotDriveRoll() {

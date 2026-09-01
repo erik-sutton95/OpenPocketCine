@@ -1,17 +1,13 @@
 import Foundation
 
 /// Shared local space: Calibrate Head Lock is identity (SET).
-/// Look is the SET-relative nose on the sphere, not Euler Δatt yaw —
-/// a nod changes Euler yaw tens of degrees with the nose still on the
-/// meridian. Reconstruct the gimbal the same way (pan then tilt, +Y
-/// forward). Error is swing (nose-to-nose) — twist/roll is not on
-/// `0x04/0x01` and must not be driven (that was quaternion slam).
-/// Pocket has no quaternion or absolute pan/tilt SET — only rate stick
-/// `0x04/0x01`. Close a **predicted** gimbal pose (integrate throw ×
-/// rate; snap to live only when attitude jumps ahead of the throw) so
-/// delayed `0x04/0x05` cannot hunt. Commit a look; retarget only when
-/// the head moves `retargetDeg` (turn the other way before arrival).
-/// Encode **linear**.
+/// Look is the SET-relative nose on the sphere, not Euler Δatt yaw.
+/// The rings show that look vs live gimbal pan/tilt — 20° head is 20°
+/// on the sky arrow when `0x04/0x05` matches. Pocket has no angle SET,
+/// only rate stick `0x04/0x01`. Throw until live matches the look
+/// (`restDeg`). Do not reverse mid-throw (delayed attitude hunted).
+/// After a rest, if live is still off and stable for `stillHold`, nudge
+/// including reverse. Twist/roll is not on the stick. Encode **linear**.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
     public static let engageDeg = 1.8
@@ -21,23 +17,13 @@ public struct HeadTrack: Equatable, Sendable {
     /// After a 1:1 close, live yaw wiggle (~2°) must not re-grab the stick.
     public static let reengageDeg = retargetDeg
     /// Error that maps to full stick. Bang-bang overshot; 15° crawled.
-    /// 10° is full throw; keep driving the committed look until restDeg.
     public static let fullThrowDeg = 10.0
     public static let stillRestDeg = 2.5
     /// |look-right| inside this is a nod — do not servo pan (live-yaw wiggle).
     public static let panIsolateDeg = 3.0
-    /// Full-stick prior. Delayed `0x04/0x05` (~10 Hz) plus a slower prior
-    /// overshot a 6° look by ~15°. Integrate this, rest when the predicted
-    /// nose arrives — do not wait for live to show the look.
-    public static let stickRatePerSecond = 120.0
-    public static let tiltRatePerSecond = stickRatePerSecond
-    /// Live jumped farther than delay can explain — snap the predictor.
-    /// 15° is larger than a 10 Hz delay overshoot and smaller than the
-    /// physical −6° look / −21° gimbal jump.
-    public static let predSnapDeg = 15.0
     public static let gyroStillRadPerSec = 0.10
     public static let calibrateStillRadPerSec = 0.08
-    /// After this of still, rest the stick (look stays on the sphere).
+    /// Rest this long with stable live before a 1:1 nudge (including reverse).
     public static let stillHold: TimeInterval = 0.25
     /// Full-stick tilt with live `@20` stuck: rest tilt (do not slam).
     /// Only arms at `|errTilt| ≥ fullThrowDeg` so a slow nod is not killed.
@@ -263,13 +249,10 @@ public struct HeadTrack: Equatable, Sendable {
     private var tiltThrowElapsed: TimeInterval = 0
     private var pitchWhenTiltBegan: Double?
     private var tiltTelemetryDead = false
-    /// Predicted gimbal pan/tilt (same units as `0x04/0x05`). Integrates
-    /// throw × `stickRatePerSecond`; live attitude is a slow correction.
-    private var predYawDeg = 0.0
-    private var predTiltDeg = 0.0
-    private var havePred = false
-    private var lastThrowX = 0.0
-    private var lastThrowY = 0.0
+    /// Live must sit still this long after a rest before a 1:1 nudge.
+    private var settleFor: TimeInterval = 0
+    private var settleYawDeg: Double?
+    private var settleTiltDeg: Double?
 
     public init() {}
 
@@ -286,9 +269,9 @@ public struct HeadTrack: Equatable, Sendable {
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
-        havePred = false
-        lastThrowX = 0
-        lastThrowY = 0
+        settleFor = 0
+        settleYawDeg = nil
+        settleTiltDeg = nil
     }
 
     @discardableResult
@@ -314,11 +297,9 @@ public struct HeadTrack: Equatable, Sendable {
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
-        predYawDeg = gimbalYaw0Deg
-        predTiltDeg = gimbalPitch0Deg
-        havePred = true
-        lastThrowX = 0
-        lastThrowY = 0
+        settleFor = 0
+        settleYawDeg = nil
+        settleTiltDeg = nil
         isCentered = true
         return .centered
     }
@@ -335,7 +316,6 @@ public struct HeadTrack: Equatable, Sendable {
         lookUpDeg = Self.unwrap(wrappedUp, previous: lookUpDeg)
         let liveYaw = Self.tenthToDeg(gimbalYawTenth)
         let liveTilt = gimbalPitchTenth.map(Self.tenthToDeg) ?? gimbalPitch0Deg
-        advancePred(liveYaw: liveYaw, liveTilt: liveTilt, dt: dt)
         let headMove = Self.geodesicDeg(
             fromRight: commitRight, fromUp: commitUp,
             toRight: lookRightDeg, toUp: lookUpDeg)
@@ -345,61 +325,43 @@ public struct HeadTrack: Equatable, Sendable {
             lastSignY = 0
             commitRight = lookRightDeg
             commitUp = lookUpDeg
+            settleFor = 0
+            settleYawDeg = nil
+            settleTiltDeg = nil
         }
         let target = Reach.project(
             lookRight: lookRightDeg, lookUp: lookUpDeg,
             yaw0: gimbalYaw0Deg, pitch0: gimbalPitch0Deg)
-        let bodyRight = Self.wrapDeg(predYawDeg - gimbalYaw0Deg)
-        let bodyUp = predTiltDeg - gimbalPitch0Deg
         let projRight = target.yaw - gimbalYaw0Deg
         let projUp = target.pitch - gimbalPitch0Deg
+        let liveBodyRight = Self.wrapDeg(liveYaw - gimbalYaw0Deg)
+        let liveBodyUp = liveTilt - gimbalPitch0Deg
         var swing = Self.swingError(
-            fromRight: bodyRight, fromUp: bodyUp,
+            fromRight: liveBodyRight, fromUp: liveBodyUp,
             toRight: projRight, toUp: projUp)
         if abs(lookRightDeg) <= Self.panIsolateDeg, abs(lookUpDeg) > abs(lookRightDeg) {
             swing.pan = 0
             swing.mag = abs(swing.tilt)
         }
-        var errPan = swing.pan
+        let errPan = swing.pan
         var errTilt = swing.tilt
-        var preMag = swing.mag
-        let liveBodyRight = Self.wrapDeg(liveYaw - gimbalYaw0Deg)
-        let liveBodyUp = liveTilt - gimbalPitch0Deg
-        var liveSwing = Self.swingError(
-            fromRight: liveBodyRight, fromUp: liveBodyUp,
-            toRight: projRight, toUp: projUp)
-        if abs(lookRightDeg) <= Self.panIsolateDeg, abs(lookUpDeg) > abs(lookRightDeg) {
-            liveSwing.pan = 0
-            liveSwing.mag = abs(liveSwing.tilt)
-        }
-        let liveMoved =
-            hypot(liveBodyRight, liveBodyUp) >= 1
-        let livePast =
-            (lastSignX != 0 && liveSwing.pan * lastSignX < 0)
-            || (lastSignY != 0 && liveSwing.tilt * lastSignY < 0)
-        let withinBox =
-            abs(liveBodyRight) <= abs(projRight) + Self.restDeg
-            && abs(liveBodyUp) <= abs(projUp) + Self.restDeg
-        if parked, liveMoved, !livePast, withinBox, liveSwing.mag >= Self.reengageDeg {
+        let mag = swing.mag
+        if parked, settleFor >= Self.stillHold, mag > Self.restDeg, !tiltTelemetryDead {
             parked = false
-        }
-        if preMag <= Self.restDeg, liveSwing.mag > Self.restDeg, liveMoved, !livePast {
-            errPan = liveSwing.pan
-            errTilt = liveSwing.tilt
-            preMag = liveSwing.mag
+            lastSignX = 0
+            lastSignY = 0
         }
         noteFrozenTilt(
             liveTilt: liveTilt, errTilt: &errTilt, dt: dt,
-            tracking: engaged || preMag >= Self.engageDeg)
+            tracking: engaged || mag >= Self.engageDeg)
         var x: Double
         var y: Double
-        (x, y) = gatedThrow(
-            errPan: errPan, errTilt: errTilt, mag: preMag, liveMag: liveSwing.mag, dt: dt)
+        (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt, mag: mag)
         if lastSignX != 0, x * lastSignX < 0 { x = 0 }
         if lastSignY != 0, y * lastSignY < 0 { y = 0 }
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
-        if x == 0, y == 0, preMag > Self.restDeg, !tiltTelemetryDead {
+        if x == 0, y == 0, mag > Self.restDeg, !tiltTelemetryDead {
             parked = true
             engaged = false
             commitRight = lookRightDeg
@@ -407,8 +369,13 @@ public struct HeadTrack: Equatable, Sendable {
         }
         if x != 0 { lastSignX = x < 0 ? -1 : 1 }
         if y != 0 { lastSignY = y < 0 ? -1 : 1 }
-        lastThrowX = x
-        lastThrowY = y
+        if x == 0, y == 0, mag > Self.restDeg {
+            noteSettle(liveYaw: liveYaw, liveTilt: liveTilt, dt: dt)
+        } else {
+            settleFor = 0
+            settleYawDeg = nil
+            settleTiltDeg = nil
+        }
         return Command(x: x, y: y)
     }
 
@@ -428,46 +395,23 @@ public struct HeadTrack: Equatable, Sendable {
 
     public static func tenthToDeg(_ tenth: Int16) -> Double { Double(tenth) / 10 }
 
-    private mutating func advancePred(liveYaw: Double, liveTilt: Double, dt: TimeInterval) {
-        if !havePred {
-            predYawDeg = liveYaw
-            predTiltDeg = liveTilt
-            havePred = true
-            return
-        }
-        let throwing =
-            abs(lastThrowX) >= Self.restThrow || abs(lastThrowY) >= Self.restThrow
-        if !throwing {
-            predYawDeg = liveYaw
-            predTiltDeg = liveTilt
-            return
-        }
-        if dt > 0 {
-            predYawDeg += lastThrowX * Self.stickRatePerSecond * dt
-            predTiltDeg += lastThrowY * Self.stickRatePerSecond * dt
-        }
-        // Snap only when live jumped *ahead* of the throw. |live−pred| while
-        // telemetry is stuck at SET would rewind the nose and slam again.
-        if lastThrowX > Self.restThrow,
-            Self.wrapDeg(liveYaw - predYawDeg) >= Self.predSnapDeg
+    private mutating func noteSettle(liveYaw: Double, liveTilt: Double, dt: TimeInterval) {
+        guard dt > 0 else { return }
+        if let y0 = settleYawDeg, let t0 = settleTiltDeg,
+            hypot(Self.wrapDeg(liveYaw - y0), liveTilt - t0) < 1
         {
-            predYawDeg = liveYaw
-        } else if lastThrowX < -Self.restThrow,
-            Self.wrapDeg(predYawDeg - liveYaw) >= Self.predSnapDeg
-        {
-            predYawDeg = liveYaw
-        }
-        if lastThrowY > Self.restThrow, liveTilt - predTiltDeg >= Self.predSnapDeg {
-            predTiltDeg = liveTilt
-        } else if lastThrowY < -Self.restThrow, predTiltDeg - liveTilt >= Self.predSnapDeg {
-            predTiltDeg = liveTilt
+            settleFor += dt
+        } else {
+            settleYawDeg = liveYaw
+            settleTiltDeg = liveTilt
+            settleFor = dt
         }
     }
 
-    private mutating func gatedThrow(
-        errPan: Double, errTilt: Double, mag: Double, liveMag: Double, dt: TimeInterval
-    ) -> (Double, Double) {
-        if mag <= Self.restDeg || liveMag <= Self.restDeg {
+    private mutating func gatedThrow(errPan: Double, errTilt: Double, mag: Double) -> (
+        Double, Double
+    ) {
+        if mag <= Self.restDeg {
             if !tiltTelemetryDead {
                 parked = true
                 commitRight = lookRightDeg
@@ -481,18 +425,13 @@ public struct HeadTrack: Equatable, Sendable {
             if mag < Self.engageDeg { return (0, 0) }
             engaged = true
         }
-        return (throwFor(errPan, dt: dt), throwFor(errTilt, dt: dt))
+        return (throwFor(errPan), throwFor(errTilt))
     }
 
-    private func throwFor(_ errorDeg: Double, dt: TimeInterval) -> Double {
+    private func throwFor(_ errorDeg: Double) -> Double {
         if abs(errorDeg) < 0.5 { return 0 }
         let n = errorDeg / Self.fullThrowDeg
-        var t = min(max(n, -Self.maxThrow), Self.maxThrow)
-        if dt > 0 {
-            let maxStep = abs(errorDeg) / (Self.stickRatePerSecond * dt)
-            t = min(max(t, -maxStep), maxStep)
-        }
-        return t
+        return min(max(n, -Self.maxThrow), Self.maxThrow)
     }
 
     /// `@20` stuck during a *full-stick* nod: rest tilt so we do not slam.

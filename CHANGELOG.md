@@ -16,13 +16,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Head-track look-at is swing on the SET sphere (head quaternion and
-  reconstructed gimbal nose), not a quaternion SET — Pocket has none,
-  and twist/roll is not on `0x04/0x01`. The closer integrates throw ×
-  120°/s and rests when the predicted nose arrives, so delayed
-  `0x04/0x05` (~10 Hz) cannot hunt. Commit a look; retarget when the
-  head moves ≥2.5° (turn the other way before arrival). One throw until
-  close, then one rest — no rest/throw chatter.
+- Head-track throws until live gimbal pan/tilt matches the head look
+  (20° on the rings is 20° on the body). Pocket has no angle SET — the
+  stick is a rate joystick — so a stable miss after rest gets one
+  reverse-allowed nudge. Do not reverse mid-throw (that hunted).
+  Retarget when the head moves ≥2.5°. One throw until close, then one
+  rest.
 
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0

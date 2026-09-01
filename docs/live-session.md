@@ -53,11 +53,10 @@ Head-track rest **lifts**
 catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it.
-Commit a look and close a predicted gimbal nose onto it (swing only;
-integrate throw × 120°/s). Retarget only when the head moves 2.5°.
-Do not reverse-hunt on delayed `0x04/0x05` (do not snap the predictor
-back to stuck SET). One throw until arrival, then one rest (rest/throw
-the same second paused HEVC). Analog/head-track rest when
+Commit a look and throw until live `0x04/0x05` matches it (20° head is
+20° gimbal). Do not reverse mid-throw; after a rest, a stable miss
+nudges. Retarget when the head moves 2.5°. One throw until arrival,
+then one rest (rest/throw the same second paused HEVC). Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
