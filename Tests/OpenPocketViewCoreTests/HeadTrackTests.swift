@@ -439,7 +439,7 @@ import Testing
             "physical take: head still −3/−5 must not bob body ±10°")
     }
 
-    @Test func stillHeadRestsEvenWhenShortOfLook() {
+    @Test func stillHeadKeepsClosingOnCommittedLook() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         var cmd: HeadTrack.Command?
@@ -449,8 +449,24 @@ import Testing
                 dt: 0.04)
         }
         #expect(
-            cmd?.rest == true,
-            "head still 0.25 s must lift — rest/throw same second paused HEVC")
+            cmd?.x == HeadTrack.maxThrow,
+            "head still: keep closing the committed 20° look until live catches")
+        let caught = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
+        #expect(caught?.rest == true)
+    }
+
+    @Test func retargetTurnsAroundBeforeArrival() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let go = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(go?.x == HeadTrack.maxThrow)
+        let around = track.tick(
+            lookRightDeg: -15, lookUpDeg: 0, gimbalYawTenth: 80, gimbalPitchTenth: 0)
+        #expect(
+            around?.x == -HeadTrack.maxThrow,
+            "head turns the other way before arrival: new destination, reverse")
     }
 
     @Test func nodKeepsThrowingUntilLivePitchCatches() {

@@ -77,13 +77,13 @@ iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
 Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
 shared identity: look is the SET-relative nose (CMAttitude +Y forward),
 not Euler yaw. That look is gimbal pan/tilt in degrees.
-Pocket has no absolute pan/tilt SET — only rate stick `0x04/0x01`. Look
-is the target pose; throw closes live `0x04/0x05` onto it (`0x04/0x50`
-Fast + tilt unlocked). Throw is error/`fullThrowDeg` (8° = full ±550)
-until `|error| ≤ restDeg` while approaching. Do not reverse while the
-nose is still that way (still head + delayed attitude hunted ±10°).
-Park when the head is still (0.25 s) — rest/throw the same second
-paused HEVC. Debounce the lift 0.3 s (`stopDrive` must not clear it). Rest **lifts** the stick (Mimo:
+Pocket has no absolute pan/tilt SET — only rate stick `0x04/0x01`.
+Commit the SET-relative look; keep closing live `0x04/0x05` onto that
+destination (`0x04/0x50` Fast + tilt unlocked) until arrival. Retarget
+only when the head moves `retargetDeg` (2.5°) from the committed look —
+turn the other way before the gimbal arrives. Do not reverse on delayed
+attitude (that hunted ±10°). One throw until close, then one rest.
+Rest **lifts** the stick (Mimo:
 notify only while thrown). Streaming center at 25 Hz paused HEVC at
 15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
 Encoder-pause: two enables then

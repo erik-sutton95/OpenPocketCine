@@ -63,7 +63,6 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private var centerHaptic = UIImpactFeedbackGenerator(style: .medium)
     private var track = HeadTrack()
     private var driving = false
-    private var restFor: TimeInterval = 0
     private var gimbalYaw0Deg = 0.0
     private var gimbalPitch0Deg = 0.0
     private var didToastLive = false
@@ -182,7 +181,6 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         pendingCalibrate = false
         calibratedByUser = true
         didToastLive = true
-        restFor = 0
         model.session.prepHeadTrackGimbal()
         model.session.controlNote = "Head lock set — gimbal follows"
         ControlLiveLog.line("head-track: calibrated")
@@ -389,16 +387,8 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
                         format: "head-track: stick rest head Y=%.1f P=%.1f", lookRight, lookUp))
                 stopDrive()
             }
-            restFor += max(dt, 0)
             return
         }
-        // 22:24 rest/throw in the same second paused HEVC. Do not re-grab
-        // for 0.3 s after lift. stopDrive must not clear this timer.
-        if restFor > 0, restFor < 0.3 {
-            restFor += max(dt, 0)
-            return
-        }
-        restFor = 0
         if !driving {
             let axes = GimbalStick.encode(
                 x: cmd.x, y: cmd.y,

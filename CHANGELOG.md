@@ -16,10 +16,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Head-track rest/throw in the same second paused HEVC (encoder-pause
-  drop). Park when the head is still; debounce 0.3 s after lift
-  (`stopDrive` must not clear that timer). Do not reverse-hunt on delayed
-  `0x04/0x05`.
+- Head-track commits a look and keeps closing onto it until the gimbal
+  arrives. Retarget only when the head moves ≥2.5° from that look (turn
+  the other way before arrival). Do not reverse on delayed attitude.
+  One throw until close, then one rest — no rest/throw chatter.
 
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0
