@@ -65,7 +65,9 @@ a forever skip after a SoftAP flap.
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
-`GL_TEXTURE_EXTERNAL_OES` is the fallback.
+`GL_TEXTURE_EXTERNAL_OES` is the fallback. Drop the swapchain in
+`surfaceDestroyed` before Android destroys the window mutex; drain
+`opc.vk.img` before `nativeDestroy`. Contract: [`docs/live-session.md`](docs/live-session.md).
 
 ### HUD glass
 

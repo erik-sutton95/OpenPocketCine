@@ -32,7 +32,7 @@ GOP (`videoPkts=0`, HUD stuck on Waiting for live view). The client 5-tuple
 uses an **ephemeral local port**; binding local `:9004` (camera's listen port)
 keeps `0x01` telemetry and drops HEVC.
 
-In-app Disconnect is not process death. The camera keeps the last GOP running, and the phone must still drop its own UDP driver (generation / closed flag, callbacks, ACK pump) and decoder (VideoToolbox session + display-layer flush on iOS; MediaCodec output thread + Surface unbind on Android). A cancelled handshake `open()` must not publish LIVE after the operator already left. Leaving those live is why reconnect hung on Waiting for live view until the app was killed.
+In-app Disconnect is not process death. The camera keeps the last GOP running, and the phone must still drop its own UDP driver (generation / closed flag, callbacks, ACK pump) and decoder (VideoToolbox session + display-layer flush on iOS; MediaCodec output thread + Surface unbind on Android). Android Vulkan must drop the swapchain before `surfaceDestroyed` returns and must not present after that window is gone. A cancelled handshake `open()` must not publish LIVE after the operator already left. Leaving those live is why reconnect hung on Waiting for live view until the app was killed.
 
 DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
 
