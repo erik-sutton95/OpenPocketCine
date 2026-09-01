@@ -148,6 +148,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live picture no longer goes black after opening clips or
+  Operator Setup (#177). Settings / media covering the monitor must not
+  drop pktType `0x02` — Pocket has no periodic GOP, and the watchdog
+  will not PLI while UDP video is still arriving. Return-from-gallery
+  now uses the captured live-start (`0x02/0x68` then `0x09/0xa8` + IDR
+  hold) instead of a raw enable write.
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —

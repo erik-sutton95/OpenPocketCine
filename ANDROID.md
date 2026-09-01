@@ -65,7 +65,10 @@ a forever skip after a SoftAP flap.
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
-`GL_TEXTURE_EXTERNAL_OES` is the fallback.
+`GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
+cover the monitor; they must not drop pktType `0x02` ingest (parity: live
+HEVC held). Return-from-gallery uses `restartLiveViewAfterMedia` (captured
+live-start), not `DatalinkDriver.startLiveView` alone.
 
 ### HUD glass
 

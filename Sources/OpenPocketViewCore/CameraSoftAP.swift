@@ -378,6 +378,20 @@ extension CameraSoftAP {
         ingestArmed
     }
 
+    /// Settings / media covering the monitor is not a leftover-GOP gate.
+    /// Android used to drop pktType `0x02` while the overlay was up; Pocket
+    /// has no periodic GOP, and the watchdog will not PLI while UDP `0x02`
+    /// is still arriving — return is a black well with live HUD (#177).
+    public static func shouldIngestLiveVideo(
+        ingestArmed: Bool,
+        browsingMedia: Bool,
+        operatorOverlayHeld: Bool
+    ) -> Bool {
+        _ = browsingMedia
+        _ = operatorOverlayHeld
+        return ingestArmed
+    }
+
     /// Skip GOP-reset IDR hold when a picture is already on the layer.
     /// Mimo's enable at +3 s must not black a feed that started at +17 ms.
     public static func shouldBeginIDRHoldOnEnable(hasPresentedPicture: Bool) -> Bool {

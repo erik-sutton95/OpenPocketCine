@@ -528,7 +528,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 ).also { created ->
                     created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
                     created.onAccessUnit = { au ->
-                        if (!isBrowsingMedia && !operatorOverlayHeld) {
+                        if (LiveViewEnablePolicy.shouldIngestLiveVideo(
+                                ingestArmed = true,
+                                browsingMedia = isBrowsingMedia,
+                                operatorOverlayHeld = operatorOverlayHeld,
+                            )
+                        ) {
                             rawAccessUnits += 1
                             decoder.decode(au)
                         }
@@ -2035,9 +2040,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         isBrowsingMedia = browsing
     }
 
-    /** Drop live HEVC while Settings / Media cover the monitor so 4K playback is not fighting the decoder. */
+    /**
+     * Settings / media cover the monitor. Do not drop pktType `0x02` —
+     * live HEVC stays armed under the overlay (parity / #177).
+     */
     fun setOperatorOverlayHeld(held: Boolean) {
         operatorOverlayHeld = held
+    }
+
+    /** iOS `restartLiveViewAfterMedia`: captured live-start, not a raw `0xa8`. */
+    fun restartLiveViewAfterMedia() {
+        sendCapturedLiveView("media browse ended")
     }
 
     fun beginMediaBrowse() {
@@ -3596,6 +3609,25 @@ internal object LiveViewEnablePolicy {
         val age = videoAgeMs ?: return false
         return age < STALL_MS
     }
+
+    fun shouldIngestLiveVideo(ingestArmed: Boolean): Boolean = ingestArmed
+
+    /**
+     * Settings / media covering the monitor is not a leftover-GOP gate.
+     * Dropping `0x02` while UDP stays live blacks the well on return (#177).
+     */
+    fun shouldIngestLiveVideo(
+        ingestArmed: Boolean,
+        browsingMedia: Boolean,
+        operatorOverlayHeld: Boolean,
+    ): Boolean {
+        // browsingMedia / operatorOverlayHeld are lockstep with CameraSoftAP.
+        // Overlay/browse must not drop 0x02. Pocket has no periodic GOP (#177).
+        if (browsingMedia || operatorOverlayHeld) return ingestArmed
+        return ingestArmed
+    }
+
+    fun shouldUseCapturedLiveStartForMediaResume(): Boolean = true
 
     /** Pocket: `0x02/0x68` `08` immediately before `0x09/0xa8`. Not Nano. */
     fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean = !usesNanoLiveViewGate

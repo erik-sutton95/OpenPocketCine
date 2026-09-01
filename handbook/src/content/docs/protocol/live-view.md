@@ -20,7 +20,7 @@ The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 90
 
 ## Enable
 
-Pocket live-entry also sends DUML **`0x02/0x68`** payload `08` (AE Lock Status Set, same bytes as the tap-focus hint) **immediately before** `0x09/0xa8`. Mimo `mimo-disconnect-20260822-105228`: first live after gallery is `0x68` then an `0xa8` burst then a 137 B VPS (NAL 32/33/34). Return-from-gallery on the same 5-tuple can skip `0x68` and still start on VPS. There is **no** live-stop command — Disconnect leaves the last GOP running, which is why handshake can see leftover TRAIL P-frames (`nals=1,35,40`) before enable. Nano has no captured `0x68` pair.
+Pocket live-entry also sends DUML **`0x02/0x68`** payload `08` (AE Lock Status Set, same bytes as the tap-focus hint) **immediately before** `0x09/0xa8`. Mimo `mimo-disconnect-20260822-105228`: first live after gallery is `0x68` then an `0xa8` burst then a 137 B VPS (NAL 32/33/34). Return-from-gallery on the same 5-tuple can skip `0x68` and still start on VPS. There is **no** live-stop command — Disconnect leaves the last GOP running, which is why handshake can see leftover TRAIL P-frames (`nals=1,35,40`) before enable. Nano has no captured `0x68` pair. Clients must keep ingesting pktType `0x02` while the library or settings cover the monitor — dropping those packets blacks the well on return (no periodic GOP).
 
 Ingest pktType `0x02` as soon as the UDP handshake is acked. Mimo
 `mimo-live-start-20260828`: first HEVC 17 ms after SoftAP DHCP; first

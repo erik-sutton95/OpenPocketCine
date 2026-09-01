@@ -70,7 +70,9 @@ Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 Live picture: Vulkan when the device can init it; GLES fallback. HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
-the last frame on freeze, one live-enable write at a time).
+the last frame on freeze, one live-enable write at a time). Opening clips or
+Operator Setup over live view keeps the HEVC GOP; returning to the monitor
+must not leave a black well.
 
 Wi-Fi passwords stay in Keystore, not saved-camera JSON. Pairing and live view
 need a **physical** Android phone.

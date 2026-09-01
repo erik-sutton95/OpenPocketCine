@@ -46,6 +46,17 @@ import Testing
         #expect(
             CameraSoftAP.shouldIngestLiveVideo(ingestArmed: true),
             "Mimo 20260828: HEVC at join+17ms, 0xa8 at +3s")
+        #expect(
+            CameraSoftAP.shouldIngestLiveVideo(
+                ingestArmed: true, browsingMedia: true, operatorOverlayHeld: false),
+            "#177: library covering the monitor is not a leftover-GOP gate")
+        #expect(
+            CameraSoftAP.shouldIngestLiveVideo(
+                ingestArmed: true, browsingMedia: false, operatorOverlayHeld: true),
+            "#177: settings covering the monitor is not a leftover-GOP gate")
+        #expect(
+            !CameraSoftAP.shouldIngestLiveVideo(
+                ingestArmed: false, browsingMedia: true, operatorOverlayHeld: true))
         #expect(CameraSoftAP.shouldBeginIDRHoldOnEnable(hasPresentedPicture: false))
         #expect(!CameraSoftAP.shouldBeginIDRHoldOnEnable(hasPresentedPicture: true))
         #expect(

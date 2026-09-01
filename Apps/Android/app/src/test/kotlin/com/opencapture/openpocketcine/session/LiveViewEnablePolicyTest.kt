@@ -159,7 +159,8 @@ class LiveViewEnablePolicyTest {
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
-                lastVideoAt = now - 8_000,
+                // Throw hold is capped at stall+3 s of video age.
+                lastVideoAt = now - 2_000,
                 lastStatusAt = now - 200,
                 lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
@@ -552,6 +553,37 @@ class LiveViewEnablePolicyTest {
                 videoPackets = 375,
                 videoAgeMs = 200,
             ),
+        )
+    }
+
+    @Test
+    fun overlayMustNotDropLiveHevc() {
+        assertTrue(
+            LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = true,
+                browsingMedia = true,
+                operatorOverlayHeld = false,
+            ),
+            "#177: library covering the monitor is not a leftover-GOP gate",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = true,
+                browsingMedia = false,
+                operatorOverlayHeld = true,
+            ),
+            "#177: settings covering the monitor is not a leftover-GOP gate",
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = false,
+                browsingMedia = true,
+                operatorOverlayHeld = true,
+            ),
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldUseCapturedLiveStartForMediaResume(),
+            "media resume is 0x68 then 0x09/0xa8 + IDR hold, not a raw 0xa8 write",
         )
     }
 
