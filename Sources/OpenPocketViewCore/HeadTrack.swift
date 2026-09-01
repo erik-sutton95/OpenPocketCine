@@ -50,6 +50,16 @@ public struct HeadTrack: Equatable, Sendable {
         radToDeg(pitchRad - originPitchRad)
     }
 
+    /// SET-relative gimbal pan. Live `0x04/0x05` yaw minus Calibrate Head Lock.
+    public static func bodyLookRightDeg(liveYawDeg: Double, originYawDeg: Double) -> Double {
+        wrapDeg(liveYawDeg - originYawDeg)
+    }
+
+    /// SET-relative gimbal tilt. Live pitch minus Calibrate Head Lock.
+    public static func bodyLookUpDeg(livePitchDeg: Double, originPitchDeg: Double) -> Double {
+        livePitchDeg - originPitchDeg
+    }
+
     /// Clockwise degrees from 12 o'clock on the yaw ring. Matches `lookRightDeg`.
     public static func yawDialDeg(lookRightDeg: Double) -> Double {
         wrapDeg(lookRightDeg)

@@ -1,8 +1,9 @@
 import OpenPocketViewCore
 import SwiftUI
 
-/// Two SET-relative rings so an operator can see AirPods yaw and pitch 1:1.
+/// Two SET-relative rings so an operator can see AirPods and gimbal 1:1.
 /// Yaw: 12 o'clock is forward. Pitch: arrow-right is 0, nod is up/down.
+/// White arrow is the head; sky arrow is live `0x04/0x05`.
 struct LiveHeadTrackAxisDials: View {
     var pose: HeadTrackAxisPose
 
@@ -11,16 +12,33 @@ struct LiveHeadTrackAxisDials: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             dial(
-                title: "YAW", lookDeg: pose.yawDeg,
+                title: "YAW",
+                lookDeg: pose.yawDeg,
                 rotationDeg: HeadTrack.yawDialDeg(lookRightDeg: pose.yawDeg),
+                gimbalDeg: pose.gimbalYawDeg,
+                gimbalRotationDeg: pose.gimbalYawDeg.map(HeadTrack.yawDialDeg(lookRightDeg:)),
                 forward: .up)
             dial(
-                title: "PITCH", lookDeg: pose.pitchDeg,
+                title: "PITCH",
+                lookDeg: pose.pitchDeg,
                 rotationDeg: HeadTrack.pitchDialDeg(lookUpDeg: pose.pitchDeg),
+                gimbalDeg: pose.gimbalPitchDeg,
+                gimbalRotationDeg: pose.gimbalPitchDeg.map(HeadTrack.pitchDialDeg(lookUpDeg:)),
                 forward: .right)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.top, 22)
+        .padding(.bottom, 8)
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 8) {
+                legendSwatch(LiveDesign.text, "HEAD")
+                if pose.gimbalYawDeg != nil || pose.gimbalPitchDeg != nil {
+                    legendSwatch(LiveDesign.accent, "GIMBAL")
+                }
+            }
+            .padding(.top, 6)
+            .padding(.leading, 10)
+        }
         .overlay(alignment: .topTrailing) {
             Text(pose.locked ? "SET" : "IMU")
                 .font(LiveType.ui(size: 9, weight: .semibold, design: .rounded))
@@ -30,10 +48,18 @@ struct LiveHeadTrackAxisDials: View {
         }
         .liveChromeCapsule()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Head yaw \(Int(pose.yawDeg.rounded())) degrees, pitch \(Int(pose.pitchDeg.rounded())) degrees"
-        )
+        .accessibilityLabel(accessibilityText)
         .accessibilityIdentifier("monitor.system.headTrackAxisDials")
+    }
+
+    private var accessibilityText: String {
+        var text =
+            "Head yaw \(Int(pose.yawDeg.rounded())) degrees, pitch \(Int(pose.pitchDeg.rounded())) degrees"
+        if let gy = pose.gimbalYawDeg, let gp = pose.gimbalPitchDeg {
+            text +=
+                ", gimbal yaw \(Int(gy.rounded())) degrees, pitch \(Int(gp.rounded())) degrees"
+        }
+        return text
     }
 
     private enum Forward {
@@ -41,9 +67,10 @@ struct LiveHeadTrackAxisDials: View {
         case right
     }
 
-    private func dial(title: String, lookDeg: Double, rotationDeg: Double, forward: Forward)
-        -> some View
-    {
+    private func dial(
+        title: String, lookDeg: Double, rotationDeg: Double,
+        gimbalDeg: Double?, gimbalRotationDeg: Double?, forward: Forward
+    ) -> some View {
         VStack(spacing: 4) {
             Text(title)
                 .font(LiveType.ui(size: 10, weight: .semibold, design: .rounded))
@@ -58,16 +85,38 @@ struct LiveHeadTrackAxisDials: View {
                 }
                 cardinalTicks
                 forwardMark(forward)
+                if let gimbalRotationDeg {
+                    LiveHeadTrackForwardArrow()
+                        .fill(LiveDesign.accent)
+                        .frame(width: 22, height: dialSize * 0.62)
+                        .rotationEffect(.degrees(gimbalRotationDeg))
+                }
                 LiveHeadTrackForwardArrow()
                     .fill(LiveDesign.text)
-                    .frame(width: 22, height: dialSize * 0.62)
+                    .frame(width: 16, height: dialSize * 0.50)
                     .rotationEffect(.degrees(rotationDeg))
-                Text(String(format: "%+.0f°", lookDeg))
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.9))
-                    .offset(y: dialSize * 0.28)
             }
             .frame(width: dialSize, height: dialSize)
+            VStack(spacing: 0) {
+                Text(String(format: "%+.0f°", lookDeg))
+                    .foregroundStyle(LiveDesign.text.opacity(0.9))
+                if let gimbalDeg {
+                    Text(String(format: "%+.0f°", gimbalDeg))
+                        .foregroundStyle(LiveDesign.accent)
+                }
+            }
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+        }
+    }
+
+    private func legendSwatch(_ color: Color, _ title: String) -> some View {
+        HStack(spacing: 4) {
+            Capsule()
+                .fill(color)
+                .frame(width: 8, height: 3)
+            Text(title)
+                .font(LiveType.ui(size: 9, weight: .semibold, design: .rounded))
+                .foregroundStyle(color.opacity(0.86))
         }
     }
 

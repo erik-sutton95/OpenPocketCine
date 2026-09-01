@@ -1004,7 +1004,7 @@ private struct LiveSessionBanners: View {
                             .liveChromeCapsule()
                     }
                 }
-                .position(x: feed.minX + 118, y: feed.minY + 92)
+                .position(x: feed.minX + 118, y: feed.minY + 118)
                 .zIndex(5)
                 .allowsHitTesting(false)
                 .transaction { $0.animation = nil }

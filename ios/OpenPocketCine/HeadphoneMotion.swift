@@ -3,10 +3,10 @@ import OpenPocketViewCore
 import UIKit
 import os
 
-/// Shared local space: Calibrate Head Lock is identity. AirPods Δatt
-/// yaw/pitch are gimbal pan/tilt in degrees. Stick throw closes live
-/// `0x04/0x05` onto that pose. Roll is displayed only — Pocket stick
-/// has no roll axis. Motion starts when Head Tracking is on.
+/// Shared local space: Calibrate Head Lock is identity. AirPods look
+/// is the SET-relative nose. Stick throw closes live `0x04/0x05` onto
+/// that pose. Roll is displayed only — Pocket stick has no roll axis.
+/// Motion starts when Head Tracking is on.
 @MainActor
 final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private struct HeadSample: Sendable {
@@ -440,8 +440,18 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let look = HeadTrack.look(current: lastQuat, origin: originQuat)
         let lookRight = look.right
         let lookUp = look.up
+        let originYaw = calibratedByUser ? gimbalYaw0Deg : 0
+        let originPitch = calibratedByUser ? gimbalPitch0Deg : 0
+        let gimbalYawDeg = model.session.gimbalYawTenthDeg.map {
+            HeadTrack.bodyLookRightDeg(liveYawDeg: Double($0) / 10, originYawDeg: originYaw)
+        }
+        let gimbalPitchDeg = model.session.gimbalPitchTenthDeg.map {
+            HeadTrack.bodyLookUpDeg(livePitchDeg: Double($0) / 10, originPitchDeg: originPitch)
+        }
         model.headTrackAxisPose = HeadTrackAxisPose(
-            yawDeg: lookRight, pitchDeg: lookUp, locked: calibratedByUser)
+            yawDeg: lookRight, pitchDeg: lookUp,
+            gimbalYawDeg: gimbalYawDeg, gimbalPitchDeg: gimbalPitchDeg,
+            locked: calibratedByUser)
         let hudDue: Bool
         if let now, let last = lastHudAt {
             hudDue = now.timeIntervalSince(last) >= LiveChromeThrottle.statusInterval
@@ -460,20 +470,10 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let dP = lookUp
         let dR = HeadTrack.wrapDeg(
             HeadTrack.radToDeg(lastRoll) - HeadTrack.radToDeg(originRoll))
-        let bodyY: Double
-        let bodyP: Double
+        let bodyY = gimbalYawDeg ?? 0
+        let bodyP = gimbalPitchDeg ?? 0
         let rawY = model.session.gimbalYawTenthDeg.map { String($0) } ?? "-"
         let rawP = model.session.gimbalPitchTenthDeg.map { String($0) } ?? "-"
-        if calibratedByUser, let yaw = model.session.gimbalYawTenthDeg {
-            bodyY = HeadTrack.wrapDeg(Double(yaw) / 10 - gimbalYaw0Deg)
-        } else {
-            bodyY = 0
-        }
-        if calibratedByUser, let pitch = model.session.gimbalPitchTenthDeg {
-            bodyP = Double(pitch) / 10 - gimbalPitch0Deg
-        } else {
-            bodyP = 0
-        }
         let setMark = calibratedByUser ? "SET" : "no SET"
         if hudDue {
             lastHudAt = now

@@ -75,9 +75,8 @@ _Avoid_: DualSense (alone) in operator copy
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
 Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
-shared identity: AirPods Δatt yaw/pitch from that pose are gimbal pan/tilt
-in degrees (physical take: 90° head turn is Δatt yaw, inverted onto
-stick right; not quat look-right).
+shared identity: look is the SET-relative nose (CMAttitude +Y forward),
+not Euler yaw. That look is gimbal pan/tilt in degrees.
 Stick throw closes live `0x04/0x05` onto that pose at full Mimo stick
 (±550, bang-bang until close; `0x04/0x50` Fast + tilt unlocked). Rest
 **lifts** the stick (Mimo: notify only while thrown). Streaming center at

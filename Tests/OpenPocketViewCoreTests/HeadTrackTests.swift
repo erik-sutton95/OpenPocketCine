@@ -11,6 +11,17 @@ import Testing
         #expect(HeadTrack.pitchDialDeg(lookUpDeg: 30) == 60, "nod up from 3 o'clock")
         #expect(HeadTrack.pitchDialDeg(lookUpDeg: -20) == 110, "nod down from 3 o'clock")
         #expect(abs(HeadTrack.yawDialDeg(lookRightDeg: 270) - -90) < 0.001)
+        #expect(HeadTrack.bodyLookRightDeg(liveYawDeg: 30, originYawDeg: 10) == 20)
+        #expect(
+            abs(HeadTrack.bodyLookRightDeg(liveYawDeg: -170, originYawDeg: 170) - 20) < 0.001,
+            "gimbal pan wraps the same as head yaw")
+        #expect(HeadTrack.bodyLookUpDeg(livePitchDeg: 25, originPitchDeg: 5) == 20)
+        #expect(
+            HeadTrack.yawDialDeg(
+                lookRightDeg: HeadTrack.bodyLookRightDeg(liveYawDeg: 90, originYawDeg: 0)) == 90)
+        #expect(
+            HeadTrack.pitchDialDeg(
+                lookUpDeg: HeadTrack.bodyLookUpDeg(livePitchDeg: 30, originPitchDeg: 0)) == 60)
     }
 
     @Test func tickIsNilUntilCentered() {

@@ -77,10 +77,12 @@ struct LiveFocusResetButton: View {
     }
 }
 
-/// SET-relative yaw/pitch for the live debug rings.
+/// SET-relative yaw/pitch for the live debug rings (head + gimbal).
 struct HeadTrackAxisPose: Equatable {
     var yawDeg: Double
     var pitchDeg: Double
+    var gimbalYawDeg: Double?
+    var gimbalPitchDeg: Double?
     var locked: Bool
 }
 
