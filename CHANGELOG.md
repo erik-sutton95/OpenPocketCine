@@ -148,6 +148,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live VideoToolbox (LUT / WAVE / PEAK / Face AF on) now asks
+  `VTDecompressionSessionCanAcceptFormatDescription` when the camera sends new
+  same-raster VPS/SPS (zoom, FORMAT, D-Log2 → D-Log hop) and rebuilds the
+  session only on refusal, keeping the last picture. A kept session that
+  refused the new sets failed every frame silently: frozen well, live HUD
+  (#148, #194). Async VT decode errors are now counted, and the observe line's
+  `decoderWedged` means an error after the last presented frame rather than
+  any error this session.
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —

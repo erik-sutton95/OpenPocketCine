@@ -64,6 +64,18 @@ public enum EncoderPresentPath {
         return pictureSizeChanged
     }
 
+    /// Same-raster sets keep the session, but the decoder gets the last word:
+    /// VT that refuses the new format description on the old session fails
+    /// every frame silently — frozen last picture while UDP, HUD, and the
+    /// gimbal stay live (#148 with LUT / WAVE on; #194 3× D-Log2 → D-Log hop).
+    /// Rebuild only on refusal; the parameter-set AU is the IRAP, so no IDR hold.
+    public static func shouldRebuildDecoderForRejectedFormat(
+        parameterSetsChanged: Bool,
+        sessionAcceptsFormat: Bool
+    ) -> Bool {
+        parameterSetsChanged && !sessionAcceptsFormat
+    }
+
     /// IDR hold is for a decoder rebuild that cannot join mid-GOP. Same-raster
     /// SPS (zoom) must keep presenting P-frames.
     public static func shouldBeginIDRHoldAfterParameterChange(
