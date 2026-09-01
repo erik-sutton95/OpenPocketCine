@@ -16,12 +16,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Head-track throw is proportional (15° = full stick). Bang-bang at 0.5°
-  left the gimbal at −21°/−20° on a −6°/−6° look. A real overshoot (>4°)
-  reverses onto the look; 2° live-yaw wiggle does not. Do not park while
-  the head is still moving. Looking back toward SET reverses onto the new
-  look. A 0.3 s shell delay no longer blocks the next throw. Tilt rests
-  if live `@20` never leaves SET.
+- Head-track is a position close on the rate stick (Pocket has no angle
+  SET): throw until live `0x04/0x05` matches the look, not 3° short.
+  8° error is full stick. Pitch-dead latch only arms on a full-stick nod
+  so a slow nod is not killed. Looking back toward SET reverses onto the
+  new look.
 
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0
