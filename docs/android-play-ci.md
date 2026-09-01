@@ -216,6 +216,7 @@ you keep a matching AAB from the Actions run.
 
 | Symptom | Likely cause |
 | --- | --- |
+| Wizard keeps opening All apps / Configurations | It used to reopen `play.google.com/console` every stage. Re-run `just android-play-setup` after pulling; paste the OpenPocketCine address-bar URL once (`…/developers/…/app/…`). Left sidebar is the menu. |
 | Workflow skipped on `main` | `ANDROID_PLAY_UPLOAD` is not exactly `true`, or the commit did not touch Android paths |
 | Missing `play-closed` secrets | One of the five values below is absent; `just android-play-sync-secrets` |
 | `PLAY_SERVICE_ACCOUNT_JSON is not a valid service-account JSON key` | The secret is empty, truncated, or not a GCP service-account key |

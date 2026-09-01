@@ -359,12 +359,95 @@ if [[ "${1:-}" == "--sync-secrets" ]]; then
   exit 0
 fi
 
+# Play Console All apps is https://play.google.com/console. Opening that on
+# every stage dumps the human back on the app picker. After they open
+# OpenPocketCine, the address bar is
+# …/developers/<dev>/app/<app>/… — later stages reuse that.
+PLAY_CONSOLE_U="0"
+PLAY_CONSOLE_DEV=""
+PLAY_CONSOLE_APP=""
+
+parse_play_console_app_url() {
+  local url="${1:-}"
+  PLAY_CONSOLE_U="0"
+  PLAY_CONSOLE_DEV=""
+  PLAY_CONSOLE_APP=""
+  [[ -n "$url" ]] || return 1
+  url="${url%%\?*}"
+  url="${url%%#*}"
+  if [[ "$url" =~ console/u/([0-9]+)/developers/([0-9]+)/app/([0-9]+) ]]; then
+    PLAY_CONSOLE_U="${BASH_REMATCH[1]}"
+    PLAY_CONSOLE_DEV="${BASH_REMATCH[2]}"
+    PLAY_CONSOLE_APP="${BASH_REMATCH[3]}"
+    return 0
+  fi
+  if [[ "$url" =~ console/developers/([0-9]+)/app/([0-9]+) ]]; then
+    PLAY_CONSOLE_DEV="${BASH_REMATCH[1]}"
+    PLAY_CONSOLE_APP="${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+play_console_app_page() {
+  local page="$1"
+  if [[ -z "${PLAY_CONSOLE_DEV:-}" || -z "${PLAY_CONSOLE_APP:-}" ]]; then
+    return 1
+  fi
+  printf 'https://play.google.com/console/u/%s/developers/%s/app/%s/%s\n' \
+    "${PLAY_CONSOLE_U:-0}" "$PLAY_CONSOLE_DEV" "$PLAY_CONSOLE_APP" "$page"
+}
+
+open_play_app_page() {
+  local page="$1"
+  local url=""
+  url="$(play_console_app_page "$page" || true)"
+  url="${url//$'\n'/}"
+  if [[ -n "$url" ]]; then
+    open_url "$url"
+    note "This should be OpenPocketCine, not All apps. If you still see the app list, click OpenPocketCine, then use the left sidebar."
+    return
+  fi
+  warn "No OpenPocketCine Console URL saved. Stay in the tab where that app is open. Do not go back to All apps."
+}
+
+capture_play_app_url() {
+  local existing=""
+  existing="$(_existing PLAY_CONSOLE_APP_URL || true)"
+  if parse_play_console_app_url "$existing"; then
+    note "Reusing saved OpenPocketCine Console app."
+    PLAY_CONSOLE_APP_URL="$existing"
+    return 0
+  fi
+  say "Click the OpenPocketCine row in All apps."
+  say "Do not stay on All apps, and do not open a generic Configurations / Setup hub."
+  say "The address bar should contain /developers/ then /app/ then a long number."
+  ask PLAY_CONSOLE_APP_URL "Paste that address-bar URL:"
+  if parse_play_console_app_url "${PLAY_CONSOLE_APP_URL:-}"; then
+    write_env PLAY_CONSOLE_APP_URL "$PLAY_CONSOLE_APP_URL"
+    say "Saved. Later stages open this app, not All apps."
+  else
+    warn "That URL is not an app page (it needs /developers/…/app/…). Copy it from the address bar after OpenPocketCine is open."
+    SKIPPED+=("Play Console app URL")
+  fi
+}
+
+open_play_account_page() {
+  local page="$1"
+  if [[ -n "${PLAY_CONSOLE_DEV:-}" ]]; then
+    open_url "https://play.google.com/console/u/${PLAY_CONSOLE_U:-0}/developers/${PLAY_CONSOLE_DEV}/${page}"
+  else
+    open_url "https://play.google.com/console/users-and-permissions"
+  fi
+}
+
 TOTAL_STAGES=11
 
 banner "Google Play closed testing"
 
 say "This is the Android analog of Xcode Cloud → TestFlight, matching OpenZCine Play Internal."
 say "Package: com.opencapture.openpocketcine. Track: Closed testing (alpha)."
+say "All apps opens once. After you click OpenPocketCine we reuse that app URL."
 say "Secrets go in the play-closed GitHub Environment, never in pull_request workflows."
 note "Privacy policy is already live: https://openpocketcine.app/privacy/"
 pause "Ready to start?"
@@ -372,28 +455,30 @@ pause "Ready to start?"
 # ── 1. Developer account ─────────────────────────────────────────────────
 stage "Play Console — developer account"
 say "A one-time \$25 Google Play developer account is required. Skip this stage if you already have one."
-open_url "https://play.google.com/console"
-step "Sign in with the Google account that should own OpenPocketCine."
-step "If Play asks to pay the registration fee, complete it. Identity verification can take hours."
-step "If you already see All apps, you are done here."
-pause "Play Console is open on your developer account?"
+if parse_play_console_app_url "$(_existing PLAY_CONSOLE_APP_URL || true)"; then
+  note "Saved OpenPocketCine Console URL on disk — not opening All apps again."
+else
+  open_url "https://play.google.com/console/u/0/developers"
+  step "Sign in with the Google account that should own OpenPocketCine."
+  step "You should land on All apps (a list of apps). That is the only time this wizard opens that list."
+  step "If Play asks to pay the registration fee, complete it. Identity verification can take hours."
+fi
+pause "You can see All apps, or OpenPocketCine is already open?"
 
-# ── 2. Create the app ────────────────────────────────────────────────────
-stage "Create the app record"
-say "Create one app. The package name locks to the first AAB you upload."
-open_url "https://play.google.com/console/u/0/developers"
-step "All apps → Create app."
-step "App name: OpenPocketCine. Default language: English (United States)."
-step "App or game: App. Free or paid: Free."
-step "Accept the declarations Play shows (privacy policy, US export laws, etc.)."
-note "Do not create a second app for the same package. Do not set production yet."
-pause "The OpenPocketCine app dashboard is open?"
+# ── 2. Open the OpenPocketCine app ───────────────────────────────────────
+stage "Open the OpenPocketCine app"
+say "The package name locks to the first AAB you upload. Do not create a second app."
+step "In All apps, click the OpenPocketCine row — not a generic Configurations / Setup card."
+step "If it does not exist yet: All apps → Create app. Name OpenPocketCine. Language English (US). App, Free. Accept the declarations."
+note "After it opens, the left sidebar is the menu (Test and release, Grow users, Policy). Stay there."
+capture_play_app_url
+pause "The address bar contains /app/ and OpenPocketCine is the current app?"
 
 # ── 3. Store listing ─────────────────────────────────────────────────────
 stage "Store listing — copy and privacy"
 say "Closed testing still needs a listing, privacy policy, and graphics. You can save a draft."
-open_url "https://play.google.com/console"
-step "Select OpenPocketCine → Grow → Store presence → Store listing (or Main store listing)."
+open_play_app_page "main-store-listing"
+step "Left sidebar: Grow users → Store presence → Main store listing (or Store listings)."
 step "App name: OpenPocketCine"
 step "Short description (80 characters): Open-source field monitor for DJI Osmo. Live view, scopes, camera control."
 step "Full description: paste from docs/android-play-ci.md (Store listing copy)."
@@ -407,8 +492,8 @@ pause "Listing fields are saved, even if graphics are still TODO?"
 # ── 4. Questionnaires ────────────────────────────────────────────────────
 stage "Rating, audience, and Data safety"
 say "Play will not review a closed-testing release until these are complete."
-open_url "https://play.google.com/console"
-step "Policy → App content → Complete all required tasks."
+open_play_app_page "app-content"
+step "Left sidebar: Policy → App content (near the bottom). Complete all required tasks."
 step "Content rating: fill the IARC questionnaire (Photo/Video; no user-generated public content)."
 step "Target audience: 18+ is honest for a production tool. Not a news app."
 step "News app: No. COVID-19: No. Data safety: the app has no account and no analytics."
@@ -420,8 +505,8 @@ pause "App content tasks are all green, or you know which ones remain?"
 # ── 5. Closed testing track ──────────────────────────────────────────────
 stage "Closed testing track"
 say "Internal testing is capped at 100 testers. The waitlist is 300+, so this is Closed testing."
-open_url "https://play.google.com/console"
-step "Test and release → Testing → Closed testing."
+open_play_app_page "tracks/closed-testing"
+step "Left sidebar: Test and release → Testing → Closed testing."
 step "Use the default closed track (often named Closed testing / alpha). Create one if Play asks."
 step "Countries: start with the countries your testers actually live in."
 step "Testers → Create email list → name it waitlist. You will upload .local/play-testers.csv later."
@@ -464,7 +549,7 @@ else
   step "Skip Cloud IAM roles — Play Console owns the permissions."
   step "Open the account → Keys → Add key → Create new key → JSON. The file downloads."
   step "Copy the service account email (it ends with .iam.gserviceaccount.com)."
-  open_url "https://play.google.com/console/users-and-permissions"
+  open_play_account_page "users-and-permissions"
   step "Users and permissions → Invite new users."
   step "Paste the service account email."
   step "App permissions (OpenPocketCine only): View app information; Release apps to testing tracks; Manage testing tracks and edit tester lists."
@@ -505,8 +590,8 @@ else
   note "Run later: just android-bundle"
   note "Or: just android-play-dispatch after this workflow is on main"
 fi
-open_url "https://play.google.com/console"
-step "Test and release → Closed testing → Create new release."
+open_play_app_page "tracks/closed-testing"
+step "Left sidebar: Test and release → Testing → Closed testing → Create new release."
 step "Upload the AAB. Play App Signing enrolls on this first bundle — keep .local/play-upload.keystore."
 step "Release name can stay the version Play fills. What's new: Apps/Android/Play/whatsnew/whatsnew-en-US"
 step "Save. Send for review if listing tasks are green; otherwise keep it draft."
@@ -516,9 +601,10 @@ pause "First AAB is uploaded (draft or in review)?"
 # ── 11. Testers + auto-upload ────────────────────────────────────────────
 stage "Testers and auto-upload"
 say "Do not enable auto-upload until the first closed release exists in Play Console."
+open_play_app_page "tracks/closed-testing"
 step "Export the Tally waitlist CSV. Keep it out of git."
 step "python3 scripts/prepare-android-testers.py ~/Downloads/tally.csv"
-step "Play Console → Closed testing → Testers → upload .local/play-testers.csv"
+step "Left sidebar: Test and release → Closed testing → Testers → upload .local/play-testers.csv"
 step "Copy the join URL into .env if it changed (PLAY_JOIN_URL)."
 if confirm "Turn on ANDROID_PLAY_UPLOAD so later merges to main ship to closed testing?"; then
   warn "Only say yes if Play already has an AAB for com.opencapture.openpocketcine and the Play API robot is invited."
