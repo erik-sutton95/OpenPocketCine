@@ -82,11 +82,11 @@ is the target pose; throw closes live `0x04/0x05` onto it (`0x04/0x50`
 Fast + tilt unlocked). Throw is error/`fullThrowDeg` (8° = full ±550)
 until `|error| ≤ restDeg` while approaching. Do not reverse while the
 nose is still that way (still head + delayed attitude hunted ±10°).
-Park when the head is still and throw is rest. Rest **lifts** the stick (Mimo:
+Park when the head is still (0.25 s) — rest/throw the same second
+paused HEVC. Debounce the lift 0.3 s (`stopDrive` must not clear it). Rest **lifts** the stick (Mimo:
 notify only while thrown). Streaming center at 25 Hz paused HEVC at
 15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
-Park after a still 1:1 close so live-yaw wiggle does not re-grab; do not
-add a second 0.3 s throw delay on top. Encoder-pause: two enables then
+Encoder-pause: two enables then
 one UDP rebuild; keepalive must not flap while status is young. Close
 tilt on live pitch `@20` only; stop tilt throw if that field never leaves
 SET. Looking back toward SET reverses onto the new look. Roll is readout

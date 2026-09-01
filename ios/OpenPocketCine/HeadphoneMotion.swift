@@ -383,13 +383,19 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         // Mimo: 0x04/0x01 only while thrown. Do not grab/release in the same
         // second — that chatter paused HEVC (22:24:19 rest/throw/rest).
         if cmd.rest {
-            restFor += max(dt, 0)
             if driving {
                 ControlLiveLog.line(
                     String(
                         format: "head-track: stick rest head Y=%.1f P=%.1f", lookRight, lookUp))
                 stopDrive()
             }
+            restFor += max(dt, 0)
+            return
+        }
+        // 22:24 rest/throw in the same second paused HEVC. Do not re-grab
+        // for 0.3 s after lift. stopDrive must not clear this timer.
+        if restFor > 0, restFor < 0.3 {
+            restFor += max(dt, 0)
             return
         }
         restFor = 0
@@ -414,7 +420,6 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private func stopDrive() {
         guard driving else { return }
         driving = false
-        restFor = 0
         if model?.gimbalAnalogHeld != true {
             model?.session.endGimbalStick()
         }

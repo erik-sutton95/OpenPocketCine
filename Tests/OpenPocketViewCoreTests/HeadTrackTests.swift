@@ -65,7 +65,7 @@ import Testing
         for _ in 0..<8 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-                dt: 0.05)
+                dt: 0.05, gyroYaw: 0.4)
         }
         #expect(cmd != nil)
         #expect(cmd!.x > 0, "held look must keep throwing until live yaw catches")
@@ -213,7 +213,7 @@ import Testing
             right -= 20
             cmd = track.tick(
                 lookRightDeg: HeadTrack.wrapDeg(right), lookUpDeg: 0, gimbalYawTenth: 580,
-                gimbalPitchTenth: 0)
+                gimbalPitchTenth: 0, dt: 0.04, gyroYaw: 0.4)
         }
         #expect(cmd != nil)
         #expect(cmd!.x < 0, "unwinding back through the box leaves the stop toward SET")
@@ -410,7 +410,7 @@ import Testing
         for _ in 0..<10 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 170, gimbalPitchTenth: 0,
-                dt: 0.04)
+                dt: 0.04, gyroYaw: 0.4)
         }
         #expect(cmd != nil)
         #expect(
@@ -437,6 +437,20 @@ import Testing
         #expect(
             otherWay?.rest == true,
             "physical take: head still −3/−5 must not bob body ±10°")
+    }
+
+    @Test func stillHeadRestsEvenWhenShortOfLook() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var cmd: HeadTrack.Command?
+        for _ in 0..<10 {
+            cmd = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        #expect(
+            cmd?.rest == true,
+            "head still 0.25 s must lift — rest/throw same second paused HEVC")
     }
 
     @Test func nodKeepsThrowingUntilLivePitchCatches() {

@@ -295,18 +295,20 @@ public struct HeadTrack: Equatable, Sendable {
         }
         var x: Double
         var y: Double
-        (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt)
+        (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt, still: still)
         x = holdOvershoot(
             x, look: lookRightDeg, lastSign: lastSignX, previousLook: previousRight)
         y = holdOvershoot(
             y, look: lookUpDeg, lastSign: lastSignY, previousLook: previousUp)
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
-        if stillFor >= Self.stillHold, x == 0, y == 0 {
+        if stillFor >= Self.stillHold {
             parked = true
             engaged = false
             restLookRight = lookRightDeg
             restLookUp = lookUpDeg
+            x = 0
+            y = 0
         }
         if x != 0 { lastSignX = x < 0 ? -1 : 1 }
         if y != 0 { lastSignY = y < 0 ? -1 : 1 }
@@ -329,7 +331,9 @@ public struct HeadTrack: Equatable, Sendable {
 
     public static func tenthToDeg(_ tenth: Int16) -> Double { Double(tenth) / 10 }
 
-    private mutating func gatedThrow(errPan: Double, errTilt: Double) -> (Double, Double) {
+    private mutating func gatedThrow(errPan: Double, errTilt: Double, still: Bool)
+        -> (Double, Double)
+    {
         let mag = (errPan * errPan + errTilt * errTilt).squareRoot()
         if mag <= Self.restDeg {
             if engaged, !tiltTelemetryDead {
@@ -341,6 +345,7 @@ public struct HeadTrack: Equatable, Sendable {
             return (0, 0)
         }
         if parked {
+            if still { return (0, 0) }
             let lookMove =
                 ((lookRightDeg - restLookRight) * (lookRightDeg - restLookRight)
                 + (lookUpDeg - restLookUp) * (lookUpDeg - restLookUp)).squareRoot()

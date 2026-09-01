@@ -53,10 +53,9 @@ Head-track rest **lifts**
 catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it.
-Park after a still 1:1 close so live-yaw wiggle does not re-grab; do not
-add a second 0.3 s throw delay on top (that stair-stepped a slow look).
-Look-at throw is a position close on the rate stick (error/8° up to full
-Mimo) until live `0x04/0x05` matches the look. Analog/head-track rest when
+Park when the head is still (0.25 s) so delayed `0x04/0x05` cannot
+reverse-hunt. Debounce the lift 0.3 s — rest/throw in the same second
+paused HEVC (22:24) and encoder-pause-dropped the live link. Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
