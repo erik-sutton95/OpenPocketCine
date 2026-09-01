@@ -839,6 +839,12 @@ final class CameraSession {
             )
         }
         let key = Duml.opcodeKey(set: frame.cmdSet, cmd: frame.cmdId)
+        // Mailbox seq match first. A 0x8E GET waiter used to steal FOV/ISO-limit
+        // SET ACKs; the SET then waitLate-counted as a dead uplink.
+        if isLiveControlOpcode(frame), setMailbox.isOpenSeq(key, seq: frame.seq) {
+            routeLiveControlAck(frame, key: key)
+            return
+        }
         if let waiter = waiters[key] {
             noteControlAck(frame, decision: "match")
             for k in waiter.keys { waiters.removeValue(forKey: k) }
@@ -2167,7 +2173,7 @@ final class CameraSession {
     private func sendTapFocusBurst(x: Float, y: Float) async {
         guard datalink != nil, !Task.isCancelled else { return }
         let prepare = Commands.tapFocusPrepare()
-        let seq = datalink?.send(prepare) ?? 0
+        let seq = datalink?.sendUntracked(prepare) ?? 0
         ControlLiveLog.line(
             "control: send AE spot 0x02/0x22 seq=\(seq) flags=0x\(String(prepare.flags, radix: 16)) payload=\(Duml.hex(prepare.payload)) via=datalink"
         )
@@ -2761,11 +2767,16 @@ final class CameraSession {
             datalink?.lastVideoPacketAt.map {
                 Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
+        let writeSkipped = datalink?.lastWriteLanded == false
         if CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
             if videoFresh {
                 log.info("control: SET timeout with video flowing — leave UDP")
                 ControlLiveLog.line(
                     "control: \(send.name) \(send.opcode) — SET timeout, video flowing, leave UDP")
+            } else if writeSkipped {
+                log.info("control: SET timeout after skipped UDP write — leave UDP")
+                ControlLiveLog.line(
+                    "control: \(send.name) \(send.opcode) — SET timeout, write skipped, leave UDP")
             } else {
                 noteCommandTimeout()
             }
@@ -2779,6 +2790,8 @@ final class CameraSession {
         case .waitLate:
             lateWait[key] = send
             ControlLiveLog.line("control: \(send.name) \(send.opcode) — awaiting late ACK")
+            // Rec-lamp / Photo busy must not stick until a late ACK. HUD stays.
+            send.onSettle?(true)
         case .launchPending:
             send.onSettle?(false)
             launchPendingAfterSettle(key)

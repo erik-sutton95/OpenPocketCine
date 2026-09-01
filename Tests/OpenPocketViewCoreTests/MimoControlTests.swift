@@ -1242,6 +1242,23 @@ import Testing
         #expect(zoom.decideAck(key: key, seq: 3) == .accept)
         #expect(!CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate, key: key))
         #expect(CameraSetMailbox.timeoutImpliesUplinkFailure(.waitLate))
+        #expect(
+            !CameraSetMailbox.timeoutImpliesUplinkFailure(
+                .waitLate, key: CameraSetMailbox.trackingPollOpcodeKey),
+            "missing 0xA5 poll ACK is not half-dead uplink")
+    }
+
+    @Test func mailboxNoteTransmitDoesNotReopenClosedGeneration() {
+        var box = CameraSetMailbox()
+        let key = Duml.opcodeKey(set: 0x02, cmd: 0x2A)
+        #expect(box.offer(key: key, urgent: true, now: 0) == .launch)
+        box.beginLaunch(key: key, now: 0)
+        box.noteTransmit(key: key, seq: 8)
+        #expect(box.isOpenSeq(key, seq: 8))
+        #expect(box.decideAck(key: key, seq: 8) == .accept)
+        box.noteTransmit(key: key, seq: 9)
+        #expect(!box.hasOpen(key))
+        #expect(!box.isOpenSeq(key, seq: 9))
     }
 
     @Test func mailboxHoldsWhiteBalanceOneInFlight() {

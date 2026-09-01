@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- SET mailbox matches ACK seq before a 0x8E GET waiter, so FOV/ISO-limit
+  SET replies are not stolen (that waitLate then rebuilt UDP). Track-poll
+  `0xA5` and skipped UDP writes are not uplink death. Photo/Record
+  `waitLate` still clears `controlBusy`.
+
 - Foreground recover no longer tears a live GOP: young HEVC or status on
   9004 skips UDP rebuild, and the post-enable escalate wait is the 8 s
   IDR grace (2 s discarded the new bind). Handshake keeps the socket when

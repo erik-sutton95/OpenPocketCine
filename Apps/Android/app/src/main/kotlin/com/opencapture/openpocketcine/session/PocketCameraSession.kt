@@ -3092,7 +3092,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         // iOS `ControlHud.timeoutNote(announce: false)` — never toast a SET timeout.
         Log.i(TAG, "control: ${send.name} — SET timeout, leave HUD")
         val zoomKey = SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS)
-        if (key != zoomKey) {
+        val pollKey = SwiftCore.waitKey(SwiftCore.CMD_POLL_TRACKING)
+        if (key != zoomKey && key != pollKey) {
             val videoFresh =
                 datalink?.lastVideoPacketAt?.let {
                     SystemClock.elapsedRealtime() - it < LiveViewEnablePolicy.STALL_MS
