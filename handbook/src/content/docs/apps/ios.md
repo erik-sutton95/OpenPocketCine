@@ -35,7 +35,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
   that gimbal pose are zero. A head turn pans the Pocket the same number
   of degrees; a nod tilts. The gimbal keeps closing onto that look until it
   arrives; if you turn the other way before it gets there, it goes to the new
-  look. Fast + tilt unlocked at calibrate. Roll is shown, not driven. STOP clears the
+  look. Head and gimbal share the same nose on a sphere (roll is shown, not
+  driven). Fast + tilt unlocked at calibrate. STOP clears the
   lock. A connected game controller's left stick drives the same path.
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2

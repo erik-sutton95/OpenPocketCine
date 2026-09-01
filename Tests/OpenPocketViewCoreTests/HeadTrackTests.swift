@@ -62,13 +62,13 @@ import Testing
         #expect(start!.x == HeadTrack.maxThrow)
         #expect(start!.y == 0)
         var cmd = start
-        for _ in 0..<8 {
+        for _ in 0..<3 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-                dt: 0.05, gyroYaw: 0.4)
+                dt: 0.04, gyroYaw: 0.4)
         }
         #expect(cmd != nil)
-        #expect(cmd!.x > 0, "held look must keep throwing until live yaw catches")
+        #expect(cmd!.x > 0, "held look keeps throwing until the predicted nose arrives")
         let caught = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true)
@@ -443,14 +443,14 @@ import Testing
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         var cmd: HeadTrack.Command?
-        for _ in 0..<10 {
+        for _ in 0..<3 {
             cmd = track.tick(
                 lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
                 dt: 0.04)
         }
         #expect(
             cmd?.x == HeadTrack.maxThrow,
-            "head still: keep closing the committed 20° look until live catches")
+            "head still: keep closing the committed 20° look until the predicted nose arrives")
         let caught = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true)
@@ -476,14 +476,14 @@ import Testing
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04)
         #expect(cmd != nil)
         #expect(cmd!.y == HeadTrack.maxThrow)
-        for _ in 0..<8 {
+        for _ in 0..<2 {
             cmd = track.tick(
                 lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04,
                 gyroLookUp: 0.3)
         }
         #expect(
             cmd?.y == HeadTrack.maxThrow,
-            "pitch must keep throwing at full stick until live @20 catches — not park")
+            "pitch must keep throwing at full stick until the predicted nose arrives")
         let caught = track.tick(
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
         #expect(caught?.rest == true)
@@ -671,5 +671,59 @@ import Testing
         let caught = track.tick(
             lookRightDeg: -20, lookUpDeg: 0, gimbalYawTenth: -200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true, "20° left is live yaw −20.0")
+    }
+
+    @Test func fromLookReconstructsTheNose() {
+        let origin = HeadTrack.Quat.identity
+        let q = HeadTrack.Quat.fromLook(rightDeg: 20, upDeg: -15)
+        let look = HeadTrack.Quat.look(from: q, origin: origin)
+        #expect(abs(look.right - 20) < 0.01)
+        #expect(abs(look.up + 15) < 0.01)
+        let rolled = q.multiply(HeadTrack.Quat.axisAngle(x: 0, y: 1, z: 0, deg: 40))
+        let still = HeadTrack.Quat.look(from: rolled, origin: origin)
+        #expect(abs(still.right - 20) < 0.5, "twist around the nose is not look-right")
+        #expect(abs(still.up + 15) < 0.5, "twist around the nose is not look-up")
+    }
+
+    @Test func geodesicIsNoseToNoseNotEulerHypot() {
+        #expect(
+            abs(HeadTrack.geodesicDeg(fromRight: 0, fromUp: 0, toRight: 20, toUp: 0) - 20) < 0.01)
+        #expect(
+            abs(HeadTrack.geodesicDeg(fromRight: 0, fromUp: 0, toRight: 0, toUp: -25) - 25) < 0.01)
+        #expect(HeadTrack.geodesicDeg(fromRight: 12, fromUp: -8, toRight: 12, toUp: -8) < 0.001)
+        let combined = HeadTrack.geodesicDeg(fromRight: 0, fromUp: 0, toRight: 20, toUp: 20)
+        #expect(combined > 20)
+        #expect(combined < hypot(20.0, 20.0), "great-circle is shorter than Euler hypot")
+        let swing = HeadTrack.swingError(fromRight: 0, fromUp: 0, toRight: 20, toUp: -10)
+        #expect(abs(swing.pan - 20) < 0.01, "pan-tilt IK is still Δazimuth")
+        #expect(abs(swing.tilt + 10) < 0.01)
+        #expect(
+            abs(
+                swing.mag
+                    - HeadTrack.geodesicDeg(fromRight: 0, fromUp: 0, toRight: 20, toUp: -10))
+                < 0.001)
+    }
+
+    @Test func predictedCloseRestsWhileLiveIsStuck() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var cmd: HeadTrack.Command?
+        for _ in 0..<20 {
+            cmd = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        #expect(
+            cmd?.rest == true,
+            "after ~0.8 s the predicted nose has arrived — do not slam live=0 until 0x04/0x05 catches"
+        )
+    }
+
+    @Test func swingCloseDoesNotDriveRoll() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let cmd = track.tick(
+            lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(cmd?.rest == true, "matched noses rest — roll is not on 0x04/0x01")
     }
 }
