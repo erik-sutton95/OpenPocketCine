@@ -49,7 +49,10 @@ looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it,
 and hold the previous throw 0.3 s so grab/release chatter does not cut
 GOP. Look-at throw is full Mimo stick until close. Analog/head-track rest when
-HEVC is stale so a held stick cannot block recover. Gimbal grace is at
+HEVC is stale so a held stick cannot block recover. After a UDP rebuild
+`lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
+Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
+Gimbal grace is at
 most stall+3 s after the last video packet, even if throw is still
 refreshing. After a 1:1 close, live-yaw
 wiggle must not re-grab. Two failed encoder-pause enables rebuild UDP
@@ -57,7 +60,13 @@ once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
 the same encoder-pause — do not rebuild UDP. After a keepalive rebuild,
 do not `0x09/0xa8` if HEVC had already existed (watchdog owns enable).
-Android JNI watchdog JSON must include `secondsSinceGimbalThrow`.
+Do not send a third `0x09/0xa8` because the decoder is still `awaitingIDR`
+— watchdog already ladders that stall. One feed-repair Task at a time:
+do not cancel a live rebuild; a cancelled body must not force-enable after
+`await`. Rebuild nils `lastVideo` / `lastAU` / `lastStatus` so the old
+5-tuple cannot look like encoder-pause on the new bind. Android stick
+ticks on the ACK thread (`noteGimbalStick`); JNI watchdog JSON must include
+`secondsSinceGimbalThrow`.
 
 ## Enable write
 

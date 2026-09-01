@@ -68,6 +68,12 @@ class DatalinkDriver(
     @Volatile private var rebuilding = false
     private val sendFailLogs = AtomicInteger(0)
     private val writeRejected = AtomicBoolean(false)
+    private val gimbalLock = Any()
+    @Volatile private var gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+    @Volatile private var gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+    @Volatile private var gimbalStickHeld = false
+    @Volatile private var gimbalSendRest = false
+    private val lastGimbalStickElapsed = AtomicLong(0)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
@@ -247,6 +253,11 @@ class DatalinkDriver(
         try {
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
             discardUdp(keepPoke = true)
+            // Pre-rebuild clocks are the old 5-tuple. Leaving lastStatus young
+            // looks like encoder-pause on the new bind (iOS noteRebuild).
+            lastVideoElapsed.set(0)
+            lastAccessUnitElapsed.set(0)
+            lastStatusElapsed.set(0)
             startUdpReceiver()
             startAckPump()
             sendAck()
@@ -351,6 +362,7 @@ class DatalinkDriver(
                     var flipTicks = 0
                     while (running.get()) {
                         sendWindowAck()
+                        tickGimbalStick()
                         flipTicks += 1
                         if (flipTicks >= 40) {
                             flipTicks = 0
@@ -434,6 +446,59 @@ class DatalinkDriver(
             write(header + routing + frameBytes)
             udpSeq = (udpSeq + 8) and 0xFFFF
         }
+    }
+
+    /** Latest `0x04/0x01` axes. The ACK pump emits them on the UDP send lock. */
+    fun noteGimbalStick(axis0: Int, axis1: Int) {
+        if (closed.get()) return
+        if (axis0 == CameraCommands.GIMBAL_STICK_CENTER &&
+            axis1 == CameraCommands.GIMBAL_STICK_CENTER
+        ) {
+            restGimbalStick()
+            return
+        }
+        synchronized(gimbalLock) {
+            gimbalAxis0 = axis0
+            gimbalAxis1 = axis1
+            gimbalStickHeld = true
+            gimbalSendRest = false
+        }
+    }
+
+    /** One center packet, then silence. Same ACK thread as window ACK. */
+    fun restGimbalStick() {
+        synchronized(gimbalLock) {
+            gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+            gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+            gimbalStickHeld = false
+            gimbalSendRest = true
+        }
+    }
+
+    private fun tickGimbalStick() {
+        val now = SystemClock.elapsedRealtime()
+        val packet: Pair<Int, Int>? =
+            synchronized(gimbalLock) {
+                val last = lastGimbalStickElapsed.get()
+                if (!CameraCommands.shouldEmitGimbalStick(
+                        gimbalStickHeld, gimbalSendRest, now, last,
+                    )
+                ) {
+                    return@synchronized null
+                }
+                if (!liveViewEnabled) return@synchronized null
+                lastGimbalStickElapsed.set(now)
+                val rest = gimbalSendRest
+                val axis0 = if (rest) CameraCommands.GIMBAL_STICK_CENTER else gimbalAxis0
+                val axis1 = if (rest) CameraCommands.GIMBAL_STICK_CENTER else gimbalAxis1
+                if (rest) {
+                    gimbalSendRest = false
+                    gimbalStickHeld = false
+                }
+                axis0 to axis1
+            }
+        val axes = packet ?: return
+        sendGimbalStick(axes.first, axes.second)
     }
 
     /** `0x04/0x01` flags `0x00`, no ACK. Built with `encodeDuml` so it works on the shipped core. */

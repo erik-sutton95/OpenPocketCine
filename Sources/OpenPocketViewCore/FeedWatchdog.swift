@@ -24,6 +24,9 @@ public struct FeedWatchdog: Equatable, Sendable {
     /// After one UDP rebuild, do not flap the bind on the 2s stall cadence.
     /// Thirty rebuilds in a minute is what dropped SoftAP.
     public static let rebuildBackoff: TimeInterval = 60
+    /// Analog / head-track lift. Shorter than stall so a held stick cannot
+    /// keep throwing into an encoder-pause recover.
+    public static let analogLiftStale: TimeInterval = 1.6
 
     public enum Stage: String, Equatable, Sendable {
         case idle
@@ -239,13 +242,28 @@ public struct FeedWatchdog: Equatable, Sendable {
         return since < rebuildBackoff
     }
 
-    /// One `0x09/0xa8` rides with the rebuild. Do not re-request every 5s
-    /// after live video existed. First picture still needs a resend if
-    /// `videoPkts` is still 0.
-    ///
-    /// Mid-session IDR hold (assist VT start): if the IDR is missed, UDP
-    /// stays alive so the watchdog never fires and a 60s wait is a frozen
-    /// canvas. One extra enable at 5s, then the 60s backoff.
+    /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.
+    /// `lastVideoPacketAge == nil` after `hadVideo` is a rebuild (`lastVideo=none`
+    /// on physical #148) — treating that as fresh re-grabs the stick into a GOP cut.
+    public static func shouldTreatLiveVideoAsStale(
+        lastVideoPacketAge: TimeInterval?,
+        hadVideo: Bool,
+        recovering: Bool = false
+    ) -> Bool {
+        if recovering { return true }
+        guard let age = lastVideoPacketAge else { return hadVideo }
+        return age >= analogLiftStale
+    }
+
+    /// One feed-repair Task at a time. Cancelling a live rebuild left the
+    /// cancelled body force-enabling after `await` while a new rebuild started.
+    public static func shouldStartFeedRecovery(rebuildInFlight: Bool) -> Bool {
+        !rebuildInFlight
+    }
+
+    /// First picture (`hadVideo == false`) may resend `0x09/0xa8` after stall.
+    /// Mid-session extra enable while `awaitingIDR` GOP-cuts a live or
+    /// encoder-paused picture — `tick` already owns that ladder.
     public static func shouldRepeatRecoverEnable(
         secondsSinceLastEnable: TimeInterval,
         secondsSinceLastRebuild: TimeInterval?,
@@ -255,33 +273,13 @@ public struct FeedWatchdog: Equatable, Sendable {
         holdEnableCount: Int = 1,
         lastVideoPacketAge: TimeInterval? = nil
     ) -> Bool {
-        if hadVideo,
-            let video = lastVideoPacketAge,
-            video > secondsSinceLastEnable + stallThreshold
-        {
-            // Last enable produced no HEVC. Another 0x09/0xa8 blacks the well;
-            // the watchdog should reopen UDP instead.
-            return false
-        }
-        if hadVideo, let video = lastVideoPacketAge, video < stallThreshold {
-            // Physical: 25 fps live, then "still holding for IDR" GOP-cut it.
-            return false
-        }
-        if !hadVideo {
-            return secondsSinceLastEnable >= stallThreshold
-        }
-        if shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: secondsSinceLastRebuild,
-            pathReady: pathReady,
-            lastBleNotifyAge: lastBleNotifyAge,
-            hadVideo: true
-        ) {
-            return false
-        }
-        if holdEnableCount < 2 {
-            return secondsSinceLastEnable >= CameraSoftAP.firstPictureResendWhileLive
-        }
-        return secondsSinceLastEnable >= rebuildBackoff
+        _ = secondsSinceLastRebuild
+        _ = pathReady
+        _ = lastBleNotifyAge
+        _ = holdEnableCount
+        _ = lastVideoPacketAge
+        if hadVideo { return false }
+        return secondsSinceLastEnable >= stallThreshold
     }
 
     public mutating func tick(_ snap: Snapshot) -> Action {

@@ -570,6 +570,80 @@ class LiveViewEnablePolicyTest {
         )
         assertTrue(!LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = true))
         assertTrue(LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo = false))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldStartFeedRecovery(rebuildInFlight = true),
+            "do not cancel a live UDP rebuild to start another",
+        )
+        assertTrue(LiveViewEnablePolicy.shouldStartFeedRecovery(rebuildInFlight = false))
+        assertTrue(
+            LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = null,
+                hadVideo = true,
+            ),
+            "rebuild wiped lastVideo — analog must lift",
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = null,
+                hadVideo = false,
+            ),
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = 1_600L,
+                hadVideo = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAgeMs = 400L,
+                hadVideo = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRepeatRecoverEnable(
+                sinceEnableMs = 5_000L,
+                sinceRebuildMs = null,
+                pathReady = true,
+                bleAgeMs = 200L,
+                hadVideo = true,
+                holdEnableCount = 1,
+                videoAgeMs = 5_000L,
+            ),
+            "encoder-pause is FeedWatchdog.tick — extra 0x09/0xa8 GOP-cuts",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldRepeatRecoverEnable(
+                sinceEnableMs = 2_000L,
+                sinceRebuildMs = 400L,
+                pathReady = true,
+                bleAgeMs = 200L,
+                hadVideo = false,
+                holdEnableCount = 1,
+                videoAgeMs = null,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow = 2,
+                downlinkFresh = true,
+                videoFresh = false,
+                rebuildInFlight = false,
+                sinceRebuildMs = null,
+                statusFresh = true,
+            ),
+            "status on 9004 is encoder-pause — SET timeout must not tear UDP",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldRebuildAfterCommandTimeouts(
+                timeoutsInWindow = 2,
+                downlinkFresh = true,
+                videoFresh = false,
+                rebuildInFlight = false,
+                sinceRebuildMs = null,
+                statusFresh = false,
+            ),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = false))
         assertTrue(LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = true))
         assertTrue(LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = false))

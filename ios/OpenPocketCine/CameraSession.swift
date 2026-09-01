@@ -223,10 +223,15 @@ final class CameraSession {
     }
     /// Side-rail lock (OpenZCine `interfaceLocked`). Disables capture-bar tiles.
     var isLocked = false
-    /// HEVC silent while status still lives — rest the gimbal so the encoder can recover.
+    /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.
     var isLiveVideoStale: Bool {
-        guard let at = datalink?.lastVideoPacketAt else { return false }
-        return Date().timeIntervalSince(at) >= 1.6
+        let recovering =
+            feedRecovering || feedRecoveryTask != nil || datalink?.isRebuilding == true
+        let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
+        let had = FeedWatchdog.hadVideo(
+            videoPackets: datalink?.videoPackets ?? 0, lastVideoPacketAge: videoAge)
+        return FeedWatchdog.shouldTreatLiveVideoAsStale(
+            lastVideoPacketAge: videoAge, hadVideo: had, recovering: recovering)
     }
     /// Latest held gimbal stick. Nil when the operator is not touching it.
     @ObservationIgnored private var pendingGimbalAxes: (UInt16, UInt16)?
@@ -2902,7 +2907,9 @@ final class CameraSession {
                 ble.send(Commands.sessionKeepalive())
                 if ssid != nil, !holdsMonitor {
                     if !isBrowsingMedia, shouldStartUDPRebuild {
+                        endGimbalStick()
                         try? await datalink?.rebuildUDP(reason: "keepalive")
+                        guard !Task.isCancelled else { return }
                         if liveViewEnableSent {
                             let hadVideo = FeedWatchdog.hadVideo(
                                 videoPackets: datalink?.videoPackets ?? 0,
@@ -3140,9 +3147,11 @@ final class CameraSession {
         commandTimeoutsAt.removeAll()
         log.info("control: SET timeouts with video stale — rebuild UDP")
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
+        endGimbalStick()
         startFeedRecovery { [weak self] in
             guard let self else { return }
             try? await self.datalink?.rebuildUDP(reason: "command timeouts")
+            guard !Task.isCancelled else { return }
             // Re-fire nothing — state reconciles via subscribe pushes. Video may
             // need a fresh enable on the new socket; the gate below rate-limits it.
             if self.liveViewEnableSent {
@@ -3197,6 +3206,7 @@ final class CameraSession {
     private func recoverLiveViewIfNeeded() {
         guard !isBrowsingMedia, !holdsMonitor else { return }
         if needsForegroundRecover { return }
+        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         guard WiFiJoiner.isCameraPathReady() else { return }
         if MediaLiveResume.strayPlaybackAction(
             browsing: isBrowsingMedia, inPlayback: status.inPlayback) != nil
@@ -3222,29 +3232,6 @@ final class CameraSession {
         {
             recoverFirstPictureIfNeeded()
             return
-        }
-        // A live receive keeps the watchdog idle, so a lost 0x09/0xa8 during an
-        // IDR hold would freeze the canvas on the held frame. One extra enable
-        // at 5s if this hold has only fired once; then the 60s backoff.
-        if decoder.awaitingIDR {
-            let bleAge = lastBleNotifyAt.map { Date().timeIntervalSince($0) }
-            let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
-            let hadVideo = FeedWatchdog.hadVideo(
-                videoPackets: datalink?.videoPackets ?? 0,
-                lastVideoPacketAge: videoAge)
-            if FeedWatchdog.shouldRepeatRecoverEnable(
-                secondsSinceLastEnable: Date().timeIntervalSince(lastIdrRequest),
-                secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
-                pathReady: true,
-                lastBleNotifyAge: bleAge,
-                hadVideo: hadVideo,
-                holdEnableCount: idrHoldEnableCount,
-                lastVideoPacketAge: videoAge
-            ) {
-                log.info("live: still holding for IDR — re-request enable")
-                sendRecoverEnable(force: true, reason: "still holding for IDR")
-                return
-            }
         }
         applyFeedWatchdog()
     }
@@ -3357,7 +3344,9 @@ final class CameraSession {
             startFeedRecovery { [weak self] in
                 guard let self else { return }
                 try? await self.datalink?.rebuildUDP(reason: "first picture")
+                guard !Task.isCancelled else { return }
                 _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+                guard !Task.isCancelled else { return }
                 self.sendRecoverEnable(force: true, reason: "first-picture after UDP rebuild")
             }
             return
@@ -3372,6 +3361,7 @@ final class CameraSession {
 
     private func applyFeedWatchdog() {
         if needsForegroundRecover { return }
+        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         let now = Date()
         let live: Bool
         if case .live = phase { live = true } else { live = false }
@@ -3445,7 +3435,9 @@ final class CameraSession {
                 )
                 logFeedObserve(snap: snap, watchdog: action)
             } else if !FeedWatchdog.udpReceiveAlive(snap),
-                GimbalStick.shouldHoldWatchdog(secondsSinceThrow: snap.secondsSinceGimbalThrow)
+                GimbalStick.shouldHoldWatchdog(
+                    secondsSinceThrow: snap.secondsSinceGimbalThrow,
+                    lastVideoPacketAge: snap.lastVideoPacketAge)
             {
                 ControlLiveLog.line(
                     "feed: hold enable — gimbal grace lastThrow=\(String(format: "%.1f", snap.secondsSinceGimbalThrow ?? -1))s"
@@ -3485,6 +3477,7 @@ final class CameraSession {
 
     /// Re-enable only after SoftAP + VT/display are ready. Holds P-frames until IDR.
     private func sendRecoverEnable(force: Bool, reason: String = "recover") {
+        endGimbalStick()
         if isBrowsingMedia { return }
         if status.inPlayback {
             sendExitPlayback()
@@ -3714,11 +3707,15 @@ final class CameraSession {
         log.info("live: recover after foreground")
         firstPictureSettled = false
         decoder.prepareAfterForeground()
+        endGimbalStick()
         startFeedRecovery { [weak self] in
             guard let self else { return }
             try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+            guard !Task.isCancelled else { return }
             try? await self.datalink?.rebuildUDP(reason: "foreground")
+            guard !Task.isCancelled else { return }
             _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+            guard !Task.isCancelled else { return }
             if self.liveViewEnableSent {
                 self.sendRecoverEnable(force: true, reason: "foreground")
             } else {
@@ -3742,15 +3739,19 @@ final class CameraSession {
     private func rebuildUDPKeepingVT() {
         startFeedRecovery { [weak self] in
             guard let self else { return }
+            self.endGimbalStick()
             try? await self.datalink?.rebuildUDP(reason: "feed watchdog")
+            guard !Task.isCancelled else { return }
             _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
+            guard !Task.isCancelled else { return }
             self.liveViewEnableSent = true
             self.sendRecoverEnable(force: true, reason: "feed watchdog UDP rebuild")
         }
     }
 
     private func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
-        feedRecoveryTask?.cancel()
+        let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
+        guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
         feedRecovering = true
         feedRecoveryTask = Task { @MainActor in
             await work()

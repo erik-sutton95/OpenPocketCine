@@ -463,11 +463,11 @@ import Testing
                 holdEnableCount: 1, lastVideoPacketAge: 0.2),
             "UDP video flowing — 0x09/0xa8 GOP-cuts a live picture (still holding for IDR)")
         #expect(
-            FeedWatchdog.shouldRepeatRecoverEnable(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
                 pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
                 holdEnableCount: 1, lastVideoPacketAge: 5),
-            "missed IDR and HEVC silent — one extra enable at 5s")
+            "encoder-pause / missed IDR is FeedWatchdog.tick — extra 0x09/0xa8 GOP-cuts")
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 5, secondsSinceLastRebuild: nil,
@@ -475,11 +475,36 @@ import Testing
                 holdEnableCount: 2),
             "already retried this hold — do not 1 Hz loop")
         #expect(
-            FeedWatchdog.shouldRepeatRecoverEnable(
+            !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 60, secondsSinceLastRebuild: nil,
                 pathReady: true, lastBleNotifyAge: 0.2, hadVideo: true,
                 holdEnableCount: 2),
-            "dead camera after the one retry — 60s backoff")
+            "mid-session backoff is the watchdog ladder, not a third PLI")
+    }
+
+    @Test func liveVideoStaleAfterRebuildNilsClock() {
+        #expect(
+            FeedWatchdog.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAge: nil, hadVideo: true),
+            "rebuild wiped lastVideo — analog/head-track must lift")
+        #expect(
+            !FeedWatchdog.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAge: nil, hadVideo: false),
+            "first picture has no GOP yet — do not block gimbal")
+        #expect(
+            FeedWatchdog.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAge: 1.6, hadVideo: true))
+        #expect(
+            !FeedWatchdog.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAge: 0.4, hadVideo: true))
+        #expect(
+            FeedWatchdog.shouldTreatLiveVideoAsStale(
+                lastVideoPacketAge: 0.1, hadVideo: true, recovering: true),
+            "repair in flight — lift the stick")
+        #expect(FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: false))
+        #expect(
+            !FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: true),
+            "do not cancel a live UDP rebuild to start another")
     }
 
     @Test func framesReturningResetToIdle() {

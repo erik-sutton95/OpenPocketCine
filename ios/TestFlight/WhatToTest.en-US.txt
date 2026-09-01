@@ -9,10 +9,11 @@ Fixes
 
 - In D-Log2, zoom waits for the hop to D-Log before the lens moves. The chip stays at 1× until color actually switches, then zoom follows. Live view should still come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view.
 - Zoom must keep the live picture, not just HUD and stick. COLOR still lists what this camera has: D-Log2 only on Pocket 4 Pro.
+- Live view should stay up while you pan, tilt, or use head tracking. A frozen picture with a live timecode was over-repair (extra live-view enables). One recover is enough — it should not storm.
 
 What to test
 
-- Pair a Pocket, go live, and pan with the on-screen stick: half throw should be slower than a full push.
+- Pair a Pocket, go live, and pan with the on-screen stick: half throw should be slower than a full push. Stay live two minutes with LUT on and pan (and head tracking if you have AirPods). Picture should not freeze while timecode still moves.
 - Connect a DualSense (or any extended gamepad). Left stick should move the gimbal. Cross records. Circle recenters. Square does 180. Triangle tracks a face. L1/R1 jump zoom. L2/R2 hold-to-zoom. D-pad ISO and shutter. Push into a tilt or pan stop — one buzz, not a continuous rumble. Haptics off should be silent. Unplug should rest the stick and toast disconnected.
 - On Pocket 4 Pro in D-Log2 (idle, not recording): press R2 or pinch. COLOR should switch to D-Log first, then the picture should zoom. The chip must not run ahead of the lens.
 - Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.

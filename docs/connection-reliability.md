@@ -49,7 +49,7 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 | `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video → enable (status young) or UDP rebuild. Never tears VT. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | Can rejoin (new handshake) after a few failed enables. |
-| Keepalive / SET-timeout / foreground | **Yes**, parallel | Extra UDP rebuilds + optional enable. Every watchdog UDP rebuild also force-enables. |
+| Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. Watchdog UDP rebuild still force-enables; keepalive does not if HEVC had already existed. `still holding for IDR` is not a repair owner. |
 | `SessionRecovery` | **Yes**, separate | BLE drop (both). Android also SoftAP `onLost`. iOS SoftAP loss does not start this. |
 
 `rebuildVTSession` and `fullSessionRejoin` are **never emitted** by `tick`.

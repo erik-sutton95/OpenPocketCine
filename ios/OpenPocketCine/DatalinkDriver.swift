@@ -423,6 +423,9 @@ final class DatalinkDriver {
         writeHealthy = true
         lastCommandWriteLanded = nil
         videoAssembler.noteRebuild()
+        // Pre-rebuild lastStatus is the old 5-tuple. Leaving it young looks
+        // like encoder-pause on the new bind and GOP-cuts immediately.
+        lastStatusDate = nil
         try await WiFiJoiner.waitUntilCameraPathReady(timeout: 5)
         if closed { return }
         try await refreshCameraPath()

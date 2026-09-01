@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- One live-repair Task at a time: do not cancel an in-flight UDP rebuild
+  (the cancelled body still force-enabled after `await`). Mid-session
+  `still holding for IDR` extra `0x09/0xa8` is gone — `FeedWatchdog.tick`
+  owns encoder-pause. Analog/head-track treat `lastVideo=none` after a
+  live GOP as stale and lift on every recover. UDP rebuild nils status
+  clocks so the old 5-tuple cannot look like encoder-pause. Android SET
+  timeout rebuild matches iOS (`statusFresh`), and stick notify rides the
+  ACK thread instead of a Main 25 Hz job.
+
 - Android UDP rebuild lowers the 0x02 ingest gate and re-arms after
   enable (leftover TRAIL P mixed into the new GOP). SoftAP reassociate
   rebuilds the 5-tuple without a force `0x09/0xa8` if HEVC already
@@ -77,6 +86,160 @@ All notable changes to this project are documented here. The format is based on
   ACK queue at 25 Hz; AirPods IMU stays off main and applies at that rate.
   MainActor stick + 100 Hz headphone motion was starving window ACK so the
   picture dropped and did not recover.
+
+- Zoom in/out no longer drops the live picture while HUD and gimbal stay up.
+  Same-raster VPS/SPS (zoom / FORMAT) does not tear the decoder or IDR-hold
+  without `0x09/0xa8`, and the watchdog holds 4 s after a zoom SET the way
+  it already does for AF-C.
+
+- First picture no longer sits on WAITING FOR LIVE VIEW when persisted LUT
+  or WAVE starts VT: if the identity layer already presented, that VT still
+  gets a PLI. In-flight VPS/IDR access units are not dropped while MainActor
+  is busy with Flip/GET.
+
+- First picture ingest pktType `0x02` on UDP handshake ack, not on
+  `0x09/0xa8`. Mimo is on-screen ~17 ms after SoftAP DHCP; enable at +3 s
+  is a later PLI. Waiting for live view no longer sits through an 8 s IDR
+  grace on an already-rolling feed.
+
+- White balance Auto keeps tint (`0x02/0x2C` `00 00 00 <tint>`), matching Mimo.
+  Auto no longer zeros tint, and a missed ACK no longer reverts the WB HUD.
+  Kelvin/tint drums are latest-wins (one SET in flight, 100 ms coalesce) so a
+  scrub cannot flood unacked writes. Tint while Auto stays Auto.
+
+- FORMAT and zoom chips follow the connected body. FORMAT tabs/drum come from
+  `camcap_video_format` (Pocket 4 Pro Video is 4K/1080 24–60; SlowMo 100/120/240
+  is not a labeled Video SET). Zoom chips: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4
+  1×/2×/4× (no second tele); Pocket 3 1×/2×/4× but 4K Video max 2×; Nano 1×.
+  SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3× optical).
+
+- COLOR drum follows the connected body. D-Log2 (`0x41`) is Pocket 4 Pro only.
+  Pocket 4 is Normal / HDR / D-Log; Pocket 3 is Normal / HDR (HLG) / D-Log M
+  (`0x00` — `0x17` D-Log showed "colour 4" and crashed the stream). Nano stays
+  the captured 8-bit / 10-bit / D-Log M wheel. (#160)
+
+- Pocket 3 first picture: 4K 25/30 boot with HUD and gimbal live stayed
+  black until the operator switched FORMAT to 1080 and back to 4K. Same-tab
+  FORMAT is a no-op, so that `0x02/0x18` round-trip never left the wire.
+  After one failed enable, first-picture recovery now SETs the other labeled
+  resolution, restores the boot 4K, then sends one `0x09/0xa8`. Pocket 4 /
+  4 Pro stay on the enable / UDP ladder. (#147)
+
+- Zoom while recording in D-Log2: the chip now grays (same 0.4 as interface
+  lock) but stays hittable. Chip tap and pinch toast
+  `Can't change color while recording — D-Log2 can't zoom` and do not send
+  zoom or a color hop — the body will not change color while rolling. Color
+  drum while recording uses the same lock. D-Log / Rec.709 / HLG still zoom
+  while rolling. Idle D-Log2 still hops to D-Log off 1×. The control toast
+  parks under the mounted top bar in DISP 1 and on the feed edge in DISP 2
+  (follows the operator's DISP map if that bar is shown or hidden).
+- Live WAVE / PARADE / HISTO / VECTOR tracked the picture at 15 Hz (10 Hz
+  with three or more), so traces held about two SoftAP frames. Nominal tap
+  is 25 Hz with 1–2 scopes; dense 3+ stays 10 Hz; thermal still ×3 / ×5.
+  Downsample is 200-wide (213×120 on 720p). Android Vulkan walks the tap
+  off the image thread so 25 Hz cannot stall the well.
+- Gimbal stick pan matches the **live** picture. Invert pan on every
+  rotate-180 (`FE 09`), latched when the 180 arrives (Mimo). Joystick yaw
+  to 180 does not invert. Extra-mirror live HEVC when TT180 and Control
+  Center Selfie Flip is off (`0x8E` pid `0x0038` `00`); Flip on skips
+  extra-mirror so the monitor stays readable like Mimo. Invert latches at
+  the end of the 180, not at the 90° midpoint. XOR the MIRROR chip.
+  Reconnect at 180 seeds TT180 from attitude (a 0° stub does not lock
+  front) and inverts without another triple-tap. Pid `0x38` GET is
+  untracked on the live UDP ACK pump (~1 Hz) and does not complete
+  audio / glamour `0x8E` waiters (a session Task plus a `.ready`-only
+  write used to freeze Flip after a few seconds while video kept
+  moving). Keepalive BLE Flip GET when UDP replies go stale (≥2 s).
+  Window ACK group 1 echoes the latest pktType-`0x03`
+  transport seq (Mimo). That window is every command reply (Flip
+  GET, other `0x8E`, record/stop, zoom ACK), not Flip alone;
+  repeating handshake `baseSeq` there filled it while HEVC and
+  `0x01` HUD kept moving, so SET/GET went stale and a session-
+  preserving UDP rebuild could not restore controls. Extra-mirror
+  holds the last picture for three frames (~120 ms) before
+  X-flipping so the current orientation is not mirrored in place.
+- Disconnected library Auto LUT keeps the clip's D-Log / D-Log2 cube. Opening
+  the LUT sheet no longer restamps Auto from a missing live SET (that showed
+  “No matching look for this color / camera” on a log clip). Color is
+  re-read when Full Resolution Caching finishes the original.
+- iPad hides the system time / battery bar. The HUD status chips stay.
+- Gimbal stick and zoom chip are one **gimbal cluster** in every orientation:
+  zoom stacks above the stick in the trailing-bottom of the 16:9 well, not
+  glued to the record button. On iPad landscape the cluster sits on the
+  right edge above record (it used to slide left, and before that drop
+  off-screen). Follow / speed / A·B·C will sit leading of the stick in
+  that same cluster.
+- Playback Share is the same chrome as the other transport actions while the
+  original is still on camera (the sheet caches first). The portrait share
+  card hugs its options instead of filling to the status bar.
+- Next/prev clip with LUT still on rebakes the look without cycling the chip.
+  The playback Metal host stays put. The first pull often ran before the new
+  item had a pixel buffer, then display-link ticks would not resubmit, so the
+  cube stayed armed in chrome until the chip was toggled. Force-pull until
+  this item presents.
+- Android playback drops Kyant. The transport plate is 82% DJI black so type
+  reads; the top row is back + filename + star with no bar. Chrome lives in
+  the same overlay as the video gestures so transport buttons receive taps.
+  Clip playback prefers the LRF/XRF proxy even when the 4K original is already
+  cached. LUT / FALSE / PEAK / ZEBRA update the GLES plan in place — they do
+  not swap ExoPlayer's output surface.
+- Android playback chrome and View Assist now sample the clip. Kyant cannot
+  see a TextureView, so WAVE / HISTO tap a 480 px `TextureView.getBitmap`
+  copy. LUT is not that overlay.
+- Android share sheet is DJI black at 94% (not Kyant frost) with a denser
+  scrim so type reads over a clip. It is a Dialog at the top of the screen so
+  clip-nav popups cannot draw over it. Playback chrome is its own Popup so
+  tap-to-play does not steal transport buttons.
+- Android playback View Assist uses the Lucide monitor glyph. Assist overlays
+  sit in a Popup above the TextureView so grid / guides / scopes actually
+  paint.
+- Opening an Android clip no longer native-crashes. Playback glass recorded
+  the box that also owned `liveChromeGlass`, so Kyant recursed in HWUI
+  `prepareTree`. The recorded well is now a sibling of the chrome.
+- Live HEVC is held while Media / Settings cover the monitor. Portrait media
+  header stacks the item count under the title. The library overlay is
+  z-indexed above live chrome so the record button cannot be tapped through
+  it.
+- Android live FPS chip now counts presented Vulkan frames over wall time.
+  It used to sample `lastPresentedAt` every 40 ms, so the readout could not
+  exceed ~25 fps. Datalink no longer `Log.i`s every HEVC fragment. ImageReader
+  AHB Vulkan imports are cached instead of `vkCreateImage` every frame.
+- Android live identity path (assists off) blits the hardware HEVC AHB
+  straight to the swapchain. Tools-off no longer runs two YCbCr copies, a
+  1280×720 histogram, a grade pass, and a CPU readback every frame — that
+  was ~25 fps on S25. Decoder prefers `c2.qti` / Exynos over `c2.android`.
+- Live view no longer paces decode at 30 fps. Android MediaCodec stamps
+  wall-clock PTS with low-latency / realtime hints (was `KEY_FRAME_RATE` 30
+  and +33.3 ms), and iOS sample timing uses a 60 kHz clock plus
+  `DisplayImmediately`, so a 4K 50p body can present 50 Hz 720p HEVC like Mimo.
+- Clip export downloads and shares the original camera file (4K HEVC), not the
+  720p LRF/XRF playback proxy. iOS LUT bake uses HEVC-highest at the source
+  raster instead of `AVAssetExportPresetHighestQuality` (720p/1080p cap).
+- Android portrait Fill center-crops the 16:9 live picture into the fill well
+  (iOS `fillCrop` / `feed.height * 16/9`) instead of stretching it vertically.
+- Android Pocket screen flip (vertical live raster) matches iOS: new VPS/SPS
+  rebuilds MediaCodec, `EncoderPresentPath.isVertical` pillarboxes 9:16 in the
+  cinema well, and a second `0x09/0xa8` is skipped when the AU already carries
+  the IDR.
+- Android live scopes overlay the full canvas (iOS `LiveScopeOverlays`) so they
+  can sit outside the feed well; drag uses root-space translation so portrait
+  layout changes do not leave the panel behind the finger.
+
+- Android first picture no longer sends gallery `0x02/0x0c` before every
+  `0x09/0xa8` (that left handshake+telemetry up and `videoPkts=0`). First-picture
+  recover also keeps running after a SoftAP flap: scene-inactive during
+  `holdsMonitor` no longer latches a forever skip, stray playback still enables
+  this tick, and UDP rebuild waits before the next enable.
+- First connect no longer sits on Waiting for live-view when HEVC freezes
+  after a P-frame burst while status is still alive.
+- Stick pan while a subject is tracked matches the free gimbal (left is left).
+- A live-view enable that produces no video packets rebuilds UDP after 2 s
+  instead of holding an 8 s IDR window (the 15 s black well after leaving a
+  clip).
+- LUT 50/50 stays pinned when the catalog scrolls, so landscape no longer hides
+  it.
+- AUDIO Channel, Wind, Dir, and Vocal stay on the value you pick instead of
+  bouncing back to the previous DSP snapshot.
 
 ### Added
 
@@ -442,159 +605,3 @@ All notable changes to this project are documented here. The format is based on
 
 - iOS live gimbal debug plate (TT180 / yaw / Flip / invert forces). Stick
   invert and extra-mirror follow `GimbalStickMapping` only, same as Android.
-
-### Fixed
-
-- Zoom in/out no longer drops the live picture while HUD and gimbal stay up.
-  Same-raster VPS/SPS (zoom / FORMAT) does not tear the decoder or IDR-hold
-  without `0x09/0xa8`, and the watchdog holds 4 s after a zoom SET the way
-  it already does for AF-C.
-
-- First picture no longer sits on WAITING FOR LIVE VIEW when persisted LUT
-  or WAVE starts VT: if the identity layer already presented, that VT still
-  gets a PLI. In-flight VPS/IDR access units are not dropped while MainActor
-  is busy with Flip/GET.
-
-- First picture ingest pktType `0x02` on UDP handshake ack, not on
-  `0x09/0xa8`. Mimo is on-screen ~17 ms after SoftAP DHCP; enable at +3 s
-  is a later PLI. Waiting for live view no longer sits through an 8 s IDR
-  grace on an already-rolling feed.
-
-- White balance Auto keeps tint (`0x02/0x2C` `00 00 00 <tint>`), matching Mimo.
-  Auto no longer zeros tint, and a missed ACK no longer reverts the WB HUD.
-  Kelvin/tint drums are latest-wins (one SET in flight, 100 ms coalesce) so a
-  scrub cannot flood unacked writes. Tint while Auto stays Auto.
-
-- FORMAT and zoom chips follow the connected body. FORMAT tabs/drum come from
-  `camcap_video_format` (Pocket 4 Pro Video is 4K/1080 24–60; SlowMo 100/120/240
-  is not a labeled Video SET). Zoom chips: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4
-  1×/2×/4× (no second tele); Pocket 3 1×/2×/4× but 4K Video max 2×; Nano 1×.
-  SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3× optical).
-
-- COLOR drum follows the connected body. D-Log2 (`0x41`) is Pocket 4 Pro only.
-  Pocket 4 is Normal / HDR / D-Log; Pocket 3 is Normal / HDR (HLG) / D-Log M
-  (`0x00` — `0x17` D-Log showed "colour 4" and crashed the stream). Nano stays
-  the captured 8-bit / 10-bit / D-Log M wheel. (#160)
-
-- Pocket 3 first picture: 4K 25/30 boot with HUD and gimbal live stayed
-  black until the operator switched FORMAT to 1080 and back to 4K. Same-tab
-  FORMAT is a no-op, so that `0x02/0x18` round-trip never left the wire.
-  After one failed enable, first-picture recovery now SETs the other labeled
-  resolution, restores the boot 4K, then sends one `0x09/0xa8`. Pocket 4 /
-  4 Pro stay on the enable / UDP ladder. (#147)
-
-- Zoom while recording in D-Log2: the chip now grays (same 0.4 as interface
-  lock) but stays hittable. Chip tap and pinch toast
-  `Can't change color while recording — D-Log2 can't zoom` and do not send
-  zoom or a color hop — the body will not change color while rolling. Color
-  drum while recording uses the same lock. D-Log / Rec.709 / HLG still zoom
-  while rolling. Idle D-Log2 still hops to D-Log off 1×. The control toast
-  parks under the mounted top bar in DISP 1 and on the feed edge in DISP 2
-  (follows the operator's DISP map if that bar is shown or hidden).
-- Live WAVE / PARADE / HISTO / VECTOR tracked the picture at 15 Hz (10 Hz
-  with three or more), so traces held about two SoftAP frames. Nominal tap
-  is 25 Hz with 1–2 scopes; dense 3+ stays 10 Hz; thermal still ×3 / ×5.
-  Downsample is 200-wide (213×120 on 720p). Android Vulkan walks the tap
-  off the image thread so 25 Hz cannot stall the well.
-- Gimbal stick pan matches the **live** picture. Invert pan on every
-  rotate-180 (`FE 09`), latched when the 180 arrives (Mimo). Joystick yaw
-  to 180 does not invert. Extra-mirror live HEVC when TT180 and Control
-  Center Selfie Flip is off (`0x8E` pid `0x0038` `00`); Flip on skips
-  extra-mirror so the monitor stays readable like Mimo. Invert latches at
-  the end of the 180, not at the 90° midpoint. XOR the MIRROR chip.
-  Reconnect at 180 seeds TT180 from attitude (a 0° stub does not lock
-  front) and inverts without another triple-tap. Pid `0x38` GET is
-  untracked on the live UDP ACK pump (~1 Hz) and does not complete
-  audio / glamour `0x8E` waiters (a session Task plus a `.ready`-only
-  write used to freeze Flip after a few seconds while video kept
-  moving). Keepalive BLE Flip GET when UDP replies go stale (≥2 s).
-  Window ACK group 1 echoes the latest pktType-`0x03`
-  transport seq (Mimo). That window is every command reply (Flip
-  GET, other `0x8E`, record/stop, zoom ACK), not Flip alone;
-  repeating handshake `baseSeq` there filled it while HEVC and
-  `0x01` HUD kept moving, so SET/GET went stale and a session-
-  preserving UDP rebuild could not restore controls. Extra-mirror
-  holds the last picture for three frames (~120 ms) before
-  X-flipping so the current orientation is not mirrored in place.
-- Disconnected library Auto LUT keeps the clip's D-Log / D-Log2 cube. Opening
-  the LUT sheet no longer restamps Auto from a missing live SET (that showed
-  “No matching look for this color / camera” on a log clip). Color is
-  re-read when Full Resolution Caching finishes the original.
-- iPad hides the system time / battery bar. The HUD status chips stay.
-- Gimbal stick and zoom chip are one **gimbal cluster** in every orientation:
-  zoom stacks above the stick in the trailing-bottom of the 16:9 well, not
-  glued to the record button. On iPad landscape the cluster sits on the
-  right edge above record (it used to slide left, and before that drop
-  off-screen). Follow / speed / A·B·C will sit leading of the stick in
-  that same cluster.
-- Playback Share is the same chrome as the other transport actions while the
-  original is still on camera (the sheet caches first). The portrait share
-  card hugs its options instead of filling to the status bar.
-- Next/prev clip with LUT still on rebakes the look without cycling the chip.
-  The playback Metal host stays put. The first pull often ran before the new
-  item had a pixel buffer, then display-link ticks would not resubmit, so the
-  cube stayed armed in chrome until the chip was toggled. Force-pull until
-  this item presents.
-- Android playback drops Kyant. The transport plate is 82% DJI black so type
-  reads; the top row is back + filename + star with no bar. Chrome lives in
-  the same overlay as the video gestures so transport buttons receive taps.
-  Clip playback prefers the LRF/XRF proxy even when the 4K original is already
-  cached. LUT / FALSE / PEAK / ZEBRA update the GLES plan in place — they do
-  not swap ExoPlayer's output surface.
-- Android playback chrome and View Assist now sample the clip. Kyant cannot
-  see a TextureView, so WAVE / HISTO tap a 480 px `TextureView.getBitmap`
-  copy. LUT is not that overlay.
-- Android share sheet is DJI black at 94% (not Kyant frost) with a denser
-  scrim so type reads over a clip. It is a Dialog at the top of the screen so
-  clip-nav popups cannot draw over it. Playback chrome is its own Popup so
-  tap-to-play does not steal transport buttons.
-- Android playback View Assist uses the Lucide monitor glyph. Assist overlays
-  sit in a Popup above the TextureView so grid / guides / scopes actually
-  paint.
-- Opening an Android clip no longer native-crashes. Playback glass recorded
-  the box that also owned `liveChromeGlass`, so Kyant recursed in HWUI
-  `prepareTree`. The recorded well is now a sibling of the chrome.
-- Live HEVC is held while Media / Settings cover the monitor. Portrait media
-  header stacks the item count under the title. The library overlay is
-  z-indexed above live chrome so the record button cannot be tapped through
-  it.
-- Android live FPS chip now counts presented Vulkan frames over wall time.
-  It used to sample `lastPresentedAt` every 40 ms, so the readout could not
-  exceed ~25 fps. Datalink no longer `Log.i`s every HEVC fragment. ImageReader
-  AHB Vulkan imports are cached instead of `vkCreateImage` every frame.
-- Android live identity path (assists off) blits the hardware HEVC AHB
-  straight to the swapchain. Tools-off no longer runs two YCbCr copies, a
-  1280×720 histogram, a grade pass, and a CPU readback every frame — that
-  was ~25 fps on S25. Decoder prefers `c2.qti` / Exynos over `c2.android`.
-- Live view no longer paces decode at 30 fps. Android MediaCodec stamps
-  wall-clock PTS with low-latency / realtime hints (was `KEY_FRAME_RATE` 30
-  and +33.3 ms), and iOS sample timing uses a 60 kHz clock plus
-  `DisplayImmediately`, so a 4K 50p body can present 50 Hz 720p HEVC like Mimo.
-- Clip export downloads and shares the original camera file (4K HEVC), not the
-  720p LRF/XRF playback proxy. iOS LUT bake uses HEVC-highest at the source
-  raster instead of `AVAssetExportPresetHighestQuality` (720p/1080p cap).
-- Android portrait Fill center-crops the 16:9 live picture into the fill well
-  (iOS `fillCrop` / `feed.height * 16/9`) instead of stretching it vertically.
-- Android Pocket screen flip (vertical live raster) matches iOS: new VPS/SPS
-  rebuilds MediaCodec, `EncoderPresentPath.isVertical` pillarboxes 9:16 in the
-  cinema well, and a second `0x09/0xa8` is skipped when the AU already carries
-  the IDR.
-- Android live scopes overlay the full canvas (iOS `LiveScopeOverlays`) so they
-  can sit outside the feed well; drag uses root-space translation so portrait
-  layout changes do not leave the panel behind the finger.
-
-- Android first picture no longer sends gallery `0x02/0x0c` before every
-  `0x09/0xa8` (that left handshake+telemetry up and `videoPkts=0`). First-picture
-  recover also keeps running after a SoftAP flap: scene-inactive during
-  `holdsMonitor` no longer latches a forever skip, stray playback still enables
-  this tick, and UDP rebuild waits before the next enable.
-- First connect no longer sits on Waiting for live-view when HEVC freezes
-  after a P-frame burst while status is still alive.
-- Stick pan while a subject is tracked matches the free gimbal (left is left).
-- A live-view enable that produces no video packets rebuilds UDP after 2 s
-  instead of holding an 8 s IDR window (the 15 s black well after leaving a
-  clip).
-- LUT 50/50 stays pinned when the catalog scrolls, so landscape no longer hides
-  it.
-- AUDIO Channel, Wind, Dir, and Vocal stay on the value you pick instead of
-  bouncing back to the previous DSP snapshot.

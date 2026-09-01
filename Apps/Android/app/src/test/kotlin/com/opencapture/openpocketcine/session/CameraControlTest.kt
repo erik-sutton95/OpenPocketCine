@@ -536,6 +536,11 @@ class CameraControlTest {
             ),
         )
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.gimbalAxis(0f))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(true, false, 1_000L, 0L))
+        assertTrue(!CameraCommands.shouldEmitGimbalStick(true, false, 1_020L, 1_000L))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(true, false, 1_040L, 1_000L))
+        assertTrue(CameraCommands.shouldEmitGimbalStick(false, true, 1_010L, 1_000L))
+        assertTrue(!CameraCommands.shouldEmitGimbalStick(false, false, 2_000L, 1_000L))
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.gimbalAxis(0.04f))
         assertEquals(CameraCommands.GIMBAL_STICK_MAX, CameraCommands.gimbalAxis(1f))
         assertEquals(CameraCommands.GIMBAL_STICK_MIN, CameraCommands.gimbalAxis(-1f))

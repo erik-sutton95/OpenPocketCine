@@ -9,9 +9,10 @@ Fixes
 
 - On a Nano, Photo now actually switches instead of staying on Video. Video back to Photo should ack and the shutter should take a still, not start a clip.
 - Live view should come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view.
+- Live view should stay up while you pan or tilt. A frozen picture with a live timecode was over-repair. Stick notify now rides the ACK thread like iOS.
 
 What to test
 
-- Pair a Pocket, go live, and pan with the on-screen stick: half throw should be slower than a full push. Connect a game controller if you have one — left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch should switch COLOR to D-Log first, then zoom — the chip must not run ahead of the lens.
+- Pair a Pocket, go live, and pan with the on-screen stick: half throw should be slower than a full push. Stay live two minutes with LUT on and pan — picture should not freeze while timecode still moves. Connect a game controller if you have one — left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch should switch COLOR to D-Log first, then zoom — the chip must not run ahead of the lens.
 - Pair a Nano, go live, open Operator Setup, Controls. Switch Video to Photo and back. The body should follow; Photo should take a still.
 - Record a short take in Video, then open it in the library. Share should send the original file, not a small preview.

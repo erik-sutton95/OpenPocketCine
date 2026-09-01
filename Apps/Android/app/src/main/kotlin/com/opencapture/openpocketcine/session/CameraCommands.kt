@@ -447,9 +447,23 @@ object CameraCommands {
 
     const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
     const val GIMBAL_STICK_TAP_SLOP = 0.18f
+    /** iOS `GimbalStick.streamInterval` — ACK pump emits while held. */
+    const val GIMBAL_STICK_STREAM_INTERVAL_MS = 40L
     /** Stick throw can pause HEVC the same way zoom/AF-C do. */
     const val GIMBAL_STICK_VIDEO_GRACE_SEC = 3.0
     const val STALL_SEC = 2.0
+
+    fun shouldEmitGimbalStick(
+        held: Boolean,
+        restPending: Boolean,
+        nowMs: Long,
+        lastEmittedMs: Long,
+    ): Boolean {
+        if (restPending) return true
+        if (!held) return false
+        if (lastEmittedMs == 0L) return true
+        return nowMs - lastEmittedMs >= GIMBAL_STICK_STREAM_INTERVAL_MS
+    }
 
     fun shouldHoldGimbalWatchdog(
         secondsSinceThrow: Double?,
