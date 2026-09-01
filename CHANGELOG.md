@@ -14,6 +14,138 @@ All notable changes to this project are documented here. The format is based on
   A nod does not drag yaw; an ear-to-shoulder roll does not drive the yaw
   ring.
 
+- Head tracking (iOS, experimental): Operator Setup → Controls
+  **Head Tracking (Experimental)**, off by default. **Calibrate Head
+  Lock** is shared identity: that AirPods pose and that gimbal pose are
+  zero. Δatt yaw/pitch from SET are pan/tilt in degrees (physical take:
+  a 90° head turn is attitude yaw, not quaternion look-right; yaw is
+  inverted onto stick right). Stick
+  throw closes live `0x04/0x05` onto that pose. Roll is shown only —
+  `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and a
+  game controller win while held. Android has no AirPods IMU.
+
+- Game controller (discussion #159): left stick pans and tilts with the
+  same expo throw as the on-screen stick. Cross/A records (skips the
+  rec-confirmation sheet). Circle/B recenters. Square/X is rotate-180.
+  Triangle/Y tracks a face in frame or cancels. L1/R1 jump the zoom chip
+  (out does not wrap to tele). L2/R2 hold-to-zoom (deeper trigger is
+  faster). D-pad up/down ISO, left/right shutter. Toast Gamepad
+  connected/disconnected; unplug rests the stick. Controls **Gamepad**
+  row shows Connected / Not connected. Joystick Sensitivity 1–5 is the
+  same gain as the on-screen stick. A mechanical stop pulses the phone
+  and rumbles the pad only after that axis moves then stalls (Haptics
+  setting). iOS and Android.
+
+- Play closed-testing pipeline (GitHub Actions signed AAB → `alpha` track)
+  and tester notes under `Apps/Android/Play/`. Wizard:
+  `just android-play-setup`. Contract: `docs/android-play-ci.md`.
+
+- Live feed **observe** line (`feed: observe diagnose=… watchdog=… disagree=…`)
+  so a physical take can classify freeze-in-seconds (#148) against
+  `LinkDiagnoser` without changing repair. Contract:
+  `docs/connection-reliability.md`.
+
+- Live recover no longer re-enables on every recording-format VPS hop, no
+  longer rebuilds UDP 2 s after an encoder pause while status is still
+  arriving, and re-arms pktType `0x02` ingest on the enable write (including
+  after a UDP rebuild). First picture waits the GOP-reset grace before a
+  second enable or UDP rebuild, and does not GOP-cut a live picture with
+  `still holding for IDR`.
+
+- LUT exposure compensation in the LUT popup (live and playback, iOS and
+  Android): plus/minus in half-stops from −3 to +3, applied as input-referred
+  gain before the Rec.709 cube. Pull 1–2 after ETTR so the cube's mid-grey
+  lands. Not camera EV. Persists with View Assist. iOS Share **Bake LUT**
+  has a **Bake exposure** row (on by default) that writes that pull into
+  the file; off keeps the cube at 0.0. Android share/save stays the original.
+
+- Playback Auto LUT reads the shot profile from QuickTime Keys
+  `com.dji.camera.ColorGammaSxS` (Mimo Color Recovery's field) on the
+  **original** take. The 720p LRF/XRF sidecar is Rec.709 even for D-Log /
+  D-Log2, so Auto was turning the cube off. When the original is not cached,
+  a 2 MiB HTTP Range of its `moov` tail is enough. Last live D-Log / D-Log2
+  is the fallback when that atom is missing. `colr`/`nclx` stays Rec.709 for
+  log. A Rec.709 live SET no longer turns Auto off after you monitored log.
+  Opening the LUT sheet in playback no longer restamps Auto from the body's
+  current SET (that was applying live D-Log2 on a D-Log clip). Shot color is
+  stored next to the cached clip (`color.json`) so Auto still binds when the
+  camera is disconnected. A **Proxy** tag marks 720p-only cache. Storage has
+  **Full Resolution Caching** (on by default) so opening a clip also pulls the
+  original; off keeps only the proxy.
+
+- LUT picker is DJI / Creative / Custom. Built-in Rec.709 conversions are
+  gone. DJI Auto uses the official manufacturer cubes (and last live log
+  color on playback). Creative is Mono / Contrast / Warm / Cool.
+
+- Android closed-beta waitlist on the landing page. The Android CTA opens a dialog
+  with the Tally signup (email required; Osmo and phone optional). Submissions stay
+  in Tally, not git.
+
+- Android playback LUT / PEAK / FALSE / ZEBRA grade in GLES on the 720p proxy
+  (ExoPlayer → OES surface → `FeedEffectsGlProgram` → TextureView), same order
+  as live. WAVE / HISTO tap that GL copy, not a TextureView `getBitmap`. Export
+  still pulls the original 4K file.
+
+- iOS playback LUT / PEAK / FALSE / ZEBRA follow live present order on the 720p
+  proxy (`AVPlayerItemVideoOutput` 420 IOSurface → `LiveAssistEngine` →
+  `CIFeedView` as a sibling of `AVPlayerLayer`). Preview LUT is not
+  `AVVideoComposition` (export bake still is). The output asks for Metal
+  420, not 32BGRA, so AVPlayer does not convert every HEVC frame to RGB.
+  LUT replace hides the player once Metal owns the cube, matching live;
+  overlay stripes keep the identity layer. Nesting Metal inside
+  `AVPlayerLayer` presented LUT replace as a black plate (zebra / peaking
+  still showed through). The look unhides only after a bake lands. SwiftUI
+  `attach` no longer invalidates the in-flight cube. Auto LUT uses the last
+  live color mode so a disconnected library clip still binds the D-Log /
+  D-Log2 cube. Grade is GPU-only (no per-frame CPU blit). Pixel-buffer
+  pulls run on `opv.playback-pull`. The LUT display link follows the
+  display (24–120 Hz) and only bakes a new player frame — it is not
+  capped at 24 fps.
+
+- Shared `FeedPresentPolicy` (Swift core + Android lockstep): skip duplicate
+  GPU timestamps, latest-wins if a bake is busy, freeze is a 2 s flag (keep
+  the last sample — do not flush), replace-grade unhides the drawable before
+  present, offscreen feeds disable Metal/GLES, and one `0x09/0xa8` write at a
+  time (`SerialSessionGate`). Recreating the processed feed re-paints the last
+  decoded buffer.
+
+- LUT grade stays on the 720p working raster (cap 1440 px): 4K originals
+  downscale before the cube, the baker pipelines the next frame, and the
+  player stays as underlay so an empty Metal plate cannot black the monitor.
+  Panel fit is bilinear. Next/prev keeps that host — a slide identity
+  rebuild left LUT on a departing view until the chip was cycled.
+
+- Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. The vendored set is 72 official
+  24px stroke glyphs (plus a filled star). Pairing, media library, playback, LUT 50/50, chrome-edit
+  eyes, live top deck / capture strip / battery / assist tools (zebra stripes stay custom),
+  portrait fit-fill, and recovery chrome use the same paths. SF Symbols remain on settings
+  sheets and a few playback destinations.
+- Android clip player View Assist rail (independent of live, persisted as
+  `OpenPocketCine.PlaybackAssists.v1`) and high-frame-rate conform preview
+  (Real time + 23.976/24/25/29.97/30, muted, stretched time labels). GPU
+  LUT/peaking/zebra on playback is still a follow-up; chips already toggle.
+- Starlight protocol handbook for BLE pairing, camera Wi-Fi, and DUML at
+  [openpocketcine.app/docs](https://openpocketcine.app/docs/) (`just handbook`
+  locally). Markdown lives in `handbook/src/content/docs/`.
+- **Face Priority** on the Auto EV sheet. On: the drum is grayed, EV follows
+  faces to middle gray (median of several; fast third-stops for 2.5 s after a
+  face appears, then one third-stop every 1 s), and a face mark sits on the EV
+  label. Off restores the EV from before the toggle, or 0.0.
+- Calculated shutter angle (5.6°–360°) on the SHUTTER sheet. The camera still
+  takes 1/N; we convert from the live frame rate.
+- ISO sheet **Auto Native ISO** toggle (default on). Off keeps ISO when switching
+  D-Log ↔ D-Log2 instead of hopping 400 ↔ 1600.
+- Shared Swift protocol core for DJI Osmo Pocket: DUML framing, BLE discovery, SoftAP join, and
+  HEVC/AVC live-view depacketizing.
+- iOS SwiftUI shell with saved cameras, live monitor chrome, and GPU assists (LUT import, peaking,
+  zebra, false color, waveform, histogram, guides).
+- Android Jetpack Compose shell in `Apps/Android/` consuming the same Swift core over JNI.
+- Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
+- README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
+  contributions, with a nod to animal charities.
+- Landing-page and README media-library and playback mockups, with a Frame.io
+  identification mark on Camera-to-Cloud delivery.
+
 ### Fixed
 
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
@@ -323,140 +455,6 @@ All notable changes to this project are documented here. The format is based on
   it.
 - AUDIO Channel, Wind, Dir, and Vocal stay on the value you pick instead of
   bouncing back to the previous DSP snapshot.
-
-### Added
-
-- Head tracking (iOS, experimental): Operator Setup → Controls
-  **Head Tracking (Experimental)**, off by default. **Calibrate Head
-  Lock** is shared identity: that AirPods pose and that gimbal pose are
-  zero. Δatt yaw/pitch from SET are pan/tilt in degrees (physical take:
-  a 90° head turn is attitude yaw, not quaternion look-right; yaw is
-  inverted onto stick right). Stick
-  throw closes live `0x04/0x05` onto that pose. Roll is shown only —
-  `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and a
-  game controller win while held. Android has no AirPods IMU.
-
-- Game controller (discussion #159): left stick pans and tilts with the
-  same expo throw as the on-screen stick. Cross/A records (skips the
-  rec-confirmation sheet). Circle/B recenters. Square/X is rotate-180.
-  Triangle/Y tracks a face in frame or cancels. L1/R1 jump the zoom chip
-  (out does not wrap to tele). L2/R2 hold-to-zoom (deeper trigger is
-  faster). D-pad up/down ISO, left/right shutter. Toast Gamepad
-  connected/disconnected; unplug rests the stick. Controls **Gamepad**
-  row shows Connected / Not connected. Joystick Sensitivity 1–5 is the
-  same gain as the on-screen stick. A mechanical stop pulses the phone
-  and rumbles the pad only after that axis moves then stalls (Haptics
-  setting). iOS and Android.
-
-- Play closed-testing pipeline (GitHub Actions signed AAB → `alpha` track)
-  and tester notes under `Apps/Android/Play/`. Wizard:
-  `just android-play-setup`. Contract: `docs/android-play-ci.md`.
-
-- Live feed **observe** line (`feed: observe diagnose=… watchdog=… disagree=…`)
-  so a physical take can classify freeze-in-seconds (#148) against
-  `LinkDiagnoser` without changing repair. Contract:
-  `docs/connection-reliability.md`.
-
-- Live recover no longer re-enables on every recording-format VPS hop, no
-  longer rebuilds UDP 2 s after an encoder pause while status is still
-  arriving, and re-arms pktType `0x02` ingest on the enable write (including
-  after a UDP rebuild). First picture waits the GOP-reset grace before a
-  second enable or UDP rebuild, and does not GOP-cut a live picture with
-  `still holding for IDR`.
-
-- LUT exposure compensation in the LUT popup (live and playback, iOS and
-  Android): plus/minus in half-stops from −3 to +3, applied as input-referred
-  gain before the Rec.709 cube. Pull 1–2 after ETTR so the cube's mid-grey
-  lands. Not camera EV. Persists with View Assist. iOS Share **Bake LUT**
-  has a **Bake exposure** row (on by default) that writes that pull into
-  the file; off keeps the cube at 0.0. Android share/save stays the original.
-
-- Playback Auto LUT reads the shot profile from QuickTime Keys
-  `com.dji.camera.ColorGammaSxS` (Mimo Color Recovery's field) on the
-  **original** take. The 720p LRF/XRF sidecar is Rec.709 even for D-Log /
-  D-Log2, so Auto was turning the cube off. When the original is not cached,
-  a 2 MiB HTTP Range of its `moov` tail is enough. Last live D-Log / D-Log2
-  is the fallback when that atom is missing. `colr`/`nclx` stays Rec.709 for
-  log. A Rec.709 live SET no longer turns Auto off after you monitored log.
-  Opening the LUT sheet in playback no longer restamps Auto from the body's
-  current SET (that was applying live D-Log2 on a D-Log clip). Shot color is
-  stored next to the cached clip (`color.json`) so Auto still binds when the
-  camera is disconnected. A **Proxy** tag marks 720p-only cache. Storage has
-  **Full Resolution Caching** (on by default) so opening a clip also pulls the
-  original; off keeps only the proxy.
-
-- LUT picker is DJI / Creative / Custom. Built-in Rec.709 conversions are
-  gone. DJI Auto uses the official manufacturer cubes (and last live log
-  color on playback). Creative is Mono / Contrast / Warm / Cool.
-
-- Android closed-beta waitlist on the landing page. The Android CTA opens a dialog
-  with the Tally signup (email required; Osmo and phone optional). Submissions stay
-  in Tally, not git.
-
-- Android playback LUT / PEAK / FALSE / ZEBRA grade in GLES on the 720p proxy
-  (ExoPlayer → OES surface → `FeedEffectsGlProgram` → TextureView), same order
-  as live. WAVE / HISTO tap that GL copy, not a TextureView `getBitmap`. Export
-  still pulls the original 4K file.
-
-- iOS playback LUT / PEAK / FALSE / ZEBRA follow live present order on the 720p
-  proxy (`AVPlayerItemVideoOutput` 420 IOSurface → `LiveAssistEngine` →
-  `CIFeedView` as a sibling of `AVPlayerLayer`). Preview LUT is not
-  `AVVideoComposition` (export bake still is). The output asks for Metal
-  420, not 32BGRA, so AVPlayer does not convert every HEVC frame to RGB.
-  LUT replace hides the player once Metal owns the cube, matching live;
-  overlay stripes keep the identity layer. Nesting Metal inside
-  `AVPlayerLayer` presented LUT replace as a black plate (zebra / peaking
-  still showed through). The look unhides only after a bake lands. SwiftUI
-  `attach` no longer invalidates the in-flight cube. Auto LUT uses the last
-  live color mode so a disconnected library clip still binds the D-Log /
-  D-Log2 cube. Grade is GPU-only (no per-frame CPU blit). Pixel-buffer
-  pulls run on `opv.playback-pull`. The LUT display link follows the
-  display (24–120 Hz) and only bakes a new player frame — it is not
-  capped at 24 fps.
-
-- Shared `FeedPresentPolicy` (Swift core + Android lockstep): skip duplicate
-  GPU timestamps, latest-wins if a bake is busy, freeze is a 2 s flag (keep
-  the last sample — do not flush), replace-grade unhides the drawable before
-  present, offscreen feeds disable Metal/GLES, and one `0x09/0xa8` write at a
-  time (`SerialSessionGate`). Recreating the processed feed re-paints the last
-  decoded buffer.
-
-- LUT grade stays on the 720p working raster (cap 1440 px): 4K originals
-  downscale before the cube, the baker pipelines the next frame, and the
-  player stays as underlay so an empty Metal plate cannot black the monitor.
-  Panel fit is bilinear. Next/prev keeps that host — a slide identity
-  rebuild left LUT on a departing view until the chip was cycled.
-
-- Shared Lucide HUD icon catalog (`OpcIcon`) on iOS and Android. The vendored set is 72 official
-  24px stroke glyphs (plus a filled star). Pairing, media library, playback, LUT 50/50, chrome-edit
-  eyes, live top deck / capture strip / battery / assist tools (zebra stripes stay custom),
-  portrait fit-fill, and recovery chrome use the same paths. SF Symbols remain on settings
-  sheets and a few playback destinations.
-- Android clip player View Assist rail (independent of live, persisted as
-  `OpenPocketCine.PlaybackAssists.v1`) and high-frame-rate conform preview
-  (Real time + 23.976/24/25/29.97/30, muted, stretched time labels). GPU
-  LUT/peaking/zebra on playback is still a follow-up; chips already toggle.
-- Starlight protocol handbook for BLE pairing, camera Wi-Fi, and DUML at
-  [openpocketcine.app/docs](https://openpocketcine.app/docs/) (`just handbook`
-  locally). Markdown lives in `handbook/src/content/docs/`.
-- **Face Priority** on the Auto EV sheet. On: the drum is grayed, EV follows
-  faces to middle gray (median of several; fast third-stops for 2.5 s after a
-  face appears, then one third-stop every 1 s), and a face mark sits on the EV
-  label. Off restores the EV from before the toggle, or 0.0.
-- Calculated shutter angle (5.6°–360°) on the SHUTTER sheet. The camera still
-  takes 1/N; we convert from the live frame rate.
-- ISO sheet **Auto Native ISO** toggle (default on). Off keeps ISO when switching
-  D-Log ↔ D-Log2 instead of hopping 400 ↔ 1600.
-- Shared Swift protocol core for DJI Osmo Pocket: DUML framing, BLE discovery, SoftAP join, and
-  HEVC/AVC live-view depacketizing.
-- iOS SwiftUI shell with saved cameras, live monitor chrome, and GPU assists (LUT import, peaking,
-  zebra, false color, waveform, histogram, guides).
-- Android Jetpack Compose shell in `Apps/Android/` consuming the same Swift core over JNI.
-- Public repository hygiene: `just check`, secret scan, landing page at openpocketcine.app.
-- README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
-  contributions, with a nod to animal charities.
-- Landing-page and README media-library and playback mockups, with a Frame.io
-  identification mark on Camera-to-Cloud delivery.
 
 ### Changed
 
