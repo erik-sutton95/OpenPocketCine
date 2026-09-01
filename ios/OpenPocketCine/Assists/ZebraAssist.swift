@@ -354,7 +354,7 @@ struct ZebraLongPressMenu: View {
             if compact {
                 HStack(spacing: 8) {
                     enableSwitch(enabled: enabled, action: onEnabledToggle)
-                    ZebraNumberField(value: value, maximum: options.editorMaximum)
+                    SettingsNumberField(value: value, maximum: options.editorMaximum)
                     Spacer(minLength: 4)
                     ZebraColorDots(
                         colors: colors, selected: selectedColor, compact: true, onSelect: onColor)
@@ -362,7 +362,7 @@ struct ZebraLongPressMenu: View {
             } else {
                 HStack(spacing: 8) {
                     enableSwitch(enabled: enabled, action: onEnabledToggle)
-                    ZebraNumberField(value: value, maximum: options.editorMaximum)
+                    SettingsNumberField(value: value, maximum: options.editorMaximum)
                     ZebraColorDots(
                         colors: colors, selected: selectedColor, compact: false, onSelect: onColor)
                 }
@@ -376,32 +376,6 @@ struct ZebraLongPressMenu: View {
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel(enabled ? "On" : "Off")
-    }
-}
-
-/// OpenZCine `SettingsNumberField` (`settings-num`).
-private struct ZebraNumberField: View {
-    @Binding var value: Int
-    var maximum: Int = 100
-
-    var body: some View {
-        TextField("", value: $value, format: .number)
-            .keyboardType(.numberPad)
-            .multilineTextAlignment(.center)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-            .foregroundStyle(LiveDesign.text)
-            .frame(width: 44, height: 30)
-            .background(
-                LiveDesign.background.opacity(0.5),
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
-                    .stroke(LiveDesign.hairline, lineWidth: 1)
-            )
-            .onChange(of: value) { _, newValue in
-                value = min(max(newValue, 0), maximum)
-            }
     }
 }
 

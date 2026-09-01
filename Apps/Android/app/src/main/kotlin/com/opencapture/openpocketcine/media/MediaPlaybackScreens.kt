@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -1007,11 +1009,15 @@ fun MediaPlayerScreen(
         }
 
         val chromeWidth = LocalConfiguration.current.screenWidthDp.dp
+        val playbackDensity = LocalDensity.current
+        val imeBottom =
+            with(playbackDensity) { WindowInsets.ime.getBottom(this).toDp() }
         val configure = assist.configureTool
         if (configure != null) {
             Popup(
                 alignment = Alignment.BottomCenter,
-                properties = PopupProperties(focusable = false, clippingEnabled = false),
+                onDismissRequest = { assist.configureTool = null },
+                properties = PopupProperties(focusable = true, clippingEnabled = false),
             ) {
             Box(
                 Modifier
@@ -1024,7 +1030,12 @@ fun MediaPlayerScreen(
                     state = assist,
                     onDismiss = { assist.configureTool = null },
                     maxHeightDp = 420f,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 88.dp),
+                    modifier =
+                        Modifier.padding(
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = 88.dp + imeBottom,
+                        ),
                     model = model,
                     colorMode =
                         PlaybackLutColor.resolve(

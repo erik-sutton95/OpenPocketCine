@@ -54,6 +54,8 @@ lock front). D-Log2 cannot zoom while rolling — the chip grays and
 tap/pinch toast; idle hops to D-Log on the first step off 1× and waits
 for that color SET before any zoom write (the chip stays at 1× until
 D-Log lands).
+Long-press View Assist options lift above the keyboard so Zebra Highlight /
+Midtone stay visible (Done on the number pad), matching iOS.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Next/prev with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /

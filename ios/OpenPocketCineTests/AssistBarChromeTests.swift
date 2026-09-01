@@ -164,4 +164,81 @@ final class AssistBarChromeTests: XCTestCase {
         XCTAssertLessThan(box.maxHeight, 360)
         XCTAssertLessThanOrEqual(box.y + box.maxHeight, 330 - 10 + 0.05)
     }
+
+    func testKeyboardOverlapIsZeroWhenKeyboardIsOffScreen() {
+        XCTAssertEqual(
+            LivePopupPlacement.keyboardOverlap(
+                frame: CGRect(x: 0, y: 844, width: 390, height: 336),
+                viewportHeight: 844),
+            0)
+        XCTAssertEqual(
+            LivePopupPlacement.keyboardOverlap(
+                frame: CGRect(x: 0, y: 900, width: 390, height: 336),
+                viewportHeight: 844),
+            0)
+    }
+
+    func testKeyboardOverlapIsVisibleHeight() {
+        XCTAssertEqual(
+            LivePopupPlacement.keyboardOverlap(
+                frame: CGRect(x: 0, y: 508, width: 390, height: 336),
+                viewportHeight: 844),
+            336)
+    }
+
+    func testKeyboardOverlapUsesViewportInScreen() {
+        let keyboard = CGRect(x: 0, y: 600, width: 390, height: 300)
+        let viewport = CGRect(x: 0, y: 100, width: 390, height: 700)
+        XCTAssertEqual(
+            LivePopupPlacement.keyboardOverlap(
+                keyboardFrameInScreen: keyboard, viewportInScreen: viewport),
+            200)
+    }
+
+    func testPopupKeyboardZeroMatchesPark() {
+        let viewport = CGSize(width: 390, height: 844)
+        let toolbar = CGRect(x: 12, y: 720, width: 360, height: 58)
+        let icon = CGRect(x: 280, y: 724, width: 48, height: 50)
+        let panel = CGSize(width: 400, height: 280)
+        let parked = AssistLongPressChrome.panelBox(
+            viewport: viewport, anchor: icon, panel: panel, toolbar: toolbar)
+        let zero = AssistLongPressChrome.panelBox(
+            viewport: viewport, anchor: icon, panel: panel, toolbar: toolbar, keyboardHeight: 0)
+        XCTAssertEqual(parked, zero)
+    }
+
+    func testPopupLiftsAboveKeyboardInPortrait() {
+        let viewport = CGSize(width: 390, height: 844)
+        let toolbar = CGRect(x: 12, y: 720, width: 360, height: 58)
+        let icon = CGRect(x: 280, y: 724, width: 48, height: 50)
+        let panel = CGSize(width: 400, height: 280)
+        let keyboard: CGFloat = 336
+        let parked = AssistLongPressChrome.panelBox(
+            viewport: viewport, anchor: icon, panel: panel, toolbar: toolbar)
+        let lifted = AssistLongPressChrome.panelBox(
+            viewport: viewport, anchor: icon, panel: panel, toolbar: toolbar,
+            keyboardHeight: keyboard)
+        let keyboardTop = viewport.height - keyboard
+        let parkedBottom = parked.y + min(panel.height, parked.maxHeight)
+        let liftedBottom = lifted.y + min(panel.height, lifted.maxHeight)
+        XCTAssertGreaterThan(parkedBottom, keyboardTop)
+        XCTAssertLessThanOrEqual(liftedBottom, keyboardTop - AssistLongPressChrome.gap + 0.05)
+        XCTAssertLessThan(lifted.y, parked.y)
+    }
+
+    func testPopupLiftsAboveKeyboardInLandscape() {
+        let viewport = CGSize(width: 874, height: 402)
+        let toolbar = CGRect(x: 16, y: 330, width: 276, height: 58)
+        let icon = CGRect(x: 80, y: 330, width: 48, height: 58)
+        let panel = CGSize(width: 400, height: 220)
+        let keyboard: CGFloat = 240
+        let lifted = AssistLongPressChrome.panelBox(
+            viewport: viewport, anchor: icon, panel: panel, toolbar: toolbar, ceilingY: 68,
+            keyboardHeight: keyboard)
+        let keyboardTop = viewport.height - keyboard
+        XCTAssertLessThanOrEqual(
+            lifted.y + min(panel.height, lifted.maxHeight),
+            keyboardTop - AssistLongPressChrome.gap + 0.05)
+        XCTAssertGreaterThanOrEqual(lifted.y, 68)
+    }
 }

@@ -12,6 +12,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
 - HEVC live view on Pocket 4 / 4 Pro; AVC on Osmo Nano
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
+  Long-press options lift above the keyboard so number fields (Zebra
+  Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
   cubes. Creative is Mono / Contrast / Warm / Cool. Exposure compensation is
   −3…+3 at ½ stop before the cube. Auto on a clip reads

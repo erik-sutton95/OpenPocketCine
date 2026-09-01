@@ -13,6 +13,7 @@ Fixes
 - Head tracking no longer bobs past where you look and swings back. Turn fast, stop — the gimbal should arrive once and hold.
 - Turning your head 20–30°, then nodding, tilts straight up and down. It used to drag diagonally.
 - Rapid look-pause-look gestures no longer freeze the live picture. The stick now holds through short pauses instead of re-grabbing.
+- Long-press ZEBRA and tap Highlight or Midtone: the number field stays above the keyboard so you can type a threshold. Done dismisses the pad; tap outside still closes the options.
 
 What to test
 
@@ -20,3 +21,4 @@ What to test
 - Connect a DualSense (or any extended gamepad). Left stick should move the gimbal. Cross records. Circle recenters. Square does 180. Triangle tracks a face. L1/R1 jump zoom. L2/R2 hold-to-zoom. D-pad ISO and shutter. Push into a tilt or pan stop — one buzz, not a continuous rumble. Haptics off should be silent. Unplug should rest the stick and toast disconnected.
 - On Pocket 4 Pro in D-Log2 (idle, not recording): press R2 or pinch. COLOR should switch to D-Log first, then the picture should zoom. The chip must not run ahead of the lens.
 - Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.
+- Go live, long-press ZEBRA, tap Highlight, type 95. You should see the field, tap Done to dismiss the keyboard, and the stripes should update. Repeat in landscape. Same on a clip in the library.

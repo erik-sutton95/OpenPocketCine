@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.settings
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -592,7 +596,10 @@ object SettingsPalette {
 
 /**
  * iOS `SettingsNumberField`: compact mono value field with digit pad and clamp.
+ * Done on the IME commits and hides the pad. Bring-into-view so Operator Setup
+ * on a small phone still reveals Highlight / Midtone.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingsNumberField(
     value: Int,
@@ -602,9 +609,12 @@ fun SettingsNumberField(
     var editing by remember { mutableStateOf(false) }
     var draft by remember(value) { mutableStateOf(value.toString()) }
     val focusRequester = remember { FocusRequester() }
+    val bringIntoView = remember { BringIntoViewRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     fun commit() {
         draft.toIntOrNull()?.let { onChange(it.coerceIn(0, maximum)) }
         editing = false
+        keyboard?.hide()
     }
     Box(
         Modifier
@@ -612,6 +622,7 @@ fun SettingsNumberField(
             .width(44.dp)
             .background(LiveDesign.background.copy(alpha = 0.5f), ChromeShape)
             .border(1.dp, LiveDesign.hairline, ChromeShape)
+            .bringIntoViewRequester(bringIntoView)
             .then(
                 if (editing) {
                     Modifier
@@ -622,7 +633,10 @@ fun SettingsNumberField(
         contentAlignment = Alignment.Center,
     ) {
         if (editing) {
-            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            LaunchedEffect(Unit) {
+                focusRequester.requestFocus()
+                bringIntoView.bringIntoView()
+            }
             BasicTextField(
                 value = draft,
                 onValueChange = { next -> draft = next.filter(Char::isDigit).take(3) },

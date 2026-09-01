@@ -148,6 +148,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- View Assist long-press options lift above the keyboard when a number
+  field is focused (Zebra Highlight / Midtone). The number pad has a
+  Done accessory; tap outside still dismisses the popup. Live and
+  playback, iOS and Android (#135).
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —

@@ -31,6 +31,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             ZebraAssist.unitsHelp,
             ZebraAssist.highlightHelp,
             ZebraAssist.midtoneHelp,
+            SettingsNumberField.doneTitle,
             PeakingAssist.sensitivityHelp,
             PeakingAssist.colorHelp,
             FalseColorAssist.scaleHelp,
