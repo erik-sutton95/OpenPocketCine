@@ -103,6 +103,10 @@ class LiveViewEnablePolicyTest {
         )
         assertTrue(LiveViewEnablePolicy.shouldReuseDatalink(isClosed = false))
         assertTrue(!LiveViewEnablePolicy.shouldReuseDatalink(isClosed = true))
+        assertTrue(
+            LiveViewEnablePolicy.handshakeOpenTimeoutMs() > 30_000L,
+            "30 s raced 20×350 ms × 4 binds",
+        )
     }
 
     @Test

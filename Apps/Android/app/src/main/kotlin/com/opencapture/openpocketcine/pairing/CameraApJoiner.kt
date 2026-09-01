@@ -68,7 +68,12 @@ class CameraApJoiner(context: Context) {
     }
 
     fun isProcessBound(): Boolean =
-        synchronized(lock) { boundNetwork != null }
+        synchronized(lock) {
+            isPathReady(
+                boundNetworkPresent = boundNetwork != null,
+                reassociationGraceActive = reassociationGrace != null,
+            )
+        }
 
     /**
      * Phone IPv4 on the camera AP (`192.168.2.2…254`). iOS
@@ -302,6 +307,16 @@ class CameraApJoiner(context: Context) {
 
         fun cameraLocalIPv4(ipv4s: Iterable<String>): String? =
             ipv4s.firstOrNull { isAssociatedIPv4(it) }
+
+        /**
+         * SoftAP `onLost` clears [boundNetwork] immediately (the Network object
+         * is dead) but keeps `bindProcessToNetwork` until grace expires. Path
+         * is still the camera AP during that window — handshake must not kick.
+         */
+        fun isPathReady(
+            boundNetworkPresent: Boolean,
+            reassociationGraceActive: Boolean,
+        ): Boolean = boundNetworkPresent || reassociationGraceActive
     }
 }
 

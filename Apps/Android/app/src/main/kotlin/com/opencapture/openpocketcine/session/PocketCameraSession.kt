@@ -538,7 +538,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         var attempt = 0
         while (true) {
             try {
-                withTimeout(30_000) {
+                withTimeout(LiveViewEnablePolicy.handshakeOpenTimeoutMs()) {
                     kotlinx.coroutines.withContext(Dispatchers.IO) {
                         dl.open(
                             afterHandshake = {
@@ -562,6 +562,20 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     }
                 }
                 return
+            } catch (e: TimeoutCancellationException) {
+                Log.i(TAG, "session: handshake open timed out")
+                val miss =
+                    DatalinkHandshakeException("camera never answered the datalink handshake")
+                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(joiner.isProcessBound())) {
+                    throw miss
+                }
+                attempt += 1
+                if (LiveViewEnablePolicy.shouldGiveUpOpenRetry(attempt)) {
+                    Log.i(TAG, "session: handshake give-up after $attempt opens")
+                    throw miss
+                }
+                Log.i(TAG, "session: handshake miss #$attempt — SoftAP up, retry (no kick)")
+                delay(LiveViewEnablePolicy.HANDSHAKE_RETRY_PAUSE_MS)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -3328,6 +3342,16 @@ internal object LiveViewEnablePolicy {
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
     const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
     const val HANDSHAKE_REBIND_LIMIT = 3
+    const val HANDSHAKE_SENDS_PER_BIND = 20
+    const val HANDSHAKE_SEND_INTERVAL_MS = 350L
+    /**
+     * One `DatalinkDriver.open` budget: 20×350 ms × (1+3 rebinds) + 500 ms
+     * pauses, plus headroom. iOS has no envelope; 30 s raced the last rebind.
+     */
+    fun handshakeOpenTimeoutMs(): Long =
+        HANDSHAKE_SENDS_PER_BIND * HANDSHAKE_SEND_INTERVAL_MS * (HANDSHAKE_REBIND_LIMIT + 1L) +
+            HANDSHAKE_RETRY_PAUSE_MS * HANDSHAKE_REBIND_LIMIT +
+            5_000L
     /** After a foreground rebuild, wait this long for an IDR before a full rejoin. */
     const val FOREGROUND_PICTURE_GRACE_MS = GOP_GRACE_MS
 

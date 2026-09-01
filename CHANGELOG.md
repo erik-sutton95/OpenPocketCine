@@ -155,7 +155,9 @@ All notable changes to this project are documented here. The format is based on
   pairing kick from connect, or a logged recovery miss that keeps the last
   frame. Production handshake / first-picture / enable-once gates go through
   JNI `cameraSoftAPDecision` (`CameraSoftAP`) so Kotlin is not a second ladder
-  (#114).
+  (#114). SoftAP `onLost` still holds `isProcessBound` through the 8 s
+  reassociation grace (the Network object is dead; the process bind is not).
+  Handshake `open()` timeout covers four UDP binds instead of racing 30 s.
 
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
