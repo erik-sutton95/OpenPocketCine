@@ -75,25 +75,16 @@ _Avoid_: DualSense (alone) in operator copy
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
 Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
-shared identity: look is the SET-relative nose (CMAttitude +Y forward),
-not Euler yaw. That look is gimbal pan/tilt in degrees.
-Pocket has no angle SET — only rate stick `0x04/0x01`. Look is the
-SET-relative nose; live `0x04/0x05` is the gimbal nose. Throw until
-those match (`restDeg` 1.2°): 20° on the rings is 20° on the body.
-Do not reverse mid-throw (delayed attitude hunted). After a rest, if
-live is still off and stable for `stillHold`, nudge including reverse.
-Retarget when the head moves `retargetDeg` (2.5°). Fast + tilt
-unlocked at calibrate. Roll is not driven. One throw until close,
-then one rest.
-Rest **lifts** the stick (Mimo:
-notify only while thrown). Streaming center at 25 Hz paused HEVC at
-15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
-Encoder-pause: two enables then
+shared identity. Look is Euler Δatt yaw/pitch from that lock. Pocket
+has no angle SET — only rate stick `0x04/0x01`. Throw until live
+`0x04/0x05` matches the look. Fast + tilt unlocked at calibrate.
+Rest **lifts** the stick (Mimo: notify only while thrown). Streaming
+center at 25 Hz paused HEVC at 15–30 s — including a leftover throw
+below the linear snap (`y=-0.01`). Encoder-pause: two enables then
 one UDP rebuild; keepalive must not flap while status is young. Close
 tilt on live pitch `@20` only; stop tilt throw if that field never leaves
-SET. Looking back toward SET reverses onto the new look. Roll is readout
-only — `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick
-and gimbal pad win while thrown. Android has no AirPods IMU.
+SET. Roll is readout only. STOP clears SET. On-screen stick and gimbal
+pad win while thrown. Android has no AirPods IMU.
 _Avoid_: spatial audio in operator copy
 
 **Triple-tap 180 (TT180)**:

@@ -1,29 +1,20 @@
 import Foundation
 
 /// Shared local space: Calibrate Head Lock is identity (SET).
-/// Look is the SET-relative nose on the sphere, not Euler Δatt yaw.
-/// The rings show that look vs live gimbal pan/tilt — 20° head is 20°
-/// on the sky arrow when `0x04/0x05` matches. Pocket has no angle SET,
-/// only rate stick `0x04/0x01`. Throw until live matches the look
-/// (`restDeg`). Do not reverse mid-throw (delayed attitude hunted).
-/// After a rest, if live is still off and stable for `stillHold`, nudge
-/// including reverse. Twist/roll is not on the stick. Encode **linear**.
+/// Look is Euler Δatt yaw/pitch from that lock. Stick throw is live
+/// `0x04/0x05` error onto that look. Pocket has no angle SET. Encode **linear**.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
     public static let engageDeg = 1.8
-    /// Head must move this far from the committed look to change destination.
-    /// Live-yaw wiggle must not retarget. 22:24 rest/throw paused HEVC.
     public static let retargetDeg = 2.5
-    /// After a 1:1 close, live yaw wiggle (~2°) must not re-grab the stick.
     public static let reengageDeg = retargetDeg
-    /// Error that maps to full stick. Bang-bang overshot; 15° crawled.
+    /// Error that maps to full stick.
     public static let fullThrowDeg = 10.0
     public static let stillRestDeg = 2.5
     /// |look-right| inside this is a nod — do not servo pan (live-yaw wiggle).
     public static let panIsolateDeg = 3.0
     public static let gyroStillRadPerSec = 0.10
     public static let calibrateStillRadPerSec = 0.08
-    /// Rest this long with stable live before a 1:1 nudge (including reverse).
     public static let stillHold: TimeInterval = 0.25
     /// Full-stick tilt with live `@20` stuck: rest tilt (do not slam).
     /// Only arms at `|errTilt| ≥ fullThrowDeg` so a slow nod is not killed.
@@ -45,8 +36,7 @@ public struct HeadTrack: Equatable, Sendable {
         yawRadPerSec * dt * 180 / .pi
     }
 
-    /// SET-relative heading from Euler yaw. A nod changes this tens of degrees
-    /// while the nose stays on the meridian — prefer ``look(current:origin:)``.
+    /// SET-relative heading from Euler yaw (inverted onto look-right).
     public static func lookRightDeg(yawRad: Double, originYawRad: Double) -> Double {
         wrapDeg(radToDeg(originYawRad - yawRad))
     }
@@ -238,40 +228,21 @@ public struct HeadTrack: Equatable, Sendable {
     private var gimbalPitch0Deg = 0.0
     private var lookRightDeg = 0.0
     private var lookUpDeg = 0.0
-    /// Look at last throw or park. Retarget / reverse only after `retargetDeg`.
-    private var commitRight = 0.0
-    private var commitUp = 0.0
-    private var lastSignX = 0.0
-    private var lastSignY = 0.0
     private var engaged = false
-    /// Arrived (or overshot) the committed look. Silent until retarget.
-    private var parked = false
     private var tiltThrowElapsed: TimeInterval = 0
     private var pitchWhenTiltBegan: Double?
     private var tiltTelemetryDead = false
-    /// Live must sit still this long after a rest before a 1:1 nudge.
-    private var settleFor: TimeInterval = 0
-    private var settleYawDeg: Double?
-    private var settleTiltDeg: Double?
 
     public init() {}
 
     public mutating func reset() {
         isCentered = false
         engaged = false
-        parked = false
         lookRightDeg = 0
         lookUpDeg = 0
-        commitRight = 0
-        commitUp = 0
-        lastSignX = 0
-        lastSignY = 0
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
-        settleFor = 0
-        settleYawDeg = nil
-        settleTiltDeg = nil
     }
 
     @discardableResult
@@ -288,18 +259,10 @@ public struct HeadTrack: Equatable, Sendable {
         gimbalPitch0Deg = gimbalPitchTenth.map(Self.tenthToDeg) ?? 0
         lookRightDeg = 0
         lookUpDeg = 0
-        commitRight = 0
-        commitUp = 0
-        lastSignX = 0
-        lastSignY = 0
         engaged = false
-        parked = false
         tiltThrowElapsed = 0
         pitchWhenTiltBegan = nil
         tiltTelemetryDead = false
-        settleFor = 0
-        settleYawDeg = nil
-        settleTiltDeg = nil
         isCentered = true
         return .centered
     }
@@ -314,68 +277,33 @@ public struct HeadTrack: Equatable, Sendable {
         _ = (gyroLookRight, gyroLookUp, gyroYaw)
         lookRightDeg = Self.unwrap(wrappedRight, previous: lookRightDeg)
         lookUpDeg = Self.unwrap(wrappedUp, previous: lookUpDeg)
-        let liveYaw = Self.tenthToDeg(gimbalYawTenth)
-        let liveTilt = gimbalPitchTenth.map(Self.tenthToDeg) ?? gimbalPitch0Deg
-        let headMove = Self.geodesicDeg(
-            fromRight: commitRight, fromUp: commitUp,
-            toRight: lookRightDeg, toUp: lookUpDeg)
-        if headMove >= Self.retargetDeg {
-            parked = false
-            lastSignX = 0
-            lastSignY = 0
-            commitRight = lookRightDeg
-            commitUp = lookUpDeg
-            settleFor = 0
-            settleYawDeg = nil
-            settleTiltDeg = nil
-        }
         let target = Reach.project(
             lookRight: lookRightDeg, lookUp: lookUpDeg,
             yaw0: gimbalYaw0Deg, pitch0: gimbalPitch0Deg)
-        let projRight = target.yaw - gimbalYaw0Deg
-        let projUp = target.pitch - gimbalPitch0Deg
-        let liveBodyRight = Self.wrapDeg(liveYaw - gimbalYaw0Deg)
-        let liveBodyUp = liveTilt - gimbalPitch0Deg
-        var swing = Self.swingError(
-            fromRight: liveBodyRight, fromUp: liveBodyUp,
-            toRight: projRight, toUp: projUp)
+        let liveYaw = Self.tenthToDeg(gimbalYawTenth)
+        let liveTilt = gimbalPitchTenth.map(Self.tenthToDeg) ?? gimbalPitch0Deg
+        var errPan = Self.wrapDeg(target.yaw - liveYaw)
         if abs(lookRightDeg) <= Self.panIsolateDeg, abs(lookUpDeg) > abs(lookRightDeg) {
-            swing.pan = 0
-            swing.mag = abs(swing.tilt)
+            errPan = 0
         }
-        let errPan = swing.pan
-        var errTilt = swing.tilt
-        let mag = swing.mag
-        if parked, settleFor >= Self.stillHold, mag > Self.restDeg, !tiltTelemetryDead {
-            parked = false
-            lastSignX = 0
-            lastSignY = 0
-        }
+        var errTilt = target.pitch - liveTilt
+        let mag = (errPan * errPan + errTilt * errTilt).squareRoot()
         noteFrozenTilt(
             liveTilt: liveTilt, errTilt: &errTilt, dt: dt,
             tracking: engaged || mag >= Self.engageDeg)
-        var x: Double
-        var y: Double
-        (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt, mag: mag)
-        if lastSignX != 0, x * lastSignX < 0 { x = 0 }
-        if lastSignY != 0, y * lastSignY < 0 { y = 0 }
+        if mag <= Self.restDeg {
+            engaged = false
+            return Command(x: 0, y: 0)
+        }
+        if !engaged {
+            if mag < Self.engageDeg { return Command(x: 0, y: 0) }
+            engaged = true
+        }
+        var x = throwFor(errPan)
+        var y = throwFor(errTilt)
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
-        if x == 0, y == 0, mag > Self.restDeg, !tiltTelemetryDead {
-            parked = true
-            engaged = false
-            commitRight = lookRightDeg
-            commitUp = lookUpDeg
-        }
-        if x != 0 { lastSignX = x < 0 ? -1 : 1 }
-        if y != 0 { lastSignY = y < 0 ? -1 : 1 }
-        if x == 0, y == 0, mag > Self.restDeg {
-            noteSettle(liveYaw: liveYaw, liveTilt: liveTilt, dt: dt)
-        } else {
-            settleFor = 0
-            settleYawDeg = nil
-            settleTiltDeg = nil
-        }
+        if x == 0, y == 0 { engaged = false }
         return Command(x: x, y: y)
     }
 
@@ -395,39 +323,6 @@ public struct HeadTrack: Equatable, Sendable {
 
     public static func tenthToDeg(_ tenth: Int16) -> Double { Double(tenth) / 10 }
 
-    private mutating func noteSettle(liveYaw: Double, liveTilt: Double, dt: TimeInterval) {
-        guard dt > 0 else { return }
-        if let y0 = settleYawDeg, let t0 = settleTiltDeg,
-            hypot(Self.wrapDeg(liveYaw - y0), liveTilt - t0) < 1
-        {
-            settleFor += dt
-        } else {
-            settleYawDeg = liveYaw
-            settleTiltDeg = liveTilt
-            settleFor = dt
-        }
-    }
-
-    private mutating func gatedThrow(errPan: Double, errTilt: Double, mag: Double) -> (
-        Double, Double
-    ) {
-        if mag <= Self.restDeg {
-            if !tiltTelemetryDead {
-                parked = true
-                commitRight = lookRightDeg
-                commitUp = lookUpDeg
-            }
-            engaged = false
-            return (0, 0)
-        }
-        if parked { return (0, 0) }
-        if !engaged {
-            if mag < Self.engageDeg { return (0, 0) }
-            engaged = true
-        }
-        return (throwFor(errPan), throwFor(errTilt))
-    }
-
     private func throwFor(_ errorDeg: Double) -> Double {
         if abs(errorDeg) < 0.5 { return 0 }
         let n = errorDeg / Self.fullThrowDeg
@@ -445,7 +340,6 @@ public struct HeadTrack: Equatable, Sendable {
                 tiltTelemetryDead = false
                 tiltThrowElapsed = 0
                 pitchWhenTiltBegan = nil
-                parked = false
             } else {
                 errTilt = 0
                 return

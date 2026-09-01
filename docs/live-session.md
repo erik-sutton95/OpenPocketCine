@@ -53,17 +53,15 @@ Head-track rest **lifts**
 catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it.
-Commit a look and throw until live `0x04/0x05` matches it (20° head is
-20° gimbal). Do not reverse mid-throw; after a rest, a stable miss
-nudges. Retarget when the head moves 2.5°. One throw until arrival,
-then one rest (rest/throw the same second paused HEVC). Analog/head-track rest when
+Head-track look is Euler Δatt yaw/pitch from SET. Throw until live
+`0x04/0x05` matches; rest lifts the stick (rest/throw the same second
+paused HEVC). Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
 Gimbal grace is at
 most stall+3 s after the last video packet, even if throw is still
-refreshing. After a 1:1 close, live-yaw
-wiggle must not re-grab. Two failed encoder-pause enables rebuild UDP
+refreshing. Two failed encoder-pause enables rebuild UDP
 once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
 the same encoder-pause — do not rebuild UDP. After a keepalive rebuild,

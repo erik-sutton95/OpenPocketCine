@@ -16,12 +16,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Head-track throws until live gimbal pan/tilt matches the head look
-  (20° on the rings is 20° on the body). Pocket has no angle SET — the
-  stick is a rate joystick — so a stable miss after rest gets one
-  reverse-allowed nudge. Do not reverse mid-throw (that hunted).
-  Retarget when the head moves ≥2.5°. One throw until close, then one
-  rest.
+- Head tracking look is AirPods Euler yaw/pitch from Calibrate Head
+  Lock, not a quaternion nose. Stick throw is live gimbal error onto
+  that look until they match. Rest lifts the stick.
 
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0

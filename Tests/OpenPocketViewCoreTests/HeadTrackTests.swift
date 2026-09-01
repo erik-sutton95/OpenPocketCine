@@ -86,8 +86,8 @@ import Testing
             dt: 0.04)
         #expect(past != nil)
         #expect(
-            past!.x >= 0,
-            "2° delayed overshoot must not reverse — that is the hunt")
+            past!.x < 0,
+            "live 22° vs look 20° throws back — follow the head")
     }
 
     @Test func sphereKeepsLookPastTheStopThenPicksUpFromAnotherAngle() {
@@ -385,15 +385,17 @@ import Testing
         let wiggle = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
             dt: 0.04)
+        #expect(wiggle != nil)
         #expect(
-            wiggle?.rest == true,
-            "2° live-yaw wiggle after close must not rest/throw — that paused HEVC")
+            wiggle!.x < 0,
+            "live 22° vs look 20° throws back")
         let undershoot = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 180, gimbalPitchTenth: 0,
             dt: 0.04)
+        #expect(undershoot != nil)
         #expect(
-            undershoot?.rest == true,
-            "2° live-yaw undershoot after a still close must not re-grab")
+            undershoot!.x > 0,
+            "live 18° vs look 20° keeps closing")
         let lookAgain = track.tick(
             lookRightDeg: 26, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
             dt: 0.04, gyroYaw: 0.4)
@@ -430,7 +432,10 @@ import Testing
                 lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
                 dt: 0.04)
         }
-        #expect(cmd?.rest == true, "mid-throw delayed overshoot must rest, not reverse-hunt")
+        #expect(cmd != nil)
+        #expect(
+            cmd!.x > 0 && cmd!.y > 0,
+            "live past the look throws back — follow the head")
     }
 
     @Test func afterSettleOvershootComesBackToTheLook() {
