@@ -10,7 +10,8 @@ All notable changes to this project are documented here. The format is based on
 
 - Live head-tracking debug: yaw ring (12 o'clock is SET) and a vertical
   pitch ring (arrow-right is 0). iOS only. Look is the SET-relative nose
-  so a nod does not drag yaw.
+  (AirPods +Y forward, +Z up) so a nod does not drag yaw and an
+  ear-to-shoulder roll does not drive the yaw ring.
 
 ### Fixed
 

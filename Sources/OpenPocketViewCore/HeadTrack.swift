@@ -61,7 +61,8 @@ public struct HeadTrack: Equatable, Sendable {
         wrapDeg(90 - lookUpDeg)
     }
 
-    /// Device frame: +X right ear, +Y top of head, +Z out the nose.
+    /// AirPods CMAttitude: +X right, +Y forward (nose), +Z up.
+    /// Tracking +Z as the nose made look-right follow roll and inverted pitch.
     public struct Quat: Equatable, Sendable {
         public var w: Double
         public var x: Double
@@ -103,11 +104,11 @@ public struct HeadTrack: Equatable, Sendable {
             return Quat(w: cos(half), x: x * inv, y: y * inv, z: z * inv)
         }
 
-        /// SET-relative look in degrees. +right / +up from the nose (+Z).
+        /// SET-relative look in degrees. +right / +up from the nose (+Y).
         public static func look(from q: Quat, origin q0: Quat) -> (right: Double, up: Double) {
-            let v = q0.conjugate.multiply(q).rotate((0, 0, 1))
-            let right = atan2(v.x, v.z) * 180 / .pi
-            let up = atan2(v.y, hypot(v.x, v.z)) * 180 / .pi
+            let v = q0.conjugate.multiply(q).rotate((0, 1, 0))
+            let right = atan2(v.x, v.y) * 180 / .pi
+            let up = atan2(v.z, hypot(v.x, v.y)) * 180 / .pi
             return (right, up)
         }
     }

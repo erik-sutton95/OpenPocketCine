@@ -45,7 +45,7 @@ SDK). Both apps must call the same state machines:
 | Screen-relative gimbal stick | `GimbalStickMapping` (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs). Expo analog throw after deadzone (`GimbalStick.analogCurve`). Stick notify `0x04/0x01` at 25 Hz on the UDP ACK queue (`GimbalStick.streamInterval`); not MainActor `sendUntracked`. | iOS `DatalinkDriver.tickGimbalStick`; Android `DatalinkDriver.tickGimbalStick` on the ACK thread (`noteGimbalStick` / `restGimbalStick`) |
 | Gimbal limit pulse | `GimbalLimitWatch` (stall ~300 ms after motion grace; skip pan during `FE 09` settle; rising-edge only) | iOS `CameraSession` + `GimbalGamepadBridge`; Android `PocketCameraSession` + `GimbalGamepadDriver` |
 | Gamepad operator map | `GamepadOperator` (discussion #159: A record, B recenter, X 180, Y track, L1/R1 zoom chip, D-pad ISO/shutter). L2/R2 analog zoom is shell. | iOS `GimbalGamepadBridge` (`GCController`); Android `GimbalGamepadDriver` (`KeyEvent` / hat / `InputManager`) |
-| AirPods look-at gimbal | `HeadTrack` (SET-relative Δatt yaw/pitch = pan/tilt degrees; stick closes live `0x04/0x05`) | iOS `HeadphoneMotionBridge`. Roll readout only. Android: no IMU — PARITY exception. |
+| AirPods look-at gimbal | `HeadTrack` (SET-relative nose look = pan/tilt degrees; stick closes live `0x04/0x05`) | iOS `HeadphoneMotionBridge`. Roll readout only. Android: no IMU — PARITY exception. |
 | Drop storm, bounded reconnect | `SessionRecovery` | platform BLE rescan + SoftAP rejoin |
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`; Android JNI |
