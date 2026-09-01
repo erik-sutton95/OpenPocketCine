@@ -648,16 +648,31 @@ import Testing
         #expect(GimbalStick.axisLinear(-1) == GimbalStick.min)
         #expect(GimbalStick.axisLinear(0.5) == linearHalf)
         #expect(GimbalStick.axisLinear(0.5) > GimbalStick.axis(0.5))
-        #expect(GimbalStick.pitchTenthDeg([0, 0, 0xE8, 0x03, 0, 0]) == 1000)
+        #expect(GimbalStick.i16LE([0xE8, 0x03], at: 0) == 1000)
         #expect(GimbalStick.pitchTenthDeg([0, 0, 0]) == nil)
-        // Live Pocket 4 `0x04/0x05`: yaw @4, pitch @2. @6 stayed 13.0° looking down.
-        let lookDown: [UInt8] = [0x10, 0x06, 0x7C, 0xFC, 0x27, 0xFB, 0x82, 0x00]
-        #expect(GimbalStick.yawTenthDeg(lookDown) == -1241)
-        #expect(GimbalStick.pitchTenthDeg(lookDown) == -900)
         #expect(
-            GimbalStick.pitchTenthDeg(lookDown) != 130, "i16 @6 is not tilt")
+            GimbalStick.attitudeAngleDump([0x10, 0x06, 0x00, 0x00, 0x13, 0x00]).contains("@4=19"))
+        // Mimo tilt take: stick down → i16@20 = +435; look-up is −@20.
+        let lookDown: [UInt8] = [
+            0xB7, 0xFA, 0x00, 0x00, 0x01, 0x00, 0x86, 0x00, 0x02, 0x00, 0x00, 0x02,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x01,
+        ]
+        #expect(GimbalStick.yawTenthDeg(lookDown) == 1)
+        #expect(GimbalStick.pitchTenthDeg(lookDown) == -435)
+        #expect(GimbalStick.i16LE(lookDown, at: 2) == 0, "@2 is not tilt")
+        #expect(GimbalStick.i16LE(lookDown, at: 6) == 134, "@6 is not tilt")
+        let nearLevel: [UInt8] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3, 0xFF,
+        ]
+        #expect(GimbalStick.pitchTenthDeg(nearLevel) == 13)
         var pitched = GimbalStickMapping()
-        pitched.applyAttitude([0, 0, 0xD0, 0x07, 0xE8, 0x03, 0x86, 0x00])
+        var att = [UInt8](repeating: 0, count: 22)
+        att[4] = 0xE8
+        att[5] = 0x03
+        att[20] = 0x30
+        att[21] = 0xF8
+        pitched.applyAttitude(att)
         #expect(pitched.yawTenthDeg == 1000)
         #expect(pitched.pitchTenthDeg == 2000)
         let right = GimbalStick.encode(x: 1, y: 0)

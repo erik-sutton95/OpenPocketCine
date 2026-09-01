@@ -1101,7 +1101,8 @@ public struct GimbalStickMapping: Equatable, Sendable {
     public var pendingRotateCount: Int { pendingWant180.count }
     /// Last `0x04/0x05` i16-LE @4 in 0.1°.
     public var yawTenthDeg: Int16?
-    /// Last `0x04/0x05` i16-LE @2 in 0.1°. Tilt. `@6` is not tilt (stays ~13°).
+    /// Last `0x04/0x05` i16-LE `@20` negated (0.1°). Tilt. Mimo stick-down
+    /// makes `@20` positive; look-up is `−@20`. `@2`/`@6` are not tilt.
     public var pitchTenthDeg: Int16?
     /// First settled attitude adopted as TT180 so reconnect-at-180 inverts
     /// without another triple-tap.
@@ -1433,16 +1434,45 @@ public enum GimbalStick {
     /// Reconnect often pushes a 0° stub before the real 180. Do not lock front yet.
     public static let poseSeedFrontVotes = 3
 
-    public static func yawTenthDeg(_ payload: [UInt8]) -> Int16? {
-        guard payload.count >= 6 else { return nil }
-        return Int16(bitPattern: UInt16(payload[4]) | UInt16(payload[5]) << 8)
+    public static func i16LE(_ payload: [UInt8], at offset: Int) -> Int16? {
+        guard payload.count >= offset + 2 else { return nil }
+        return Int16(bitPattern: UInt16(payload[offset]) | UInt16(payload[offset + 1]) << 8)
     }
 
-    /// Tilt 0.1° i16-LE `@2`. `@6` after yaw is not tilt — a live Pocket 4
-    /// take held `@6` at 13.0…16.6° while `@2` hit −90° looking down.
+    public static func yawTenthDeg(_ payload: [UInt8]) -> Int16? {
+        i16LE(payload, at: 4)
+    }
+
+    /// Tilt 0.1° from i16-LE `@20`, negated so look-up is positive.
+    /// Mimo tilt take 2026-09-01: stick axis0 down → `@20` +43.5°; stick up
+    /// → `@20` −115°. `@2` stays 0; `@6` stays ~13°.
     public static func pitchTenthDeg(_ payload: [UInt8]) -> Int16? {
-        guard payload.count >= 4 else { return nil }
-        return Int16(bitPattern: UInt16(payload[2]) | UInt16(payload[3]) << 8)
+        guard let raw = i16LE(payload, at: 20) else { return nil }
+        return 0 &- raw
+    }
+
+    /// Even-offset i16s in ±360° and plausible degree floats for the pitch hunt.
+    public static func attitudeAngleDump(_ payload: [UInt8]) -> String {
+        var parts = ["n=\(payload.count)"]
+        var offset = 0
+        while offset + 2 <= payload.count {
+            if let v = i16LE(payload, at: offset), abs(Int(v)) <= 3600 {
+                parts.append("@\(offset)=\(v)")
+            }
+            offset += 2
+        }
+        offset = 0
+        while offset + 4 <= payload.count {
+            let bits =
+                UInt32(payload[offset]) | UInt32(payload[offset + 1]) << 8
+                | UInt32(payload[offset + 2]) << 16 | UInt32(payload[offset + 3]) << 24
+            let f = Float(bitPattern: bits)
+            if f.isFinite, abs(f) >= 0.5, abs(f) <= 200 {
+                parts.append("f@\(offset)=\(String(format: "%.1f", f))")
+            }
+            offset += 4
+        }
+        return parts.joined(separator: " ")
     }
 
     public static func rotated180(_ payload: [UInt8]) -> Bool? {

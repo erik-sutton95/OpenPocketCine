@@ -518,11 +518,11 @@ object CameraCommands {
         return raw.toShort().toInt()
     }
 
-    /** Tilt 0.1° i16-LE `@2`. `@6` after yaw is not tilt (held ~13° while `@2` hit −90°). */
+    /** Tilt 0.1° from i16-LE `@20`, negated so look-up is positive (Mimo stick-down → `@20` +). */
     fun pitchTenthDeg(payload: ByteArray): Int? {
-        if (payload.size < 4) return null
-        val raw = (payload[2].toInt() and 0xFF) or (payload[3].toInt() shl 8)
-        return raw.toShort().toInt()
+        if (payload.size < 22) return null
+        val raw = ((payload[20].toInt() and 0xFF) or (payload[21].toInt() shl 8)).toShort().toInt()
+        return -raw
     }
 
     fun rotated180(payload: ByteArray): Boolean? {

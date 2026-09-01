@@ -485,12 +485,13 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         if logDue {
             lastLogAt = now
             let att = model.session.lastGimbalAttitudeHex
+            let dump = model.session.lastGimbalAttitudeDump
             ControlLiveLog.line(
                 String(
                     format:
-                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ att=%@",
+                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ %@ att=%@",
                     setMark, dY, dP, dR, bodyY, bodyP, dY - bodyY, dP - bodyP, rawY, rawP,
-                    att.isEmpty ? "-" : att)
+                    dump.isEmpty ? "-" : dump, att.isEmpty ? "-" : att)
             )
         }
     }

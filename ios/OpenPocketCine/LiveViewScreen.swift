@@ -999,6 +999,7 @@ private struct LiveSessionBanners: View {
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(LiveDesign.text)
                             .multilineTextAlignment(.leading)
+                            .frame(maxWidth: 220, alignment: .leading)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .liveChromeCapsule()
