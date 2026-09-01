@@ -225,6 +225,14 @@ object SwiftCore {
 
     external fun feedWatchdogDestroy(handle: Long)
 
+    /**
+     * `CameraSoftAP` / first-picture / handshake gates. `kind` is the Swift
+     * function name; [requestJSON] is the argument bag. Bool results are
+     * `"true"` / `"false"`; handshake / first-picture enums use core raw values
+     * (`keepSocket`, `rebindUDP`, `fail`, `wait`, `resendEnable`, …).
+     */
+    external fun cameraSoftAPDecision(kind: String, requestJSON: String): String?
+
     /** Probe JSON for playback conform preview. See `AndroidSessionWire.conformPreviewJSON`. */
     external fun conformPreviewJSON(request: String): String?
 

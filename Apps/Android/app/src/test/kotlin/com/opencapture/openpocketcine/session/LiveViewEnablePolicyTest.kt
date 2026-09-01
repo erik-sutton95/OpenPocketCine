@@ -85,6 +85,24 @@ class LiveViewEnablePolicyTest {
         assertTrue(LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(pathReady = false))
         assertTrue(!LiveViewEnablePolicy.shouldGiveUpOpenRetry(5))
         assertTrue(LiveViewEnablePolicy.shouldGiveUpOpenRetry(6))
+        assertTrue(!LiveViewEnablePolicy.canSendHandshake(receiveArmed = false, connectionReady = true))
+        assertTrue(LiveViewEnablePolicy.canSendHandshake(receiveArmed = true, connectionReady = true))
+        assertTrue(
+            LiveViewEnablePolicy.shouldCommitLiveHandshake(
+                driverOwned = true,
+                isClosed = false,
+                isCancelled = false,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldCommitLiveHandshake(
+                driverOwned = true,
+                isClosed = true,
+                isCancelled = false,
+            ),
+        )
+        assertTrue(LiveViewEnablePolicy.shouldReuseDatalink(isClosed = false))
+        assertTrue(!LiveViewEnablePolicy.shouldReuseDatalink(isClosed = true))
     }
 
     @Test
@@ -159,9 +177,9 @@ class LiveViewEnablePolicyTest {
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
-                lastVideoAt = now - 8_000,
-                lastStatusAt = now - 200,
-                lastBleAt = now - 100,
+                lastVideoAt = now - 4_200,
+                lastStatusAt = now - 300,
+                lastBleAt = now - 200,
                 lastRebuildAt = now - 70_000,
                 lastGimbalThrowAt = now - 1_000,
             )

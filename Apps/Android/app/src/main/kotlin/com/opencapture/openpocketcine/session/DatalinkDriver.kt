@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
@@ -18,6 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
+
+/** iOS `DatalinkError.noHandshake` — recoverable, never `error()` / crash. */
+class DatalinkHandshakeException(message: String) : IOException(message)
 
 /**
  * DUML-over-UDP datalink. Byte builders live in Swift; this owns the socket,
@@ -128,6 +132,16 @@ class DatalinkDriver(
             keepBind = false
             val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
             for (send in 1..HANDSHAKE_SENDS_PER_BIND) {
+                if (handshakeAcked) break
+                val receiveArmed = running.get() && receiver?.isAlive == true
+                val connectionReady = socket != null && !closed.get()
+                if (!LiveViewEnablePolicy.canSendHandshake(receiveArmed, connectionReady)) {
+                    Log.i(
+                        TAG,
+                        "datalink: handshake UDP not ready reader=$receiveArmed — will rebind",
+                    )
+                    break
+                }
                 sendRaw(0x00, handshake)
                 val deadline = SystemClock.elapsedRealtime() + HANDSHAKE_SEND_INTERVAL_MS
                 while (SystemClock.elapsedRealtime() < deadline) {
@@ -174,7 +188,7 @@ class DatalinkDriver(
                     continue
                 }
                 LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL ->
-                    error("camera never answered the datalink handshake")
+                    throw DatalinkHandshakeException("camera never answered the datalink handshake")
                 LiveViewEnablePolicy.HandshakeTimeoutStep.REBIND_UDP -> {
                     rebinds += 1
                     Log.i(

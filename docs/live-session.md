@@ -139,6 +139,11 @@ Mid-session SoftAP `onLost` is a Network-object replace until the grace
 expires — do not `bindProcessToNetwork(null)` while `isProcessBound` still
 reads true, or UDP rebuilds on home Wi-Fi.
 
+Android handshake miss throws a recoverable `DatalinkHandshakeException` (same
+copy as iOS `DatalinkError.noHandshake`). Do not `error()` / crash when SoftAP
+`isProcessBound()` is false — `CameraSoftAP.shouldKickAfterHandshakeTimeout`
+decides pairing kick vs retry; feed recovery logs and keeps the last frame.
+
 Foreground recover is VT-only while HEVC or DUML status is still on 9004.
 A Control Center peek must not rebuild UDP. After a parked-app rebuild,
 wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was

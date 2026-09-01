@@ -148,6 +148,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live handshake miss is no longer an uncaught `IllegalStateException`
+  (`error("camera never answered the datalink handshake")`, Play Vitals on
+  Android 16 / #189). `DatalinkDriver.open` throws `DatalinkHandshakeException`
+  like iOS `DatalinkError.noHandshake`. SoftAP still up → retry; path gone →
+  pairing kick from connect, or a logged recovery miss that keeps the last
+  frame. Production handshake / first-picture / enable-once gates go through
+  JNI `cameraSoftAPDecision` (`CameraSoftAP`) so Kotlin is not a second ladder
+  (#114).
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —

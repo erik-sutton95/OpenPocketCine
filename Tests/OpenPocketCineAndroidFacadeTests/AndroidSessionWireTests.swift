@@ -120,4 +120,103 @@ struct AndroidSessionWireTests {
         let decoded = AndroidSessionWire.status(fromJSON: json)
         #expect(decoded.availableVideoFormats == status.availableVideoFormats)
     }
+
+    @Test
+    func cameraSoftAPHandshakeTimeoutMatchesCore() {
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "handshakeTimeoutStep",
+                requestJSON: "{\"pathReady\":true,\"rebindsUsed\":0,\"inboundDatagrams\":0}"
+            )
+                == CameraSoftAP.handshakeTimeoutStep(
+                    pathReady: true, rebindsUsed: 0, inboundDatagrams: 0
+                ).rawValue)
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "handshakeTimeoutStep",
+                requestJSON: "{\"pathReady\":true,\"rebindsUsed\":0,\"inboundDatagrams\":1}"
+            ) == "keepSocket")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "handshakeTimeoutStep",
+                requestJSON: "{\"pathReady\":false,\"rebindsUsed\":0,\"inboundDatagrams\":0}"
+            ) == "fail")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "handshakeTimeoutStep",
+                requestJSON:
+                    "{\"pathReady\":true,\"rebindsUsed\":\(CameraSoftAP.handshakeRebindLimit),\"inboundDatagrams\":0}"
+            ) == "fail")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldKickAfterHandshakeTimeout",
+                requestJSON: "{\"pathReady\":true}"
+            ) == "false")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldKickAfterHandshakeTimeout",
+                requestJSON: "{\"pathReady\":false}"
+            ) == "true")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldGiveUpOpenRetry",
+                requestJSON: "{\"attempts\":5}"
+            ) == "false")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldGiveUpOpenRetry",
+                requestJSON: "{\"attempts\":6}"
+            ) == "true")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "canSendHandshake",
+                requestJSON: "{\"receiveArmed\":false,\"connectionReady\":true}"
+            ) == "false")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "canSendHandshake",
+                requestJSON: "{\"receiveArmed\":true,\"connectionReady\":true}"
+            ) == "true")
+    }
+
+    @Test
+    func cameraSoftAPFirstPictureMatchesCore() {
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "firstPictureStep",
+                requestJSON:
+                    "{\"videoPackets\":0,\"enableSends\":0,\"secondsSinceLastEnable\":0,\"hasPresentedPicture\":false}"
+            ) == "resendEnable")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "firstPictureStep",
+                requestJSON:
+                    "{\"videoPackets\":0,\"enableSends\":1,\"secondsSinceLastEnable\":3,\"hasPresentedPicture\":false}"
+            ) == "wait")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "firstPictureStep",
+                requestJSON:
+                    "{\"videoPackets\":0,\"enableSends\":1,\"secondsSinceLastEnable\":9,\"hasPresentedPicture\":false}"
+            )
+                == CameraSoftAP.firstPictureStep(
+                    videoPackets: 0, enableSends: 1, secondsSinceLastEnable: 9
+                ).rawValue)
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "firstPictureStep",
+                requestJSON:
+                    "{\"videoPackets\":0,\"enableSends\":1,\"secondsSinceLastEnable\":9,\"hasPresentedPicture\":true}"
+            ) == "wait")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldForceEnableAfterUDPRebuild",
+                requestJSON: "{\"hadVideo\":true}"
+            ) == "false")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "shouldForceEnableAfterUDPRebuild",
+                requestJSON: "{\"hadVideo\":false}"
+            ) == "true")
+    }
 }
