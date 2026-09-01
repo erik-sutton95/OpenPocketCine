@@ -116,6 +116,12 @@ import Testing
             pktType: 0x02, payloadLen: 8, sessionId: 1, seq: 0xA9D8)
         let afterVideo = w.advancing(datagram: video)
         #expect(afterVideo == w)
+        #expect(DumlTransport.AckWindows.shouldSeedVideoCursorFromTelemetry(hasVideoSeq: false))
+        #expect(!DumlTransport.AckWindows.shouldSeedVideoCursorFromTelemetry(hasVideoSeq: true))
+        #expect(DumlTransport.AckWindows.windowCursor(stored: 0, seen: true, fallback: 0x1000) == 0)
+        #expect(
+            DumlTransport.AckWindows.windowCursor(stored: 0, seen: false, fallback: 0x1000)
+                == 0x1000)
     }
 
     // scanFrames must find the DUML frame buried under the transport + routing wrapper.

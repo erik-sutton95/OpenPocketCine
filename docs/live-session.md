@@ -22,7 +22,9 @@ live-entry uses an ephemeral client port.
 
 Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
 latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a
-third cursor seeded from 34-byte `0x01` telemetry. Keep TCP 7001 poke
+third cursor seeded from 34-byte `0x01` telemetry. After the first `0x02`,
+telemetry must not rewind group 0 — that closed HEVC while HUD stayed
+live. Seq `0` is a valid cursor once seen. Keep TCP 7001 poke
 across UDP rebuilds.
 
 Those are **separate** camera send windows. HEVC (`0x02`) can stay at 25 fps

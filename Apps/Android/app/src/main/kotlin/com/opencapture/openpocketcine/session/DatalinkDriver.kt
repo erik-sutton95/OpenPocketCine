@@ -46,6 +46,7 @@ class DatalinkDriver(
     private var cmdCounter = 0
     /** Latest video transport seq — ACK pump must echo this (iOS `videoAssembler.peerCursor`). */
     private val peerCursor = AtomicInteger(0)
+    private val hasVideoSeq = AtomicBoolean(false)
     /** pktType 0x03 command-reply window (every GET/SET ACK). Mimo ACK group 1. */
     private val ackedDataCursor = AtomicInteger(0)
     /** Third ACK group, seeded from 34-byte pktType 0x01 telemetry. */
@@ -343,6 +344,7 @@ class DatalinkDriver(
         dumlSeq = 0xA000
         cmdCounter = 0
         peerCursor.set(0)
+        hasVideoSeq.set(false)
         ackedDataCursor.set(0)
         extraCursor.set(0)
         handshakeAcked = false
@@ -654,10 +656,17 @@ class DatalinkDriver(
         if (datagram.size >= 8 && datagram[6] == 0x00.toByte()) handshakeAcked = true
         noteAckWindows(datagram)
         if (datagram.size == 34 && datagram[6] == 0x01.toByte()) {
-            peerCursor.set((datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8))
+            if (!hasVideoSeq.get()) {
+                peerCursor.set(
+                    (datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8),
+                )
+            }
         } else if (datagram.size >= 6 && datagram[6] == 0x02.toByte()) {
             val seq = SwiftCore.transportSeq(datagram)
-            if (seq >= 0) peerCursor.set(seq)
+            if (seq >= 0) {
+                peerCursor.set(seq)
+                hasVideoSeq.set(true)
+            }
         }
         if (datagram.size > 20 && datagram[6] == 0x02.toByte()) {
             if (!liveViewEnabled) {

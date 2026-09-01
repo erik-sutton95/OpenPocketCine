@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Window ACK group 0 is latest `0x02` seq: 34-byte `0x01` no longer rewinds
+  it after video has been seen, and seq `0` is not treated as missing.
+  Live-view enable is untracked so `0xa8` still leaves on UDP `.waiting`.
+  Rebuild ingest is generation-gated; leftover GOP from the old socket
+  cannot mix into the new assembler. Stick rest can still emit while
+  `liveAccepting` is down.
+
 - SET mailbox matches ACK seq before a 0x8E GET waiter, so FOV/ISO-limit
   SET replies are not stolen (that waitLate then rebuilt UDP). Track-poll
   `0xA5` and skipped UDP writes are not uplink death. Photo/Record

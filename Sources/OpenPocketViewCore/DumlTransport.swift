@@ -104,6 +104,17 @@ public enum DumlTransport {
 
         /// Advance group 1 from pktType `0x03` and seed/refresh groups 1–2 from
         /// 34-byte `0x01` telemetry. Video (`0x02`) is tracked separately.
+        /// Group 0 is latest `0x02` seq. A 34-byte `0x01` must not rewind it
+        /// after video has been seen (that closed HEVC while HUD stayed live).
+        public static func shouldSeedVideoCursorFromTelemetry(hasVideoSeq: Bool) -> Bool {
+            !hasVideoSeq
+        }
+
+        /// `0` is a valid 8-aligned seq. Do not treat it as "missing" once seen.
+        public static func windowCursor(stored: UInt16, seen: Bool, fallback: UInt16) -> UInt16 {
+            seen ? stored : fallback
+        }
+
         public func advancing(datagram: [UInt8]) -> AckWindows {
             var next = self
             guard datagram.count >= 8 else { return next }

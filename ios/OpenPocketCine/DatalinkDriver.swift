@@ -32,6 +32,8 @@ final class DatalinkDriver {
     /// Bumped before the old UDP is canceled so its 89 / write failures
     /// cannot mark the replacement socket dead.
     private var udpGeneration = 0
+    /// Readable from the UDP ingest closure without hopping to MainActor.
+    nonisolated private let liveGeneration = OSAllocatedUnfairLock(initialState: 0)
     private var cameraInterface: NWInterface?
     private var cameraLocalIPv4: String?
 
@@ -85,6 +87,7 @@ final class DatalinkDriver {
         var lastFlipGetAt: TimeInterval = 0
         var liveAccepting = false
         var ackedDataCursor: UInt16 = 0
+        var sawAckedData = false
         var extraCursor: UInt16 = 0
         var lastAckedDataLogAt: TimeInterval = 0
         var gimbalAxis0: UInt16 = GimbalStick.center
@@ -327,7 +330,7 @@ final class DatalinkDriver {
     /// Never writes TCP 7001 — a second enable on a dying UDP flow RST'd the poke.
     func startLiveView(receiver: UInt8 = Commands.liveViewEnableReceiverPocket) {
         if closed { return }
-        let seq = sendDuml(Commands.liveViewEnable(seq: 0, receiver: receiver), trackCommand: true)
+        let seq = sendDuml(Commands.liveViewEnable(seq: 0, receiver: receiver), trackCommand: false)
         log.info(
             "datalink: sent 0x09/0xa8 rcv=0x\(String(receiver, radix: 16), privacy: .public) seq=\(seq, privacy: .public) ready=\(self.isConnectionReady ? 1 : 0) videoPkts=\(self.videoPackets, privacy: .public)"
         )
@@ -341,7 +344,7 @@ final class DatalinkDriver {
         if closed { return }
         let first = videoGate.withLock { !$0.accepting }
         if first {
-            videoAssembler.reset()
+            videoAssembler.resetDepacketizerKeepingCursor()
         }
         videoGate.withLock {
             $0.accepting = true
@@ -450,19 +453,17 @@ final class DatalinkDriver {
         syncWire()
         if wasAccepting { armLiveVideo() }
         sendAck()
-        sendDuml(Commands.appPresenceFrame(seq: 0))
+        sendDuml(Commands.appPresenceFrame(seq: 0), trackCommand: false)
     }
 
     /// Drop the live UDP socket only. TCP 7001 stays up for the session.
     private func discardUDP() {
         udpGeneration += 1
+        liveGeneration.withLock { $0 = udpGeneration }
         receiveArmed = false
         let old = conn
         conn = nil
-        wire.withLock {
-            $0.conn = nil
-            $0.liveAccepting = false
-        }
+        wire.withLock { $0.conn = nil }
         old?.stateUpdateHandler = nil
         old?.cancel()
     }
@@ -543,7 +544,8 @@ final class DatalinkDriver {
         peerCursor = videoAssembler.peerCursor(fallback: peerCursor)
         let (acked, extra) = wire.withLock {
             (
-                $0.ackedDataCursor == 0 ? $0.baseSeq : $0.ackedDataCursor,
+                DumlTransport.AckWindows.windowCursor(
+                    stored: $0.ackedDataCursor, seen: $0.sawAckedData, fallback: $0.baseSeq),
                 $0.extraCursor == 0 ? $0.baseSeq : $0.extraCursor
             )
         }
@@ -576,9 +578,8 @@ final class DatalinkDriver {
             return
         default:
             // Not-ready is not a dead flow. Tracked SETs skip — latching
-            // writeHealthy here used to tear UDP during LUT / zoom. Untracked
-            // pid 0x38 GET follows the ACK pump: video still flows on
-            // `.waiting`, and skipping the GET froze Flip after a few seconds.
+            // writeHealthy here used to tear UDP during LUT / zoom. Enable is
+            // untracked so 0xa8 still leaves on `.waiting`.
             if trackCommand {
                 lastCommandWriteLanded = false
                 log.info(
@@ -646,7 +647,8 @@ final class DatalinkDriver {
         let (session, base, conn, acked, extra) = wire.withLock {
             (
                 $0.sessionId, $0.baseSeq, $0.conn,
-                $0.ackedDataCursor == 0 ? $0.baseSeq : $0.ackedDataCursor,
+                DumlTransport.AckWindows.windowCursor(
+                    stored: $0.ackedDataCursor, seen: $0.sawAckedData, fallback: $0.baseSeq),
                 $0.extraCursor == 0 ? $0.baseSeq : $0.extraCursor
             )
         }
@@ -730,8 +732,9 @@ final class DatalinkDriver {
                     held: w.gimbalStickHeld, restPending: w.gimbalSendRest, now: now,
                     lastEmitted: w.lastGimbalStickAt)
             else { return .wait }
-            guard w.liveAccepting, let conn = w.conn else { return .wait }
+            guard let conn = w.conn else { return .wait }
             let rest = w.gimbalSendRest
+            if !rest, !w.liveAccepting { return .wait }
             let axis0 = rest ? GimbalStick.center : w.gimbalAxis0
             let axis1 = rest ? GimbalStick.center : w.gimbalAxis1
             w.lastGimbalStickAt = now
@@ -793,6 +796,7 @@ final class DatalinkDriver {
             $0.udpSeq = us
             $0.lastFlipGetAt = 0
             $0.ackedDataCursor = 0
+            $0.sawAckedData = false
             $0.extraCursor = 0
             $0.lastAckedDataLogAt = 0
         }
@@ -807,6 +811,9 @@ final class DatalinkDriver {
                 ackedData: w.ackedDataCursor, extra: w.extraCursor
             ).advancing(datagram: bytes)
             w.ackedDataCursor = advanced.ackedData
+            if datagram.count > 6, datagram[6] == DumlTransport.PktType.ackedData.rawValue {
+                w.sawAckedData = true
+            }
             w.extraCursor = advanced.extra
             let now = CFAbsoluteTimeGetCurrent()
             let logIt =
@@ -834,6 +841,8 @@ final class DatalinkDriver {
         let gate = videoGate
         let flipReplyAt = lastSelfieFlipReply
         let generation = udpGeneration
+        let genLock = liveGeneration
+        genLock.withLock { $0 = generation }
         let socket = conn
         receiveArmed = true
         log.info("datalink: UDP reader armed")
@@ -861,6 +870,7 @@ final class DatalinkDriver {
                 }
             },
             ingest: { [weak self] bytes in
+                guard genLock.withLock({ $0 }) == generation else { return }
                 let awaitingAck = !handshake.withLock { $0 }
                 if awaitingAck {
                     inbound.withLock { $0 += 1 }
@@ -968,8 +978,8 @@ final class DatalinkDriver {
                 }
             } else {
                 armReceive(conn, queue: queue, onError: onError, ingest: ingest)
+                if let data, !data.isEmpty { ingest([UInt8](data)) }
             }
-            if let data, !data.isEmpty { ingest([UInt8](data)) }
         }
     }
 
@@ -991,8 +1001,10 @@ final class DatalinkDriver {
         // 0x01 telemetry carries a cursor at [10:12]. Video (0x02) has no such field — Mimo echoes
         // the video packet's own transport seq (bytes 4-5) instead, 96% of ACKs in the capture.
         if datagram.count == 34, datagram[6] == 0x01 {
-            peerCursor = UInt16(datagram[10]) | (UInt16(datagram[11]) << 8)
-            videoAssembler.notePeerCursor(peerCursor)
+            let cursor = UInt16(datagram[10]) | (UInt16(datagram[11]) << 8)
+            if videoAssembler.seedPeerCursorIfNeeded(cursor) {
+                peerCursor = cursor
+            }
         }
 
         // Video is assembled on the UDP queue. A stray main-actor copy must not
@@ -1140,6 +1152,9 @@ final class DatalinkDriver {
                 if !WiFiJoiner.isCameraPathReady() {
                     self.writeHealthy = false
                     self.log.info("datalink: camera 192.168.2.x left the path")
+                } else if !self.writeHealthy {
+                    self.writeHealthy = true
+                    self.log.info("datalink: camera 192.168.2.x returned — write health restored")
                 }
             }
         }
@@ -1163,7 +1178,6 @@ final class DatalinkDriver {
                     self.log.info(
                         "datalink: UDP failed (\(error.localizedDescription, privacy: .public))")
                 case .waiting(let error):
-                    self.writeHealthy = false
                     self.log.info(
                         "datalink: UDP waiting (\(error.localizedDescription, privacy: .public))")
                 case .cancelled:
@@ -1288,6 +1302,7 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
         var lastAU: Date?
         var loggedFirst = false
         var peerCursor: UInt16 = 0
+        var hasVideoSeq = false
         var pending: [[UInt8]] = []
         var hopScheduled = false
     }
@@ -1300,6 +1315,7 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
             state.lastPacket = Date()
             if let seq = DumlTransport.transportSeq(datagram) {
                 state.peerCursor = seq
+                state.hasVideoSeq = true
             }
             let first = !state.loggedFirst
             if first { state.loggedFirst = true }
@@ -1357,16 +1373,38 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
 
     func peerCursor(fallback: UInt16) -> UInt16 {
         lock.withLock { state in
-            state.peerCursor == 0 ? fallback : state.peerCursor
+            DumlTransport.AckWindows.windowCursor(
+                stored: state.peerCursor, seen: state.hasVideoSeq, fallback: fallback)
         }
     }
 
-    func notePeerCursor(_ cursor: UInt16) {
-        lock.withLock { $0.peerCursor = cursor }
+    /// Seed group 0 from telemetry only before the first `0x02`.
+    @discardableResult
+    func seedPeerCursorIfNeeded(_ cursor: UInt16) -> Bool {
+        lock.withLock { state in
+            guard
+                DumlTransport.AckWindows.shouldSeedVideoCursorFromTelemetry(
+                    hasVideoSeq: state.hasVideoSeq)
+            else { return false }
+            state.peerCursor = cursor
+            return true
+        }
     }
 
     func reset() {
         lock.withLock { $0 = State() }
+    }
+
+    /// First `armLiveVideo` must drop leftover GOP bytes without wiping the
+    /// ACK video cursor (that left 40 Hz group0=0 until the next 0x02).
+    func resetDepacketizerKeepingCursor() {
+        lock.withLock { state in
+            let cursor = state.peerCursor
+            let has = state.hasVideoSeq
+            state = State()
+            state.peerCursor = cursor
+            state.hasVideoSeq = has
+        }
     }
 
     /// Clear receive clocks. Stamping `Date()` looked like a live packet and
@@ -1375,6 +1413,8 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
         lock.withLock {
             $0.lastPacket = nil
             $0.lastAU = nil
+            $0.depacketizer.reset()
+            $0.pending.removeAll()
         }
     }
 }
