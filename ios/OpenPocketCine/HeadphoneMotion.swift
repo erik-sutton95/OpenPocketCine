@@ -439,9 +439,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
         let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
         model.headTrackAxisPose = HeadTrackAxisPose(
-            yawDeg: HeadTrack.yawDialDeg(lookRightDeg: lookRight),
-            pitchDeg: HeadTrack.pitchDialDeg(lookUpDeg: lookUp),
-            locked: calibratedByUser)
+            yawDeg: lookRight, pitchDeg: lookUp, locked: calibratedByUser)
         let hudDue: Bool
         if let now, let last = lastHudAt {
             hudDue = now.timeIntervalSince(last) >= LiveChromeThrottle.statusInterval

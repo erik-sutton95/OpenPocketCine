@@ -7,8 +7,9 @@ import Testing
     @Test func axisDialsFollowLook() {
         #expect(HeadTrack.yawDialDeg(lookRightDeg: 90) == 90)
         #expect(HeadTrack.yawDialDeg(lookRightDeg: -45) == -45)
-        #expect(HeadTrack.pitchDialDeg(lookUpDeg: 30) == -30, "nod up is counter-clockwise")
-        #expect(HeadTrack.pitchDialDeg(lookUpDeg: -20) == 20, "nod down is clockwise")
+        #expect(HeadTrack.pitchDialDeg(lookUpDeg: 0) == 90, "level look points right")
+        #expect(HeadTrack.pitchDialDeg(lookUpDeg: 30) == 60, "nod up from 3 o'clock")
+        #expect(HeadTrack.pitchDialDeg(lookUpDeg: -20) == 110, "nod down from 3 o'clock")
         #expect(abs(HeadTrack.yawDialDeg(lookRightDeg: 270) - -90) < 0.001)
     }
 

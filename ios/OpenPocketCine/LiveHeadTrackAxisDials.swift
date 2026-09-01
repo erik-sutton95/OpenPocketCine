@@ -2,7 +2,7 @@ import OpenPocketViewCore
 import SwiftUI
 
 /// Two SET-relative rings so an operator can see AirPods yaw and pitch 1:1.
-/// 12 o'clock is forward. The arrow is the nose.
+/// Yaw: 12 o'clock is forward. Pitch: arrow-right is 0, nod is up/down.
 struct LiveHeadTrackAxisDials: View {
     var pose: HeadTrackAxisPose
 
@@ -10,8 +10,14 @@ struct LiveHeadTrackAxisDials: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            dial(title: "YAW", degrees: pose.yawDeg)
-            dial(title: "PITCH", degrees: pose.pitchDeg)
+            dial(
+                title: "YAW", lookDeg: pose.yawDeg,
+                rotationDeg: HeadTrack.yawDialDeg(lookRightDeg: pose.yawDeg),
+                forward: .up)
+            dial(
+                title: "PITCH", lookDeg: pose.pitchDeg,
+                rotationDeg: HeadTrack.pitchDialDeg(lookUpDeg: pose.pitchDeg),
+                forward: .right)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -30,7 +36,14 @@ struct LiveHeadTrackAxisDials: View {
         .accessibilityIdentifier("monitor.system.headTrackAxisDials")
     }
 
-    private func dial(title: String, degrees: Double) -> some View {
+    private enum Forward {
+        case up
+        case right
+    }
+
+    private func dial(title: String, lookDeg: Double, rotationDeg: Double, forward: Forward)
+        -> some View
+    {
         VStack(spacing: 4) {
             Text(title)
                 .font(LiveType.ui(size: 10, weight: .semibold, design: .rounded))
@@ -38,23 +51,36 @@ struct LiveHeadTrackAxisDials: View {
             ZStack {
                 Circle()
                     .strokeBorder(LiveDesign.hairline, lineWidth: 1.5)
+                if forward == .right {
+                    Rectangle()
+                        .fill(LiveDesign.text.opacity(0.22))
+                        .frame(width: dialSize - 10, height: 1)
+                }
                 cardinalTicks
-                // Fixed forward mark at 12 o'clock.
-                Capsule()
-                    .fill(LiveDesign.text)
-                    .frame(width: 2.5, height: 9)
-                    .offset(y: -(dialSize / 2) + 8)
+                forwardMark(forward)
                 LiveHeadTrackForwardArrow()
                     .fill(LiveDesign.text)
                     .frame(width: 22, height: dialSize * 0.62)
-                    .rotationEffect(.degrees(degrees))
-                Text(String(format: "%+.0f°", degrees))
+                    .rotationEffect(.degrees(rotationDeg))
+                Text(String(format: "%+.0f°", lookDeg))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(LiveDesign.text.opacity(0.9))
                     .offset(y: dialSize * 0.28)
             }
             .frame(width: dialSize, height: dialSize)
         }
+    }
+
+    private func forwardMark(_ forward: Forward) -> some View {
+        Capsule()
+            .fill(LiveDesign.text)
+            .frame(
+                width: forward == .right ? 9 : 2.5,
+                height: forward == .right ? 2.5 : 9
+            )
+            .offset(
+                x: forward == .right ? (dialSize / 2) - 8 : 0,
+                y: forward == .up ? -(dialSize / 2) + 8 : 0)
     }
 
     private var cardinalTicks: some View {

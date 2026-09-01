@@ -51,14 +51,15 @@ public struct HeadTrack: Equatable, Sendable {
         radToDeg(pitchRad - originPitchRad)
     }
 
-    /// Clockwise degrees from SET forward on the yaw ring. Matches `lookRightDeg`.
+    /// Clockwise degrees from 12 o'clock on the yaw ring. Matches `lookRightDeg`.
     public static func yawDialDeg(lookRightDeg: Double) -> Double {
         wrapDeg(lookRightDeg)
     }
 
-    /// Clockwise degrees from SET forward on the pitch ring. Nod down is clockwise.
+    /// Clockwise degrees for an up-drawn arrow on the pitch ring. 0 look
+    /// points right (3 o'clock). Nod up is counter-clockwise; nod down clockwise.
     public static func pitchDialDeg(lookUpDeg: Double) -> Double {
-        wrapDeg(-lookUpDeg)
+        wrapDeg(90 - lookUpDeg)
     }
 
     /// Device frame: +X right ear, +Y top of head, +Z out the nose.
