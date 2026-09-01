@@ -3,7 +3,214 @@ import Testing
 
 @testable import OpenPocketViewCore
 
+/// Pocket plant for closed-loop tests: integrates stick × rate, publishes
+/// `0x04/0x05` tenth-degree telemetry at ~10 Hz, ~0.24 s stale — the delay
+/// that limit-cycled the old telemetry-closed loop (17:10 take).
+private struct PocketSim {
+    var yaw: Double
+    var tilt: Double
+    var fullStickDegPerSec = HeadTrack.stickRateDegPerSec
+    var delay = 0.24
+    var sampleEvery = 0.1
+    var panStop: ClosedRange<Double>?
+    var tiltFrozen = false
+    private var t = 0.0
+    private var lastSample = 0.0
+    private var trail: [(t: Double, yaw: Double, tilt: Double)]
+    private(set) var yawTenth: Int16
+    private(set) var tiltTenth: Int16
+
+    init(yaw: Double = 0, tilt: Double = 0) {
+        self.yaw = yaw
+        self.tilt = tilt
+        trail = [(0, yaw, tilt)]
+        yawTenth = Int16((yaw * 10).rounded())
+        tiltTenth = Int16((tilt * 10).rounded())
+    }
+
+    mutating func step(x: Double, y: Double, dt: Double) {
+        t += dt
+        yaw += x * fullStickDegPerSec * dt
+        if let panStop { yaw = min(max(yaw, panStop.lowerBound), panStop.upperBound) }
+        tilt += y * fullStickDegPerSec * dt
+        trail.append((t, yaw, tilt))
+        guard t - lastSample >= sampleEvery else { return }
+        lastSample = t
+        let cut = t - delay
+        let past = trail.last(where: { $0.t <= cut }) ?? trail[0]
+        yawTenth = Int16((past.yaw * 10).rounded())
+        if !tiltFrozen { tiltTenth = Int16((past.tilt * 10).rounded()) }
+    }
+}
+
 @Suite struct HeadTrackTests {
+    /// Drive the loop at the 25 Hz pump. Head looks are functions of time.
+    private func run(
+        _ track: inout HeadTrack, _ sim: inout PocketSim,
+        seconds: Double,
+        lookRight: (Double) -> Double = { _ in 0 },
+        lookUp: (Double) -> Double = { _ in 0 },
+        onTick: ((Double, HeadTrack.Command?, PocketSim) -> Void)? = nil
+    ) {
+        let dt = 0.04
+        var t = 0.0
+        while t < seconds {
+            let cmd = track.tick(
+                lookRightDeg: lookRight(t), lookUpDeg: lookUp(t),
+                gimbalYawTenth: sim.yawTenth, gimbalPitchTenth: sim.tiltTenth, dt: dt)
+            sim.step(x: cmd?.x ?? 0, y: cmd?.y ?? 0, dt: dt)
+            t += dt
+            onTick?(t, cmd, sim)
+        }
+    }
+
+    /// Head swings 20° right and parks. 17:10 take: the telemetry-closed
+    /// loop blew ~9° past and bobbed (body 27.9→38.3→27.5→26.3). The
+    /// model-closed loop must arrive without a swing-back cycle.
+    @Test func swingToTwentySettlesWithoutBobbing() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        var maxYaw = 0.0
+        var flips = 0
+        var lastSign = 0
+        run(
+            &track, &sim, seconds: 3,
+            lookRight: { min(20, 100 * $0) },
+            onTick: { _, cmd, sim in
+                maxYaw = max(maxYaw, sim.yaw)
+                let sign = (cmd?.x ?? 0) > 0 ? 1 : (cmd?.x ?? 0) < 0 ? -1 : 0
+                if sign != 0, lastSign != 0, sign != lastSign { flips += 1 }
+                if sign != 0 { lastSign = sign }
+            })
+        #expect(maxYaw < 23, "overshoot past a parked 20° look is the bob")
+        #expect(abs(sim.yaw - 20) < 1.5, "gimbal must arrive at the look")
+        #expect(flips <= 1, "sign flip after arrival is reverse-hunt")
+        var rested = true
+        run(
+            &track, &sim, seconds: 1, lookRight: { _ in 20 },
+            onTick: { _, cmd, _ in
+                if cmd?.rest != true { rested = false }
+            })
+        #expect(rested, "parked head and arrived gimbal must hold rest")
+    }
+
+    /// A slow deliberate pan must track 1:1 the whole way — never park at
+    /// engage hysteresis mid-motion, never lag more than a few degrees.
+    @Test func slowRampTracksWithoutParking() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        var parked = false
+        run(
+            &track, &sim, seconds: 1.0,
+            lookRight: { 30 * $0 },
+            onTick: { t, cmd, sim in
+                guard t > 0.3 else { return }
+                if cmd?.x ?? 0 <= 0 { parked = true }
+                #expect(30 * t - sim.yaw < 8, "ramp lag beyond 8° is not following")
+            })
+        #expect(!parked, "a moving look must keep the stick thrown")
+        run(&track, &sim, seconds: 2, lookRight: { _ in 30 })
+        #expect(abs(sim.yaw - 30) < 1.5)
+    }
+
+    /// `@20` froze during a full-stick nod (physical take). Dead telemetry
+    /// must stop correcting the model — the nod still closes and rests, and
+    /// the tilt must not slam toward the stop.
+    @Test func frozenTiltTelemetryClosesWithoutSlam() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        sim.tiltFrozen = true
+        var maxTilt = 0.0
+        run(
+            &track, &sim, seconds: 3,
+            lookUp: { min(20, 100 * $0) },
+            onTick: { _, _, sim in maxTilt = max(maxTilt, sim.tilt) })
+        #expect(maxTilt < 25, "frozen @20 must not slam tilt past the look")
+        #expect(abs(sim.tilt - 20) < 2, "model still closes the nod")
+        var rested = true
+        run(
+            &track, &sim, seconds: 1, lookUp: { _ in 20 },
+            onTick: { _, cmd, _ in
+                if cmd?.rest != true { rested = false }
+            })
+        #expect(rested, "frozen telemetry must not re-arm a closed nod")
+    }
+
+    /// Plant ~25% slower than the model prior: dead-reckoning rests
+    /// early, stationary telemetry pulls the model home, and the
+    /// leftover closes as a nudge — the sky arrow must reach the look.
+    @Test func slowerPlantNudgesHomeAfterStableTelemetry() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        sim.fullStickDegPerSec = HeadTrack.stickRateDegPerSec * 0.75
+        run(&track, &sim, seconds: 5, lookRight: { min(20, 100 * $0) })
+        #expect(abs(sim.yaw - 20) < 1.5, "stable live short of the look must nudge home")
+    }
+
+    /// Plant ~20% faster than the model prior: physical overshoot
+    /// stays small and stationary telemetry brings it back without a hunt.
+    @Test func fasterPlantComesBackWithoutHunting() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        sim.fullStickDegPerSec = HeadTrack.stickRateDegPerSec * 1.2
+        var maxYaw = 0.0
+        run(
+            &track, &sim, seconds: 5, lookRight: { min(20, 100 * $0) },
+            onTick: { _, _, sim in maxYaw = max(maxYaw, sim.yaw) })
+        #expect(maxYaw < 25, "20% rate error must not become a slam")
+        #expect(
+            abs(sim.yaw - 20) < HeadTrack.engageDeg + 0.3,
+            "parked error beyond the re-engage band is a real miss")
+        var travel = 0.0
+        var last = sim.yaw
+        run(
+            &track, &sim, seconds: 1.5, lookRight: { _ in 20 },
+            onTick: { _, _, sim in
+                travel += abs(sim.yaw - last)
+                last = sim.yaw
+            })
+        #expect(travel < 2, "settled loop must not keep sawing")
+    }
+
+    /// A look past the +58° pan stop pins the target at the stop: arrive,
+    /// rest, no pressing. Looking back inside the box leaves the stop.
+    @Test func lookPastPanStopRestsThenFollowsBack() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var sim = PocketSim()
+        sim.panStop = HeadTrack.Reach.panMinDeg...HeadTrack.Reach.panMaxDeg
+        run(&track, &sim, seconds: 4, lookRight: { min(90, 120 * $0) })
+        #expect(abs(sim.yaw - HeadTrack.Reach.panMaxDeg) < 1.5, "projected look is the stop")
+        var rested = true
+        run(
+            &track, &sim, seconds: 1, lookRight: { _ in 90 },
+            onTick: { _, cmd, _ in
+                if cmd?.rest != true { rested = false }
+            })
+        #expect(rested, "pinned at the stop must rest, not press")
+        run(&track, &sim, seconds: 4, lookRight: { max(20, 90 - 120 * $0) })
+        #expect(abs(sim.yaw - 20) < 1.5, "looking back inside the box leaves the stop")
+    }
+
+    /// Head turns the other way before arrival: new destination, reverse.
+    @Test func retargetTurnsAroundBeforeArrival() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let go = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(go?.x == HeadTrack.maxThrow)
+        let around = track.tick(
+            lookRightDeg: -15, lookUpDeg: 0, gimbalYawTenth: 80, gimbalPitchTenth: 0)
+        #expect(
+            around?.x == -HeadTrack.maxThrow,
+            "head turns the other way before arrival: new destination, reverse")
+    }
+
     @Test func axisDialsFollowLook() {
         #expect(HeadTrack.yawDialDeg(lookRightDeg: 90) == 90)
         #expect(HeadTrack.yawDialDeg(lookRightDeg: -45) == -45)
@@ -52,64 +259,6 @@ import Testing
             "y=-0.01 encodes as center (axisLinear snap) — 22:24 streamed that and paused HEVC")
     }
 
-    @Test func lookingRightPansRightUntilLiveYawCatches() {
-        var track = HeadTrack()
-        let ok = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(ok == .centered)
-        let start = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(start != nil)
-        #expect(start!.x == HeadTrack.maxThrow)
-        #expect(start!.y == 0)
-        var cmd = start
-        for _ in 0..<8 {
-            cmd = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-                dt: 0.04, gyroYaw: 0.4)
-        }
-        #expect(cmd != nil)
-        #expect(cmd!.x > 0, "held look keeps throwing until live yaw is 20°")
-        let caught = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        #expect(caught?.rest == true)
-    }
-
-    @Test func twoDegPastLookDoesNotReverseHunt() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let first = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(first != nil)
-        #expect(first!.x > 0)
-        let past = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
-            dt: 0.04)
-        #expect(past != nil)
-        #expect(
-            past!.x < 0,
-            "live 22° vs look 20° throws back — follow the head")
-    }
-
-    @Test func sphereKeepsLookPastTheStopThenPicksUpFromAnotherAngle() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let stop = Int16(HeadTrack.Reach.panMaxDeg * 10)
-        let past = track.tick(
-            lookRightDeg: 90, lookUpDeg: 0, gimbalYawTenth: stop, gimbalPitchTenth: 0)
-        #expect(past?.rest == true, "90° look sits on the +58° stop")
-        let nod = track.tick(
-            lookRightDeg: 90, lookUpDeg: 25, gimbalYawTenth: stop, gimbalPitchTenth: 0)
-        #expect(nod != nil)
-        #expect(nod!.x == 0, "still past the pan stop")
-        #expect(nod!.y > 0, "a nod on the sphere still tilts")
-        let back = track.tick(
-            lookRightDeg: 20, lookUpDeg: 25, gimbalYawTenth: stop, gimbalPitchTenth: 0)
-        #expect(back != nil)
-        #expect(
-            back!.x < 0, "coming back from another angle leaves the pan stop toward SET")
-        #expect(back!.y > 0)
-    }
-
     @Test func heldLookClosesEvenWhenGyroIsQuiet() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
@@ -149,14 +298,38 @@ import Testing
         #expect(cmd!.x == 0)
     }
 
-    @Test func nodDoesNotPanWhenLiveYawWiggles() {
+    /// 18:29 take: rest→throw in the same second paused HEVC. Arrival must
+    /// stream center through `restLinger`; a head move inside the linger
+    /// resumes throw with no lift in between; only a real stop lifts.
+    @Test func arrivalLingersBeforeLiftAndResumesWithoutRegrab() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let cmd = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 50, gimbalPitchTenth: 0)
-        #expect(cmd != nil)
-        #expect(cmd!.y > 0)
-        #expect(cmd!.x == 0, "a vertical nod must not zigzag pan when live yaw wiggles")
+        var sim = PocketSim()
+        run(&track, &sim, seconds: 1.5, lookRight: { min(20, 100 * $0) })
+        var sawLift = false
+        var resumed = false
+        run(
+            &track, &sim, seconds: 0.5, lookRight: { t in 20 + 80 * t },
+            onTick: { _, cmd, _ in
+                if cmd?.rest == true { sawLift = true }
+                if abs(cmd?.x ?? 0) > 0 { resumed = true }
+            })
+        #expect(resumed, "a head move during the linger resumes throw")
+        #expect(!sawLift, "no lift between arrival and the next gesture — that chatter paused HEVC")
+        run(&track, &sim, seconds: 0.9, lookRight: { _ in 60 })
+        var holds = 0
+        var lifts = 0
+        run(
+            &track, &sim, seconds: 1.5, lookRight: { _ in 60 },
+            onTick: { _, cmd, _ in
+                if cmd?.rest == true {
+                    lifts += 1
+                } else if cmd?.x == 0, cmd?.y == 0 {
+                    holds += 1
+                }
+            })
+        #expect(holds > 5, "arrival streams center before lifting")
+        #expect(lifts > 0, "a real stop still lifts after the linger")
     }
 
     @Test func yawWrapsAround180() {
@@ -166,57 +339,6 @@ import Testing
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: -1700, gimbalPitchTenth: 0)
         #expect(cmd != nil)
         #expect(cmd!.x == HeadTrack.maxThrow)
-    }
-
-    @Test func lookPastPanStopRestsThenFollowsBack() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let past = HeadTrack.Reach.panMaxDeg + 40
-        let stop = Int16(HeadTrack.Reach.panMaxDeg * 10)
-        let slammed = track.tick(
-            lookRightDeg: past, lookUpDeg: 0, gimbalYawTenth: stop, gimbalPitchTenth: 0)
-        #expect(slammed?.rest == true, "projected look is the stop — do not keep throwing")
-        let back = 20.0
-        let recover = track.tick(
-            lookRightDeg: back, lookUpDeg: 0, gimbalYawTenth: stop, gimbalPitchTenth: 0)
-        #expect(recover != nil)
-        #expect(recover!.x < 0, "looking back inside the box must leave the stop toward SET")
-        let home = track.tick(
-            lookRightDeg: back, lookUpDeg: 0, gimbalYawTenth: Int16(back * 10),
-            gimbalPitchTenth: 0)
-        #expect(home?.rest == true)
-    }
-
-    @Test func lookPastTiltStopRests() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let stop = Int16(HeadTrack.Reach.tiltMaxDeg * 10)
-        let cmd = track.tick(
-            lookRightDeg: 0, lookUpDeg: 80, gimbalYawTenth: 0, gimbalPitchTenth: stop)
-        #expect(cmd?.rest == true)
-    }
-
-    @Test func fullTurnDoesNotWrapToTheOtherStop() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var right = 0.0
-        var cmd: HeadTrack.Command?
-        for _ in 0..<18 {
-            right += 20
-            cmd = track.tick(
-                lookRightDeg: HeadTrack.wrapDeg(right), lookUpDeg: 0, gimbalYawTenth: 580,
-                gimbalPitchTenth: 0)
-        }
-        #expect(abs(right - 360) < 0.001)
-        #expect(cmd?.rest == true, "360° head turn stays projected on +58, not wrapped home")
-        for _ in 0..<16 {
-            right -= 20
-            cmd = track.tick(
-                lookRightDeg: HeadTrack.wrapDeg(right), lookUpDeg: 0, gimbalYawTenth: 580,
-                gimbalPitchTenth: 0, dt: 0.04, gyroYaw: 0.4)
-        }
-        #expect(cmd != nil)
-        #expect(cmd!.x < 0, "unwinding back through the box leaves the stop toward SET")
     }
 
     @Test func projectClampsToControllableBox() {
@@ -284,10 +406,17 @@ import Testing
             lookRightDeg: 2, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
         #expect(still != nil)
         #expect(still!.x > 0)
-        #expect(
-            track.tick(
-                lookRightDeg: 0.4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0
-            )?.rest == true)
+        let arrived = track.tick(
+            lookRightDeg: 0.4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(arrived?.x == 0 && arrived?.y == 0)
+        #expect(arrived?.rest == false, "arrival center-holds through the linger")
+        var last: HeadTrack.Command?
+        for _ in 0..<30 {
+            last = track.tick(
+                lookRightDeg: 0.4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        #expect(last?.rest == true, "a real stop lifts once the linger expires")
     }
 
     @Test func resetClearsCenter() {
@@ -339,170 +468,6 @@ import Testing
         #expect(abs(right - 90) < 0.01, "inverted Δatt yaw is look-right")
         let left = HeadTrack.lookRightDeg(yawRad: .pi / 3, originYawRad: 0)
         #expect(abs(left + 60) < 0.01)
-    }
-
-    @Test func fiftyThreeDegLookClosesOnLiveYaw() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 100, gimbalPitchTenth: -50)
-        let start = track.tick(
-            lookRightDeg: -53, lookUpDeg: 0, gimbalYawTenth: 100, gimbalPitchTenth: -50)
-        #expect(start != nil)
-        #expect(start!.x < 0, "53° left throws pan left until live yaw matches")
-        let caught = track.tick(
-            lookRightDeg: -53, lookUpDeg: 0, gimbalYawTenth: -430, gimbalPitchTenth: -50)
-        #expect(caught?.rest == true, "SET 10° + head −53° = live −43°")
-    }
-
-    @Test func overshootLeftoverBelowLinearSnapRests() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let start = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0.1, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(start != nil)
-        #expect(start!.x > 0)
-        let leftover = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0.1, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        #expect(
-            leftover?.rest == true,
-            "caught pan + leftover y=-0.01 encodes as center — lift")
-    }
-
-    @Test func liveYawWiggleAfterCloseDoesNotRegrab() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let caught = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        #expect(caught?.rest == true)
-        var parked: HeadTrack.Command?
-        for _ in 0..<8 {
-            parked = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
-                dt: 0.04)
-        }
-        #expect(parked?.rest == true)
-        let wiggle = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
-            dt: 0.04)
-        #expect(wiggle != nil)
-        #expect(
-            wiggle!.x < 0,
-            "live 22° vs look 20° throws back")
-        let undershoot = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 180, gimbalPitchTenth: 0,
-            dt: 0.04)
-        #expect(undershoot != nil)
-        #expect(
-            undershoot!.x > 0,
-            "live 18° vs look 20° keeps closing")
-        let lookAgain = track.tick(
-            lookRightDeg: 26, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
-            dt: 0.04, gyroYaw: 0.4)
-        #expect(lookAgain != nil)
-        #expect(lookAgain!.x > 0, "a 6° head turn after close must throw again")
-    }
-
-    @Test func threeDegShortOfLookKeepsThrowing() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<10 {
-            cmd = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 170, gimbalPitchTenth: 0,
-                dt: 0.04, gyroYaw: 0.4)
-        }
-        #expect(cmd != nil)
-        #expect(
-            cmd!.x > 0,
-            "3° short of a 20° look must not park at reengageDeg — drive until restDeg")
-    }
-
-    @Test func delayedOvershootDoesNotReverseUntilLiveSettles() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let go = track.tick(
-            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(go != nil && go!.x < 0 && go!.y < 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<4 {
-            cmd = track.tick(
-                lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
-                dt: 0.04)
-        }
-        #expect(cmd != nil)
-        #expect(
-            cmd!.x > 0 && cmd!.y > 0,
-            "live past the look throws back — follow the head")
-    }
-
-    @Test func afterSettleOvershootComesBackToTheLook() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<10 {
-            cmd = track.tick(
-                lookRightDeg: -8, lookUpDeg: -8, gimbalYawTenth: -160, gimbalPitchTenth: -160,
-                dt: 0.04)
-        }
-        #expect(cmd != nil)
-        #expect(
-            cmd!.x > 0 && cmd!.y > 0,
-            "stable live 8° past a −8° look must nudge back — 1:1 is live matching the look")
-    }
-
-    @Test func stillHeadKeepsClosingOnCommittedLook() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<10 {
-            cmd = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-                dt: 0.04)
-        }
-        #expect(
-            cmd?.x == HeadTrack.maxThrow,
-            "head still: keep throwing until live yaw is 20°, not a predicted rest")
-        let caught = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        #expect(caught?.rest == true)
-    }
-
-    @Test func retargetTurnsAroundBeforeArrival() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let go = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(go?.x == HeadTrack.maxThrow)
-        let around = track.tick(
-            lookRightDeg: -15, lookUpDeg: 0, gimbalYawTenth: 80, gimbalPitchTenth: 0)
-        #expect(
-            around?.x == -HeadTrack.maxThrow,
-            "head turns the other way before arrival: new destination, reverse")
-    }
-
-    @Test func nodKeepsThrowingUntilLivePitchCatches() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04)
-        #expect(cmd != nil)
-        #expect(cmd!.y == HeadTrack.maxThrow)
-        for _ in 0..<8 {
-            cmd = track.tick(
-                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04,
-                gyroLookUp: 0.3)
-        }
-        #expect(
-            cmd?.y == HeadTrack.maxThrow,
-            "pitch must keep throwing at full stick until live @20 is 20°")
-        let caught = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
-        #expect(caught?.rest == true)
     }
 
     @Test func twoDegLagIsProportionalNotBangBang() {
@@ -565,128 +530,7 @@ import Testing
         #expect(up?.y == HeadTrack.maxThrow)
         let back = track.tick(
             lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(back?.rest == true)
-    }
-
-    @Test func livePitchClosesTiltOneToOne() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let start = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 50)
-        #expect(start != nil)
-        #expect(start!.y > 0)
-        let caught = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
-        #expect(caught?.rest == true)
-    }
-
-    @Test func movingHeadDoesNotParkACloseSoASlowLookStaysOneToOne() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let go = track.tick(
-            lookRightDeg: 4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-            dt: 0.05, gyroYaw: 0.4)
-        #expect(go != nil && go!.x > 0, "4° look engages")
-        for step in 5...20 {
-            let look = Double(step)
-            let liveTenth = Int16((look - 2) * 10)
-            let cmd = track.tick(
-                lookRightDeg: look, lookUpDeg: 0, gimbalYawTenth: liveTenth, gimbalPitchTenth: 0,
-                dt: 0.05, gyroYaw: 0.4)
-            #expect(
-                cmd != nil && cmd!.x > 0,
-                "step \(step): a moving 20° look must not wait reengageDeg (4°) between throws")
-        }
-    }
-
-    @Test func lookBackAfterCloseReturnsTowardSet() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        for _ in 0..<8 {
-            _ = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
-                dt: 0.04)
-        }
-        let back = track.tick(
-            lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
-            dt: 0.04, gyroYaw: 0.5)
-        #expect(back != nil)
-        #expect(
-            back!.x == -HeadTrack.maxThrow,
-            "looking back to SET after a 20° close must pan home — not holdOvershoot rest")
-    }
-
-    @Test func lookBackAfterNodReturnsTowardSet() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
-        for _ in 0..<8 {
-            _ = track.tick(
-                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200,
-                dt: 0.04)
-        }
-        let back = track.tick(
-            lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 200,
-            dt: 0.04, gyroLookUp: 0.5)
-        #expect(back != nil)
-        #expect(
-            back!.y == -HeadTrack.maxThrow,
-            "looking back to SET after a 20° nod must tilt home")
-    }
-
-    @Test func frozenLivePitchRestsTilt() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        var cmd: HeadTrack.Command?
-        for _ in 0..<16 {
-            cmd = track.tick(
-                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0,
-                dt: 0.04, gyroLookUp: 0.3)
-        }
-        #expect(
-            cmd?.y == 0,
-            "@20 stuck at SET for pitchLiveTimeout must rest tilt (do not slam)")
-        let live = track.tick(
-            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 80,
-            dt: 0.04, gyroLookUp: 0.3)
-        #expect(live != nil && live!.y > 0, "live @20 moving again resumes tilt close")
-    }
-
-    @Test func sixDegLookDoesNotLeaveGimbalAtTwentyOne() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let throwOut = track.tick(
-            lookRightDeg: -20, lookUpDeg: -20, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(throwOut?.x == -HeadTrack.maxThrow)
-        #expect(throwOut?.y == -HeadTrack.maxThrow)
-        let over = track.tick(
-            lookRightDeg: -6, lookUpDeg: -6, gimbalYawTenth: -210, gimbalPitchTenth: -200,
-            dt: 0.04)
-        #expect(over != nil)
-        #expect(
-            over!.x > 0,
-            "physical take: head −6° / gimbal −21° must pan back, not holdOvershoot rest")
-        #expect(
-            over!.y > 0,
-            "physical take: head −6° / gimbal −20° must tilt back")
-    }
-
-    @Test func lookingLeftTwentyClosesOnLiveYaw() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        let start = track.tick(
-            lookRightDeg: -20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        #expect(start?.x == -HeadTrack.maxThrow)
-        let caught = track.tick(
-            lookRightDeg: -20, lookUpDeg: 0, gimbalYawTenth: -200, gimbalPitchTenth: 0)
-        #expect(caught?.rest == true, "20° left is live yaw −20.0")
+        #expect(back?.x == 0 && back?.y == 0, "matched look center-holds the stick")
     }
 
     @Test func fromLookReconstructsTheNose() {
@@ -718,30 +562,6 @@ import Testing
                 swing.mag
                     - HeadTrack.geodesicDeg(fromRight: 0, fromUp: 0, toRight: 20, toUp: -10))
                 < 0.001)
-    }
-
-    @Test func afterSettleLiveShortOfLookNudges() {
-        var track = HeadTrack()
-        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
-        _ = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
-        for _ in 0..<8 {
-            _ = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
-                dt: 0.04)
-        }
-        var cmd: HeadTrack.Command?
-        for _ in 0..<8 {
-            cmd = track.tick(
-                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 170, gimbalPitchTenth: 0,
-                dt: 0.04)
-        }
-        #expect(cmd != nil)
-        #expect(
-            cmd!.x > 0,
-            "stable live 17° vs a 20° look must nudge — the sky arrow has to reach 20°")
     }
 
     @Test func swingCloseDoesNotDriveRoll() {

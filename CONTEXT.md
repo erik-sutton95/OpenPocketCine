@@ -75,16 +75,23 @@ _Avoid_: DualSense (alone) in operator copy
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
 Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
-shared identity. Look is Euler Δatt yaw/pitch from that lock. Pocket
-has no angle SET — only rate stick `0x04/0x01`. Throw until live
-`0x04/0x05` matches the look. Fast + tilt unlocked at calibrate.
-Rest **lifts** the stick (Mimo: notify only while thrown). Streaming
-center at 25 Hz paused HEVC at 15–30 s — including a leftover throw
-below the linear snap (`y=-0.01`). Encoder-pause: two enables then
-one UDP rebuild; keepalive must not flap while status is young. Close
-tilt on live pitch `@20` only; stop tilt throw if that field never leaves
-SET. Roll is readout only. STOP clears SET. On-screen stick and gimbal
-pad win while thrown. Android has no AirPods IMU.
+shared identity. Look is the SET-relative nose azimuth/elevation
+(quaternion, +Y forward) — Euler Δatt yaw wobbles during a nod at a
+yawed heading (diagonal drift). Pocket has no angle SET — only rate
+stick `0x04/0x01`. Throw closes a **dead-reckoned model** (full linear
+stick ≈ 40°/s, Fast) onto the look, plus target-rate feed-forward;
+live `0x04/0x05` is ~0.25 s stale at ~10 Hz and closing on it
+limit-cycled (bobbing). Stale telemetry only bleeds drift out of the
+model; it is adopted once provably stationary, and ignored while dead
+(`@20` froze mid-nod; yaw froze 8 s in the 18:29 take). Fast + tilt
+unlocked at calibrate. Arrival streams **center for ~1 s** before the
+lift — rest/throw grab cycles in the same second paused HEVC (22:24
+and 18:29). Sustained center still lifts: 25 Hz center paused HEVC at
+15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
+Encoder-pause: two enables then one UDP rebuild; keepalive must not
+flap while status is young. Roll is readout only. STOP clears SET.
+On-screen stick and gimbal pad win while thrown. Android has no
+AirPods IMU.
 _Avoid_: spatial audio in operator copy
 
 **Triple-tap 180 (TT180)**:

@@ -53,9 +53,11 @@ Head-track rest **lifts**
 catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it.
-Head-track look is Euler Δatt yaw/pitch from SET. Throw until live
-`0x04/0x05` matches; rest lifts the stick (rest/throw the same second
-paused HEVC). Analog/head-track rest when
+Head-track look is the SET-relative nose azimuth/elevation. Throw closes a
+dead-reckoned gimbal model onto the look (live `0x04/0x05` is ~0.25 s
+stale — closing on it hunted); arrival streams center ~1 s, then lifts
+(rest/throw the same second paused HEVC — 22:24 and the 18:29 stall
+with 4 recovers + UDP rebuilds). Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).

@@ -16,6 +16,38 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Head tracking closes on a dead-reckoned gimbal model with target-rate
+  feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
+  stale at ~10 Hz, and a proportional loop closed on it limit-cycled —
+  the 17:10 take shows the gimbal blowing ~9° past a parked head and
+  bobbing back. Full linear stick measures ~40°/s (Fast); stale
+  telemetry only bleeds drift out of the model, is adopted once
+  provably stationary, and is ignored while dead (`@20` froze mid-nod,
+  replacing the frozen-tilt rest hack; yaw froze 8 s in the 18:29 take).
+  The debug HUD gains a `pred` row — the model pose — for retuning
+  `stickRateDegPerSec` on device.
+
+- Head-track look is the SET-relative nose azimuth/elevation again:
+  Euler Δatt yaw wobbles when nodding at a yawed heading, dragging pan
+  diagonally through a vertical nod (18:29 take). The `panIsolateDeg`
+  nod guard existed to mask that wobble and instead froze real pan
+  error (a 15° stuck offset while nodding near SET) — removed.
+
+- Head-track model rate corrected to the measured wire ceiling: a rvi0
+  capture of Mimo's own joystick at Fast shows ~67°/s on both axes
+  (the first 40°/s estimate read decaying throw as full throw), so
+  full-stick catch-up now actually delivers 67°/s. ±550 is the wire's
+  valid range, not a UI limit — a 1.6x over-travel build made the
+  gimbal slow and jerky because the camera drops out-of-range stick
+  frames instead of clamping. The handle joystick's ~82°/s is an
+  internal channel `0x04/0x01` cannot reach.
+
+- Head-track arrival streams center for ~1 s before lifting the stick.
+  Arriving fast and lifting immediately made every gesture pause a
+  grab/release cycle; rest→throw in the same second paused HEVC at
+  18:29:47 (4 recovers and 2 UDP rebuilds to get the picture back).
+  A real stop still lifts, so sustained center never streams.
+
 - Head tracking look is AirPods Euler yaw/pitch from Calibrate Head
   Lock, not a quaternion nose. Stick throw is live gimbal error onto
   that look until they match. Rest lifts the stick.

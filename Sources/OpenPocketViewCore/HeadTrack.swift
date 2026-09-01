@@ -1,24 +1,57 @@
 import Foundation
 
 /// Shared local space: Calibrate Head Lock is identity (SET).
-/// Look is Euler Δatt yaw/pitch from that lock. Stick throw is live
-/// `0x04/0x05` error onto that look. Pocket has no angle SET. Encode **linear**.
+/// Look is the SET-relative nose azimuth/elevation (`Quat.look`, +Y
+/// forward) — Euler Δatt yaw wobbles during a nod at a yawed heading
+/// (18:29 take: diagonal drift). Stick throw closes a **dead-reckoned
+/// model** of the gimbal onto that look — live `0x04/0x05` is ~0.25 s
+/// stale at ~10 Hz, and a P loop closed on it limit-cycled (17:10 take:
+/// head parked at +29°, gimbal swung 27→38→27, bobbing). We command the
+/// velocity, so the model knows where the gimbal is *now*; stale
+/// telemetry only bleeds drift out of the model, and is adopted
+/// outright once provably stationary. Target rate feeds forward so the
+/// gimbal moves while the head moves. Arrival streams center for
+/// `restLinger` before lifting — grab/release in the same second paused
+/// HEVC (22:24 and the 18:29 stall). Encode **linear**.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
     public static let engageDeg = 1.8
-    public static let retargetDeg = 2.5
-    public static let reengageDeg = retargetDeg
     /// Error that maps to full stick.
     public static let fullThrowDeg = 10.0
-    public static let stillRestDeg = 2.5
-    /// |look-right| inside this is a nod — do not servo pan (live-yaw wiggle).
-    public static let panIsolateDeg = 3.0
-    public static let gyroStillRadPerSec = 0.10
+    /// Center-hold after arrival before lifting the stick. A gesture
+    /// pause re-engages inside this with no grab; only a real stop
+    /// lifts. Short enough that sustained center (15–30 s) never streams.
+    public static let restLinger: TimeInterval = 1.0
     public static let calibrateStillRadPerSec = 0.08
-    public static let stillHold: TimeInterval = 0.25
-    /// Full-stick tilt with live `@20` stuck: rest tilt (do not slam).
-    /// Only arms at `|errTilt| ≥ fullThrowDeg` so a slow nod is not killed.
-    public static let pitchLiveTimeout: TimeInterval = 0.55
+    /// Full linear stick (±550) in Fast mode slews ~67°/s on both axes —
+    /// measured from the 20:55 rvi0 capture of Mimo's own stick sweeps
+    /// with the camera reporting Fast (`0x04/0x50` reply `05 01 00`).
+    /// The Pocket handle joystick does ~82°/s; that headroom is not
+    /// reachable through ±550. The first 40°/s estimate read decaying
+    /// throw as full throw. ponytail: calibration knob — retune if
+    /// `pred` races or trails `body` on the HUD.
+    public static let stickRateDegPerSec = 67.0
+    /// `0x04/0x05` age (17:10 take: live kept slewing ~10° after err read
+    /// ~0). Fresh-but-moving samples are predicted forward by this before
+    /// correcting the model.
+    public static let telemetryLag: TimeInterval = 0.25
+    /// Fresh (changed) telemetry bleeds this fraction into the model.
+    public static let freshBlend = 0.15
+    /// Same tenth-deg value this long = the gimbal truly stopped there.
+    public static let stableAfter: TimeInterval = 0.3
+    /// Stationary telemetry pulls the model per tick (25 Hz) — heals
+    /// dead-reckoning drift as a single small settle, not a hunt.
+    public static let stableBlend = 0.2
+    /// Commanded this many degrees with telemetry never changing → the
+    /// axis feed is dead (`@20` froze during a full-stick nod). Stop
+    /// correcting from it; the model still closes, so no slam.
+    public static let telemetryDeadDeg = 5.0
+    /// EMA per tick for the target rate used as feed-forward.
+    public static let targetRateSmooth = 0.3
+    /// Below this target rate the head counts as still for rest.
+    public static let restRateDegPerSec = 3.0
+    /// At or above this target rate a rested track re-engages early.
+    public static let engageRateDegPerSec = 8.0
     /// Mimo virtual joystick full throw is 1024 ±550 (`GimbalStick.max`).
     public static let maxThrow = 1.0
     /// Below `GimbalStick.axisLinear` snap (0.02) both axes encode as center.
@@ -209,16 +242,79 @@ public struct HeadTrack: Equatable, Sendable {
     public struct Command: Equatable, Sendable {
         public var x: Double
         public var y: Double
-        /// Zero throw. Live shell **lifts** (`endGimbalStick`) — streaming
-        /// center at 25 Hz while calibrated paused HEVC after 15–30 s.
-        /// Tiny leftovers encode as center (`axisLinear` snaps |n|<0.02).
-        public var rest: Bool {
-            abs(x) < HeadTrack.restThrow && abs(y) < HeadTrack.restThrow
-        }
+        /// Lift the stick (`endGimbalStick`). Center-hold (x=y=0,
+        /// rest=false) keeps streaming center through `restLinger` —
+        /// grab/release in the same second paused HEVC (22:24, 18:29).
+        /// Sustained center still lifts: 25 Hz center while calibrated
+        /// paused HEVC after 15–30 s.
+        public var rest: Bool
 
-        public init(x: Double, y: Double) {
+        public init(x: Double, y: Double, rest: Bool? = nil) {
             self.x = x
             self.y = y
+            self.rest =
+                rest ?? (abs(x) < HeadTrack.restThrow && abs(y) < HeadTrack.restThrow)
+        }
+    }
+
+    /// One gimbal axis of the observer: dead-reckoned pose plus telemetry
+    /// bleed, and the target-rate EMA that feeds forward.
+    private struct AxisState: Equatable, Sendable {
+        var model = 0.0
+        var lastThrow = 0.0
+        var lastSeenTenth: Int16?
+        var stableFor: TimeInterval = 0
+        var movedSinceFresh = 0.0
+        var dead = false
+        var prevTarget: Double?
+        var rate = 0.0
+        /// Feed-forward rate: min-magnitude of instant and EMA, zero on a
+        /// sign split — collapses the moment the head stops so the EMA tail
+        /// cannot push past the look.
+        var ffRate = 0.0
+
+        mutating func seed(_ deg: Double) {
+            self = AxisState()
+            model = deg
+        }
+
+        /// Dead-reckon with the throw we actually streamed last tick.
+        mutating func integrate(dt: TimeInterval) {
+            guard dt > 0 else { return }
+            let step = lastThrow * HeadTrack.stickRateDegPerSec * dt
+            model += step
+            movedSinceFresh += abs(step)
+        }
+
+        mutating func observe(tenth: Int16?, dt: TimeInterval) {
+            guard let tenth else { return }
+            let live = HeadTrack.tenthToDeg(tenth)
+            if tenth != lastSeenTenth {
+                lastSeenTenth = tenth
+                stableFor = 0
+                dead = false
+                movedSinceFresh = 0
+                // Fresh but stale by `telemetryLag` — predict it forward by
+                // our own commanded motion before bleeding it in.
+                let predicted =
+                    live + lastThrow * HeadTrack.stickRateDegPerSec * HeadTrack.telemetryLag
+                model += HeadTrack.freshBlend * HeadTrack.wrapDeg(predicted - model)
+                return
+            }
+            stableFor += dt
+            if movedSinceFresh >= HeadTrack.telemetryDeadDeg { dead = true }
+            guard !dead, stableFor >= HeadTrack.stableAfter else { return }
+            model += HeadTrack.stableBlend * HeadTrack.wrapDeg(live - model)
+        }
+
+        mutating func noteTarget(_ target: Double, dt: TimeInterval) {
+            defer { prevTarget = target }
+            guard dt > 0, let prev = prevTarget else { return }
+            let instant = HeadTrack.wrapDeg(target - prev) / dt
+            rate += HeadTrack.targetRateSmooth * (instant - rate)
+            ffRate =
+                instant.sign == rate.sign
+                ? (abs(instant) < abs(rate) ? instant : rate) : 0
         }
     }
 
@@ -229,20 +325,27 @@ public struct HeadTrack: Equatable, Sendable {
     private var lookRightDeg = 0.0
     private var lookUpDeg = 0.0
     private var engaged = false
-    private var tiltThrowElapsed: TimeInterval = 0
-    private var pitchWhenTiltBegan: Double?
-    private var tiltTelemetryDead = false
+    private var holding = false
+    private var restingFor: TimeInterval = 0
+    private var pan = AxisState()
+    private var tilt = AxisState()
+
+    /// Observer pose for the HUD/log — where the model believes the gimbal
+    /// is right now, ahead of stale `0x04/0x05`.
+    public var modelYawDeg: Double { pan.model }
+    public var modelTiltDeg: Double { tilt.model }
 
     public init() {}
 
     public mutating func reset() {
         isCentered = false
         engaged = false
+        holding = false
+        restingFor = 0
         lookRightDeg = 0
         lookUpDeg = 0
-        tiltThrowElapsed = 0
-        pitchWhenTiltBegan = nil
-        tiltTelemetryDead = false
+        pan = AxisState()
+        tilt = AxisState()
     }
 
     @discardableResult
@@ -260,9 +363,10 @@ public struct HeadTrack: Equatable, Sendable {
         lookRightDeg = 0
         lookUpDeg = 0
         engaged = false
-        tiltThrowElapsed = 0
-        pitchWhenTiltBegan = nil
-        tiltTelemetryDead = false
+        holding = false
+        restingFor = 0
+        pan.seed(gimbalYaw0Deg)
+        tilt.seed(gimbalPitch0Deg)
         isCentered = true
         return .centered
     }
@@ -280,31 +384,57 @@ public struct HeadTrack: Equatable, Sendable {
         let target = Reach.project(
             lookRight: lookRightDeg, lookUp: lookUpDeg,
             yaw0: gimbalYaw0Deg, pitch0: gimbalPitch0Deg)
-        let liveYaw = Self.tenthToDeg(gimbalYawTenth)
-        let liveTilt = gimbalPitchTenth.map(Self.tenthToDeg) ?? gimbalPitch0Deg
-        var errPan = Self.wrapDeg(target.yaw - liveYaw)
-        if abs(lookRightDeg) <= Self.panIsolateDeg, abs(lookUpDeg) > abs(lookRightDeg) {
-            errPan = 0
-        }
-        var errTilt = target.pitch - liveTilt
+        pan.integrate(dt: dt)
+        tilt.integrate(dt: dt)
+        pan.observe(tenth: gimbalYawTenth, dt: dt)
+        tilt.observe(tenth: gimbalPitchTenth, dt: dt)
+        // Feed-forward from the projected target, not the raw look — a look
+        // pinned past a Reach stop must not keep pushing into it.
+        pan.noteTarget(target.yaw, dt: dt)
+        tilt.noteTarget(target.pitch, dt: dt)
+        let errPan = Self.wrapDeg(target.yaw - pan.model)
+        let errTilt = target.pitch - tilt.model
         let mag = (errPan * errPan + errTilt * errTilt).squareRoot()
-        noteFrozenTilt(
-            liveTilt: liveTilt, errTilt: &errTilt, dt: dt,
-            tracking: engaged || mag >= Self.engageDeg)
-        if mag <= Self.restDeg {
+        let still =
+            abs(pan.rate) < Self.restRateDegPerSec && abs(tilt.rate) < Self.restRateDegPerSec
+        let moving =
+            abs(pan.rate) >= Self.engageRateDegPerSec
+            || abs(tilt.rate) >= Self.engageRateDegPerSec
+        if mag <= Self.restDeg, still {
             engaged = false
-            return Command(x: 0, y: 0)
+            return idle(dt: dt)
         }
         if !engaged {
-            if mag < Self.engageDeg { return Command(x: 0, y: 0) }
+            if mag < Self.engageDeg, !moving { return idle(dt: dt) }
             engaged = true
         }
-        var x = throwFor(errPan)
-        var y = throwFor(errTilt)
+        var x = throwFor(errPan) + pan.ffRate / Self.stickRateDegPerSec
+        var y = throwFor(errTilt) + tilt.ffRate / Self.stickRateDegPerSec
+        x = min(Swift.max(x, -Self.maxThrow), Self.maxThrow)
+        y = min(Swift.max(y, -Self.maxThrow), Self.maxThrow)
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
-        if x == 0, y == 0 { engaged = false }
-        return Command(x: x, y: y)
+        if x == 0, y == 0 {
+            engaged = false
+            return idle(dt: dt)
+        }
+        holding = true
+        restingFor = 0
+        pan.lastThrow = x
+        tilt.lastThrow = y
+        return Command(x: x, y: y, rest: false)
+    }
+
+    /// Zero throw. While `holding`, stream center for `restLinger` before
+    /// lifting so a gesture pause is not a grab/release cycle.
+    private mutating func idle(dt: TimeInterval) -> Command {
+        pan.lastThrow = 0
+        tilt.lastThrow = 0
+        guard holding else { return Command(x: 0, y: 0, rest: true) }
+        restingFor += dt
+        guard restingFor >= Self.restLinger else { return Command(x: 0, y: 0, rest: false) }
+        holding = false
+        return Command(x: 0, y: 0, rest: true)
     }
 
     public static func wrapDeg(_ deg: Double) -> Double {
@@ -327,36 +457,5 @@ public struct HeadTrack: Equatable, Sendable {
         if abs(errorDeg) < 0.5 { return 0 }
         let n = errorDeg / Self.fullThrowDeg
         return min(max(n, -Self.maxThrow), Self.maxThrow)
-    }
-
-    /// `@20` stuck during a *full-stick* nod: rest tilt so we do not slam.
-    /// Slow proportional nods must not arm this.
-    private mutating func noteFrozenTilt(
-        liveTilt: Double, errTilt: inout Double, dt: TimeInterval, tracking: Bool
-    ) {
-        if tiltTelemetryDead {
-            let origin = pitchWhenTiltBegan ?? gimbalPitch0Deg
-            if abs(liveTilt - origin) >= 1 {
-                tiltTelemetryDead = false
-                tiltThrowElapsed = 0
-                pitchWhenTiltBegan = nil
-            } else {
-                errTilt = 0
-                return
-            }
-        }
-        guard tracking, abs(errTilt) >= Self.fullThrowDeg, dt > 0 else {
-            tiltThrowElapsed = 0
-            pitchWhenTiltBegan = nil
-            return
-        }
-        if pitchWhenTiltBegan == nil { pitchWhenTiltBegan = liveTilt }
-        tiltThrowElapsed += dt
-        if tiltThrowElapsed >= Self.pitchLiveTimeout,
-            abs(liveTilt - (pitchWhenTiltBegan ?? liveTilt)) < 1
-        {
-            tiltTelemetryDead = true
-            errTilt = 0
-        }
     }
 }

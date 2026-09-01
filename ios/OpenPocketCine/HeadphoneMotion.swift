@@ -368,8 +368,11 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             stopDrive()
             return
         }
-        let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
-        let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
+        // Nose azimuth/elevation, not Euler Δatt: Euler yaw wobbles during
+        // a nod at a yawed heading (18:29 take: diagonal drift).
+        let look = HeadTrack.look(current: lastQuat, origin: originQuat)
+        let lookRight = look.right
+        let lookUp = look.up
         guard
             let cmd = track.tick(
                 lookRightDeg: lookRight, lookUpDeg: lookUp,
@@ -427,8 +430,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             model?.headTrackAxisPose = nil
             return
         }
-        let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
-        let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
+        let look = HeadTrack.look(current: lastQuat, origin: originQuat)
+        let lookRight = look.right
+        let lookUp = look.up
         let originGimbalYaw = calibratedByUser ? gimbalYaw0Deg : 0
         let originGimbalPitch = calibratedByUser ? gimbalPitch0Deg : 0
         let gimbalYawDeg = model.session.gimbalYawTenthDeg.map {
@@ -463,6 +467,10 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             HeadTrack.radToDeg(lastRoll) - HeadTrack.radToDeg(originRoll))
         let bodyY = gimbalYawDeg ?? 0
         let bodyP = gimbalPitchDeg ?? 0
+        // Observer pose, SET-relative like body. `pred` racing or trailing a
+        // settled `body` on a physical take means `stickRateDegPerSec` is off.
+        let predY = calibratedByUser ? track.modelYawDeg - gimbalYaw0Deg : 0
+        let predP = calibratedByUser ? track.modelTiltDeg - gimbalPitch0Deg : 0
         let rawY = model.session.gimbalYawTenthDeg.map { String($0) } ?? "-"
         let rawP = model.session.gimbalPitchTenthDeg.map { String($0) } ?? "-"
         let setMark = calibratedByUser ? "SET" : "no SET"
@@ -470,8 +478,8 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             lastHudAt = now
             model.headTrackImuReadout = String(
                 format:
-                    "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\nerr    Y%+6.1f  P%+6.1f",
-                setMark, dY, dP, dR, bodyY, bodyP, rawP, dY - bodyY, dP - bodyP)
+                    "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\npred   Y%+6.1f  P%+6.1f\nerr    Y%+6.1f  P%+6.1f",
+                setMark, dY, dP, dR, bodyY, bodyP, rawP, predY, predP, dY - predY, dP - predP)
         }
         if logDue {
             lastLogAt = now
@@ -480,9 +488,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             ControlLiveLog.line(
                 String(
                     format:
-                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ %@ att=%@",
-                    setMark, dY, dP, dR, bodyY, bodyP, dY - bodyY, dP - bodyP, rawY, rawP,
-                    dump.isEmpty ? "-" : dump, att.isEmpty ? "-" : att)
+                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  pred Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ %@ att=%@",
+                    setMark, dY, dP, dR, bodyY, bodyP, predY, predP, dY - predY, dP - predP,
+                    rawY, rawP, dump.isEmpty ? "-" : dump, att.isEmpty ? "-" : att)
             )
         }
     }

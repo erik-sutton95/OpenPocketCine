@@ -1226,6 +1226,9 @@ public struct GimbalStickMapping: Equatable, Sendable {
 /// (left=`min`, right=`max`). First-cut X→axis0 / Y→axis1 was a 90° rotate.
 public enum GimbalStick {
     public static let center: UInt16 = 1024
+    /// ±550 is the wire's valid range, not just Mimo's UI range: a 1.6x
+    /// over-travel build (±880, 21:0x take) made the gimbal slow and
+    /// jerky — the camera drops out-of-range frames instead of clamping.
     public static let travel: UInt16 = 550
     public static let min: UInt16 = 474
     public static let max: UInt16 = 1574
