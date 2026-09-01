@@ -52,9 +52,11 @@ Head-track rest **lifts**
 (Mimo: `0x04/0x01` only while thrown). Streaming center at 25 Hz after
 catch-up paused HEVC at 15–30 s, then two `0x09/0xa8` and a UDP rebuild
 looked like a dropped connection (status stayed young). A leftover throw
-below the linear snap (`y=-0.01`) is the same center stream — rest it,
-and hold the previous throw 0.3 s so grab/release chatter does not cut
-GOP. Look-at throw is full Mimo stick until close. Analog/head-track rest when
+below the linear snap (`y=-0.01`) is the same center stream — rest it.
+Park after a still 1:1 close so live-yaw wiggle does not re-grab; do not
+add a second 0.3 s throw delay on top (that stair-stepped a slow look).
+Look-at throw is full Mimo stick until close, including while the head
+is still turning. Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).

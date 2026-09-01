@@ -78,15 +78,18 @@ Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
 shared identity: look is the SET-relative nose (CMAttitude +Y forward),
 not Euler yaw. That look is gimbal pan/tilt in degrees.
 Stick throw closes live `0x04/0x05` onto that pose at full Mimo stick
-(±550, bang-bang until close; `0x04/0x50` Fast + tilt unlocked). Rest
-**lifts** the stick (Mimo: notify only while thrown). Streaming center at
-25 Hz paused HEVC at 15–30 s — including a leftover throw below the
-linear snap (`y=-0.01`). Debounce the lift 0.3 s. After a 1:1 close, live-yaw wiggle must not
-re-grab. Encoder-pause: two enables then one UDP rebuild; keepalive
-must not flap while status is young. Close tilt on live pitch `@20` only;
-stop tilt throw if that field never leaves SET. Roll is readout only —
-`0x04/0x01` has no roll axis. STOP clears SET. On-screen stick and gimbal
-pad win while thrown. Android has no AirPods IMU.
+(±550, bang-bang until close; `0x04/0x50` Fast + tilt unlocked). A 20°
+head turn is a 20° gimbal turn — do not park a close while the head is
+still moving (that stair-stepped ~4°). Rest **lifts** the stick (Mimo:
+notify only while thrown). Streaming center at 25 Hz paused HEVC at
+15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
+Park after a still 1:1 close so live-yaw wiggle does not re-grab; do not
+add a second 0.3 s throw delay on top. Encoder-pause: two enables then
+one UDP rebuild; keepalive must not flap while status is young. Close
+tilt on live pitch `@20` only; stop tilt throw if that field never leaves
+SET. Looking back toward SET reverses onto the new look. Roll is readout
+only — `0x04/0x01` has no roll axis. STOP clears SET. On-screen stick
+and gimbal pad win while thrown. Android has no AirPods IMU.
 _Avoid_: spatial audio in operator copy
 
 **Triple-tap 180 (TT180)**:

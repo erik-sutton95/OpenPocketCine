@@ -381,13 +381,28 @@ import Testing
         let caught = track.tick(
             lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
         #expect(caught?.rest == true)
+        var parked: HeadTrack.Command?
+        for _ in 0..<8 {
+            parked = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        #expect(parked?.rest == true)
         let wiggle = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0)
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
+            dt: 0.04)
         #expect(
             wiggle?.rest == true,
             "2° live-yaw wiggle after close must not rest/throw — that paused HEVC")
+        let undershoot = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 180, gimbalPitchTenth: 0,
+            dt: 0.04)
+        #expect(
+            undershoot?.rest == true,
+            "2° live-yaw undershoot after a still close must not re-grab")
         let lookAgain = track.tick(
-            lookRightDeg: 26, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
+            lookRightDeg: 26, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
+            dt: 0.04, gyroYaw: 0.4)
         #expect(lookAgain != nil)
         #expect(lookAgain!.x > 0, "a 6° head turn after close must throw again")
     }
@@ -399,9 +414,10 @@ import Testing
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04)
         #expect(cmd != nil)
         #expect(cmd!.y == HeadTrack.maxThrow)
-        for _ in 0..<25 {
+        for _ in 0..<8 {
             cmd = track.tick(
-                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04)
+                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0, dt: 0.04,
+                gyroLookUp: 0.3)
         }
         #expect(
             cmd?.y == HeadTrack.maxThrow,
@@ -473,5 +489,95 @@ import Testing
         let caught = track.tick(
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
         #expect(caught?.rest == true)
+    }
+
+    @Test func movingHeadDoesNotParkACloseSoASlowLookStaysOneToOne() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let go = track.tick(
+            lookRightDeg: 4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+            dt: 0.05, gyroYaw: 0.4)
+        #expect(go?.x == HeadTrack.maxThrow, "4° look engages")
+        for step in 5...20 {
+            let look = Double(step)
+            let liveTenth = Int16((look - 2) * 10)
+            let cmd = track.tick(
+                lookRightDeg: look, lookUpDeg: 0, gimbalYawTenth: liveTenth, gimbalPitchTenth: 0,
+                dt: 0.05, gyroYaw: 0.4)
+            #expect(
+                cmd?.x == HeadTrack.maxThrow,
+                "step \(step): a moving 20° look must not wait reengageDeg (4°) between throws")
+        }
+    }
+
+    @Test func lookBackAfterCloseReturnsTowardSet() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0)
+        for _ in 0..<8 {
+            _ = track.tick(
+                lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
+                dt: 0.04)
+        }
+        let back = track.tick(
+            lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 200, gimbalPitchTenth: 0,
+            dt: 0.04, gyroYaw: 0.5)
+        #expect(back != nil)
+        #expect(
+            back!.x == -HeadTrack.maxThrow,
+            "looking back to SET after a 20° close must pan home — not holdOvershoot rest")
+    }
+
+    @Test func lookBackAfterNodReturnsTowardSet() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        _ = track.tick(
+            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200)
+        for _ in 0..<8 {
+            _ = track.tick(
+                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 200,
+                dt: 0.04)
+        }
+        let back = track.tick(
+            lookRightDeg: 0, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 200,
+            dt: 0.04, gyroLookUp: 0.5)
+        #expect(back != nil)
+        #expect(
+            back!.y == -HeadTrack.maxThrow,
+            "looking back to SET after a 20° nod must tilt home")
+    }
+
+    @Test func frozenLivePitchRestsTilt() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        var cmd: HeadTrack.Command?
+        for _ in 0..<16 {
+            cmd = track.tick(
+                lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 0,
+                dt: 0.04, gyroLookUp: 0.3)
+        }
+        #expect(
+            cmd?.y == 0,
+            "@20 stuck at SET for pitchLiveTimeout must rest tilt (do not slam)")
+        let live = track.tick(
+            lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 80,
+            dt: 0.04, gyroLookUp: 0.3)
+        #expect(live?.y == HeadTrack.maxThrow, "live @20 moving again resumes tilt close")
+    }
+
+    @Test func lookingLeftTwentyClosesOnLiveYaw() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let start = track.tick(
+            lookRightDeg: -20, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(start?.x == -HeadTrack.maxThrow)
+        let caught = track.tick(
+            lookRightDeg: -20, lookUpDeg: 0, gimbalYawTenth: -200, gimbalPitchTenth: 0)
+        #expect(caught?.rest == true, "20° left is live yaw −20.0")
     }
 }

@@ -392,10 +392,6 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             }
             return
         }
-        if restFor > 0, restFor < 0.3 {
-            restFor += max(dt, 0)
-            return
-        }
         restFor = 0
         if !driving {
             let axes = GimbalStick.encode(

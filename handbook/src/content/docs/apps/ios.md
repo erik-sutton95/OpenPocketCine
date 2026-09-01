@@ -33,8 +33,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
   off by default). With AirPods that report motion, Calibrate Head Lock —
   centered above the bottom bars — is shared forward: that head pose and
   that gimbal pose are zero. A head turn pans the Pocket the same number
-  of degrees; a nod tilts — full Mimo stick throw until the pose matches
-  (Fast + tilt unlocked at calibrate). Roll is shown, not driven. STOP clears the
+  of degrees; a nod tilts — full Mimo stick throw until the pose matches,
+  including while you are still turning (Fast + tilt unlocked at calibrate). Roll is shown, not driven. STOP clears the
   lock. A connected game controller's left stick drives the same path.
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2

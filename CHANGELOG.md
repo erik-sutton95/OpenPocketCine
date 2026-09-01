@@ -16,6 +16,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Head-track 1:1 close: a 20° head turn is a 20° gimbal turn. Do not park
+  while the head is still moving (that stair-stepped ~4°). Looking back
+  toward SET reverses onto the new look. A 0.3 s shell delay no longer
+  blocks the next throw. Tilt rests if live `@20` never leaves SET.
+
 - Head-track gimbal pitch ring reads `0x04/0x05` i16 `@20` (negated). A
   Mimo tilt take showed stick-down making `@20` positive; `@2` stayed 0
   and `@6` stayed ~13°.
