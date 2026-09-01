@@ -370,8 +370,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             stopDrive()
             return
         }
-        let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
-        let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
+        let look = HeadTrack.look(current: lastQuat, origin: originQuat)
+        let lookRight = look.right
+        let lookUp = look.up
         guard
             let cmd = track.tick(
                 lookRightDeg: lookRight, lookUpDeg: lookUp,
@@ -436,8 +437,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             model?.headTrackAxisPose = nil
             return
         }
-        let lookRight = HeadTrack.lookRightDeg(yawRad: lastYaw, originYawRad: originYaw)
-        let lookUp = HeadTrack.lookUpDeg(pitchRad: lastPitch, originPitchRad: originPitch)
+        let look = HeadTrack.look(current: lastQuat, origin: originQuat)
+        let lookRight = look.right
+        let lookUp = look.up
         model.headTrackAxisPose = HeadTrackAxisPose(
             yawDeg: lookRight, pitchDeg: lookUp, locked: calibratedByUser)
         let hudDue: Bool

@@ -1,10 +1,9 @@
 import Foundation
 
 /// Shared local space: Calibrate Head Lock is identity (SET).
-/// AirPods attitude yaw/pitch from that pose are the gimbal pan/tilt
-/// in degrees. Physical IMU take: a 90° head turn is Δatt yaw ~90°,
-/// not quaternion look-right (that topped out ~15°) and not gyro Y.
-/// The Pocket stick is pan+tilt only — roll is not on `0x04/0x01`.
+/// Look is the SET-relative nose on the sphere, not Euler Δatt yaw —
+/// a nod changes Euler yaw tens of degrees with the nose still on the
+/// meridian. The Pocket stick is pan+tilt only — roll is not on `0x04/0x01`.
 /// Encode **linear**. Stick throw closes live `0x04/0x05` onto that pose.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
@@ -39,8 +38,8 @@ public struct HeadTrack: Equatable, Sendable {
         yawRadPerSec * dt * 180 / .pi
     }
 
-    /// SET-relative heading. Physical take: Δatt yaw is 1:1 magnitude;
-    /// operator: +Δatt yaw panned the wrong way — invert onto stick `x+`.
+    /// SET-relative heading from Euler yaw. A nod changes this tens of degrees
+    /// while the nose stays on the meridian — prefer ``look(current:origin:)``.
     public static func lookRightDeg(yawRad: Double, originYawRad: Double) -> Double {
         wrapDeg(radToDeg(originYawRad - yawRad))
     }
@@ -111,6 +110,11 @@ public struct HeadTrack: Equatable, Sendable {
             let up = atan2(v.y, hypot(v.x, v.z)) * 180 / .pi
             return (right, up)
         }
+    }
+
+    /// Nose on the SET sphere. Euler Δatt yaw jumps when you nod; this does not.
+    public static func look(current: Quat, origin: Quat) -> (right: Double, up: Double) {
+        Quat.look(from: current, origin: origin)
     }
 
     /// Pocket 4 / 4 Pro controllable range (DJI spec) in `0x04/0x05` degrees.

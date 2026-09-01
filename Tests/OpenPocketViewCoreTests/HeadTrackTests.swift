@@ -249,6 +249,11 @@ import Testing
         #expect(abs(side90.right - 90) < 0.01, "a 90° head turn is 90° on the sphere")
         let still = HeadTrack.Quat.look(from: origin, origin: origin)
         #expect(abs(still.right) < 0.001 && abs(still.up) < 0.001)
+        let yawed = HeadTrack.Quat.axisAngle(x: 0, y: 1, z: 0, deg: 30)
+        let nodAfter = yawed.multiply(HeadTrack.Quat.axisAngle(x: -1, y: 0, z: 0, deg: 40))
+        let kept = HeadTrack.look(current: nodAfter, origin: origin)
+        #expect(abs(kept.right - 30) < 1.5, "a nod must not add Euler yaw onto look-right")
+        #expect(abs(kept.up - 40) < 1.5)
     }
 
     @Test func deadzoneThenHysteresis() {
