@@ -1114,7 +1114,7 @@ final class HevcDecoder {
                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
         }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
-        guard displayLayer.isReadyForMoreMediaData else { return }
+        guard displayLayer.isReadyForMoreMediaData else { return false }
         releaseLayerDecoderIfNeeded()
         CATransaction.begin()
         CATransaction.setDisableActions(true)

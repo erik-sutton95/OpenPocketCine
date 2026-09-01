@@ -462,7 +462,8 @@ final class DatalinkDriver {
     /// Drop the live UDP socket only. TCP 7001 stays up for the session.
     private func discardUDP() {
         udpGeneration += 1
-        liveGeneration.withLock { $0 = udpGeneration }
+        let generation = udpGeneration
+        liveGeneration.withLock { $0 = generation }
         receiveArmed = false
         let old = conn
         conn = nil
