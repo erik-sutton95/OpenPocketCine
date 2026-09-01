@@ -5,16 +5,18 @@ import Foundation
 /// a nod changes Euler yaw tens of degrees with the nose still on the
 /// meridian. The Pocket stick is pan+tilt only — roll is not on `0x04/0x01`.
 /// Encode **linear**. Stick throw closes live `0x04/0x05` onto that pose
-/// 1:1 (20° look → 20° gimbal) while the head is moving; park only after
-/// a still close so live-yaw wiggle does not re-grab.
+/// 1:1 (error/15° up to full stick). Park only after a still close so
+/// live-yaw wiggle does not re-grab. Reverse a real overshoot; do not
+/// reverse a 2° delayed packet.
 public struct HeadTrack: Equatable, Sendable {
     public static let restDeg = 1.2
     public static let engageDeg = 1.8
     /// After a 1:1 close, live yaw wiggle (~2°) must not re-grab the stick.
     /// 22:24 rest/throw in the same second paused HEVC.
     public static let reengageDeg = 4.0
-    /// Bang-bang: any error past rest is full stick. `/ 10°` was a 10× crawl.
-    public static let fullThrowDeg = 1.2
+    /// Error that maps to full stick. Bang-bang at 0.5° overshot ~15° on a
+    /// 6° look (`0x04/0x05` is ~10 Hz). 20° look is still full throw.
+    public static let fullThrowDeg = 15.0
     public static let stillRestDeg = 2.5
     /// |look-right| inside this is a nod — do not servo pan (live-yaw wiggle).
     public static let panIsolateDeg = 3.0
@@ -293,9 +295,11 @@ public struct HeadTrack: Equatable, Sendable {
         var y: Double
         (x, y) = gatedThrow(errPan: errPan, errTilt: errTilt)
         x = holdOvershoot(
-            x, look: lookRightDeg, lastSign: lastSignX, previousLook: previousRight)
+            x, errorDeg: errPan, look: lookRightDeg, lastSign: lastSignX,
+            previousLook: previousRight)
         y = holdOvershoot(
-            y, look: lookUpDeg, lastSign: lastSignY, previousLook: previousUp)
+            y, errorDeg: errTilt, look: lookUpDeg, lastSign: lastSignY,
+            previousLook: previousUp)
         if abs(x) < Self.restThrow { x = 0 }
         if abs(y) < Self.restThrow { y = 0 }
         noteSign(x: x, y: y)
@@ -359,15 +363,19 @@ public struct HeadTrack: Equatable, Sendable {
 
     private func throwFor(_ errorDeg: Double) -> Double {
         if abs(errorDeg) < 0.5 { return 0 }
-        return errorDeg < 0 ? -Self.maxThrow : Self.maxThrow
+        let n = errorDeg / Self.fullThrowDeg
+        return min(max(n, -Self.maxThrow), Self.maxThrow)
     }
 
-    /// Live yaw overshot: do not reverse while the nose is still that way.
+    /// Tiny delayed overshoot (~2° live-yaw wiggle) must not reverse-hunt.
+    /// A 15° miss (physical SET take: head −6°, gimbal −21°) must come back.
     /// A look that walks back toward SET is a new command — reverse onto it.
     private func holdOvershoot(
-        _ throw: Double, look: Double, lastSign: Double, previousLook: Double
+        _ throw: Double, errorDeg: Double, look: Double, lastSign: Double,
+        previousLook: Double
     ) -> Double {
         guard lastSign != 0, `throw` * lastSign < 0 else { return `throw` }
+        if abs(errorDeg) >= Self.reengageDeg { return `throw` }
         if look * lastSign > 0,
             abs(look) + Self.overshootLookBackDeg >= abs(previousLook)
         {
@@ -376,8 +384,8 @@ public struct HeadTrack: Equatable, Sendable {
         return `throw`
     }
 
-    /// `@20` never left the throw-start pose: rest tilt so bang-bang cannot
-    /// slam a stop. Clear when live pitch moves again.
+    /// `@20` never left the throw-start pose: rest tilt so a stuck field
+    /// cannot slam a stop. Clear when live pitch moves again.
     private mutating func noteFrozenTilt(
         liveTilt: Double, errTilt: inout Double, dt: TimeInterval, tracking: Bool
     ) {

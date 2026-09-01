@@ -82,18 +82,18 @@ import Testing
         #expect(first != nil)
         #expect(first!.x > 0)
         let past = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 280, gimbalPitchTenth: 0,
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
             dt: 0.04)
         #expect(past != nil)
         #expect(
-            past!.x >= 0, "head still + delayed overshoot must not reverse — that is the bounce")
+            past!.x >= 0, "2° delayed overshoot must not reverse — that is the bounce")
         let movingOvershoot = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 280, gimbalPitchTenth: 0,
+            lookRightDeg: 20, lookUpDeg: 0, gimbalYawTenth: 220, gimbalPitchTenth: 0,
             dt: 0.04, gyroYaw: 0.5)
         #expect(movingOvershoot != nil)
         #expect(
             movingOvershoot!.x >= 0,
-            "live overshoot must not reverse while the nose is still right")
+            "2° live-yaw wiggle must not reverse while the nose is still right")
     }
 
     @Test func sphereKeepsLookPastTheStopThenPicksUpFromAnotherAngle() {
@@ -367,10 +367,10 @@ import Testing
         #expect(start != nil)
         #expect(start!.x > 0)
         let leftover = track.tick(
-            lookRightDeg: 20, lookUpDeg: 0.1, gimbalYawTenth: 280, gimbalPitchTenth: 0)
+            lookRightDeg: 20, lookUpDeg: 0.1, gimbalYawTenth: 220, gimbalPitchTenth: 0)
         #expect(
             leftover?.rest == true,
-            "overshoot zeros pan; leftover y=-0.01 encodes as center — lift")
+            "2° overshoot zeros pan; leftover y=-0.01 encodes as center — lift")
     }
 
     @Test func liveYawWiggleAfterCloseDoesNotRegrab() {
@@ -427,15 +427,26 @@ import Testing
         #expect(caught?.rest == true)
     }
 
-    @Test func twoDegLagIsFullStick() {
+    @Test func twoDegLagIsProportionalNotBangBang() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         let cmd = track.tick(
             lookRightDeg: 2, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0)
         #expect(cmd != nil)
+        #expect(cmd!.x > HeadTrack.restThrow)
         #expect(
-            cmd!.x == HeadTrack.maxThrow,
-            "2° lag used to be 0.2 stick (/10°) — that is the crawl")
+            abs(cmd!.x - 2 / HeadTrack.fullThrowDeg) < 0.001,
+            "2° at full stick overshot ~15° on a 6° look")
+        #expect(cmd!.x < HeadTrack.maxThrow)
+    }
+
+    @Test func fifteenDegLagIsFullStick() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let cmd = track.tick(
+            lookRightDeg: HeadTrack.fullThrowDeg, lookUpDeg: 0, gimbalYawTenth: 0,
+            gimbalPitchTenth: 0)
+        #expect(cmd?.x == HeadTrack.maxThrow)
     }
 
     @Test func catchUpThrowMatchesMimoFullStick() {
@@ -464,8 +475,8 @@ import Testing
         #expect(cmd != nil)
         #expect(cmd!.x > 0)
         #expect(cmd!.y > 0, "a 1° nod must not die behind a 10° pan")
-        #expect(cmd!.x == HeadTrack.maxThrow)
-        #expect(cmd!.y == HeadTrack.maxThrow, "catch-up is full stick, not error/10")
+        #expect(abs(cmd!.x - 10 / HeadTrack.fullThrowDeg) < 0.001)
+        #expect(abs(cmd!.y - 1 / HeadTrack.fullThrowDeg) < 0.001)
     }
 
     @Test func lookingBackTiltsTheOtherWay() {
@@ -497,7 +508,7 @@ import Testing
         let go = track.tick(
             lookRightDeg: 4, lookUpDeg: 0, gimbalYawTenth: 0, gimbalPitchTenth: 0,
             dt: 0.05, gyroYaw: 0.4)
-        #expect(go?.x == HeadTrack.maxThrow, "4° look engages")
+        #expect(go != nil && go!.x > 0, "4° look engages")
         for step in 5...20 {
             let look = Double(step)
             let liveTenth = Int16((look - 2) * 10)
@@ -505,7 +516,7 @@ import Testing
                 lookRightDeg: look, lookUpDeg: 0, gimbalYawTenth: liveTenth, gimbalPitchTenth: 0,
                 dt: 0.05, gyroYaw: 0.4)
             #expect(
-                cmd?.x == HeadTrack.maxThrow,
+                cmd != nil && cmd!.x > 0,
                 "step \(step): a moving 20° look must not wait reengageDeg (4°) between throws")
         }
     }
@@ -567,7 +578,26 @@ import Testing
         let live = track.tick(
             lookRightDeg: 0, lookUpDeg: 20, gimbalYawTenth: 0, gimbalPitchTenth: 80,
             dt: 0.04, gyroLookUp: 0.3)
-        #expect(live?.y == HeadTrack.maxThrow, "live @20 moving again resumes tilt close")
+        #expect(live != nil && live!.y > 0, "live @20 moving again resumes tilt close")
+    }
+
+    @Test func sixDegLookDoesNotLeaveGimbalAtTwentyOne() {
+        var track = HeadTrack()
+        _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        let throwOut = track.tick(
+            lookRightDeg: -20, lookUpDeg: -20, gimbalYawTenth: 0, gimbalPitchTenth: 0)
+        #expect(throwOut?.x == -HeadTrack.maxThrow)
+        #expect(throwOut?.y == -HeadTrack.maxThrow)
+        let over = track.tick(
+            lookRightDeg: -6, lookUpDeg: -6, gimbalYawTenth: -210, gimbalPitchTenth: -200,
+            dt: 0.04)
+        #expect(over != nil)
+        #expect(
+            over!.x > 0,
+            "physical take: head −6° / gimbal −21° must pan back, not holdOvershoot rest")
+        #expect(
+            over!.y > 0,
+            "physical take: head −6° / gimbal −20° must tilt back")
     }
 
     @Test func lookingLeftTwentyClosesOnLiveYaw() {

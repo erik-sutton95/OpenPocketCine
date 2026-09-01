@@ -55,7 +55,7 @@ looked like a dropped connection (status stayed young). A leftover throw
 below the linear snap (`y=-0.01`) is the same center stream — rest it.
 Park after a still 1:1 close so live-yaw wiggle does not re-grab; do not
 add a second 0.3 s throw delay on top (that stair-stepped a slow look).
-Look-at throw is full Mimo stick until close, including while the head
+Look-at throw is error/15° up to full Mimo stick, including while the head
 is still turning. Analog/head-track rest when
 HEVC is stale so a held stick cannot block recover. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
