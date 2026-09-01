@@ -118,6 +118,12 @@ cancelled `open()` must not publish LIVE (`CameraSoftAP.shouldCommitLiveHandshak
 Process death did that for free; leaving the socket live is why reconnect
 hung on Waiting for live view until the app was killed.
 
+Android Vulkan: `surfaceDestroyed` wait-idles and destroys the swapchain
+before the Surface is gone. Session `release` drains `opc.vk.img` then
+destroys the device — do not `DestroySwapchainKHR` while an ImageReader
+submit is in flight (#190). GLES already joins the render thread in
+`detachDisplay`.
+
 ## Decoder latch
 
 Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the

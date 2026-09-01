@@ -148,6 +148,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live Vulkan: destroy the swapchain on `surfaceDestroyed` while
+  the window is still valid, drain `opc.vk.img` (drop the ImageReader
+  listener, join) before `nativeDestroy`, and refuse submit/present after
+  dispose. Play Vitals aborted in `DestroySwapchainKHR` /
+  `ReleaseSwapchainImage` from Compose `onDispose` (#190); the same race
+  is `vkCreateImage` during `nativeSubmit` (#186) and a destroyed mutex in
+  `QueuePresentKHR` (#187).
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —

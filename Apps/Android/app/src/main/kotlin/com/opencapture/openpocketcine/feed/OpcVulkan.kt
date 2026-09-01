@@ -28,6 +28,9 @@ internal object OpcVulkan {
 
     @JvmStatic external fun nativeDestroy(handle: Long)
 
+    /** Wait-idle and destroy the swapchain while the window is still valid. */
+    @JvmStatic external fun nativeDetachWindow(handle: Long)
+
     @JvmStatic external fun nativeAttachWindow(handle: Long, surface: Surface, w: Int, h: Int): Boolean
 
     @JvmStatic external fun nativeResize(handle: Long, w: Int, h: Int)

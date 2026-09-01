@@ -12,9 +12,12 @@ import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,7 +40,9 @@ internal class LiveVulkanSession(
             Thread(runnable, "opc.vk.scope").apply { isDaemon = true }
         }
     private val sampleBusy = AtomicBoolean(false)
-    private val handle = if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L
+    private val handle =
+        AtomicLong(if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L)
+    private val gate = LiveVulkanGate()
     private val slots = FloatArray(GpuLiveLayout.SLOT_STRIDE * 4)
     private val plates = AtomicReference(FloatArray(0))
     private val histo = IntArray(1024)
@@ -57,23 +62,32 @@ internal class LiveVulkanSession(
         private set
 
     val isReady: Boolean
-        get() = handle != 0L
+        get() = handle.get() != 0L
 
     fun attachWindow(surface: Surface, width: Int, height: Int) {
-        if (handle == 0L) return
-        val ok = OpcVulkan.nativeAttachWindow(handle, surface, width, height)
-        windowReady = ok
+        val h = handle.get()
+        if (h == 0L || !gate.allowsAttach()) return
+        val ok = OpcVulkan.nativeAttachWindow(h, surface, width, height)
         if (!ok) {
+            gate.detachWindow()
+            windowReady = false
             Log.w(TAG, "swapchain attach failed")
             onFailed()
             return
         }
+        if (!gate.attachWindow()) {
+            OpcVulkan.nativeDetachWindow(h)
+            windowReady = false
+            return
+        }
+        windowReady = true
         ensureReader()
     }
 
     fun resize(width: Int, height: Int) {
-        if (handle == 0L) return
-        OpcVulkan.nativeResize(handle, width, height)
+        val h = handle.get()
+        if (h == 0L || !gate.allowsSubmit()) return
+        OpcVulkan.nativeResize(h, width, height)
     }
 
     private var feedW = SOURCE_W.toFloat()
@@ -92,6 +106,7 @@ internal class LiveVulkanSession(
         sourceW = w
         sourceH = h
         imageHandler.post {
+            if (!gate.allowsAttach()) return@post
             held?.close()
             held = null
             reader?.close()
@@ -101,15 +116,17 @@ internal class LiveVulkanSession(
     }
 
     fun setFeedRect(x: Float, y: Float, w: Float, h: Float) {
-        if (handle == 0L) return
+        val native = handle.get()
+        if (native == 0L) return
         feedW = w
         feedH = h
-        OpcVulkan.nativeSetFeedRect(handle, x, y, w, h)
+        OpcVulkan.nativeSetFeedRect(native, x, y, w, h)
     }
 
     fun setPlates(packed: FloatArray) {
         plates.set(packed)
-        if (handle != 0L) OpcVulkan.nativeSetPlates(handle, packed)
+        val h = handle.get()
+        if (h != 0L) OpcVulkan.nativeSetPlates(h, packed)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -125,9 +142,10 @@ internal class LiveVulkanSession(
         uiScale: Float = 1f,
         pictureMirrored: Boolean = assist.isVisible(LiveAssistTool.MIRROR),
     ) {
-        if (handle == 0L) return
+        val h = handle.get()
+        if (h == 0L) return
         lastPlan = plan
-        OpcVulkan.nativeSetUiScale(handle, uiScale)
+        OpcVulkan.nativeSetUiScale(h, uiScale)
         uploadCube(0, plan.lutCube, lastLut) { lastLut = it }
         uploadCube(1, plan.falseColorPaint, lastPaint) { lastPaint = it }
         uploadCube(2, plan.falseColorWeight, lastWeight) { lastWeight = it }
@@ -135,7 +153,7 @@ internal class LiveVulkanSession(
         val ire = WaveformIre.levelTable(transfer, plan.scopeTap.iso)
         val luma = LiveColorScience.lumaWeights(transfer)
         OpcVulkan.nativeSetIre(
-            handle,
+            h,
             ire,
             luma.first.toFloat(),
             luma.second.toFloat(),
@@ -143,7 +161,7 @@ internal class LiveVulkanSession(
             8,
         )
         OpcVulkan.nativeSetFeedFlags(
-            handle,
+            h,
             if (plan.lutCube != null) plan.lutCube.size.toFloat() else 0f,
             if (plan.falseColorOn) 1f else 0f,
             if (plan.splitComparison) 1f else 0f,
@@ -179,13 +197,16 @@ internal class LiveVulkanSession(
         for (index in 0 until 4) {
             GpuLiveLayout.packSlot(slots, index, false, 0f, 0f, 0f, 0f, 0, 0f)
         }
-        OpcVulkan.nativeSetSlots(handle, slots)
-        OpcVulkan.nativeSetStack(handle, intArrayOf())
+        val h = handle.get()
+        if (h == 0L) return
+        OpcVulkan.nativeSetSlots(h, slots)
+        OpcVulkan.nativeSetStack(h, intArrayOf())
     }
 
     fun copyHistogram(): IntArray {
-        if (handle == 0L) return histo
-        OpcVulkan.nativeCopyHisto(handle, histo)
+        val h = handle.get()
+        if (h == 0L) return histo
+        OpcVulkan.nativeCopyHisto(h, histo)
         return histo
     }
 
@@ -195,13 +216,15 @@ internal class LiveVulkanSession(
         last: Any?,
         commit: (Any?) -> Unit,
     ) {
+        val h = handle.get()
+        if (h == 0L) return
         if (cube === last) return
         if (cube == null) {
-            OpcVulkan.nativeSetCube(handle, slot, null, 0, 0, 0f)
+            OpcVulkan.nativeSetCube(h, slot, null, 0, 0, 0f)
         } else {
             val atlas = feedEffectsCubeAtlas(cube)
             OpcVulkan.nativeSetCube(
-                handle,
+                h,
                 slot,
                 atlas.rgba,
                 atlas.width,
@@ -214,29 +237,58 @@ internal class LiveVulkanSession(
 
     fun detachWindow() {
         windowReady = false
+        gate.detachWindow()
+        val h = handle.get()
+        if (h != 0L) OpcVulkan.nativeDetachWindow(h)
     }
 
     fun release() {
         windowReady = false
-        held?.close()
-        held = null
-        reader?.close()
-        reader = null
-        if (handle != 0L) OpcVulkan.nativeDestroy(handle)
-        imageThread.quitSafely()
+        gate.release(
+            drain = {
+                val drained = CountDownLatch(1)
+                val posted =
+                    imageHandler.post {
+                        try {
+                            reader?.setOnImageAvailableListener(null, null)
+                            held?.close()
+                            held = null
+                            reader?.close()
+                            reader = null
+                        } finally {
+                            drained.countDown()
+                        }
+                    }
+                if (!posted) drained.countDown()
+                imageThread.quitSafely()
+                runCatching { drained.await(1, TimeUnit.SECONDS) }
+                runCatching { imageThread.join(800) }
+                sampleExecutor.shutdownNow()
+            },
+            destroy = {
+                val h = handle.getAndSet(0L)
+                if (h != 0L) OpcVulkan.nativeDestroy(h)
+            },
+        )
     }
 
     private fun ensureReader() {
-        if (reader != null || handle == 0L) return
+        val native = handle.get()
+        if (reader != null || native == 0L || !gate.allowsAttach()) return
         val next = ImageReader.newInstance(sourceW, sourceH, ImageFormat.PRIVATE, 5)
         reader = next
         next.setOnImageAvailableListener(
             { rdr ->
                 val image = rdr.acquireLatestImage() ?: return@setOnImageAvailableListener
+                val h = handle.get()
+                if (h == 0L || !gate.allowsSubmit()) {
+                    image.close()
+                    return@setOnImageAvailableListener
+                }
                 val hb = image.hardwareBuffer
                 if (hb == null) {
                     image.close()
-                    main.post(onFailed)
+                    if (gate.allowsSubmit()) main.post(onFailed)
                     return@setOnImageAvailableListener
                 }
                 val policy = lastPlan?.scopeTap ?: ScopeTapPolicy.IDLE
@@ -262,14 +314,14 @@ internal class LiveVulkanSession(
                     }
                 // 1280→213 blit is per-submit. Arm it only on the sample tick;
                 // leaving needTap on made WAVE/PARADE/VECTOR stall every frame.
-                OpcVulkan.nativeSetNeedTap(handle, takeTap)
-                val ok = OpcVulkan.nativeSubmit(handle, hb)
+                OpcVulkan.nativeSetNeedTap(h, takeTap)
+                val ok = OpcVulkan.nativeSubmit(h, hb)
                 hb.close()
                 held?.close()
                 held = image
                 if (!ok) {
                     if (takeTap) sampleBusy.set(false)
-                    main.post(onFailed)
+                    if (gate.allowsSubmit()) main.post(onFailed)
                     return@setOnImageAvailableListener
                 }
                 framesPresented.incrementAndGet()
@@ -284,7 +336,7 @@ internal class LiveVulkanSession(
                 val previous = previousBundle
                 val packed =
                     if ((includePoints || includeVectorPoints) &&
-                        OpcVulkan.nativeCopyTap(handle, tapBytes)
+                        OpcVulkan.nativeCopyTap(h, tapBytes)
                     ) {
                         tapBytes.copyOf()
                     } else {
@@ -292,7 +344,7 @@ internal class LiveVulkanSession(
                     }
                 val histoCopy =
                     if (packed == null) {
-                        OpcVulkan.nativeCopyHisto(handle, histo)
+                        OpcVulkan.nativeCopyHisto(h, histo)
                         histo.copyOf()
                     } else {
                         null

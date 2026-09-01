@@ -67,6 +67,12 @@ Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
 `GL_TEXTURE_EXTERNAL_OES` is the fallback.
 
+`surfaceDestroyed` detaches the swapchain (wait-idle, `DestroySwapchainKHR`)
+while the window is still valid. `LiveVulkanSession.release` drops the
+ImageReader listener, joins `opc.vk.img`, then `nativeDestroy`. Do not
+present or import after dispose — that race aborted in `DestroySwapchainKHR`
+(#190) and `QueuePresentKHR` (#187).
+
 ### HUD glass
 
 Kyant `AndroidLiquidGlass` on API 33+ / ≥4 GB devices that are not
