@@ -296,11 +296,13 @@ public enum CamCapVideoFormat {
 /// ```
 /// 02 | innerLen:u16-LE | count | count × IsoLimit | base:u16-LE
 /// ```
-/// Normal/HDR: `02 0b 00 08 02…09 64 00` → 100 + 200…25600.
+/// Pocket 4 Pro Normal/HDR: `02 0b 00 08 02…09 64 00` → 100 + 200…25600.
 /// D-Log: `02 07 00 04 04…07 90 01` → 400 + 800…6400.
 /// D-Log2: `01 01 00 00` → no Auto.
 ///
-/// Wheel lists stay on `ColorMode.isoAutoLimits`. This parser pins the capture.
+/// Wheel lists stay on `ColorMode.isoAutoLimits` / `isoAutoBase(for:)`. Pocket 3
+/// / Pocket 4 Rec.709 labels use floor 50 even though this 4 Pro capture is 100.
+/// This parser pins the capture; it is not subscribed.
 public enum CamCapIsoAutoMax {
     public static let subscribeKey = "camcap_iso_auto_max"
 

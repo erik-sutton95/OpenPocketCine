@@ -1070,7 +1070,7 @@ final class CameraSession {
     func setIsoLimit(_ limit: IsoLimit) {
         let previous = status.isoLimit
         status.isoLimit = limit
-        let base = status.colorMode?.isoAutoBase ?? 100
+        let base = (status.colorMode ?? .normal).isoAutoBase(for: connectedCamera?.model) ?? 100
         fireCamera(
             Commands.setIsoLimit(limit), name: "ISO \(limit.label(base: base))",
             onFail: { [weak self] in self?.status.isoLimit = previous },

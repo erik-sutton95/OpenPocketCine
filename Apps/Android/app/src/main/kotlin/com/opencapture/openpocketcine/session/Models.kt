@@ -26,6 +26,8 @@ data class CameraModel(
 ) {
     val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
 
+    val isoAutoRangeFloor: Int get() = Companion.isoAutoRangeFloorFor(name)
+
     /**
      * Chip cycle for this body, current FORMAT, and shooting mode.
      * SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3×).
@@ -56,6 +58,18 @@ data class CameraModel(
         fun looksLikePocket3(name: String): Boolean {
             val n = name.lowercase().replace(" ", "")
             return n.contains("pocket3") || n.contains("muse")
+        }
+
+        /**
+         * Rec.709 / HDR / D-Log M Auto ISO range floor. Pocket 3 and Pocket 4
+         * start at 50 (DJI spec; #180). Pocket 4 Pro wide is 100 (captured
+         * `camcap_iso_auto_max`). Unknown bodies keep 100.
+         */
+        fun isoAutoRangeFloorFor(name: String): Int {
+            val n = name.lowercase().replace(" ", "")
+            if (n.contains("pocket4p") || n.contains("4pro")) return 100
+            if (n.contains("pocket4") || n.contains("pocket3") || n.contains("muse")) return 50
+            return 100
         }
 
         /** DJI color wheel. D-Log2 is Pocket 4 Pro only. Pocket 3 is HLG / D-Log M. */

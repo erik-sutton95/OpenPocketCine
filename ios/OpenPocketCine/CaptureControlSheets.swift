@@ -657,8 +657,10 @@ struct CapturePickerPanel: View {
         return model.session.colorModes.map { $0.label(for: family) }
     }
 
+    private var connectedBody: CameraModel? { model.session.connectedCamera?.model }
+
     private var isoAutoDrumLabels: [String] {
-        CaptureLists.isoAutoLabels(from: model.session.status)
+        CaptureLists.isoAutoLabels(from: model.session.status, model: connectedBody)
     }
 
     private var evLabels: [String] {
@@ -779,7 +781,9 @@ struct CapturePickerPanel: View {
         switch sheet {
         case .iso:
             if isIsoAutoTab {
-                guard let limit = CaptureLists.isoLimit(from: value, status: model.session.status)
+                guard
+                    let limit = CaptureLists.isoLimit(
+                        from: value, status: model.session.status, model: connectedBody)
                 else { return }
                 enqueueDrumSend { model.session.setIsoLimit(limit) }
                 return
@@ -894,7 +898,7 @@ struct CapturePickerPanel: View {
 
     private func reseatIsoAutoDrum() {
         let labels = isoAutoDrumLabels
-        let live = CaptureLists.isoAutoLabel(from: model.session.status)
+        let live = CaptureLists.isoAutoLabel(from: model.session.status, model: connectedBody)
         let next = labels.contains(live) ? live : (labels.first ?? "")
         lastApplied = next
         drumSelection = next
@@ -1086,20 +1090,22 @@ enum CaptureLists {
         (status.colorMode ?? .normal).offersIsoAuto
     }
 
-    static func isoAutoLabels(from status: CameraStatus) -> [String] {
-        (status.colorMode ?? .normal).isoAutoLabels
+    static func isoAutoLabels(from status: CameraStatus, model: CameraModel? = nil) -> [String] {
+        (status.colorMode ?? .normal).isoAutoLabels(for: model)
     }
 
-    static func isoAutoLabel(from status: CameraStatus) -> String {
-        guard let base = (status.colorMode ?? .normal).isoAutoBase,
+    static func isoAutoLabel(from status: CameraStatus, model: CameraModel? = nil) -> String {
+        guard let base = (status.colorMode ?? .normal).isoAutoBase(for: model),
             let limit = status.isoLimit
         else { return "" }
         return limit.label(base: base)
     }
 
-    static func isoLimit(from label: String, status: CameraStatus) -> IsoLimit? {
+    static func isoLimit(from label: String, status: CameraStatus, model: CameraModel? = nil)
+        -> IsoLimit?
+    {
         let color = status.colorMode ?? .normal
-        guard let base = color.isoAutoBase else { return nil }
+        guard let base = color.isoAutoBase(for: model) else { return nil }
         return color.isoAutoLimits.first { $0.label(base: base) == label }
     }
 
