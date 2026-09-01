@@ -9,6 +9,12 @@ import os
 /// Tracking is on.
 @MainActor
 final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
+    /// On-screen head-track debug: axis rings + IMU/pred readout. Off for
+    /// operators; flip to true when retuning `HeadTrack.stickRateDegPerSec`
+    /// against the `pred` row. `ControlLiveLog` head-imu lines stay on
+    /// either way (they are the pullable evidence, not screen chrome).
+    static let debugHud = false
+
     private struct HeadSample: Sendable {
         var w: Double
         var x: Double
@@ -443,10 +449,13 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             HeadTrack.bodyLookUpDeg(
                 livePitchDeg: Double($0) / 10, originPitchDeg: originGimbalPitch)
         }
-        model.headTrackAxisPose = HeadTrackAxisPose(
-            yawDeg: lookRight, pitchDeg: lookUp,
-            gimbalYawDeg: gimbalYawDeg, gimbalPitchDeg: gimbalPitchDeg,
-            locked: calibratedByUser)
+        model.headTrackAxisPose =
+            Self.debugHud
+            ? HeadTrackAxisPose(
+                yawDeg: lookRight, pitchDeg: lookUp,
+                gimbalYawDeg: gimbalYawDeg, gimbalPitchDeg: gimbalPitchDeg,
+                locked: calibratedByUser)
+            : nil
         let hudDue: Bool
         if let now, let last = lastHudAt {
             hudDue = now.timeIntervalSince(last) >= LiveChromeThrottle.statusInterval
@@ -476,10 +485,14 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let setMark = calibratedByUser ? "SET" : "no SET"
         if hudDue {
             lastHudAt = now
-            model.headTrackImuReadout = String(
-                format:
-                    "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\npred   Y%+6.1f  P%+6.1f\nerr    Y%+6.1f  P%+6.1f",
-                setMark, dY, dP, dR, bodyY, bodyP, rawP, predY, predP, dY - predY, dP - predP)
+            model.headTrackImuReadout =
+                Self.debugHud
+                ? String(
+                    format:
+                        "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\npred   Y%+6.1f  P%+6.1f\nerr    Y%+6.1f  P%+6.1f",
+                    setMark, dY, dP, dR, bodyY, bodyP, rawP, predY, predP, dY - predY,
+                    dP - predP)
+                : ""
         }
         if logDue {
             lastLogAt = now
