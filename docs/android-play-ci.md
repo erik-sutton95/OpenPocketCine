@@ -88,6 +88,13 @@ API robot is invited.
 `just android-play-sync-secrets` writes those from `.local/`. No keystore,
 password, or service-account JSON is ever committed.
 
+The Play API robot is **separate** from OpenZCine's
+`openzcine-play-publisher`. The wizard mints
+`openpocketcine-play-publisher@openpocketcine-play-publisher.iam.gserviceaccount.com`
+when `gcloud` is logged in, then you **Invite new users** on Play Console
+Users and permissions (same page as OpenZCine's robot). Play cannot create
+that invite from git. Leave the OpenZCine row alone.
+
 Repository variables:
 
 | Variable | Value |
@@ -220,7 +227,7 @@ you keep a matching AAB from the Actions run.
 | Workflow skipped on `main` | `ANDROID_PLAY_UPLOAD` is not exactly `true`, or the commit did not touch Android paths |
 | Missing `play-closed` secrets | One of the five values below is absent; `just android-play-sync-secrets` |
 | `PLAY_SERVICE_ACCOUNT_JSON is not a valid service-account JSON key` | The secret is empty, truncated, or not a GCP service-account key |
-| Insufficient permissions | Service account invited in Play Console, but wait 15–60 minutes |
+| Insufficient permissions | Invite `openpocketcine-play-publisher@…` on Users and permissions (OpenPocketCine app, testing-track release). Wait 15–60 minutes after Invite. |
 | Package not found | First AAB has not been uploaded in the Console yet |
 | Testers see nothing | Closed release still in review; or they have not tapped Become a tester |
 | "Device not compatible" | 32-bit phone, or Android older than 10 |

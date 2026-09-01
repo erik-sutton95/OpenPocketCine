@@ -317,6 +317,75 @@ push_signing_secrets() {
   unset b64
 }
 
+PLAY_GCP_PROJECT="${PLAY_GCP_PROJECT:-openpocketcine-play-publisher}"
+PLAY_SA_ID="${PLAY_SA_ID:-openpocketcine-play-publisher}"
+
+play_sa_email() {
+  printf '%s@%s.iam.gserviceaccount.com' "$PLAY_SA_ID" "$PLAY_GCP_PROJECT"
+}
+
+gcloud_ready() {
+  command -v gcloud >/dev/null 2>&1 || return 1
+  gcloud auth print-access-token >/dev/null 2>&1
+}
+
+# Mint a dedicated OpenPocketCine Play API robot (separate from OpenZCine).
+# Play Console invite is still a human click — the Publishing API cannot add
+# the first robot to the developer account.
+provision_play_service_account() {
+  if [[ -f "$SA_JSON" ]]; then
+    note "Reusing $SA_JSON"
+    return 0
+  fi
+  if ! gcloud_ready; then
+    return 1
+  fi
+  say "Minting Play API robot $PLAY_GCP_PROJECT (separate from OpenZCine)."
+  if ! gcloud projects describe "$PLAY_GCP_PROJECT" >/dev/null 2>&1; then
+    if ! gcloud projects create "$PLAY_GCP_PROJECT" --name="OpenPocketCine Play"; then
+      warn "could not create GCP project $PLAY_GCP_PROJECT"
+      SKIPPED+=("GCP project $PLAY_GCP_PROJECT")
+      return 1
+    fi
+  else
+    note "GCP project $PLAY_GCP_PROJECT already exists"
+  fi
+  if ! gcloud services enable androidpublisher.googleapis.com --project="$PLAY_GCP_PROJECT"; then
+    warn "could not enable the Google Play Android Developer API"
+    SKIPPED+=("androidpublisher.googleapis.com")
+    return 1
+  fi
+  local email
+  email="$(play_sa_email)"
+  if ! gcloud iam service-accounts describe "$email" --project="$PLAY_GCP_PROJECT" >/dev/null 2>&1; then
+    if ! gcloud iam service-accounts create "$PLAY_SA_ID" \
+      --project="$PLAY_GCP_PROJECT" \
+      --display-name="OpenPocketCine Play publisher"; then
+      warn "could not create service account"
+      SKIPPED+=("service account $email")
+      return 1
+    fi
+  else
+    note "service account already exists"
+  fi
+  mkdir -p "$(dirname "$SA_JSON")"
+  umask 077
+  if ! gcloud iam service-accounts keys create "$SA_JSON" \
+    --iam-account="$email" \
+    --project="$PLAY_GCP_PROJECT"; then
+    warn "could not mint JSON key"
+    SKIPPED+=("Play service-account JSON key")
+    return 1
+  fi
+  chmod 600 "$SA_JSON"
+  say "wrote $SA_JSON (gitignored)."
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$email" | pbcopy
+    note "copied $email to the clipboard"
+  fi
+  return 0
+}
+
 push_service_account_secret() {
   if [[ ! -f "$SA_JSON" ]]; then
     SKIPPED+=(".local/play-service-account.json")
@@ -338,6 +407,7 @@ sync_play_upload_secrets() {
   ensure_play_environment
   ensure_upload_keystore
   push_signing_secrets
+  provision_play_service_account || true
   push_service_account_secret
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if ! gh variable get ANDROID_VERSION_CODE_BASE >/dev/null 2>&1; then
@@ -531,30 +601,26 @@ pause "Signing secrets are on GitHub, or listed as still-to-do?"
 
 # ── 7. Google Cloud API ──────────────────────────────────────────────────
 stage "Google Play Developer API"
-say "CI talks to Play through a service account, not your Google login."
-open_url "https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com"
-step "Select or create a Google Cloud project (openpocketcine-play is a fine name)."
-step "Enable the Google Play Android Developer API."
-note "Play Console no longer has a dedicated API access page on many accounts — Users and permissions is the grant."
-pause "The Android Publisher API is enabled?"
-
-# ── 8. Service account ───────────────────────────────────────────────────
-stage "Service account + Play permissions"
-say "Create a JSON key, then invite that robot email into Play Console."
-if [[ -f "$SA_JSON" ]]; then
-  note "Reusing $SA_JSON"
+say "Dedicated OpenPocketCine Play API robot — separate from OpenZCine's."
+note "Cloud project / SA: $PLAY_GCP_PROJECT  Email: $(play_sa_email)"
+if provision_play_service_account; then
+  say "Cloud project, API, service account, and JSON key are on disk."
 else
-  open_url "https://console.cloud.google.com/iam-admin/serviceaccounts"
-  step "Create service account. Name: play-upload. ID: play-upload."
+  open_url "https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com"
+  step "Select or create a Google Cloud project named openpocketcine-play-publisher (not the OpenZCine project)."
+  step "Enable the Google Play Android Developer API."
+  note "gcloud is not logged in on this machine, so this stage is in the browser. Play Console owns the grant, not a Cloud IAM role."
+fi
+pause "The Android Publisher API is enabled for OpenPocketCine?"
+
+# ── 8. Service account + Play invite ─────────────────────────────────────
+stage "Service account + Play permissions"
+say "Invite a new OpenPocketCine robot. Leave the OpenZCine row as-is."
+if [[ ! -f "$SA_JSON" ]]; then
+  open_url "https://console.cloud.google.com/iam-admin/serviceaccounts?project=${PLAY_GCP_PROJECT}"
+  step "Create service account. Name: openpocketcine-play-publisher. ID: openpocketcine-play-publisher."
   step "Skip Cloud IAM roles — Play Console owns the permissions."
   step "Open the account → Keys → Add key → Create new key → JSON. The file downloads."
-  step "Copy the service account email (it ends with .iam.gserviceaccount.com)."
-  open_play_account_page "users-and-permissions"
-  step "Users and permissions → Invite new users."
-  step "Paste the service account email."
-  step "App permissions (OpenPocketCine only): View app information; Release apps to testing tracks; Manage testing tracks and edit tester lists."
-  step "Do not grant production, financial, or Admin."
-  step "Invite user. Propagation can take a few minutes (rarely up to an hour)."
   ask PLAY_SA_JSON_PATH "Path to the downloaded JSON key:"
   PLAY_SA_JSON_PATH="${PLAY_SA_JSON_PATH/#\~/$HOME}"
   if [[ -n "${PLAY_SA_JSON_PATH}" && -f "${PLAY_SA_JSON_PATH}" ]]; then
@@ -564,9 +630,16 @@ else
   else
     warn "JSON path missing — copy the file to .local/play-service-account.json and re-run just android-play-sync-secrets"
   fi
+else
+  note "JSON key is already at $SA_JSON"
 fi
+open_play_account_page "users-and-permissions"
+step "Invite new users (blue button). Paste $(play_sa_email) — it should already be on the clipboard if gcloud minted the robot."
+step "App permissions (OpenPocketCine only): View app information; Release apps to testing tracks; Manage testing tracks and edit tester lists."
+step "Do not grant production, financial, or Admin."
+step "Invite user. Propagation can take a few minutes (rarely up to an hour)."
 push_service_account_secret
-pause "Service account is invited in Play Console and the GitHub secret is set?"
+pause "The new OpenPocketCine robot is invited and the GitHub secret is set?"
 
 # ── 9. GitHub Environment ────────────────────────────────────────────────
 stage "GitHub Environment play-closed"
