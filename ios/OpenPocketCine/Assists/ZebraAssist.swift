@@ -10,7 +10,8 @@ import UIKit
 /// * Highlight — enable, threshold, fill colour White / Amber / Red
 /// * Midtone — enable, threshold, fill colour Amber / Cyan / Green
 ///
-/// Defaults match `AssistConfiguration.Zebra`: IRE, highlight 100 / white, midtone 55 / amber.
+/// Defaults follow `AssistConfiguration.Zebra` (IRE, white / amber, midtone 55) except highlight:
+/// 99, one IRE under the live-tap ceiling so the typical D-Log2 243–247 shelf paints (#136).
 /// The GPU compositor reads ``overlay(from:)``.
 enum ZebraAssist {
     /// Popup width OpenZCine uses for zebra (`assistPanelWidth` — 400, not guides' 472).

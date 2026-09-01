@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Highlight zebra (#136): the stripe now reads the frame's max channel,
+  the same byte WAVE draws at 100, instead of Rec.709 luma. A blue-led hot
+  sky whose luma sat under its hot channel never painted at 100. Factory
+  Highlight is now **99 IRE** ("approaching clip"): 100 is the live-tap
+  ceiling byte itself (D-Log2 247) and the ceiling ratchets to the frame
+  max, so a typical 243–247 D-Log2 shelf missed it. Saved thresholds are
+  untouched. Both shells; GLES, Vulkan, Core Image and the Android CPU look.
+
 ### Added
 
 - Live head-tracking debug: yaw ring (12 o'clock is SET) and a vertical

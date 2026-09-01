@@ -293,5 +293,10 @@ class PlaybackChromeTest {
         val cool = intArrayOf(0xFF101010.toInt())
         applyPlaybackLookPixels(cool, 1, 1, plan)
         assertEquals(0xFF101010.toInt(), cool[0])
+        // #136: a blue-led pixel whose max channel is hot paints even though
+        // its Rec.709 luma is under the threshold — same axis as WAVE 100.
+        val tinted = intArrayOf(0xFF2040FF.toInt())
+        applyPlaybackLookPixels(tinted, 1, 1, plan)
+        assertEquals(0xFFFFFFFF.toInt(), tinted[0])
     }
 }
