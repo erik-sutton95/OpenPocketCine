@@ -180,9 +180,23 @@ import Testing
         #expect(!CameraSoftAP.shouldRecoverAfterForeground(secondsSinceLastPresented: 0.4))
         #expect(CameraSoftAP.shouldRecoverAfterForeground(secondsSinceLastPresented: 2.0))
         #expect(CameraSoftAP.shouldRecoverAfterForeground(secondsSinceLastPresented: nil))
+        #expect(
+            !CameraSoftAP.shouldRecoverAfterForeground(
+                secondsSinceLastPresented: 3.0, videoFresh: true),
+            "HEVC still on 9004 — VT only, do not tear UDP")
+        #expect(
+            !CameraSoftAP.shouldRecoverAfterForeground(
+                secondsSinceLastPresented: 3.0, statusFresh: true),
+            "status on 9004 is encoder-pause, not a parked app")
         #expect(!CameraSoftAP.shouldEscalateForegroundRecover(secondsSinceLastPresented: 0.5))
-        #expect(CameraSoftAP.shouldEscalateForegroundRecover(secondsSinceLastPresented: 2.0))
+        #expect(
+            !CameraSoftAP.shouldEscalateForegroundRecover(secondsSinceLastPresented: 2.0),
+            "2s is still GOP-reset grace after the force-enable")
+        #expect(CameraSoftAP.shouldEscalateForegroundRecover(secondsSinceLastPresented: 8.0))
         #expect(CameraSoftAP.shouldEscalateForegroundRecover(secondsSinceLastPresented: nil))
+        #expect(
+            !CameraSoftAP.shouldEscalateForegroundRecover(
+                secondsSinceLastPresented: 9.0, videoFresh: true))
     }
 
     @Test func frozenPresentedFrameIsStillFirstPicture() {
@@ -372,7 +386,18 @@ import Testing
                 flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
                 videoFresh: false, sawPicture: true, statusFresh: true),
             "DUML status on 9004 is encoder pause — keepalive must not flap UDP")
+        #expect(
+            !CameraSoftAP.shouldKeepaliveRebuildUDP(
+                flowNeedsRebuild: true, rebuildInFlight: false, secondsSinceLastRebuild: 10,
+                videoFresh: false, sawPicture: true, statusFresh: false,
+                secondsSinceLastEnable: 2.5),
+            "GOP-reset grace — keepalive must not tear the new bind")
         #expect(CameraSoftAP.rebuildCooldown == 5)
+        #expect(
+            CameraSoftAP.firstPictureStep(
+                videoPackets: 80, enableSends: 0, secondsSinceLastEnable: 0,
+                hasPresentedPicture: true) == .wait,
+            "HEVC already presented before 0xa8 — do not PLI")
     }
 
     @Test func canceledReceiveIsNotTheLiveSocket() {
@@ -434,6 +459,13 @@ import Testing
         #expect(
             CameraSoftAP.handshakeTimeoutStep(
                 pathReady: true, rebindsUsed: CameraSoftAP.handshakeRebindLimit) == .fail)
+        #expect(
+            CameraSoftAP.handshakeTimeoutStep(
+                pathReady: true, rebindsUsed: 0, inboundDatagrams: 12) == .keepSocket,
+            "HEVC/status already inbound — do not discardUDP")
+        #expect(CameraSoftAP.shouldBindLocalListenPort(9004) == false)
+        #expect(CameraSoftAP.isEphemeralLocalPort(0))
+        #expect(!CameraSoftAP.isEphemeralLocalPort(9004))
     }
 
     /// Late SET ACK while video is still arriving is not a dead uplink.

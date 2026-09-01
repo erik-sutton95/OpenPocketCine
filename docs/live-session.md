@@ -131,6 +131,12 @@ Mid-session SoftAP `onLost` is a Network-object replace until the grace
 expires — do not `bindProcessToNetwork(null)` while `isProcessBound` still
 reads true, or UDP rebuilds on home Wi-Fi.
 
+Foreground recover is VT-only while HEVC or DUML status is still on 9004.
+A Control Center peek must not rebuild UDP. After a parked-app rebuild,
+wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was
+still inside the IDR gap. Handshake inbound `0x02`/`0x01` without a
+`0x00` ACK keeps that bind (`keepSocket`); rebind dumps the first IDR.
+
 ## Pointers
 
 - Stall / recover: [`feed-watchdog.md`](feed-watchdog.md)

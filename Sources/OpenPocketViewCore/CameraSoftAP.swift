@@ -8,6 +8,16 @@ import Foundation
 /// is why the feed appears after disconnect/reconnect.
 public enum CameraSoftAP: Sendable {
     public static let host = "192.168.2.1"
+    /// Camera listen port. The phone binds an **ephemeral** local port — local
+    /// `:9004` kept `0x01` and dropped every pktType `0x02`.
+    public static let remotePort: UInt16 = 9004
+    public static let ephemeralLocalPort: UInt16 = 0
+    public static func isEphemeralLocalPort(_ port: UInt16) -> Bool {
+        port == ephemeralLocalPort
+    }
+    public static func shouldBindLocalListenPort(_ port: UInt16) -> Bool {
+        port != remotePort
+    }
     public static let invalidVTSessionStatus: Int32 = -12903  // kVTInvalidSessionErr
 
     /// Phone address on the camera AP. `.1` is the camera; `.0` / `.255` are not hosts.
@@ -104,22 +114,29 @@ extension CameraSoftAP {
     /// opened. Cancel of the *old* UDP is NWError 89 — that is not the new flow dying.
     public static let rebuildCooldown: TimeInterval = 5
     /// After a foreground rebuild, wait this long for an IDR before a full rejoin.
-    public static let foregroundPictureGrace: TimeInterval = 2.0
+    /// 2 s was still inside the GOP-cut gap and discarded the new UDP.
+    public static var foregroundPictureGrace: TimeInterval { firstPictureIDRGrace }
 
     /// Control Center / a 300 ms app-switcher peek still has a live GOP — do not
-    /// tear UDP. A parked app does not.
+    /// tear UDP. A parked app does not. Young HEVC or status on 9004 is VT-only.
     public static func shouldRecoverAfterForeground(
         secondsSinceLastPresented: TimeInterval?,
+        videoFresh: Bool = false,
+        statusFresh: Bool = false,
         stall: TimeInterval = FeedWatchdog.stallThreshold
     ) -> Bool {
+        if videoFresh || statusFresh { return false }
         guard let age = secondsSinceLastPresented else { return true }
         return age >= stall
     }
 
     public static func shouldEscalateForegroundRecover(
         secondsSinceLastPresented: TimeInterval?,
+        videoFresh: Bool = false,
+        statusFresh: Bool = false,
         grace: TimeInterval = foregroundPictureGrace
     ) -> Bool {
+        if videoFresh || statusFresh { return false }
         guard let age = secondsSinceLastPresented else { return true }
         return age >= grace
     }
@@ -130,7 +147,8 @@ extension CameraSoftAP {
         secondsSinceLastRebuild: TimeInterval?,
         videoFresh: Bool = false,
         sawPicture: Bool = true,
-        statusFresh: Bool = false
+        statusFresh: Bool = false,
+        secondsSinceLastEnable: TimeInterval? = nil
     ) -> Bool {
         // First picture owns the socket. Keepalive rebuild here canceled the
         // new UDP and RST'd TCP 7001 — black canvas, 2 s flap.
@@ -141,6 +159,11 @@ extension CameraSoftAP {
         // Gimbal throw can pause HEVC while DUML status stays on 9004.
         // Keepalive 6 s UDP flaps were the 15–30 s “connection drop.”
         if statusFresh { return false }
+        if FeedWatchdog.shouldHoldForGOPReset(
+            secondsSinceLastEnable: secondsSinceLastEnable, lastVideoPacketAge: nil)
+        {
+            return false
+        }
         if let since = secondsSinceLastRebuild, since < rebuildCooldown { return false }
         return true
     }
@@ -242,10 +265,11 @@ extension CameraSoftAP {
         isRecording: Bool = false,
         hasPresentedPicture: Bool = false
     ) -> FirstPictureStep {
+        // Mimo HEVC can present before 0x09/0xa8. A PLI on that GOP blacks the well.
+        if hasPresentedPicture { return .wait }
         // Handshake succeeded but 0x09/0xa8 never left (pathReady flickered).
         // Waiting here is the black LINK canvas until the operator reconnects.
         if enableSends < 1 { return .resendEnable }
-        if hasPresentedPicture { return .wait }
         if recordingFormatPokeInFlight { return .wait }
         guard secondsSinceLastEnable >= 2 else { return .wait }
         let hadVideo = FeedWatchdog.hadVideo(
@@ -438,6 +462,8 @@ extension CameraSoftAP {
     }
 
     public enum HandshakeTimeoutStep: String, Equatable, Sendable {
+        /// pktType 0x02 / 0x01 already on this bind. Do not discardUDP.
+        case keepSocket
         case rebindUDP
         case fail
     }
@@ -451,8 +477,11 @@ extension CameraSoftAP {
     public static func handshakeTimeoutStep(
         pathReady: Bool,
         rebindsUsed: Int,
+        inboundDatagrams: Int = 0,
         rebindLimit: Int = handshakeRebindLimit
     ) -> HandshakeTimeoutStep {
+        // Mimo HEVC at join+17 ms can beat the 0x00 ACK. Rebind here dumps the IDR.
+        if inboundDatagrams > 0 { return .keepSocket }
         if !pathReady { return .fail }
         if rebindsUsed < rebindLimit { return .rebindUDP }
         return .fail

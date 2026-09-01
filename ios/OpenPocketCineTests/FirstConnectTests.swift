@@ -197,6 +197,10 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertEqual(
             CameraSoftAP.handshakeTimeoutStep(pathReady: false, rebindsUsed: 0),
             .fail)
+        XCTAssertEqual(
+            CameraSoftAP.handshakeTimeoutStep(
+                pathReady: true, rebindsUsed: 0, inboundDatagrams: 12),
+            .keepSocket)
         XCTAssertTrue(
             CameraSoftAP.isHandshakeAck(
                 [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))

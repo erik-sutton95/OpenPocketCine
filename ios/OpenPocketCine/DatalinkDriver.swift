@@ -172,17 +172,21 @@ final class DatalinkDriver {
 
         var rebinds = 0
         var haveSocket = false
+        var keepBind = false
         while true {
             try throwIfClosed()
-            resetHandshakeSession()
-            // Do not discard before the first bind — that was a no-op on a
-            // fresh driver but raced the reader on session retry.
-            if haveSocket { discardUDP() }
-            try await openUDP()
-            try throwIfClosed()
-            haveSocket = true
-            syncWire()
-            startPathWatch()
+            if !keepBind {
+                resetHandshakeSession()
+                // Do not discard before the first bind — that was a no-op on a
+                // fresh driver but raced the reader on session retry.
+                if haveSocket { discardUDP() }
+                try await openUDP()
+                try throwIfClosed()
+                haveSocket = true
+                syncWire()
+                startPathWatch()
+            }
+            keepBind = false
 
             let sends = CameraSoftAP.handshakeSendsPerBind
             for send in 1...sends {
@@ -230,7 +234,14 @@ final class DatalinkDriver {
 
             let inbound = handshakeInbound.withLock { $0 }
             let pathReady = WiFiJoiner.isCameraPathReady()
-            switch CameraSoftAP.handshakeTimeoutStep(pathReady: pathReady, rebindsUsed: rebinds) {
+            switch CameraSoftAP.handshakeTimeoutStep(
+                pathReady: pathReady, rebindsUsed: rebinds, inboundDatagrams: inbound)
+            {
+            case .keepSocket:
+                log.info(
+                    "datalink: handshake miss inbound=\(inbound, privacy: .public) — keep UDP, retry sends"
+                )
+                keepBind = true
             case .rebindUDP:
                 rebinds += 1
                 log.info(

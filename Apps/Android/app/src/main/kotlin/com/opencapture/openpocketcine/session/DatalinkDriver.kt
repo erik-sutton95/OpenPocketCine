@@ -115,9 +115,13 @@ class DatalinkDriver(
         else runCatching { SwiftCore.depacketizerReset(depacketizer) }
 
         var rebinds = 0
+        var keepBind = false
         while (true) {
-            resetHandshakeSession()
-            startUdpReceiver()
+            if (!keepBind) {
+                resetHandshakeSession()
+                startUdpReceiver()
+            }
+            keepBind = false
             val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
             for (send in 1..HANDSHAKE_SENDS_PER_BIND) {
                 sendRaw(0x00, handshake)
@@ -150,12 +154,33 @@ class DatalinkDriver(
                 armLiveVideo()
                 return
             }
-            if (!joiner.isProcessBound()) error("camera never answered the datalink handshake")
-            if (rebinds >= HANDSHAKE_REBIND_LIMIT) error("camera never answered the datalink handshake")
-            rebinds += 1
-            Log.i(TAG, "datalink: handshake miss — SoftAP up, rebind UDP ($rebinds/$HANDSHAKE_REBIND_LIMIT)")
-            discardUdp(keepPoke = true)
-            Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
+            val inbound = inboundLogs.get()
+            when (
+                LiveViewEnablePolicy.handshakeTimeoutStep(
+                    pathReady = joiner.isProcessBound(),
+                    rebindsUsed = rebinds,
+                    inboundDatagrams = inbound,
+                    rebindLimit = HANDSHAKE_REBIND_LIMIT,
+                )
+            ) {
+                LiveViewEnablePolicy.HandshakeTimeoutStep.KEEP_SOCKET -> {
+                    Log.i(TAG, "datalink: handshake miss inbound=$inbound — keep UDP, retry sends")
+                    keepBind = true
+                    continue
+                }
+                LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL ->
+                    error("camera never answered the datalink handshake")
+                LiveViewEnablePolicy.HandshakeTimeoutStep.REBIND_UDP -> {
+                    rebinds += 1
+                    Log.i(
+                        TAG,
+                        "datalink: handshake miss inbound=$inbound — SoftAP up, rebind UDP " +
+                            "($rebinds/$HANDSHAKE_REBIND_LIMIT)",
+                    )
+                    discardUdp(keepPoke = true)
+                    Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
+                }
+            }
         }
     }
 

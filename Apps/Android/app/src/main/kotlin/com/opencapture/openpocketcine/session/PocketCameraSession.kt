@@ -245,14 +245,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     init {
         ble.onLinkLost = {
             if (_phase.value == ConnectionPhase.LIVE || holdsMonitor) {
-                beginSessionRecovery("BLE dropped")
+                beginSessionRecovery("BLE dropped", SessionRecoveryTrigger.BLE_DROPPED)
             } else {
                 failLink("the camera disconnected")
             }
         }
         joiner.onPathLost = {
             if (_phase.value == ConnectionPhase.LIVE || holdsMonitor) {
-                beginSessionRecovery("the camera Wi-Fi disconnected")
+                beginSessionRecovery(
+                    "the camera Wi-Fi disconnected",
+                    SessionRecoveryTrigger.SOFTAP_LOST,
+                )
             } else {
                 failLink("the camera Wi-Fi disconnected")
             }
@@ -711,6 +714,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 videoFresh = videoFresh,
                 sawPicture = hasStableLivePicture,
                 statusFresh = statusFresh,
+                sinceEnableMs = if (lastIdrRequest == 0L) null else now - lastIdrRequest,
             )
         }
 
@@ -1131,8 +1135,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun recoverAfterForeground() {
         val now = SystemClock.elapsedRealtime()
         val presentedAgeSec = decoder.lastPresentedAt?.let { (now - it) / 1000.0 }
-        if (!LiveViewEnablePolicy.shouldRecoverAfterForeground(presentedAgeSec)) {
-            Log.i(TAG, "live: foreground — picture still fresh, skip rebuild")
+        val videoFresh =
+            datalink?.lastVideoPacketAt?.let { now - it < LiveViewEnablePolicy.STALL_MS } == true
+        val statusFresh =
+            datalink?.lastStatusAt?.let { now - it < LiveViewEnablePolicy.STALL_MS } == true
+        if (!LiveViewEnablePolicy.shouldRecoverAfterForeground(
+                presentedAgeSec, videoFresh = videoFresh, statusFresh = statusFresh,
+            )
+        ) {
+            Log.i(TAG, "live: foreground — picture or 9004 still fresh, skip rebuild")
             return
         }
         Log.i(TAG, "live: recover after foreground")
@@ -1150,9 +1161,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sendCapturedLiveView("first picture")
             }
             delay(LiveViewEnablePolicy.FOREGROUND_PICTURE_GRACE_MS)
+            val after = SystemClock.elapsedRealtime()
+            val videoFresh =
+                datalink?.lastVideoPacketAt?.let { after - it < LiveViewEnablePolicy.STALL_MS } == true
+            val statusFresh =
+                datalink?.lastStatusAt?.let { after - it < LiveViewEnablePolicy.STALL_MS } == true
             val stillFrozen =
                 LiveViewEnablePolicy.shouldEscalateForegroundRecover(
-                    decoder.lastPresentedAt?.let { (SystemClock.elapsedRealtime() - it) / 1000.0 },
+                    decoder.lastPresentedAt?.let { (after - it) / 1000.0 },
+                    videoFresh = videoFresh,
+                    statusFresh = statusFresh,
                 )
             if (stillFrozen) {
                 Log.i(TAG, "live: foreground still frozen — full datalink rejoin")
@@ -1307,7 +1325,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun retrySessionRecovery() {
         dropStorm.reset()
         cancelSessionRecovery(clearHoldsMonitor = false)
-        beginSessionRecovery("operator retry")
+        beginSessionRecovery("operator retry", SessionRecoveryTrigger.OPERATOR_RETRY)
     }
 
     fun abandonRecoveryToMenu() {
@@ -1315,7 +1333,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         disconnect()
     }
 
-    private fun beginSessionRecovery(reason: String) {
+    private fun beginSessionRecovery(
+        reason: String,
+        trigger: SessionRecoveryTrigger = SessionRecoveryTrigger.BLE_DROPPED,
+    ) {
+        if (!SessionRecoveryPolicy.shouldBegin(trigger)) return
         if (_recoveryState.value is SessionRecoveryUi.PausedAfterDrops) return
         if (_recoveryState.value is SessionRecoveryUi.WaitingForOperator) return
         if (recoveryJob != null) return
@@ -3274,8 +3296,9 @@ internal object LiveViewEnablePolicy {
     const val FORMAT_STALL_MS = 2_000L
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
     const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
+    const val HANDSHAKE_REBIND_LIMIT = 3
     /** After a foreground rebuild, wait this long for an IDR before a full rejoin. */
-    const val FOREGROUND_PICTURE_GRACE_MS = 2_000L
+    const val FOREGROUND_PICTURE_GRACE_MS = GOP_GRACE_MS
 
     fun shouldGiveUpOpenRetry(attempts: Int): Boolean = attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
 
@@ -3350,18 +3373,38 @@ internal object LiveViewEnablePolicy {
     /** Control Center / a short app-switcher peek still has a live GOP — do not tear UDP. */
     fun shouldRecoverAfterForeground(
         secondsSinceLastPresented: Double?,
+        videoFresh: Boolean = false,
+        statusFresh: Boolean = false,
         stallSec: Double = STALL_MS / 1000.0,
     ): Boolean {
+        if (videoFresh || statusFresh) return false
         val age = secondsSinceLastPresented ?: return true
         return age >= stallSec
     }
 
     fun shouldEscalateForegroundRecover(
         secondsSinceLastPresented: Double?,
+        videoFresh: Boolean = false,
+        statusFresh: Boolean = false,
         graceSec: Double = FOREGROUND_PICTURE_GRACE_MS / 1000.0,
     ): Boolean {
+        if (videoFresh || statusFresh) return false
         val age = secondsSinceLastPresented ?: return true
         return age >= graceSec
+    }
+
+    enum class HandshakeTimeoutStep { KEEP_SOCKET, REBIND_UDP, FAIL }
+
+    fun handshakeTimeoutStep(
+        pathReady: Boolean,
+        rebindsUsed: Int,
+        inboundDatagrams: Int = 0,
+        rebindLimit: Int = HANDSHAKE_REBIND_LIMIT,
+    ): HandshakeTimeoutStep {
+        if (inboundDatagrams > 0) return HandshakeTimeoutStep.KEEP_SOCKET
+        if (!pathReady) return HandshakeTimeoutStep.FAIL
+        if (rebindsUsed < rebindLimit) return HandshakeTimeoutStep.REBIND_UDP
+        return HandshakeTimeoutStep.FAIL
     }
 
     fun holdUdpRebuildGopLog(sinceEnableMs: Long?, videoAgeMs: Long?): String =
@@ -3465,8 +3508,8 @@ internal object LiveViewEnablePolicy {
         isRecording: Boolean = false,
         hasPresentedPicture: Boolean = false,
     ): FirstPictureStep {
-        if (enableSends < 1) return FirstPictureStep.RESEND_ENABLE
         if (hasPresentedPicture) return FirstPictureStep.WAIT
+        if (enableSends < 1) return FirstPictureStep.RESEND_ENABLE
         if (recordingFormatPokeInFlight) return FirstPictureStep.WAIT
         if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return FirstPictureStep.WAIT
         val had = hadVideo(videoPackets, videoAgeMs)
@@ -3561,10 +3604,12 @@ internal object LiveViewEnablePolicy {
         videoFresh: Boolean = false,
         sawPicture: Boolean = true,
         statusFresh: Boolean = false,
+        sinceEnableMs: Long? = null,
     ): Boolean {
         if (!sawPicture) return false
         if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return false
         if (statusFresh) return false
+        if (shouldHoldForGopReset(sinceEnableMs, null)) return false
         if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return false
         return true
     }

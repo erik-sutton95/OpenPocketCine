@@ -817,7 +817,7 @@ final class CameraSession {
             }
             failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
-                beginSessionRecovery(reason: "BLE dropped")
+                beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
             }
         }
     }
@@ -3196,7 +3196,8 @@ final class CameraSession {
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
             videoFresh: videoFresh,
             sawPicture: hasStableLivePicture,
-            statusFresh: statusFresh
+            statusFresh: statusFresh,
+            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest)
         )
     }
 
@@ -3699,9 +3700,21 @@ final class CameraSession {
     /// UDP and VT die while suspended. Watchdog will not fire if packets still
     /// arrive but the present path is dead — that is the frozen resume canvas.
     private func recoverAfterForeground() {
-        let presentedAge = decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
-        if !CameraSoftAP.shouldRecoverAfterForeground(secondsSinceLastPresented: presentedAge) {
-            log.info("live: foreground — picture still fresh, skip rebuild")
+        let now = Date()
+        let presentedAge = decoder.lastPresentedAt.map { now.timeIntervalSince($0) }
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        let statusFresh =
+            datalink?.lastStatusAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        if !CameraSoftAP.shouldRecoverAfterForeground(
+            secondsSinceLastPresented: presentedAge, videoFresh: videoFresh,
+            statusFresh: statusFresh)
+        {
+            log.info("live: foreground — picture or 9004 still fresh, skip rebuild")
             return
         }
         log.info("live: recover after foreground")
@@ -3724,10 +3737,19 @@ final class CameraSession {
             }
             try? await Task.sleep(for: .seconds(CameraSoftAP.foregroundPictureGrace))
             guard !Task.isCancelled else { return }
+            let now = Date()
+            let videoFresh =
+                self.datalink?.lastVideoPacketAt.map {
+                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
+            let statusFresh =
+                self.datalink?.lastStatusAt.map {
+                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
             let stillFrozen = CameraSoftAP.shouldEscalateForegroundRecover(
                 secondsSinceLastPresented: self.decoder.lastPresentedAt.map {
-                    Date().timeIntervalSince($0)
-                })
+                    now.timeIntervalSince($0)
+                }, videoFresh: videoFresh, statusFresh: statusFresh)
             if stillFrozen {
                 self.log.info("live: foreground still frozen — full datalink rejoin")
                 await self.rejoinDatalinkKeepingLive()
@@ -3766,7 +3788,10 @@ final class CameraSession {
 
     /// Recovers an established live session that dropped — camera power-off, BLE gone —
     /// without leaving the last frame. Bounded automatic attempts, then the operator chooses.
-    func beginSessionRecovery(reason: String) {
+    func beginSessionRecovery(
+        reason: String, trigger: SessionRecoveryTrigger = .bleDropped
+    ) {
+        guard SessionRecoveryPolicy.shouldBegin(trigger) else { return }
         if case .pausedAfterRepeatedDrops = sessionRecovery { return }
         if case .waitingForOperator = sessionRecovery { return }
         if sessionRecoveryTask != nil { return }
@@ -3820,7 +3845,7 @@ final class CameraSession {
     func retrySessionRecovery() {
         sessionDropStormGuard.reset()
         cancelSessionRecovery(clearHoldsMonitor: false)
-        beginSessionRecovery(reason: "operator retry")
+        beginSessionRecovery(reason: "operator retry", trigger: .operatorRetry)
     }
 
     func cancelSessionRecovery(clearHoldsMonitor: Bool = true) {

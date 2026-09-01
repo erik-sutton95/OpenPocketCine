@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Foreground recover no longer tears a live GOP: young HEVC or status on
+  9004 skips UDP rebuild, and the post-enable escalate wait is the 8 s
+  IDR grace (2 s discarded the new bind). Handshake keeps the socket when
+  inbound 0x02/0x01 beat the 0x00 ACK. First-picture does not PLI a
+  picture that already presented. Session recovery starts only on BLE /
+  SoftAP loss.
+
 - Pocket live GOP is often HEVC BLA_W_LP (NAL 16), not only IDR_N_LP (20).
   iOS IDR hold now releases on IRAP 16–21 so a live BLA picture is not
   frozen while UDP stays young. Duplicate UDP fragments no longer mark

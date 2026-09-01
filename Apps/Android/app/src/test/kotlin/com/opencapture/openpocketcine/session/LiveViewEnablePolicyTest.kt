@@ -179,9 +179,35 @@ class LiveViewEnablePolicyTest {
         assertTrue(!LiveViewEnablePolicy.shouldRecoverAfterForeground(0.4))
         assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(2.0))
         assertTrue(LiveViewEnablePolicy.shouldRecoverAfterForeground(null))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldRecoverAfterForeground(3.0, videoFresh = true),
+        )
         assertTrue(!LiveViewEnablePolicy.shouldEscalateForegroundRecover(0.5))
-        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(2.0))
+        assertTrue(
+            !LiveViewEnablePolicy.shouldEscalateForegroundRecover(2.0),
+            "2s is still GOP-reset grace",
+        )
+        assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(8.0))
         assertTrue(LiveViewEnablePolicy.shouldEscalateForegroundRecover(null))
+        assertEquals(
+            LiveViewEnablePolicy.HandshakeTimeoutStep.KEEP_SOCKET,
+            LiveViewEnablePolicy.handshakeTimeoutStep(
+                pathReady = true,
+                rebindsUsed = 0,
+                inboundDatagrams = 12,
+            ),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.FirstPictureStep.WAIT,
+            LiveViewEnablePolicy.firstPictureStep(
+                videoPackets = 80,
+                enableSends = 0,
+                sinceEnableMs = 0,
+                videoAgeMs = 40,
+                sinceRebuildMs = null,
+                hasPresentedPicture = true,
+            ),
+        )
     }
 
     @Test
