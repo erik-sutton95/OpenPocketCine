@@ -113,7 +113,10 @@ during handshake are expected until this pair starts a clean VPS.
 
 In-app Disconnect must drop the UDP driver (`udpGeneration` / closed flag,
 callbacks, ACK pump) and the platform decoder (VT invalidate + layer flush
-on iOS; MediaCodec output-thread join + Surface unbind on Android). A
+on iOS; MediaCodec output-thread join + Surface unbind on Android). Vulkan
+on Android drains `opc.vk.img` and detaches the swapchain before
+`DestroySwapchainKHR` / `vkDestroyDevice`, so `nativeSubmit` cannot
+`vkCreateImage` or `vkQueuePresentKHR` after the window is gone. A
 cancelled `open()` must not publish LIVE (`CameraSoftAP.shouldCommitLiveHandshake`).
 Process death did that for free; leaving the socket live is why reconnect
 hung on Waiting for live view until the app was killed.

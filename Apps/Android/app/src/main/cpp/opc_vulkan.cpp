@@ -965,7 +965,7 @@ static void destroySwapchain(OpcVk* r) {
     r->swapchain = VK_NULL_HANDLE;
 }
 
-static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
+static void releaseWindow(OpcVk* r) {
     destroySwapchain(r);
     if (r->surface) {
         vkDestroySurfaceKHR(r->instance, r->surface, nullptr);
@@ -975,6 +975,10 @@ static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
         ANativeWindow_release(r->window);
         r->window = nullptr;
     }
+}
+
+static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
+    releaseWindow(r);
     r->window = window;
     ANativeWindow_acquire(window);
     VkAndroidSurfaceCreateInfoKHR sci{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
@@ -1912,9 +1916,7 @@ static void destroyAll(OpcVk* r) {
     vkDeviceWaitIdle(r->device);
     destroyAhbCache(r);
     destroyImportedConversion(r);
-    destroySwapchain(r);
-    if (r->surface) vkDestroySurfaceKHR(r->instance, r->surface, nullptr);
-    if (r->window) ANativeWindow_release(r->window);
+    releaseWindow(r);
     auto killPipe = [&](VkPipeline p) { if (p) vkDestroyPipeline(r->device, p, nullptr); };
     killPipe(r->blitPipe);
     killPipe(r->blitAlphaPipe);
@@ -1993,7 +1995,12 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeDestroy(JNIEnv*, jclass, jlong h) {
     auto* r = fromHandle(h);
     if (!r) return;
-    destroyAll(r);
+    {
+        std::lock_guard<std::mutex> g(r->lock);
+        if (!r->ready) return;
+        r->ready = false;
+        destroyAll(r);
+    }
     delete r;
 }
 
@@ -2003,6 +2010,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeAttachWindow(JNIEnv* en
     auto* r = fromHandle(h);
     if (!r || !surface) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return JNI_FALSE;
     ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
     if (!win) return JNI_FALSE;
     bool ok = createSwapchain(r, win, w, height);
@@ -2011,10 +2019,21 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeAttachWindow(JNIEnv* en
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeDetachWindow(JNIEnv*, jclass, jlong h) {
+    auto* r = fromHandle(h);
+    if (!r) return;
+    std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
+    if (r->device) vkDeviceWaitIdle(r->device);
+    releaseWindow(r);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeResize(JNIEnv*, jclass, jlong h, jint w, jint height) {
     auto* r = fromHandle(h);
-    if (!r || !r->window) return;
+    if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready || !r->window) return;
     vkDeviceWaitIdle(r->device);
     ANativeWindow_acquire(r->window);
     createSwapchain(r, r->window, w, height);
@@ -2026,6 +2045,8 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSubmit(JNIEnv* env, jcl
     auto* r = fromHandle(h);
     if (!r || !buffer) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
+    // No vkCreateImage / present after detach or destroy (Play Vitals #186).
+    if (!r->ready || !r->swapchain) return JNI_FALSE;
     vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     AHardwareBuffer* hb = AHardwareBuffer_fromHardwareBuffer(env, buffer);
     if (!hb) return JNI_FALSE;
@@ -2039,7 +2060,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeRedraw(JNIEnv*, jclass,
     auto* r = fromHandle(h);
     if (!r) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
-    if (!r->imported.view) return JNI_FALSE;
+    if (!r->ready || !r->swapchain || !r->imported.view) return JNI_FALSE;
     return renderFrame(r) ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -2049,6 +2070,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedRect(JNIEnv*, jc
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     r->feedRect[0] = x;
     r->feedRect[1] = y;
     r->feedRect[2] = w;
@@ -2060,6 +2082,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetUiScale(JNIEnv*, jcl
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     r->uiScale = scale > 0.f ? scale : 1.f;
 }
 
@@ -2069,6 +2092,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetSlots(JNIEnv* env, j
     auto* r = fromHandle(h);
     if (!r || !arr) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     jsize n = env->GetArrayLength(arr);
     jfloat* p = env->GetFloatArrayElements(arr, nullptr);
     for (int i = 0; i < 4 && (i * 8 + 7) < n; ++i) {
@@ -2091,6 +2115,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetStack(JNIEnv* env, j
     auto* r = fromHandle(h);
     if (!r || !arr) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     jsize n = env->GetArrayLength(arr);
     jint* p = env->GetIntArrayElements(arr, nullptr);
     r->stackCount = 0;
@@ -2107,6 +2132,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetPlates(JNIEnv* env, 
     auto* r = fromHandle(h);
     if (!r || !arr) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     jsize n = env->GetArrayLength(arr);
     jfloat* p = env->GetFloatArrayElements(arr, nullptr);
     r->plateCount = std::min((uint32_t)(n / 9), kMaxPlates);
@@ -2132,6 +2158,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetIre(JNIEnv* env, jcl
     auto* r = fromHandle(h);
     if (!r || !arr || !r->ire.mapped) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     jsize n = std::min(256, env->GetArrayLength(arr));
     jfloat* p = env->GetFloatArrayElements(arr, nullptr);
     memcpy(r->ire.mapped, p, n * 4);
@@ -2149,6 +2176,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetCube(
     auto* r = fromHandle(h);
     if (!r || slot < 0 || slot > 2) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     auto& c = r->cube[slot];
     if (!rgba || width < 2 || height < 2 || cubeSize < 2.f) {
         c.rgba.clear();
@@ -2179,6 +2207,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedFlags(
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     r->lutSize = lutSize;
     r->limitsOn = limitsOn;
     r->splitOn = splitOn;
@@ -2198,6 +2227,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCopyHisto(JNIEnv* env, 
     auto* r = fromHandle(h);
     if (!r || !out || !r->histo.mapped) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     jsize n = std::min(1024, env->GetArrayLength(out));
     env->SetIntArrayRegion(out, 0, n, reinterpret_cast<jint*>(r->histo.mapped));
 }
@@ -2207,6 +2237,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetNeedTap(JNIEnv*, jcl
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return;
     r->needTap = on ? 1 : 0;
 }
 
@@ -2217,6 +2248,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCopyTap(JNIEnv* env, jc
     const jint need = (jint)(kTapW * kTapH * 4);
     if (!r || !out || !r->staging.mapped) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return JNI_FALSE;
     if (env->GetArrayLength(out) < need) return JNI_FALSE;
     env->SetByteArrayRegion(out, 0, need, reinterpret_cast<jbyte*>(r->staging.mapped));
     return JNI_TRUE;

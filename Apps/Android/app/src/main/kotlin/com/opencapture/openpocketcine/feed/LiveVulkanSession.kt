@@ -37,12 +37,13 @@ internal class LiveVulkanSession(
             Thread(runnable, "opc.vk.scope").apply { isDaemon = true }
         }
     private val sampleBusy = AtomicBoolean(false)
-    private val handle = if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L
+    private val lifetime =
+        VulkanRendererLifetime(if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L)
     private val slots = FloatArray(GpuLiveLayout.SLOT_STRIDE * 4)
     private val plates = AtomicReference(FloatArray(0))
     private val histo = IntArray(1024)
-    private var reader: ImageReader? = null
-    private var held: Image? = null
+    @Volatile private var reader: ImageReader? = null
+    @Volatile private var held: Image? = null
     private val started = AtomicBoolean(false)
     val framesPresented = AtomicInteger(0)
     private val cubeSentinel = Any()
@@ -53,16 +54,17 @@ internal class LiveVulkanSession(
     @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
     private var lastSampleNs = 0L
-    @Volatile var windowReady = false
-        private set
+    val windowReady: Boolean
+        get() = lifetime.windowReady
 
     val isReady: Boolean
-        get() = handle != 0L
+        get() = lifetime.isReady
 
     fun attachWindow(surface: Surface, width: Int, height: Int) {
+        val handle = lifetime.liveHandle()
         if (handle == 0L) return
         val ok = OpcVulkan.nativeAttachWindow(handle, surface, width, height)
-        windowReady = ok
+        lifetime.markWindowAttached(ok)
         if (!ok) {
             Log.w(TAG, "swapchain attach failed")
             onFailed()
@@ -72,6 +74,7 @@ internal class LiveVulkanSession(
     }
 
     fun resize(width: Int, height: Int) {
+        val handle = lifetime.liveHandle()
         if (handle == 0L) return
         OpcVulkan.nativeResize(handle, width, height)
     }
@@ -86,21 +89,25 @@ internal class LiveVulkanSession(
         val w = width.coerceAtLeast(2)
         val h = height.coerceAtLeast(2)
         if (w == sourceW && h == sourceH) {
-            reader?.surface?.let { onDecoderSurface(it) }
+            if (lifetime.liveHandle() != 0L) {
+                reader?.surface?.let { onDecoderSurface(it) }
+            }
             return
         }
         sourceW = w
         sourceH = h
         imageHandler.post {
+            if (lifetime.liveHandle() == 0L) return@post
             held?.close()
             held = null
             reader?.close()
             reader = null
-            if (windowReady) ensureReader()
+            if (lifetime.windowReady) ensureReader()
         }
     }
 
     fun setFeedRect(x: Float, y: Float, w: Float, h: Float) {
+        val handle = lifetime.liveHandle()
         if (handle == 0L) return
         feedW = w
         feedH = h
@@ -109,6 +116,7 @@ internal class LiveVulkanSession(
 
     fun setPlates(packed: FloatArray) {
         plates.set(packed)
+        val handle = lifetime.liveHandle()
         if (handle != 0L) OpcVulkan.nativeSetPlates(handle, packed)
     }
 
@@ -125,6 +133,7 @@ internal class LiveVulkanSession(
         uiScale: Float = 1f,
         pictureMirrored: Boolean = assist.isVisible(LiveAssistTool.MIRROR),
     ) {
+        val handle = lifetime.liveHandle()
         if (handle == 0L) return
         lastPlan = plan
         OpcVulkan.nativeSetUiScale(handle, uiScale)
@@ -179,11 +188,14 @@ internal class LiveVulkanSession(
         for (index in 0 until 4) {
             GpuLiveLayout.packSlot(slots, index, false, 0f, 0f, 0f, 0f, 0, 0f)
         }
+        val handle = lifetime.liveHandle()
+        if (handle == 0L) return
         OpcVulkan.nativeSetSlots(handle, slots)
         OpcVulkan.nativeSetStack(handle, intArrayOf())
     }
 
     fun copyHistogram(): IntArray {
+        val handle = lifetime.liveHandle()
         if (handle == 0L) return histo
         OpcVulkan.nativeCopyHisto(handle, histo)
         return histo
@@ -195,6 +207,8 @@ internal class LiveVulkanSession(
         last: Any?,
         commit: (Any?) -> Unit,
     ) {
+        val handle = lifetime.liveHandle()
+        if (handle == 0L) return
         if (cube === last) return
         if (cube == null) {
             OpcVulkan.nativeSetCube(handle, slot, null, 0, 0, 0f)
@@ -213,26 +227,46 @@ internal class LiveVulkanSession(
     }
 
     fun detachWindow() {
-        windowReady = false
+        lifetime.markWindowDetached()
+        val handle = lifetime.liveHandle()
+        if (handle != 0L) OpcVulkan.nativeDetachWindow(handle)
     }
 
     fun release() {
-        windowReady = false
-        held?.close()
-        held = null
-        reader?.close()
-        reader = null
-        if (handle != 0L) OpcVulkan.nativeDestroy(handle)
+        val handle = lifetime.beginRelease()
+        reader?.setOnImageAvailableListener(null, null)
+        imageHandler.post {
+            held?.close()
+            held = null
+            reader?.close()
+            reader = null
+        }
         imageThread.quitSafely()
+        try {
+            imageThread.join()
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        sampleExecutor.shutdown()
+        if (handle != 0L) OpcVulkan.nativeDestroy(handle)
     }
 
     private fun ensureReader() {
-        if (reader != null || handle == 0L) return
+        if (reader != null || lifetime.liveHandle() == 0L) return
         val next = ImageReader.newInstance(sourceW, sourceH, ImageFormat.PRIVATE, 5)
         reader = next
         next.setOnImageAvailableListener(
             { rdr ->
                 val image = rdr.acquireLatestImage() ?: return@setOnImageAvailableListener
+                if (!lifetime.canSubmit()) {
+                    image.close()
+                    return@setOnImageAvailableListener
+                }
+                val handle = lifetime.liveHandle()
+                if (handle == 0L) {
+                    image.close()
+                    return@setOnImageAvailableListener
+                }
                 val hb = image.hardwareBuffer
                 if (hb == null) {
                     image.close()
@@ -269,7 +303,7 @@ internal class LiveVulkanSession(
                 held = image
                 if (!ok) {
                     if (takeTap) sampleBusy.set(false)
-                    main.post(onFailed)
+                    if (lifetime.canSubmit()) main.post(onFailed)
                     return@setOnImageAvailableListener
                 }
                 framesPresented.incrementAndGet()

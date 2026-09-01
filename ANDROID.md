@@ -65,7 +65,10 @@ a forever skip after a SoftAP flap.
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
-`GL_TEXTURE_EXTERNAL_OES` is the fallback.
+`GL_TEXTURE_EXTERNAL_OES` is the fallback. `LiveVulkanSession.release` drops the
+ImageReader listener, joins `opc.vk.img`, then `nativeDestroy`. `nativeSubmit`
+is a no-op after window detach or destroy — no `vkCreateImage` / present on a
+dead swapchain (Play Vitals #186).
 
 ### HUD glass
 

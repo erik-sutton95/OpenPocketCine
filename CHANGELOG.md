@@ -148,6 +148,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live Vulkan: `nativeSubmit` is a no-op after window detach or
+  session `release()`, and `release()` joins the ImageReader thread before
+  destroying the device. Leaving live view no longer races Adreno
+  `vkCreateImage` / present on a torn-down swapchain (Play Vitals #186).
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —
