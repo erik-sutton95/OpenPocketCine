@@ -42,7 +42,10 @@ public struct HevcDepacketizer {
             lastPosition = nil
         }
         currentFrame = frameNo
-        if let last = lastPosition, position != last + 1 { corrupt = true }  // lost / reordered fragment
+        if let last = lastPosition {
+            if position == last { return completed }  // UDP dup — do not mark the AU corrupt
+            if position != last + 1 { corrupt = true }  // lost / reordered fragment
+        }
         lastPosition = position
         buffer.append(contentsOf: payload[20...])
         return completed

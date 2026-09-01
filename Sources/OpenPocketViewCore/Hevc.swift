@@ -8,11 +8,17 @@ public enum Hevc {
 
     // Named types we care about.
     public static let vps = 32, sps = 33, pps = 34
-    public static let idr = 20  // IDR_N_LP — the Pocket's keyframe slice
+    public static let idr = 20  // IDR_N_LP
+    /// BLA_W_LP — Pocket 4 / 4 Pro live GOP start is often this, not type 20.
+    public static let blaWLP = 16
+    public static let craNut = 21
     public static let djiMarker = 63  // DJI's private per-frame marker (`00 00 01 ff …`)
     public static func isVCL(_ t: Int) -> Bool { t <= 31 }  // 0..31 = coded slice NALs
+    /// HEVC IRAP pictures (BLA 16–18, IDR 19–20, CRA 21). Holding IDR for type
+    /// 20 only froze the canvas on a live BLA GOP (`feed: freeze`, UDP young).
+    public static func isIRAP(_ t: Int) -> Bool { (16...21).contains(t) }
     public static func isKeyframeNal(_ t: Int) -> Bool {
-        t == vps || t == sps || t == pps || t == idr
+        t == vps || t == sps || t == pps || isIRAP(t)
     }
 
     /// UDP-queue pending cap must not drop the AU that latches format.

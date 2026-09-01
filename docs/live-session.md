@@ -116,7 +116,9 @@ Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
 decoder from VPS/SPS/PPS (`0x40/0x42/0x44`) or Nano AVC SPS/PPS (`0x67/0x68`).
 Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 `nal_ref_idc=1`) must not latch AVC — that threw `MediaCodec.configure` and
-left Waiting for live view up.
+left Waiting for live view up. Pocket IRAP is often **BLA_W_LP (16)**
+(`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
+IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 
 ## Foreground / SoftAP flap
 

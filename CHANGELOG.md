@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Pocket live GOP is often HEVC BLA_W_LP (NAL 16), not only IDR_N_LP (20).
+  iOS IDR hold now releases on IRAP 16–21 so a live BLA picture is not
+  frozen while UDP stays young. Duplicate UDP fragments no longer mark
+  the whole AU corrupt.
+
 - One live-repair Task at a time: do not cancel an in-flight UDP rebuild
   (the cancelled body still force-enabled after `await`). Mid-session
   `still holding for IDR` extra `0x09/0xa8` is gone — `FeedWatchdog.tick`
