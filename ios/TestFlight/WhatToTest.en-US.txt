@@ -13,6 +13,7 @@ Fixes
 - Head tracking no longer bobs past where you look and swings back. Turn fast, stop — the gimbal should arrive once and hold.
 - Turning your head 20–30°, then nodding, tilts straight up and down. It used to drag diagonally.
 - Rapid look-pause-look gestures no longer freeze the live picture. The stick now holds through short pauses instead of re-grabbing.
+- With LUT, waveform, peaking, or Face AF on, zooming, changing the recording format, or the D-Log2 to D-Log hop no longer freezes the picture while the HUD keeps running. The last picture is kept while the decoder catches up.
 
 What to test
 
@@ -20,3 +21,4 @@ What to test
 - Connect a DualSense (or any extended gamepad). Left stick should move the gimbal. Cross records. Circle recenters. Square does 180. Triangle tracks a face. L1/R1 jump zoom. L2/R2 hold-to-zoom. D-pad ISO and shutter. Push into a tilt or pan stop — one buzz, not a continuous rumble. Haptics off should be silent. Unplug should rest the stick and toast disconnected.
 - On Pocket 4 Pro in D-Log2 (idle, not recording): press R2 or pinch. COLOR should switch to D-Log first, then the picture should zoom. The chip must not run ahead of the lens.
 - Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.
+- Go live with LUT and waveform on. Zoom in and out, switch the recording format on the camera body, and hop D-Log2 to D-Log. The picture should keep moving; a frozen picture with live timecode is a bug.
