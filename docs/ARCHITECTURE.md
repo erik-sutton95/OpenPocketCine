@@ -49,6 +49,7 @@ SDK). Both apps must call the same state machines:
 | Drop storm, bounded reconnect | `SessionRecovery` | platform BLE rescan + SoftAP rejoin |
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`; Android JNI |
+| Diagnostics redaction and report shape | `PrivacyRedactor`, `DiagnosticReport` | iOS `DiagnosticCenter` (os.Logger, MetricKit, screenshot paste); Android `diagnostics/DiagnosticCenter` (logcat + share) |
 
 Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering,
 storage, and UI. Do not import SwiftUI, UIKit, Android, or Compose into the core.

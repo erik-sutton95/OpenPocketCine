@@ -520,6 +520,24 @@ class LiveViewEnablePolicyTest {
                 sinceEnableMs = 2_000,
             ),
         )
+        assertTrue(
+            LiveViewEnablePolicy.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat = false,
+                sinceEnableMs = 2_000,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat = true,
+                sinceEnableMs = 2_000,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat = false,
+                sinceEnableMs = 8_000,
+            ),
+        )
     }
 
     @Test

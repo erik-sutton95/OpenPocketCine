@@ -289,6 +289,17 @@ import Testing
             !CameraSoftAP.shouldPokeRecordingFormat(
                 needsPoke: false, alreadyPoked: false, isRecording: false,
                 hadVideo: false, enableSends: 1, secondsSinceLastEnable: 2))
+        #expect(
+            CameraSoftAP.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat: false, secondsSinceLastEnable: 2),
+            "wait for camcap before burning the one-shot poke")
+        #expect(
+            !CameraSoftAP.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat: true, secondsSinceLastEnable: 2))
+        #expect(
+            !CameraSoftAP.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat: false, secondsSinceLastEnable: 8),
+            "camcap never arrived — poke the fallback")
     }
 
     /// A keepalive / handshake leftover rebuild must not eat the first enable.

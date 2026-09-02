@@ -72,6 +72,13 @@ Write for camera operators:
 `scripts/ios-release-notes-check.sh` enforces the format. Pull-request CI also verifies that the
 notes file changed when iOS production paths changed.
 
+TestFlight screenshot feedback cannot carry an attached file (Apple has no
+API for that). The app copies a redacted compact report to the pasteboard
+when the tester screenshots; they paste it into the feedback comment.
+Crashes still go to App Store Connect automatically. Full report:
+Operator Setup → System → Share Diagnostics. Contract:
+[`diagnostics.md`](diagnostics.md).
+
 Preview locally:
 
 ```bash

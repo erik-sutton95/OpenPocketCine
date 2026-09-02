@@ -21,6 +21,26 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>OSLogPreferences</key>
+	<dict>
+		<key>com.opencapture.openpocketcine</key>
+		<dict>
+			<key>DEFAULT-OPTIONS</key>
+			<dict>
+				<key>Level</key>
+				<dict>
+					<key>Enable</key>
+					<string>Info</string>
+					<key>Persist</key>
+					<string>Info</string>
+				</dict>
+			</dict>
+		</dict>
+	</dict>
 	<key>GCSupportsControllerUserInteraction</key>
 	<true/>
 	<key>NSMotionUsageDescription</key>

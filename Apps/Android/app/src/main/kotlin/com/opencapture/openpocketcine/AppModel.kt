@@ -14,6 +14,7 @@ import com.opencapture.openpocketcine.pairing.SavedCameras
 import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import com.opencapture.openpocketcine.session.VideoFormat
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,9 @@ import kotlinx.coroutines.launch
 
 class AppModel(context: Context) {
     private val appContext = context.applicationContext
+    init {
+        DiagnosticCenter.install(appContext)
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SharedPreferencesSavedCameraStore(context)
     val session = PocketCameraSession(context)

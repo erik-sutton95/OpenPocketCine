@@ -367,6 +367,12 @@ struct AppRoot: View {
         .environment(\.font, LiveType.text(16))
         .preferredColorScheme(.dark)
         .onAppear {
+            DiagnosticCenter.shared.install()
+            AppModelDiagnosticsAnchor.model = model
+            DiagnosticCenter.shared.onCopiedForTestFlight = { [weak model] in
+                model?.session.controlNote =
+                    "Diagnostics copied — paste into TestFlight feedback"
+            }
             model.prepareStartup()
             UIApplication.shared.isIdleTimerDisabled = model.keepScreenAwake
         }

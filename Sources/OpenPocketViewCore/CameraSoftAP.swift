@@ -347,6 +347,16 @@ extension CameraSoftAP {
         return secondsSinceLastEnable >= firstPictureResendWhileLive
     }
 
+    /// Do not SET a guessed 4K 30 (and burn the one-shot poke) before
+    /// `cam_video_param_v2` / `camcap_video_format` land. After IDR grace
+    /// poke anyway — camcap may never arrive.
+    public static func shouldDeferRecordingFormatPoke(
+        hasKnownRecordingFormat: Bool,
+        secondsSinceLastEnable: TimeInterval
+    ) -> Bool {
+        !hasKnownRecordingFormat && secondsSinceLastEnable < firstPictureIDRGrace
+    }
+
     /// After a UDP rebuild, first picture must put `0x09/0xa8` on the new
     /// socket. After live video, the enable already rode with the rebuild.
     public static func shouldForceEnableAfterUDPRebuild(hadVideo: Bool) -> Bool {

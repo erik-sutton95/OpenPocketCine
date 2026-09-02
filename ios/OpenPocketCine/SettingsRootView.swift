@@ -51,6 +51,8 @@ enum SettingsHelpCopy {
         "Removes downloaded clip files from this phone. The clip list stays so you can cache them again from the camera."
     static let cacheFullResolution =
         "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original — connect the camera if it is not cached."
+    static let shareDiagnostics =
+        "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Take a screenshot for TestFlight and paste the copied text into the feedback."
 }
 
 enum OperatorSettingsTab: String, CaseIterable, Identifiable {
@@ -82,6 +84,7 @@ struct SettingsRootView: View {
     @State private var showLUTPicker = false
     @State private var expandedDisp: PocketDispMode?
     @State private var confirmClearCache = false
+    @State private var diagnosticsShare: SharePayload?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -135,6 +138,9 @@ struct SettingsRootView: View {
         }
         .sheet(isPresented: $showLUTPicker) {
             LUTPicker(assist: model.assist)
+        }
+        .sheet(item: $diagnosticsShare) { payload in
+            ActivityShareView(items: [payload.url])
         }
     }
 
@@ -886,6 +892,15 @@ struct SettingsRootView: View {
                     if let url = OpenPocketCineLinks.support { openURL(url) }
                 }
             }
+            SettingsInlineRow(title: "Share Diagnostics", help: SettingsHelpCopy.shareDiagnostics) {
+                SettingsActionPill(title: "Share") {
+                    DiagnosticCenter.shared.copyCompactSummaryForTestFlight(
+                        session: model.session)
+                    if let url = DiagnosticCenter.shared.writeReport(session: model.session) {
+                        diagnosticsShare = SharePayload(url: url)
+                    }
+                }
+            }
             SettingsInlineRow(title: "Report a Problem", help: SettingsHelpCopy.reportHelp) {
                 SettingsActionPill(title: "Report") {
                     if let url = OpenPocketCineLinks.reportProblem { openURL(url) }
@@ -956,6 +971,21 @@ struct SettingsRootView: View {
         let build = info?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
     }
+}
+
+private struct SharePayload: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ActivityShareView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 /// One switch per cinema view-assist tool — the DISP 2 keep list.

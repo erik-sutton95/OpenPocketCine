@@ -100,11 +100,13 @@ while HUD and gimbal keep moving.
 
 **Pocket 3 first picture:** the body boots 4K 25/30, HUD and gimbal work,
 and the well stays black until the operator SETs 1080 then 4K
-(`0x02/0x18`). Same-tab FORMAT is a no-op, so that round-trip is the
-encoder kick. After one failed enable with no picture, first-picture
-recovery does that SET once, restores the boot format, then one
-`0x09/0xa8`. Pocket 4 / 4 Pro stay on the enable / UDP ladder — do not
-GOP-cut them. (#147)
+(`0x02/0x18`) or changes COLOR. Same-tab FORMAT is a no-op, so that
+round-trip is the encoder kick. After one failed enable with no picture,
+first-picture recovery waits for `cam_video_param_v2` /
+`camcap_video_format`, SETs a **legal** other pair (not a guessed 4K 30),
+restores the boot format, then one `0x09/0xa8`. One shot; do not mark it
+done before the SET leaves. Pocket 4 / 4 Pro stay on the enable / UDP
+ladder — do not GOP-cut them. (#147, #221)
 
 Media is pktType `0x02`. Disconnect has no live-stop — leftover GOP P-frames
 during handshake are expected until this pair starts a clean VPS.

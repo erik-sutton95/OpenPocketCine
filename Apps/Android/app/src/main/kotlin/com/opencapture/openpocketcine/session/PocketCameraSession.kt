@@ -850,7 +850,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun startFirstPictureFormatPoke() {
         if (firstPictureFormatPokeJob?.isActive == true) return
-        firstPictureFormatPoked = true
         firstPictureFormatPokeJob =
             scope.launch {
                 try {
@@ -865,11 +864,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val live = _status.value
         if (live.isRecording || isBrowsingMedia) return
         val original = VideoFormat.firstPictureOriginal(live)
-        val kick = VideoFormat.firstPictureEncoderKick(original)
+        val kick = VideoFormat.firstPictureEncoderKick(original, live.availableVideoFormats)
+        firstPictureFormatPoked = true
+        val legal = live.availableVideoFormats.isEmpty() || kick in live.availableVideoFormats
         Log.i(
             TAG,
             "live: Pocket 3 first-picture format poke ${original.chipLabel} → " +
-                "${kick.chipLabel} → ${original.chipLabel}",
+                "${kick.chipLabel} → ${original.chipLabel} legal=${if (legal) 1 else 0} " +
+                "formats=${live.availableVideoFormats.size}",
         )
         setVideoFormat(kick)
         waitForRecordingFormatPokeSettle()
@@ -894,11 +896,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun recoverFirstPictureIfNeeded(now: Long, packets: Int) {
         if (datalink?.isRebuilding == true || feedRecoveryJob != null) return
-        when (
+        val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
+        val step =
             LiveViewEnablePolicy.firstPictureStep(
                 videoPackets = packets,
                 enableSends = liveViewEnableSends,
-                sinceEnableMs = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest,
+                sinceEnableMs = sinceEnable,
                 videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it },
                 sinceRebuildMs = datalink?.lastRebuildAt?.let { now - it },
                 needsRecordingFormatPoke =
@@ -910,11 +913,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     decoder.lastPresentedAt?.let { now - it }?.let { it >= 0 && it < LiveViewEnablePolicy.STALL_MS }
                         == true,
             )
-        ) {
-            LiveViewEnablePolicy.FirstPictureStep.WAIT ->
-                logFirstPicture(now, packets)
+        val live = _status.value
+        val deferPoke =
+            step == LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT &&
+                LiveViewEnablePolicy.shouldDeferRecordingFormatPoke(
+                    hasKnownRecordingFormat = VideoFormat.hasKnownRecordingFormat(live),
+                    sinceEnableMs = sinceEnable,
+                )
+        logFirstPicture(now, packets, step, deferPoke)
+        when (step) {
+            LiveViewEnablePolicy.FirstPictureStep.WAIT -> {}
             LiveViewEnablePolicy.FirstPictureStep.POKE_RECORDING_FORMAT -> {
-                startFirstPictureFormatPoke()
+                if (!deferPoke) startFirstPictureFormatPoke()
             }
             LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE -> {
                 // Do not route through sendRecoverEnable — inPlayback / decoder-ready
@@ -1066,22 +1076,36 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         )
     }
 
-    private fun logFirstPicture(now: Long, packets: Int) {
-        val signature = "$packets.$rawAccessUnits.${decoder.hasFormat}.$liveViewEnableSends"
+    private fun logFirstPicture(
+        now: Long,
+        packets: Int,
+        step: LiveViewEnablePolicy.FirstPictureStep,
+        deferred: Boolean,
+    ) {
+        val live = _status.value
+        val original = VideoFormat.firstPictureOriginal(live)
+        val kick = VideoFormat.firstPictureEncoderKick(original, live.availableVideoFormats)
+        val known = VideoFormat.hasKnownRecordingFormat(live)
+        val legal = live.availableVideoFormats.isEmpty() || kick in live.availableVideoFormats
+        val needs = connectedCamera?.model?.needsFirstPictureFormatPoke == true
+        val signature =
+            "${step.name}.$deferred.$needs.$firstPictureFormatPoked.$known.$packets.$liveViewEnableSends.${decoder.hasFormat}"
         if (signature == lastFirstPictureSignature && now - lastFirstPictureLogAt < 3_000L) return
         lastFirstPictureSignature = signature
         lastFirstPictureLogAt = now
         val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
-        val statusAge = datalink?.lastStatusAt?.let { now - it }
+        val presented = decoder.lastPresentedAt?.let { now - it }
         Log.i(
             TAG,
-            "live: first-picture videoPkts=$packets aus=$rawAccessUnits " +
-                "lastVideo=${videoAge ?: -1}ms lastStatus=${statusAge ?: -1}ms " +
-                "enables=$liveViewEnableSends format=${if (decoder.hasFormat) 1 else 0} " +
-                "idrHold=${if (decoder.awaitingIdr) 1 else 0} " +
-                "bound=${if (joiner.isProcessBound()) 1 else 0} " +
-                "fg=${if (needsForegroundRecover) 1 else 0} " +
-                "hold=${if (holdsMonitor) 1 else 0}",
+            "feed: first-picture step=${step.name} defer=${if (deferred) 1 else 0} " +
+                "needsPoke=${if (needs) 1 else 0} poked=${if (firstPictureFormatPoked) 1 else 0} " +
+                "inFlight=${if (firstPictureFormatPokeJob?.isActive == true) 1 else 0} " +
+                "known=${if (known) 1 else 0} model=${connectedCamera?.model?.name ?: "none"} " +
+                "boot=${original.chipLabel} kick=${kick.chipLabel} legal=${if (legal) 1 else 0} " +
+                "formats=${live.availableVideoFormats.size} enables=$liveViewEnableSends " +
+                "videoPkts=$packets lastVideo=${videoAge ?: -1}ms presented=${presented ?: -1}ms " +
+                "decoderFmt=${if (decoder.hasFormat) 1 else 0} " +
+                "idrHold=${if (decoder.awaitingIdr) 1 else 0}",
         )
     }
 
@@ -3668,6 +3692,18 @@ internal object LiveViewEnablePolicy {
             if (alreadySettled) return@coreFlag false
             presentedAgeMs == null || presentedAgeMs >= STALL_MS
         }
+
+    fun shouldDeferRecordingFormatPoke(
+        hasKnownRecordingFormat: Boolean,
+        sinceEnableMs: Long,
+    ): Boolean =
+        coreFlag(
+            "shouldDeferRecordingFormatPoke",
+            "{" +
+                "\"hasKnownRecordingFormat\":$hasKnownRecordingFormat," +
+                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}" +
+                "}",
+        ) { !hasKnownRecordingFormat && sinceEnableMs < GOP_GRACE_MS }
 
     fun shouldMarkFirstPictureSettled(presentedAgeMs: Long?, sinceEnableMs: Long): Boolean =
         coreFlag(
