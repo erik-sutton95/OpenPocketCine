@@ -68,7 +68,12 @@ class CameraApJoiner(context: Context) {
     }
 
     fun isProcessBound(): Boolean =
-        synchronized(lock) { boundNetwork != null }
+        synchronized(lock) {
+            isPathReady(
+                hasBoundNetwork = boundNetwork != null,
+                inReassociationGrace = reassociationGrace != null,
+            )
+        }
 
     /**
      * Phone IPv4 on the camera AP (`192.168.2.2…254`). iOS
@@ -287,6 +292,16 @@ class CameraApJoiner(context: Context) {
         private const val PRE_JOIN_SCAN_WAIT_MILLIS: Long = 3_000L
         /** Samsung often replaces the SoftAP Network a few seconds after join. */
         private const val REASSOCIATION_GRACE_MS: Long = 8_000L
+
+        /**
+         * SoftAP `onLost` nulls the [Network] object immediately. Process bind
+         * stays until grace expires so UDP cannot hop onto home Wi-Fi.
+         * Handshake / rebuild must treat that window as path-ready (#189).
+         */
+        internal fun isPathReady(
+            hasBoundNetwork: Boolean,
+            inReassociationGrace: Boolean,
+        ): Boolean = hasBoundNetwork || inReassociationGrace
 
         /**
          * Phone address on the camera AP. `.1` is the camera; `.0` / `.255` are

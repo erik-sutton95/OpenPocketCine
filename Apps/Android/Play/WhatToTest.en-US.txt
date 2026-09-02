@@ -7,6 +7,7 @@ New and changed
 
 Fixes
 
+- Connecting or recovering live view should not close the app if the camera Wi-Fi drops or the phone jumps back to home Wi-Fi. You should see a retry or return to pairing.
 - On a Nano, Photo now actually switches instead of staying on Video. Video back to Photo should ack and the shutter should take a still, not start a clip.
 - Live view should come up in a couple of seconds after Wi-Fi joins, not sit on Waiting for live view.
 - Live view should stay up while you pan or tilt. A frozen picture with a live timecode was over-repair. Stick notify now rides the ACK thread like iOS.
@@ -18,3 +19,4 @@ What to test
 - Pair a Nano, go live, open Operator Setup, Controls. Switch Video to Photo and back. The body should follow; Photo should take a still.
 - Record a short take in Video, then open it in the library. Share should send the original file, not a small preview.
 - Go live, open the library or Operator Setup, come back. Repeat a few times and rotate the phone. The app should stay up.
+- Pair a Pocket, go live, then turn camera Wi-Fi off and on or let the phone hop to home Wi-Fi. The app should retry or return to pairing — it must not close.

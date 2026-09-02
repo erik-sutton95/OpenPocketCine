@@ -59,7 +59,9 @@ How this shell implements [`docs/PARITY.md`](docs/PARITY.md). Contract language 
 `bindProcessToNetwork` then UDP `0.0.0.0:0` after `Network.bindSocket`. MediaCodec
 uses wall-clock PTS and `KEY_LOW_LATENCY`; do not pace at 30 fps. Cached Wi-Fi
 creds sit in private prefs, not saved-camera JSON. `holdsMonitor` must not latch
-a forever skip after a SoftAP flap.
+a forever skip after a SoftAP flap. `isProcessBound` stays true while
+reassociation grace is armed (the `Network` object may already be null).
+Handshake miss is `DatalinkError.NoHandshake`, not Kotlin `error()`.
 
 ### Live picture
 
