@@ -136,15 +136,16 @@ public enum GlamourEffect {
 ///
 /// Osmosis §14 labeled SET `04` = 100–800, `05` = 100–1600. Pocket 4 Pro GET
 /// replies were `07` and `09`. `camcap_iso_auto_max` publishes the full
-/// ceiling list plus the color-mode base (100 or 400):
+/// ceiling list plus the color-mode base (100 or 400 on 4 Pro):
 ///
-/// - Normal / HDR: `02 0b 00 08 02…09 64 00` → `02`–`09`, base 100
+/// - Normal / HDR: `02 0b 00 08 02…09 64 00` → `02`–`09`, base 100 (4 Pro)
 /// - D-Log: `02 07 00 04 04…07 90 01` → `04`–`07`, base 400
 /// - D-Log2: `01 01 00 00` → no Auto
 ///
-/// Ceiling = `100 << (raw − 1)`. Same raw, different base — D-Log `04` is
-/// 400–800, not a second opcode. Do not treat raw as `IsoIndex`
-/// (`IsoIndex` `04` is 200).
+/// Ceiling = `100 << (raw − 1)`. Floor is the body: Pocket 3 / Pocket 4
+/// Rec.709 is 50 (#180 — SET `03` labeled 100–400 is 50–400 on the camera).
+/// Same raw, different base — D-Log `04` is 400–800, not a second opcode.
+/// Do not treat raw as `IsoIndex` (`IsoIndex` `04` is 200).
 public enum IsoLimit: UInt8, CaseIterable, Sendable {
     case max200 = 0x02
     case max400 = 0x03
@@ -492,12 +493,16 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
     /// D-Log2 has no Auto ISO — even if `IsoLimit` grows, this stays false.
     public var offersIsoAuto: Bool { self != .dLog2 }
 
-    /// `camcap_iso_auto_max` base: 100 Normal/HDR, 400 D-Log. nil = no Auto.
-    public var isoAutoBase: Int? {
+    /// `camcap_iso_auto_max` base when the body is unknown: 100 Normal/HDR /
+    /// D-Log M (Pocket 4 Pro capture), 400 D-Log. nil = no Auto. Prefer
+    /// `isoAutoBase(for:)` so Pocket 3 / Pocket 4 Rec.709 labels start at 50.
+    public var isoAutoBase: Int? { isoAutoBase(for: nil) }
+
+    public func isoAutoBase(for model: CameraModel?) -> Int? {
         switch self {
         case .dLog2: nil
         case .dLog: 400
-        case .normal, .hdr, .normal10, .dLogM: 100
+        case .normal, .hdr, .normal10, .dLogM: model?.isoAutoRangeFloor ?? 100
         }
     }
 
@@ -513,8 +518,10 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         }
     }
 
-    public var isoAutoLabels: [String] {
-        guard let base = isoAutoBase else { return [] }
+    public var isoAutoLabels: [String] { isoAutoLabels(for: nil) }
+
+    public func isoAutoLabels(for model: CameraModel?) -> [String] {
+        guard let base = isoAutoBase(for: model) else { return [] }
         return isoAutoLimits.map { $0.label(base: base) }
     }
 

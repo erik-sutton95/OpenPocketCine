@@ -1072,7 +1072,7 @@ final class CameraSession {
     func setIsoLimit(_ limit: IsoLimit) {
         let previous = status.isoLimit
         status.isoLimit = limit
-        let base = status.colorMode?.isoAutoBase ?? 100
+        let base = (status.colorMode ?? .normal).isoAutoBase(for: connectedCamera?.model) ?? 100
         fireCamera(
             Commands.setIsoLimit(limit), name: "ISO \(limit.label(base: base))",
             onFail: { [weak self] in self?.status.isoLimit = previous },
@@ -3402,7 +3402,7 @@ final class CameraSession {
             flowHealthy: datalink?.isFlowHealthy ?? false,
             pathReady: WiFiJoiner.isCameraPathReady(),
             hasFormat: decoder.hasFormat,
-            decoderFailed: decoder.decoderErrors > 0 || decoder.displayLayer.status == .failed,
+            decoderFailed: decoder.isDecoderWedged || decoder.displayLayer.status == .failed,
             live: live,
             sawPicture: decoder.lastPresentedAt != nil,
             tcpPokeReady: datalink?.isTcpPokeReady ?? false,

@@ -19,7 +19,10 @@ pattern, not Skip/SKIE:
 3. Gradle `:app:stageSwiftCore` (`just android-core`) builds
    `aarch64-unknown-linux-android29` and stages `libOpenPocketCineAndroid.so`.
    **arm64-v8a only.** Toolchain pin: Swift **6.3.3**.
-4. Kotlin `core-api` wraps JNI. Kotlin does not pack protocol bytes.
+4. Kotlin `core-api` wraps JNI. Kotlin does not pack protocol bytes. Live
+   handshake / first-picture / enable-once policy is `cameraSoftAPDecision` in
+   the Swift facade — a handshake miss is a recoverable session error, not a
+   crash.
 
 Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
 [`ANDROID.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/ANDROID.md).
@@ -32,7 +35,8 @@ Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Zoom must not drop the live
 picture. FORMAT only lists
 `camcap_video_format` pairs. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
-10-bit / D-Log M. The gimbal stick and zoom chip sit together as a cluster in the
+10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
+on Pocket 4 Pro. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. Stick throw is analog with
 an ease-in curve (small push crawls; full throw is fastest). A connected
 game controller's left stick drives the same path. Cross/A records.
@@ -72,7 +76,9 @@ Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 Live picture: Vulkan when the device can init it; GLES fallback. HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
-the last frame on freeze, one live-enable write at a time).
+the last frame on freeze, one live-enable write at a time). Leaving live view,
+opening clips, or rotating must drop the Vulkan swapchain with the window —
+present after that is a skip, not a crash.
 
 Wi-Fi passwords stay in Keystore, not saved-camera JSON. Pairing and live view
 need a **physical** Android phone.

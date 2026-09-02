@@ -268,7 +268,9 @@ class MediaLibraryController(
 
     /**
      * Pull a playable local copy. Prefers the 720p LRF/XRF sidecar even when the
-     * 4K original is already cached for export. Never returns a `/v2` URL.
+     * 4K original is already cached for export. Streams that sidecar to disk
+     * (same as the original fallback) — never a RAM copy. Never returns a `/v2`
+     * URL.
      */
     suspend fun cacheForPlayback(file: MediaFile): File? {
         cache.localProxyFile(file, cameraId)?.let { return it }
@@ -283,9 +285,12 @@ class MediaLibraryController(
                 try {
                     val storage = resolvedStorage(file)
                     withContext(Dispatchers.IO) {
-                        val data = MediaTransfer.fetchBytes(storage, path).first
-                        if (data.isEmpty()) throw MediaTransferError.BadResponse
-                        cache.writeAtomically(data, dest)
+                        MediaTransfer.downloadFile(
+                            storage = storage,
+                            path = path,
+                            dest = dest,
+                            onProgress = { p -> setProgress(file.path, p) },
+                        )
                     }
                     rememberStorage(storage, file.path)
                     clearProgress(file.path)

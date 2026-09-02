@@ -14,7 +14,7 @@ Fixes
 - With LUT, waveform, peaking, or Face AF on, zooming, changing the recording format, or the D-Log2 to D-Log hop no longer freezes the picture while the HUD keeps running.
 - Opening clips or Operator Setup over live view, then going back, keeps the live picture instead of a black well.
 - On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
-- Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad.
+- Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad; tap outside still closes the options.
 
 What to test
 

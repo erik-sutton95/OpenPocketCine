@@ -27,6 +27,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   with 4K max 2×; Nano 1×). Zoom must not drop the live picture. FORMAT only lists `camcap_video_format` pairs.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
+  Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. Stick

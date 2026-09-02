@@ -118,6 +118,14 @@ cancelled `open()` must not publish LIVE (`CameraSoftAP.shouldCommitLiveHandshak
 Process death did that for free; leaving the socket live is why reconnect
 hung on Waiting for live view until the app was killed.
 
+Android Vulkan live present: `surfaceDestroyed` must drop the swapchain and
+`ANativeWindow` (`nativeDetachWindow`) before it returns — presenting after
+that mutex is destroyed aborts in `vkQueuePresentKHR`. `opc.vk.img` must not
+`vkQueuePresentKHR` or `vkCreateImage` once the window is gone.
+`LiveVulkanSession.release` clears the ImageReader listener, joins
+`opc.vk.img`, then `nativeDestroy`. Do not destroy the swapchain on the
+Compose thread while a present is in flight.
+
 ## Decoder latch
 
 Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
@@ -127,6 +135,16 @@ Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 left Waiting for live view up. Pocket IRAP is often **BLA_W_LP (16)**
 (`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
 IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
+
+Same-raster new VPS/SPS (zoom `0xB8`, FORMAT SET, D-Log2 → D-Log hop) keep
+VT **only if** `VTDecompressionSessionCanAcceptFormatDescription` says so.
+A kept session that refuses the new sets fails every frame with no log —
+frozen last picture while UDP, HUD, and the gimbal stay live (LUT / WAVE
+on, #148; 3× hop, #194). On refusal: `feed: VT refused new parameter sets`,
+rebuild VT, keep the picture, no IDR hold (the sets ride the IRAP AU).
+Android MediaCodec takes in-band SPS itself. Async VT decode errors count
+toward `decoderErrors`; `decoderWedged` on the observe line means an error
+**after** the last presented frame, not any error this session.
 
 ## Foreground / SoftAP flap
 
@@ -145,6 +163,14 @@ otherwise handshake miss takes `FAIL` and Kotlin `error()` was an
 uncaught `IllegalStateException` on Android 16 (#189). Handshake miss
 throws typed `DatalinkError.NoHandshake`. SoftAP still up → rebind /
 retry. Path gone → pairing or session recovery, never a process crash.
+
+Android handshake miss throws a recoverable `DatalinkHandshakeException` (same
+copy as iOS `DatalinkError.noHandshake`). Do not `error()` / crash when SoftAP
+`isProcessBound()` is false — `CameraSoftAP.shouldKickAfterHandshakeTimeout`
+decides pairing kick vs retry; feed recovery logs and keeps the last frame.
+`onLost` clears the Network object immediately but `isProcessBound` stays true
+through the 8 s reassociation grace (`bindProcessToNetwork` still pinned).
+One `open()` may take four UDP binds; do not wrap it in a 30 s timeout.
 
 Foreground recover is VT-only while HEVC or DUML status is still on 9004.
 A Control Center peek must not rebuild UDP. After a parked-app rebuild,

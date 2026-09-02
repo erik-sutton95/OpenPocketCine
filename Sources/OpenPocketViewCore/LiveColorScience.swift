@@ -690,10 +690,14 @@ public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     case limits = "Limits"
 }
 
-/// OpenZCine zebra defaults (`AssistConfiguration.Zebra`: highlight 100, midtone 55).
-/// Thresholds are on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
+/// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
+/// Midtone 55 is OpenZCine's (`AssistConfiguration.Zebra`). Highlight is **99**,
+/// not OpenZCine's 100: 100 is the live-tap ceiling byte itself (D-Log2 247),
+/// and the ceiling ratchets to the frame max, so at 100 only that one code
+/// paints. A typical SoftAP D-Log2 shelf is 243–247 (245 ≈ IRE 99.2), so 99
+/// reads "approaching clip" (#136). Operators who saved 100 keep 100.
 public enum LiveZebra {
-    public static let highlightIRE = 100.0
+    public static let highlightIRE = 99.0
     public static let midtoneIRE = 55.0
     /// Half-width of the midtone stripe, in monitor IRE.
     public static let midtoneHalfWidthIRE = 5.0

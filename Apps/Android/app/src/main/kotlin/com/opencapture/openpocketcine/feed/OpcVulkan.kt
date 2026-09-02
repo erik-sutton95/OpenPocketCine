@@ -30,6 +30,9 @@ internal object OpcVulkan {
 
     @JvmStatic external fun nativeAttachWindow(handle: Long, surface: Surface, w: Int, h: Int): Boolean
 
+    /** Drop the swapchain and ANativeWindow. Safe to call from surfaceDestroyed. */
+    @JvmStatic external fun nativeDetachWindow(handle: Long)
+
     @JvmStatic external fun nativeResize(handle: Long, w: Int, h: Int)
 
     @JvmStatic external fun nativeSubmit(handle: Long, buffer: HardwareBuffer): Boolean

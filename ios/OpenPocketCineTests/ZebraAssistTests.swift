@@ -88,7 +88,7 @@ final class ZebraAssistTests: XCTestCase {
         XCTAssertEqual(defaults.unit, .ire)
         XCTAssertTrue(defaults.highlightEnabled)
         XCTAssertTrue(defaults.midtoneEnabled)
-        XCTAssertEqual(defaults.highlightIRE, 100)
+        XCTAssertEqual(defaults.highlightIRE, 99)
         XCTAssertEqual(defaults.midtoneIRE, 55)
         XCTAssertEqual(defaults.highlightColor, .white)
         XCTAssertEqual(defaults.midtoneColor, .amber)
@@ -247,6 +247,24 @@ final class ZebraAssistTests: XCTestCase {
         XCTAssertGreaterThan(rgb.0, rgb.1, "highlight fill stays red-dominant")
     }
 
+    /// #136: WAVE's 100 line is the frame's max channel. A hot sky is blue-led,
+    /// so its Rec.709 luma sits well under the byte WAVE shows at 100. The
+    /// highlight zebra must read the same max channel or it never paints.
+    func testHighlightPaintsTintedHotPixelThatWaveShowsAtCeiling() {
+        let buffer = ScopeTestBuffers.makeFlatBuffer(red: 170, green: 215, blue: 247)
+        let source = CIImage(cvPixelBuffer: buffer)
+        var fx = LiveImageEffects()
+        fx.zebra = true
+        fx.zebraHighlight = true
+        fx.zebraMidtone = false
+        fx.colorMode = .dLog2
+        fx.zebraHighlightIRE = 100
+        let overlay = LiveMonitorCompositor.assistOverlay(from: source, effects: fx)
+        XCTAssertGreaterThan(
+            Self.maxAlpha(overlay), 0.4,
+            "a channel at the live-tap ceiling is clip; luma under it must not hide it")
+    }
+
     func testGPUEffectsReadOverlayHook() {
         var fx = LiveImageEffects()
         fx.zebraHighlight = false
@@ -270,7 +288,7 @@ final class ZebraAssistTests: XCTestCase {
         XCTAssertEqual(assist.zebraOptions, ZebraAssist.Options.default)
         XCTAssertTrue(assist.zebraHighlight)
         XCTAssertTrue(assist.zebraMidtone)
-        XCTAssertEqual(assist.zebraHighlightIRE, 100)
+        XCTAssertEqual(assist.zebraHighlightIRE, 99)
         XCTAssertEqual(assist.zebraMidtoneIRE, 55)
         XCTAssertEqual(assist.zebraHighlightColor, .white)
         XCTAssertEqual(assist.zebraMidtoneColor, .amber)

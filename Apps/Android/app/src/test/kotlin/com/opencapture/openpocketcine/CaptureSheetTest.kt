@@ -154,6 +154,39 @@ class CaptureSheetTest {
     }
 
     @Test
+    fun pocket3IsoAutoRangesStartAt50() {
+        val dash = "\u2013"
+        val expected =
+            listOf(
+                "50${dash}200",
+                "50${dash}400",
+                "50${dash}800",
+                "50${dash}1600",
+                "50${dash}3200",
+                "50${dash}6400",
+                "50${dash}12800",
+                "50${dash}25600",
+            )
+        val normal = CameraStatus(colorMode = CameraCommands.COLOR_NORMAL)
+        val p3 = "Osmo Pocket 3"
+        assertEquals(expected, CaptureLists.isoAutoLabels(normal, p3))
+        assertEquals(IsoLimit.Max400, CaptureLists.isoLimit("50${dash}400", normal, p3))
+        assertEquals(
+            "50${dash}400",
+            CaptureLists.isoAutoLabel(normal.copy(isoLimit = 0x03), p3),
+        )
+        assertEquals("50${dash}200", CaptureLists.isoAutoLabels(normal, "Osmo Pocket 4").first())
+        assertEquals(
+            "100${dash}200",
+            CaptureLists.isoAutoLabels(normal, "Osmo Pocket 4 Pro").first(),
+        )
+        assertEquals(
+            IsoSheetLogic.Command.SetLimit(0x03),
+            IsoSheetLogic.applyDrum("50${dash}400", normal, selectedMode = 0, bodyName = p3),
+        )
+    }
+
+    @Test
     fun evLabelsThirdStopsFromMinus3ToPlus3() {
         val minus = EvComp.MINUS
         val labels = CaptureLists.evLabels

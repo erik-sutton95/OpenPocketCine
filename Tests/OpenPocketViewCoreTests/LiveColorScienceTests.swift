@@ -440,7 +440,9 @@ struct LiveColorScienceTests {
     // MARK: - Zebra (monitor-percent axis, no bisection)
 
     @Test func zebraThresholdsRideMonitorPercent() {
-        #expect(LiveZebra.highlightIRE == 100.0)
+        // 100 is the live-tap ceiling byte itself; the factory highlight sits
+        // one IRE under it so the typical 243–247 D-Log2 shelf paints (#136).
+        #expect(LiveZebra.highlightIRE == 99.0)
         #expect(LiveZebra.midtoneIRE == 55.0)
         for transfer in transfers {
             let clip = ScopeDisplayScale.signalNative(monitorPercent: 100, transfer: transfer)
@@ -451,9 +453,36 @@ struct LiveColorScienceTests {
             #expect(abs(black - transfer.scopeAnchors.black) < 1e-12)
         }
         #expect(LiveColorScience.zebraHighlight(100))
-        #expect(!LiveColorScience.zebraHighlight(99.4))
+        #expect(LiveColorScience.zebraHighlight(99))
+        #expect(!LiveColorScience.zebraHighlight(98.4))
         #expect(LiveColorScience.zebraMidtone(58))
         #expect(!LiveColorScience.zebraMidtone(61))
+    }
+
+    /// #136: a D-Log2 SoftAP take tops out at 243–247. Only the ceiling byte
+    /// itself is IRE 100, so a highlight threshold of 100 misses the shelf.
+    /// The factory default must catch the shelf; 100 must still catch 247.
+    @Test func dlog2ShelfUnderCeilingPaintsAtFactoryHighlight() {
+        ScopeExposureCeiling.reset()
+        let ceiling = ScopeDisplayScale.monitorPercent(247.0 / 255, transfer: .dlog2, iso: 1600)
+        #expect(abs(ceiling - 100) < 0.05)
+        #expect(LiveColorScience.zebraHighlight(ceiling, threshold: 100))
+        #expect(LiveColorScience.zebraHighlight(ceiling))
+        for byte in 245...246 {
+            let shelf = ScopeDisplayScale.monitorPercent(
+                Double(byte) / 255, transfer: .dlog2, iso: 1600)
+            #expect(shelf < 100, "byte \(byte) is under the 100 line")
+            #expect(!LiveColorScience.zebraHighlight(shelf, threshold: 100), "byte \(byte)")
+            #expect(LiveColorScience.zebraHighlight(shelf), "byte \(byte) at factory highlight")
+        }
+        // Rec.709 / HLG: 100 is still encoded peak; 99 is just under it.
+        for transfer in [MonitorTransfer.rec709, .hdr] {
+            let peak = ScopeDisplayScale.signalNative(monitorPercent: 100, transfer: transfer)
+            #expect(abs(peak - 1) < 1e-12)
+            let factory = ScopeDisplayScale.signalNative(
+                monitorPercent: LiveZebra.highlightIRE, transfer: transfer)
+            #expect(factory < 1 && factory > 0.98)
+        }
     }
 
     // MARK: - False colour

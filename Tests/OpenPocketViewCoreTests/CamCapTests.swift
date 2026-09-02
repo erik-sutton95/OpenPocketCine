@@ -199,6 +199,35 @@ import Testing
         #expect(ColorMode.hdr.offersIsoAuto)
     }
 
+    /// #180: Auto ISO range labels use the body's Rec.709 floor. SET bytes stay
+    /// `IsoLimit` — Pocket 3 "100–400" was 50–400 on the camera.
+    @Test func rec709IsoAutoFloorFollowsTheBody() {
+        let p3 = CameraModel.resolve(modelId: 0x0020, name: nil)
+        let p4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        let p4p = CameraModel.resolve(modelId: 0x0022, name: nil)
+        #expect(p3.isoAutoRangeFloor == 50)
+        #expect(p4.isoAutoRangeFloor == 50)
+        #expect(p4p.isoAutoRangeFloor == 100)
+        #expect(CameraModel.default.isoAutoRangeFloor == 100)
+        #expect(
+            CameraModel.resolve(modelId: nil, name: "OsmoPocket3-A1B2").isoAutoRangeFloor == 50)
+
+        #expect(ColorMode.normal.isoAutoBase(for: p3) == 50)
+        #expect(ColorMode.hdr.isoAutoBase(for: p3) == 50)
+        #expect(ColorMode.dLogM.isoAutoBase(for: p3) == 50)
+        #expect(ColorMode.normal.isoAutoBase(for: p4) == 50)
+        #expect(ColorMode.normal.isoAutoBase(for: p4p) == 100)
+        #expect(ColorMode.normal.isoAutoBase == 100, "unknown body keeps captured 4 Pro floor")
+        #expect(ColorMode.dLog.isoAutoBase(for: p3) == 400, "D-Log floor is color, not body")
+        #expect(ColorMode.dLog2.isoAutoBase(for: p3) == nil)
+
+        #expect(ColorMode.normal.isoAutoLabels(for: p3).first == "50–200")
+        #expect(ColorMode.normal.isoAutoLabels(for: p3).contains("50–400"))
+        #expect(!ColorMode.normal.isoAutoLabels(for: p3).contains("100–400"))
+        #expect(ColorMode.normal.isoAutoLabels(for: p4p).first == "100–200")
+        #expect(IsoLimit.max400.label(base: 50) == "50–400")
+    }
+
     @Test func subscriptionIncludesShutterCap() {
         #expect(Commands.subscriptionKeys.contains(CamCapShutter.subscribeKey))
         #expect(Commands.subscriptionKeys.contains(CamCapIso.subscribeKey))

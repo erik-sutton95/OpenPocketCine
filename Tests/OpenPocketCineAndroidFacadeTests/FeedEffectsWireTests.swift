@@ -11,7 +11,7 @@ struct FeedEffectsWireTests {
         let scalars = FeedEffectsWire.assistScalars(
             colorModeCode: Int(ColorMode.dLog2.rawValue),
             iso: 1600,
-            highlightIRE: LiveZebra.highlightIRE,
+            highlightIRE: 100,
             midtoneIRE: LiveZebra.midtoneIRE)
         #expect(scalars.count == FeedEffectsWire.assistScalarCount)
         let clip = Float(ScopeExposureCeiling.dlog2LiveTapByteAt1600) / 255
