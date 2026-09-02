@@ -32,7 +32,8 @@ Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Zoom must not drop the live
 picture. FORMAT only lists
 `camcap_video_format` pairs. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
-10-bit / D-Log M. The gimbal stick and zoom chip sit together as a cluster in the
+10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
+on Pocket 4 Pro. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. Stick throw is analog with
 an ease-in curve (small push crawls; full throw is fastest). A connected
 game controller's left stick drives the same path. Cross/A records.

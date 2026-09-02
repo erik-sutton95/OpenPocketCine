@@ -967,6 +967,14 @@ class CameraControlTest {
         assertEquals(true, byName.needsFirstPictureFormatPoke)
         assertEquals(true, CameraModel.looksLikePocket3("Osmo Pocket 3"))
         assertEquals(false, CameraModel.looksLikePocket3("Osmo Pocket 4"))
+        assertEquals(50, CameraModel.isoAutoRangeFloorFor("Osmo Pocket 3"))
+        assertEquals(50, CameraModel.isoAutoRangeFloorFor("OsmoPocket3-AAAA"))
+        assertEquals(50, CameraModel.isoAutoRangeFloorFor("Xtra Muse"))
+        assertEquals(50, CameraModel.isoAutoRangeFloorFor("Osmo Pocket 4"))
+        assertEquals(100, CameraModel.isoAutoRangeFloorFor("Osmo Pocket 4 Pro"))
+        assertEquals(100, CameraModel.isoAutoRangeFloorFor("OsmoPocket4P-AAAA"))
+        assertEquals(100, CameraModel.isoAutoRangeFloorFor("DJI Osmo camera"))
+        assertEquals(50, parsed.isoAutoRangeFloor)
     }
 
     @Test
