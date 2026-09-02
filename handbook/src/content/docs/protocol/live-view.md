@@ -53,7 +53,10 @@ Send once to start (and at most once after a stall, with a multi-second cooldown
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not
 IDR-hold those AUs while skipping `0x09/0xa8` — that drops the picture while
-HUD and gimbal stay on 9004.
+HUD and gimbal stay on 9004. Keep the hardware decoder only if it accepts the
+new sets (iOS asks VideoToolbox; a kept session that refuses them fails every
+frame silently — frozen picture, live HUD). On refusal rebuild it and keep
+the last picture.
 
 After a healthy take the feed can still **freeze or go black at ~3–5 min** — cumulative packet counts do not detect that. Staged recover is `docs/feed-watchdog.md` in the repository.
 

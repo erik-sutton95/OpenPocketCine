@@ -3402,7 +3402,7 @@ final class CameraSession {
             flowHealthy: datalink?.isFlowHealthy ?? false,
             pathReady: WiFiJoiner.isCameraPathReady(),
             hasFormat: decoder.hasFormat,
-            decoderFailed: decoder.decoderErrors > 0 || decoder.displayLayer.status == .failed,
+            decoderFailed: decoder.isDecoderWedged || decoder.displayLayer.status == .failed,
             live: live,
             sawPicture: decoder.lastPresentedAt != nil,
             tcpPokeReady: datalink?.isTcpPokeReady ?? false,

@@ -73,6 +73,11 @@ On stall, freeze, GOP/AF-C hold, iOS logs:
 `disagree=1` means the unused classifier and the live watchdog split. That
 is a finding, not a license to wire `LinkDiagnoser` blindly.
 
+`diagnose=decoderWedged` is fresh: a VT / layer decode error **after** the
+last presented frame (async VT callback errors included). It used to be the
+cumulative `decoderErrors > 0`, so one bad AU early in a take pinned every
+later observe line on `decoderWedged` and hid the real class.
+
 ## Ranked hypotheses for #148
 
 1. **Over-repair.** 2 s stall → enable and/or UDP rebuild + force `0x09/0xa8`

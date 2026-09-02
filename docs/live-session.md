@@ -136,6 +136,16 @@ left Waiting for live view up. Pocket IRAP is often **BLA_W_LP (16)**
 (`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
 IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 
+Same-raster new VPS/SPS (zoom `0xB8`, FORMAT SET, D-Log2 → D-Log hop) keep
+VT **only if** `VTDecompressionSessionCanAcceptFormatDescription` says so.
+A kept session that refuses the new sets fails every frame with no log —
+frozen last picture while UDP, HUD, and the gimbal stay live (LUT / WAVE
+on, #148; 3× hop, #194). On refusal: `feed: VT refused new parameter sets`,
+rebuild VT, keep the picture, no IDR hold (the sets ride the IRAP AU).
+Android MediaCodec takes in-band SPS itself. Async VT decode errors count
+toward `decoderErrors`; `decoderWedged` on the observe line means an error
+**after** the last presented frame, not any error this session.
+
 ## Foreground / SoftAP flap
 
 iOS is the operator-proven datalink (`DatalinkDriver.swift`

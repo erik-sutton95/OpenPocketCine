@@ -50,6 +50,32 @@ final class EncoderFormatChangeTests: XCTestCase {
         XCTAssertEqual(fired, 0, "second 0x09/0xa8 on an IDR AU hangs the hold")
     }
 
+    /// LUT / WAVE own VT. Same-raster new SPS (zoom, FORMAT, D-Log2 → D-Log hop)
+    /// keeps the session only if VT takes the new format; otherwise every frame
+    /// fails silently — frozen well, live HUD (#148, #194).
+    func testVTSessionAlwaysAcceptsAdoptedFormat() throws {
+        let decoder = HevcDecoder()
+        decoder.effects.waveform = true
+        _ = decoder.decode(accessUnit: Self.annexB([Self.vps, Self.sps, Self.pps]))
+        try XCTSkipUnless(decoder.vtRebuildCount == 1, "no VT HEVC decoder on this host")
+        XCTAssertTrue(decoder.vtSessionAcceptsCurrentFormat)
+
+        var flippedSPS = Self.sps
+        flippedSPS[flippedSPS.count - 1] ^= 0x01
+        _ = decoder.decode(accessUnit: Self.annexB([Self.vps, flippedSPS, Self.pps]))
+        XCTAssertTrue(decoder.hasFormat)
+        XCTAssertTrue(
+            decoder.vtSessionAcceptsCurrentFormat,
+            "kept a VT session that refuses the new SPS — every frame would fail")
+        XCTAssertFalse(decoder.awaitingIDR, "same-raster rebuild must not hold IDR")
+    }
+
+    func testDecoderWedgedIsFreshNotCumulative() {
+        let decoder = HevcDecoder()
+        XCTAssertFalse(decoder.isDecoderWedged)
+        XCTAssertEqual(decoder.decoderErrors, 0)
+    }
+
     func testLivePresentTimingDoesNotPaceAtThirtyFps() {
         let timing = LiveViewPresentTiming.sampleTiming(frameIndex: 1)
         XCTAssertEqual(timing.duration.timescale, 60_000)
