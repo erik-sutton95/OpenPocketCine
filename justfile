@@ -193,18 +193,20 @@ android-install serial="":
 android-version:
     @sed -n 's/^openpocketcine.versionName=/Version: /p; s/^openpocketcine.versionCode=/Build: /p' Apps/Android/gradle.properties
 
-# Signed Play App Bundle (upload keystore from .env). First console upload, then CI.
+# Signed Play App Bundle (upload keystore from .local/play-signing.env). First console upload, then CI.
 android-bundle:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ -f .env ]]; then
-        set -a
-        # shellcheck disable=SC1091
-        source .env
-        set +a
-    fi
+    for signing_env in .env .local/play-signing.env; do
+        if [[ -f "$signing_env" ]]; then
+            set -a
+            # shellcheck disable=SC1090
+            source "$signing_env"
+            set +a
+        fi
+    done
     if [[ -z "${ANDROID_KEYSTORE_FILE:-}" ]]; then
-        echo "ANDROID_KEYSTORE_FILE is unset. Run ./scripts/setup-android-play.sh" >&2
+        echo "ANDROID_KEYSTORE_FILE is unset. Run just android-play-sync-secrets" >&2
         exit 1
     fi
     extra=()
@@ -212,9 +214,17 @@ android-bundle:
         extra+=(-PversionCode="$VERSION_CODE")
     fi
     cd Apps/Android
-    JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew bundleRelease "${extra[@]}"
+    JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew bundleRelease ${extra[@]+"${extra[@]}"}
     echo "AAB: Apps/Android/app/build/outputs/bundle/release/app-release.aab"
 
-# One-time Play Console + signing + GitHub Environment secrets.
+# One-time Play Console + upload keystore + API robot + first AAB.
 android-play-setup:
     ./scripts/setup-android-play.sh
+
+# Generate (or reuse) the upload keystore and push play-closed GitHub secrets. Non-interactive.
+android-play-sync-secrets:
+    ./scripts/setup-android-play.sh --sync-secrets
+
+# Dispatch Android Play on main (signed AAB; Play API upload if PLAY_SERVICE_ACCOUNT_JSON exists).
+android-play-dispatch track="alpha" status="completed":
+    gh workflow run android-play.yml --ref main --field track={{track}} --field status={{status}}
