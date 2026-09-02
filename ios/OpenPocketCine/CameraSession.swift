@@ -3286,7 +3286,6 @@ final class CameraSession {
     /// Same-tab FORMAT never sends `0x02/0x18`. One shot per connect / rejoin.
     private func startFirstPictureFormatPoke() {
         if firstPictureFormatPokeTask != nil { return }
-        firstPictureFormatPoked = true
         firstPictureFormatPokeTask = Task { @MainActor [weak self] in
             defer { self?.firstPictureFormatPokeTask = nil }
             await self?.runFirstPictureFormatPoke()
@@ -3299,12 +3298,17 @@ final class CameraSession {
             format: status.videoFormat,
             resolution: status.videoResolution,
             fps: status.fps)
-        let kick = VideoFormat.firstPictureEncoderKick(from: original)
+        let kick = VideoFormat.firstPictureEncoderKick(
+            from: original, available: status.availableVideoFormats)
+        firstPictureFormatPoked = true
+        let legal =
+            status.availableVideoFormats.isEmpty
+            || status.availableVideoFormats.contains(kick)
         log.info(
-            "live: Pocket 3 first-picture format poke \(original.chipLabel, privacy: .public) → \(kick.chipLabel, privacy: .public) → \(original.chipLabel, privacy: .public)"
+            "live: Pocket 3 first-picture format poke \(original.chipLabel, privacy: .public) → \(kick.chipLabel, privacy: .public) → \(original.chipLabel, privacy: .public) legal=\(legal ? 1 : 0) formats=\(self.status.availableVideoFormats.count, privacy: .public)"
         )
         ControlLiveLog.line(
-            "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel)"
+            "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count)"
         )
         setVideoFormat(resolution: kick.resolution, frameRate: kick.frameRate)
         await waitForRecordingFormatPokeSettle()
@@ -3334,12 +3338,56 @@ final class CameraSession {
         }
     }
 
+    private func logFirstPictureObserve(
+        step: CameraSoftAP.FirstPictureStep,
+        packets: Int,
+        deferred: Bool
+    ) {
+        let original = VideoFormat.firstPictureOriginal(
+            format: status.videoFormat,
+            resolution: status.videoResolution,
+            fps: status.fps)
+        let kick = VideoFormat.firstPictureEncoderKick(
+            from: original, available: status.availableVideoFormats)
+        let known = VideoFormat.hasKnownRecordingFormat(
+            format: status.videoFormat,
+            resolution: status.videoResolution,
+            fps: status.fps,
+            availableCount: status.availableVideoFormats.count)
+        let legal =
+            status.availableVideoFormats.isEmpty
+            || status.availableVideoFormats.contains(kick)
+        let presented =
+            decoder.lastPresentedAt.map {
+                String(format: "%.1f", Date().timeIntervalSince($0))
+            } ?? "none"
+        let videoAge =
+            datalink?.lastVideoPacketAt.map {
+                String(format: "%.1f", Date().timeIntervalSince($0))
+            } ?? "none"
+        let model = connectedCamera?.model.name ?? "none"
+        let needs = connectedCamera?.model.needsFirstPictureFormatPoke == true
+        let line =
+            "feed: first-picture step=\(step.rawValue) defer=\(deferred ? 1 : 0) needsPoke=\(needs ? 1 : 0) poked=\(firstPictureFormatPoked ? 1 : 0) inFlight=\(firstPictureFormatPokeTask != nil ? 1 : 0) known=\(known ? 1 : 0) model=\(model) boot=\(original.chipLabel) kick=\(kick.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count) enables=\(liveViewEnableSends) videoPkts=\(packets) lastVideo=\(videoAge)s presented=\(presented)s decoderFmt=\(decoder.hasFormat ? 1 : 0) idrHold=\(decoder.awaitingIDR ? 1 : 0)"
+        let signature =
+            "\(step.rawValue).\(deferred).\(needs).\(firstPictureFormatPoked).\(known).\(packets).\(liveViewEnableSends).\(decoder.hasFormat)"
+        let now = Date()
+        guard
+            signature != lastFirstPictureSignature
+                || now.timeIntervalSince(lastFirstPictureLogAt) >= 3
+        else { return }
+        lastFirstPictureSignature = signature
+        lastFirstPictureLogAt = now
+        log.info("\(line, privacy: .public)")
+        ControlLiveLog.line(line)
+    }
+
     private func recoverFirstPictureIfNeeded() {
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         let packets = datalink?.videoPackets ?? 0
         let since = Date().timeIntervalSince(lastIdrRequest)
         let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
-        switch CameraSoftAP.firstPictureStep(
+        let step = CameraSoftAP.firstPictureStep(
             videoPackets: packets,
             enableSends: liveViewEnableSends,
             secondsSinceLastEnable: since,
@@ -3353,11 +3401,23 @@ final class CameraSession {
             hasPresentedPicture: CameraSoftAP.isPresentedPictureFresh(
                 secondsSinceLastPresented: decoder.lastPresentedAt.map {
                     Date().timeIntervalSince($0)
-                })
-        ) {
+                }))
+        let known = VideoFormat.hasKnownRecordingFormat(
+            format: status.videoFormat,
+            resolution: status.videoResolution,
+            fps: status.fps,
+            availableCount: status.availableVideoFormats.count)
+        let deferPoke =
+            step == .pokeRecordingFormat
+            && CameraSoftAP.shouldDeferRecordingFormatPoke(
+                hasKnownRecordingFormat: known,
+                secondsSinceLastEnable: since)
+        logFirstPictureObserve(step: step, packets: packets, deferred: deferPoke)
+        switch step {
         case .wait:
             break
         case .pokeRecordingFormat:
+            if deferPoke { return }
             startFirstPictureFormatPoke()
             return
         case .resendEnable:

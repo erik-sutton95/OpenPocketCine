@@ -1,24 +1,42 @@
 import Foundation
+import OpenPocketViewCore
 import os
 
 /// Structured expo lines for the agent loop: os.Logger + a capped Documents journal.
 /// Pull with `tools/pull-control-log.sh` (no sudo, no pcap).
 ///
 /// Journal writes ride a utility queue — `line` never does file I/O on the
-/// caller's thread (it sits on the command send path).
+/// caller's thread (it sits on the command send path). Person identifiers
+/// are stripped before a line is stored (`PrivacyRedactor`).
 enum ControlLiveLog {
     private static let log = Logger(
         subsystem: "com.opencapture.openpocketcine", category: "session")
     private static let queue = DispatchQueue(label: "opv.control-log", qos: .utility)
-    private static let cap = 2500
+    private static let cap = DiagnosticReport.journalCap
     /// Trim cadence in appends — not a size stat per line.
     private static let trimEvery = 128
     private static let name = "control-live.log"
 
     nonisolated static func line(_ text: String) {
-        log.info("\(text, privacy: .public)")
+        appendRedacted(text)
+    }
+
+    /// Already-redacted structured line (exceptions, DiagnosticCenter).
+    nonisolated static func appendRedacted(_ text: String) {
+        let safe = PrivacyRedactor.redact(text)
+        log.info("\(safe, privacy: .public)")
         let stampedAt = Date()
-        queue.async { append(stampedAt, text) }
+        queue.async { append(stampedAt, safe) }
+    }
+
+    nonisolated static func recentLines() -> [String] {
+        queue.sync {
+            guard let url else { return [] }
+            guard let existing = try? String(contentsOf: url, encoding: .utf8) else {
+                return []
+            }
+            return existing.split(whereSeparator: \.isNewline).map(String.init)
+        }
     }
 
     // Queue-confined.

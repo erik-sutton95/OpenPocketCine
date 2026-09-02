@@ -40,6 +40,9 @@ Commit and leak hygiene (what must never enter git) lives in
 
 Log phases and opcodes, not passphrases. `Documents/control-live.log` is for
 feed diagnosis on device; it is not a capture dump and it is not committed.
+Tester reports go through `PrivacyRedactor` (no name, email, location, device
+name, or Wi-Fi password). The app still does not upload logs. See
+[`docs/diagnostics.md`](docs/diagnostics.md).
 
 Pairing dumps, Keychain exports, and `captures/` can contain the SoftAP
 passphrase and interiors. They stay gitignored.

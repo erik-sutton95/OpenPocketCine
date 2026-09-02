@@ -1254,6 +1254,25 @@ class CaptureSheetTest {
             VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS25),
             VideoFormat.firstPictureEncoderKick(boot),
         )
+        assertTrue(!VideoFormat.hasKnownRecordingFormat(CameraStatus()))
+        assertTrue(
+            VideoFormat.hasKnownRecordingFormat(
+                CameraStatus(fps = 25, resolutionCode = CameraCommands.RES_4K, fpsIndex = 2),
+            ),
+        )
+        val p3Video =
+            listOf(
+                VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25),
+                VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS25),
+            )
+        assertEquals(
+            VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS25),
+            VideoFormat.firstPictureEncoderKick(
+                VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS30),
+                p3Video,
+            ),
+            "illegal 1080 30 on a 25p table must pick a legal pair",
+        )
         assertEquals(
             boot,
             VideoFormat.firstPictureOriginal(

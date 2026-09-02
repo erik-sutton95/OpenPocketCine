@@ -585,6 +585,26 @@ import Testing
             VideoFormat.firstPictureOriginal(format: nil, resolution: nil, fps: 0)
                 == VideoFormat(resolution: .p4K, frameRate: .fps30),
             "unknown falls back to 4K 30, not 1080 24")
+        #expect(
+            !VideoFormat.hasKnownRecordingFormat(
+                format: nil, resolution: nil, fps: 0, availableCount: 0),
+            "empty status must not poke a guessed 4K 30")
+        #expect(
+            VideoFormat.hasKnownRecordingFormat(
+                format: boot, resolution: nil, fps: 0, availableCount: 0))
+        let p3Video = [
+            VideoFormat(resolution: .p4K, frameRate: .fps25),
+            VideoFormat(resolution: .p1080, frameRate: .fps25),
+        ]
+        #expect(
+            VideoFormat.firstPictureEncoderKick(
+                from: VideoFormat(resolution: .p4K, frameRate: .fps30),
+                available: p3Video)
+                == VideoFormat(resolution: .p1080, frameRate: .fps25),
+            "illegal 1080 30 on a 25p table must pick a legal pair")
+        #expect(
+            VideoFormat.firstPictureEncoderKick(from: boot, available: p3Video)
+                == VideoFormat(resolution: .p1080, frameRate: .fps25))
     }
 
     @Test func timecodeAt3to6() {

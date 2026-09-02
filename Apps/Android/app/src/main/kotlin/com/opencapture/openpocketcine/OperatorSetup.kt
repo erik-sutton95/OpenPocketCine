@@ -77,6 +77,7 @@ import com.opencapture.openpocketcine.assists.ZebraEditor
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.feed.MonitorTransfer
@@ -131,6 +132,8 @@ object SettingsHelpCopy {
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
     const val SUPPORT = "Connection, live view, controls, and troubleshooting."
     const val REPORT = "Opens a public issue form on GitHub for this project."
+    const val SHARE_DIAGNOSTICS =
+        "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Paste the copied text into a bug report."
     const val FEATURE = "Start an idea in this project's feature-request discussion."
     const val SOURCE =
         "View the OpenPocketCine project on GitHub. Opening this may leave the camera Wi-Fi if that is the only network."
@@ -797,7 +800,7 @@ private fun SettingsContentPane(
                         OperatorSettingsTab.DISPLAY ->
                             DisplayRows(model, isLive, expandedDisp, onExpandDisp)
                         OperatorSettingsTab.STORAGE -> StorageRows(model, onClearCache)
-                        OperatorSettingsTab.SYSTEM -> SystemRows(onLegal)
+                        OperatorSettingsTab.SYSTEM -> SystemRows(model, onLegal)
                     }
                 }
                 if (scroll.canScrollForward) {
@@ -1502,11 +1505,16 @@ private fun StorageRows(model: AppModel, onClearCache: () -> Unit) {
 }
 
 @Composable
-private fun SystemRows(onLegal: (LegalKind) -> Unit) {
+private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     val context = LocalContext.current
     SettingsRowCard(title = "Help & Feedback") {
         SettingsInlineRow("Support", SettingsHelpCopy.SUPPORT, showTopDivider = false) {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SUPPORT) }
+        }
+        SettingsInlineRow("Share Diagnostics", SettingsHelpCopy.SHARE_DIAGNOSTICS) {
+            SettingsActionPill("Share") {
+                DiagnosticCenter.shareReport(context, model.session)
+            }
         }
         SettingsInlineRow("Report a Problem", SettingsHelpCopy.REPORT) {
             SettingsActionPill("Report") { openUrl(context, OpenPocketCineLinks.REPORT_PROBLEM) }

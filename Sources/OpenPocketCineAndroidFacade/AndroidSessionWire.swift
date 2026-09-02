@@ -933,6 +933,13 @@ public enum AndroidSessionWire {
                         json, key: "secondsSinceLastPresented"),
                     secondsSinceLastEnable: jsonNumber(
                         json, key: "secondsSinceLastEnable", default: 0)))
+        case "shouldDeferRecordingFormatPoke":
+            return flag(
+                CameraSoftAP.shouldDeferRecordingFormatPoke(
+                    hasKnownRecordingFormat: jsonBool(
+                        json, key: "hasKnownRecordingFormat", default: false),
+                    secondsSinceLastEnable: jsonNumber(
+                        json, key: "secondsSinceLastEnable", default: 0)))
         case "shouldContinueFirstPictureAfterStrayPlayback":
             return flag(
                 CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(

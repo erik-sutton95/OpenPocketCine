@@ -57,6 +57,8 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
   Storage, System).
 - TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
 - Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
+- Operator Setup → System → **Share Diagnostics**. iOS screenshot for
+  TestFlight copies a compact paste (`docs/diagnostics.md`).
 
 ## When this pointer fires
 

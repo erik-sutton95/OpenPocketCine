@@ -1003,10 +1003,42 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
 
     /// Other labeled resolution, same fps. Pocket 3 first picture: the FORMAT
     /// sheet skips a same-tab SET, so 4K→4K never restarts the live encoder.
-    public static func firstPictureEncoderKick(from original: VideoFormat) -> VideoFormat {
-        VideoFormat(
+    /// Prefer a pair the body advertised (`camcap_video_format`); a guessed
+    /// 1080 30 on a 4K 25 boot is rejected and the poke never retries.
+    public static func firstPictureEncoderKick(
+        from original: VideoFormat,
+        available: [VideoFormat] = []
+    ) -> VideoFormat {
+        let naive = VideoFormat(
             resolution: original.resolution == .p4K ? .p1080 : .p4K,
             frameRate: original.frameRate)
+        if available.isEmpty { return naive }
+        if available.contains(naive) { return naive }
+        if let sameFps = available.first(where: {
+            $0.frameRate == original.frameRate && $0.resolution != original.resolution
+        }) {
+            return sameFps
+        }
+        if let otherRes = available.first(where: { $0.resolution != original.resolution }) {
+            return otherRes
+        }
+        if let other = available.first(where: { $0 != original }) {
+            return other
+        }
+        return naive
+    }
+
+    /// True when a FORMAT SET would use a reported pair, not the 4K 30 guess.
+    public static func hasKnownRecordingFormat(
+        format: VideoFormat?,
+        resolution: VideoResolution?,
+        fps: Int,
+        availableCount: Int
+    ) -> Bool {
+        if format != nil { return true }
+        if availableCount > 0 { return true }
+        if resolution != nil && fps > 0 { return true }
+        return false
     }
 
     /// Reported P3 boot is 4K 25/30. Unknown falls back to 4K 30, not 1080 24.

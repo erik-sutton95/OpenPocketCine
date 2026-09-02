@@ -3,4 +3,7 @@
     <files-path
         name="opc_media"
         path="OpenPocketCine/media/" />
+    <cache-path
+        name="opc_diagnostics"
+        path="diagnostics/" />
 </paths>

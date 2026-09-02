@@ -65,12 +65,34 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
         }
 
         /** Other labeled resolution, same fps. iOS `VideoFormat.firstPictureEncoderKick`. */
-        fun firstPictureEncoderKick(original: VideoFormat): VideoFormat =
-            VideoFormat(
-                if (original.resolution == VideoResolution.P4K) VideoResolution.P1080
-                else VideoResolution.P4K,
-                original.frameRate,
-            )
+        fun firstPictureEncoderKick(
+            original: VideoFormat,
+            available: List<VideoFormat> = emptyList(),
+        ): VideoFormat {
+            val naive =
+                VideoFormat(
+                    if (original.resolution == VideoResolution.P4K) VideoResolution.P1080
+                    else VideoResolution.P4K,
+                    original.frameRate,
+                )
+            if (available.isEmpty()) return naive
+            if (naive in available) return naive
+            available
+                .firstOrNull {
+                    it.frameRate == original.frameRate && it.resolution != original.resolution
+                }
+                ?.let { return it }
+            available.firstOrNull { it.resolution != original.resolution }?.let { return it }
+            available.firstOrNull { it != original }?.let { return it }
+            return naive
+        }
+
+        /** True when a FORMAT SET would use a reported pair, not the 4K 30 guess. */
+        fun hasKnownRecordingFormat(status: CameraStatus): Boolean {
+            if (parse(status.resolutionCode, status.fpsIndex) != null) return true
+            if (status.availableVideoFormats.isNotEmpty()) return true
+            return VideoResolution.fromRaw(status.resolutionCode) != null && status.fps > 0
+        }
 
         /** Reported P3 boot is 4K 25/30. Unknown falls back to 4K 30, not 1080 24. */
         fun firstPictureOriginal(status: CameraStatus): VideoFormat {

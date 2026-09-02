@@ -52,6 +52,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **hygiene** — commit/PR that might touch secrets, LUTs, captures, identity: [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
 - **contributing** — issues vs discussions, labels, human setup: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **budget** — smoothness, fps, jank, HUD Hz, scope tap, ACK rate, thermal: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
+- **diagnostics** — logs, TestFlight report, crash journal, redaction: [`docs/diagnostics.md`](docs/diagnostics.md)
 - **security** — vulnerability, SoftAP password, Keychain, advisory: [`SECURITY.md`](SECURITY.md)
 - **ux** — FTUE, first-run, wizard, operator copy, help, empty/error: [`docs/UX.md`](docs/UX.md)
 - **workflow** — parallel, subagent, loop, verify in a fresh context, graphify: [`docs/WORKFLOW.md`](docs/WORKFLOW.md)

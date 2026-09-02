@@ -4,6 +4,7 @@ New and changed
 - The on-screen gimbal stick uses the same gradual speed.
 - While live, Operator Setup then Controls has a Shooting Mode row. Switch Video, Photo, and the time-based modes from there. The row follows a mode changed on the body itself.
 - Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform, parade, and assists.
+- Operator Setup → System → Share Diagnostics sends a report with no name or location.
 
 Fixes
 
@@ -14,7 +15,7 @@ Fixes
 - Opening clips or Operator Setup over live view, then going back, keeps the live picture, not a black well while the camera still responds.
 - Opening a long clip for in-app playback no longer crashes while the preview is caching. Playback still uses the 720p proxy; share and save still use the original camera file.
 - On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
-- Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad.
+- Zebra: Highlight now paints when any color channel runs hot. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged.
 
 What to test
 

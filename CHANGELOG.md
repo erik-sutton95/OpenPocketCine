@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- On-device diagnostics: redacted journal, exceptions, MetricKit payloads
+  (iOS), and Operator Setup → System → **Share Diagnostics**. A TestFlight
+  screenshot copies a compact paste (Apple cannot attach files to that
+  form). No name, location, or Wi-Fi password. No upload.
+  `docs/diagnostics.md`.
+
 - Live head-tracking debug: yaw ring (12 o'clock is SET) and a vertical
   pitch ring (arrow-right is 0). iOS only. White arrow is the SET-relative
   nose (AirPods +Y forward, +Z up); sky arrow is live gimbal pan/tilt.
@@ -151,6 +157,13 @@ All notable changes to this project are documented here. The format is based on
   identification mark on Camera-to-Cloud delivery.
 
 ### Fixed
+
+- Pocket 3 first picture still black until FORMAT or COLOR changed (#221,
+  #147): the 1080→boot-4K poke waited 2 s then SETs a guessed 4K 30 if
+  `cam_video_param_v2` had not landed, marked the poke done, and never
+  retried. Wait for the legal FORMAT table (or 8 s), pick a pair from
+  `camcap_video_format`, and only then mark the one-shot used. `feed:
+  first-picture` lands in `control-live.log`. Both shells.
 
 - Live feed that stalled and never came back (#218, #219, #216 family): the
   mid-session stall ladder now ends in a new datalink handshake on the same
