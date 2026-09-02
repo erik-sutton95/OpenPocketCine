@@ -21,6 +21,9 @@ sealed class MediaTransferError : Exception() {
  * open after the body, so waiting for EOF hangs at 100%.
  */
 object MediaTransfer {
+    /** RAM GET is thumbs/SCR only. LRF/XRF and originals stream to disk. */
+    const val MAX_RAM_BYTES: Long = 8L * 1024 * 1024
+
     private val client: OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -65,6 +68,7 @@ object MediaTransfer {
         throw last
     }
 
+    /** In-memory GET for thumbs/SCR. Capped at [MAX_RAM_BYTES]. */
     fun fetchBytes(storage: Int, path: String): Pair<ByteArray, Int> = performGet(storage, path)
 
     /** Last 2 MiB of the original take. Camera `/v2` already answers Range. */
@@ -156,10 +160,16 @@ object MediaTransfer {
             if (code !in 200..299) throw MediaTransferError.HttpStatus(code)
             val body = response.body ?: throw MediaTransferError.BadResponse
             val expected = body.contentLength().takeIf { it > 0 } ?: 0L
+            if (expected > MAX_RAM_BYTES) throw MediaTransferError.BadResponse
             val sink = java.io.ByteArrayOutputStream()
             val written =
                 try {
-                    readUntilLength(body.byteStream(), sink, expected) { }
+                    readUntilLength(
+                        body.byteStream(),
+                        sink,
+                        expected,
+                        maxBytes = MAX_RAM_BYTES,
+                    ) { }
                 } catch (e: IOException) {
                     if (sink.size() > 0 && expected > 0 && sink.size().toLong() >= expected) {
                         sink.size().toLong()
@@ -198,7 +208,7 @@ object MediaTransfer {
                 tmp.outputStream().use { out ->
                     val written =
                         try {
-                            readUntilLength(body.byteStream(), out, expected, onProgress)
+                            readUntilLength(body.byteStream(), out, expected) { onProgress(it) }
                         } catch (e: IOException) {
                             val already = tmp.length()
                             if (already > 0 && expected > 0 && already >= expected) {
@@ -232,20 +242,31 @@ object MediaTransfer {
 
     /**
      * Copy [expected] bytes (or until EOF when [expected] is 0). Progress is
-     * `written / expected` when the length is known.
+     * `written / expected` when the length is known. [maxBytes] is a hard cap:
+     * a larger Content-Length or extra bytes fail instead of growing RAM.
      */
     fun readUntilLength(
         input: InputStream,
         output: OutputStream,
         expected: Long,
+        maxBytes: Long = Long.MAX_VALUE,
         onProgress: (Double) -> Unit,
     ): Long {
+        if (maxBytes <= 0L) throw MediaTransferError.BadResponse
+        if (expected > maxBytes) throw MediaTransferError.BadResponse
         val buf = ByteArray(64 * 1024)
         var written = 0L
         while (true) {
-            val remaining = if (expected > 0) (expected - written).toInt().coerceAtLeast(0) else buf.size
-            if (expected > 0 && remaining == 0) break
-            val n = input.read(buf, 0, min(buf.size, remaining.coerceAtLeast(1)))
+            val remainingExpected =
+                if (expected > 0) (expected - written).coerceAtLeast(0L) else Long.MAX_VALUE
+            if (expected > 0 && remainingExpected == 0L) break
+            val remainingMax = (maxBytes - written).coerceAtLeast(0L)
+            if (remainingMax == 0L) {
+                if (input.read() >= 0) throw MediaTransferError.BadResponse
+                break
+            }
+            val toRead = minOf(remainingExpected, remainingMax, buf.size.toLong()).toInt()
+            val n = input.read(buf, 0, toRead)
             if (n < 0) break
             output.write(buf, 0, n)
             written += n

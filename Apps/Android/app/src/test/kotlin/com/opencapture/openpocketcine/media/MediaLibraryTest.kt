@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -331,6 +332,66 @@ class MediaLibraryTest {
         assertEquals(100L, written)
         assertEquals(100, out.size())
         assertEquals(body.toList(), out.toByteArray().toList())
+    }
+
+    @Test
+    fun unknownLengthRamCopyRejectsPastMaxBytes() {
+        val body = ByteArray(200) { it.toByte() }
+        val out = ByteArrayOutputStream()
+        assertFailsWith<MediaTransferError.BadResponse> {
+            MediaTransfer.readUntilLength(
+                ByteArrayInputStream(body),
+                out,
+                expected = 0,
+                maxBytes = 100,
+            ) { }
+        }
+        assertTrue(out.size() <= 100)
+    }
+
+    @Test
+    fun unknownLengthRamCopyWithinMaxSucceeds() {
+        val body = ByteArray(50) { it.toByte() }
+        val out = ByteArrayOutputStream()
+        val written =
+            MediaTransfer.readUntilLength(
+                ByteArrayInputStream(body),
+                out,
+                expected = 0,
+                maxBytes = 100,
+            ) { }
+        assertEquals(50L, written)
+        assertEquals(body.toList(), out.toByteArray().toList())
+    }
+
+    @Test
+    fun unknownLengthRamCopyAtExactMaxSucceeds() {
+        val body = ByteArray(100) { it.toByte() }
+        val out = ByteArrayOutputStream()
+        val written =
+            MediaTransfer.readUntilLength(
+                ByteArrayInputStream(body),
+                out,
+                expected = 0,
+                maxBytes = 100,
+            ) { }
+        assertEquals(100L, written)
+        assertEquals(body.toList(), out.toByteArray().toList())
+    }
+
+    @Test
+    fun knownLengthAboveMaxIsRejectedWithoutCopying() {
+        val body = ByteArray(200) { it.toByte() }
+        val out = ByteArrayOutputStream()
+        assertFailsWith<MediaTransferError.BadResponse> {
+            MediaTransfer.readUntilLength(
+                ByteArrayInputStream(body),
+                out,
+                expected = 200,
+                maxBytes = 100,
+            ) { }
+        }
+        assertEquals(0, out.size())
     }
 
     @Test

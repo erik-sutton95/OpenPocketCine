@@ -91,6 +91,9 @@ the 128-bin raster.
 
 Playback grades the 720p LRF/XRF proxy in GLES (ExoPlayer → OES → TextureView).
 Share / Save to Photos caches the original (`MediaHTTP.deliveryPath`).
+Playback cache streams LRF/XRF (and originals) to disk (`downloadFile`).
+`fetchBytes` is thumbs/SCR only and is capped at 8 MiB — a missing
+Content-Length must not grow a `ByteArrayOutputStream` until OOM (#188).
 
 ## OpenZCine Android patterns adopted
 
