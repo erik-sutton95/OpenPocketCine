@@ -164,6 +164,14 @@ uncaught `IllegalStateException` on Android 16 (#189). Handshake miss
 throws typed `DatalinkError.NoHandshake`. SoftAP still up → rebind /
 retry. Path gone → pairing or session recovery, never a process crash.
 
+Android handshake miss throws a recoverable `DatalinkHandshakeException` (same
+copy as iOS `DatalinkError.noHandshake`). Do not `error()` / crash when SoftAP
+`isProcessBound()` is false — `CameraSoftAP.shouldKickAfterHandshakeTimeout`
+decides pairing kick vs retry; feed recovery logs and keeps the last frame.
+`onLost` clears the Network object immediately but `isProcessBound` stays true
+through the 8 s reassociation grace (`bindProcessToNetwork` still pinned).
+One `open()` may take four UDP binds; do not wrap it in a 30 s timeout.
+
 Foreground recover is VT-only while HEVC or DUML status is still on 9004.
 A Control Center peek must not rebuild UDP. After a parked-app rebuild,
 wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was

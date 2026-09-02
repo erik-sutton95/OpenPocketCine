@@ -19,7 +19,7 @@ Match Mimo: diagnose the failure, then the cheapest repair — not rebuild +
 | Issue | Role |
 | --- | --- |
 | [#148](https://github.com/erik-sutton95/OpenPocketCine/issues/148) | **P0.** TestFlight 0.1.0 (29/32): freeze / Reconnecting in **seconds**. First physical target. |
-| [#114](https://github.com/erik-sutton95/OpenPocketCine/issues/114) | **P0.** Android drops. Follow-on after #148 is classified. Kotlin datalink is still a rewrite. |
+| [#114](https://github.com/erik-sutton95/OpenPocketCine/issues/114) | **P0.** Android drops. Handshake / first-picture / enable-once gates now call JNI `cameraSoftAPDecision` (`CameraSoftAP`). Handshake miss is `DatalinkHandshakeException`, not a crash (#189). Kotlin `LiveViewEnablePolicy` is the JVM-test fallback. Sockets stay in the shell. Physical S25 soak is still the done-when. |
 | [#189](https://github.com/erik-sutton95/OpenPocketCine/issues/189) | **P0.** Android 16 crash: handshake miss was Kotlin `error()` (`IllegalStateException`) in `DatalinkDriver.open`. SoftAP `onLost` must stay path-ready during reassociation grace; miss is typed `DatalinkError.NoHandshake` (retry / pairing), not a process crash. |
 | [#93](https://github.com/erik-sutton95/OpenPocketCine/issues/93) | Audit + leftover wiring. This file is that audit. |
 | [#146](https://github.com/erik-sutton95/OpenPocketCine/issues/146) | Glass-to-glass lag on build 32. Merge into #148 if the take is a freeze presenting as lag. |
@@ -146,10 +146,11 @@ after the picture dies:
 | `session: recovery attempt failed phase=…` | Power cycle (#193): `phase` names the stuck stage — `pairing` / `awaitingApproval`, `joiningWifi` (SoftAP), `openingDatalink` (handshake). `stalled past 30 s phase=openingDatalink` on every attempt means the 30 s attempt deadline is cutting the driver's own ~39 s handshake ladder (4 × 20 × 350 ms plus the 7001 poke); take before touching either number. | Fix the named stage, not the ladder. |
 | `flip: window 0x03` stuck, HEVC moving | ACK group 1 | Control PR. Close as not #148. |
 
-Out of scope until #148 is classified: Android #114 Kotlin lift, ACK group 2
-identity, wiring `LinkDiagnoser` as the sole owner. Pocket 3 first-picture
-format poke is in [`live-session.md`](live-session.md) — still needs a
-physical P3 log (`live: Pocket 3 first-picture format poke`).
+Out of scope until #148 is classified: ACK group 2 identity, wiring
+`LinkDiagnoser` as the sole owner. Pocket 3 first-picture format poke is in
+[`live-session.md`](live-session.md) — still needs a physical P3 log
+(`live: Pocket 3 first-picture format poke`). #114 policy is JNI
+`cameraSoftAPDecision`; sockets stay in the Android shell.
 
 ## Hard rules
 

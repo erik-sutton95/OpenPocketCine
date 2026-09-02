@@ -70,6 +70,16 @@ class CameraApAvailabilityTrackerTest {
     }
 
     @Test
+    fun pathStaysReadyDuringReassociationGrace() {
+        assertTrue(CameraApJoiner.isPathReady(hasBoundNetwork = true, inReassociationGrace = false))
+        assertTrue(
+            CameraApJoiner.isPathReady(hasBoundNetwork = false, inReassociationGrace = true),
+            "onLost clears the Network object; process bind + grace still hold the camera AP",
+        )
+        assertTrue(!CameraApJoiner.isPathReady(hasBoundNetwork = false, inReassociationGrace = false))
+    }
+
+    @Test
     fun lossDoesNotClearEstablishedUntilRelease() {
         val tracker = CameraApAvailabilityTracker<String>()
         tracker.requestStarted()

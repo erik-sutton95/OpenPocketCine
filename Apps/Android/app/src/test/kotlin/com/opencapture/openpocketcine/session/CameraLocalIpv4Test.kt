@@ -34,6 +34,13 @@ class CameraLocalIpv4Test {
     }
 
     @Test
+    fun handshakeMissIsRecoverableIOException() {
+        val e: java.io.IOException =
+            DatalinkHandshakeException("camera never answered the datalink handshake")
+        assertEquals("camera never answered the datalink handshake", e.message)
+    }
+
+    @Test
     fun udpBindStaysWildcardEphemeralAfterNetworkPin() {
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost("192.168.2.15"))
         assertEquals(DatalinkDriver.WILDCARD_BIND_HOST, DatalinkDriver.udpBindHost(null))

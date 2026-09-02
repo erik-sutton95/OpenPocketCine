@@ -85,6 +85,28 @@ class LiveViewEnablePolicyTest {
         assertTrue(LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(pathReady = false))
         assertTrue(!LiveViewEnablePolicy.shouldGiveUpOpenRetry(5))
         assertTrue(LiveViewEnablePolicy.shouldGiveUpOpenRetry(6))
+        assertTrue(!LiveViewEnablePolicy.canSendHandshake(receiveArmed = false, connectionReady = true))
+        assertTrue(LiveViewEnablePolicy.canSendHandshake(receiveArmed = true, connectionReady = true))
+        assertTrue(
+            LiveViewEnablePolicy.shouldCommitLiveHandshake(
+                driverOwned = true,
+                isClosed = false,
+                isCancelled = false,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldCommitLiveHandshake(
+                driverOwned = true,
+                isClosed = true,
+                isCancelled = false,
+            ),
+        )
+        assertTrue(LiveViewEnablePolicy.shouldReuseDatalink(isClosed = false))
+        assertTrue(!LiveViewEnablePolicy.shouldReuseDatalink(isClosed = true))
+        assertTrue(
+            LiveViewEnablePolicy.handshakeOpenTimeoutMs() > 30_000L,
+            "30 s raced 20×350 ms × 4 binds",
+        )
     }
 
     @Test

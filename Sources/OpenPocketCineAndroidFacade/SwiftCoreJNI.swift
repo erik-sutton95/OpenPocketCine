@@ -387,6 +387,18 @@
         AndroidSessionWire.feedWatchdogDestroy(handle: Int64(handle))
     }
 
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_cameraSoftAPDecision")
+    public func swiftCoreCameraSoftAPDecision(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        kind: jstring?, requestJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: swiftString(env, kind) ?? "",
+                requestJSON: swiftString(env, requestJSON) ?? "{}"))
+    }
+
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_conformPreviewJSON")
     public func swiftCoreConformPreviewJSON(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, request: jstring?

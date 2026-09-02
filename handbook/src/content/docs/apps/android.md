@@ -19,7 +19,10 @@ pattern, not Skip/SKIE:
 3. Gradle `:app:stageSwiftCore` (`just android-core`) builds
    `aarch64-unknown-linux-android29` and stages `libOpenPocketCineAndroid.so`.
    **arm64-v8a only.** Toolchain pin: Swift **6.3.3**.
-4. Kotlin `core-api` wraps JNI. Kotlin does not pack protocol bytes.
+4. Kotlin `core-api` wraps JNI. Kotlin does not pack protocol bytes. Live
+   handshake / first-picture / enable-once policy is `cameraSoftAPDecision` in
+   the Swift facade — a handshake miss is a recoverable session error, not a
+   crash.
 
 Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
 [`ANDROID.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/ANDROID.md).
