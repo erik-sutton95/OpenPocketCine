@@ -1110,6 +1110,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             scope.launch {
                 try {
                     work()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.i(TAG, "feed: recovery work failed ${e.message}")
                 } finally {
                     feedRecoveryJob = null
                 }
@@ -1208,7 +1212,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         firstPictureSettled = false
         focusTrackPending = true
         if (!joiner.isProcessBound()) return
-        openDatalinkKeepingLive(camera)
+        try {
+            openDatalinkKeepingLive(camera)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.i(TAG, "feed: full rejoin failed (${e.message})")
+            disposeDatalink()
+        }
     }
 
     private fun sendCapturedLiveView(reason: String): Boolean {
