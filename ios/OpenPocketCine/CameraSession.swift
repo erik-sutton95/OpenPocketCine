@@ -4244,6 +4244,11 @@ final class CameraSession {
     }
 
     private func ingestAccessUnit(_ accessUnit: [UInt8]) {
+        guard CameraSoftAP.shouldIngestLiveVideo(
+            ingestArmed: true,
+            browsingMedia: isBrowsingMedia,
+            operatorOverlayHeld: false)
+        else { return }
         rawAccessUnits += 1
         if decoder.decode(accessUnit: accessUnit) { rawFramesEnqueued += 1 }
     }

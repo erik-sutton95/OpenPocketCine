@@ -47,6 +47,10 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(
             CameraSoftAP.shouldIngestLiveVideo(ingestArmed: true),
             "Mimo 20260828: HEVC at join+17ms, enable at +3s")
+        XCTAssertTrue(
+            CameraSoftAP.shouldIngestLiveVideo(
+                ingestArmed: true, browsingMedia: true, operatorOverlayHeld: true),
+            "#177: overlay/browse must not drop pktType 0x02")
         XCTAssertFalse(CameraSoftAP.shouldBeginIDRHoldOnEnable(hasPresentedPicture: true))
         XCTAssertTrue(
             CameraSoftAP.shouldRunFirstPictureRecover(
