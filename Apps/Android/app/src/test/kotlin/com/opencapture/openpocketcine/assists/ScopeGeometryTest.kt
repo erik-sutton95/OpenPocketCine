@@ -280,7 +280,7 @@ class ScopeGeometryTest {
 
     @Test
     fun zebraAndPeakingDefaultsMatchIos() {
-        assertEquals(100.0, LiveZebra.HIGHLIGHT_IRE)
+        assertEquals(99.0, LiveZebra.HIGHLIGHT_IRE)
         assertEquals(55.0, LiveZebra.MIDTONE_IRE)
         val state = LiveAssistState()
         assertEquals(PeakingColor.RED, state.peakingColor)
@@ -288,7 +288,7 @@ class ScopeGeometryTest {
         assertEquals(2.10, state.peakingSensitivity.ratioThreshold, 1e-12)
         assertEquals(ZebraPaint.WHITE, state.zebraHighlightColor)
         assertEquals(ZebraPaint.AMBER, state.zebraMidtoneColor)
-        assertEquals(100.0, state.zebraHighlightIRE)
+        assertEquals(99.0, state.zebraHighlightIRE)
         assertEquals(55.0, state.zebraMidtoneIRE)
         assertEquals(FalseColorScale.STOPS, state.falseColorScale)
         assertTrue(state.falseColorReference)

@@ -102,7 +102,9 @@ void main() {
         vec2 displayCoordinate = vec2(uv.x * pc.displaySize.x, (1.0 - uv.y) * pc.displaySize.y);
         float stripe = step(0.5, fract((displayCoordinate.x + displayCoordinate.y) / STRIPE_PITCH));
         if (pc.zebraHighlightOn > 0.5) {
-            float highlightMask = clamp((luma - pc.zebraHighlight) * ZEBRA_GAIN + 1.0, 0.0, 1.0);
+            // Highlight reads the max channel — the byte WAVE draws at 100 (#136).
+            float hot = max(source.r, max(source.g, source.b));
+            float highlightMask = clamp((hot - pc.zebraHighlight) * ZEBRA_GAIN + 1.0, 0.0, 1.0);
             color = mix(color, pc.zebraHighlightColor, highlightMask * stripe);
         }
         if (pc.zebraMidtoneOn > 0.5) {

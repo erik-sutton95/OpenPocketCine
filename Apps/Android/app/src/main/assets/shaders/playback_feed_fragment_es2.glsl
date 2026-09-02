@@ -295,9 +295,11 @@ void main() {
             fract((displayCoordinate.x + displayCoordinate.y) / STRIPE_PITCH)
         );
         if (uZebraHighlightOn > 0.5) {
-            // +1 matches iOS `thresholdMask` so luma == threshold paints.
+            // Highlight reads the max channel — the byte WAVE draws at 100 (#136).
+            // +1 matches iOS `thresholdMask` so code == threshold paints.
+            float hot = max(source.r, max(source.g, source.b));
             float highlightMask = clamp(
-                (luma - uZebraHighlight) * ZEBRA_GAIN + 1.0,
+                (hot - uZebraHighlight) * ZEBRA_GAIN + 1.0,
                 0.0,
                 1.0
             );
