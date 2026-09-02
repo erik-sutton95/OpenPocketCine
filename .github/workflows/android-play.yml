@@ -1,11 +1,17 @@
 name: Android Play
 
-# Closed-testing analog of Xcode Cloud → TestFlight. Never runs on pull_request
-# (forks must not see Play or keystore secrets). Secrets live in the
-# **play-closed** GitHub Environment. Auto-upload on main is opt-in via
-# ANDROID_PLAY_UPLOAD — first listing + first AAB stay a human gate.
+# Closed-testing analog of Xcode Cloud → TestFlight. Mirrors OpenZCine
+# play-internal.yml: auto-upload on main when Android-relevant paths change,
+# once ANDROID_PLAY_UPLOAD is exactly "true". Fail-closed on missing
+# play-closed secrets. Never runs on pull_request (forks must not see Play
+# or keystore secrets).
 #
-# One-time Play Console / signing / secrets: ./scripts/setup-android-play.sh
+# The first AAB of a new package must go through the Play Console UI; the
+# Publishing API cannot create the package. Dispatch without
+# PLAY_SERVICE_ACCOUNT_JSON still signs an AAB artifact for that first
+# Console upload. Auto-upload on main requires all five secrets.
+#
+# One-time upload keystore / Play API robot: just android-play-setup
 # Contract: docs/android-play-ci.md
 
 on:
@@ -47,13 +53,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-play-${{ github.ref }}
+  group: android-play-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   play:
     name: Bundle and upload
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.ANDROID_PLAY_UPLOAD == 'true' }}
+    if: ${{ github.repository == 'erik-sutton95/OpenPocketCine' && (github.event_name == 'workflow_dispatch' || vars.ANDROID_PLAY_UPLOAD == 'true') }}
     runs-on: ubuntu-latest
     environment: play-closed
     env:
@@ -79,16 +85,60 @@ jobs:
       - name: Install Swift Android SDK
         run: ./scripts/ci-install-swift-android.sh
 
-      - name: Decode upload keystore
+      - name: Validate release credentials
+        id: creds
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [[ -z "${ANDROID_KEYSTORE_BASE64}" ]]; then
-            echo "ANDROID_KEYSTORE_BASE64 is empty. Run ./scripts/setup-android-play.sh" >&2
+          missing=()
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing 'play-closed' environment secrets: ${missing[*]} (docs/android-play-ci.md)."
             exit 1
           fi
+          if [ -z "${PLAY_SERVICE_ACCOUNT_JSON}" ]; then
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "play_api=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::PLAY_SERVICE_ACCOUNT_JSON is empty. Signing the AAB only. Upload that artifact in Play Console, then just android-play-sync-secrets."
+            else
+              echo "::error::Missing 'play-closed' environment secret PLAY_SERVICE_ACCOUNT_JSON (docs/android-play-ci.md). Auto-upload is fail-closed."
+              exit 1
+            fi
+          else
+            if ! jq -e '
+              .type == "service_account" and
+              (.client_email | type == "string" and length > 0) and
+              (.private_key | type == "string" and length > 0)
+            ' >/dev/null <<< "$PLAY_SERVICE_ACCOUNT_JSON"; then
+              echo "::error::PLAY_SERVICE_ACCOUNT_JSON is not a valid service-account JSON key."
+              exit 1
+            fi
+            echo "play_api=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode and inspect upload keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/play-upload.keystore"
+          chmod 600 "$RUNNER_TEMP/play-upload.keystore"
+          keytool -list \
+            -keystore "$RUNNER_TEMP/play-upload.keystore" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
           echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/play-upload.keystore" >> "$GITHUB_ENV"
 
       - name: Stamp versionCode
@@ -107,7 +157,16 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
 
+      - name: Attach signed AAB
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-release-${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
+          path: Apps/Android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload to Play
+        if: ${{ steps.creds.outputs.play_api == 'true' }}
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -119,6 +178,18 @@ jobs:
           releaseName: ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
           whatsNewDirectory: Apps/Android/Play/whatsnew
 
+      - name: Play API skipped
+        if: ${{ steps.creds.outputs.play_api != 'true' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Play API skipped (dispatch bootstrap)"
+            echo "PLAY_SERVICE_ACCOUNT_JSON is empty. The signed AAB is attached as an artifact."
+            echo "Upload that AAB once in Play Console (closed testing), put the JSON at"
+            echo "\`.local/play-service-account.json\`, run \`just android-play-sync-secrets\`,"
+            echo "then set \`ANDROID_PLAY_UPLOAD=true\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summary
         run: |
           set -euo pipefail
@@ -128,4 +199,6 @@ jobs:
             echo "- versionCode: \`${VERSION_CODE}\`"
             echo "- track: \`${{ github.event.inputs.track || 'alpha' }}\`"
             echo "- status: \`${{ github.event.inputs.status || 'completed' }}\`"
+            echo "- artifact: \`app-release-${VERSION_NAME}-${VERSION_CODE}\`"
+            echo "- play API: \`${{ steps.creds.outputs.play_api }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
