@@ -152,6 +152,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android handshake miss is no longer an uncaught `IllegalStateException`
+  (`error()` in `DatalinkDriver.open`). SoftAP `onLost` still counts as
+  path-ready during reassociation grace, so the miss rebinds UDP instead
+  of crashing. After the path is gone, the session retries or returns to
+  pairing (#189). Android 16 Vitals on S24-class devices.
+
 - Head tracking closes on a dead-reckoned gimbal model with target-rate
   feed-forward instead of live `0x04/0x05`. Live attitude is ~0.25 s
   stale at ~10 Hz, and a proportional loop closed on it limit-cycled —
