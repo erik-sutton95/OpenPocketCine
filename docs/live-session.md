@@ -118,6 +118,14 @@ cancelled `open()` must not publish LIVE (`CameraSoftAP.shouldCommitLiveHandshak
 Process death did that for free; leaving the socket live is why reconnect
 hung on Waiting for live view until the app was killed.
 
+Android Vulkan live present: `surfaceDestroyed` must drop the swapchain and
+`ANativeWindow` (`nativeDetachWindow`) before it returns — presenting after
+that mutex is destroyed aborts in `vkQueuePresentKHR`. `opc.vk.img` must not
+`vkQueuePresentKHR` or `vkCreateImage` once the window is gone.
+`LiveVulkanSession.release` clears the ImageReader listener, joins
+`opc.vk.img`, then `nativeDestroy`. Do not destroy the swapchain on the
+Compose thread while a present is in flight.
+
 ## Decoder latch
 
 Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
