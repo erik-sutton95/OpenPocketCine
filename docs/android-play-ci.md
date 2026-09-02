@@ -1,18 +1,25 @@
 # Play closed testing (GitHub Actions)
 
-GitHub Actions is the Android analog of Xcode Cloud → TestFlight: a signed
+GitHub Actions is the Android analog of Xcode Cloud → TestFlight, and the
+OpenPocketCine counterpart of OpenZCine’s Play Internal pipeline: a signed
 App Bundle, a monotonic `versionCode`, and an upload onto Play **closed
-testing**. There is no Play equivalent of Apple-managed signing, so the upload
-keystore and the Play service account live in the **play-closed** GitHub
-Environment.
+testing** (`alpha`). There is no Play equivalent of Apple-managed signing, so
+the upload keystore and the Play service account live in the **play-closed**
+GitHub Environment.
+
+Auto-upload on `main` is gated by the repository variable
+`ANDROID_PLAY_UPLOAD` (must be exactly `true`) — the same kill switch as
+OpenZCine `PLAY_UPLOAD_ENABLED`. Missing `play-closed` secrets **fail the
+job**. They do not skip-succeed.
 
 Join URL (once the first release is live):
 <https://play.google.com/apps/testing/com.opencapture.openpocketcine>
 
-One-time Play Console / signing / secrets:
+One-time Play Console, upload keystore, Play API robot, and GitHub secrets:
 
 ```bash
-./scripts/setup-android-play.sh
+just android-play-setup          # walkthrough (Console + keystore + API robot + first AAB)
+just android-play-sync-secrets   # non-interactive: keystore + play-closed secrets
 ```
 
 ## Why closed testing
@@ -41,28 +48,70 @@ Play-delivered updates.
 | Upload | `.github/workflows/android-play.yml` → track `alpha` |
 
 The workflow **never** runs on `pull_request`. Forks must not see the keystore
-or the service account. Auto-upload on `main` is off until you set the
-repository variable `ANDROID_PLAY_UPLOAD=true` (the wizard asks). Until then,
-**Run workflow** on **Android Play**.
+or the service account (`github.repository` is pinned to
+`erik-sutton95/OpenPocketCine`). Auto-upload on `main` is off until
+`ANDROID_PLAY_UPLOAD=true`. Until then, **Run workflow** on **Android Play**
+or `just android-play-dispatch`.
 
 The first AAB of a new package must go through the Play Console UI so the
-package name exists. After that, Actions can upload.
+package name exists. After that, Actions can upload. Keep
+`ANDROID_PLAY_UPLOAD` off until that first Console AAB exists and the Play
+API robot is invited.
 
 ## After the workflow exists
 
 - **Merges to `main`** that touch `Apps/Android/`, the Swift core, the JNI
-  facade, `Package.swift`, the Android scripts, or `Apps/Android/Play/` upload
-  once `ANDROID_PLAY_UPLOAD` is true. Docs-only commits do not.
+  facade, `Package.swift`, the Android scripts, or `Apps/Android/Play/`
+  upload once `ANDROID_PLAY_UPLOAD` is `true`. Docs-only commits do not.
+  Auto-upload is fail-closed: all five `play-closed` secrets must exist and
+  `PLAY_SERVICE_ACCOUNT_JSON` must be a service-account key.
 - **Dispatch inputs**: `alpha` (closed) or `internal` (smoke); `completed` or
   `draft`; `changes_not_sent_for_review` while the listing is still incomplete.
+  Dispatch without `PLAY_SERVICE_ACCOUNT_JSON` still signs an AAB artifact
+  (the first Console upload). Auto-upload never takes that shortcut.
 - **Next versionCode**: the stamp is monotonic because `github.run_number` only
   increases. Raise `ANDROID_VERSION_CODE_BASE` if you ever need to jump over a
   manual upload.
+- **Signed AAB artifact**: every run attaches
+  `app-release-<versionName>-<versionCode>`.
+
+## GitHub `play-closed` environment secrets
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64 of `.local/play-upload.keystore` (no newlines) |
+| `ANDROID_KEYSTORE_PASSWORD` | Store password from `.local/play-signing.env` |
+| `ANDROID_KEY_ALIAS` | `upload` |
+| `ANDROID_KEY_PASSWORD` | Same as the store password (PKCS12) |
+| `PLAY_SERVICE_ACCOUNT_JSON` | Full contents of `.local/play-service-account.json` |
+
+`just android-play-sync-secrets` writes those from `.local/`. No keystore,
+password, or service-account JSON is ever committed.
+
+The Play API robot is **separate** from OpenZCine's
+`openzcine-play-publisher`. The wizard mints
+`openpocketcine-play-publisher@openpocketcine-play-publisher.iam.gserviceaccount.com`
+when `gcloud` is logged in, then you **Invite new users** on Play Console
+Users and permissions (same page as OpenZCine's robot). Play cannot create
+that invite from git. Leave the OpenZCine row alone.
+
+Repository variables:
+
+| Variable | Value |
+| --- | --- |
+| `ANDROID_PLAY_UPLOAD` | `true` to auto-upload on `main`; anything else is off |
+| `ANDROID_VERSION_CODE_BASE` | Offset added to `github.run_number` (default `0`) |
 
 Local signed bundle (same keystore as CI):
 
 ```bash
 just android-bundle
+```
+
+Dispatch a run from `main` without waiting for a merge:
+
+```bash
+just android-play-dispatch
 ```
 
 ## Tester-facing release notes
@@ -174,9 +223,11 @@ you keep a matching AAB from the Actions run.
 
 | Symptom | Likely cause |
 | --- | --- |
-| Workflow skipped on `main` | `ANDROID_PLAY_UPLOAD` is not `true`; dispatch it once by hand |
-| `ANDROID_KEYSTORE_BASE64 is empty` | Environment **play-closed** secrets missing; re-run the wizard |
-| Insufficient permissions | Service account invited in Play Console, but wait 15–60 minutes |
+| Wizard keeps opening All apps / Configurations | It used to reopen `play.google.com/console` every stage. Re-run `just android-play-setup` after pulling; paste the OpenPocketCine address-bar URL once (`…/developers/…/app/…`). Left sidebar is the menu. |
+| Workflow skipped on `main` | `ANDROID_PLAY_UPLOAD` is not exactly `true`, or the commit did not touch Android paths |
+| Missing `play-closed` secrets | One of the five values below is absent; `just android-play-sync-secrets` |
+| `PLAY_SERVICE_ACCOUNT_JSON is not a valid service-account JSON key` | The secret is empty, truncated, or not a GCP service-account key |
+| Insufficient permissions | Invite `openpocketcine-play-publisher@…` on Users and permissions (OpenPocketCine app, testing-track release). Wait 15–60 minutes after Invite. |
 | Package not found | First AAB has not been uploaded in the Console yet |
 | Testers see nothing | Closed release still in review; or they have not tapped Become a tester |
 | "Device not compatible" | 32-bit phone, or Android older than 10 |
