@@ -130,6 +130,26 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(IsoLimit.max12800.rawValue, 0x08)
     }
 
+    func testPocket3IsoAutoRangesStartAt50() {
+        let p3 = CameraModel.resolve(modelId: 0x0020, name: nil)
+        let expected = [
+            "50–200", "50–400", "50–800", "50–1600",
+            "50–3200", "50–6400", "50–12800", "50–25600",
+        ]
+        var normal = CameraStatus()
+        normal.colorMode = .normal
+        XCTAssertEqual(CaptureLists.isoAutoLabels(from: normal, model: p3), expected)
+        XCTAssertEqual(CaptureLists.isoLimit(from: "50–400", status: normal, model: p3), .max400)
+        var live = CameraStatus()
+        live.colorMode = .normal
+        live.isoLimit = .max400
+        XCTAssertEqual(CaptureLists.isoAutoLabel(from: live, model: p3), "50–400")
+        let p4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        XCTAssertEqual(CaptureLists.isoAutoLabels(from: normal, model: p4).first, "50–200")
+        let p4p = CameraModel.resolve(modelId: 0x0022, name: nil)
+        XCTAssertEqual(CaptureLists.isoAutoLabels(from: normal, model: p4p).first, "100–200")
+    }
+
     func testEvLabelsThirdStopsFromMinus3ToPlus3() {
         let labels = CaptureLists.evLabels
         XCTAssertEqual(labels.count, 19)

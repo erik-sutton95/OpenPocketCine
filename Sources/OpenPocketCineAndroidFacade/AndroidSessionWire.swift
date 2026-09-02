@@ -822,6 +822,194 @@ public enum AndroidSessionWire {
 
     private static let watchdogStore = WatchdogStore()
 
+    /// Android JNI: `CameraSoftAP` decisions so Kotlin does not clone the ladder.
+    /// `kind` is the function name. Bool results are `true` / `false`. Enums use
+    /// `HandshakeTimeoutStep` / `FirstPictureStep` raw values.
+    public static func cameraSoftAPDecision(kind: String, requestJSON: String) -> String {
+        let json = requestJSON
+        func flag(_ value: Bool) -> String { value ? "true" : "false" }
+        switch kind {
+        case "handshakeTimeoutStep":
+            return CameraSoftAP.handshakeTimeoutStep(
+                pathReady: jsonBool(json, key: "pathReady", default: false),
+                rebindsUsed: Int(jsonNumber(json, key: "rebindsUsed", default: 0)),
+                inboundDatagrams: Int(jsonNumber(json, key: "inboundDatagrams", default: 0)),
+                rebindLimit: Int(
+                    jsonNumber(
+                        json, key: "rebindLimit",
+                        default: Double(CameraSoftAP.handshakeRebindLimit)))
+            ).rawValue
+        case "firstPictureStep":
+            return CameraSoftAP.firstPictureStep(
+                videoPackets: Int(jsonNumber(json, key: "videoPackets", default: 0)),
+                enableSends: Int(jsonNumber(json, key: "enableSends", default: 0)),
+                secondsSinceLastEnable: jsonNumber(
+                    json, key: "secondsSinceLastEnable", default: 0),
+                secondsSinceLastVideo: jsonOptionalNumber(json, key: "secondsSinceLastVideo"),
+                secondsSinceLastRebuild: jsonOptionalNumber(json, key: "secondsSinceLastRebuild"),
+                secondsSinceLastStatus: jsonOptionalNumber(json, key: "secondsSinceLastStatus"),
+                needsRecordingFormatPoke: jsonBool(
+                    json, key: "needsRecordingFormatPoke", default: false),
+                alreadyPokedRecordingFormat: jsonBool(
+                    json, key: "alreadyPokedRecordingFormat", default: false),
+                recordingFormatPokeInFlight: jsonBool(
+                    json, key: "recordingFormatPokeInFlight", default: false),
+                isRecording: jsonBool(json, key: "isRecording", default: false),
+                hasPresentedPicture: jsonBool(json, key: "hasPresentedPicture", default: false)
+            ).rawValue
+        case "shouldKickAfterHandshakeTimeout":
+            return flag(
+                CameraSoftAP.shouldKickAfterHandshakeTimeout(
+                    pathReady: jsonBool(json, key: "pathReady", default: false)))
+        case "shouldGiveUpOpenRetry":
+            return flag(
+                CameraSoftAP.shouldGiveUpOpenRetry(
+                    attempts: Int(jsonNumber(json, key: "attempts", default: 0))))
+        case "canSendHandshake":
+            return flag(
+                CameraSoftAP.canSendHandshake(
+                    receiveArmed: jsonBool(json, key: "receiveArmed", default: false),
+                    connectionReady: jsonBool(json, key: "connectionReady", default: false)))
+        case "shouldRecoverAfterForeground":
+            return flag(
+                CameraSoftAP.shouldRecoverAfterForeground(
+                    secondsSinceLastPresented: jsonOptionalNumber(
+                        json, key: "secondsSinceLastPresented"),
+                    videoFresh: jsonBool(json, key: "videoFresh", default: false),
+                    statusFresh: jsonBool(json, key: "statusFresh", default: false)))
+        case "shouldEscalateForegroundRecover":
+            return flag(
+                CameraSoftAP.shouldEscalateForegroundRecover(
+                    secondsSinceLastPresented: jsonOptionalNumber(
+                        json, key: "secondsSinceLastPresented"),
+                    videoFresh: jsonBool(json, key: "videoFresh", default: false),
+                    statusFresh: jsonBool(json, key: "statusFresh", default: false)))
+        case "shouldKeepaliveRebuildUDP":
+            return flag(
+                CameraSoftAP.shouldKeepaliveRebuildUDP(
+                    flowNeedsRebuild: jsonBool(json, key: "flowNeedsRebuild", default: false),
+                    rebuildInFlight: jsonBool(json, key: "rebuildInFlight", default: false),
+                    secondsSinceLastRebuild: jsonOptionalNumber(
+                        json, key: "secondsSinceLastRebuild"),
+                    videoFresh: jsonBool(json, key: "videoFresh", default: false),
+                    sawPicture: jsonBool(json, key: "sawPicture", default: true),
+                    statusFresh: jsonBool(json, key: "statusFresh", default: false),
+                    secondsSinceLastEnable: jsonOptionalNumber(
+                        json, key: "secondsSinceLastEnable"),
+                    pathReady: jsonBool(json, key: "pathReady", default: true)))
+        case "shouldRebuildAfterCommandTimeouts":
+            return flag(
+                CameraSoftAP.shouldRebuildAfterCommandTimeouts(
+                    timeoutsInWindow: Int(jsonNumber(json, key: "timeoutsInWindow", default: 0)),
+                    downlinkFresh: jsonBool(json, key: "downlinkFresh", default: false),
+                    videoFresh: jsonBool(json, key: "videoFresh", default: false),
+                    rebuildInFlight: jsonBool(json, key: "rebuildInFlight", default: false),
+                    secondsSinceLastRebuild: jsonOptionalNumber(
+                        json, key: "secondsSinceLastRebuild"),
+                    statusFresh: jsonBool(json, key: "statusFresh", default: false)))
+        case "shouldForceEnableAfterUDPRebuild":
+            return flag(
+                CameraSoftAP.shouldForceEnableAfterUDPRebuild(
+                    hadVideo: jsonBool(json, key: "hadVideo", default: false)))
+        case "shouldRearmLiveIngestAfterUDPRebuild":
+            return flag(
+                CameraSoftAP.shouldRearmLiveIngestAfterUDPRebuild(
+                    wasAccepting: jsonBool(json, key: "wasAccepting", default: false)))
+        case "shouldBeginIDRHoldOnEnable":
+            return flag(
+                CameraSoftAP.shouldBeginIDRHoldOnEnable(
+                    hasPresentedPicture: jsonBool(
+                        json, key: "hasPresentedPicture", default: false)))
+        case "shouldRunFirstPictureRecover":
+            return flag(
+                CameraSoftAP.shouldRunFirstPictureRecover(
+                    secondsSinceLastPresented: jsonOptionalNumber(
+                        json, key: "secondsSinceLastPresented"),
+                    alreadySettled: jsonBool(json, key: "alreadySettled", default: false)))
+        case "shouldMarkFirstPictureSettled":
+            return flag(
+                CameraSoftAP.shouldMarkFirstPictureSettled(
+                    secondsSinceLastPresented: jsonOptionalNumber(
+                        json, key: "secondsSinceLastPresented"),
+                    secondsSinceLastEnable: jsonNumber(
+                        json, key: "secondsSinceLastEnable", default: 0)))
+        case "shouldContinueFirstPictureAfterStrayPlayback":
+            return flag(
+                CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(
+                    hasPicture: jsonBool(json, key: "hasPicture", default: false)))
+        case "shouldClearForegroundRecoverWithoutRebuild":
+            return flag(
+                CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(
+                    holdsMonitor: jsonBool(json, key: "holdsMonitor", default: false)))
+        case "shouldExitPlaybackBeforeLiveEnable":
+            return flag(
+                CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(
+                    inPlayback: jsonBool(json, key: "inPlayback", default: false)))
+        case "shouldSendLiveViewPrepare":
+            return flag(
+                CameraSoftAP.shouldSendLiveViewPrepare(
+                    usesNanoLiveViewGate: jsonBool(
+                        json, key: "usesNanoLiveViewGate", default: false)))
+        case "shouldPokeRecordingFormat":
+            return flag(
+                CameraSoftAP.shouldPokeRecordingFormat(
+                    needsPoke: jsonBool(json, key: "needsPoke", default: false),
+                    alreadyPoked: jsonBool(json, key: "alreadyPoked", default: false),
+                    isRecording: jsonBool(json, key: "isRecording", default: false),
+                    hadVideo: jsonBool(json, key: "hadVideo", default: false),
+                    enableSends: Int(jsonNumber(json, key: "enableSends", default: 0)),
+                    secondsSinceLastEnable: jsonNumber(
+                        json, key: "secondsSinceLastEnable", default: 0)))
+        case "shouldSendLiveViewEnableAfterHandshake":
+            return flag(
+                CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(
+                    alreadySent: jsonBool(json, key: "alreadySent", default: false)))
+        case "shouldReuseDatalink":
+            return flag(
+                CameraSoftAP.shouldReuseDatalink(
+                    isClosed: jsonBool(json, key: "isClosed", default: false)))
+        case "shouldCommitLiveHandshake":
+            return flag(
+                CameraSoftAP.shouldCommitLiveHandshake(
+                    driverOwned: jsonBool(json, key: "driverOwned", default: false),
+                    isClosed: jsonBool(json, key: "isClosed", default: false),
+                    isCancelled: jsonBool(json, key: "isCancelled", default: false)))
+        case "shouldHoldForGOPReset":
+            return flag(
+                FeedWatchdog.shouldHoldForGOPReset(
+                    secondsSinceLastEnable: jsonOptionalNumber(
+                        json, key: "secondsSinceLastEnable"),
+                    lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge")))
+        case "shouldStartFeedRecovery":
+            return flag(
+                FeedWatchdog.shouldStartFeedRecovery(
+                    rebuildInFlight: jsonBool(json, key: "rebuildInFlight", default: false)))
+        case "shouldSendRecoverEnable":
+            return flag(
+                FeedWatchdog.shouldSendRecoverEnable(
+                    pathReady: jsonBool(json, key: "pathReady", default: false),
+                    decoderReady: jsonBool(json, key: "decoderReady", default: false)))
+        case "shouldTreatLiveVideoAsStale":
+            return flag(
+                FeedWatchdog.shouldTreatLiveVideoAsStale(
+                    lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
+                    hadVideo: jsonBool(json, key: "hadVideo", default: false),
+                    recovering: jsonBool(json, key: "recovering", default: false)))
+        case "shouldRepeatRecoverEnable":
+            return flag(
+                FeedWatchdog.shouldRepeatRecoverEnable(
+                    secondsSinceLastEnable: jsonNumber(
+                        json, key: "secondsSinceLastEnable", default: 0),
+                    secondsSinceLastRebuild: jsonOptionalNumber(
+                        json, key: "secondsSinceLastRebuild"),
+                    pathReady: jsonBool(json, key: "pathReady", default: true),
+                    lastBleNotifyAge: jsonOptionalNumber(json, key: "lastBleNotifyAge"),
+                    hadVideo: jsonBool(json, key: "hadVideo", default: true)))
+        default:
+            return ""
+        }
+    }
+
     public static func feedWatchdogCreate() -> Int64 {
         let store = watchdogStore
         store.lock.lock()

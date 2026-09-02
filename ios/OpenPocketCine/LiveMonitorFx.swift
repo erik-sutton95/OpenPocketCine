@@ -689,7 +689,12 @@ enum LiveMonitorCompositor {
         // `encodedValue(ire100:)` ran a 48-step bisection up to 3× per frame.
         // D-Log2 18% grey stays at paper IRE 30.50 — never a highlight zebra.
         // Unit is editor-only (OpenZCine `ZebraSettings.unit`) — both zones read IRE here.
+        // Highlight reads the max channel: WAVE 100 and the ceiling ratchet
+        // are `LiveFrameTap.maxRGB`, and a blue-led sky has luma well under
+        // its hot channel, so a luma compare never reached the 100 line (#136).
+        // Midtone stays luma (skin band, OpenZCine).
         let transfer = MonitorTransfer(colorMode)
+        let hot = source.applyingFilter("CIMaximumComponent")
         let luma = source.applyingFilter(
             "CIColorMatrix",
             parameters: [
@@ -705,7 +710,7 @@ enum LiveMonitorCompositor {
             let threshold = ScopeDisplayScale.signalNative(
                 monitorPercent: zebra.highlightIRE, transfer: transfer)
             output = blendStripedZebra(
-                over: output, mask: thresholdMask(luma, above: threshold),
+                over: output, mask: thresholdMask(hot, above: threshold),
                 color: CIColor(red: rgb.0, green: rgb.1, blue: rgb.2), extent: extent)
         }
         if zebra.midtoneEnabled {

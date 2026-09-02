@@ -34,6 +34,9 @@ final class HevcDecoder {
     private(set) var hasFormat = false
     private(set) var nalTypesSeen: Set<Int> = []
     private(set) var decoderErrors = 0
+    /// Last VT / layer decode failure. `decoderErrors` is cumulative — one bad
+    /// AU an hour ago must not read as `decoderWedged` on the observe line.
+    private(set) var lastDecodeErrorAt: Date?
     private(set) var lastKeyframeAt: Date?
     /// Last AU enqueued or VT frame presented. Watchdog stall signal (not keyframe age).
     private(set) var lastPresentedAt: Date?
@@ -168,6 +171,22 @@ final class HevcDecoder {
     }
     /// VT owns the picture so the hardware decoder is not shared with the display layer.
     private var usesPixelBufferDisplay: Bool { prefersPixelBufferDisplay || shouldStartVT }
+    /// Test seam: the live VT session (if any) can decode samples stamped with
+    /// the current format description. `adoptFormat` must keep this true.
+    var vtSessionAcceptsCurrentFormat: Bool {
+        guard let vtSession, let format else { return true }
+        return VTDecompressionSessionCanAcceptFormatDescription(
+            vtSession, formatDescription: format)
+    }
+
+    /// Decode failed after the last presented picture — VT / layer is not
+    /// producing frames right now. Fresh signal for `LinkDiagnoser`.
+    var isDecoderWedged: Bool {
+        guard let error = lastDecodeErrorAt else { return false }
+        guard let presented = lastPresentedAt else { return true }
+        return error > presented
+    }
+
     /// UDP may still be alive. This is a present hitch, not a recover enable.
     var isPresentFrozen: Bool {
         let age: TimeInterval?
@@ -377,7 +396,7 @@ final class HevcDecoder {
             if displayLayer.status == .failed {
                 displayedImageRemoved = true
                 flushForRecovery()
-                decoderErrors += 1
+                noteDecodeError()
                 return false
             }
         }
@@ -877,6 +896,18 @@ final class HevcDecoder {
         {
             handleEncoderFormatChange()
         }
+        // Same raster, new sets: VT decides. Keeping a session that refuses the
+        // new SPS fails every frame with no log — frozen well, live HUD.
+        if let vtSession,
+            EncoderPresentPath.shouldRebuildDecoderForRejectedFormat(
+                parameterSetsChanged: changing,
+                sessionAcceptsFormat: VTDecompressionSessionCanAcceptFormatDescription(
+                    vtSession, formatDescription: fmt))
+        {
+            log.info("feed: VT refused new parameter sets — rebuild VT, keep picture")
+            ControlLiveLog.line("feed: VT refused new parameter sets — rebuild VT, keep picture")
+            rebuildVT(force: true)
+        }
         // Persisted LUT/scopes: start VT on this parameter-set AU. `onHandoffNeedsIDR`
         // still requires a picture, so the first GOP is not cut.
         if effects.needsSample {
@@ -1124,7 +1155,7 @@ final class HevcDecoder {
             if recoverOnFailure {
                 displayedImageRemoved = true
                 flushForRecovery()
-                decoderErrors += 1
+                noteDecodeError()
             }
             return false
         }
@@ -1158,8 +1189,13 @@ final class HevcDecoder {
                 return true
             }
         }
-        decoderErrors += 1
+        noteDecodeError()
         return false
+    }
+
+    private func noteDecodeError() {
+        decoderErrors += 1
+        lastDecodeErrorAt = Date()
     }
 
     private func decodeFrame(
@@ -1175,11 +1211,10 @@ final class HevcDecoder {
         ) { [weak self] status, _, imageBuffer, _, _ in
             guard let self else { return }
             if status != noErr {
-                if Self.shouldRebuildSession(status: status) {
-                    Task { @MainActor [weak self] in
-                        guard let self, self.vtGeneration == generation, self.shouldStartVT else {
-                            return
-                        }
+                Task { @MainActor [weak self] in
+                    guard let self, self.vtGeneration == generation else { return }
+                    self.noteDecodeError()
+                    if Self.shouldRebuildSession(status: status), self.shouldStartVT {
                         self.rebuildVT(force: true)
                     }
                 }

@@ -305,7 +305,7 @@ enum class CrushClipCompensation(val raw: Int, val label: String, val compactLab
 }
 
 object LiveZebra {
-    const val HIGHLIGHT_IRE = 100.0
+    const val HIGHLIGHT_IRE = 99.0
     const val MIDTONE_IRE = 55.0
     const val MIDTONE_HALF_WIDTH_IRE = 5.0
 }

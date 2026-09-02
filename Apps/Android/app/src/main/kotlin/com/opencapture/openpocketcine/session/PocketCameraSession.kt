@@ -519,7 +519,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun openDatalinkKeepingLive(camera: FoundCamera) {
         val existing = datalink
         val dl =
-            existing?.takeUnless { it.isClosed }
+            existing?.takeIf { LiveViewEnablePolicy.shouldReuseDatalink(it.isClosed) }
                 ?: DatalinkDriver(
                     joiner,
                     camera.model.datalinkPort,
@@ -543,11 +543,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         var attempt = 0
         while (true) {
             try {
-                withTimeout(30_000) {
+                withTimeout(LiveViewEnablePolicy.handshakeOpenTimeoutMs()) {
                     kotlinx.coroutines.withContext(Dispatchers.IO) {
                         dl.open(
                             afterHandshake = {
-                                if (datalink !== dl || dl.isClosed) {
+                                if (!LiveViewEnablePolicy.shouldCommitLiveHandshake(
+                                        driverOwned = datalink === dl,
+                                        isClosed = dl.isClosed,
+                                        isCancelled = Thread.currentThread().isInterrupted,
+                                    )
+                                ) {
                                     Log.i(TAG, "live: ignore stale datalink open")
                                     return@open
                                 }
@@ -562,6 +567,20 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     }
                 }
                 return
+            } catch (e: TimeoutCancellationException) {
+                Log.i(TAG, "session: handshake open timed out")
+                val miss =
+                    DatalinkHandshakeException("camera never answered the datalink handshake")
+                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(joiner.isProcessBound())) {
+                    throw miss
+                }
+                attempt += 1
+                if (LiveViewEnablePolicy.shouldGiveUpOpenRetry(attempt)) {
+                    Log.i(TAG, "session: handshake give-up after $attempt opens")
+                    throw miss
+                }
+                Log.i(TAG, "session: handshake miss #$attempt — SoftAP up, retry (no kick)")
+                delay(LiveViewEnablePolicy.HANDSHAKE_RETRY_PAUSE_MS)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -3336,12 +3355,46 @@ internal object LiveViewEnablePolicy {
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
     const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
     const val HANDSHAKE_REBIND_LIMIT = 3
+    const val HANDSHAKE_SENDS_PER_BIND = 20
+    const val HANDSHAKE_SEND_INTERVAL_MS = 350L
+    /**
+     * One `DatalinkDriver.open` budget: 20×350 ms × (1+3 rebinds) + 500 ms
+     * pauses, plus headroom. iOS has no envelope; 30 s raced the last rebind.
+     */
+    fun handshakeOpenTimeoutMs(): Long =
+        HANDSHAKE_SENDS_PER_BIND * HANDSHAKE_SEND_INTERVAL_MS * (HANDSHAKE_REBIND_LIMIT + 1L) +
+            HANDSHAKE_RETRY_PAUSE_MS * HANDSHAKE_REBIND_LIMIT +
+            5_000L
     /** After a foreground rebuild, wait this long for an IDR before a full rejoin. */
     const val FOREGROUND_PICTURE_GRACE_MS = GOP_GRACE_MS
 
-    fun shouldGiveUpOpenRetry(attempts: Int): Boolean = attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
+    private fun coreDecision(kind: String, json: String): String? {
+        if (!SwiftCore.isAvailable) return null
+        return SwiftCore.cameraSoftAPDecision(kind, json)?.takeIf { it.isNotEmpty() }
+    }
 
-    fun shouldKickAfterHandshakeTimeout(pathReady: Boolean): Boolean = !pathReady
+    private fun coreFlag(kind: String, json: String, fallback: () -> Boolean): Boolean =
+        when (coreDecision(kind, json)) {
+            "true" -> true
+            "false" -> false
+            else -> fallback()
+        }
+
+    private fun secJson(ms: Long?): String = ms?.let { (it / 1000.0).toString() } ?: "null"
+
+    fun shouldGiveUpOpenRetry(attempts: Int): Boolean =
+        coreFlag("shouldGiveUpOpenRetry", "{\"attempts\":$attempts}") {
+            attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
+        }
+
+    fun shouldKickAfterHandshakeTimeout(pathReady: Boolean): Boolean =
+        coreFlag("shouldKickAfterHandshakeTimeout", "{\"pathReady\":$pathReady}") { !pathReady }
+
+    fun canSendHandshake(receiveArmed: Boolean, connectionReady: Boolean): Boolean =
+        coreFlag(
+            "canSendHandshake",
+            "{\"receiveArmed\":$receiveArmed,\"connectionReady\":$connectionReady}",
+        ) { receiveArmed && connectionReady }
 
     enum class Action { NONE, RESEND_ENABLE, REBUILD_UDP }
 
@@ -3403,11 +3456,15 @@ internal object LiveViewEnablePolicy {
     fun hadVideo(videoPackets: Int, videoAgeMs: Long?): Boolean =
         videoPackets > 0 || videoAgeMs != null
 
-    fun shouldHoldForGopReset(sinceEnableMs: Long?, videoAgeMs: Long?): Boolean {
-        if (sinceEnableMs == null || sinceEnableMs >= GOP_GRACE_MS) return false
-        if (videoAgeMs != null && videoAgeMs > sinceEnableMs + STALL_MS) return false
-        return true
-    }
+    fun shouldHoldForGopReset(sinceEnableMs: Long?, videoAgeMs: Long?): Boolean =
+        coreFlag(
+            "shouldHoldForGOPReset",
+            "{\"secondsSinceLastEnable\":${secJson(sinceEnableMs)},\"lastVideoPacketAge\":${secJson(videoAgeMs)}}",
+        ) {
+            if (sinceEnableMs == null || sinceEnableMs >= GOP_GRACE_MS) return@coreFlag false
+            if (videoAgeMs != null && videoAgeMs > sinceEnableMs + STALL_MS) return@coreFlag false
+            true
+        }
 
     /** Control Center / a short app-switcher peek still has a live GOP — do not tear UDP. */
     fun shouldRecoverAfterForeground(
@@ -3415,22 +3472,30 @@ internal object LiveViewEnablePolicy {
         videoFresh: Boolean = false,
         statusFresh: Boolean = false,
         stallSec: Double = STALL_MS / 1000.0,
-    ): Boolean {
-        if (videoFresh || statusFresh) return false
-        val age = secondsSinceLastPresented ?: return true
-        return age >= stallSec
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldRecoverAfterForeground",
+            "{\"secondsSinceLastPresented\":${secondsSinceLastPresented ?: "null"},\"videoFresh\":$videoFresh,\"statusFresh\":$statusFresh}",
+        ) {
+            if (videoFresh || statusFresh) return@coreFlag false
+            val age = secondsSinceLastPresented ?: return@coreFlag true
+            age >= stallSec
+        }
 
     fun shouldEscalateForegroundRecover(
         secondsSinceLastPresented: Double?,
         videoFresh: Boolean = false,
         statusFresh: Boolean = false,
         graceSec: Double = FOREGROUND_PICTURE_GRACE_MS / 1000.0,
-    ): Boolean {
-        if (videoFresh || statusFresh) return false
-        val age = secondsSinceLastPresented ?: return true
-        return age >= graceSec
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldEscalateForegroundRecover",
+            "{\"secondsSinceLastPresented\":${secondsSinceLastPresented ?: "null"},\"videoFresh\":$videoFresh,\"statusFresh\":$statusFresh}",
+        ) {
+            if (videoFresh || statusFresh) return@coreFlag false
+            val age = secondsSinceLastPresented ?: return@coreFlag true
+            age >= graceSec
+        }
 
     enum class HandshakeTimeoutStep { KEEP_SOCKET, REBIND_UDP, FAIL }
 
@@ -3440,6 +3505,16 @@ internal object LiveViewEnablePolicy {
         inboundDatagrams: Int = 0,
         rebindLimit: Int = HANDSHAKE_REBIND_LIMIT,
     ): HandshakeTimeoutStep {
+        when (
+            coreDecision(
+                "handshakeTimeoutStep",
+                "{\"pathReady\":$pathReady,\"rebindsUsed\":$rebindsUsed,\"inboundDatagrams\":$inboundDatagrams,\"rebindLimit\":$rebindLimit}",
+            )
+        ) {
+            "keepSocket" -> return HandshakeTimeoutStep.KEEP_SOCKET
+            "rebindUDP" -> return HandshakeTimeoutStep.REBIND_UDP
+            "fail" -> return HandshakeTimeoutStep.FAIL
+        }
         if (inboundDatagrams > 0) return HandshakeTimeoutStep.KEEP_SOCKET
         if (!pathReady) return HandshakeTimeoutStep.FAIL
         if (rebindsUsed < rebindLimit) return HandshakeTimeoutStep.REBIND_UDP
@@ -3484,13 +3559,20 @@ internal object LiveViewEnablePolicy {
         lastVideoPacketAgeMs: Long?,
         hadVideo: Boolean,
         recovering: Boolean = false,
-    ): Boolean {
-        if (recovering) return true
-        val age = lastVideoPacketAgeMs ?: return hadVideo
-        return age >= ANALOG_LIFT_STALE_MS
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldTreatLiveVideoAsStale",
+            "{\"lastVideoPacketAge\":${secJson(lastVideoPacketAgeMs)},\"hadVideo\":$hadVideo,\"recovering\":$recovering}",
+        ) {
+            if (recovering) return@coreFlag true
+            val age = lastVideoPacketAgeMs ?: return@coreFlag hadVideo
+            age >= ANALOG_LIFT_STALE_MS
+        }
 
-    fun shouldStartFeedRecovery(rebuildInFlight: Boolean): Boolean = !rebuildInFlight
+    fun shouldStartFeedRecovery(rebuildInFlight: Boolean): Boolean =
+        coreFlag("shouldStartFeedRecovery", "{\"rebuildInFlight\":$rebuildInFlight}") {
+            !rebuildInFlight
+        }
 
     fun shouldRepeatRecoverEnable(
         sinceEnableMs: Long,
@@ -3500,11 +3582,21 @@ internal object LiveViewEnablePolicy {
         hadVideo: Boolean,
         @Suppress("UNUSED_PARAMETER") holdEnableCount: Int,
         @Suppress("UNUSED_PARAMETER") videoAgeMs: Long?,
-    ): Boolean {
-        // Mid-session extra enable GOP-cuts. FeedWatchdog.tick owns that ladder.
-        if (hadVideo) return false
-        return sinceEnableMs >= STALL_MS
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldRepeatRecoverEnable",
+            "{" +
+                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
+                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
+                "\"pathReady\":$pathReady," +
+                "\"lastBleNotifyAge\":${secJson(bleAgeMs)}," +
+                "\"hadVideo\":$hadVideo" +
+                "}",
+        ) {
+            // Mid-session extra enable GOP-cuts. FeedWatchdog.tick owns that ladder.
+            if (hadVideo) return@coreFlag false
+            sinceEnableMs >= STALL_MS
+        }
 
     fun shouldRebuildAfterCommandTimeouts(
         timeoutsInWindow: Int,
@@ -3513,27 +3605,50 @@ internal object LiveViewEnablePolicy {
         rebuildInFlight: Boolean,
         sinceRebuildMs: Long?,
         statusFresh: Boolean = false,
-    ): Boolean {
-        if (videoFresh) return false
-        if (statusFresh) return false
-        if (timeoutsInWindow < COMMAND_TIMEOUT_REBUILD_COUNT || !downlinkFresh || rebuildInFlight) {
-            return false
+    ): Boolean =
+        coreFlag(
+            "shouldRebuildAfterCommandTimeouts",
+            "{" +
+                "\"timeoutsInWindow\":$timeoutsInWindow," +
+                "\"downlinkFresh\":$downlinkFresh," +
+                "\"videoFresh\":$videoFresh," +
+                "\"rebuildInFlight\":$rebuildInFlight," +
+                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
+                "\"statusFresh\":$statusFresh" +
+                "}",
+        ) {
+            if (videoFresh) return@coreFlag false
+            if (statusFresh) return@coreFlag false
+            if (timeoutsInWindow < COMMAND_TIMEOUT_REBUILD_COUNT || !downlinkFresh || rebuildInFlight) {
+                return@coreFlag false
+            }
+            if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return@coreFlag false
+            true
         }
-        if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return false
-        return true
-    }
 
-    fun shouldRunFirstPictureRecover(presentedAgeMs: Long?, alreadySettled: Boolean): Boolean {
-        if (alreadySettled) return false
-        return presentedAgeMs == null || presentedAgeMs >= STALL_MS
-    }
+    fun shouldRunFirstPictureRecover(presentedAgeMs: Long?, alreadySettled: Boolean): Boolean =
+        coreFlag(
+            "shouldRunFirstPictureRecover",
+            "{\"secondsSinceLastPresented\":${secJson(presentedAgeMs)},\"alreadySettled\":$alreadySettled}",
+        ) {
+            if (alreadySettled) return@coreFlag false
+            presentedAgeMs == null || presentedAgeMs >= STALL_MS
+        }
 
-    fun shouldMarkFirstPictureSettled(presentedAgeMs: Long?, sinceEnableMs: Long): Boolean {
-        val presented = presentedAgeMs ?: return false
-        return presented >= 0 && presented < STALL_MS
-    }
+    fun shouldMarkFirstPictureSettled(presentedAgeMs: Long?, sinceEnableMs: Long): Boolean =
+        coreFlag(
+            "shouldMarkFirstPictureSettled",
+            "{\"secondsSinceLastPresented\":${secJson(presentedAgeMs)},\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}}",
+        ) {
+            val presented = presentedAgeMs ?: return@coreFlag false
+            presented >= 0 && presented < STALL_MS
+        }
 
-    fun shouldBeginIDRHoldOnEnable(hasPresentedPicture: Boolean): Boolean = !hasPresentedPicture
+    fun shouldBeginIDRHoldOnEnable(hasPresentedPicture: Boolean): Boolean =
+        coreFlag(
+            "shouldBeginIDRHoldOnEnable",
+            "{\"hasPresentedPicture\":$hasPresentedPicture}",
+        ) { !hasPresentedPicture }
 
     fun firstPictureStep(
         videoPackets: Int,
@@ -3547,6 +3662,29 @@ internal object LiveViewEnablePolicy {
         isRecording: Boolean = false,
         hasPresentedPicture: Boolean = false,
     ): FirstPictureStep {
+        when (
+            coreDecision(
+                "firstPictureStep",
+                "{" +
+                    "\"videoPackets\":$videoPackets," +
+                    "\"enableSends\":$enableSends," +
+                    "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
+                    "\"secondsSinceLastVideo\":${secJson(videoAgeMs)}," +
+                    "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
+                    "\"needsRecordingFormatPoke\":$needsRecordingFormatPoke," +
+                    "\"alreadyPokedRecordingFormat\":$alreadyPokedRecordingFormat," +
+                    "\"recordingFormatPokeInFlight\":$recordingFormatPokeInFlight," +
+                    "\"isRecording\":$isRecording," +
+                    "\"hasPresentedPicture\":$hasPresentedPicture" +
+                    "}",
+            )
+        ) {
+            "wait" -> return FirstPictureStep.WAIT
+            "resendEnable" -> return FirstPictureStep.RESEND_ENABLE
+            "pokeRecordingFormat" -> return FirstPictureStep.POKE_RECORDING_FORMAT
+            "rebuildUDP" -> return FirstPictureStep.REBUILD_UDP
+            "rejoin" -> return FirstPictureStep.REJOIN
+        }
         if (hasPresentedPicture) return FirstPictureStep.WAIT
         if (enableSends < 1) return FirstPictureStep.RESEND_ENABLE
         if (recordingFormatPokeInFlight) return FirstPictureStep.WAIT
@@ -3599,12 +3737,23 @@ internal object LiveViewEnablePolicy {
         hadVideo: Boolean,
         enableSends: Int,
         sinceEnableMs: Long,
-    ): Boolean {
-        if (!needsPoke || alreadyPoked || isRecording || enableSends < 1) return false
-        if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return false
-        if (!hadVideo) return true
-        return sinceEnableMs >= ESCALATE_MS
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldPokeRecordingFormat",
+            "{" +
+                "\"needsPoke\":$needsPoke," +
+                "\"alreadyPoked\":$alreadyPoked," +
+                "\"isRecording\":$isRecording," +
+                "\"hadVideo\":$hadVideo," +
+                "\"enableSends\":$enableSends," +
+                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}" +
+                "}",
+        ) {
+            if (!needsPoke || alreadyPoked || isRecording || enableSends < 1) return@coreFlag false
+            if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return@coreFlag false
+            if (!hadVideo) return@coreFlag true
+            sinceEnableMs >= ESCALATE_MS
+        }
 
     /**
      * Leftover TRAIL P-frames still arriving: ask for IDR, keep the socket.
@@ -3641,14 +3790,27 @@ internal object LiveViewEnablePolicy {
     fun shouldUseCapturedLiveStartForMediaResume(): Boolean = true
 
     /** Pocket: `0x02/0x68` `08` immediately before `0x09/0xa8`. Not Nano. */
-    fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean = !usesNanoLiveViewGate
+    fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean =
+        coreFlag(
+            "shouldSendLiveViewPrepare",
+            "{\"usesNanoLiveViewGate\":$usesNanoLiveViewGate}",
+        ) { !usesNanoLiveViewGate }
 
     /** `0x02/0x0c` is gallery enter/exit — not live-start. Matches iOS / handbook. */
-    fun shouldExitPlaybackBeforeLiveEnable(inPlayback: Boolean): Boolean = inPlayback
+    fun shouldExitPlaybackBeforeLiveEnable(inPlayback: Boolean): Boolean =
+        coreFlag("shouldExitPlaybackBeforeLiveEnable", "{\"inPlayback\":$inPlayback}") { inPlayback }
 
-    fun shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: Boolean): Boolean = holdsMonitor
+    fun shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: Boolean): Boolean =
+        coreFlag(
+            "shouldClearForegroundRecoverWithoutRebuild",
+            "{\"holdsMonitor\":$holdsMonitor}",
+        ) { holdsMonitor }
 
-    fun shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Boolean): Boolean = !hasPicture
+    fun shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Boolean): Boolean =
+        coreFlag(
+            "shouldContinueFirstPictureAfterStrayPlayback",
+            "{\"hasPicture\":$hasPicture}",
+        ) { !hasPicture }
 
     /**
      * Mimo 20260828: HEVC at join+17 ms. Do not wait a DUML ACK before arming.
@@ -3664,22 +3826,56 @@ internal object LiveViewEnablePolicy {
         statusFresh: Boolean = false,
         sinceEnableMs: Long? = null,
         pathReady: Boolean = true,
-    ): Boolean {
-        if (!sawPicture) return false
-        if (!pathReady) return false
-        if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return false
-        if (statusFresh) return false
-        if (shouldHoldForGopReset(sinceEnableMs, null)) return false
-        if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return false
-        return true
-    }
+    ): Boolean =
+        coreFlag(
+            "shouldKeepaliveRebuildUDP",
+            "{" +
+                "\"flowNeedsRebuild\":$flowNeedsRebuild," +
+                "\"rebuildInFlight\":$rebuildInFlight," +
+                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
+                "\"videoFresh\":$videoFresh," +
+                "\"sawPicture\":$sawPicture," +
+                "\"statusFresh\":$statusFresh," +
+                "\"secondsSinceLastEnable\":${secJson(sinceEnableMs)}," +
+                "\"pathReady\":$pathReady" +
+                "}",
+        ) {
+            if (!sawPicture) return@coreFlag false
+            if (!pathReady) return@coreFlag false
+            if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return@coreFlag false
+            if (statusFresh) return@coreFlag false
+            if (shouldHoldForGopReset(sinceEnableMs, null)) return@coreFlag false
+            if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return@coreFlag false
+            true
+        }
 
-    fun shouldForceEnableAfterUDPRebuild(hadVideo: Boolean): Boolean = !hadVideo
+    fun shouldForceEnableAfterUDPRebuild(hadVideo: Boolean): Boolean =
+        coreFlag("shouldForceEnableAfterUDPRebuild", "{\"hadVideo\":$hadVideo}") { !hadVideo }
 
-    fun shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: Boolean): Boolean = wasAccepting
+    fun shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: Boolean): Boolean =
+        coreFlag(
+            "shouldRearmLiveIngestAfterUDPRebuild",
+            "{\"wasAccepting\":$wasAccepting}",
+        ) { wasAccepting }
 
     fun shouldSendRecoverEnable(pathReady: Boolean, decoderReady: Boolean): Boolean =
-        pathReady && decoderReady
+        coreFlag(
+            "shouldSendRecoverEnable",
+            "{\"pathReady\":$pathReady,\"decoderReady\":$decoderReady}",
+        ) { pathReady && decoderReady }
+
+    fun shouldCommitLiveHandshake(
+        driverOwned: Boolean,
+        isClosed: Boolean,
+        isCancelled: Boolean,
+    ): Boolean =
+        coreFlag(
+            "shouldCommitLiveHandshake",
+            "{\"driverOwned\":$driverOwned,\"isClosed\":$isClosed,\"isCancelled\":$isCancelled}",
+        ) { driverOwned && !isClosed && !isCancelled }
+
+    fun shouldReuseDatalink(isClosed: Boolean): Boolean =
+        coreFlag("shouldReuseDatalink", "{\"isClosed\":$isClosed}") { !isClosed }
 
     fun tick(state: State, snap: Snapshot): Action {
         if (!snap.live) {

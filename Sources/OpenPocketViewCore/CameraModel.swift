@@ -64,6 +64,18 @@ public struct CameraModel: Equatable, Sendable {
         return n.contains("pocket3") || n.contains("muse")
     }
 
+    /// Rec.709 / HDR / D-Log M Auto ISO range floor. SET bytes are still
+    /// `IsoLimit` — only the label changes (#180).
+    ///
+    /// Pocket 3 and Pocket 4 start at 50 (DJI spec). Pocket 4 Pro wide is 100
+    /// (captured `camcap_iso_auto_max`). Unknown bodies keep 100.
+    public var isoAutoRangeFloor: Int {
+        let n = name.lowercased().replacingOccurrences(of: " ", with: "")
+        if n.contains("pocket4p") || n.contains("4pro") { return 100 }
+        if n.contains("pocket4") || n.contains("pocket3") || n.contains("muse") { return 50 }
+        return 100
+    }
+
     /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF.
     public var supportsTapFocus: Bool { family != .nano }
 

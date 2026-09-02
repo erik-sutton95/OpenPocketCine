@@ -192,7 +192,8 @@ internal fun applyPlaybackLookPixels(
             g = mg
             b = mb
         }
-        if (zebraOn && luma >= zebraCode) {
+        // Highlight rides the max channel: same byte WAVE draws at 100 (#136).
+        if (zebraOn && maxOf(r, g, b) >= zebraCode) {
             r = zr
             g = zg
             b = zb

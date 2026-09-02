@@ -61,7 +61,9 @@ uses wall-clock PTS and `KEY_LOW_LATENCY`; do not pace at 30 fps. Cached Wi-Fi
 creds sit in private prefs, not saved-camera JSON. `holdsMonitor` must not latch
 a forever skip after a SoftAP flap. `isProcessBound` stays true while
 reassociation grace is armed (the `Network` object may already be null).
-Handshake miss is `DatalinkError.NoHandshake`, not Kotlin `error()`.
+Handshake miss is `DatalinkError.NoHandshake` (iOS `DatalinkError.noHandshake`),
+not Kotlin `error()`. Session recovery catches it; `cameraSoftAPDecision` JNI is
+the production `CameraSoftAP` ladder.
 
 ### Live picture
 
@@ -71,6 +73,9 @@ AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
 cover the monitor; they must not drop pktType `0x02` ingest (parity: live
 HEVC held). Return-from-gallery uses `restartLiveViewAfterMedia` (captured
 live-start), not `DatalinkDriver.startLiveView` alone.
+`GL_TEXTURE_EXTERNAL_OES` is the fallback. Drop the swapchain in
+`surfaceDestroyed` before Android destroys the window mutex; drain
+`opc.vk.img` before `nativeDestroy`. Contract: [`docs/live-session.md`](docs/live-session.md).
 
 ### HUD glass
 
@@ -92,6 +97,9 @@ the 128-bin raster.
 
 Playback grades the 720p LRF/XRF proxy in GLES (ExoPlayer → OES → TextureView).
 Share / Save to Photos caches the original (`MediaHTTP.deliveryPath`).
+Playback cache streams LRF/XRF (and originals) to disk (`downloadFile`).
+`fetchBytes` is thumbs/SCR only and is capped at 8 MiB — a missing
+Content-Length must not grow a `ByteArrayOutputStream` until OOM (#188).
 
 ## OpenZCine Android patterns adopted
 

@@ -85,6 +85,21 @@ import Testing
             "P-frames after a same-raster SPS must still present")
     }
 
+    @Test func decoderRefusingNewParameterSetsIsRebuilt() {
+        #expect(
+            EncoderPresentPath.shouldRebuildDecoderForRejectedFormat(
+                parameterSetsChanged: true, sessionAcceptsFormat: false),
+            "VT that cannot take the new SPS fails every frame — frozen well, live HUD")
+        #expect(
+            !EncoderPresentPath.shouldRebuildDecoderForRejectedFormat(
+                parameterSetsChanged: true, sessionAcceptsFormat: true),
+            "same-raster zoom / color SPS the session accepts keeps VT")
+        #expect(
+            !EncoderPresentPath.shouldRebuildDecoderForRejectedFormat(
+                parameterSetsChanged: false, sessionAcceptsFormat: false),
+            "identical sets are never a rebuild")
+    }
+
     @Test func screenFlipWithoutIDRRebuildsAndHolds() {
         #expect(
             EncoderPresentPath.shouldRebuildDecoderAfterParameterChange(

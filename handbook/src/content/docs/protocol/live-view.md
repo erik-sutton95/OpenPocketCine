@@ -32,7 +32,7 @@ GOP (`videoPkts=0`, HUD stuck on Waiting for live view). The client 5-tuple
 uses an **ephemeral local port**; binding local `:9004` (camera's listen port)
 keeps `0x01` telemetry and drops HEVC.
 
-In-app Disconnect is not process death. The camera keeps the last GOP running, and the phone must still drop its own UDP driver (generation / closed flag, callbacks, ACK pump) and decoder (VideoToolbox session + display-layer flush on iOS; MediaCodec output thread + Surface unbind on Android). A cancelled handshake `open()` must not publish LIVE after the operator already left. Leaving those live is why reconnect hung on Waiting for live view until the app was killed.
+In-app Disconnect is not process death. The camera keeps the last GOP running, and the phone must still drop its own UDP driver (generation / closed flag, callbacks, ACK pump) and decoder (VideoToolbox session + display-layer flush on iOS; MediaCodec output thread + Surface unbind on Android). Android Vulkan must drop the swapchain before `surfaceDestroyed` returns and must not present after that window is gone. A cancelled handshake `open()` must not publish LIVE after the operator already left. Leaving those live is why reconnect hung on Waiting for live view until the app was killed.
 
 DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
 
@@ -53,7 +53,10 @@ Send once to start (and at most once after a stall, with a multi-second cooldown
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not
 IDR-hold those AUs while skipping `0x09/0xa8` — that drops the picture while
-HUD and gimbal stay on 9004.
+HUD and gimbal stay on 9004. Keep the hardware decoder only if it accepts the
+new sets (iOS asks VideoToolbox; a kept session that refuses them fails every
+frame silently — frozen picture, live HUD). On refusal rebuild it and keep
+the last picture.
 
 After a healthy take the feed can still **freeze or go black at ~3–5 min** — cumulative packet counts do not detect that. Staged recover is `docs/feed-watchdog.md` in the repository.
 

@@ -52,6 +52,26 @@ enum ScopeTestBuffers {
         makeBGRA(width: width, height: height) { _, _ in code }
     }
 
+    /// Tinted flat field: BGRA bytes carry the given curve codes per channel.
+    static func makeFlatBuffer(
+        red: UInt8, green: UInt8, blue: UInt8, width: Int = 128, height: Int = 72
+    ) -> CVPixelBuffer {
+        let buffer = makeBGRA(width: width, height: height) { _, _ in 0 }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        let stride = CVPixelBufferGetBytesPerRow(buffer)
+        let base = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
+        for y in 0..<height {
+            for x in 0..<width {
+                let p = base.advanced(by: y * stride + x * 4)
+                p[0] = blue
+                p[1] = green
+                p[2] = red
+            }
+        }
+        return buffer
+    }
+
     static func makeEdgeBuffer(width: Int = 128, height: Int = 72) -> CVPixelBuffer {
         makeBGRA(width: width, height: height) { x, _ in x > width / 2 ? 255 : 16 }
     }

@@ -965,7 +965,7 @@ static void destroySwapchain(OpcVk* r) {
     r->swapchain = VK_NULL_HANDLE;
 }
 
-static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
+static void dropWindow(OpcVk* r) {
     destroySwapchain(r);
     if (r->surface) {
         vkDestroySurfaceKHR(r->instance, r->surface, nullptr);
@@ -975,6 +975,10 @@ static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
         ANativeWindow_release(r->window);
         r->window = nullptr;
     }
+}
+
+static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
+    dropWindow(r);
     r->window = window;
     ANativeWindow_acquire(window);
     VkAndroidSurfaceCreateInfoKHR sci{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
@@ -1450,7 +1454,7 @@ static int pointCount(int w, int h, int stride) {
 }
 
 static bool renderFrame(OpcVk* r) {
-    if (!r->swapchain || !r->imported.view) return false;
+    if (!r->swapchain || !r->window || !r->imported.view) return false;
     vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     const bool grade = feedNeedsGrade(r);
     const bool tap = r->needTap != 0;
@@ -1912,9 +1916,7 @@ static void destroyAll(OpcVk* r) {
     vkDeviceWaitIdle(r->device);
     destroyAhbCache(r);
     destroyImportedConversion(r);
-    destroySwapchain(r);
-    if (r->surface) vkDestroySurfaceKHR(r->instance, r->surface, nullptr);
-    if (r->window) ANativeWindow_release(r->window);
+    dropWindow(r);
     auto killPipe = [&](VkPipeline p) { if (p) vkDestroyPipeline(r->device, p, nullptr); };
     killPipe(r->blitPipe);
     killPipe(r->blitAlphaPipe);
@@ -1993,7 +1995,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeDestroy(JNIEnv*, jclass, jlong h) {
     auto* r = fromHandle(h);
     if (!r) return;
-    destroyAll(r);
+    {
+        std::lock_guard<std::mutex> g(r->lock);
+        r->ready = false;
+        destroyAll(r);
+    }
     delete r;
 }
 
@@ -2003,6 +2009,8 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeAttachWindow(JNIEnv* en
     auto* r = fromHandle(h);
     if (!r || !surface) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready) return JNI_FALSE;
+    if (r->device) vkDeviceWaitIdle(r->device);
     ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
     if (!win) return JNI_FALSE;
     bool ok = createSwapchain(r, win, w, height);
@@ -2011,10 +2019,20 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeAttachWindow(JNIEnv* en
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeDetachWindow(JNIEnv*, jclass, jlong h) {
+    auto* r = fromHandle(h);
+    if (!r) return;
+    std::lock_guard<std::mutex> g(r->lock);
+    if (r->device) vkDeviceWaitIdle(r->device);
+    dropWindow(r);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeResize(JNIEnv*, jclass, jlong h, jint w, jint height) {
     auto* r = fromHandle(h);
-    if (!r || !r->window) return;
+    if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready || !r->window) return;
     vkDeviceWaitIdle(r->device);
     ANativeWindow_acquire(r->window);
     createSwapchain(r, r->window, w, height);
@@ -2026,6 +2044,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSubmit(JNIEnv* env, jcl
     auto* r = fromHandle(h);
     if (!r || !buffer) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
+    if (!r->ready || !r->swapchain || !r->window) return JNI_FALSE;
     vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     AHardwareBuffer* hb = AHardwareBuffer_fromHardwareBuffer(env, buffer);
     if (!hb) return JNI_FALSE;
@@ -2039,7 +2058,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeRedraw(JNIEnv*, jclass,
     auto* r = fromHandle(h);
     if (!r) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
-    if (!r->imported.view) return JNI_FALSE;
+    if (!r->ready || !r->swapchain || !r->window || !r->imported.view) return JNI_FALSE;
     return renderFrame(r) ? JNI_TRUE : JNI_FALSE;
 }
 
