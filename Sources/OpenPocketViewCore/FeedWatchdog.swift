@@ -15,15 +15,29 @@ import Foundation
 /// grace. Two `0x09/0xa8`, then one UDP rebuild. Keepalive must not flap
 /// while status is young. `escalateAfter` between actions — do not 1 Hz loop.
 ///
+/// After picture the ladder is bounded and ends in a **new handshake**:
+/// enable ×2 (encoder pause only) → one session-preserving UDP rebuild →
+/// `fullSessionRejoin`. A rebuild keeps session/seq; a camera that dropped
+/// the session never answers it, and the old ladder sat in Reconnecting on
+/// 60 s rebuild cycles until the operator force-quit (#218). The rejoin is
+/// the Disconnect + Connect sequence that always worked; the shell hands a
+/// failed rejoin to bounded `SessionRecovery`.
+///
 /// Mid-session recover must not paint black: keep the last frame until a
 /// new decoded picture is in hand, and do not enqueue empty samples.
 public struct FeedWatchdog: Equatable, Sendable {
     public static let stallThreshold: TimeInterval = 2
     public static let escalateAfter: TimeInterval = 5
     public static let cooldownDuration: TimeInterval = 15
-    /// After one UDP rebuild, do not flap the bind on the 2s stall cadence.
-    /// Thirty rebuilds in a minute is what dropped SoftAP.
+    /// After one UDP rebuild, do not bind again on the 2s stall cadence.
+    /// Thirty rebuilds in a minute is what dropped SoftAP. Inside this window
+    /// the next rung is a new handshake, not a second bind.
     public static let rebuildBackoff: TimeInterval = 60
+    /// Any tracked SET (record, FORMAT, COLOR, WB, tracking box `0xA6`, …)
+    /// can pause HEVC for a moment, the same way AF-C and zoom do. Hold the
+    /// stall repair that long after the last SET so a chip tap or a
+    /// long-press track never GOP-cuts or rebinds a live picture (#219).
+    public static let cameraSetGrace: TimeInterval = 4
     /// Analog / head-track lift. Shorter than stall so a held stick cannot
     /// keep throwing into an encoder-pause recover.
     public static let analogLiftStale: TimeInterval = 1.6
@@ -80,6 +94,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         public var secondsSinceZoomSet: TimeInterval?
         /// Age of the last non-rest gimbal stick throw. Motion can pause HEVC.
         public var secondsSinceGimbalThrow: TimeInterval?
+        /// Age of the last tracked camera SET on the datalink (any opcode).
+        public var secondsSinceCameraSet: TimeInterval?
 
         public init(
             now: TimeInterval,
@@ -101,7 +117,8 @@ public struct FeedWatchdog: Equatable, Sendable {
             secondsSinceLastEnable: TimeInterval? = nil,
             secondsSinceFocusTrackSet: TimeInterval? = nil,
             secondsSinceZoomSet: TimeInterval? = nil,
-            secondsSinceGimbalThrow: TimeInterval? = nil
+            secondsSinceGimbalThrow: TimeInterval? = nil,
+            secondsSinceCameraSet: TimeInterval? = nil
         ) {
             self.now = now
             self.lastDecodedFrameAge = lastDecodedFrameAge
@@ -123,6 +140,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.secondsSinceFocusTrackSet = secondsSinceFocusTrackSet
             self.secondsSinceZoomSet = secondsSinceZoomSet
             self.secondsSinceGimbalThrow = secondsSinceGimbalThrow
+            self.secondsSinceCameraSet = secondsSinceCameraSet
         }
     }
 
@@ -203,6 +221,21 @@ public struct FeedWatchdog: Equatable, Sendable {
         return true
     }
 
+    /// Same shape as the AF-C / zoom / gimbal holds, for every tracked SET.
+    /// Lifts once HEVC has been dead `stallThreshold + cameraSetGrace` so a
+    /// SET burst cannot block recover forever.
+    public static func shouldHoldForCameraSet(
+        secondsSinceSet: TimeInterval?,
+        lastVideoPacketAge: TimeInterval? = nil
+    ) -> Bool {
+        guard let secondsSinceSet else { return false }
+        guard secondsSinceSet >= 0, secondsSinceSet < cameraSetGrace else { return false }
+        if let video = lastVideoPacketAge, video >= stallThreshold + cameraSetGrace {
+            return false
+        }
+        return true
+    }
+
     /// Only the first time a hardware decoder that cannot join mid-GOP starts.
     /// LUT / PEAK / WAVE off is a local present change — not an IDR request.
     public static func shouldRequestKeyFrameForDecoderStart(
@@ -259,19 +292,6 @@ public struct FeedWatchdog: Equatable, Sendable {
     /// cancelled body force-enabling after `await` while a new rebuild started.
     public static func shouldStartFeedRecovery(rebuildInFlight: Bool) -> Bool {
         !rebuildInFlight
-    }
-
-    /// BLE session keepalive keeps `lastBle` young. After one UDP rebuild the
-    /// cooldown used to sit forever while 9004 stayed silent. Retry once the
-    /// 60 s backoff has elapsed — not on the 2 s stall cadence.
-    public static func shouldRetrySilentSocketAfterRebuildBackoff(
-        secondsSinceLastRebuild: TimeInterval?,
-        udpReceiveAlive: Bool,
-        controlReceiveAlive: Bool
-    ) -> Bool {
-        guard !udpReceiveAlive, !controlReceiveAlive else { return false }
-        guard let since = secondsSinceLastRebuild else { return false }
-        return since >= rebuildBackoff
     }
 
     /// Mid-session IDR hold with UDP alive and a picture already on the layer
@@ -349,6 +369,13 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
+        if Self.shouldHoldForCameraSet(
+            secondsSinceSet: snap.secondsSinceCameraSet,
+            lastVideoPacketAge: snap.lastVideoPacketAge)
+        {
+            return .none
+        }
+
         // First connect: no video packet yet. Resend enable — do not treat
         // “already rebuilt / no clocks” as a post-video flap.
         if !snap.hadVideo {
@@ -369,73 +396,46 @@ public struct FeedWatchdog: Equatable, Sendable {
             }
         }
 
-        // Encoder pause: status still on 9004, HEVC silent. Two enables,
-        // then one UDP rebuild (22:16 brought the picture back). Do not
-        // reset the enable cap or ignore rebuildBackoff when BLE is stale
-        // — that flapped UDP while status was young (#148). The shell
-        // already rides one enable with the rebuild.
-        if snap.hadVideo, Self.controlReceiveAlive(snap), !Self.udpReceiveAlive(snap) {
-            if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
-                return .none
-            }
-            if encoderPauseEnables < 2 {
-                encoderPauseEnables += 1
-                return fire(.resendLiveViewEnable, at: snap.now)
-            }
-            if let since = snap.secondsSinceLastRebuild, since < Self.rebuildBackoff {
-                return .none
-            }
-            return fire(.reopenDatalink, at: snap.now)
-        }
-
-        if Self.shouldHoldRebuildAfterRecentUDP(
-            secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
-            pathReady: snap.pathReady,
-            lastBleNotifyAge: snap.lastBleNotifyAge,
-            hadVideo: snap.hadVideo
-        ) {
-            if stage == .idle {
-                stage = .cooldown
-                lastActionAt = snap.now
-            }
-            return .none
-        }
-
-        if stage == .cooldown {
-            if Self.shouldHoldBind(
-                pathReady: snap.pathReady, lastBleNotifyAge: snap.lastBleNotifyAge)
-            {
-                // BLE keepalive keeps lastBle young. After rebuildBackoff a
-                // fully silent 9004 is still a dead UDP — one more bind.
-                if Self.shouldRetrySilentSocketAfterRebuildBackoff(
-                    secondsSinceLastRebuild: snap.secondsSinceLastRebuild,
-                    udpReceiveAlive: false,
-                    controlReceiveAlive: Self.controlReceiveAlive(snap))
-                {
-                    return fire(.reopenDatalink, at: snap.now)
-                }
-                return .none
-            }
-            if snap.now - lastActionAt >= Self.cooldownDuration {
-                return fire(.reopenDatalink, at: snap.now)
-            }
-            return .none
-        }
-
-        if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
-            return .none
-        }
-
-        switch stage {
-        case .idle, .resendEnable, .rebuildVT:
-            // UDP silent. BLE/tx may still be up — rebuild the socket now.
-            // Do not resend enable, do not tear VT, do not fullRejoin SoftAP.
-            return fire(.reopenDatalink, at: snap.now)
-        case .reopenDatalink, .fullRejoin:
+        // After picture: one bounded ladder, escalateAfter between rungs.
+        // Encoder pause (status still on 9004, HEVC silent): two enables
+        // first (#148: reopening at 2 s left lastVideo=none). Then one
+        // session-preserving UDP rebuild (22:16 brought the picture back).
+        // Then a new handshake — never a second bind inside rebuildBackoff,
+        // and never VT tear-down or a SoftAP rejoin from here.
+        if stage == .fullRejoin {
+            // The rejoin is the end of this ladder: the shell owns the new
+            // driver (first picture, or SessionRecovery on a miss). Leave the
+            // recovering stage now so the chip does not sit on Reconnecting.
             stage = .cooldown
             lastActionAt = snap.now
             return .none
-        case .cooldown:
+        }
+        if stage != .idle, snap.now - lastActionAt < Self.escalateAfter {
+            return .none
+        }
+        switch stage {
+        case .idle, .resendEnable, .rebuildVT:
+            if Self.controlReceiveAlive(snap), encoderPauseEnables < 2 {
+                encoderPauseEnables += 1
+                return fire(.resendLiveViewEnable, at: snap.now)
+            }
+            // A UDP rebuild (ours, keepalive, foreground, SET timeout) is
+            // recent: give it escalateAfter, then re-handshake. The shell
+            // already rode one enable with that rebuild.
+            if let since = snap.secondsSinceLastRebuild, since < Self.rebuildBackoff {
+                if since < Self.escalateAfter { return .none }
+                return fire(.fullSessionRejoin, at: snap.now)
+            }
+            return fire(.reopenDatalink, at: snap.now)
+        case .reopenDatalink:
+            return fire(.fullSessionRejoin, at: snap.now)
+        case .fullRejoin, .cooldown:
+            // Shells reset this watchdog on a rejoin that handshakes and hand
+            // a failed rejoin to SessionRecovery. Left here (Android JVM
+            // fallback), one more rebuild → rejoin cycle per cooldown.
+            if snap.now - lastActionAt >= Self.cooldownDuration {
+                return fire(.reopenDatalink, at: snap.now)
+            }
             return .none
         }
     }

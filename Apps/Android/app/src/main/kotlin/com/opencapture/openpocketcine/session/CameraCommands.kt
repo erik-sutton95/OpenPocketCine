@@ -476,6 +476,24 @@ object CameraCommands {
         return liveAccepting
     }
 
+    /** Core `FeedWatchdog.cameraSetGrace`: any tracked SET can pause HEVC. */
+    const val CAMERA_SET_VIDEO_GRACE_SEC = 4.0
+
+    /** Core `FeedWatchdog.shouldHoldForCameraSet`. Same shape as the gimbal hold. */
+    fun shouldHoldCameraSetWatchdog(
+        secondsSinceSet: Double?,
+        lastVideoPacketAgeSec: Double? = null,
+    ): Boolean {
+        val s = secondsSinceSet ?: return false
+        if (s < 0.0 || s >= CAMERA_SET_VIDEO_GRACE_SEC) return false
+        if (lastVideoPacketAgeSec != null &&
+            lastVideoPacketAgeSec >= STALL_SEC + CAMERA_SET_VIDEO_GRACE_SEC
+        ) {
+            return false
+        }
+        return true
+    }
+
     fun shouldHoldGimbalWatchdog(
         secondsSinceThrow: Double?,
         lastVideoPacketAgeSec: Double? = null,

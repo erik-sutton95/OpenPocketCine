@@ -46,6 +46,9 @@ public enum SessionRecoveryDecision: Equatable, Sendable {
 public enum SessionRecoveryTrigger: Equatable, Sendable {
     case bleDropped
     case softAPLost
+    /// The watchdog's last rung (new handshake) missed while SoftAP was still
+    /// up. Without this the shell sat on a nil datalink in Reconnecting.
+    case datalinkLost
     case operatorRetry
     case feedWatchdogStall
     case commandTimeout
@@ -73,7 +76,7 @@ public struct SessionRecoveryPolicy: Sendable, Equatable {
 
     public static func shouldBegin(_ trigger: SessionRecoveryTrigger) -> Bool {
         switch trigger {
-        case .bleDropped, .softAPLost, .operatorRetry: true
+        case .bleDropped, .softAPLost, .datalinkLost, .operatorRetry: true
         case .feedWatchdogStall, .commandTimeout, .firstPicture: false
         }
     }

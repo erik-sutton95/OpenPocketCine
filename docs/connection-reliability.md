@@ -48,15 +48,16 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 
 | Owner | Production? | What it does |
 | --- | --- | --- |
-| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video → enable (status young) or UDP rebuild. Never tears VT. |
+| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video → enable ×2 (status young) → one UDP rebuild → `fullSessionRejoin` (new handshake, same SoftAP, last frame held). Never tears VT. Holds 4 s after any tracked SET. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | Can rejoin (new handshake) after a few failed enables. |
 | Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. Watchdog UDP rebuild still force-enables; keepalive does not if HEVC had already existed. `still holding for IDR` is not a repair owner. |
-| `SessionRecovery` | **Yes**, separate | BLE drop (both). Android also SoftAP `onLost`. iOS SoftAP loss does not start this. |
+| `SessionRecovery` | **Yes**, separate | BLE drop (both). Android also SoftAP `onLost`. iOS SoftAP loss does not start this. Both shells also start it (`.datalinkLost`) when the watchdog's rejoin misses its handshake — a nil datalink under a live phase had no repair owner. |
 
-`rebuildVTSession` and `fullSessionRejoin` are **never emitted** by `tick`.
-Both shells map them to UDP rebuild. `decoderFailed` is on the snapshot and
-unused.
+`rebuildVTSession` is **never emitted** by `tick`; both shells map it to UDP
+rebuild. `fullSessionRejoin` is the last rung after a UDP rebuild proved
+nothing in `escalateAfter`; both shells map it to `rejoinDatalinkKeepingLive`.
+`decoderFailed` is on the snapshot and unused.
 
 Chrome is three flags:
 

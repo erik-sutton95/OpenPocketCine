@@ -3169,6 +3169,13 @@ final class CameraSession {
             log.info("control: SET timeouts during gimbal grace — leave UDP")
             return
         }
+        if FeedWatchdog.shouldHoldForCameraSet(
+            secondsSinceSet: datalink?.secondsSinceLastCommand,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
+            log.info("control: SET timeouts during SET grace — leave UDP")
+            return
+        }
         commandTimeoutsAt.removeAll()
         log.info("control: SET timeouts with video stale — rebuild UDP")
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
@@ -3203,6 +3210,12 @@ final class CameraSession {
         }
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+        {
+            return false
+        }
+        if FeedWatchdog.shouldHoldForCameraSet(
+            secondsSinceSet: datalink?.secondsSinceLastCommand,
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
         {
             return false
@@ -3415,7 +3428,8 @@ final class CameraSession {
             secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
-            secondsSinceGimbalThrow: secondsSinceGimbalThrow
+            secondsSinceGimbalThrow: secondsSinceGimbalThrow,
+            secondsSinceCameraSet: datalink?.secondsSinceLastCommand
         )
         let action = feedWatchdog.tick(snap)
         feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
@@ -3480,6 +3494,15 @@ final class CameraSession {
                     "feed: hold enable — gimbal grace lastThrow=\(String(format: "%.1f", snap.secondsSinceGimbalThrow ?? -1))s"
                 )
                 logFeedObserve(snap: snap, watchdog: action)
+            } else if !FeedWatchdog.udpReceiveAlive(snap),
+                FeedWatchdog.shouldHoldForCameraSet(
+                    secondsSinceSet: snap.secondsSinceCameraSet,
+                    lastVideoPacketAge: snap.lastVideoPacketAge)
+            {
+                ControlLiveLog.line(
+                    "feed: hold repair — SET grace lastSet=\(String(format: "%.1f", snap.secondsSinceCameraSet ?? -1))s"
+                )
+                logFeedObserve(snap: snap, watchdog: action)
             }
             return
         case .resendLiveViewEnable:
@@ -3496,12 +3519,25 @@ final class CameraSession {
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
             rebuildUDPKeepingVT()
-        case .reopenDatalink, .fullSessionRejoin:
+        case .reopenDatalink:
             endGimbalStick()
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
             rebuildUDPKeepingVT()
+        case .fullSessionRejoin:
+            // Last rung: the session-preserving rebuild did not bring 9004
+            // back. New handshake on the same SoftAP, last frame held. This
+            // used to map to another UDP rebuild — a camera that dropped the
+            // session never answered, and Reconnecting stayed up (#218).
+            endGimbalStick()
+            log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
+            ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            logFeedObserve(snap: snap, watchdog: action)
+            ControlLiveLog.line("feed: watchdog full datalink rejoin")
+            startFeedRecovery { [weak self] in
+                await self?.rejoinDatalinkKeepingLive()
+            }
         }
     }
 
@@ -4033,12 +4069,21 @@ final class CameraSession {
                 sendInitialLiveViewEnable(
                     displayAttached: decoder.isDisplayReady, pathProven: true)
             }
+            // New session: the old stall ladder is over. First picture owns
+            // the new driver until a rolling picture; then a fresh watchdog.
+            feedWatchdog = FeedWatchdog()
             startKeepalive(ssid: joinedSSID)
         } catch is CancellationError {
             return
         } catch {
             log.info("feed: full rejoin failed (\(error.localizedDescription, privacy: .public))")
+            ControlLiveLog.line("feed: full rejoin failed (\(error.localizedDescription))")
             disposeDatalink()
+            // A nil datalink under a live phase has no repair owner: the
+            // watchdog cannot enable or rebind, so Reconnecting stayed up
+            // until force-quit. Bounded session recovery (warm rehandshake,
+            // then BLE reconnect) owns it from here, last frame held.
+            beginSessionRecovery(reason: "datalink rejoin failed", trigger: .datalinkLost)
         }
     }
 
@@ -4244,10 +4289,11 @@ final class CameraSession {
     }
 
     private func ingestAccessUnit(_ accessUnit: [UInt8]) {
-        guard CameraSoftAP.shouldIngestLiveVideo(
-            ingestArmed: true,
-            browsingMedia: isBrowsingMedia,
-            operatorOverlayHeld: false)
+        guard
+            CameraSoftAP.shouldIngestLiveVideo(
+                ingestArmed: true,
+                browsingMedia: isBrowsingMedia,
+                operatorOverlayHeld: false)
         else { return }
         rawAccessUnits += 1
         if decoder.decode(accessUnit: accessUnit) { rawFramesEnqueued += 1 }

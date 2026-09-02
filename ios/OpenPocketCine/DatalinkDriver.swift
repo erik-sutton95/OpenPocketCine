@@ -74,6 +74,9 @@ final class DatalinkDriver {
     nonisolated private let lastSelfieFlipReply = OSAllocatedUnfairLock(initialState: Date?.none)
     var lastSelfieFlipReplyAt: Date? { lastSelfieFlipReply.withLock { $0 } }
     private var lastStatusDate: Date?
+    /// Last tracked SET / GET on the datalink. Any SET can pause HEVC for a
+    /// moment; the watchdog holds `FeedWatchdog.cameraSetGrace` after it.
+    private var lastCommandSendAt: Date?
     private var receiveErrors = 0
     private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "datalink")
 
@@ -123,6 +126,9 @@ final class DatalinkDriver {
     var isClosed: Bool { closed }
     var secondsSinceLastRebuild: TimeInterval? {
         lastRebuildAt.map { Date().timeIntervalSince($0) }
+    }
+    var secondsSinceLastCommand: TimeInterval? {
+        lastCommandSendAt.map { Date().timeIntervalSince($0) }
     }
     var needsRebuild: Bool {
         if rebuilding { return false }
@@ -360,6 +366,7 @@ final class DatalinkDriver {
     func send(_ frame: Duml.Frame) -> UInt16 {
         if closed { return 0 }
         lastCommandWriteLanded = nil
+        lastCommandSendAt = Date()
         return sendDuml(frame, trackCommand: true)
     }
 
