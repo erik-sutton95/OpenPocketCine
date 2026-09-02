@@ -147,7 +147,14 @@ reimplement the ladder in `LiveViewEnablePolicy`.
 
 Mid-session SoftAP `onLost` is a Network-object replace until the grace
 expires — do not `bindProcessToNetwork(null)` while `isProcessBound` still
-reads true, or UDP rebuilds on home Wi-Fi.
+reads true, or UDP rebuilds on home Wi-Fi. Android nulls the `Network`
+object on `onLost` so `bindSocket` cannot target a dead network; process
+bind stays until grace expires. `isProcessBound` must stay true for that
+window (grace armed), not only when the `Network` object is non-null —
+otherwise handshake miss takes `FAIL` and Kotlin `error()` was an
+uncaught `IllegalStateException` on Android 16 (#189). Handshake miss
+throws typed `DatalinkError.NoHandshake`. SoftAP still up → rebind /
+retry. Path gone → pairing or session recovery, never a process crash.
 
 Foreground recover is VT-only while HEVC or DUML status is still on 9004.
 A Control Center peek must not rebuild UDP. After a parked-app rebuild,

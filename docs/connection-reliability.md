@@ -20,6 +20,7 @@ Match Mimo: diagnose the failure, then the cheapest repair — not rebuild +
 | --- | --- |
 | [#148](https://github.com/erik-sutton95/OpenPocketCine/issues/148) | **P0.** TestFlight 0.1.0 (29/32): freeze / Reconnecting in **seconds**. First physical target. |
 | [#114](https://github.com/erik-sutton95/OpenPocketCine/issues/114) | **P0.** Android drops. Follow-on after #148 is classified. Kotlin datalink is still a rewrite. |
+| [#189](https://github.com/erik-sutton95/OpenPocketCine/issues/189) | **P0.** Android 16 crash: handshake miss was Kotlin `error()` (`IllegalStateException`) in `DatalinkDriver.open`. SoftAP `onLost` must stay path-ready during reassociation grace; miss is typed `DatalinkError.NoHandshake` (retry / pairing), not a process crash. |
 | [#93](https://github.com/erik-sutton95/OpenPocketCine/issues/93) | Audit + leftover wiring. This file is that audit. |
 | [#146](https://github.com/erik-sutton95/OpenPocketCine/issues/146) | Glass-to-glass lag on build 32. Merge into #148 if the take is a freeze presenting as lag. |
 | [#147](https://github.com/erik-sutton95/OpenPocketCine/issues/147) | WAITING FOR LIVE VIEW. SoftAP-never-joined (5G in the status bar) is still open. A second P3 well — 4K 25/30 boot, HUD/gimbal live, black until 1080→4K — is the first-picture format poke in [`live-session.md`](live-session.md). Separate from mid-session freeze. |
