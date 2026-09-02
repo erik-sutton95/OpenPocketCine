@@ -148,6 +148,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- iOS session recovery keeps the held frame across every reconnect
+  attempt after a camera power cycle (#193). `run()` reset the decoder
+  (`flushAndRemoveImage`) on each attempt, so the Reconnecting card sat
+  over a black well; Android already skipped that reset while holding
+  the monitor. Recovery outcomes (`session: drop` / `recovery attempt
+  failed phase=…` / `stalled` / `recovered` / `exhausted`) now also land
+  in `Documents/control-live.log` so a TestFlight log names the stuck
+  stage.
 - Android handshake miss is no longer an uncaught `IllegalStateException`
   (`error()` in `DatalinkDriver.open`). SoftAP `onLost` still counts as
   path-ready during reassociation grace, so the miss rebinds UDP instead

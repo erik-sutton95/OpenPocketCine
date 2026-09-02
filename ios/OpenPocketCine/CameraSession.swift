@@ -468,8 +468,8 @@ final class CameraSession {
                 if Task.isCancelled { return }
                 if case .idle = phase { return }  // user already hit Disconnect
                 if preserveMonitor {
-                    log.info(
-                        "session: recovery attempt failed \(error.localizedDescription, privacy: .public)"
+                    ControlLiveLog.line(
+                        "session: recovery attempt failed phase=\(phase) \(error.localizedDescription)"
                     )
                     return
                 }
@@ -664,7 +664,9 @@ final class CameraSession {
         needsForegroundRecover = false
         resetLinkHealthMeasurements()
         resetFeedWatchdog()
-        decoder.reset()
+        // Session recovery holds the last frame (Android parity). `reset()` is
+        // `flushAndRemoveImage` — abortInFlightRun already flushed for recovery.
+        if !holdsMonitor { decoder.reset() }
         resetGimbalPoseForNewStream()
         // Camera is still pushing the last GOP. Hold before UDP opens so
         // leftover P-frames cannot set lastPresentedAt and skip first-picture.
@@ -3858,7 +3860,7 @@ final class CameraSession {
             applyLinkPresentation()
             return
         }
-        log.info("session: drop (\(reason, privacy: .public)) → bounded recovery")
+        ControlLiveLog.line("session: drop (\(reason)) → bounded recovery")
         sessionRecovery = SessionRecoveryPolicy.monitor.state(afterFailedAttempts: 0)
         sessionRecoveryCardGraceElapsed = false
         recoveryCardGraceTask?.cancel()
@@ -3913,7 +3915,7 @@ final class CameraSession {
                 holdsMonitor = false
                 isReconnecting = false
                 sessionRecoveryCardGraceElapsed = false
-                log.info("session: recovered after \(failures) failed attempt(s)")
+                ControlLiveLog.line("session: recovered after \(failures) failed attempt(s)")
                 applyLinkPresentation()
                 return
             }
@@ -3923,7 +3925,7 @@ final class CameraSession {
                     afterFailedAttempts: failures, jitter: .random(in: 0...1))
             else {
                 sessionRecovery = policy.state(afterFailedAttempts: failures)
-                log.info("session: recovery exhausted after \(failures) attempts")
+                ControlLiveLog.line("session: recovery exhausted after \(failures) attempts")
                 applyLinkPresentation()
                 return
             }
@@ -3956,7 +3958,8 @@ final class CameraSession {
             elapsed += .milliseconds(250)
         }
         if case .live = phase { return true }
-        log.info("session: recovery attempt stalled past \(Self.recoveryAttemptDeadline)")
+        ControlLiveLog.line(
+            "session: recovery attempt stalled past \(Self.recoveryAttemptDeadline) phase=\(phase)")
         abortInFlightRun(preserveDecoder: true)
         return false
     }
