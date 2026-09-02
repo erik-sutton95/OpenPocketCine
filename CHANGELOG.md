@@ -152,6 +152,17 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live feed that stalled and never came back (#218, #219, #216 family): the
+  mid-session stall ladder now ends in a new datalink handshake on the same
+  SoftAP (enable ×2 on encoder pause → one UDP rebuild → rejoin, last frame
+  held) instead of session-preserving UDP rebuilds every 60 s under a
+  Reconnecting chip. A rejoin that misses its handshake starts bounded session
+  recovery (warm rehandshake, BLE reconnect, then the operator) instead of
+  leaving a live phase with no datalink until force-quit. Any tracked camera
+  SET (record, FORMAT, COLOR, WB, tracking box) now holds stall repair 4 s the
+  same way AF-C / zoom / gimbal already did, so a long-press track or a chip
+  tap cannot GOP-cut or rebind a live picture. Both shells.
+
 - Highlight zebra (#136): the stripe now reads the frame's max channel,
   the same byte WAVE draws at 100, instead of Rec.709 luma. A blue-led hot
   sky whose luma sat under its hot channel never painted at 100. Factory

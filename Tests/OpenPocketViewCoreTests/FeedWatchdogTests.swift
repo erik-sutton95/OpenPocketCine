@@ -180,25 +180,36 @@ import Testing
             dog.tick(snap) == .reopenDatalink,
             "two failed enables: 22:16 UDP rebuild brought the picture back")
         #expect(dog.isRecovering)
+        snap.now = 22.3
+        snap.lastDecodedFrameAge = 15.1
+        snap.lastVideoPacketAge = 15.1
+        snap.lastAccessUnitAge = 15.1
+        snap.secondsSinceLastEnable = 2.1
+        snap.secondsSinceLastRebuild = 2.1
+        #expect(
+            dog.tick(snap) == .none,
+            "recent rebuild: do not GOP-cut or flap UDP; shell already enabled")
+        #expect(dog.isRecovering)
         snap.now = 25.3
         snap.lastDecodedFrameAge = 18.1
         snap.lastVideoPacketAge = 18.1
         snap.lastAccessUnitAge = 18.1
-        snap.secondsSinceLastEnable = 10.2
+        snap.secondsSinceLastEnable = 5.1
         snap.secondsSinceLastRebuild = 5.1
         #expect(
-            dog.tick(snap) == .none,
-            "recent rebuild: do not GOP-cut or flap UDP; shell already enabled")
-        snap.now = 25.3 + FeedWatchdog.rebuildBackoff
-        snap.lastDecodedFrameAge = 18.1 + FeedWatchdog.rebuildBackoff
-        snap.lastVideoPacketAge = 18.1 + FeedWatchdog.rebuildBackoff
-        snap.lastAccessUnitAge = 18.1 + FeedWatchdog.rebuildBackoff
-        snap.lastStatusAge = 0.0
-        snap.secondsSinceLastEnable = 10.2 + FeedWatchdog.rebuildBackoff
-        snap.secondsSinceLastRebuild = FeedWatchdog.rebuildBackoff
-        #expect(
-            dog.tick(snap) == .reopenDatalink,
-            "after 60s still paused — one more rebuild, not an enable storm")
+            dog.tick(snap) == .fullSessionRejoin,
+            "rebuild kept the session and 9004 stayed silent — new handshake, not a 60 s wait (#218)"
+        )
+        #expect(dog.stage == .fullRejoin)
+        snap.now = 30.4
+        snap.lastDecodedFrameAge = 23.2
+        snap.lastVideoPacketAge = 23.2
+        snap.lastAccessUnitAge = 23.2
+        snap.secondsSinceLastEnable = 10.2
+        snap.secondsSinceLastRebuild = 10.2
+        #expect(dog.tick(snap) == .none, "rejoin fired — shell owns the new session")
+        #expect(dog.stage == .cooldown)
+        #expect(!dog.isRecovering, "Reconnecting chip must not stay up after the ladder ends")
         #expect(
             !FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 2.1,
@@ -233,6 +244,39 @@ import Testing
         #expect(
             dog.tick(snap) == .none,
             "status young + recent rebuild: BLE age must not disable the 60s backoff")
+        snap.now = 23.3
+        snap.lastDecodedFrameAge = 17.5
+        snap.lastVideoPacketAge = 17.5
+        snap.lastAccessUnitAge = 17.5
+        snap.secondsSinceLastEnable = 8.2
+        snap.secondsSinceLastRebuild = 5.1
+        #expect(
+            dog.tick(snap) == .fullSessionRejoin,
+            "the recent rebuild had escalateAfter to prove itself — re-handshake, never a second bind"
+        )
+    }
+
+    @Test func trackedSetHoldsStallRepairLikeAFC() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 10, frameAge: 3.0, videoAge: 3.0, statusAge: 0.2, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        snap.secondsSinceCameraSet = 1.5
+        #expect(
+            dog.tick(snap) == .none,
+            "tracking box 0xA6 / record / FORMAT can pause HEVC — do not GOP-cut (#219)")
+        #expect(dog.stage == .idle)
+        #expect(FeedWatchdog.shouldHoldForCameraSet(secondsSinceSet: 3.9))
+        #expect(!FeedWatchdog.shouldHoldForCameraSet(secondsSinceSet: 4.0))
+        #expect(!FeedWatchdog.shouldHoldForCameraSet(secondsSinceSet: nil))
+        #expect(
+            !FeedWatchdog.shouldHoldForCameraSet(secondsSinceSet: 1.0, lastVideoPacketAge: 6.0),
+            "HEVC dead stall+grace before this SET — a SET burst cannot block recover forever")
+        snap.now = 13
+        snap.lastDecodedFrameAge = 6.0
+        snap.lastVideoPacketAge = 6.0
+        snap.lastAccessUnitAge = 6.0
+        snap.secondsSinceCameraSet = 4.5
+        #expect(dog.tick(snap) == .resendLiveViewEnable, "grace over, status young — encoder pause")
     }
 
     @Test func gopResetSilenceDoesNotRebuildUDP() {
@@ -312,20 +356,29 @@ import Testing
                 startingHardwareDecoder: true, hasFormat: false, hasPicture: true))
     }
 
-    @Test func udpSilentDoesNotTearVTOrFullRejoin() {
+    @Test func udpSilentRebuildsOnceThenRehandshakesWithoutVTLadder() {
         var dog = FeedWatchdog()
         var now: TimeInterval = 10
         var snap = Self.snap(
             now: now, frameAge: 13, videoAge: 13, statusAge: 13,
             bleAge: 0.2, tcpPokeReady: true)
-        #expect(dog.tick(snap) == .reopenDatalink)
+        #expect(dog.tick(snap) == .reopenDatalink, "half-dead socket: rebuild UDP, keep VT")
 
         now += FeedWatchdog.escalateAfter
         snap.now = now
         snap.lastDecodedFrameAge = 18
         snap.lastVideoPacketAge = 18
         snap.lastAccessUnitAge = 18
-        #expect(dog.tick(snap) == .none, "second UDP pause must not fullRejoin SoftAP")
+        snap.secondsSinceLastRebuild = FeedWatchdog.escalateAfter
+        #expect(
+            dog.tick(snap) == .fullSessionRejoin,
+            "session-preserving rebuild did not bring 9004 back — new handshake on the same SoftAP")
+        #expect(dog.stage == .fullRejoin)
+        #expect(dog.isRecovering)
+
+        now += 1
+        snap.now = now
+        #expect(dog.tick(snap) == .none)
         #expect(dog.stage == .cooldown)
         #expect(!dog.isRecovering)
     }
@@ -395,25 +448,27 @@ import Testing
         #expect(dog.stage == .reopenDatalink)
 
         now += 0.6
-        #expect(dog.tick(Self.snap(now: now, frameAge: 7, statusAge: 7, bleAge: 0.2)) == .none)
-        #expect(dog.stage == .cooldown)
-        #expect(!dog.isRecovering)
+        var rebuilt = Self.snap(now: now, frameAge: 7, statusAge: 7, bleAge: 0.2)
+        rebuilt.secondsSinceLastRebuild = 5.1
+        #expect(dog.tick(rebuilt) == .fullSessionRejoin, "one rebuild, then a new handshake")
+        #expect(dog.stage == .fullRejoin)
 
         now += 1
         #expect(dog.tick(Self.snap(now: now, frameAge: 8, statusAge: 8, bleAge: 0.2)) == .none)
         #expect(dog.stage == .cooldown)
+        #expect(!dog.isRecovering)
 
-        now += FeedWatchdog.cooldownDuration
+        now += FeedWatchdog.cooldownDuration - 1
         #expect(
-            dog.tick(Self.snap(now: now, frameAge: 25, statusAge: 25, bleAge: 0.2)) == .none,
-            "BLE + SoftAP still up — do not flap UDP after cooldown")
+            dog.tick(Self.snap(now: now, frameAge: 22, statusAge: 22, bleAge: 0.2)) == .none,
+            "cooldown holds — no 2 s flap")
         #expect(dog.stage == .cooldown)
 
-        var aged = Self.snap(now: now + 1, frameAge: 70, statusAge: 70, bleAge: 0.2)
-        aged.secondsSinceLastRebuild = FeedWatchdog.rebuildBackoff + 1
+        now += 1
         #expect(
-            dog.tick(aged) == .reopenDatalink,
-            "fully silent 9004 after rebuildBackoff — one more bind even if BLE is fresh")
+            dog.tick(Self.snap(now: now, frameAge: 23, statusAge: 23, bleAge: 0.2))
+                == .reopenDatalink,
+            "still silent after cooldown — one more rebuild → rejoin cycle, never VT / SoftAP")
     }
 
     /// Command-timeout rebuild tears video, stamps a fake lastPacket, watchdog
@@ -435,8 +490,16 @@ import Testing
         var stall = Self.snap(now: now, frameAge: 5.2, videoAge: 2.6, statusAge: 2.6, bleAge: 0.2)
         stall.secondsSinceLastRebuild = 2.6
         #expect(dog.tick(stall) == .none, "2s stall after a rebuild is not another UDP tear-down")
-        #expect(dog.stage == .cooldown)
-        #expect(dog.tick(stall) != .fullSessionRejoin)
+        #expect(dog.stage == .idle)
+        #expect(dog.tick(stall) != .fullSessionRejoin, "give the bind escalateAfter first")
+
+        now += 2.5
+        stall = Self.snap(now: now, frameAge: 7.7, videoAge: 5.1, statusAge: 5.1, bleAge: 0.2)
+        stall.secondsSinceLastRebuild = 5.1
+        #expect(
+            dog.tick(stall) == .fullSessionRejoin,
+            "keepalive / SET-timeout rebuild proved nothing in escalateAfter — re-handshake, not a second bind"
+        )
     }
 
     @Test func recentRebuildWithBleAndPathHoldsBind() {

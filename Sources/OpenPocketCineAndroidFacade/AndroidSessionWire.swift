@@ -1077,7 +1077,8 @@ public enum AndroidSessionWire {
             secondsSinceLastEnable: jsonOptionalNumber(json, key: "secondsSinceLastEnable"),
             secondsSinceFocusTrackSet: jsonOptionalNumber(json, key: "secondsSinceFocusTrackSet"),
             secondsSinceZoomSet: jsonOptionalNumber(json, key: "secondsSinceZoomSet"),
-            secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow")
+            secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow"),
+            secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet")
         )
         switch watchdog.tick(snap) {
         case .none: return "none"

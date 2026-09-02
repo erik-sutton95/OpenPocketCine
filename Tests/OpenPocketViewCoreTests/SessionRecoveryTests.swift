@@ -57,6 +57,9 @@ struct SessionRecoveryPolicyTests {
     @Test func onlyBleAndSoftAPStartSessionRecovery() {
         #expect(SessionRecoveryPolicy.shouldBegin(.bleDropped))
         #expect(SessionRecoveryPolicy.shouldBegin(.softAPLost))
+        #expect(
+            SessionRecoveryPolicy.shouldBegin(.datalinkLost),
+            "watchdog rejoin missed its handshake — bounded recovery, not a nil datalink")
         #expect(SessionRecoveryPolicy.shouldBegin(.operatorRetry))
         #expect(!SessionRecoveryPolicy.shouldBegin(.feedWatchdogStall))
         #expect(!SessionRecoveryPolicy.shouldBegin(.commandTimeout))

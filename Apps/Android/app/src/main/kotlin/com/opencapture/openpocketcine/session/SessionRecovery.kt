@@ -52,6 +52,8 @@ sealed class SessionRecoveryDecision {
 enum class SessionRecoveryTrigger {
     BLE_DROPPED,
     SOFTAP_LOST,
+    /** Watchdog's last rung (new handshake) missed while SoftAP was still up. */
+    DATALINK_LOST,
     OPERATOR_RETRY,
     FEED_WATCHDOG,
     COMMAND_TIMEOUT,
@@ -113,6 +115,7 @@ class SessionRecoveryPolicy(
             when (trigger) {
                 SessionRecoveryTrigger.BLE_DROPPED,
                 SessionRecoveryTrigger.SOFTAP_LOST,
+                SessionRecoveryTrigger.DATALINK_LOST,
                 SessionRecoveryTrigger.OPERATOR_RETRY,
                 -> true
                 SessionRecoveryTrigger.FEED_WATCHDOG,

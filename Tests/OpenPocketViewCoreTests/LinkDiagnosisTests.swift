@@ -107,6 +107,20 @@ struct LinkDiagnosisTests {
                 == .udpFlowDead)
     }
 
+    @Test func trackedSetHoldIsNone() {
+        #expect(
+            diagnose(
+                statusAge: 0.3, udpReceiveAlive: false, secondsSinceCameraSet: 1.0)
+                == .none,
+            "any tracked SET (tracking box, record, FORMAT) can pause HEVC")
+        #expect(
+            diagnose(
+                statusAge: 3,
+                udpReceiveAlive: false,
+                secondsSinceCameraSet: FeedWatchdog.cameraSetGrace)
+                == .udpFlowDead)
+    }
+
     @Test func bleLostWhenNotifyAndUDPAndStatusAreStale() {
         let failure = diagnose(
             bleNotifyAge: 8.1, statusAge: 3, udpReceiveAlive: false)
@@ -226,6 +240,7 @@ struct LinkDiagnosisTests {
         secondsSinceFocusTrackSet: TimeInterval? = nil,
         secondsSinceZoomSet: TimeInterval? = nil,
         secondsSinceGimbalThrow: TimeInterval? = nil,
+        secondsSinceCameraSet: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
         LinkDiagnoser.diagnose(
@@ -241,7 +256,8 @@ struct LinkDiagnosisTests {
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
-            presentAge: presentAge)
+            presentAge: presentAge,
+            secondsSinceCameraSet: secondsSinceCameraSet)
     }
 }
 

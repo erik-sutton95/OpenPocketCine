@@ -48,7 +48,7 @@ This **is** the IDR request — there is no separate PLI opcode. Each send is fo
 Pocket 3 can boot 4K 25/30 with chrome and gimbal live while pktType `0x02` never starts. Operators unstick that by SETting 1080 then 4K (`0x02/0x18`). OpenPocketCine does that round-trip once on first picture (restore the boot format, then one `0x09/0xa8`). Pocket 4 / 4 Pro do not. The live monitor is still 720p; this is an encoder kick, not a 4K SoftAP stream.
 
 :::caution[Do not re-enable every second]
-Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug). A decoder still waiting for IDR is not a license for another `0x09/0xa8` — the stall watchdog already ladders that.
+Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug). A decoder still waiting for IDR is not a license for another `0x09/0xa8` — the stall watchdog already ladders that. Any SET (record, FORMAT, COLOR, tracking box `0xA6`) can also pause HEVC for a moment; hold stall repair a few seconds after one. A session-preserving UDP rebind that stays silent means the camera dropped the session: the only thing that brings video back is a **new handshake** on the same SoftAP, not another bind or another enable.
 :::
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not

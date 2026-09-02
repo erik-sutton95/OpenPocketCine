@@ -42,9 +42,13 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 `feed: black lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=1`
 
-If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. After that rebuild, do not enable-storm for `rebuildBackoff` (60 s) — BLE age must not disable that hold. A second rebuild is allowed only after the backoff.
+Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s after the last `datalink.send`): record, FORMAT, COLOR, WB, tracking box `0xA6`, audio. The camera can pause HEVC for a moment on any of them; a long-press track that GOP-cut or rebound the socket was #219. The hold lifts once HEVC has been dead `stall + grace`, so a SET burst cannot block recover.
 
-If both video and status are silent, rebuild UDP only (keep VT and SoftAP). Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild). Keepalive / SoftAP reassociate that skip enable (HEVC already existed) must still raise ingest — discard lowers the gate so leftover GOP cannot mix, and leaving it down drops every `0x02` as leftover.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop.
+
+**The ladder ends in a new handshake.** `rebuildUDP` keeps session id / seq. A camera that dropped the session (or a wedged send window) never answers that bind, and the old ladder sat in Reconnecting on 60 s rebuild cycles until the operator force-quit (#218). After picture the mid-session ladder is now bounded: enable ×2 (encoder pause only) → one UDP rebuild → `escalateAfter` → `fullSessionRejoin` (`rejoinDatalinkKeepingLive`: new driver, new handshake, same SoftAP, VT and the last frame kept — the Disconnect + Connect sequence that always worked). A rebuild that keepalive / SET-timeout / foreground already did inside `rebuildBackoff` (60 s) counts as that rung: give it `escalateAfter`, then rejoin — never a second bind on the 2 s cadence. A rejoin that handshakes resets the watchdog and hands the new driver to first-picture recovery. A rejoin that misses (SoftAP up, six opens, or path gone) starts bounded `SessionRecovery` (`.datalinkLost`: warm rehandshake, then BLE reconnect, then the operator) — a nil datalink under a live phase had no repair owner.
+
+If both video and status are silent, rebuild UDP only (keep VT and SoftAP), then the same rejoin rung. Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild). Keepalive / SoftAP reassociate that skip enable (HEVC already existed) must still raise ingest — discard lowers the gate so leftover GOP cannot mix, and leaving it down drops every `0x02` as leftover.
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 
@@ -55,7 +59,10 @@ Watch Console (`com.opencapture.openpocketcine`) and `Documents/control-live.log
 - `feed: assist off — keep VT, no 0x09/0xa8`
 - `feed: recover 0x09/0xa8 reason=…`
 - `feed: hold UDP rebuild — GOP-reset grace`
+- `feed: hold repair — SET grace lastSet=…s`
 - `datalink: rebuilding UDP (…)`
+- `feed: watchdog full datalink rejoin` / `feed: full datalink rejoin (SoftAP bind kept)`
+- `feed: full rejoin failed (…)` then `session: drop (datalink rejoin failed) → bounded recovery`
 - `feed: stall` / `feed: black` / `feed: freeze`
 
 The live canvas shows a brief **Reconnecting** chip while UDP rebuilds. The last picture stays under that chip. SoftAP interface binding is unchanged (do not pin only `requiredInterfaceType = .wifi`).

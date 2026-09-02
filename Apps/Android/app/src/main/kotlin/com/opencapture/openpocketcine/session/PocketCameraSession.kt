@@ -236,6 +236,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastLiveTrackingAt: Long? = null
     private var lastGimbalStickAt: Long? = null
     private var lastGimbalThrowAt: Long? = null
+    /** Last tracked SET on the datalink. Core `FeedWatchdog.cameraSetGrace` holds after it. */
+    private var lastCameraSetAt: Long? = null
     private var trackingPollJob: Job? = null
     private val _trackingHud = MutableStateFlow(TrackingHud())
     val trackingHud: StateFlow<TrackingHud> = _trackingHud.asStateFlow()
@@ -426,6 +428,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         firstPictureSettled = false
         focusTrackPending = false
         lastFocusTrackAt = null
+        lastCameraSetAt = null
         lastBleNotifyAt = null
         needsForegroundRecover = false
         feedWatchdog.reset()
@@ -450,6 +453,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         firstPictureSettled = false
         focusTrackPending = true
         lastFocusTrackAt = null
+        lastCameraSetAt = null
         streamStartedAt = null
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
@@ -739,6 +743,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             ) {
                 return false
             }
+            if (CameraCommands.shouldHoldCameraSetWatchdog(
+                    lastCameraSetAt?.let { (now - it) / 1000.0 },
+                    videoAge?.div(1000.0),
+                )
+            ) {
+                return false
+            }
             val videoFresh = videoAge != null && videoAge < LiveViewEnablePolicy.STALL_MS
             val statusFresh =
                 datalink?.lastStatusAt?.let { now - it < LiveViewEnablePolicy.STALL_MS } == true
@@ -997,6 +1008,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
                     age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
                     age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
+                    age(lastCameraSetAt)?.let { append(",\"secondsSinceCameraSet\":$it") }
                     append("}")
                 }
             when (SwiftCore.feedWatchdogTick(coreWatchdog, json)) {
@@ -1006,7 +1018,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
                 "rebuildVTSession",
                 "reopenDatalink",
-                "fullSessionRejoin",
                 -> {
                     endGimbalStick()
                     startFeedRecovery {
@@ -1014,6 +1025,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         if (!coroutineContext.isActive) return@startFeedRecovery
                         sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
                     }
+                }
+                // Last rung: the session-preserving rebuild did not bring 9004
+                // back. New handshake on the same SoftAP, last frame held.
+                "fullSessionRejoin" -> {
+                    endGimbalStick()
+                    Log.i(TAG, "feed: watchdog full datalink rejoin")
+                    startFeedRecovery { rejoinDatalinkKeepingLive() }
                 }
                 else -> logWatchdogHold(snap)
             }
@@ -1233,11 +1251,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (!joiner.isProcessBound()) return
         try {
             openDatalinkKeepingLive(camera)
+            // New session: the old stall ladder is over.
+            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            feedWatchdog.reset()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.i(TAG, "feed: full rejoin failed (${e.message})")
             disposeDatalink()
+            // A null datalink under LIVE has no repair owner — bounded session
+            // recovery (warm rehandshake, then BLE reconnect) takes it from here.
+            beginSessionRecovery("datalink rejoin failed", SessionRecoveryTrigger.DATALINK_LOST)
         }
     }
 
@@ -1364,6 +1388,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         firstPictureSettled = false
         focusTrackPending = false
         lastFocusTrackAt = null
+        lastCameraSetAt = null
         needsForegroundRecover = false
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
@@ -3119,6 +3144,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val dl = datalink ?: return
         pairingHold.remove(SwiftCore.waitKey(send.kind))
         try {
+            lastCameraSetAt = SystemClock.elapsedRealtime()
             dl.sendCommand(send.kind, send.extra)
             Log.i(TAG, "control: send ${send.name}")
         } catch (e: Exception) {
@@ -3202,6 +3228,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             )
         ) {
             Log.i(TAG, "control: SET timeouts during zoom grace — leave UDP")
+            return
+        }
+        if (CameraCommands.shouldHoldCameraSetWatchdog(
+                lastCameraSetAt?.let { (now - it) / 1000.0 },
+                videoAge?.div(1000.0),
+            )
+        ) {
+            Log.i(TAG, "control: SET timeouts during SET grace — leave UDP")
             return
         }
         if (CameraCommands.shouldHoldGimbalWatchdog(
