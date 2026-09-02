@@ -695,6 +695,24 @@ enum LivePopupPlacement {
     static let cutoutClearance: CGFloat = 4
     static let assistTopInset: CGFloat = 4
 
+    /// Visible keyboard height in the same space as `viewportHeight`.
+    /// A dismissed keyboard reports a frame whose minY is at or below the
+    /// viewport bottom, so this is 0.
+    static func keyboardOverlap(frame: CGRect, viewportHeight: CGFloat) -> CGFloat {
+        keyboardOverlap(
+            keyboardFrameInScreen: frame,
+            viewportInScreen: CGRect(x: 0, y: 0, width: 1, height: viewportHeight)
+        )
+    }
+
+    /// Keyboard frame and overlay frame are both in screen space.
+    static func keyboardOverlap(keyboardFrameInScreen: CGRect, viewportInScreen: CGRect)
+        -> CGFloat
+    {
+        let topInViewport = keyboardFrameInScreen.minY - viewportInScreen.minY
+        return max(0, viewportInScreen.height - topInViewport)
+    }
+
     static func horizontalBand(
         preferredWidth: CGFloat,
         viewportWidth: CGFloat,
@@ -802,7 +820,8 @@ enum LivePopupPlacement {
         viewport: CGSize,
         safeArea: EdgeInsets,
         ceilingY: CGFloat = 0,
-        gap: CGFloat = LiveChromeMetrics.popupGap
+        gap: CGFloat = LiveChromeMetrics.popupGap,
+        keyboardHeight: CGFloat = 0
     ) -> Box {
         let minX = max(
             LiveChromeMetrics.chromeLeading,
@@ -834,7 +853,8 @@ enum LivePopupPlacement {
             barTop = viewport.height - max(edgeMargin, safeArea.bottom)
         }
         let minY = max(assistMargin, safeArea.top + assistTopInset, ceilingY)
-        let boxBottom = barTop - gap
+        let keyboardTop = viewport.height - max(0, keyboardHeight)
+        let boxBottom = min(barTop, keyboardTop) - gap
         let maxHeight = max(0, boxBottom - minY)
         let height = min(max(0, panelHeight), maxHeight)
         let y = max(minY, boxBottom - height)

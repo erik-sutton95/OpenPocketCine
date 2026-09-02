@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Shared long-press options chrome — OpenZCine `AssistPanel` +
 /// `AssistOptionsPopupAnchor` (glass card above the assist bar).
@@ -22,7 +23,8 @@ enum AssistLongPressChrome {
         toolbar: CGRect = .zero,
         safeArea: EdgeInsets = EdgeInsets(),
         ceilingY: CGFloat = 0,
-        gap: CGFloat = gap
+        gap: CGFloat = gap,
+        keyboardHeight: CGFloat = 0
     ) -> LivePopupPlacement.Box {
         LivePopupPlacement.assistOptions(
             icon: anchor,
@@ -32,7 +34,8 @@ enum AssistLongPressChrome {
             viewport: viewport,
             safeArea: safeArea,
             ceilingY: ceilingY,
-            gap: gap
+            gap: gap,
+            keyboardHeight: keyboardHeight
         )
     }
 
@@ -199,6 +202,7 @@ struct AssistLongPressOverlay: View {
 
     @State private var revealed = false
     @State private var panelSize = CGSize.zero
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
         let place = AssistLongPressChrome.panelBox(
@@ -210,7 +214,8 @@ struct AssistLongPressOverlay: View {
             ),
             toolbar: toolbar,
             safeArea: safeArea,
-            ceilingY: ceilingY
+            ceilingY: ceilingY,
+            keyboardHeight: keyboardHeight
         )
         // Unmeasured: offer the full well so a short menu (peaking) can hug
         // instead of ViewThatFits picking a scroll view from a 160 pt guess.
@@ -222,10 +227,10 @@ struct AssistLongPressOverlay: View {
         ZStack(alignment: .topLeading) {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(perform: onDismiss)
+                .onTapGesture(perform: dismissKeyboardAndPopup)
 
             AssistLongPressPanel(
-                tool: tool, onClose: onDismiss, width: place.width,
+                tool: tool, onClose: dismissKeyboardAndPopup, width: place.width,
                 maxHeight: place.maxHeight,
                 shouldScroll: shouldScroll,
                 showsFooter: tool == .lut
@@ -245,12 +250,41 @@ struct AssistLongPressOverlay: View {
         .frame(width: viewport.width, height: viewport.height)
         .animation(.easeInOut(duration: 0.22), value: place.x)
         .animation(.easeInOut(duration: 0.22), value: place.y)
+        .background { keyboardOverlapReader }
         .onAppear(perform: scheduleReveal)
         .onChange(of: tool) { _, _ in
             panelSize = .zero
             revealed = false
             scheduleReveal()
         }
+    }
+
+    private var keyboardOverlapReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIResponder.keyboardWillChangeFrameNotification)
+                ) { note in
+                    guard
+                        let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+                            as? CGRect
+                    else { return }
+                    let overlap = LivePopupPlacement.keyboardOverlap(
+                        keyboardFrameInScreen: frame,
+                        viewportInScreen: proxy.frame(in: .global)
+                    )
+                    withAnimation(.easeOut(duration: 0.2)) { keyboardHeight = overlap }
+                }
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIResponder.keyboardWillHideNotification)
+                ) { _ in
+                    withAnimation(.easeOut(duration: 0.2)) { keyboardHeight = 0 }
+                }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     /// Hug the full menu off-screen so a later scroll frame cannot shrink the
@@ -276,6 +310,12 @@ struct AssistLongPressOverlay: View {
         .hidden()
         .accessibilityHidden(true)
         .allowsHitTesting(false)
+    }
+
+    private func dismissKeyboardAndPopup() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        onDismiss()
     }
 
     private func scheduleReveal() {

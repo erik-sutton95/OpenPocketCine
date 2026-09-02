@@ -317,6 +317,129 @@ struct SettingsValueText: View {
     }
 }
 
+/// Compact mono value field with a number pad and a Done accessory.
+/// OpenZCine `SettingsNumberField` (`settings-num`). Used by any assist
+/// numeric editor (Zebra Highlight / Midtone today) so IME chrome is shared.
+struct SettingsNumberField: View {
+    @Binding var value: Int
+    var maximum: Int = 100
+
+    static let doneTitle = "Done"
+
+    var body: some View {
+        SettingsNumberPadInput(value: $value, maximum: maximum)
+            .frame(width: 44, height: 30)
+            .background(
+                LiveDesign.background.opacity(0.5),
+                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                    .stroke(LiveDesign.hairline, lineWidth: 1)
+            )
+    }
+}
+
+/// Number pad has no Return. A UIKit accessory is the reliable Done control
+/// outside a NavigationStack (live / playback assist overlays).
+private struct SettingsNumberPadInput: UIViewRepresentable {
+    @Binding var value: Int
+    var maximum: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(value: $value, maximum: maximum)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.keyboardType = .numberPad
+        field.textAlignment = .center
+        field.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        field.textColor = UIColor(LiveDesign.text)
+        field.tintColor = UIColor(LiveDesign.accent)
+        field.backgroundColor = .clear
+        field.borderStyle = .none
+        field.delegate = context.coordinator
+        field.text = String(value)
+        field.accessibilityValue = String(value)
+        field.inputAccessoryView = context.coordinator.makeDoneBar()
+        field.addTarget(
+            context.coordinator, action: #selector(Coordinator.editingChanged(_:)),
+            for: .editingChanged)
+        context.coordinator.field = field
+        return field
+    }
+
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.value = $value
+        context.coordinator.maximum = maximum
+        if !field.isFirstResponder, field.text != String(value) {
+            field.text = String(value)
+            field.accessibilityValue = String(value)
+        }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var value: Binding<Int>
+        var maximum: Int
+        weak var field: UITextField?
+
+        init(value: Binding<Int>, maximum: Int) {
+            self.value = value
+            self.maximum = maximum
+        }
+
+        func makeDoneBar() -> UIToolbar {
+            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+            bar.barStyle = .black
+            bar.isTranslucent = true
+            bar.tintColor = UIColor(LiveDesign.accent)
+            bar.items = [
+                UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
+                UIBarButtonItem(
+                    title: SettingsNumberField.doneTitle,
+                    style: .done,
+                    target: self,
+                    action: #selector(done)),
+            ]
+            bar.sizeToFit()
+            return bar
+        }
+
+        @objc func editingChanged(_ field: UITextField) {
+            field.accessibilityValue = field.text
+        }
+
+        @objc func done() {
+            field?.resignFirstResponder()
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            commit(textField)
+        }
+
+        func textField(
+            _ textField: UITextField,
+            shouldChangeCharactersIn range: NSRange,
+            replacementString string: String
+        ) -> Bool {
+            let current = textField.text ?? ""
+            guard let swiftRange = Range(range, in: current) else { return false }
+            let next = current.replacingCharacters(in: swiftRange, with: string)
+            if next.isEmpty { return true }
+            return next.allSatisfy(\.isNumber) && next.count <= 3
+        }
+
+        private func commit(_ textField: UITextField) {
+            let parsed = Int(textField.text ?? "") ?? value.wrappedValue
+            let clamped = min(max(parsed, 0), maximum)
+            value.wrappedValue = clamped
+            textField.text = String(clamped)
+            textField.accessibilityValue = String(clamped)
+        }
+    }
+}
+
 struct SettingsActionPill: View {
     let title: String
     var systemImage: String? = nil

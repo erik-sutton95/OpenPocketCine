@@ -25,6 +25,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -788,6 +789,8 @@ fun LiveViewScreen(model: AppModel) {
                     }
                 // Same well as LUT: nearly to the top edge (ASSIST_MARGIN), so
                 // ZEBRA / GUIDES can grow instead of sitting under STBY / TC.
+                val keyboardHeight =
+                    with(density) { WindowInsets.ime.getBottom(this).toDp().value }
                 val place =
                     LivePopupPlacement.assistOptions(
                         icon = assist.longPressAnchor,
@@ -801,6 +804,7 @@ fun LiveViewScreen(model: AppModel) {
                         safeTop = safeTop,
                         safeBottom = safeBottom,
                         ceilingY = 0f,
+                        keyboardHeight = keyboardHeight,
                     )
                 val assistSlide = place.maxHeight + 20f
                 Box(

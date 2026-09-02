@@ -647,6 +647,7 @@ object LivePopupPlacement {
         safeBottom: Float,
         ceilingY: Float = 0f,
         gap: Float = LiveChromeMetrics.POPUP_GAP,
+        keyboardHeight: Float = 0f,
     ): Box {
         val minX =
             maxOf(
@@ -674,7 +675,8 @@ object LivePopupPlacement {
                 else -> viewportHeight - max(EDGE_MARGIN, safeBottom)
             }
         val minY = maxOf(ASSIST_MARGIN, safeTop + ASSIST_TOP_INSET, ceilingY)
-        val boxBottom = barTop - gap
+        val keyboardTop = viewportHeight - max(0f, keyboardHeight)
+        val boxBottom = min(barTop, keyboardTop) - gap
         val maxHeight = max(0f, boxBottom - minY)
         val height = min(max(0f, panelHeight), maxHeight)
         val y = max(minY, boxBottom - height)
