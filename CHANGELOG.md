@@ -6,16 +6,6 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed
-
-- Highlight zebra (#136): the stripe now reads the frame's max channel,
-  the same byte WAVE draws at 100, instead of Rec.709 luma. A blue-led hot
-  sky whose luma sat under its hot channel never painted at 100. Factory
-  Highlight is now **99 IRE** ("approaching clip"): 100 is the live-tap
-  ceiling byte itself (D-Log2 247) and the ceiling ratchets to the frame
-  max, so a typical 243–247 D-Log2 shelf missed it. Saved thresholds are
-  untouched. Both shells; GLES, Vulkan, Core Image and the Android CPU look.
-
 ### Added
 
 - Live head-tracking debug: yaw ring (12 o'clock is SET) and a vertical
@@ -49,6 +39,10 @@ All notable changes to this project are documented here. The format is based on
 - Play closed-testing pipeline (GitHub Actions signed AAB → `alpha` track)
   and tester notes under `Apps/Android/Play/`. Wizard:
   `just android-play-setup`. Contract: `docs/android-play-ci.md`.
+
+- Play CI matches OpenZCine: fail-closed `play-closed` secrets, signed AAB
+  artifact, auto-upload on `main` once `ANDROID_PLAY_UPLOAD=true`. Dispatch
+  can attach the first Console AAB before the Play API robot exists.
 
 - Live feed **observe** line (`feed: observe diagnose=… watchdog=… disagree=…`)
   so a physical take can classify freeze-in-seconds (#148) against
@@ -158,6 +152,62 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Highlight zebra (#136): the stripe now reads the frame's max channel,
+  the same byte WAVE draws at 100, instead of Rec.709 luma. A blue-led hot
+  sky whose luma sat under its hot channel never painted at 100. Factory
+  Highlight is now **99 IRE** ("approaching clip"): 100 is the live-tap
+  ceiling byte itself (D-Log2 247) and the ceiling ratchets to the frame
+  max, so a typical 243–247 D-Log2 shelf missed it. Saved thresholds are
+  untouched. Both shells; GLES, Vulkan, Core Image and the Android CPU look.
+- iOS session recovery keeps the held frame across every reconnect
+  attempt after a camera power cycle (#193). `run()` reset the decoder
+  (`flushAndRemoveImage`) on each attempt, so the Reconnecting card sat
+  over a black well; Android already skipped that reset while holding
+  the monitor. Recovery outcomes (`session: drop` / `recovery attempt
+  failed phase=…` / `stalled` / `recovered` / `exhausted`) now also land
+  in `Documents/control-live.log` so a TestFlight log names the stuck
+  stage.
+- Live VideoToolbox (LUT / WAVE / PEAK / Face AF on) now asks
+  `VTDecompressionSessionCanAcceptFormatDescription` when the camera sends new
+  same-raster VPS/SPS (zoom, FORMAT, D-Log2 → D-Log hop) and rebuilds the
+  session only on refusal, keeping the last picture. A kept session that
+  refused the new sets failed every frame silently: frozen well, live HUD
+  (#148, #194). Async VT decode errors are now counted, and the observe line's
+  `decoderWedged` means an error after the last presented frame rather than
+  any error this session.
+- Android live picture no longer goes black after opening clips or
+  Operator Setup (#177). Settings / media covering the monitor must not
+  drop pktType `0x02` — Pocket has no periodic GOP, and the watchdog
+  will not PLI while UDP video is still arriving. Return-from-gallery
+  now uses the captured live-start (`0x02/0x68` then `0x09/0xa8` + IDR
+  hold) instead of a raw enable write.
+- Android live handshake miss is no longer an uncaught `IllegalStateException`
+  (`error("camera never answered the datalink handshake")`, Play Vitals on
+  Android 16 / #189). `DatalinkDriver.open` throws `DatalinkError.NoHandshake`
+  like iOS `DatalinkError.noHandshake`. SoftAP still up → retry; path gone →
+  pairing kick from connect, or a logged recovery miss that keeps the last
+  frame. Production handshake / first-picture / enable-once gates go through
+  JNI `cameraSoftAPDecision` (`CameraSoftAP`) so Kotlin is not a second ladder
+  (#114). SoftAP `onLost` still holds `isProcessBound` through the 8 s
+  reassociation grace (the Network object is dead; the process bind is not).
+  Handshake `open()` timeout covers four UDP binds instead of racing 30 s.
+- Android live Vulkan no longer aborts when leaving the monitor, rotating,
+  or opening clips: `surfaceDestroyed` now drops the swapchain before the
+  window mutex is destroyed, in-flight `nativeSubmit` drains before
+  `nativeDestroy`, and a present after detach is a skip rather than a
+  process abort (`vkQueuePresentKHR` destroyed mutex, `vkCreateImage`
+  during submit, `DestroySwapchainKHR` on release).
+- Auto ISO Rec.709 range labels start at 50 on Pocket 3 / Pocket 4 and 100
+  on Pocket 4 Pro. The ceiling SET is unchanged — picking 100–400 on a
+  Pocket 3 was already 50–400 on the camera (#180).
+- Android clip playback no longer copies the LRF/XRF sidecar into RAM.
+  A missing Content-Length used to grow `ByteArrayOutputStream` until
+  `OutOfMemoryError` (Play Vitals, #188). Proxies stream to disk like
+  originals; RAM GETs (thumbs) cap at 8 MiB.
+- View Assist long-press options lift above the keyboard when a number
+  field is focused (Zebra Highlight / Midtone). The number pad has a
+  Done accessory; tap outside still dismisses the popup. Live and
+  playback, iOS and Android (#135).
 - Android handshake miss is no longer an uncaught `IllegalStateException`
   (`error()` in `DatalinkDriver.open`). SoftAP `onLost` still counts as
   path-ready during reassociation grace, so the miss rebinds UDP instead

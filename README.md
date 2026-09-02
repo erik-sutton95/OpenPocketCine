@@ -253,10 +253,13 @@ iOS beta: [TestFlight](https://testflight.apple.com/join/1tmt3aEB). Archives com
 
 See [`docs/testflight-ci.md`](docs/testflight-ci.md).
 
-Android closed testing: signed AAB from GitHub Actions onto Play. One-time Play Console / signing:
+Android closed testing: signed AAB from GitHub Actions onto Play closed testing
+(`alpha`), the same shape as OpenZCine’s Play Internal pipeline. One-time
+Play Console / signing:
 
 ```bash
-./scripts/setup-android-play.sh
+just android-play-setup          # walkthrough (Console, keystore, API robot)
+just android-play-sync-secrets   # push play-closed GitHub secrets
 ```
 
 See [`docs/android-play-ci.md`](docs/android-play-ci.md).

@@ -187,10 +187,37 @@ finish() {
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
 ENV_FILE="$ROOT/.env"
+SIGNING_ENV="$ROOT/.local/play-signing.env"
+KEYSTORE="$ROOT/.local/play-upload.keystore"
+SA_JSON="$ROOT/.local/play-service-account.json"
+
 mkdir -p "$ROOT/.local"
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+# Homebrew OpenJDK, then JAVA_HOME. Never the Java 8 applet keytool at /usr/bin.
+play_keytool() {
+  if [[ -x /opt/homebrew/opt/openjdk/bin/keytool ]]; then
+    printf '%s' /opt/homebrew/opt/openjdk/bin/keytool
+    return
+  fi
+  if [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/keytool" ]]; then
+    printf '%s' "${JAVA_HOME}/bin/keytool"
+    return
+  fi
+  command -v keytool
+}
 
 set_play_secret() {
   local name="$1" value="$2"
+  if [[ -z "$value" ]]; then
+    SKIPPED+=("GitHub environment secret play-closed/$name")
+    warn "skipped $name — empty value"
+    return
+  fi
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if printf '%s' "$value" | gh secret set "$name" --env play-closed >/dev/null 2>&1; then
       WRITTEN_SECRET+=("play-closed/$name")
@@ -210,11 +237,277 @@ ensure_play_environment() {
   fi
   local repo
   repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
-  if gh api --method PUT "repos/${repo}/environments/play-closed" >/dev/null; then
-    printf '  %s✓ environment%s play-closed\n' "$GREEN" "$RESET"
+  if gh api --method PUT "repos/${repo}/environments/play-closed" \
+    --input - >/dev/null <<'EOF'
+{
+  "deployment_branch_policy": {
+    "protected_branches": true,
+    "custom_branch_policies": false
+  }
+}
+EOF
+  then
+    printf '  %s✓ environment%s play-closed (main only)\n' "$GREEN" "$RESET"
   else
     SKIPPED+=("GitHub Environment play-closed")
     warn "could not create the play-closed environment"
+  fi
+}
+
+write_signing_env() {
+  local password="$1"
+  umask 077
+  cat > "$SIGNING_ENV" <<EOF
+ANDROID_KEYSTORE_FILE=${KEYSTORE}
+ANDROID_KEYSTORE_PASSWORD=${password}
+ANDROID_KEY_ALIAS=upload
+ANDROID_KEY_PASSWORD=${password}
+EOF
+  chmod 600 "$SIGNING_ENV"
+}
+
+load_signing_env() {
+  [[ -f "$SIGNING_ENV" ]] || return 1
+  set -a
+  # shellcheck disable=SC1090
+  source "$SIGNING_ENV"
+  set +a
+}
+
+ensure_upload_keystore() {
+  local keytool pass
+  keytool="$(play_keytool || true)"
+  [[ -n "$keytool" && -x "$keytool" ]] || fail "keytool not found; brew install openjdk"
+
+  if [[ -f "$KEYSTORE" && -f "$SIGNING_ENV" ]]; then
+    note "Reusing $KEYSTORE"
+    return 0
+  fi
+  if [[ -f "$KEYSTORE" && ! -f "$SIGNING_ENV" ]]; then
+    fail "$KEYSTORE exists but $SIGNING_ENV is missing. Restore the password file, or delete the keystore to generate a new upload key (only safe before the first Play AAB)."
+  fi
+
+  say "Generating a PKCS12 upload keystore."
+  note "Using $keytool"
+  pass="$(openssl rand -hex 32)"
+  "$keytool" -genkeypair \
+    -keystore "$KEYSTORE" \
+    -storetype PKCS12 \
+    -alias upload \
+    -keyalg RSA -keysize 2048 -validity 10000 \
+    -storepass "$pass" \
+    -keypass "$pass" \
+    -dname "CN=OpenPocketCine, OU=Play Upload, O=OpenPocketCine, C=US" \
+    >/dev/null 2>&1
+  chmod 600 "$KEYSTORE"
+  write_signing_env "$pass"
+  unset pass
+  say "wrote $KEYSTORE and $SIGNING_ENV (gitignored)."
+}
+
+push_signing_secrets() {
+  load_signing_env || fail "missing $SIGNING_ENV"
+  [[ -f "${ANDROID_KEYSTORE_FILE:-}" ]] || fail "ANDROID_KEYSTORE_FILE is not a file"
+  local b64
+  b64="$(base64 < "$ANDROID_KEYSTORE_FILE" | tr -d '\n')"
+  set_play_secret ANDROID_KEYSTORE_BASE64 "$b64"
+  set_play_secret ANDROID_KEYSTORE_PASSWORD "$ANDROID_KEYSTORE_PASSWORD"
+  set_play_secret ANDROID_KEY_ALIAS "$ANDROID_KEY_ALIAS"
+  set_play_secret ANDROID_KEY_PASSWORD "$ANDROID_KEY_PASSWORD"
+  unset b64
+}
+
+PLAY_GCP_PROJECT="${PLAY_GCP_PROJECT:-openpocketcine-play-publisher}"
+PLAY_SA_ID="${PLAY_SA_ID:-openpocketcine-play-publisher}"
+
+play_sa_email() {
+  printf '%s@%s.iam.gserviceaccount.com' "$PLAY_SA_ID" "$PLAY_GCP_PROJECT"
+}
+
+gcloud_ready() {
+  command -v gcloud >/dev/null 2>&1 || return 1
+  gcloud auth print-access-token >/dev/null 2>&1
+}
+
+# Mint a dedicated OpenPocketCine Play API robot (separate from OpenZCine).
+# Play Console invite is still a human click — the Publishing API cannot add
+# the first robot to the developer account.
+provision_play_service_account() {
+  if [[ -f "$SA_JSON" ]]; then
+    note "Reusing $SA_JSON"
+    return 0
+  fi
+  if ! gcloud_ready; then
+    return 1
+  fi
+  say "Minting Play API robot $PLAY_GCP_PROJECT (separate from OpenZCine)."
+  if ! gcloud projects describe "$PLAY_GCP_PROJECT" >/dev/null 2>&1; then
+    if ! gcloud projects create "$PLAY_GCP_PROJECT" --name="OpenPocketCine Play"; then
+      warn "could not create GCP project $PLAY_GCP_PROJECT"
+      SKIPPED+=("GCP project $PLAY_GCP_PROJECT")
+      return 1
+    fi
+  else
+    note "GCP project $PLAY_GCP_PROJECT already exists"
+  fi
+  if ! gcloud services enable androidpublisher.googleapis.com --project="$PLAY_GCP_PROJECT"; then
+    warn "could not enable the Google Play Android Developer API"
+    SKIPPED+=("androidpublisher.googleapis.com")
+    return 1
+  fi
+  local email
+  email="$(play_sa_email)"
+  if ! gcloud iam service-accounts describe "$email" --project="$PLAY_GCP_PROJECT" >/dev/null 2>&1; then
+    if ! gcloud iam service-accounts create "$PLAY_SA_ID" \
+      --project="$PLAY_GCP_PROJECT" \
+      --display-name="OpenPocketCine Play publisher"; then
+      warn "could not create service account"
+      SKIPPED+=("service account $email")
+      return 1
+    fi
+  else
+    note "service account already exists"
+  fi
+  mkdir -p "$(dirname "$SA_JSON")"
+  umask 077
+  if ! gcloud iam service-accounts keys create "$SA_JSON" \
+    --iam-account="$email" \
+    --project="$PLAY_GCP_PROJECT"; then
+    warn "could not mint JSON key"
+    SKIPPED+=("Play service-account JSON key")
+    return 1
+  fi
+  chmod 600 "$SA_JSON"
+  say "wrote $SA_JSON (gitignored)."
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$email" | pbcopy
+    note "copied $email to the clipboard"
+  fi
+  return 0
+}
+
+push_service_account_secret() {
+  if [[ ! -f "$SA_JSON" ]]; then
+    SKIPPED+=(".local/play-service-account.json")
+    note "No service-account JSON yet. Play API upload waits on that file."
+    return
+  fi
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    if gh secret set PLAY_SERVICE_ACCOUNT_JSON --env play-closed < "$SA_JSON"; then
+      WRITTEN_SECRET+=("play-closed/PLAY_SERVICE_ACCOUNT_JSON")
+      printf '  %s✓ set%s GitHub environment secret PLAY_SERVICE_ACCOUNT_JSON\n' "$GREEN" "$RESET"
+      return
+    fi
+  fi
+  SKIPPED+=("GitHub environment secret play-closed/PLAY_SERVICE_ACCOUNT_JSON")
+  warn "could not set PLAY_SERVICE_ACCOUNT_JSON"
+}
+
+sync_play_upload_secrets() {
+  ensure_play_environment
+  ensure_upload_keystore
+  push_signing_secrets
+  provision_play_service_account || true
+  push_service_account_secret
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    if ! gh variable get ANDROID_VERSION_CODE_BASE >/dev/null 2>&1; then
+      set_var ANDROID_VERSION_CODE_BASE 0
+    fi
+  fi
+}
+
+if [[ "${1:-}" == "--sync-secrets" ]]; then
+  printf 'Play upload secrets → GitHub Environment play-closed\n'
+  sync_play_upload_secrets
+  printf '\n'
+  (( ${#WRITTEN_SECRET[@]} )) && note "set ${#WRITTEN_SECRET[@]} GitHub secret(s): ${WRITTEN_SECRET[*]}"
+  if (( ${#SKIPPED[@]} )); then
+    warn "still to do:"
+    for s in "${SKIPPED[@]}"; do note "  - $s"; done
+  fi
+  printf '\n'
+  exit 0
+fi
+
+# Play Console All apps is https://play.google.com/console. Opening that on
+# every stage dumps the human back on the app picker. After they open
+# OpenPocketCine, the address bar is
+# …/developers/<dev>/app/<app>/… — later stages reuse that.
+PLAY_CONSOLE_U="0"
+PLAY_CONSOLE_DEV=""
+PLAY_CONSOLE_APP=""
+
+parse_play_console_app_url() {
+  local url="${1:-}"
+  PLAY_CONSOLE_U="0"
+  PLAY_CONSOLE_DEV=""
+  PLAY_CONSOLE_APP=""
+  [[ -n "$url" ]] || return 1
+  url="${url%%\?*}"
+  url="${url%%#*}"
+  if [[ "$url" =~ console/u/([0-9]+)/developers/([0-9]+)/app/([0-9]+) ]]; then
+    PLAY_CONSOLE_U="${BASH_REMATCH[1]}"
+    PLAY_CONSOLE_DEV="${BASH_REMATCH[2]}"
+    PLAY_CONSOLE_APP="${BASH_REMATCH[3]}"
+    return 0
+  fi
+  if [[ "$url" =~ console/developers/([0-9]+)/app/([0-9]+) ]]; then
+    PLAY_CONSOLE_DEV="${BASH_REMATCH[1]}"
+    PLAY_CONSOLE_APP="${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+play_console_app_page() {
+  local page="$1"
+  if [[ -z "${PLAY_CONSOLE_DEV:-}" || -z "${PLAY_CONSOLE_APP:-}" ]]; then
+    return 1
+  fi
+  printf 'https://play.google.com/console/u/%s/developers/%s/app/%s/%s\n' \
+    "${PLAY_CONSOLE_U:-0}" "$PLAY_CONSOLE_DEV" "$PLAY_CONSOLE_APP" "$page"
+}
+
+open_play_app_page() {
+  local page="$1"
+  local url=""
+  url="$(play_console_app_page "$page" || true)"
+  url="${url//$'\n'/}"
+  if [[ -n "$url" ]]; then
+    open_url "$url"
+    note "This should be OpenPocketCine, not All apps. If you still see the app list, click OpenPocketCine, then use the left sidebar."
+    return
+  fi
+  warn "No OpenPocketCine Console URL saved. Stay in the tab where that app is open. Do not go back to All apps."
+}
+
+capture_play_app_url() {
+  local existing=""
+  existing="$(_existing PLAY_CONSOLE_APP_URL || true)"
+  if parse_play_console_app_url "$existing"; then
+    note "Reusing saved OpenPocketCine Console app."
+    PLAY_CONSOLE_APP_URL="$existing"
+    return 0
+  fi
+  say "Click the OpenPocketCine row in All apps."
+  say "Do not stay on All apps, and do not open a generic Configurations / Setup hub."
+  say "The address bar should contain /developers/ then /app/ then a long number."
+  ask PLAY_CONSOLE_APP_URL "Paste that address-bar URL:"
+  if parse_play_console_app_url "${PLAY_CONSOLE_APP_URL:-}"; then
+    write_env PLAY_CONSOLE_APP_URL "$PLAY_CONSOLE_APP_URL"
+    say "Saved. Later stages open this app, not All apps."
+  else
+    warn "That URL is not an app page (it needs /developers/…/app/…). Copy it from the address bar after OpenPocketCine is open."
+    SKIPPED+=("Play Console app URL")
+  fi
+}
+
+open_play_account_page() {
+  local page="$1"
+  if [[ -n "${PLAY_CONSOLE_DEV:-}" ]]; then
+    open_url "https://play.google.com/console/u/${PLAY_CONSOLE_U:-0}/developers/${PLAY_CONSOLE_DEV}/${page}"
+  else
+    open_url "https://play.google.com/console/users-and-permissions"
   fi
 }
 
@@ -222,8 +515,9 @@ TOTAL_STAGES=11
 
 banner "Google Play closed testing"
 
-say "This is the Android analog of Xcode Cloud → TestFlight."
+say "This is the Android analog of Xcode Cloud → TestFlight, matching OpenZCine Play Internal."
 say "Package: com.opencapture.openpocketcine. Track: Closed testing (alpha)."
+say "All apps opens once. After you click OpenPocketCine we reuse that app URL."
 say "Secrets go in the play-closed GitHub Environment, never in pull_request workflows."
 note "Privacy policy is already live: https://openpocketcine.app/privacy/"
 pause "Ready to start?"
@@ -231,28 +525,30 @@ pause "Ready to start?"
 # ── 1. Developer account ─────────────────────────────────────────────────
 stage "Play Console — developer account"
 say "A one-time \$25 Google Play developer account is required. Skip this stage if you already have one."
-open_url "https://play.google.com/console"
-step "Sign in with the Google account that should own OpenPocketCine."
-step "If Play asks to pay the registration fee, complete it. Identity verification can take hours."
-step "If you already see All apps, you are done here."
-pause "Play Console is open on your developer account?"
+if parse_play_console_app_url "$(_existing PLAY_CONSOLE_APP_URL || true)"; then
+  note "Saved OpenPocketCine Console URL on disk — not opening All apps again."
+else
+  open_url "https://play.google.com/console/u/0/developers"
+  step "Sign in with the Google account that should own OpenPocketCine."
+  step "You should land on All apps (a list of apps). That is the only time this wizard opens that list."
+  step "If Play asks to pay the registration fee, complete it. Identity verification can take hours."
+fi
+pause "You can see All apps, or OpenPocketCine is already open?"
 
-# ── 2. Create the app ────────────────────────────────────────────────────
-stage "Create the app record"
-say "Create one app. The package name locks to the first AAB you upload."
-open_url "https://play.google.com/console/u/0/developers"
-step "All apps → Create app."
-step "App name: OpenPocketCine. Default language: English (United States)."
-step "App or game: App. Free or paid: Free."
-step "Accept the declarations Play shows (privacy policy, US export laws, etc.)."
-note "Do not create a second app for the same package. Do not set production yet."
-pause "The OpenPocketCine app dashboard is open?"
+# ── 2. Open the OpenPocketCine app ───────────────────────────────────────
+stage "Open the OpenPocketCine app"
+say "The package name locks to the first AAB you upload. Do not create a second app."
+step "In All apps, click the OpenPocketCine row — not a generic Configurations / Setup card."
+step "If it does not exist yet: All apps → Create app. Name OpenPocketCine. Language English (US). App, Free. Accept the declarations."
+note "After it opens, the left sidebar is the menu (Test and release, Grow users, Policy). Stay there."
+capture_play_app_url
+pause "The address bar contains /app/ and OpenPocketCine is the current app?"
 
 # ── 3. Store listing ─────────────────────────────────────────────────────
 stage "Store listing — copy and privacy"
 say "Closed testing still needs a listing, privacy policy, and graphics. You can save a draft."
-open_url "https://play.google.com/console"
-step "Select OpenPocketCine → Grow → Store presence → Store listing (or Main store listing)."
+open_play_app_page "main-store-listing"
+step "Left sidebar: Grow users → Store presence → Main store listing (or Store listings)."
 step "App name: OpenPocketCine"
 step "Short description (80 characters): Open-source field monitor for DJI Osmo. Live view, scopes, camera control."
 step "Full description: paste from docs/android-play-ci.md (Store listing copy)."
@@ -266,8 +562,8 @@ pause "Listing fields are saved, even if graphics are still TODO?"
 # ── 4. Questionnaires ────────────────────────────────────────────────────
 stage "Rating, audience, and Data safety"
 say "Play will not review a closed-testing release until these are complete."
-open_url "https://play.google.com/console"
-step "Policy → App content → Complete all required tasks."
+open_play_app_page "app-content"
+step "Left sidebar: Policy → App content (near the bottom). Complete all required tasks."
 step "Content rating: fill the IARC questionnaire (Photo/Video; no user-generated public content)."
 step "Target audience: 18+ is honest for a production tool. Not a news app."
 step "News app: No. COVID-19: No. Data safety: the app has no account and no analytics."
@@ -279,8 +575,8 @@ pause "App content tasks are all green, or you know which ones remain?"
 # ── 5. Closed testing track ──────────────────────────────────────────────
 stage "Closed testing track"
 say "Internal testing is capped at 100 testers. The waitlist is 300+, so this is Closed testing."
-open_url "https://play.google.com/console"
-step "Test and release → Testing → Closed testing."
+open_play_app_page "tracks/closed-testing"
+step "Left sidebar: Test and release → Testing → Closed testing."
 step "Use the default closed track (often named Closed testing / alpha). Create one if Play asks."
 step "Countries: start with the countries your testers actually live in."
 step "Testers → Create email list → name it waitlist. You will upload .local/play-testers.csv later."
@@ -296,140 +592,100 @@ pause "Closed track exists and the join URL is saved?"
 # ── 6. Upload keystore ───────────────────────────────────────────────────
 stage "Upload keystore"
 say "Play App Signing holds the app key. We keep an upload key in .local/ (gitignored)."
-KEYSTORE="$ROOT/.local/play-upload.keystore"
-if [[ -f "$KEYSTORE" ]]; then
-  note "Reusing existing $KEYSTORE"
-  ask_secret ANDROID_KEYSTORE_PASSWORD "Password for that keystore:"
-  ask ANDROID_KEY_ALIAS "Key alias [upload]:"
-  ANDROID_KEY_ALIAS="${ANDROID_KEY_ALIAS:-upload}"
-  ask_secret ANDROID_KEY_PASSWORD "Key password (Enter = same as store):"
-  ANDROID_KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-else
-  say "This generates a 2048-bit RSA upload key, valid ~27 years."
-  ask_secret ANDROID_KEYSTORE_PASSWORD "Choose a keystore password:"
-  if [[ -z "${ANDROID_KEYSTORE_PASSWORD}" ]]; then
-    warn "password was empty — skip keytool and set this later"
-  else
-    ANDROID_KEY_ALIAS="upload"
-    ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
-    keytool -genkeypair -v \
-      -keystore "$KEYSTORE" \
-      -alias "$ANDROID_KEY_ALIAS" \
-      -keyalg RSA -keysize 2048 -validity 10000 \
-      -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-      -keypass "$ANDROID_KEY_PASSWORD" \
-      -dname "CN=OpenPocketCine, OU=Play Upload, O=OpenPocketCine, C=US"
-    chmod 600 "$KEYSTORE"
-    say "wrote $KEYSTORE"
-  fi
-fi
-if [[ -f "$KEYSTORE" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" ]]; then
-  write_env ANDROID_KEYSTORE_FILE "$KEYSTORE"
-  write_env ANDROID_KEYSTORE_PASSWORD "$ANDROID_KEYSTORE_PASSWORD"
-  write_env ANDROID_KEY_ALIAS "${ANDROID_KEY_ALIAS:-upload}"
-  write_env ANDROID_KEY_PASSWORD "${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-  ANDROID_KEYSTORE_BASE64="$(base64 < "$KEYSTORE" | tr -d '\n')"
-fi
-note "Never commit .local/play-upload.keystore. Hygiene already blocks *.keystore."
-pause "Upload keystore is on disk?"
+note "If you already enrolled Play App Signing with a different upload key, stop. Put that keystore at .local/play-upload.keystore and the password file at .local/play-signing.env."
+ensure_play_environment
+ensure_upload_keystore
+push_signing_secrets
+note "Never commit .local/play-upload.keystore or .local/play-signing.env."
+pause "Signing secrets are on GitHub, or listed as still-to-do?"
 
 # ── 7. Google Cloud API ──────────────────────────────────────────────────
 stage "Google Play Developer API"
-say "CI talks to Play through a service account, not your personal Google login."
-open_url "https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com"
-step "Select or create a Google Cloud project (name it openpocketcine-play is fine)."
-step "Enable the Google Play Android Developer API."
-note "Play Console no longer has a dedicated API access page on many accounts — Users and permissions is the grant."
-pause "The Android Publisher API is enabled?"
-
-# ── 8. Service account ───────────────────────────────────────────────────
-stage "Service account + Play permissions"
-say "Create a JSON key, then invite that robot email into Play Console."
-open_url "https://console.cloud.google.com/iam-admin/serviceaccounts"
-step "Create service account. Name: play-upload. ID: play-upload."
-step "Skip Cloud IAM roles — Play Console owns the permissions."
-step "Open the account → Keys → Add key → Create new key → JSON. The file downloads."
-step "Copy the service account email (it ends with .iam.gserviceaccount.com)."
-open_url "https://play.google.com/console/users-and-permissions"
-step "Users and permissions → Invite new users."
-step "Paste the service account email."
-step "App permissions (OpenPocketCine only): View app information; Release apps to testing tracks; Manage testing tracks and edit tester lists."
-step "Do not grant production, financial, or Admin unless you want that later."
-step "Invite user. Propagation can take a few minutes (rarely up to an hour)."
-ask PLAY_SA_JSON_PATH "Path to the downloaded JSON key:"
-PLAY_SA_JSON_PATH="${PLAY_SA_JSON_PATH/#\~/$HOME}"
-if [[ -n "${PLAY_SA_JSON_PATH}" && -f "${PLAY_SA_JSON_PATH}" ]]; then
-  cp "$PLAY_SA_JSON_PATH" "$ROOT/.local/play-service-account.json"
-  chmod 600 "$ROOT/.local/play-service-account.json"
-  write_env PLAY_SERVICE_ACCOUNT_JSON_FILE "$ROOT/.local/play-service-account.json"
-  say "copied to .local/play-service-account.json"
+say "Dedicated OpenPocketCine Play API robot — separate from OpenZCine's."
+note "Cloud project / SA: $PLAY_GCP_PROJECT  Email: $(play_sa_email)"
+if provision_play_service_account; then
+  say "Cloud project, API, service account, and JSON key are on disk."
 else
-  warn "JSON path missing — you can still set the GitHub secret by hand later"
+  open_url "https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com"
+  step "Select or create a Google Cloud project named openpocketcine-play-publisher (not the OpenZCine project)."
+  step "Enable the Google Play Android Developer API."
+  note "gcloud is not logged in on this machine, so this stage is in the browser. Play Console owns the grant, not a Cloud IAM role."
 fi
-pause "Service account is invited in Play Console?"
+pause "The Android Publisher API is enabled for OpenPocketCine?"
+
+# ── 8. Service account + Play invite ─────────────────────────────────────
+stage "Service account + Play permissions"
+say "Invite a new OpenPocketCine robot. Leave the OpenZCine row as-is."
+if [[ ! -f "$SA_JSON" ]]; then
+  open_url "https://console.cloud.google.com/iam-admin/serviceaccounts?project=${PLAY_GCP_PROJECT}"
+  step "Create service account. Name: openpocketcine-play-publisher. ID: openpocketcine-play-publisher."
+  step "Skip Cloud IAM roles — Play Console owns the permissions."
+  step "Open the account → Keys → Add key → Create new key → JSON. The file downloads."
+  ask PLAY_SA_JSON_PATH "Path to the downloaded JSON key:"
+  PLAY_SA_JSON_PATH="${PLAY_SA_JSON_PATH/#\~/$HOME}"
+  if [[ -n "${PLAY_SA_JSON_PATH}" && -f "${PLAY_SA_JSON_PATH}" ]]; then
+    cp "$PLAY_SA_JSON_PATH" "$SA_JSON"
+    chmod 600 "$SA_JSON"
+    say "copied to $SA_JSON"
+  else
+    warn "JSON path missing — copy the file to .local/play-service-account.json and re-run just android-play-sync-secrets"
+  fi
+else
+  note "JSON key is already at $SA_JSON"
+fi
+open_play_account_page "users-and-permissions"
+step "Invite new users (blue button). Paste $(play_sa_email) — it should already be on the clipboard if gcloud minted the robot."
+step "App permissions (OpenPocketCine only): View app information; Release apps to testing tracks; Manage testing tracks and edit tester lists."
+step "Do not grant production, financial, or Admin."
+step "Invite user. Propagation can take a few minutes (rarely up to an hour)."
+push_service_account_secret
+pause "The new OpenPocketCine robot is invited and the GitHub secret is set?"
 
 # ── 9. GitHub Environment ────────────────────────────────────────────────
 stage "GitHub Environment play-closed"
 say "The upload workflow reads secrets only from this environment. Pull requests never see them."
-ensure_play_environment
-if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
-  set_play_secret ANDROID_KEYSTORE_BASE64 "$ANDROID_KEYSTORE_BASE64"
-  set_play_secret ANDROID_KEYSTORE_PASSWORD "$ANDROID_KEYSTORE_PASSWORD"
-  set_play_secret ANDROID_KEY_ALIAS "${ANDROID_KEY_ALIAS:-upload}"
-  set_play_secret ANDROID_KEY_PASSWORD "${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-fi
-if [[ -f "$ROOT/.local/play-service-account.json" ]] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  if gh secret set PLAY_SERVICE_ACCOUNT_JSON --env play-closed < "$ROOT/.local/play-service-account.json"; then
-    WRITTEN_SECRET+=("play-closed/PLAY_SERVICE_ACCOUNT_JSON")
-    printf '  %s✓ set%s GitHub environment secret PLAY_SERVICE_ACCOUNT_JSON\n' "$GREEN" "$RESET"
-  else
-    SKIPPED+=("GitHub environment secret play-closed/PLAY_SERVICE_ACCOUNT_JSON")
-  fi
-fi
+sync_play_upload_secrets
 note "Do not add these secrets to the CI pull_request workflow."
 pause "Environment secrets are set, or listed as still-to-do?"
 
 # ── 10. First AAB ────────────────────────────────────────────────────────
 stage "First App Bundle"
-say "The Play Developer API needs the package to exist. The first AAB is a console upload."
-note "just android-bundle signs with the keystore from .env and writes app-release.aab"
+say "The Play Developer API cannot create the package. The first AAB is a Console upload."
+note "just android-bundle signs with .local/play-signing.env. CI also attaches the AAB as an artifact (just android-play-dispatch)."
 if confirm "Build a signed bundle on this machine now?"; then
   if just android-bundle; then
     say "AAB: Apps/Android/app/build/outputs/bundle/release/app-release.aab"
   else
-    warn "bundle failed — you can run just android-bundle after the Swift Android SDK is installed"
+    warn "bundle failed — install Swift 6.3.3, or dispatch Android Play after signing secrets exist and download the artifact"
     SKIPPED+=("local bundleRelease")
   fi
 else
   note "Run later: just android-bundle"
+  note "Or: just android-play-dispatch after this workflow is on main"
 fi
-open_url "https://play.google.com/console"
-step "Test and release → Closed testing → Create new release."
-step "Upload the AAB. Play App Signing enrolls on this first bundle — keep the upload keystore."
+open_play_app_page "tracks/closed-testing"
+step "Left sidebar: Test and release → Testing → Closed testing → Create new release."
+step "Upload the AAB. Play App Signing enrolls on this first bundle — keep .local/play-upload.keystore."
 step "Release name can stay the version Play fills. What's new: Apps/Android/Play/whatsnew/whatsnew-en-US"
-step "Save. Send for review if the listing tasks are green; otherwise keep it draft."
-note "After this first upload, GitHub Actions can ship the rest."
+step "Save. Send for review if listing tasks are green; otherwise keep it draft."
+note "Do not turn on ANDROID_PLAY_UPLOAD until Play has accepted that first AAB."
 pause "First AAB is uploaded (draft or in review)?"
 
 # ── 11. Testers + auto-upload ────────────────────────────────────────────
 stage "Testers and auto-upload"
-say "Do not enable auto-upload until the first closed release is accepted."
+say "Do not enable auto-upload until the first closed release exists in Play Console."
+open_play_app_page "tracks/closed-testing"
 step "Export the Tally waitlist CSV. Keep it out of git."
 step "python3 scripts/prepare-android-testers.py ~/Downloads/tally.csv"
-step "Play Console → Closed testing → Testers → upload .local/play-testers.csv"
+step "Left sidebar: Test and release → Closed testing → Testers → upload .local/play-testers.csv"
 step "Copy the join URL into .env if it changed (PLAY_JOIN_URL)."
-if confirm "Turn on ANDROID_PLAY_UPLOAD so merges to main ship to closed testing?"; then
-  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    gh variable set ANDROID_PLAY_UPLOAD --body true
-    say "Auto-upload is on. Path-filtered pushes to main will bundle and upload."
-  else
-    SKIPPED+=("GitHub variable ANDROID_PLAY_UPLOAD")
-    warn "Set it later: gh variable set ANDROID_PLAY_UPLOAD --body true"
-  fi
+if confirm "Turn on ANDROID_PLAY_UPLOAD so later merges to main ship to closed testing?"; then
+  warn "Only say yes if Play already has an AAB for com.opencapture.openpocketcine and the Play API robot is invited."
+  set_var ANDROID_PLAY_UPLOAD true
 else
-  note "Leave it off. Dispatch Android Play from the Actions tab until you are ready."
+  note "Leave it off. After the first Console upload: just android-play-dispatch"
+  note "Then: gh variable set ANDROID_PLAY_UPLOAD --body true"
 fi
 note "Details: docs/android-play-ci.md"
 
 finish
-
