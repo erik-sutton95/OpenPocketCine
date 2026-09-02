@@ -109,6 +109,14 @@ GOP-cut them. (#147)
 Media is pktType `0x02`. Disconnect has no live-stop — leftover GOP P-frames
 during handshake are expected until this pair starts a clean VPS.
 
+Settings and the media library cover the monitor; they must not drop
+pktType `0x02` ingest. Pocket has no periodic GOP. The watchdog will not
+PLI while UDP `0x02` is still arriving, so a dropped GOP returns as a
+black well with live HUD (#177). Return-from-gallery is
+`MediaLiveResume` (`0x02/0x0c` until the playback bit clears, then the
+captured live-start — `0x02/0x68` `08` then `0x09/0xa8` + IDR hold),
+not a raw enable write.
+
 ## Disconnect teardown
 
 In-app Disconnect must drop the UDP driver (`udpGeneration` / closed flag,

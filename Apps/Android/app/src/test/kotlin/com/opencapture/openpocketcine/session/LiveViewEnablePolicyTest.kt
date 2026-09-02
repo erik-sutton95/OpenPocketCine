@@ -580,6 +580,37 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
+    fun overlayMustNotDropLiveHevc() {
+        assertTrue(
+            LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = true,
+                browsingMedia = true,
+                operatorOverlayHeld = false,
+            ),
+            "#177: library covering the monitor is not a leftover-GOP gate",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = true,
+                browsingMedia = false,
+                operatorOverlayHeld = true,
+            ),
+            "#177: settings covering the monitor is not a leftover-GOP gate",
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldIngestLiveVideo(
+                ingestArmed = false,
+                browsingMedia = true,
+                operatorOverlayHeld = true,
+            ),
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldUseCapturedLiveStartForMediaResume(),
+            "media resume is 0x68 then 0x09/0xa8 + IDR hold, not a raw 0xa8 write",
+        )
+    }
+
+    @Test
     fun firstPictureDoesNotExitPlaybackUnlessCameraIsInGallery() {
         assertTrue(!LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(inPlayback = false))
         assertTrue(LiveViewEnablePolicy.shouldExitPlaybackBeforeLiveEnable(inPlayback = true))

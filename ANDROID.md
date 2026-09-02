@@ -69,7 +69,10 @@ the production `CameraSoftAP` ladder.
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
-`GL_TEXTURE_EXTERNAL_OES` is the fallback. Drop the swapchain in
+`GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
+cover the monitor; they must not drop pktType `0x02` ingest (parity: live
+HEVC held). Return-from-gallery uses `restartLiveViewAfterMedia` (captured
+live-start), not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
 `surfaceDestroyed` before Android destroys the window mutex; drain
 `opc.vk.img` before `nativeDestroy`. Contract: [`docs/live-session.md`](docs/live-session.md).
 

@@ -11,7 +11,7 @@ Fixes
 - On a Nano, Photo now actually switches instead of staying on Video. Video back to Photo should ack and the shutter should take a still, not start a clip.
 - Live view should come up a couple of seconds after Wi-Fi joins, not sit on Waiting for live view, and stay up while you pan or tilt. A frozen picture with a live timecode should not happen.
 - Leaving live view, rotating, or opening clips must not crash the app. The picture should return after rotation and after clips.
-- Opening clips or Operator Setup over live view, then going back, keeps the live picture instead of a black well.
+- Opening clips or Operator Setup over live view, then going back, keeps the live picture, not a black well while the camera still responds.
 - Opening a long clip for in-app playback no longer crashes while the preview is caching. Playback still uses the 720p proxy; share and save still use the original camera file.
 - On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
 - Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad.

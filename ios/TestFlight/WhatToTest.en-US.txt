@@ -12,7 +12,7 @@ Fixes
 - Head tracking no longer bobs past where you look and swings back. Turning your head, then nodding, tilts straight up and down. Rapid look-pause-look gestures no longer freeze the picture.
 - Power-cycling the camera mid-session keeps the last picture under the Reconnecting card instead of going black. Connection retry rules were reworked under the hood; reconnect should behave as before.
 - With LUT, waveform, peaking, or Face AF on, zooming, changing the recording format, or the D-Log2 to D-Log hop no longer freezes the picture while the HUD keeps running.
-- Opening clips or Operator Setup over live view, then going back, keeps the live picture instead of a black well.
+- Opening clips or Operator Setup over live view, then going back, keeps the live picture, not a black well while the camera still responds.
 - On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
 - Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad.
 

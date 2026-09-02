@@ -8,9 +8,8 @@ import com.opencapture.openpocketcine.session.PocketCameraSession
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Session/datalink surface the media browser needs. PocketCameraSession does not
- * expose beginMediaBrowse yet, so this wraps [DatalinkDriver] when the session
- * is live.
+ * Session/datalink surface the media browser needs. Live enable goes through
+ * [PocketCameraSession.restartLiveViewAfterMedia], not a raw `0xa8` write.
  */
 interface MediaSessionLink {
     val isLive: Boolean
@@ -72,7 +71,7 @@ class PocketCameraMediaLink(
     }
 
     override fun enableLiveView() {
-        driver()?.startLiveView()
+        session.restartLiveViewAfterMedia()
     }
 
     override fun addFrameListener(listener: (DumlFrame) -> Unit): () -> Unit {
