@@ -20,4 +20,4 @@ What to test
 - Connect a DualSense (or any extended gamepad). Left stick should move the gimbal. Cross records. Circle recenters. Square does 180. Triangle tracks a face. L1/R1 jump zoom. L2/R2 hold-to-zoom. D-pad ISO and shutter. Push into a tilt or pan stop — one buzz, not a continuous rumble. Haptics off should be silent. Unplug should rest the stick and toast disconnected.
 - On Pocket 4 Pro in D-Log2 (idle, not recording): press R2 or pinch. COLOR should switch to D-Log first, then the picture should zoom. The chip must not run ahead of the lens.
 - Record a short take, then open it in the library with LUT on. Share should send the original file, not a small preview.
-- The Android handshake work touched the shared Swift core. On iPhone, pair, go live, then power the camera off and on once. Reconnect should behave as before.
+- Connection retry rules were reworked under the hood. Pair, go live, then power the camera off and on once. Reconnect should behave as before.
