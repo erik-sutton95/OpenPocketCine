@@ -71,12 +71,12 @@ class CameraApAvailabilityTrackerTest {
 
     @Test
     fun pathStaysReadyDuringReassociationGrace() {
-        assertTrue(CameraApJoiner.isPathReady(boundNetworkPresent = true, reassociationGraceActive = false))
+        assertTrue(CameraApJoiner.isPathReady(hasBoundNetwork = true, inReassociationGrace = false))
         assertTrue(
-            CameraApJoiner.isPathReady(boundNetworkPresent = false, reassociationGraceActive = true),
+            CameraApJoiner.isPathReady(hasBoundNetwork = false, inReassociationGrace = true),
             "onLost clears the Network object; process bind + grace still hold the camera AP",
         )
-        assertTrue(!CameraApJoiner.isPathReady(boundNetworkPresent = false, reassociationGraceActive = false))
+        assertTrue(!CameraApJoiner.isPathReady(hasBoundNetwork = false, inReassociationGrace = false))
     }
 
     @Test

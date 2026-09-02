@@ -27,8 +27,11 @@ changes through the API or
 - Play closed testing uses Environment **play-closed** secrets
   (`PLAY_SERVICE_ACCOUNT_JSON`, `ANDROID_KEYSTORE_*`), consumed only by
   `.github/workflows/android-play.yml` (`workflow_dispatch` and `push` to
-  `main`). Auto-upload is the repository variable `ANDROID_PLAY_UPLOAD`.
-  See [`android-play-ci.md`](android-play-ci.md).
+  `main`). Auto-upload is the repository variable `ANDROID_PLAY_UPLOAD`
+  (must be exactly `true`; same kill switch as OpenZCine
+  `PLAY_UPLOAD_ENABLED`). `ANDROID_VERSION_CODE_BASE` is the versionCode
+  offset. Missing secrets fail the job; they do not skip-succeed. See
+  [`android-play-ci.md`](android-play-ci.md).
 - Hosted runners only. Do not add a self-hosted runner — CI executes pull
   request code.
 
