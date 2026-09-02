@@ -181,9 +181,11 @@ class LiveViewEnablePolicyTest {
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
-                lastVideoAt = now - 4_200,
-                lastStatusAt = now - 300,
-                lastBleAt = now - 200,
+                // Stalled (2 s) but inside gimbal video grace (stall + 3 s).
+                // 8 s stale video lifts the hold so a stuck stick cannot block recover.
+                lastVideoAt = now - 2_500,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
                 lastGimbalThrowAt = now - 1_000,
             )

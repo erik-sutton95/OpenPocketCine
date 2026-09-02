@@ -187,8 +187,10 @@ class DatalinkDriver(
                     keepBind = true
                     continue
                 }
-                LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL ->
-                    throw DatalinkHandshakeException("camera never answered the datalink handshake")
+                LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL -> {
+                    Log.i(TAG, "datalink: handshake never acked inbound=$inbound")
+                    throw handshakeTimeoutFailure()
+                }
                 LiveViewEnablePolicy.HandshakeTimeoutStep.REBIND_UDP -> {
                     rebinds += 1
                     Log.i(
@@ -796,10 +798,23 @@ class DatalinkDriver(
         Thread.sleep(400)
     }
 
+    /**
+     * Recoverable datalink failures. iOS `DatalinkDriver.DatalinkError`.
+     * Do not use Kotlin `error()` here — that is `IllegalStateException` and
+     * Play Vitals treats an uncaught one as a crash (#189).
+     */
+    sealed class DatalinkError(message: String) : Exception(message) {
+        class NoHandshake : DatalinkError("camera never answered the datalink handshake")
+    }
+
     companion object {
         private const val TAG = "DatalinkDriver"
         private const val CAMERA_HOST = "192.168.2.1"
         internal const val WILDCARD_BIND_HOST = "0.0.0.0"
+
+        /** Handshake miss after rebind/path-lost. Pairing or recovery, not a crash. */
+        internal fun handshakeTimeoutFailure(): Exception = DatalinkError.NoHandshake()
+
         /** Ephemeral local port. Camera 9004 is the remote, not the client bind. */
         internal const val UDP_BIND_PORT = 0
 

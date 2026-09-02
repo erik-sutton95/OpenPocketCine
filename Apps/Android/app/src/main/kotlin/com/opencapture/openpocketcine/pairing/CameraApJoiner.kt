@@ -70,8 +70,8 @@ class CameraApJoiner(context: Context) {
     fun isProcessBound(): Boolean =
         synchronized(lock) {
             isPathReady(
-                boundNetworkPresent = boundNetwork != null,
-                reassociationGraceActive = reassociationGrace != null,
+                hasBoundNetwork = boundNetwork != null,
+                inReassociationGrace = reassociationGrace != null,
             )
         }
 
@@ -294,6 +294,16 @@ class CameraApJoiner(context: Context) {
         private const val REASSOCIATION_GRACE_MS: Long = 8_000L
 
         /**
+         * SoftAP `onLost` nulls the [Network] object immediately. Process bind
+         * stays until grace expires so UDP cannot hop onto home Wi-Fi.
+         * Handshake / rebuild must treat that window as path-ready (#189).
+         */
+        internal fun isPathReady(
+            hasBoundNetwork: Boolean,
+            inReassociationGrace: Boolean,
+        ): Boolean = hasBoundNetwork || inReassociationGrace
+
+        /**
          * Phone address on the camera AP. `.1` is the camera; `.0` / `.255` are
          * not hosts. Matches `CameraSoftAP.isAssociatedIPv4` exactly.
          */
@@ -307,16 +317,6 @@ class CameraApJoiner(context: Context) {
 
         fun cameraLocalIPv4(ipv4s: Iterable<String>): String? =
             ipv4s.firstOrNull { isAssociatedIPv4(it) }
-
-        /**
-         * SoftAP `onLost` clears [boundNetwork] immediately (the Network object
-         * is dead) but keeps `bindProcessToNetwork` until grace expires. Path
-         * is still the camera AP during that window — handshake must not kick.
-         */
-        fun isPathReady(
-            boundNetworkPresent: Boolean,
-            reassociationGraceActive: Boolean,
-        ): Boolean = boundNetworkPresent || reassociationGraceActive
     }
 }
 
