@@ -68,7 +68,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   original. Storage **Full Resolution Caching** (on by default) also caches
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
-- Optional Frame.io Camera to Cloud when you add your own Adobe keys
+- Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 
 Verify record start/stop on the camera body until you trust the link.
 

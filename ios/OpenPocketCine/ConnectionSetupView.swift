@@ -253,7 +253,7 @@ struct ConnectionSetupView: View {
                     icon: .aperture,
                     steps: [
                         "Leave the camera on — it brings up its own Wi-Fi",
-                        "No menu tap needed on this path",
+                        "On 5.8 GHz that can take about a minute; we keep trying",
                     ]
                 ),
                 tight: tight

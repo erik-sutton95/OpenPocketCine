@@ -154,9 +154,23 @@ All notable changes to this project are documented here. The format is based on
 - README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
   contributions, with a nod to animal charities.
 - Landing-page and README media-library and playback mockups, with a Frame.io
-  identification mark on Camera-to-Cloud delivery.
+  identification mark on clip upload.
 
 ### Fixed
+
+- First pair could never join the Pocket SoftAP again after a camera Wi-Fi
+  reset (#235, #216): Wi-Fi credentials were cached before the join and kept
+  through every failed join, so a regenerated passphrase was never re-read
+  (Keychain survives reinstall; the wizard has no Forget). Credentials now
+  persist only after a successful join, and a failed join with cached
+  credentials drops them so the next tap re-reads them over BLE. A 5.8 GHz
+  SoftAP in a DFS region (UK) beacons only after a ~60 s channel availability
+  check, which is why Mimo "takes forever" there; one hotspot apply gave up
+  in ~20 s with Unable to join. Both shells now keep applying the join for
+  90 s, and the copy says 2.4 GHz joins at once. The connect spine (`creds:`,
+  `wifi:` with the hotspot error code, `session: connect failed`) now lands
+  in the diagnostics journal; a `joiningWifi` report used to carry no line
+  about why. Both shells.
 
 - Pocket 3 first picture still black until FORMAT or COLOR changed (#221,
   #147): the 1080→boot-4K poke waited 2 s then SETs a guessed 4K 30 if
@@ -547,6 +561,8 @@ All notable changes to this project are documented here. The format is based on
   bouncing back to the previous DSP snapshot.
 
 ### Changed
+
+- Public copy names optional clip delivery **Frame.io upload** (Platform API v4).
 
 - Idle D-Log2 zoom hops to D-Log (`0x02/0x42`) on the first step off 1×
   and holds every zoom `0xB8` until `cam_image_effect` is D-Log. The chip

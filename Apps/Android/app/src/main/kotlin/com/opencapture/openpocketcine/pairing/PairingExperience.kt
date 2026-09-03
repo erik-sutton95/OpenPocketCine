@@ -418,7 +418,10 @@ private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
     )
     StartupDeviceInstructionCard(
         "On the camera",
-        listOf("Leave the camera on — it brings up its own Wi-Fi", "No menu tap needed on this path"),
+        listOf(
+            "Leave the camera on — it brings up its own Wi-Fi",
+            "On 5.8 GHz that can take about a minute; we keep trying",
+        ),
         tight,
         glyph = StartupGlyphKind.APERTURE,
     )

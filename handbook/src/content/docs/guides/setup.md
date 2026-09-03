@@ -56,7 +56,8 @@ GitHub Pages merges the landing site and this handbook at
 
 ## Frame.io (optional)
 
-Disabled unless you add a gitignored Adobe Native App client ID. See
+Disabled unless you add a gitignored Adobe Native App client ID. Uploads use the
+Frame.io Platform API (v4). See
 [`docs/frameio-setup.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/frameio-setup.md)
 in the repo. No keys are committed.
 
