@@ -101,7 +101,7 @@ enum FrameioError: LocalizedError {
     }
 }
 
-/// `URLSession` client for the Frame.io V4 API: token refresh, account/project listing, and clip
+/// `URLSession` client for the Frame.io Platform API v4: token refresh, account/project listing, and clip
 /// upload. Endpoint paths beyond the documented shapes are `[verify-with-credentials]`.
 @MainActor
 final class FrameioService {

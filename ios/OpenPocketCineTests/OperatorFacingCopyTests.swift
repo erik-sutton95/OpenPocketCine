@@ -3,7 +3,8 @@ import XCTest
 
 @testable import OpenPocketCine
 
-/// Operator-facing copy must never name a sister app or another camera brand.
+/// Operator-facing copy must never name a sister app, another camera brand,
+/// or Adobe's integrator-program name.
 final class OperatorFacingCopyTests: XCTestCase {
     func testWizardShareDiagnosticsUsesSettingsTitle() {
         XCTAssertEqual(StartupConnectionCopy.shareDiagnostics, "Share Diagnostics")
@@ -27,6 +28,18 @@ final class OperatorFacingCopyTests: XCTestCase {
             XCTAssertFalse(
                 text.localizedCaseInsensitiveContains("Nikon"),
                 "operator copy names Nikon: \(text)")
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Camera to Cloud"),
+                "operator copy uses Camera to Cloud: \(text)")
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Camera-to-Cloud"),
+                "operator copy uses Camera-to-Cloud: \(text)")
+            XCTAssertFalse(
+                text.range(
+                    of: #"\bC2C\b"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil,
+                "operator copy uses C2C: \(text)")
         }
     }
 

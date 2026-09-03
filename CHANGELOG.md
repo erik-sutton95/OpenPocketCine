@@ -154,7 +154,7 @@ All notable changes to this project are documented here. The format is based on
 - README support note for optional [Buy Me a Coffee](https://buymeacoffee.com/eriksutton)
   contributions, with a nod to animal charities.
 - Landing-page and README media-library and playback mockups, with a Frame.io
-  identification mark on Camera-to-Cloud delivery.
+  identification mark on clip upload.
 
 ### Fixed
 
@@ -561,6 +561,8 @@ All notable changes to this project are documented here. The format is based on
   bouncing back to the previous DSP snapshot.
 
 ### Changed
+
+- Public copy names optional clip delivery **Frame.io upload** (Platform API v4).
 
 - Idle D-Log2 zoom hops to D-Log (`0x02/0x42`) on the first step off 1×
   and holds every zoom `0xB8` until `cam_image_effect` is D-Log. The chip
