@@ -126,10 +126,13 @@ struct ConnectionSetupView: View {
             }
             .fadeOverflowBottom()
 
-            if showsFooter {
-                footer
-                    .padding(.top, 10)
+            VStack(spacing: 10) {
+                if showsFooter {
+                    footer
+                }
+                StartupShareDiagnosticsButton()
             }
+            .padding(.top, 10)
         }
         .padding(22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

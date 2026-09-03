@@ -92,6 +92,8 @@ extension View {
 }
 
 enum StartupConnectionCopy {
+    static let shareDiagnostics = "Share Diagnostics"
+
     static func statusTitle(for phase: ConnectionPhase, isDiscovering: Bool) -> String {
         switch phase {
         case .idle:
@@ -596,6 +598,27 @@ struct StartupQuietButtonStyle: ButtonStyle {
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.cornerRadius).stroke(
                     StartupColors.border.opacity(0.08), lineWidth: 1))
+    }
+}
+
+/// Wizard footer so testers stuck on first pair can send a report
+/// without reaching Operator Setup.
+struct StartupShareDiagnosticsButton: View {
+    @Environment(AppModel.self) private var model
+    @State private var payload: DiagnosticSharePayload?
+
+    var body: some View {
+        Button {
+            if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
+                payload = DiagnosticSharePayload(url: url)
+            }
+        } label: {
+            Text(StartupConnectionCopy.shareDiagnostics)
+        }
+        .buttonStyle(StartupWizardOutlineButtonStyle())
+        .sheet(item: $payload) { item in
+            DiagnosticActivityShareView(items: [item.url])
+        }
     }
 }
 

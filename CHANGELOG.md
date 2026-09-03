@@ -9,10 +9,10 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - On-device diagnostics: redacted journal, exceptions, MetricKit payloads
-  (iOS), and Operator Setup → System → **Share Diagnostics**. A TestFlight
-  screenshot copies a compact paste (Apple cannot attach files to that
-  form). No name, location, or Wi-Fi password. No upload.
-  `docs/diagnostics.md`.
+  (iOS), and **Share Diagnostics** on Connection setup (first pair) and
+  Operator Setup → System. A TestFlight screenshot copies a compact paste
+  (Apple cannot attach files to that form). No name, location, or Wi-Fi
+  password. No upload. `docs/diagnostics.md`.
 
 - Live head-tracking debug: yaw ring (12 o'clock is SET) and a vertical
   pitch ring (arrow-right is 0). iOS only. White arrow is the SET-relative

@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.FoundCamera
 
 private val prepareSteps =
@@ -213,27 +215,40 @@ private fun StepCard(
                 busy ||
                 ((phase == ConnectionPhase.IDLE || phase == ConnectionPhase.SCANNING) &&
                     model.savedCameras.isNotEmpty())
-        if (showFooter) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (model.savedCameras.isNotEmpty() || busy) {
-                    StartupOutlineButton(
-                        if (busy) "Cancel" else "Back",
-                        onClick = model::cancelPairing,
-                        leadingChevron = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (phase == ConnectionPhase.FAILED) {
-                    StartupFilledButton(
-                        "Try again",
-                        enabled = true,
-                        onClick = { model.session.startScan() },
-                        modifier = Modifier.weight(1f),
-                    )
+        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (showFooter) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (model.savedCameras.isNotEmpty() || busy) {
+                        StartupOutlineButton(
+                            if (busy) "Cancel" else "Back",
+                            onClick = model::cancelPairing,
+                            leadingChevron = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (phase == ConnectionPhase.FAILED) {
+                        StartupFilledButton(
+                            "Try again",
+                            enabled = true,
+                            onClick = { model.session.startScan() },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
+            StartupShareDiagnosticsButton(model, Modifier.fillMaxWidth())
         }
     }
+}
+
+@Composable
+private fun StartupShareDiagnosticsButton(model: AppModel, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    StartupOutlineButton(
+        StartupConnectionCopy.SHARE_DIAGNOSTICS,
+        onClick = { DiagnosticCenter.shareReport(context, model.session) },
+        modifier = modifier,
+    )
 }
 
 @Composable

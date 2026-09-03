@@ -5,6 +5,10 @@ import XCTest
 
 /// Operator-facing copy must never name a sister app or another camera brand.
 final class OperatorFacingCopyTests: XCTestCase {
+    func testWizardShareDiagnosticsUsesSettingsTitle() {
+        XCTAssertEqual(StartupConnectionCopy.shareDiagnostics, "Share Diagnostics")
+    }
+
     func testHeadTrackingIsExperimentalAndCalibrateIsOperatorFacing() {
         XCTAssertEqual(LiveHeadTrackCalibrateButton.calibrateTitle, "Calibrate Head Lock")
         XCTAssertEqual(LiveHeadTrackCalibrateButton.stopTitle, "STOP")
@@ -91,7 +95,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.reportHelp,
             SettingsHelpCopy.shareDiagnostics,
             "Diagnostics copied — paste into TestFlight feedback",
-            "Share Diagnostics",
+            StartupConnectionCopy.shareDiagnostics,
             SettingsHelpCopy.featureHelp,
             SettingsHelpCopy.sourceHelp,
             SettingsHelpCopy.linkHealth,

@@ -76,8 +76,8 @@ TestFlight screenshot feedback cannot carry an attached file (Apple has no
 API for that). The app copies a redacted compact report to the pasteboard
 when the tester screenshots; they paste it into the feedback comment.
 Crashes still go to App Store Connect automatically. Full report:
-Operator Setup → System → Share Diagnostics. Contract:
-[`diagnostics.md`](diagnostics.md).
+Connection setup **Share Diagnostics**, or Operator Setup → System →
+Share Diagnostics. Contract: [`diagnostics.md`](diagnostics.md).
 
 Preview locally:
 
