@@ -45,6 +45,12 @@ Categories: `session`, `feed`, `control`, `ble`, `decoder`, `recovery`,
 `diagnostics`. High-rate ACK stays on the existing 1 Hz journal, not a 40 Hz
 dump (`PERFORMANCE.md`).
 
+The connect spine journals itself: `creds:` (source, cached or from BLE,
+GetSSID / GetPassword attempts), `wifi:` (hotspot apply result with the
+`NEHotspotConfiguration` error code, DHCP wait, current SSID on a miss), and
+`session: connect failed at <phase>` with the operator string. A report whose
+phase is `joiningWifi` must carry the line that says why (#235).
+
 Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 `DiagnosticCenter` (MetricKit, uncaught `NSException`, screenshot paste).
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).

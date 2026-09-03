@@ -23,6 +23,17 @@ import Testing
         #expect(CameraSoftAP.isPathReady(localIPv4s: ["192.168.1.10", "192.168.2.42"]))
     }
 
+    @Test func dfsJoinKeepsRetryingUntilTheDeadline() {
+        #expect(CameraSoftAPSwitch.joinDeadlineSeconds >= 60)
+        #expect(CameraSoftAPSwitch.joinRetryPauseSeconds == 10)
+        #expect(CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 70))
+        #expect(CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 11))
+        #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 10))
+        #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 0))
+        #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: -5))
+        #expect(CameraSoftAPSwitch.frequencyHint.contains("2.4 GHz"))
+    }
+
     @Test func leftoverCameraPathDoesNotBlockTheOtherBody() {
         #expect(!CameraSoftAPSwitch.shouldAbortBecausePathStillReady(true))
         #expect(!CameraSoftAPSwitch.shouldAbortBecausePathStillReady(false))
