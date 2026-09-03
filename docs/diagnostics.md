@@ -7,6 +7,7 @@ analytics SDK and does not send footage, names, or locations.
 
 | Path | What it is |
 | --- | --- |
+| Connection setup (first pair) → **Share Diagnostics** | Same redacted report, available before a camera is saved |
 | Operator Setup → System → **Share Diagnostics** | Redacted report (`report.txt`) plus a compact paste |
 | TestFlight screenshot feedback | iOS copies that compact paste to the clipboard — paste it into the TestFlight comment. Apple does not let an app attach files to TestFlight feedback. |
 | Finder / Files (iOS) | `Documents/control-live.log` and `Documents/diagnostics/` (file sharing on) |

@@ -89,6 +89,7 @@ change `Sources/`, `ios/`, or `Package.swift` update
 `ios/TestFlight/WhatToTest.en-US.txt` for operators. See
 [`docs/testflight-ci.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md).
 
-If live view fails: Operator Setup → System → **Share Diagnostics**, or take a
-screenshot for TestFlight and paste the copied report into the feedback. The
-report has no name, location, or Wi-Fi password.
+If pairing or live view fails: Connection setup **Share Diagnostics**, or
+Operator Setup → System → **Share Diagnostics**, or take a screenshot for
+TestFlight and paste the copied report into the feedback. The report has no
+name, location, or Wi-Fi password.

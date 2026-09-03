@@ -32,7 +32,8 @@ First pair is the wizard in `ConnectionSetupView` (Android matches):
 
 Empty store: the wizard fills the viewport. After a successful pair, the camera
 is saved; next launch is **Your cameras**. **Pair new camera** re-enters the
-wizard. Settings does not start a new pair.
+wizard. Settings does not start a new pair. The wizard always offers **Share
+Diagnostics** so a stuck first pair can still send a report.
 
 Pocket and Nano are separate bodies. If Bluetooth reached a different camera
 than the one tapped, say so and tell the operator to pick the matching row.
@@ -57,6 +58,8 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
   Storage, System).
 - TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
 - Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
+- Connection setup (first pair): **Share Diagnostics** on the wizard so a
+  tester who never reaches Operator Setup can still send a report.
 - Operator Setup → System → **Share Diagnostics**. iOS screenshot for
   TestFlight copies a compact paste (`docs/diagnostics.md`).
 
