@@ -158,6 +158,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Renaming the Pocket SoftAP no longer joins the cached old SSID while the
+  paired row shows the new BLE name (#257). Cached password is kept; a live
+  advertised name that differs from Keychain / Keystore wins. Scan rows
+  update when the BLE local name changes. Both shells.
+
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept
   through every failed join, so a regenerated passphrase was never re-read

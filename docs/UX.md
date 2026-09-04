@@ -48,6 +48,10 @@ Session recovery holds the last frame. A black well is a teardown or present-pat
 bug, not “Waiting for live view” copy over a live socket. Teardown rules:
 [`live-session.md`](live-session.md). Stall policy: [`feed-watchdog.md`](feed-watchdog.md).
 
+Renaming camera Wi-Fi updates the BLE name. Reconnect must join that live
+name, not the previous SoftAP SSID still sitting in Keychain / Keystore
+(#257). Deleting the saved row is not required.
+
 Record confirmation is a bottom action sheet, not a centred dialog.
 
 Link health in the top bar is delivery (FPS chip), not RSSI.

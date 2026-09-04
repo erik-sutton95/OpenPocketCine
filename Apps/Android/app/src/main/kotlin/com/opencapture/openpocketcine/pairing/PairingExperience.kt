@@ -444,33 +444,6 @@ private fun DatalinkStep(phase: ConnectionPhase, tight: Boolean) {
     )
 }
 
-/** Scan-row title/subtitle — first BLE advert is often nameless. */
-private object FoundCameraIdentity {
-    fun isGenericName(name: String): Boolean {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return true
-        val compact = trimmed.lowercase()
-        return compact == "dji camera" || compact == "dji osmo camera"
-    }
-
-    fun listTitle(advertisedName: String, modelName: String): String =
-        if (isGenericName(advertisedName)) modelName else advertisedName
-
-    fun listSubtitle(advertisedName: String, modelName: String, family: String): String {
-        val kind =
-            when (family.lowercase()) {
-                "nano" -> "Nano"
-                "other" -> modelName
-                else -> "Pocket"
-            }
-        return if (isGenericName(advertisedName) || advertisedName == modelName) {
-            "$kind · nearby"
-        } else {
-            "$kind · $modelName · nearby"
-        }
-    }
-}
-
 fun pocketRuntimePermissions(): Array<String> {
     val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
     if (Build.VERSION.SDK_INT >= 31) {

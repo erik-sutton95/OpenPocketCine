@@ -45,6 +45,8 @@ public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
 
 /// SoftAP creds are per body. A session-global last-SSID would join the
 /// Pocket AP when connecting a Nano (both use `192.168.2.1`).
+/// A live BLE name that differs from the cached SSID is a renamed SoftAP
+/// (#257) — join that name; do not keep the old Keychain SSID.
 public enum CameraWifiResolution {
     public struct Memory: Equatable, Sendable {
         public var cameraId: UUID
@@ -65,22 +67,39 @@ public enum CameraWifiResolution {
         public var skipBle: Bool
     }
 
+    /// BLE local name when it is usable as a SoftAP SSID. Nameless first
+    /// adverts (`DJI camera`) are not — Pocket BLE name follows the Wi-Fi name.
+    public static func liveAdvertisedSSID(_ name: String?) -> String? {
+        guard let name else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !FoundCameraIdentity.isGenericName(trimmed) else { return nil }
+        return trimmed
+    }
+
     public static func resolve(
         cameraId: UUID,
         savedSSID: String?,
         memory: Memory?,
         keychainSSID: String?,
-        keychainPassword: String?
+        keychainPassword: String?,
+        advertisedName: String? = nil
     ) -> Result {
         let memoryMatches = memory?.cameraId == cameraId
         let memSsid = memoryMatches ? memory?.ssid : nil
         let memPass = memoryMatches ? memory?.password : nil
-        let ssid = [memSsid, keychainSSID, savedSSID]
+        let cachedSsid = [memSsid, keychainSSID, savedSSID]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
         let password = [memPass, keychainPassword]
             .compactMap { $0 }
             .first { !$0.isEmpty }
+        let live = liveAdvertisedSSID(advertisedName)
+        let ssid: String?
+        if let live, let cachedSsid, live != cachedSsid {
+            ssid = live
+        } else {
+            ssid = cachedSsid
+        }
         let memoryHit = memoryMatches && !(memSsid ?? "").isEmpty && !(memPass ?? "").isEmpty
         let keychainHit = !(keychainSSID ?? "").isEmpty && !(keychainPassword ?? "").isEmpty
         let source: String
@@ -129,7 +148,13 @@ public enum FoundCameraIdentity {
         existingName: String, existingModelId: Int?,
         incomingName: String, incomingModelId: Int?
     ) -> Bool {
-        if isGenericName(existingName), !isGenericName(incomingName) { return true }
+        if isGenericName(incomingName) {
+            return isGenericName(existingName) && existingModelId == nil && incomingModelId != nil
+        }
+        if isGenericName(existingName) { return true }
+        let existing = existingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let incoming = incomingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if existing != incoming { return true }
         if existingModelId == nil, incomingModelId != nil { return true }
         return false
     }

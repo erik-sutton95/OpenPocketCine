@@ -16,6 +16,7 @@ import com.opencapture.openpocketcine.feed.SerialSessionGate
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
+import com.opencapture.openpocketcine.pairing.CameraWifiResolution
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -534,13 +535,34 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun wifiCredsAfterPairing(camera: FoundCamera): Pair<String, String> {
         val cached = wifiCache.load(camera.id)
         if (cached != null) {
-            DiagnosticCenter.log(
-                "info",
-                "session",
-                "creds",
-                "creds: skipping BLE GetSSID/GetPassword — cached SSID ${cached.first}",
-            )
-            return cached
+            val resolved =
+                CameraWifiResolution.resolve(
+                    cameraId = camera.id,
+                    savedSSID = null,
+                    memoryCameraId = camera.id,
+                    memorySsid = cached.first,
+                    memoryPassword = cached.second,
+                    keychainSsid = cached.first,
+                    keychainPassword = cached.second,
+                    advertisedName = camera.name,
+                )
+            if (resolved.skipBle && resolved.ssid != null && resolved.password != null) {
+                if (resolved.ssid != cached.first) {
+                    DiagnosticCenter.log(
+                        "info",
+                        "session",
+                        "creds",
+                        "creds: live BLE name ${resolved.ssid} replaces cached SSID ${cached.first}",
+                    )
+                }
+                DiagnosticCenter.log(
+                    "info",
+                    "session",
+                    "creds",
+                    "creds: skipping BLE GetSSID/GetPassword — ${resolved.source} SSID ${resolved.ssid}",
+                )
+                return resolved.ssid to resolved.password
+            }
         }
         val ssid =
             readWifiString("GetSSID", 0x07, 0x07) {
