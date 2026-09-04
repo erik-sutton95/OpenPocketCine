@@ -56,7 +56,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   SET before any zoom write (the chip stays at 1× until D-Log lands);
   while rolling the chip grays and tap/pinch toast instead of changing
   color.
-- Media library, playback with LUT / peaking / false colour / zebra on the 720p
+- Media library (Pocket 3: newest page lists after a take even if enter-playback ACKs E0; `/v2` is storage 0), playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
   GPU latest-wins, freeze keeps the last frame). Preview LUT grades the
   decoded 420 frame on Metal at 1440 px — not `AVVideoComposition` (that

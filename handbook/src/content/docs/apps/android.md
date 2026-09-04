@@ -72,8 +72,9 @@ window). Auto on a clip reads `com.dji.camera.ColorGammaSxS`
 from the original take like iOS — not the LRF/XRF sidecar (Rec.709 even
 for log). Shot color is stored with the cached clip. A **Proxy** tag means
 only the 720p sidecar is on the phone. Storage **Full Resolution Caching**
-matches iOS. Share/save is the original camera file — LUT bake
-(and Bake exposure) is iOS only.
+matches iOS. Pocket 3 `/v2` is storage 0; the newest catalog page lists
+after a take even if enter-playback ACKs E0. Share/save is the original
+camera file — LUT bake (and Bake exposure) is iOS only.
 Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
