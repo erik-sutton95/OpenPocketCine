@@ -180,6 +180,10 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertFalse(
             FeedPresentPolicy.isDuplicateFrameTime(0, lastPresentedNs: 42),
             "unknown timestamps must not skip")
+        XCTAssertTrue(FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 0))
+        XCTAssertFalse(
+            FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 1),
+            "LUT 50/50 must not block MainActor on a second nextDrawable")
     }
 
     func testLUTMustNotStealThePlayerOnAStaleOverlayBake() {

@@ -65,7 +65,9 @@ D-Log lands).
 Long-press View Assist options lift above the keyboard so Zebra Highlight /
 Midtone stay visible (Done on the number pad), matching iOS.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
-input-referred before the cube). Next/prev with LUT on keeps the grade on
+input-referred before the cube). 50/50 log-vs-LUT is monitor-only and must
+not drop the live picture (GPU split only while a cube is loaded). Next/prev
+with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /
 ZEBRA grade in `LiveFeedEffectsSession` like live — TextureView is only the
 window). Auto on a clip reads `com.dji.camera.ColorGammaSxS`
@@ -80,7 +82,8 @@ Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 Live picture: Vulkan when the device can init it; GLES fallback. HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
-the last frame on freeze, one live-enable write at a time). Opening clips or
+the last frame on freeze, one live-enable write at a time, latest-wins
+present). Opening clips or
 Operator Setup over live view keeps the HEVC GOP; returning to the monitor
 must not leave a black well. Leaving live view,
 opening clips, or rotating must drop the Vulkan swapchain with the window —

@@ -98,6 +98,13 @@ GOP. Do not tear VT/MediaCodec or begin an IDR hold when the 720p size did not
 change. Holding IDR then skipping enable (UDP still alive) drops the picture
 while HUD and gimbal keep moving.
 
+LUT **50/50** is a present-graph flag on an already-replacing cube (log vs
+LUT), not a GOP cut and not a swapchain realloc. Split without a cube must
+not set replace-grade. Metal presents latest-wins with one drawable in
+flight — blocking `nextDrawable` on MainActor starved HEVC ingest and left
+Reconnecting up until force-quit (#218). Further enables still follow the
+watchdog only.
+
 **Pocket 3 first picture:** the body boots 4K 25/30, HUD and gimbal work,
 and the well stays black until the operator SETs 1080 then 4K
 (`0x02/0x18`) or changes COLOR. Same-tab FORMAT is a no-op, so that
