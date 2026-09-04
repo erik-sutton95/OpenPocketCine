@@ -316,6 +316,14 @@ class MediaLibraryTest {
     }
 
     @Test
+    fun leftoverGopPacketsAreNotALivePicture() {
+        assertFalse(MediaLiveResume.isPictureFresh(lastPresentedAt = null, since = 100L))
+        assertFalse(MediaLiveResume.isPictureFresh(lastPresentedAt = 99L, since = 100L))
+        assertTrue(MediaLiveResume.isPictureFresh(lastPresentedAt = 100L, since = 100L))
+        assertTrue(MediaLiveResume.isPictureFresh(lastPresentedAt = 101L, since = 100L))
+    }
+
+    @Test
     fun sortCyclesNewestOldestNameRating() {
         assertEquals(MediaLibrarySort.OLDEST, MediaLibrarySort.NEWEST.next)
         assertEquals(MediaLibrarySort.NAME, MediaLibrarySort.OLDEST.next)

@@ -81,8 +81,8 @@ Live picture: Vulkan when the device can init it; GLES fallback. HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
 the last frame on freeze, one live-enable write at a time). Opening clips or
-Operator Setup over live view keeps the HEVC GOP; returning to the monitor
-must not leave a black well. Leaving live view,
+Operator Setup over live view keeps the HEVC GOP and the live SurfaceView;
+returning to the monitor must not leave a black well. Leaving live view,
 opening clips, or rotating must drop the Vulkan swapchain with the window —
 present after that is a skip, not a crash.
 

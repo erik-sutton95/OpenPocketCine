@@ -158,6 +158,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live picture no longer goes black after Operator Setup or clips on
+  API 34+ phones (#248, S25 Ultra / Pocket 4 Pro). Settings / media covering
+  the monitor already kept pktType `0x02` ingest (#177); the SurfaceView still
+  followed visibility and destroyed the Vulkan swapchain, and a failed
+  reattach fell back to GLES (unbinding MediaCodec) while UDP stayed live so
+  the watchdog never PLI'd. The live surface now stays attached under the
+  overlay, a failed attach retries instead of abandoning Vulkan, and
+  return-from-gallery treats leftover GOP packets as not a live picture.
+
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept
   through every failed join, so a regenerated passphrase was never re-read

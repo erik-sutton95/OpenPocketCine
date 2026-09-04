@@ -71,8 +71,12 @@ Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
 `GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
 cover the monitor; they must not drop pktType `0x02` ingest (parity: live
-HEVC held). Return-from-gallery uses `restartLiveViewAfterMedia` (captured
-live-start), not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
+HEVC held). API 34+ SurfaceView stays attached while that overlay covers it
+(`SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT`) — visibility-follow destroyed the
+swapchain on S25 and left a black well while UDP stayed live (#248). A
+failed swapchain attach retries; it is not a GLES fallback.
+Return-from-gallery uses `restartLiveViewAfterMedia` (captured live-start),
+not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
 `surfaceDestroyed` before Android destroys the window mutex; drain
 `opc.vk.img` before `nativeDestroy`. Contract: [`docs/live-session.md`](docs/live-session.md).
 

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import OpenPocketViewCore
@@ -45,5 +46,19 @@ import Testing
                 == .exitPlayback)
         #expect(MediaLiveResume.strayPlaybackAction(browsing: true, inPlayback: true) == nil)
         #expect(MediaLiveResume.strayPlaybackAction(browsing: false, inPlayback: false) == nil)
+    }
+
+    @Test func leftoverGopPacketsAreNotALivePicture() {
+        let start = Date(timeIntervalSince1970: 100)
+        #expect(!MediaLiveResume.isPictureFresh(lastPresentedAt: nil, since: start))
+        #expect(
+            !MediaLiveResume.isPictureFresh(
+                lastPresentedAt: Date(timeIntervalSince1970: 99), since: start))
+        #expect(
+            MediaLiveResume.isPictureFresh(
+                lastPresentedAt: Date(timeIntervalSince1970: 100), since: start))
+        #expect(
+            MediaLiveResume.isPictureFresh(
+                lastPresentedAt: Date(timeIntervalSince1970: 101), since: start))
     }
 }

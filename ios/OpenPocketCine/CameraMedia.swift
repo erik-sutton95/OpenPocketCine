@@ -562,7 +562,8 @@ extension CameraSession {
                 attempt: attempt,
                 inPlayback: status.inPlayback,
                 exitAcknowledged: exitAcked,
-                pictureFresh: livePictureArrived(since: started)
+                pictureFresh: MediaLiveResume.isPictureFresh(
+                    lastPresentedAt: decoder.lastPresentedAt, since: started)
             ) {
             case .done:
                 ControlLiveLog.line("media: live resume done attempt=\(attempt)")
@@ -587,12 +588,6 @@ extension CameraSession {
                 try? await Task.sleep(for: .milliseconds(350))
             }
         }
-    }
-
-    private func livePictureArrived(since start: Date) -> Bool {
-        if let presented = decoder.lastPresentedAt, presented >= start { return true }
-        if let packet = datalink?.lastVideoPacketAt, packet >= start { return true }
-        return false
     }
 
     func refreshMedia() {

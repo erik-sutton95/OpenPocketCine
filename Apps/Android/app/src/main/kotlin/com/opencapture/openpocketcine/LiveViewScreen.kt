@@ -833,7 +833,10 @@ fun LiveViewScreen(model: AppModel) {
             }
 
             val panel = model.liveOperatorPanel
-            LaunchedEffect(panel) { model.session.setOperatorOverlayHeld(panel != null) }
+            LaunchedEffect(panel) {
+                model.session.setOperatorOverlayHeld(panel != null)
+                if (panel == null) vulkanSession?.redrawLast()
+            }
             if (panel != null && !model.isEditingChrome) {
                 Box(Modifier.fillMaxSize().zIndex(10f)) {
                     when (panel) {
@@ -997,6 +1000,12 @@ private fun VulkanLivePresenter(
                 isClickable = false
                 isFocusable = false
                 setZOrderMediaOverlay(false)
+                // API 34+ default destroys this surface when Settings / Media
+                // cover it. Pocket has no periodic GOP — keep the surface while
+                // the view stays attached (#248).
+                if (Build.VERSION.SDK_INT >= 34) {
+                    setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
+                }
                 unsplitMotionEvents()
                 onSurfaceView(this)
                 holder.addCallback(

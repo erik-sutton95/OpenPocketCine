@@ -114,10 +114,16 @@ during handshake are expected until this pair starts a clean VPS.
 Settings and the media library cover the monitor; they must not drop
 pktType `0x02` ingest. Pocket has no periodic GOP. The watchdog will not
 PLI while UDP `0x02` is still arriving, so a dropped GOP returns as a
-black well with live HUD (#177). Return-from-gallery is
-`MediaLiveResume` (`0x02/0x0c` until the playback bit clears, then the
+black well with live HUD (#177). Android API 34+ SurfaceView follows
+visibility by default — covering the well with Operator Setup or clips
+destroyed the live surface while UDP stayed alive (#248). Keep
+`SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT` so occlusion is not
+`surfaceDestroyed`. A failed swapchain attach is a retry, not a GLES
+fallback (that unbound MediaCodec from the ImageReader). Return-from-gallery
+is `MediaLiveResume` (`0x02/0x0c` until the playback bit clears, then the
 captured live-start — `0x02/0x68` `08` then `0x09/0xa8` + IDR hold),
-not a raw enable write.
+not a raw enable write. Leftover GOP packets are not a live picture —
+resume is done only when a frame presented after resume started.
 
 ## Disconnect teardown
 
