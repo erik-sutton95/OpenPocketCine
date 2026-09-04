@@ -1593,7 +1593,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (next.availableColorModes.isEmpty()) {
             next = next.copy(availableColorModes = prev.availableColorModes)
         }
-        next = StatusExtras.apply(frame, next)
+        next = StatusExtras.apply(frame, next, connectedCamera?.model?.name ?: "")
         next = CamFov.absorb(next)
         next = absorbStaleFormat(next)
         next = absorbStaleColor(next)
@@ -2378,13 +2378,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         pinColor(mode)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "$mode",
+            colorModeExtra(mode),
             CameraCommands.colorLabel(mode, family),
             onFail = { colorPin = null },
         )
         hopNativeISO(from, mode, hopEnabled)
         if (mode == CameraCommands.COLOR_DLOG) confirmZoomColorHopIfReady()
     }
+
+    /** JNI extra is the body SET byte — Pocket 3 is not `ColorMode.rawValue`. */
+    private fun colorModeExtra(mode: Int): String =
+        CameraCommands.wireColorMode(mode, connectedCamera?.model?.name ?: "").toString()
 
     /**
      * `0x02/0x18` via Swift `Commands.setVideoFormat`. Optimistic HUD, pin until
@@ -2529,7 +2533,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlNote.value = "D-Log — D-Log2 cannot zoom"
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "$next",
+            colorModeExtra(next),
             "D-Log (zoom)",
             onFail = hopFail@{
                 if (zoomColorHopGeneration != hopGen) return@hopFail
@@ -2587,7 +2591,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         pinColor(CameraCommands.COLOR_DLOG2)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "${CameraCommands.COLOR_DLOG2}",
+            colorModeExtra(CameraCommands.COLOR_DLOG2),
             "D-Log2",
             onFail = { colorPin = null },
             onSettle = { ok -> if (ok) _controlNote.value = "Zoom 1× · D-Log2" },

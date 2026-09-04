@@ -158,6 +158,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Pocket 3 COLOR SET/GET used Pocket 4 / Nano bytes: `00` was sent as D-Log M
+  (the body took Rec.709), `3F` Normal was rejected, and `cam_image_effect`
+  `@2` `3D` showed as Normal 10-bit (#176). Pocket 3 wire is now `00` Normal /
+  `3C` HDR (HLG) / `3D` D-Log M on iOS and Android. Nano `00`/`3F`/`3D` is
+  unchanged.
+
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept
   through every failed join, so a regenerated passphrase was never re-read

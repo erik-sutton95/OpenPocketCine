@@ -1442,7 +1442,8 @@ final class CameraSession {
         controlNote = "D-Log — D-Log2 cannot zoom"
         ControlLiveLog.line("zoom: hold 0xB8 until D-Log2 → D-Log")
         fireCamera(
-            Commands.setColorMode(next), name: "D-Log (zoom)", expect: .color(next),
+            Commands.setColorMode(next, model: connectedCamera?.model), name: "D-Log (zoom)",
+            expect: .color(next),
             onFail: { [weak self] in
                 guard let self, self.zoomColorHopGeneration == hopGen else { return }
                 self.colorPin = nil
@@ -1500,7 +1501,8 @@ final class CameraSession {
         status.colorMode = .dLog2
         colorPin = (.dLog2, Date().addingTimeInterval(2))
         fireCamera(
-            Commands.setColorMode(.dLog2), name: "D-Log2", expect: .color(.dLog2),
+            Commands.setColorMode(.dLog2, model: connectedCamera?.model), name: "D-Log2",
+            expect: .color(.dLog2),
             onFail: { [weak self] in self?.colorPin = nil },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line("zoom: restore D-Log2 on 1× ack=\(ok ? "ok" : "failed")")
@@ -2057,7 +2059,8 @@ final class CameraSession {
         }
         colorPin = (mode, Date().addingTimeInterval(2))
         fireCamera(
-            Commands.setColorMode(mode), name: mode.label(for: bodyFamily), expect: .color(mode),
+            Commands.setColorMode(mode, model: connectedCamera?.model),
+            name: mode.label(for: bodyFamily), expect: .color(mode),
             onFail: { [weak self] in self?.colorPin = nil })
         hopNativeISO(from: from, to: mode)
         if mode == .dLog { confirmZoomColorHopIfReady() }
@@ -2915,7 +2918,7 @@ final class CameraSession {
         late: Bool = false, announce: Bool = true
     ) -> Bool {
         var next = status
-        _ = CameraStatusDecoder.apply(reply, to: &next)
+        _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
         absorbStaleAudio(&next)
         status = next
         let parsed = CameraReply.parse(reply.payload)
@@ -4207,7 +4210,7 @@ final class CameraSession {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
-        let applied = CameraStatusDecoder.apply(frame, to: &s)
+        let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
         let flipReply = CameraParam.isSelfieFlipGetReply(
             set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
         if flipReply, let parsed = CameraParam.parseGetReply(frame.payload) {

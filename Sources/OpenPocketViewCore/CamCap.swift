@@ -194,18 +194,19 @@ public enum CamCapIso {
 }
 
 /// Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D`.
-/// Pocket never published this table in our takes.
+/// Pocket never published this table in our takes. Pocket 3 `@2` / SET
+/// bytes are `00`/`3C`/`3D` (#176) — parse them with the body model.
 public enum CamCapColorMode {
     public static let subscribeKey = "camcap_color_mode"
 
-    public static func parse(_ value: [UInt8]) -> [ColorMode] {
+    public static func parse(_ value: [UInt8], model: CameraModel? = nil) -> [ColorMode] {
         guard value.count >= 5, value[0] == 0x01 else { return [] }
         let inner = Int(value[1]) | (Int(value[2]) << 8)
         guard inner >= 2, 3 + inner <= value.count else { return [] }
         let body = Array(value[3..<(3 + inner)])
         let count = Int(body[0])
         guard count >= 1, body.count >= 1 + count else { return [] }
-        return body[1..<(1 + count)].compactMap { ColorMode(rawValue: $0) }
+        return body[1..<(1 + count)].compactMap { ColorMode.fromWire($0, model: model) }
     }
 
     public static func wheel(

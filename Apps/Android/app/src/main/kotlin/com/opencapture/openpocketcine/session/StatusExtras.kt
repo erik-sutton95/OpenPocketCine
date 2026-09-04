@@ -8,9 +8,10 @@ package com.opencapture.openpocketcine.session
  * ISO index `@5`, EV `@6`, expo mode `@7`, ISO number `@16`.
  */
 object StatusExtras {
-    fun apply(frame: DumlFrame, status: CameraStatus): CameraStatus {
+    fun apply(frame: DumlFrame, status: CameraStatus, cameraName: String = ""): CameraStatus {
         return when {
-            frame.cmdSet == 0x00 && frame.cmdId == 0x99 -> applySubscribe(frame.payload, status)
+            frame.cmdSet == 0x00 && frame.cmdId == 0x99 ->
+                applySubscribe(frame.payload, status, cameraName)
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_PARAM -> applyParamReply(frame.payload, status)
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_AUDIO_DSP_GET ->
                 applyAudioDsp(frame.payload, status).first
@@ -18,17 +19,21 @@ object StatusExtras {
         }
     }
 
-    fun applySubscribe(payload: ByteArray, status: CameraStatus): CameraStatus {
+    fun applySubscribe(
+        payload: ByteArray,
+        status: CameraStatus,
+        cameraName: String = "",
+    ): CameraStatus {
         val item = parseSubscribe(payload) ?: return status
         return when (item.name) {
             "cam_expo_param" -> applyExpo(item.value, status)
             "cam_video_param_v2" -> applyVideo(item.value, status)
-            "cam_image_effect" -> applyImageEffect(item.value, status)
+            "cam_image_effect" -> applyImageEffect(item.value, status, cameraName)
             "cam_lens_state" -> applyLens(item.value, status)
             "cam_fov" -> applyFov(item.value, status)
             "camcap_shutter" -> applyShutterCap(item.value, status)
             "camcap_iso" -> applyIsoCap(item.value, status)
-            "camcap_color_mode" -> applyColorCap(item.value, status)
+            "camcap_color_mode" -> applyColorCap(item.value, status, cameraName)
             "camcap_video_format" -> applyVideoCap(item.value, status)
             else -> status
         }
@@ -82,9 +87,14 @@ object StatusExtras {
         return next
     }
 
-    fun applyImageEffect(value: ByteArray, status: CameraStatus): CameraStatus {
+    fun applyImageEffect(
+        value: ByteArray,
+        status: CameraStatus,
+        cameraName: String = "",
+    ): CameraStatus {
         if (value.size < 5) return status
-        var next = status.copy(colorMode = value[2].toInt() and 0xFF)
+        var next =
+            status.copy(colorMode = CameraCommands.parseColorMode(value[2].toInt() and 0xFF, cameraName))
         if (value.size >= 9) {
             val mode = value[4].toInt() and 0xFF
             if (mode == CameraCommands.WB_AUTO || mode == CameraCommands.WB_CUSTOM) {
@@ -115,8 +125,12 @@ object StatusExtras {
         return if (indices.isEmpty()) status else status.copy(availableIsoIndices = indices)
     }
 
-    fun applyColorCap(value: ByteArray, status: CameraStatus): CameraStatus {
-        val modes = CameraCommands.parseColorModes(value)
+    fun applyColorCap(
+        value: ByteArray,
+        status: CameraStatus,
+        cameraName: String = "",
+    ): CameraStatus {
+        val modes = CameraCommands.parseColorModes(value, cameraName)
         return if (modes.isEmpty()) status else status.copy(availableColorModes = modes)
     }
 
