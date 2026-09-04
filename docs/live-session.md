@@ -188,6 +188,21 @@ wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was
 still inside the IDR gap. Handshake inbound `0x02`/`0x01` without a
 `0x00` ACK keeps that bind (`keepSocket`); rebind dumps the first IDR.
 
+## Local VPN / ad blocker
+
+AdGuard, Blokada, RethinkDNS, and similar always-on local VPNs capture UDP
+before the camera SoftAP. Pairing and Wi-Fi join can succeed while pktType
+`0x02` never arrives (WAITING FOR LIVE VIEW). Android
+`bindProcessToNetwork` + `Network.bindSocket` cannot bypass a `VpnService`
+that did not call `allowBypass()` — Mimo and other official camera apps
+fail the same way (#239). Do not add a second bind ladder for this.
+
+Shells detect a local VPN (`TRANSPORT_VPN` on Android; CFNetwork scoped
+tunnel names on iOS), journal `vpn: local VPN or ad blocker active`, and
+put `vpn=on|off` on the diagnostic report. Operator copy lives in
+`LocalVPNFilter`. The Join Wi-Fi wizard step always names the workaround;
+the live well repeats it after 8 s with no picture when a tunnel is on.
+
 ## Pointers
 
 - Stall / recover: [`feed-watchdog.md`](feed-watchdog.md)

@@ -33,6 +33,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: '' },
             { label: 'Setup and build', slug: 'guides/setup' },
+            { label: 'Troubleshooting', slug: 'guides/troubleshooting' },
             { label: 'Keeping docs current', slug: 'contribute/documentation' },
           ],
         },

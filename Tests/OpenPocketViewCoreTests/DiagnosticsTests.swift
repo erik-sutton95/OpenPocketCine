@@ -57,8 +57,27 @@ import Testing
             recent: ["info session first-picture needsPoke=1"])
         #expect(text.contains("iPhone17,2"))
         #expect(text.contains("Osmo Pocket 3"))
+        #expect(text.contains("vpn=off"))
         #expect(!text.contains("Erik"))
         #expect(text.count <= PrivacyRedactor.compactCharacterCap)
+    }
+
+    @Test func compactSummaryFlagsActiveVPN() {
+        let env = DiagnosticEnvironment(
+            appVersion: "0.1.0",
+            appBuild: "59",
+            osName: "Android",
+            osVersion: "16",
+            deviceModel: "CPH2583",
+            cameraFamily: "pocket",
+            cameraModel: "Osmo Pocket 3",
+            phase: "live",
+            vpnActive: true)
+        let text = DiagnosticReport.compactSummary(environment: env, recent: [])
+        #expect(text.contains("vpn=on"))
+        let full = DiagnosticReport.fullReport(
+            environment: env, journal: [], exceptions: [])
+        #expect(full.contains("vpn: on"))
     }
 
     @Test func journalLineIsStable() {

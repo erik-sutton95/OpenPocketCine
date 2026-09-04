@@ -266,6 +266,7 @@ struct ConnectionSetupView: View {
                     steps: [
                         "Tap Join when iOS asks to join the camera network",
                         "Stay on this screen until we open the datalink",
+                        LocalVPNFilter.joinWifiPhoneStep,
                     ]
                 ),
                 tight: tight
@@ -282,6 +283,9 @@ struct ConnectionSetupView: View {
 
     private var datalinkStep: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if LocalVPNProbe.isActive() {
+                StartupWizardInfoBanner(text: LocalVPNFilter.wizardBanner, tight: tight)
+            }
             HStack(spacing: 14) {
                 ProgressView()
                     .controlSize(.regular)
@@ -295,6 +299,7 @@ struct ConnectionSetupView: View {
                 .font(LiveType.ui(size: 13, weight: .regular, design: .rounded))
                 .foregroundStyle(StartupColors.muted)
         }
+        .onAppear { LocalVPNProbe.noteIfActive() }
     }
 
     private var showsFooter: Bool {

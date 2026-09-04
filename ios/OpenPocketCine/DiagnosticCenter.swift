@@ -140,7 +140,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             deviceModel: Self.machineIdentifier,
             cameraFamily: familyName,
             cameraModel: session.connectedCamera?.model.name ?? "none",
-            phase: phase)
+            phase: phase,
+            vpnActive: LocalVPNProbe.isActive())
     }
 
     @MainActor
