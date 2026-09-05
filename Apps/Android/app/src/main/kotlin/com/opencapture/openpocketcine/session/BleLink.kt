@@ -25,6 +25,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.pairing.FoundCameraIdentity
 import java.util.UUID
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -108,8 +109,18 @@ class BleLink(context: Context) {
                 classify(result)?.let { camera ->
                     foundDevices[camera.address] = result.device
                     val current = _found.value
-                    if (current.none { it.id == camera.id }) {
+                    val idx = current.indexOfFirst { it.id == camera.id }
+                    if (idx < 0) {
                         _found.value = current + camera
+                    } else if (
+                        FoundCameraIdentity.shouldReplace(
+                            current[idx].name,
+                            current[idx].modelId,
+                            camera.name,
+                            camera.modelId,
+                        )
+                    ) {
+                        _found.value = current.toMutableList().also { it[idx] = camera }
                     }
                 }
             }
