@@ -10,3 +10,7 @@ this repo. Packet captures stay in gitignored `captures/` and are never
 committed. Do not open issues with pcaps or SoftAP passwords.
 
 Implementation lives in `Sources/OpenPocketViewCore/`.
+
+Recording resolution × aspect × fps (official DJI tables + wire bytes):
+[`osmo-recording-formats.md`](osmo-recording-formats.md). FORMAT lists
+`camcap_video_format` pairs; aspect is the resolution byte.

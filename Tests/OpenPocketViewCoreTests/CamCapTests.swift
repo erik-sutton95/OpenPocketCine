@@ -286,6 +286,91 @@ import Testing
             ).map(\.fps) == [24, 25, 30, 48, 50, 60])
     }
 
+    /// Nano Video spec: 4K/2.7K/1080 × 16:9 and 4:3. 4K 4:3 has no 60.
+    /// FORMAT must keep those pairs — dropping unknown res bytes leaves 1080/4K.
+    @Test func nanoVideoCapKeeps27KAnd4by3() {
+        let formats = CamCapVideoFormat.parse(Self.videoFormatNanoVideo)
+        #expect(formats.count == 35)
+        #expect(formats.contains { $0.resolution.rawValue == 0x2D && $0.frameRate == .fps24 })
+        #expect(formats.contains { $0.resolution.rawValue == 0x5F && $0.frameRate == .fps60 })
+        #expect(formats.contains { $0.resolution.rawValue == 0x0C && $0.frameRate == .fps30 })
+        #expect(formats.contains { $0.resolution.rawValue == 0x67 && $0.frameRate == .fps50 })
+        #expect(!formats.contains { $0.resolution.rawValue == 0x67 && $0.frameRate == .fps60 })
+        let tabs = CamCapVideoFormat.resolutions(available: formats, current: nil)
+        #expect(Set(tabs.map(\.rawValue)).isSuperset(of: [0x0A, 0x0C, 0x10, 0x2D, 0x5F, 0x67]))
+        if let fourK43 = formats.first(where: { $0.resolution.rawValue == 0x67 })?.resolution {
+            #expect(
+                CamCapVideoFormat.frameRates(
+                    available: formats, resolution: fourK43, current: nil
+                ).map(\.fps) == [24, 25, 30, 48, 50])
+        }
+        #expect(
+            CamCapVideoFormat.resolutions(available: [], current: .p4K) == [.p1080, .p4K],
+            "empty camcap must not grow into every catalog size")
+        #expect(
+            CamCapVideoFormat.aspects(available: formats, current: nil)
+                == [.fourThree, .sixteenNine])
+        #expect(
+            CamCapVideoFormat.resolutions(
+                available: formats, aspect: .fourThree, current: nil
+            ).map(\.rawValue) == [0x67, 0x5F, 0x0C])
+        #expect(VideoFormat(resolution: .p4K_4x3, frameRate: .fps30).chipLabel == "4K 4:3 · 30p")
+        #expect(VideoResolution.p2_7K.tabTitle == "2.7K")
+    }
+
+    @Test func pocket3VideoCapKeeps1by1And9by16() {
+        let rates: [UInt8] = [1, 2, 3, 4, 5, 6]
+        let formats = CamCapVideoFormat.parse(
+            Self.packVideoFormats(
+                [0x10, 0x2D, 0x0A, 0x6B, 0x6A, 0x69, 0x6C, 0x43, 0x42].map { ($0, rates) }))
+        #expect(formats.count == 54)
+        #expect(
+            CamCapVideoFormat.aspects(available: formats, current: nil)
+                == [.sixteenNine, .oneOne, .nineSixteen])
+        #expect(
+            CamCapVideoFormat.resolutions(
+                available: formats, aspect: .oneOne, current: nil
+            ).map(\.rawValue) == [0x6B, 0x6A, 0x69])
+        #expect(
+            CamCapVideoFormat.resolutions(
+                available: formats, aspect: .nineSixteen, current: nil
+            ).map(\.rawValue) == [0x6C, 0x43, 0x42])
+        #expect(VideoFormat(resolution: .p3K_1x1, frameRate: .fps24).chipLabel == "3K 1:1 · 24p")
+        #expect(VideoFormat(resolution: .p3K_9x16, frameRate: .fps30).chipLabel == "3K 9:16 · 30p")
+    }
+
+    @Test func pocket4VideoCapKeeps9by16() {
+        let rates: [UInt8] = [1, 2, 3, 4, 5, 6]
+        let formats = CamCapVideoFormat.parse(
+            Self.packVideoFormats([0x10, 0x0A, 0x6C, 0x42].map { ($0, rates) }))
+        #expect(formats.count == 24)
+        #expect(
+            CamCapVideoFormat.aspects(available: formats, current: nil)
+                == [.sixteenNine, .nineSixteen])
+        #expect(
+            CamCapVideoFormat.resolutions(
+                available: formats, aspect: .nineSixteen, current: nil
+            ).map(\.rawValue) == [0x6C, 0x42])
+    }
+
+    @Test func unknownCamcapByteIsKept() {
+        let formats = CamCapVideoFormat.parse(Self.packVideoFormats([(0x11, [1])]))
+        #expect(formats.count == 1)
+        #expect(formats[0].resolution.rawValue == 0x11)
+        #expect(formats[0].resolution.aspect == nil)
+        #expect(formats[0].resolution.tabTitle == "11")
+        #expect(formats[0].chipLabel == "0x11 · 24p")
+    }
+
+    @Test func action6Custom4KIs1by1() {
+        let formats = CamCapVideoFormat.parse(
+            Self.packVideoFormats([(0x7D, [1, 2, 3, 4, 5, 6])]))
+        #expect(formats.count == 6)
+        #expect(formats[0].resolution == .p4K_1x1)
+        #expect(formats[0].resolution.aspect == .oneOne)
+        #expect(VideoFormat(resolution: .p4K_1x1, frameRate: .fps24).chipLabel == "4K 1:1 · 24p")
+    }
+
     @Test func colorModesFollowTheBody() {
         let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
         let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
@@ -428,6 +513,21 @@ import Testing
     private static let videoFormatPocket4Pro = hex(
         "0125000c1001001002001003001004001005001006000a06000a05000a04000a03000a02000a0100"
     )
+    /// DJI Nano Video matrix: 4K 4:3 24–50, then 16:9/4:3 4K/2.7K/1080 24–60.
+    private static let videoFormatNanoVideo: [UInt8] = packVideoFormats(
+        [(0x67, [1, 2, 3, 4, 5])]
+            + [0x10, 0x5F, 0x2D, 0x0C, 0x0A].map { res in (res, [1, 2, 3, 4, 5, 6]) }
+    )
+
+    private static func packVideoFormats(_ groups: [(UInt8, [UInt8])]) -> [UInt8] {
+        let pairs = groups.flatMap { res, rates in rates.map { (res, $0) } }
+        let inner = 1 + pairs.count * 3
+        var out: [UInt8] = [0x01, UInt8(inner & 0xFF), UInt8((inner >> 8) & 0xFF), UInt8(pairs.count)]
+        for (res, fps) in pairs {
+            out += [res, fps, 0x00]
+        }
+        return out
+    }
 
     private static func hex(_ s: String) -> [UInt8] {
         stride(from: 0, to: s.count, by: 2).map {

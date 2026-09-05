@@ -657,13 +657,13 @@ class CaptureSheetTest {
     fun fpsDrumAndColorWheelMatchIos() {
         assertEquals(listOf("24p", "25p", "30p", "48p", "50p", "60p"), CaptureLists.fpsDrumLabels)
         assertEquals(listOf("1080", "4K"), CaptureLists.resolutionTabTitles)
-        assertEquals(listOf("1080p", "4K"), VideoResolution.entries.map { it.label })
-        assertEquals(listOf(24, 25, 30, 48, 50, 60), VideoFrameRate.entries.map { it.fps })
+        assertEquals(listOf("1080p", "4K"), VideoResolution.labeledVideo.map { it.label })
+        assertEquals(listOf(24, 25, 30, 48, 50, 60), VideoFrameRate.labeledVideo.map { it.fps })
         assertEquals(1, CaptureLists.fpsIndexFromDrum("24p"))
         assertEquals(6, CaptureLists.fpsIndexFromDrum("60p"))
         assertEquals(VideoFrameRate.FPS48, VideoFrameRate.fromDrumLabel("48p"))
-        assertNull(VideoFrameRate.fromDrumLabel("120p"))
-        assertNull(CaptureLists.fpsIndexFromDrum("120p"))
+        assertEquals(VideoFrameRate.FPS120, VideoFrameRate.fromDrumLabel("120p"))
+        assertEquals(7, CaptureLists.fpsIndexFromDrum("120p"))
         assertTrue(!CaptureLists.resolutionTabTitles.contains("2.7K"))
         assertTrue(!CaptureLists.fpsDrumLabels.contains("120p"))
         assertEquals(
@@ -1223,7 +1223,7 @@ class CaptureSheetTest {
             ),
         )
         assertEquals(
-            "24p",
+            "120p",
             CaptureLists.fpsDrumLabel(
                 CameraStatus(resolutionCode = CameraCommands.RES_4K, fps = 120, fpsIndex = 7),
             ),

@@ -504,14 +504,51 @@ import Testing
         #expect(s.videoFormat == VideoFormat(resolution: .p1080, frameRate: .fps50))
     }
 
-    @Test func recAndColorDrumLabelsMatchCapture() {
-        #expect(VideoResolution.allCases.map(\.label) == ["1080p", "4K"])
-        #expect(VideoResolution.allCases.map(\.tabTitle) == ["1080", "4K"])
-        #expect(VideoFrameRate.allCases.map(\.fps) == [24, 25, 30, 48, 50, 60])
+    @Test func absorbStaleFormatIgnoresUnrelatedStatusCopy() {
+        let expected = VideoFormat(resolution: .p4K, frameRate: .fps25)
+        var incoming = CameraStatus()
+        incoming.videoFormat = expected
+        incoming.videoResolution = .p4K
+        incoming.fps = 25
         #expect(
-            VideoFrameRate.allCases.map(\.drumLabel) == ["24p", "25p", "30p", "48p", "50p", "60p"])
+            VideoFormat.absorbStale(
+                incoming: &incoming, expected: expected, reportedThisFrame: false))
+        #expect(incoming.videoFormat == expected)
+        #expect(incoming.videoResolution == .p4K)
+        #expect(incoming.fps == 25)
+    }
+
+    @Test func absorbStaleFormatHoldsUntilReportedMatch() {
+        let expected = VideoFormat(resolution: .p4K, frameRate: .fps25)
+        var stale = CameraStatus()
+        stale.videoFormat = VideoFormat(resolution: .p1080, frameRate: .fps24)
+        stale.videoResolution = .p1080
+        stale.fps = 24
+        #expect(
+            VideoFormat.absorbStale(
+                incoming: &stale, expected: expected, reportedThisFrame: true))
+        #expect(stale.videoFormat == expected)
+        #expect(stale.videoResolution == .p4K)
+        #expect(stale.fps == 25)
+
+        var matched = CameraStatus()
+        matched.videoFormat = expected
+        matched.videoResolution = .p4K
+        matched.fps = 25
+        #expect(
+            !VideoFormat.absorbStale(
+                incoming: &matched, expected: expected, reportedThisFrame: true))
+        #expect(matched.videoFormat == expected)
+    }
+
+    @Test func recAndColorDrumLabelsMatchCapture() {
+        #expect(VideoResolution.labeledVideo.map(\.label) == ["1080p", "4K"])
+        #expect(VideoResolution.labeledVideo.map(\.tabTitle) == ["1080", "4K"])
+        #expect(VideoFrameRate.labeledVideo.map(\.fps) == [24, 25, 30, 48, 50, 60])
+        #expect(
+            VideoFrameRate.labeledVideo.map(\.drumLabel) == ["24p", "25p", "30p", "48p", "50p", "60p"])
         #expect(VideoFrameRate(drumLabel: "48p") == .fps48)
-        #expect(VideoFrameRate(drumLabel: "120p") == nil)
+        #expect(VideoFrameRate(drumLabel: "120p") == .fps120)
         #expect(
             ColorMode.available(for: .pocket).map(\.label)
                 == ["Normal", "HDR", "D-Log"])
@@ -552,6 +589,8 @@ import Testing
         #expect(ColorMode(label: "N-Log") == nil)
         #expect(VideoFormat(resolution: .p4K, frameRate: .fps25).chipLabel == "4K · 25p")
         #expect(VideoFormat(resolution: .p1080, frameRate: .fps24).chipLabel == "1080p · 24p")
+        #expect(VideoFormat(resolution: .p2_7K, frameRate: .fps30).chipLabel == "2.7K · 30p")
+        #expect(VideoFormat(resolution: .p4K_4x3, frameRate: .fps50).chipLabel == "4K 4:3 · 50p")
     }
 
     @Test func videoFormatOffersOnlyAcceptedPairs() {
@@ -572,8 +611,10 @@ import Testing
         for (res, rate, payload) in expected {
             #expect(Commands.setVideoFormat(resolution: res, frameRate: rate).payload == payload)
         }
-        #expect(VideoResolution.allCases.count == 2)
-        #expect(VideoFrameRate.allCases.count == 6)
+        #expect(VideoResolution.labeledVideo.count == 2)
+        #expect(VideoFrameRate.labeledVideo.count == 6)
+        #expect(VideoFormat.parseVideoParamV2([0x2D, 0x03])?.chipLabel == "2.7K · 30p")
+        #expect(VideoFormat.parseVideoParamV2([0x67, 0x05])?.chipLabel == "4K 4:3 · 50p")
         let boot = VideoFormat(resolution: .p4K, frameRate: .fps25)
         let kick = VideoFormat.firstPictureEncoderKick(from: boot)
         #expect(kick == VideoFormat(resolution: .p1080, frameRate: .fps25))

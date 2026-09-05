@@ -1,46 +1,132 @@
 package com.opencapture.openpocketcine.session
 
-/** `0x02/0x18` `@0`. Only 1080p / 4K were in the labeled take. */
-enum class VideoResolution(val rawValue: Int, val label: String, val tabTitle: String) {
-    P1080(0x0A, "1080p", "1080"),
-    P4K(0x10, "4K", "4K"),
-    ;
+/** Recording aspect. Encoded in the `0x02/0x18` res byte — not a second SET. */
+enum class VideoAspect(val label: String) {
+    SIXTEEN_NINE("16:9"),
+    FOUR_THREE("4:3"),
+    ONE_ONE("1:1"),
+    NINE_SIXTEEN("9:16"),
+}
+
+/** `0x02/0x18` `@0`. Any byte the body sends; labels from the media catalog. */
+data class VideoResolution(val rawValue: Int) {
+    val aspect: VideoAspect?
+        get() =
+            when (rawValue) {
+                0x0A, 0x10, 0x2D -> VideoAspect.SIXTEEN_NINE
+                0x0C, 0x5F, 0x67 -> VideoAspect.FOUR_THREE
+                0x69, 0x6A, 0x6B, 0x7D -> VideoAspect.ONE_ONE
+                0x42, 0x43, 0x6C -> VideoAspect.NINE_SIXTEEN
+                else -> null
+            }
+
+    val sizeTitle: String
+        get() =
+            when (rawValue) {
+                0x0A, 0x0C, 0x42, 0x69 -> "1080"
+                0x2D, 0x43, 0x5F -> "2.7K"
+                0x10, 0x67, 0x7D -> "4K"
+                0x6A -> "2160"
+                0x6B, 0x6C -> "3K"
+                else -> "%02X".format(rawValue)
+            }
+
+    private val sizeLabel: String
+        get() =
+            when (rawValue) {
+                0x0A, 0x0C, 0x42, 0x69 -> "1080p"
+                0x2D, 0x43, 0x5F -> "2.7K"
+                0x10, 0x67, 0x7D -> "4K"
+                0x6A -> "2160p"
+                0x6B, 0x6C -> "3K"
+                else -> "0x%02X".format(rawValue)
+            }
+
+    val label: String
+        get() {
+            val aspect = aspect ?: return sizeLabel
+            return if (aspect == VideoAspect.SIXTEEN_NINE) sizeLabel else "$sizeLabel ${aspect.label}"
+        }
+
+    val tabTitle: String get() = sizeTitle
 
     companion object {
-        fun fromRaw(raw: Int): VideoResolution? = entries.firstOrNull { it.rawValue == raw }
+        val P1080 = VideoResolution(0x0A)
+        val P1080_4X3 = VideoResolution(0x0C)
+        val P4K = VideoResolution(0x10)
+        val P2_7K = VideoResolution(0x2D)
+        val P1080_9X16 = VideoResolution(0x42)
+        val P2_7K_9X16 = VideoResolution(0x43)
+        val P2_7K_4X3 = VideoResolution(0x5F)
+        val P4K_4X3 = VideoResolution(0x67)
+        val P1080_1X1 = VideoResolution(0x69)
+        val P2160_1X1 = VideoResolution(0x6A)
+        val P3K_1X1 = VideoResolution(0x6B)
+        val P3K_9X16 = VideoResolution(0x6C)
+        val P4K_1X1 = VideoResolution(0x7D)
 
-        /** iOS `resolutionForTab`: tab 1 is 4K, anything else 1080. */
-        fun fromTabIndex(index: Int): VideoResolution = if (index == 1) P4K else P1080
+        fun fromRaw(raw: Int): VideoResolution? =
+            if (raw in 0..255) VideoResolution(raw) else null
 
-        val tabTitles: List<String> get() = entries.map { it.tabTitle }
+        fun fromTabIndex(index: Int): VideoResolution = labeledVideo.getOrElse(index) { P1080 }
+
+        val labeledVideo: List<VideoResolution>
+            get() = listOf(P1080, P4K)
+
+        val tabTitles: List<String> get() = labeledVideo.map { it.tabTitle }
     }
 }
 
-/** `0x02/0x18` `@1` fps index. SET only the six labeled values. */
-enum class VideoFrameRate(val rawValue: Int, val fps: Int) {
-    FPS24(0x01, 24),
-    FPS25(0x02, 25),
-    FPS30(0x03, 30),
-    FPS48(0x04, 48),
-    FPS50(0x05, 50),
-    FPS60(0x06, 60),
-    ;
-
-    val label: String get() = "$fps"
-    val drumLabel: String get() = "${fps}p"
+/** `0x02/0x18` `@1`. Any index the body sends; fps from the Osmosis table. */
+data class VideoFrameRate(val rawValue: Int) {
+    val fps: Int get() = fps(rawValue) ?: 0
+    val label: String get() = if (fps > 0) "$fps" else "%02X".format(rawValue)
+    val drumLabel: String get() = if (fps > 0) "${fps}p" else "%02Xp".format(rawValue)
 
     companion object {
-        fun fromRaw(raw: Int): VideoFrameRate? = entries.firstOrNull { it.rawValue == raw }
+        val FPS24 = VideoFrameRate(0x01)
+        val FPS25 = VideoFrameRate(0x02)
+        val FPS30 = VideoFrameRate(0x03)
+        val FPS48 = VideoFrameRate(0x04)
+        val FPS50 = VideoFrameRate(0x05)
+        val FPS60 = VideoFrameRate(0x06)
+        val FPS120 = VideoFrameRate(0x07)
+        val FPS240 = VideoFrameRate(0x08)
+        val FPS100 = VideoFrameRate(0x0A)
+        val FPS96 = VideoFrameRate(0x0B)
+        val FPS15 = VideoFrameRate(0x1D)
 
-        fun fromFps(fps: Int): VideoFrameRate? = entries.firstOrNull { it.fps == fps }
+        fun fromRaw(raw: Int): VideoFrameRate? =
+            if (raw in 0..255) VideoFrameRate(raw) else null
+
+        fun fps(index: Int): Int? =
+            when (index) {
+                1 -> 24
+                2 -> 25
+                3 -> 30
+                4 -> 48
+                5 -> 50
+                6 -> 60
+                7 -> 120
+                8 -> 240
+                10 -> 100
+                11 -> 96
+                29 -> 15
+                else -> null
+            }
+
+        fun fromFps(fps: Int): VideoFrameRate? =
+            listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60, FPS120, FPS240, FPS100, FPS96, FPS15)
+                .firstOrNull { it.fps == fps }
 
         fun fromDrumLabel(label: String): VideoFrameRate? =
-            entries.firstOrNull { it.drumLabel == label }
+            listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60, FPS120, FPS240, FPS100, FPS96, FPS15)
+                .firstOrNull { it.drumLabel == label }
 
-        val drumLabels: List<String> get() = entries.map { it.drumLabel }
+        val drumLabels: List<String> get() = labeledVideo.map { it.drumLabel }
 
-        /** Labeled Video-mode SET. SlowMo 100/120/240 is display-only. */
-        val labeledVideo: List<VideoFrameRate> get() = entries
+        val labeledVideo: List<VideoFrameRate>
+            get() = listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60)
     }
 }
 
@@ -50,7 +136,7 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
         get() = CameraCommands.resolutionFps(resolution.rawValue, frameRate.rawValue)
 
     /** Top-deck chip, OpenZCine `resolutionFrameRate` shape (`4K · 25p`). */
-    val chipLabel: String get() = "${resolution.label} · ${frameRate.fps}p"
+    val chipLabel: String get() = "${resolution.label} · ${frameRate.drumLabel}"
 
     companion object {
         fun parse(resRaw: Int, fpsRaw: Int): VideoFormat? {
@@ -119,12 +205,33 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
         }
 
         /** iOS `CamCapVideoFormat.resolutions`. Empty camcap → 1080 / 4K tabs. */
-        fun resolutions(available: List<VideoFormat>, current: VideoResolution?): List<VideoResolution> {
-            if (available.isEmpty()) return VideoResolution.entries
+        fun resolutions(
+            available: List<VideoFormat>,
+            current: VideoResolution?,
+            aspect: VideoAspect? = null,
+        ): List<VideoResolution> {
+            if (available.isEmpty()) return VideoResolution.labeledVideo
             val out = ArrayList<VideoResolution>()
             val seen = HashSet<VideoResolution>()
             for (format in available) {
+                if (aspect != null && format.resolution.aspect != aspect) continue
                 if (seen.add(format.resolution)) out.add(format.resolution)
+            }
+            if (current != null && current !in seen &&
+                (aspect == null || current.aspect == aspect)
+            ) {
+                out.add(0, current)
+            }
+            return out
+        }
+
+        fun aspects(available: List<VideoFormat>, current: VideoAspect?): List<VideoAspect> {
+            if (available.isEmpty()) return listOf(current ?: VideoAspect.SIXTEEN_NINE)
+            val out = ArrayList<VideoAspect>()
+            val seen = HashSet<VideoAspect>()
+            for (format in available) {
+                val aspect = format.resolution.aspect ?: continue
+                if (seen.add(aspect)) out.add(aspect)
             }
             if (current != null && current !in seen) out.add(0, current)
             return out
@@ -147,30 +254,46 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
         /** Tab change: skip the SET when res+fps already match. */
         fun nextForTab(status: CameraStatus, tab: Int, drum: String): VideoFormat? {
             val rate = VideoFrameRate.fromDrumLabel(drum) ?: current(status).frameRate
-            val next = VideoFormat(VideoResolution.fromTabIndex(tab), rate)
+            val res =
+                resolutions(status.availableVideoFormats, current(status).resolution)
+                    .getOrNull(tab) ?: return null
+            val next = VideoFormat(res, rate)
             return next.takeIf { it != current(status) }
         }
 
-        /** Drum row: unlabeled labels (`120p`) do not SET. */
+        /** Drum row: rate must be on the camcap (or Video 24–60) list. */
         fun nextForDrum(status: CameraStatus, tab: Int, drum: String): VideoFormat? {
             val rate = VideoFrameRate.fromDrumLabel(drum) ?: return null
-            return VideoFormat(VideoResolution.fromTabIndex(tab), rate)
+            val current = current(status)
+            val res =
+                resolutions(status.availableVideoFormats, current.resolution)
+                    .getOrNull(tab) ?: current.resolution
+            val rates = frameRates(status.availableVideoFormats, res, current.frameRate)
+            if (rate !in rates) return null
+            return VideoFormat(res, rate)
         }
 
+        /**
+         * Keep the optimistic FORMAT HUD until `cam_video_param_v2` reports the SET.
+         *
+         * Merged status from an unrelated push still carries the SET pair — that
+         * is not confirmation. [formatReported] is true only when this apply
+         * changed res / fps index / fps.
+         */
         fun absorbStale(
             incoming: CameraStatus,
             pin: FormatPin?,
             nowElapsedRealtime: Long,
+            formatReported: Boolean = true,
         ): Pair<CameraStatus, FormatPin?> {
             if (pin == null) return incoming to null
             if (nowElapsedRealtime >= pin.deadlineElapsedRealtime) return incoming to null
             val incomingFormat = parse(incoming.resolutionCode, incoming.fpsIndex)
-            if (incomingFormat == pin.expected ||
-                (incoming.resolutionCode == pin.expected.resolution.rawValue &&
-                    incoming.fps == pin.expected.frameRate.fps)
-            ) {
-                return incoming to null
-            }
+            val matched =
+                incomingFormat == pin.expected ||
+                    (incoming.resolutionCode == pin.expected.resolution.rawValue &&
+                        incoming.fps == pin.expected.frameRate.fps)
+            if (formatReported && matched) return incoming to null
             return incoming.copy(
                 resolutionCode = pin.expected.resolution.rawValue,
                 fpsIndex = pin.expected.frameRate.rawValue,

@@ -262,13 +262,40 @@ public enum CamCapVideoFormat {
     public static func resolutions(
         available: [VideoFormat], current: VideoResolution?
     ) -> [VideoResolution] {
+        resolutions(available: available, aspect: nil, current: current)
+    }
+
+    public static func resolutions(
+        available: [VideoFormat], aspect: VideoAspect?, current: VideoResolution?
+    ) -> [VideoResolution] {
         if available.isEmpty {
-            return VideoResolution.allCases
+            return VideoResolution.labeledVideo
         }
         var seen = Set<VideoResolution>()
         var out: [VideoResolution] = []
-        for format in available where seen.insert(format.resolution).inserted {
-            out.append(format.resolution)
+        for format in available {
+            if let aspect, format.resolution.aspect != aspect { continue }
+            if seen.insert(format.resolution).inserted {
+                out.append(format.resolution)
+            }
+        }
+        if let current, !seen.contains(current), aspect == nil || current.aspect == aspect {
+            out.insert(current, at: 0)
+        }
+        return out
+    }
+
+    public static func aspects(
+        available: [VideoFormat], current: VideoAspect?
+    ) -> [VideoAspect] {
+        if available.isEmpty {
+            return current.map { [$0] } ?? [.sixteenNine]
+        }
+        var seen = Set<VideoAspect>()
+        var out: [VideoAspect] = []
+        for format in available {
+            guard let aspect = format.resolution.aspect else { continue }
+            if seen.insert(aspect).inserted { out.append(aspect) }
         }
         if let current, !seen.contains(current) {
             out.insert(current, at: 0)

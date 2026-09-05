@@ -192,11 +192,14 @@ class CameraControlTest {
                 "${res.label} ${rate.drumLabel}",
             )
         }
-        assertEquals(2, VideoResolution.entries.size)
-        assertEquals(6, VideoFrameRate.entries.size)
-        assertNull(VideoFormat.parse(CameraCommands.RES_4K, 7))
-        assertNull(VideoResolution.fromRaw(0x0C))
-        assertNull(VideoFrameRate.fromDrumLabel("120p"))
+        assertEquals(2, VideoResolution.labeledVideo.size)
+        assertEquals(6, VideoFrameRate.labeledVideo.size)
+        assertEquals(
+            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS120),
+            VideoFormat.parse(CameraCommands.RES_4K, 7),
+        )
+        assertEquals(VideoResolution.P1080_4X3, VideoResolution.fromRaw(0x0C))
+        assertEquals(VideoFrameRate.FPS120, VideoFrameRate.fromDrumLabel("120p"))
     }
 
     @Test
@@ -208,7 +211,8 @@ class CameraControlTest {
         assertEquals(50, next.fps)
         assertEquals(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS50), next.videoFormat)
         assertEquals(120, CameraCommands.fpsFromSubscribeIndex(7))
-        assertNull(CameraCommands.fpsFromIndex(7))
+        assertEquals(120, CameraCommands.fpsFromIndex(7))
+        assertNull(CameraCommands.fpsFromIndex(0x09))
     }
 
     @Test
@@ -219,15 +223,16 @@ class CameraControlTest {
                 resolutionCode = CameraCommands.RES_4K,
                 fpsIndex = 2,
             )
-        val unlabeled = StatusExtras.applyVideo(byteArrayOf(0x0C, 0x02), live)
-        assertEquals(CameraCommands.RES_4K, unlabeled.resolutionCode)
+        val unlabeled = StatusExtras.applyVideo(byteArrayOf(0x11, 0x02), live)
+        assertEquals(0x11, unlabeled.resolutionCode)
         assertEquals(25, unlabeled.fps)
         assertEquals(2, unlabeled.fpsIndex)
+        val fourThree = StatusExtras.applyVideo(byteArrayOf(0x0C, 0x02), live)
+        assertEquals(0x0C, fourThree.resolutionCode)
         val highRate = StatusExtras.applyVideo(byteArrayOf(0x10, 0x07), CameraStatus())
         assertEquals(CameraCommands.RES_4K, highRate.resolutionCode)
         assertEquals(120, highRate.fps)
         assertEquals(7, highRate.fpsIndex)
-        assertNull(highRate.videoFormat)
     }
 
     @Test
@@ -260,6 +265,28 @@ class CameraControlTest {
                 VideoResolution.P4K,
                 VideoFrameRate.FPS25,
             ).map { it.fps },
+        )
+    }
+
+    @Test
+    fun camcapVideoFormatKeepsNano27KAnd4by3() {
+        val blob =
+            byteArrayOf(
+                0x01, 0x07, 0x00, 0x02,
+                0x2D, 0x01, 0x00,
+                0x67, 0x05, 0x00,
+            )
+        val formats = CameraCommands.parseVideoFormats(blob)
+        assertEquals(2, formats.size)
+        assertTrue(formats.contains(VideoFormat(VideoResolution.P2_7K, VideoFrameRate.FPS24)))
+        assertTrue(formats.contains(VideoFormat(VideoResolution.P4K_4X3, VideoFrameRate.FPS50)))
+        assertEquals(
+            listOf(VideoAspect.SIXTEEN_NINE, VideoAspect.FOUR_THREE),
+            VideoFormat.aspects(formats, null),
+        )
+        assertEquals(
+            listOf(VideoResolution.P1080, VideoResolution.P4K),
+            VideoFormat.resolutions(emptyList(), VideoResolution.P4K),
         )
     }
 
@@ -363,6 +390,22 @@ class CameraControlTest {
         val expired = VideoFormat.absorbStale(stale, pin, nowElapsedRealtime = 2_000L)
         assertNull(expired.second)
         assertEquals(CameraCommands.RES_1080, expired.first.resolutionCode)
+        val optimistic =
+            CameraStatus(
+                fps = 25,
+                resolutionCode = CameraCommands.RES_4K,
+                fpsIndex = 2,
+            )
+        val copy =
+            VideoFormat.absorbStale(
+                optimistic,
+                pin,
+                nowElapsedRealtime = 500L,
+                formatReported = false,
+            )
+        assertEquals(pin, copy.second)
+        assertEquals(CameraCommands.RES_4K, copy.first.resolutionCode)
+        assertEquals(2, copy.first.fpsIndex)
     }
 
     @Test

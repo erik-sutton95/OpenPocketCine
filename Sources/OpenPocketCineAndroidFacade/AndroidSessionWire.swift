@@ -218,16 +218,14 @@ public enum AndroidSessionWire {
         {
             status.colorMode = color
         }
-        if let res = VideoResolution(
-            rawValue: UInt8(truncatingIfNeeded: int("videoResolution", default: -1)))
-        {
-            status.videoResolution = res
+        let resRaw = int("videoResolution", default: -1)
+        if (0...255).contains(resRaw) {
+            status.videoResolution = VideoResolution(rawValue: UInt8(resRaw))
         }
-        if let fpsIdx = VideoFrameRate(
-            rawValue: UInt8(truncatingIfNeeded: int("fpsIndex", default: -1))),
-            let res = status.videoResolution
-        {
-            status.videoFormat = VideoFormat(resolution: res, frameRate: fpsIdx)
+        let fpsRaw = int("fpsIndex", default: -1)
+        if (0...255).contains(fpsRaw), let res = status.videoResolution {
+            status.videoFormat = VideoFormat(
+                resolution: res, frameRate: VideoFrameRate(rawValue: UInt8(fpsRaw)))
         }
         let wbMode = WhiteBalanceMode(
             rawValue: UInt8(truncatingIfNeeded: int("whiteBalanceMode", default: -1)))
@@ -289,10 +287,13 @@ public enum AndroidSessionWire {
         var formats: [VideoFormat] = []
         var fi = 0
         while fi + 1 < formatFlat.count {
-            if let res = VideoResolution(rawValue: UInt8(truncatingIfNeeded: formatFlat[fi])),
-                let rate = VideoFrameRate(rawValue: UInt8(truncatingIfNeeded: formatFlat[fi + 1]))
-            {
-                formats.append(VideoFormat(resolution: res, frameRate: rate))
+            let resRaw = formatFlat[fi]
+            let fpsRaw = formatFlat[fi + 1]
+            if (0...255).contains(resRaw), (0...255).contains(fpsRaw) {
+                formats.append(
+                    VideoFormat(
+                        resolution: VideoResolution(rawValue: UInt8(resRaw)),
+                        frameRate: VideoFrameRate(rawValue: UInt8(fpsRaw))))
             }
             fi += 2
         }
@@ -508,11 +509,11 @@ public enum AndroidSessionWire {
         case .setVideoFormat:
             let parts = splitExtra(extra)
             guard parts.count >= 2,
-                let resRaw = UInt8(parts[0]), let fpsRaw = UInt8(parts[1]),
-                let res = VideoResolution(rawValue: resRaw),
-                let fps = VideoFrameRate(rawValue: fpsRaw)
+                let resRaw = UInt8(parts[0]), let fpsRaw = UInt8(parts[1])
             else { return nil }
-            return Commands.setVideoFormat(resolution: res, frameRate: fps, seq: seq)
+            return Commands.setVideoFormat(
+                resolution: VideoResolution(rawValue: resRaw),
+                frameRate: VideoFrameRate(rawValue: fpsRaw), seq: seq)
         case .tapFocusPrepare:
             return Commands.tapFocusPrepare(seq: seq)
         case .tapFocusPoint:

@@ -134,6 +134,7 @@ struct CapturePickerPanel: View {
     var onClose: () -> Void
     @Environment(AppModel.self) private var model
     @State private var selectedMode = 0
+    @State private var selectedAspect: VideoAspect = .sixteenNine
     @State private var drumSelection = ""
     @State private var lastApplied = ""
     @State private var tintDraft: Double = 0
@@ -144,6 +145,9 @@ struct CapturePickerPanel: View {
             if showsGrabber { grabber }
             header
             content
+            if sheet == .resolution, formatAspects.count > 1 {
+                aspectBar
+            }
             if !modeTabs.isEmpty {
                 modeBar
             }
@@ -199,10 +203,12 @@ struct CapturePickerPanel: View {
         }
         .onChange(of: model.session.status.availableVideoFormats) { _, _ in
             guard sheet == .resolution else { return }
+            guard !model.session.isFormatPinActive else { return }
             seed()
         }
         .onChange(of: model.session.status.videoFormat) { _, _ in
             guard sheet == .resolution else { return }
+            guard !model.session.isFormatPinActive else { return }
             seed()
         }
         .onChange(of: drumSelection) { _, newValue in
@@ -528,6 +534,38 @@ struct CapturePickerPanel: View {
         }
     }
 
+    private var aspectBar: some View {
+        HStack(spacing: 10) {
+            ForEach(formatAspects, id: \.self) { aspect in
+                let active = aspect == selectedAspect
+                Button {
+                    handleAspectChange(aspect)
+                } label: {
+                    Text(aspect.label)
+                        .font(LiveType.ui(size: 13, weight: .bold, design: .default))
+                        .kerning(0.5)
+                        .foregroundStyle(active ? LiveDesign.accent : LiveDesign.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            active ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
+                            in: RoundedRectangle(
+                                cornerRadius: LiveDesign.cornerRadius, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: LiveDesign.cornerRadius, style: .continuous
+                            )
+                            .stroke(
+                                active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.zcTapTarget)
+                .accessibilityLabel("Aspect \(aspect.label)")
+            }
+        }
+    }
+
     private var modeBar: some View {
         HStack(spacing: 10) {
             ForEach(Array(modeTabs.enumerated()), id: \.offset) { index, title in
@@ -713,6 +751,7 @@ struct CapturePickerPanel: View {
             Task { await model.session.refreshAudioState() }
         case .resolution:
             let format = currentVideoFormat
+            selectedAspect = format.resolution.aspect ?? .sixteenNine
             let tabs = formatResolutions
             selectedMode = tabs.firstIndex(of: format.resolution) ?? 0
             drumSelection = format.frameRate.drumLabel
@@ -842,13 +881,21 @@ struct CapturePickerPanel: View {
     private var currentVideoFormat: VideoFormat {
         if let format = model.session.status.videoFormat { return format }
         let res = model.session.status.videoResolution ?? .p1080
-        let rate = VideoFrameRate.allCases.first { $0.fps == model.session.status.fps } ?? .fps24
+        let rate = VideoFrameRate.fromFps(model.session.status.fps) ?? .fps24
         return VideoFormat(resolution: res, frameRate: rate)
     }
 
-    private var formatResolutions: [VideoResolution] {
-        CamCapVideoFormat.resolutions(
+    private var formatAspects: [VideoAspect] {
+        CamCapVideoFormat.aspects(
             available: model.session.status.availableVideoFormats,
+            current: currentVideoFormat.resolution.aspect)
+    }
+
+    private var formatResolutions: [VideoResolution] {
+        let aspect = formatAspects.count > 1 ? selectedAspect : nil
+        return CamCapVideoFormat.resolutions(
+            available: model.session.status.availableVideoFormats,
+            aspect: aspect,
             current: currentVideoFormat.resolution)
     }
 
@@ -867,6 +914,27 @@ struct CapturePickerPanel: View {
 
     private func applyVideoFormat(resolution: VideoResolution, frameRate: VideoFrameRate) {
         model.session.setVideoFormat(resolution: resolution, frameRate: frameRate)
+    }
+
+    private func handleAspectChange(_ aspect: VideoAspect) {
+        guard aspect != selectedAspect else { return }
+        selectedAspect = aspect
+        let sizes = formatResolutions
+        let match =
+            sizes.first { $0.sizeTitle == currentVideoFormat.resolution.sizeTitle }
+            ?? sizes.first
+            ?? currentVideoFormat.resolution
+        selectedMode = sizes.firstIndex(of: match) ?? 0
+        let rates = CamCapVideoFormat.frameRates(
+            available: model.session.status.availableVideoFormats,
+            resolution: match,
+            current: currentVideoFormat.frameRate)
+        let rate =
+            rates.contains(currentVideoFormat.frameRate)
+            ? currentVideoFormat.frameRate : (rates.first ?? currentVideoFormat.frameRate)
+        drumSelection = rate.drumLabel
+        lastApplied = drumSelection
+        applyVideoFormat(resolution: match, frameRate: rate)
     }
 
     private func nudgeTint(_ delta: Int) {

@@ -332,6 +332,8 @@ final class CameraSession {
     @ObservationIgnored private var audioPin: AudioPin?
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
     @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
+    /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
+    var isFormatPinActive: Bool { formatPin != nil }
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
     @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
     @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
@@ -1726,22 +1728,17 @@ final class CameraSession {
         expoPin = pinIsEmpty(pin) ? nil : pin
     }
 
-    private func absorbStaleFormat(_ incoming: inout CameraStatus) {
+    private func absorbStaleFormat(_ incoming: inout CameraStatus, reportedThisFrame: Bool) {
         guard let pin = formatPin else { return }
         if Date() >= pin.deadline {
             formatPin = nil
             return
         }
-        if incoming.videoFormat == pin.expected
-            || (incoming.videoResolution == pin.expected.resolution
-                && incoming.fps == pin.expected.frameRate.fps)
+        if !VideoFormat.absorbStale(
+            incoming: &incoming, expected: pin.expected, reportedThisFrame: reportedThisFrame)
         {
             formatPin = nil
-            return
         }
-        incoming.videoFormat = status.videoFormat
-        incoming.videoResolution = status.videoResolution
-        incoming.fps = status.fps
     }
 
     private func absorbStaleColor(_ incoming: inout CameraStatus) {
@@ -2007,10 +2004,12 @@ final class CameraSession {
         let previousFormat = status.videoFormat
         let previousRes = status.videoResolution
         let previousFps = status.fps
-        status.videoResolution = format.resolution
-        status.videoFormat = format
-        status.fps = format.frameRate.fps
         formatPin = (format, Date().addingTimeInterval(2))
+        var next = status
+        next.videoResolution = format.resolution
+        next.videoFormat = format
+        next.fps = format.frameRate.fps
+        status = next
         fireCamera(
             Commands.setVideoFormat(resolution: format.resolution, frameRate: format.frameRate),
             name: format.chipLabel,
@@ -2920,8 +2919,16 @@ final class CameraSession {
         late: Bool = false, announce: Bool = true
     ) -> Bool {
         var next = status
+        let priorFormat = next.videoFormat
+        let priorRes = next.videoResolution
+        let priorFps = next.fps
         _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
         absorbStaleAudio(&next)
+        let formatReported =
+            next.videoFormat != priorFormat
+            || next.videoResolution != priorRes
+            || next.fps != priorFps
+        absorbStaleFormat(&next, reportedThisFrame: formatReported)
         status = next
         let parsed = CameraReply.parse(reply.payload)
         ControlLiveLog.line(
@@ -4212,6 +4219,9 @@ final class CameraSession {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
+        let priorFormat = s.videoFormat
+        let priorRes = s.videoResolution
+        let priorFps = s.fps
         let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
         let flipReply = CameraParam.isSelfieFlipGetReply(
             set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
@@ -4222,7 +4232,11 @@ final class CameraSession {
         guard applied || flipReply else { return }
         absorbStaleExpo(&s)
         absorbStaleAudio(&s)
-        absorbStaleFormat(&s)
+        let formatReported =
+            s.videoFormat != priorFormat
+            || s.videoResolution != priorRes
+            || s.fps != priorFps
+        absorbStaleFormat(&s, reportedThisFrame: formatReported)
         absorbStaleColor(&s)
         if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)

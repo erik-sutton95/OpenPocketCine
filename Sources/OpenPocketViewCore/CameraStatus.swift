@@ -296,7 +296,7 @@ public enum CameraStatusDecoder {
             return true
         case "cam_video_param_v2" where item.value.count >= 2:
             if let fps = fps(index: item.value[1]) { status.fps = fps }
-            if let res = VideoResolution(rawValue: item.value[0]) { status.videoResolution = res }
+            status.videoResolution = VideoResolution(rawValue: item.value[0])
             if let format = VideoFormat.parseVideoParamV2(item.value) {
                 status.videoFormat = format
             }
@@ -350,22 +350,7 @@ public enum CameraStatusDecoder {
     }
 
     /// Osmosis `VideoFrameRate` table (Nano / Pocket share the index).
-    public static func fps(index: UInt8) -> Int? {
-        switch index {
-        case 1: 24
-        case 2: 25
-        case 3: 30
-        case 4: 48
-        case 5: 50
-        case 6: 60
-        case 7: 120
-        case 8: 240
-        case 10: 100
-        case 11: 96
-        case 29: 15
-        default: nil
-        }
-    }
+    public static func fps(index: UInt8) -> Int? { VideoFrameRate.fps(index: index) }
 
     private static func u16(_ p: [UInt8], _ i: Int) -> UInt16 {
         UInt16(p[i]) | (UInt16(p[i + 1]) << 8)
