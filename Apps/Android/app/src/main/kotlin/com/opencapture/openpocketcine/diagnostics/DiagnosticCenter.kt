@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
+import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import java.io.File
 import java.text.SimpleDateFormat
@@ -104,6 +105,7 @@ object DiagnosticCenter {
         val family = session.connectedCamera?.model?.family ?: "none"
         val model = session.connectedCamera?.model?.name ?: "none"
         val phase = session.phase.name.lowercase()
+        val vpn = appContext?.let { LocalVPNFilter.isActive(it) } ?: false
         return Env(
             appVersion = BuildConfig.VERSION_NAME,
             appBuild = BuildConfig.VERSION_CODE.toString(),
@@ -113,6 +115,7 @@ object DiagnosticCenter {
             cameraFamily = family,
             cameraModel = model,
             phase = phase,
+            vpnActive = vpn,
         )
     }
 
@@ -121,7 +124,7 @@ object DiagnosticCenter {
             mutableListOf(
                 "OpenPocketCine diagnostics (no name, no location)",
                 "app ${env.appVersion} (${env.appBuild}) ${env.osName} ${env.osVersion} ${env.deviceModel}",
-                "camera ${env.cameraModel} family=${env.cameraFamily} phase=${env.phase}",
+                "camera ${env.cameraModel} family=${env.cameraFamily} phase=${env.phase} vpn=${if (env.vpnActive) "on" else "off"}",
             )
         val tail = recent.takeLast(12)
         if (tail.isNotEmpty()) {
@@ -145,6 +148,7 @@ object DiagnosticCenter {
             camera: ${env.cameraModel}
             family: ${env.cameraFamily}
             phase: ${env.phase}
+            vpn: ${if (env.vpnActive) "on" else "off"}
             """.trimIndent()
         if (exceptions.isNotEmpty()) {
             sections += "Exceptions / faults\n" + exceptions.takeLast(EXCEPTION_CAP).joinToString("\n")
@@ -202,5 +206,6 @@ object DiagnosticCenter {
         val cameraFamily: String,
         val cameraModel: String,
         val phase: String,
+        val vpnActive: Boolean,
     )
 }

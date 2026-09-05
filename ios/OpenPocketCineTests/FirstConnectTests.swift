@@ -455,6 +455,18 @@ final class FirstConnectTests: XCTestCase {
         decoder.effects = lut
         XCTAssertEqual(idrRequests, 1, "second LUT on must not request another IDR")
         XCTAssertTrue(decoder.videoToolboxActive)
+
+        var split = lut
+        split.splitComparison = true
+        decoder.effects = split
+        XCTAssertEqual(
+            idrRequests, 1, "LUT 50/50 is a compositor flag — must not GOP-reset (#218)")
+        XCTAssertTrue(decoder.videoToolboxActive)
+        XCTAssertFalse(decoder.awaitingIDR)
+        XCTAssertFalse(decoder.displayedImageRemoved)
+        decoder.effects = lut
+        XCTAssertEqual(idrRequests, 1, "50/50 off must not request another IDR")
+        XCTAssertFalse(decoder.awaitingIDR)
     }
 
     func testHoldDropsPFramesUntilIDR() {

@@ -847,6 +847,9 @@ private struct LiveFeedPane: View {
 
 /// Empty / frozen feed well until a rolling picture exists.
 private struct LiveFeedWarmupCover: View {
+    @Environment(AppModel.self) private var model
+    @State private var showVPNHint = false
+
     var body: some View {
         ZStack {
             Color.black
@@ -857,11 +860,32 @@ private struct LiveFeedWarmupCover: View {
                 Text("WAITING FOR LIVE VIEW")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
                     .foregroundStyle(LiveDesign.text.opacity(0.72))
+                if showVPNHint {
+                    Text(LocalVPNFilter.liveHint)
+                        .font(LiveType.ui(size: 12, weight: .regular, design: .rounded))
+                        .foregroundStyle(LiveDesign.muted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 28)
+                }
             }
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Waiting for live view")
+        .accessibilityLabel(
+            showVPNHint
+                ? "Waiting for live view. \(LocalVPNFilter.liveHint)"
+                : "Waiting for live view"
+        )
+        .task(id: model.session.isFeedWarming) {
+            showVPNHint = false
+            guard model.session.isFeedWarming else { return }
+            let delay = UInt64(LocalVPNFilter.liveHintDelaySeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: delay)
+            showVPNHint = LocalVPNFilter.shouldHintOnLiveWait(
+                vpnActive: LocalVPNProbe.isActive(),
+                hadVideo: !model.session.isFeedWarming,
+                secondsWithoutVideo: LocalVPNFilter.liveHintDelaySeconds)
+        }
     }
 }
 

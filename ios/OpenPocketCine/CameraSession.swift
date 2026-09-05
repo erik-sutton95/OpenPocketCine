@@ -453,6 +453,7 @@ final class CameraSession {
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         connectGeneration += 1
         let generation = connectGeneration
+        LocalVPNProbe.noteIfActive()
         scanTask?.cancel()
         abortInFlightRun(preserveDecoder: preserveMonitor)
         reconnectTarget = nil
@@ -716,7 +717,8 @@ final class CameraSession {
         do {
             _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))  // Pocket 3 may answer e0
         } catch Fail.timeout {
-            ControlLiveLog.line("creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
+            ControlLiveLog.line(
+                "creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
         } catch Fail.disconnected {
             throw Fail.disconnectedDuring("0x53/0x10")
         }

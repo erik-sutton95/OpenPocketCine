@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
+  operator to pause VPNs and ad blockers or exclude this app. If the well
+  stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same
+  hint appears on the well. Diagnostics reports include `vpn=on|off`.
+  Handbook troubleshooting names AdGuard, Blokada, and RethinkDNS. Not a
+  bind-ladder fix — official camera apps fail the same way.
+
 - On-device diagnostics: redacted journal, exceptions, MetricKit payloads
   (iOS), and **Share Diagnostics** on Connection setup (first pair) and
   Operator Setup → System. A TestFlight screenshot copies a compact paste
@@ -163,6 +170,13 @@ All notable changes to this project are documented here. The format is based on
   `@2` `3D` showed as Normal 10-bit (#176). Pocket 3 wire is now `00` Normal /
   `3C` HDR (HLG) / `3D` D-Log M on iOS and Android. Nano `00`/`3F`/`3D` is
   unchanged.
+- LUT 50/50 split dropped live view and stayed on Reconnecting until
+  force-quit (#218): split without a cube was treated as replace-grade
+  (empty Metal over HEVC), and overlapping LUT bakes blocked MainActor on
+  `nextDrawable`, which starved HEVC ingest. 50/50 is a LUT option only
+  (same gate as Android); Metal presents latest-wins with one drawable in
+  flight and does not block. Toggling 50/50 does not GOP-reset. iOS present
+  path; Android already skipped GPU split without a cube.
 
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept

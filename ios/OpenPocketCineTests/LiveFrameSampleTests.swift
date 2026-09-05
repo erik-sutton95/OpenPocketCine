@@ -198,6 +198,28 @@ final class LiveFrameSampleTests: XCTestCase {
             "zebra must not cover Rec.709 / D-Log2 identity with a remade CI picture")
     }
 
+    func testSplitWithoutCubeKeepsIdentityDisplayLayer() {
+        let decoder = HevcDecoder()
+        let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+        decoder.processedFeed = feed
+        feed.isHidden = true
+        decoder.displayLayer.isHidden = false
+
+        var zebra = LiveImageEffects()
+        zebra.zebra = true
+        decoder.effects = zebra
+        var split = zebra
+        split.splitComparison = true
+        decoder.effects = split
+        XCTAssertTrue(decoder.effects.needsOverlayFeed)
+        XCTAssertFalse(decoder.effects.replacesIdentityFeed)
+        XCTAssertFalse(
+            decoder.displayLayer.isHidden,
+            "50/50 without a cube must not cover HEVC with replace-grade Metal (#218)")
+        XCTAssertFalse(decoder.awaitingIDR)
+        XCTAssertFalse(decoder.displayedImageRemoved)
+    }
+
     func testFalseColorKeepsIdentityDisplayLayer() {
         let decoder = HevcDecoder()
         let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))

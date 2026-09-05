@@ -29,6 +29,10 @@ Lucide = "Lucide"
 ND = "ND"
 Resend = "Resend"
 whatsnew = "whatsnew"
+AdGuard = "AdGuard"
+Blokada = "Blokada"
+RethinkDNS = "RethinkDNS"
+utun = "utun"
 
 [default.extend-identifiers]
 ue = "ue"
