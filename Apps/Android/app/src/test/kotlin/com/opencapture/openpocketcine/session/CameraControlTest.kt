@@ -843,14 +843,23 @@ class CameraControlTest {
         assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_HDR, p3).contentEquals(byteArrayOf(0x3C)))
         assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, muse).contentEquals(byteArrayOf(0x00)))
         assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, p4).contentEquals(byteArrayOf(0x3F)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, nano).contentEquals(byteArrayOf(0x00)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, nano).contentEquals(byteArrayOf(0x00)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL10, nano).contentEquals(byteArrayOf(0x3F)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, nano).contentEquals(byteArrayOf(0x3D)))
         assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, p3))
         assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, p3))
         assertEquals(CameraCommands.COLOR_HDR, CameraCommands.parseColorMode(0x3C, p3))
-        assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x00, nano))
-        assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3D, nano))
+        assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, nano))
+        assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3F, nano))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, nano))
         assertEquals(0x00, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL, p3))
         assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, p3))
+        assertEquals(0x00, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL, "", "nano"))
+        assertEquals(0x3F, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL10, "", "nano"))
+        assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, "", "nano"))
+        assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, "", "nano"))
+        assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3F, "", "nano"))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, "", "nano"))
 
         val effect = ByteArray(16)
         effect[2] = 0x00
@@ -865,8 +874,23 @@ class CameraControlTest {
         )
         effect[2] = 0x00
         assertEquals(
+            CameraCommands.COLOR_NORMAL,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), nano).colorMode,
+        )
+        effect[2] = 0x3F.toByte()
+        assertEquals(
+            CameraCommands.COLOR_NORMAL10,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), nano).colorMode,
+        )
+        effect[2] = 0x3D.toByte()
+        assertEquals(
             CameraCommands.COLOR_DLOG_M,
             StatusExtras.applyImageEffect(effect, CameraStatus(), nano).colorMode,
+        )
+        effect[2] = 0x00
+        assertEquals(
+            CameraCommands.COLOR_NORMAL,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), "", "nano").colorMode,
         )
 
         val cap = hex("01040003003C3D")
@@ -883,21 +907,30 @@ class CameraControlTest {
     @Test
     fun camcapColorModeListsNanoModes() {
         val value = hex("01040003003F3D")
+        val nano = "Osmo Nano"
         assertEquals(
             listOf(
-                CameraCommands.COLOR_DLOG_M,
                 CameraCommands.COLOR_NORMAL,
                 CameraCommands.COLOR_NORMAL10,
+                CameraCommands.COLOR_DLOG_M,
             ),
-            CameraCommands.parseColorModes(value),
+            CameraCommands.parseColorModes(value, nano),
+        )
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_NORMAL10,
+                CameraCommands.COLOR_DLOG_M,
+            ),
+            CameraCommands.parseColorModes(value, "", "nano"),
         )
         val packed = StatusExtras.packSubscribe("camcap_color_mode", value)
-        val next = StatusExtras.applySubscribe(packed, CameraStatus())
+        val next = StatusExtras.applySubscribe(packed, CameraStatus(), nano)
         assertEquals(
             listOf(
-                CameraCommands.COLOR_DLOG_M,
                 CameraCommands.COLOR_NORMAL,
                 CameraCommands.COLOR_NORMAL10,
+                CameraCommands.COLOR_DLOG_M,
             ),
             next.availableColorModes,
         )

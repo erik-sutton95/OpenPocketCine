@@ -8,10 +8,15 @@ package com.opencapture.openpocketcine.session
  * ISO index `@5`, EV `@6`, expo mode `@7`, ISO number `@16`.
  */
 object StatusExtras {
-    fun apply(frame: DumlFrame, status: CameraStatus, cameraName: String = ""): CameraStatus {
+    fun apply(
+        frame: DumlFrame,
+        status: CameraStatus,
+        cameraName: String = "",
+        family: String = "",
+    ): CameraStatus {
         return when {
             frame.cmdSet == 0x00 && frame.cmdId == 0x99 ->
-                applySubscribe(frame.payload, status, cameraName)
+                applySubscribe(frame.payload, status, cameraName, family)
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_PARAM -> applyParamReply(frame.payload, status)
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_AUDIO_DSP_GET ->
                 applyAudioDsp(frame.payload, status).first
@@ -23,17 +28,18 @@ object StatusExtras {
         payload: ByteArray,
         status: CameraStatus,
         cameraName: String = "",
+        family: String = "",
     ): CameraStatus {
         val item = parseSubscribe(payload) ?: return status
         return when (item.name) {
             "cam_expo_param" -> applyExpo(item.value, status)
             "cam_video_param_v2" -> applyVideo(item.value, status)
-            "cam_image_effect" -> applyImageEffect(item.value, status, cameraName)
+            "cam_image_effect" -> applyImageEffect(item.value, status, cameraName, family)
             "cam_lens_state" -> applyLens(item.value, status)
             "cam_fov" -> applyFov(item.value, status)
             "camcap_shutter" -> applyShutterCap(item.value, status)
             "camcap_iso" -> applyIsoCap(item.value, status)
-            "camcap_color_mode" -> applyColorCap(item.value, status, cameraName)
+            "camcap_color_mode" -> applyColorCap(item.value, status, cameraName, family)
             "camcap_video_format" -> applyVideoCap(item.value, status)
             else -> status
         }
@@ -91,10 +97,17 @@ object StatusExtras {
         value: ByteArray,
         status: CameraStatus,
         cameraName: String = "",
+        family: String = "",
     ): CameraStatus {
         if (value.size < 5) return status
         var next =
-            status.copy(colorMode = CameraCommands.parseColorMode(value[2].toInt() and 0xFF, cameraName))
+            status.copy(
+                colorMode = CameraCommands.parseColorMode(
+                    value[2].toInt() and 0xFF,
+                    cameraName,
+                    family,
+                ),
+            )
         if (value.size >= 9) {
             val mode = value[4].toInt() and 0xFF
             if (mode == CameraCommands.WB_AUTO || mode == CameraCommands.WB_CUSTOM) {
@@ -129,8 +142,9 @@ object StatusExtras {
         value: ByteArray,
         status: CameraStatus,
         cameraName: String = "",
+        family: String = "",
     ): CameraStatus {
-        val modes = CameraCommands.parseColorModes(value, cameraName)
+        val modes = CameraCommands.parseColorModes(value, cameraName, family)
         return if (modes.isEmpty()) status else status.copy(availableColorModes = modes)
     }
 

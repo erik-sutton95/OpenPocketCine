@@ -237,16 +237,18 @@ import Testing
 
     @Test func nanoColorCapListsThreeCapturedModes() {
         let value: [UInt8] = [0x01, 0x04, 0x00, 0x03, 0x00, 0x3F, 0x3D]
-        #expect(CamCapColorMode.parse(value) == [.dLogM, .normal, .normal10])
-        #expect(ColorMode.parseImageEffect([0, 0, 0x3D]) == .normal10)
-        #expect(ColorMode.parseImageEffect([0, 0, 0x00]) == .dLogM)
+        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
+        #expect(CamCapColorMode.parse(value, model: nano) == [.normal, .normal10, .dLogM])
+        #expect(ColorMode.parseImageEffect([0, 0, 0x00], model: nano) == .normal)
+        #expect(ColorMode.parseImageEffect([0, 0, 0x3F], model: nano) == .normal10)
+        #expect(ColorMode.parseImageEffect([0, 0, 0x3D], model: nano) == .dLogM)
         #expect(MonitorTransfer(.normal10) == .rec709)
         #expect(MonitorTransfer(.dLogM) == .dlog)
         var s = CameraStatus()
         #expect(
             CameraStatusDecoder.applySubscribePush(
-                SubscribePush.pack(name: "camcap_color_mode", value: value), to: &s))
-        #expect(s.availableColorModes == [.dLogM, .normal, .normal10])
+                SubscribePush.pack(name: "camcap_color_mode", value: value), to: &s, model: nano))
+        #expect(s.availableColorModes == [.normal, .normal10, .dLogM])
         #expect(
             CamCapColorMode.wheel(available: s.availableColorModes, family: .nano)
                 == [.normal, .normal10, .dLogM])
@@ -346,10 +348,16 @@ import Testing
         #expect(Commands.setColorMode(.hdr, model: pocket3).payload == [0x3C])
 
         #expect(ColorMode.normal.wireByte(for: pocket4) == 0x3F)
-        #expect(ColorMode.dLogM.wireByte(for: nano) == 0x00)
-        #expect(ColorMode.fromWire(0x00, model: nano) == .dLogM)
-        #expect(ColorMode.fromWire(0x3D, model: nano) == .normal10)
+        #expect(ColorMode.normal.wireByte(for: nano) == 0x00)
+        #expect(ColorMode.normal10.wireByte(for: nano) == 0x3F)
+        #expect(ColorMode.dLogM.wireByte(for: nano) == 0x3D)
+        #expect(ColorMode.fromWire(0x00, model: nano) == .normal)
+        #expect(ColorMode.fromWire(0x3F, model: nano) == .normal10)
+        #expect(ColorMode.fromWire(0x3D, model: nano) == .dLogM)
         #expect(Commands.setColorMode(.normal, model: pocket4).payload == [0x3F])
+        #expect(Commands.setColorMode(.normal, model: nano).payload == [0x00])
+        #expect(Commands.setColorMode(.normal10, model: nano).payload == [0x3F])
+        #expect(Commands.setColorMode(.dLogM, model: nano).payload == [0x3D])
         #expect(Commands.setColorMode(.dLogM).payload == [0x00])
 
         let cap: [UInt8] = [0x01, 0x04, 0x00, 0x03, 0x00, 0x3C, 0x3D]
