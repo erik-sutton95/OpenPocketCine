@@ -138,7 +138,9 @@ public struct CameraStatus: Equatable, Sendable {
 public enum CameraStatusDecoder {
     /// Apply one status push frame to `status`. Returns true if it was a recognised status frame.
     @discardableResult
-    public static func apply(_ frame: Duml.Frame, to status: inout CameraStatus) -> Bool {
+    public static func apply(
+        _ frame: Duml.Frame, to status: inout CameraStatus, model: CameraModel? = nil
+    ) -> Bool {
         let p = frame.payload
         switch (frame.cmdSet, frame.cmdId) {
         case (0x02, 0x80) where p.count >= 13:
@@ -252,7 +254,7 @@ public enum CameraStatusDecoder {
             return false
 
         case (0x00, 0x99):
-            return applySubscribePush(p, to: &status)
+            return applySubscribePush(p, to: &status, model: model)
 
         default:
             return false
@@ -261,8 +263,9 @@ public enum CameraStatusDecoder {
 
     /// `0x00/0x99` camera→app push: `02 06 00 00 | idx | 00×3 | total_len | name_len | name | 00×6 | value_len | value`.
     @discardableResult
-    public static func applySubscribePush(_ payload: [UInt8], to status: inout CameraStatus) -> Bool
-    {
+    public static func applySubscribePush(
+        _ payload: [UInt8], to status: inout CameraStatus, model: CameraModel? = nil
+    ) -> Bool {
         guard let item = SubscribePush.parse(payload) else { return false }
         switch item.name {
         case "timecode_info" where item.value.count >= 8:
@@ -277,7 +280,7 @@ public enum CameraStatusDecoder {
             if !indices.isEmpty { status.availableIsoIndices = indices }
             return !indices.isEmpty
         case CamCapColorMode.subscribeKey:
-            let modes = CamCapColorMode.parse(item.value)
+            let modes = CamCapColorMode.parse(item.value, model: model)
             if !modes.isEmpty { status.availableColorModes = modes }
             return !modes.isEmpty
         case CamCapVideoFormat.subscribeKey:
@@ -299,7 +302,9 @@ public enum CameraStatusDecoder {
             }
             return true
         case "cam_image_effect" where item.value.count > 2:
-            if let color = ColorMode.parseImageEffect(item.value) { status.colorMode = color }
+            if let color = ColorMode.parseImageEffect(item.value, model: model) {
+                status.colorMode = color
+            }
             if let wb = WhiteBalance.parseImageEffect(item.value) {
                 status.whiteBalance = wb
                 if wb.mode == .custom, (2_000...10_000).contains(wb.kelvin) {

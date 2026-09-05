@@ -165,10 +165,30 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Pocket 3 COLOR SET/GET used Pocket 4 / Nano bytes: `00` was sent as D-Log M
+  (the body took Rec.709), `3F` Normal was rejected, and `cam_image_effect`
+  `@2` `3D` showed as Normal 10-bit (#176). Pocket 3 wire is now `00` Normal /
+  `3C` HDR (HLG) / `3D` D-Log M on iOS and Android. Nano `00`/`3F`/`3D` is
+  unchanged.
+
+- Android live picture no longer goes black after Operator Setup or clips on
+  API 34+ phones (#248, S25 Ultra / Pocket 4 Pro). Settings / media covering
+  the monitor already kept pktType `0x02` ingest (#177); the SurfaceView still
+  followed visibility and destroyed the Vulkan swapchain, and a failed
+  reattach fell back to GLES (unbinding MediaCodec) while UDP stayed live so
+  the watchdog never PLI'd. The live surface now stays attached under the
+  overlay, a failed attach retries instead of abandoning Vulkan, and
+  return-from-gallery treats leftover GOP packets as not a live picture.
+
+- Pocket 3 media library after a take (#258): `/v2` always uses storage 0
+  (single microSD), even when the list handle looks internal, and the newest
+  catalog page still lists if enter-playback ACKs E0. Both shells.
+
 - Renaming the Pocket SoftAP no longer joins the cached old SSID while the
   paired row shows the new BLE name (#257). Cached password is kept; a live
   advertised name that differs from Keychain / Keystore wins. Scan rows
   update when the BLE local name changes. Both shells.
+
 - LUT 50/50 split dropped live view and stayed on Reconnecting until
   force-quit (#218): split without a cube was treated as replace-grade
   (empty Metal over HEVC), and overlapping LUT bakes blocked MainActor on

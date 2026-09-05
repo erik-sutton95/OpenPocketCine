@@ -109,6 +109,23 @@ object MediaHTTP {
         return if ((handle and MediaListCommand.INTERNAL_BIT) != 0L) 1 else 0
     }
 
+    /**
+     * `/v2?storage=` for a listed clip. Pocket 3 (single microSD) is always 0,
+     * even when the manifest stamped storage 1 from the internal-handle bit or a
+     * previous GET remembered 1.
+     */
+    fun resolvedStorage(
+        stamped: Int,
+        handle: Long,
+        winner: Int?,
+        singleSdStorage: Boolean,
+    ): Int {
+        if (singleSdStorage) return 0
+        winner?.let { if (it == 0 || it == 1) return it }
+        if (stamped == 0 || stamped == 1) return stamped
+        return storageGuess(handle, singleSdStorage = false)
+    }
+
     fun originalPath(file: MediaFile): String = file.path
 
     /** Clip delivery / export: the original camera file, never the LRF/XRF 720p proxy. */

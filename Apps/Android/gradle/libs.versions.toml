@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.2"
+agp = "9.4.0"
 kotlin = "2.4.10"
 coroutines = "1.11.0"
 composeBom = "2026.08.00"
@@ -9,7 +9,7 @@ coreSplashscreen = "1.2.0"
 json = "20260814"
 media3 = "1.11.0"
 okhttp = "5.5.0"
-kyantBackdrop = "2.0.0"
+kyantBackdrop = "2.0.1"
 kyantShapes = "1.2.1"
 
 [libraries]

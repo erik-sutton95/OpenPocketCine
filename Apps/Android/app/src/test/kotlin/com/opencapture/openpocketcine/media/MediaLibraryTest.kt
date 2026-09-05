@@ -96,6 +96,24 @@ class MediaLibraryTest {
         val file = files[0]
         val storage = MediaHTTP.storageGuess(file.handle, singleSdStorage = false)
         assertEquals(1, storage)
+        assertEquals(
+            0,
+            MediaHTTP.resolvedStorage(
+                stamped = 1,
+                handle = file.handle,
+                winner = 1,
+                singleSdStorage = true,
+            ),
+        )
+        assertEquals(
+            1,
+            MediaHTTP.resolvedStorage(
+                stamped = 1,
+                handle = file.handle,
+                winner = null,
+                singleSdStorage = false,
+            ),
+        )
         val thumb = MediaHTTP.pathUrlString(storage, file.thumbPath)
         assertEquals(
             "http://192.168.2.1/v2?storage=1&path=MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
@@ -313,6 +331,14 @@ class MediaLibraryTest {
             MediaLiveResume.strayPlaybackAction(browsing = false, inPlayback = true),
         )
         assertEquals(null, MediaLiveResume.strayPlaybackAction(browsing = true, inPlayback = true))
+        val failed = MediaBrowsePolicy.afterEnterPlayback(false)
+        assertTrue(failed.listNewestPage)
+        assertFalse(failed.listOlderPages)
+        assertTrue(failed.keepBrowsing)
+        val entered = MediaBrowsePolicy.afterEnterPlayback(true)
+        assertTrue(entered.listNewestPage)
+        assertTrue(entered.listOlderPages)
+        assertTrue(entered.keepBrowsing)
     }
 
     @Test

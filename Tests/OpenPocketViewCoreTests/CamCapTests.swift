@@ -321,6 +321,59 @@ import Testing
             ) == [.normal, .hdr, .dLog, .dLog2])
     }
 
+    /// #176: Pocket 3 Rec.709 is `00`, D-Log M is `3D`. `3F` is Pocket 4 Normal
+    /// and is rejected; sending `00` as D-Log M switched the body to Normal.
+    @Test func pocket3ColorWireSwapsNormalAndDLogM() {
+        let pocket3 = CameraModel.resolve(modelId: 0x0020, name: nil)
+        let muse = CameraModel.resolve(modelId: nil, name: "Xtra Muse")
+        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
+
+        #expect(ColorMode.normal.wireByte(for: pocket3) == 0x00)
+        #expect(ColorMode.dLogM.wireByte(for: pocket3) == 0x3D)
+        #expect(ColorMode.hdr.wireByte(for: pocket3) == 0x3C)
+        #expect(ColorMode.normal.wireByte(for: muse) == 0x00)
+        #expect(ColorMode.dLogM.wireByte(for: muse) == 0x3D)
+
+        #expect(ColorMode.fromWire(0x00, model: pocket3) == .normal)
+        #expect(ColorMode.fromWire(0x3D, model: pocket3) == .dLogM)
+        #expect(ColorMode.fromWire(0x3C, model: pocket3) == .hdr)
+        #expect(ColorMode.parseImageEffect([0, 0, 0x00], model: pocket3) == .normal)
+        #expect(ColorMode.parseImageEffect([0, 0, 0x3D], model: pocket3) == .dLogM)
+
+        #expect(Commands.setColorMode(.normal, model: pocket3).payload == [0x00])
+        #expect(Commands.setColorMode(.dLogM, model: pocket3).payload == [0x3D])
+        #expect(Commands.setColorMode(.hdr, model: pocket3).payload == [0x3C])
+
+        #expect(ColorMode.normal.wireByte(for: pocket4) == 0x3F)
+        #expect(ColorMode.dLogM.wireByte(for: nano) == 0x00)
+        #expect(ColorMode.fromWire(0x00, model: nano) == .dLogM)
+        #expect(ColorMode.fromWire(0x3D, model: nano) == .normal10)
+        #expect(Commands.setColorMode(.normal, model: pocket4).payload == [0x3F])
+        #expect(Commands.setColorMode(.dLogM).payload == [0x00])
+
+        let cap: [UInt8] = [0x01, 0x04, 0x00, 0x03, 0x00, 0x3C, 0x3D]
+        #expect(CamCapColorMode.parse(cap, model: pocket3) == [.normal, .hdr, .dLogM])
+        #expect(
+            CamCapColorMode.wheel(available: [.normal, .hdr, .dLogM], model: pocket3)
+                == [.normal, .hdr, .dLogM])
+
+        var s = CameraStatus()
+        var effect = [UInt8](repeating: 0, count: 16)
+        effect[2] = 0x00
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_image_effect", value: effect),
+                to: &s, model: pocket3))
+        #expect(s.colorMode == .normal)
+        effect[2] = 0x3D
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_image_effect", value: effect),
+                to: &s, model: pocket3))
+        #expect(s.colorMode == .dLogM)
+    }
+
     @Test func zoomStopsFollowTheBody() {
         let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
         let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
