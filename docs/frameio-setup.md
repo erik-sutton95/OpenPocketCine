@@ -1,7 +1,8 @@
 # Frame.io integration setup
 
-OpenPocketCine can upload clips to Frame.io with **OAuth 2.0 (PKCE)** via **Adobe IMS**. There is
-no client secret. The feature is **disabled** in builds that are not configured.
+OpenPocketCine can upload clips to Frame.io through the **Frame.io Platform API (v4)** with
+**OAuth 2.0 (PKCE)** via **Adobe IMS**. There is no client secret. The feature is **disabled**
+in builds that are not configured. Call this **Frame.io upload** in public copy.
 
 > **Requires iOS 17.4+** for `ASWebAuthenticationSession`.
 
