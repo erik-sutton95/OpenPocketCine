@@ -126,10 +126,13 @@ struct ConnectionSetupView: View {
             }
             .fadeOverflowBottom()
 
-            if showsFooter {
-                footer
-                    .padding(.top, 10)
+            VStack(spacing: 10) {
+                if showsFooter {
+                    footer
+                }
+                StartupShareDiagnosticsButton()
             }
+            .padding(.top, 10)
         }
         .padding(22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -250,7 +253,7 @@ struct ConnectionSetupView: View {
                     icon: .aperture,
                     steps: [
                         "Leave the camera on — it brings up its own Wi-Fi",
-                        "No menu tap needed on this path",
+                        "On 5.8 GHz that can take about a minute; we keep trying",
                     ]
                 ),
                 tight: tight

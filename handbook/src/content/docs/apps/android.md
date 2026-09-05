@@ -9,8 +9,9 @@ Google Play is the TestFlight analog — join from
 [openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. arm64
 phones, Android 10 or newer.
 
-If live view fails: Operator Setup → System → **Share Diagnostics**. The
-report has no name, location, or Wi-Fi password.
+If pairing or live view fails: Connection setup **Share Diagnostics**, or
+Operator Setup → System → **Share Diagnostics**. The report has no name,
+location, or Wi-Fi password.
 
 ## How Swift reaches Android
 
