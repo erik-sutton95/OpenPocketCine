@@ -211,7 +211,8 @@ class CameraControlTest {
         assertEquals(50, next.fps)
         assertEquals(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS50), next.videoFormat)
         assertEquals(120, CameraCommands.fpsFromSubscribeIndex(7))
-        assertNull(CameraCommands.fpsFromIndex(7))
+        assertEquals(120, CameraCommands.fpsFromIndex(7))
+        assertNull(CameraCommands.fpsFromIndex(0x09))
     }
 
     @Test

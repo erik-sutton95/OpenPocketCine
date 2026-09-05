@@ -663,11 +663,13 @@ object CameraCommands {
 
     fun fpsIndex(fps: Int): Int? = VideoFrameRate.fromFps(fps)?.rawValue
 
-    fun fpsFromIndex(index: Int): Int? = VideoFrameRate.fromRaw(index)?.fps
+    fun fpsFromIndex(index: Int): Int? =
+        VideoFrameRate.fromRaw(index)?.fps?.takeIf { it > 0 }
 
     /**
-     * iOS `CameraStatusDecoder.fps(index:)` — subscribe display table.
-     * SET still uses [VideoFrameRate] only (no 120 / 240 / 100 / 96 / 15).
+     * iOS `CameraStatusDecoder.fps(index:)` — subscribe display table,
+     * including SlowMo 100/120/240. FORMAT SET still only writes a pair
+     * the body advertised (or Video 24–60 when camcap is empty).
      */
     fun fpsFromSubscribeIndex(index: Int): Int? =
         when (index) {
