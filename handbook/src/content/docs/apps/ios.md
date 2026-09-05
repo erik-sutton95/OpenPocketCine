@@ -25,7 +25,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
   keeps that Auto cube (it does not restamp from a missing live SET).
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Zoom chips follow
   the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
-  with 4K max 2×; Nano 1×). Zoom must not drop the live picture. FORMAT only lists `camcap_video_format` pairs.
+  with 4K max 2×; Nano 1×). Zoom must not drop the live picture. FORMAT lists
+  `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16 when the body
+  advertises them; aspect is the res byte). A tap stays on that pair until
+  the body reports it.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.

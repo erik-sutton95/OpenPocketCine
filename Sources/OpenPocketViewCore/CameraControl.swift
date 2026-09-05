@@ -959,63 +959,138 @@ public enum AudioDspBlob {
     }
 }
 
-/// `0x02/0x18` `@0`. Only 1080p / 4K were in the labeled take.
-public enum VideoResolution: UInt8, CaseIterable, Sendable {
-    case p1080 = 0x0A
-    case p4K = 0x10
+/// Recording aspect. Encoded in the `0x02/0x18` res byte — not a second SET.
+public enum VideoAspect: String, Equatable, Hashable, CaseIterable, Sendable {
+    case sixteenNine = "16:9"
+    case fourThree = "4:3"
+    case oneOne = "1:1"
+    case nineSixteen = "9:16"
 
-    public var label: String {
-        switch self {
-        case .p1080: "1080p"
-        case .p4K: "4K"
-        }
-    }
-
-    /// OpenZCine resolution-tab title. Pocket only advertised these two.
-    public var tabTitle: String {
-        switch self {
-        case .p1080: "1080"
-        case .p4K: "4K"
-        }
-    }
+    public var label: String { rawValue }
 }
 
-/// `0x02/0x18` `@1` fps index. SET only the six labeled values.
-public enum VideoFrameRate: UInt8, CaseIterable, Sendable {
-    case fps24 = 0x01
-    case fps25 = 0x02
-    case fps30 = 0x03
-    case fps48 = 0x04
-    case fps50 = 0x05
-    case fps60 = 0x06
+/// `0x02/0x18` `@0`. Any byte the body sends; labels from the media catalog.
+public struct VideoResolution: Equatable, Hashable, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
 
-    public var fps: Int {
-        switch self {
-        case .fps24: 24
-        case .fps25: 25
-        case .fps30: 30
-        case .fps48: 48
-        case .fps50: 50
-        case .fps60: 60
+    public static let p1080 = Self(rawValue: 0x0A)
+    public static let p1080_4x3 = Self(rawValue: 0x0C)
+    public static let p4K = Self(rawValue: 0x10)
+    public static let p2_7K = Self(rawValue: 0x2D)
+    public static let p1080_9x16 = Self(rawValue: 0x42)
+    public static let p2_7K_9x16 = Self(rawValue: 0x43)
+    public static let p2_7K_4x3 = Self(rawValue: 0x5F)
+    public static let p4K_4x3 = Self(rawValue: 0x67)
+    public static let p1080_1x1 = Self(rawValue: 0x69)
+    public static let p2160_1x1 = Self(rawValue: 0x6A)
+    public static let p3K_1x1 = Self(rawValue: 0x6B)
+    public static let p3K_9x16 = Self(rawValue: 0x6C)
+    public static let p4K_1x1 = Self(rawValue: 0x7D)
+
+    public var aspect: VideoAspect? {
+        switch rawValue {
+        case 0x0A, 0x10, 0x2D: .sixteenNine
+        case 0x0C, 0x5F, 0x67: .fourThree
+        case 0x69, 0x6A, 0x6B, 0x7D: .oneOne
+        case 0x42, 0x43, 0x6C: .nineSixteen
+        default: nil
         }
     }
 
-    public var label: String { "\(fps)" }
+    public var sizeTitle: String {
+        switch rawValue {
+        case 0x0A, 0x0C, 0x42, 0x69: "1080"
+        case 0x2D, 0x43, 0x5F: "2.7K"
+        case 0x10, 0x67, 0x7D: "4K"
+        case 0x6A: "2160"
+        case 0x6B, 0x6C: "3K"
+        default: String(format: "%02X", rawValue)
+        }
+    }
 
-    /// OpenZCine framerate-drum row (`24p`, not a bare `24`).
-    public var drumLabel: String { "\(fps)p" }
+    private var sizeLabel: String {
+        switch rawValue {
+        case 0x0A, 0x0C, 0x42, 0x69: "1080p"
+        case 0x2D, 0x43, 0x5F: "2.7K"
+        case 0x10, 0x67, 0x7D: "4K"
+        case 0x6A: "2160p"
+        case 0x6B, 0x6C: "3K"
+        default: String(format: "0x%02X", rawValue)
+        }
+    }
+
+    public var label: String {
+        guard let aspect else { return sizeLabel }
+        return aspect == .sixteenNine ? sizeLabel : "\(sizeLabel) \(aspect.label)"
+    }
+
+    public var tabTitle: String { sizeTitle }
+
+    /// Empty-camcap FORMAT tabs. Not every catalog size.
+    public static let labeledVideo: [VideoResolution] = [.p1080, .p4K]
+}
+
+/// `0x02/0x18` `@1`. Any index the body sends; fps from the Osmosis table.
+public struct VideoFrameRate: Equatable, Hashable, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
+
+    public static let fps24 = Self(rawValue: 0x01)
+    public static let fps25 = Self(rawValue: 0x02)
+    public static let fps30 = Self(rawValue: 0x03)
+    public static let fps48 = Self(rawValue: 0x04)
+    public static let fps50 = Self(rawValue: 0x05)
+    public static let fps60 = Self(rawValue: 0x06)
+    public static let fps120 = Self(rawValue: 0x07)
+    public static let fps240 = Self(rawValue: 0x08)
+    public static let fps100 = Self(rawValue: 0x0A)
+    public static let fps96 = Self(rawValue: 0x0B)
+    public static let fps15 = Self(rawValue: 0x1D)
+
+    public var fps: Int { Self.fps(index: rawValue) ?? 0 }
+
+    public var label: String { fps > 0 ? "\(fps)" : String(format: "%02X", rawValue) }
+
+    public var drumLabel: String { fps > 0 ? "\(fps)p" : String(format: "%02Xp", rawValue) }
 
     public init?(drumLabel: String) {
-        guard let match = Self.allCases.first(where: { $0.drumLabel == drumLabel }) else {
+        guard let match = Self.catalog.first(where: { $0.drumLabel == drumLabel }) else {
             return nil
         }
         self = match
     }
 
-    /// Labeled Video-mode SET (`0x02/0x18`). SlowMo 100/120/240 is display-only
-    /// until a SlowMo `camcap_video_format` / SET take lands.
+    public static func fromFps(_ fps: Int) -> VideoFrameRate? {
+        catalog.first { $0.fps == fps }
+    }
+
+    /// Video-mode SET 24–60. SlowMo 100/120/240 from that mode's camcap.
     public static let labeledVideo: [VideoFrameRate] = [
         .fps24, .fps25, .fps30, .fps48, .fps50, .fps60,
+    ]
+
+    /// Osmosis index table (Nano / Pocket share it). 200 fps is still unlabeled.
+    public static func fps(index: UInt8) -> Int? {
+        switch index {
+        case 1: 24
+        case 2: 25
+        case 3: 30
+        case 4: 48
+        case 5: 50
+        case 6: 60
+        case 7: 120
+        case 8: 240
+        case 10: 100
+        case 11: 96
+        case 29: 15
+        default: nil
+        }
+    }
+
+    private static let catalog: [VideoFrameRate] = [
+        .fps24, .fps25, .fps30, .fps48, .fps50, .fps60, .fps120, .fps240, .fps100, .fps96,
+        .fps15,
     ]
 }
 
@@ -1035,15 +1110,14 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
 
     /// Top-deck chip, OpenZCine `resolutionFrameRate` shape (`4K · 25p`).
     public var chipLabel: String {
-        "\(resolution.label) · \(frameRate.fps)p"
+        "\(resolution.label) · \(frameRate.drumLabel)"
     }
 
     public static func parseVideoParamV2(_ value: [UInt8]) -> VideoFormat? {
-        guard value.count >= 2,
-            let res = VideoResolution(rawValue: value[0]),
-            let fps = VideoFrameRate(rawValue: value[1])
-        else { return nil }
-        return VideoFormat(resolution: res, frameRate: fps)
+        guard value.count >= 2 else { return nil }
+        return VideoFormat(
+            resolution: VideoResolution(rawValue: value[0]),
+            frameRate: VideoFrameRate(rawValue: value[1]))
     }
 
     /// Other labeled resolution, same fps. Pocket 3 first picture: the FORMAT
@@ -1094,8 +1168,34 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
     ) -> VideoFormat {
         if let format { return format }
         let res = resolution ?? .p4K
-        let rate = VideoFrameRate.allCases.first { $0.fps == fps } ?? .fps30
+        let rate = VideoFrameRate.fromFps(fps) ?? .fps30
         return VideoFormat(resolution: res, frameRate: rate)
+    }
+
+    /// Keep the optimistic FORMAT HUD until `cam_video_param_v2` reports the SET.
+    ///
+    /// Status apply copies the last HUD then overlays one push. After an
+    /// optimistic write, battery / expo / gimbal frames still carry the SET
+    /// pair — that is not confirmation. `reportedThisFrame` is true only when
+    /// this apply changed res / fps / `videoFormat`.
+    ///
+    /// Returns `false` when the pin should drop (this frame reported a match).
+    public static func absorbStale(
+        incoming: inout CameraStatus,
+        expected: VideoFormat,
+        reportedThisFrame: Bool
+    ) -> Bool {
+        let matched =
+            incoming.videoFormat == expected
+            || (incoming.videoResolution == expected.resolution
+                && incoming.fps == expected.frameRate.fps)
+        if reportedThisFrame, matched {
+            return false
+        }
+        incoming.videoFormat = expected
+        incoming.videoResolution = expected.resolution
+        incoming.fps = expected.frameRate.fps
+        return true
     }
 }
 

@@ -189,6 +189,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastRecoverSkipAt = 0L
     private var lastRecoverSkipReason = ""
     private var formatPin: FormatPin? = null
+    /** iOS `CameraSession.isFormatPinActive` — FORMAT sheet skips reseat. */
+    val isFormatPinActive: Boolean
+        get() = formatPin != null
     private var colorPin: ColorPin? = null
     private var gimbalStickMapping = GimbalStickMapping()
     /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
@@ -1619,7 +1622,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val cam = connectedCamera?.model
         next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
         next = CamFov.absorb(next)
-        next = absorbStaleFormat(next)
+        val formatReported =
+            next.resolutionCode != prev.resolutionCode ||
+                next.fpsIndex != prev.fpsIndex ||
+                next.fps != prev.fps
+        next = absorbStaleFormat(next, formatReported)
         next = absorbStaleColor(next)
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
@@ -2422,16 +2429,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
      */
     fun setVideoFormat(format: VideoFormat): Boolean {
         val previous = _status.value
+        formatPin =
+            FormatPin(
+                expected = format,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
         _status.value =
             previous.copy(
                 resolutionCode = format.resolution.rawValue,
                 fpsIndex = format.frameRate.rawValue,
                 fps = format.frameRate.fps,
-            )
-        formatPin =
-            FormatPin(
-                expected = format,
-                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
             )
         val rematch =
             CaptureLists.rematchShutterDenomAfterFps(
@@ -2471,9 +2478,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         return setVideoFormat(format)
     }
 
-    private fun absorbStaleFormat(incoming: CameraStatus): CameraStatus {
+    private fun absorbStaleFormat(incoming: CameraStatus, formatReported: Boolean): CameraStatus {
         val (next, remaining) =
-            VideoFormat.absorbStale(incoming, formatPin, SystemClock.elapsedRealtime())
+            VideoFormat.absorbStale(
+                incoming,
+                formatPin,
+                SystemClock.elapsedRealtime(),
+                formatReported,
+            )
         formatPin = remaining
         return next
     }

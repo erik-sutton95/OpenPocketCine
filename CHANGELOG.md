@@ -607,6 +607,16 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- FORMAT lists every `camcap_video_format` pair the body advertises, not only
+  1080p / 4K 16:9. Catalog labels cover Nano 2.7K/4:3, Pocket 3 1:1/9:16/2.7K,
+  Pocket 4 / 4 Pro 9:16 3K, Action 6 4K 1:1, and SlowMo 100/120/240. Unknown
+  res/fps bytes still appear (hex tab) instead of being dropped. When the
+  table has more than one aspect, FORMAT shows aspect chips then size tabs.
+  Empty camcap still falls back to 1080 / 4K 16:9. Aspect is the resolution
+  byte (`docs/osmo-recording-formats.md`). The sheet and chip stay on the
+  tapped pair until `cam_video_param_v2` reports it — other HUD pushes no
+  longer bounce the picker back to the previous size/aspect.
+
 - Public copy names optional clip delivery **Frame.io upload** (Platform API v4).
 
 - Idle D-Log2 zoom hops to D-Log (`0x02/0x42`) on the first step off 1×

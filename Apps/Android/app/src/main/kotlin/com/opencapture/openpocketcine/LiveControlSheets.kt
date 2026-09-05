@@ -86,6 +86,7 @@ import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.settings.SettingsHelpBadge
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.FocusTrackMode
+import com.opencapture.openpocketcine.session.VideoAspect
 import com.opencapture.openpocketcine.session.VideoFormat
 import com.opencapture.openpocketcine.session.VideoFrameRate
 import com.opencapture.openpocketcine.session.VideoResolution
@@ -129,6 +130,11 @@ fun LiveControlSheet(
     var selectedMode by remember(sheet) {
         mutableIntStateOf(initialSelectedMode(sheet, status, model, isEvSheet))
     }
+    var selectedAspect by remember(sheet) {
+        mutableStateOf(
+            VideoFormat.current(status).resolution.aspect ?: VideoAspect.SIXTEEN_NINE,
+        )
+    }
     var drumSelection by remember(sheet) { mutableStateOf("") }
     var lastApplied by remember(sheet) { mutableStateOf("") }
     var tintDraft by remember(sheet) { mutableFloatStateOf(CaptureLists.currentTint(status).toFloat()) }
@@ -137,7 +143,8 @@ fun LiveControlSheet(
     var drumJob by remember { mutableStateOf<Job?>(null) }
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
     val isAngleSheet = CaptureLists.isAngleSheet(sheet, status.expoMode, selectedMode)
-    val tabs = CaptureLists.modeTabs(sheet, status, offersIsoAuto)
+    val formatAspects = CaptureLists.formatAspects(status)
+    val tabs = CaptureLists.modeTabs(sheet, status, offersIsoAuto, selectedAspect)
     val bodyFamily = model.session.connectedCamera?.model?.family ?: "pocket"
     val bodyName = model.session.connectedCamera?.model?.name ?: ""
 
@@ -193,11 +200,30 @@ fun LiveControlSheet(
 
     fun reseatResolution() {
         val format = VideoFormat.current(status)
-        val tabs = CaptureLists.formatResolutions(status)
+        selectedAspect = format.resolution.aspect ?: VideoAspect.SIXTEEN_NINE
+        val tabs = CaptureLists.formatResolutions(status, selectedAspect)
         selectedMode = tabs.indexOf(format.resolution).coerceAtLeast(0)
         val label = format.frameRate.drumLabel
         drumSelection = label
         lastApplied = label
+    }
+
+    fun handleAspectChange(aspect: VideoAspect) {
+        if (!enabled || aspect == selectedAspect) return
+        selectedAspect = aspect
+        val sizes = CaptureLists.formatResolutions(status, aspect)
+        val match =
+            sizes.firstOrNull { it.sizeTitle == VideoFormat.current(status).resolution.sizeTitle }
+                ?: sizes.firstOrNull()
+                ?: return
+        selectedMode = sizes.indexOf(match).coerceAtLeast(0)
+        val rates = CaptureLists.formatRates(status, match)
+        val currentRate = VideoFormat.current(status).frameRate
+        val rate = if (currentRate in rates) currentRate else rates.firstOrNull() ?: return
+        drumSelection = rate.drumLabel
+        lastApplied = drumSelection
+        val next = VideoFormat(match, rate)
+        if (next != VideoFormat.current(status)) model.setVideoFormat(next)
     }
 
     fun reseatColor() {
@@ -227,7 +253,7 @@ fun LiveControlSheet(
     }
 
     fun applyVideoFormat(tab: Int, drum: String, fromDrum: Boolean) {
-        val next = CaptureLists.nextVideoFormat(status, tab, drum, fromDrum) ?: return
+        val next = CaptureLists.nextVideoFormat(status, tab, drum, fromDrum, selectedAspect) ?: return
         model.setVideoFormat(next)
     }
 
@@ -360,7 +386,7 @@ fun LiveControlSheet(
         if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
     }
     LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.availableVideoFormats) {
-        if (sheet == LiveSheet.FORMAT) reseatResolution()
+        if (sheet == LiveSheet.FORMAT && !model.session.isFormatPinActive) reseatResolution()
     }
     LaunchedEffect(sheet, status.colorMode) {
         if (sheet == LiveSheet.COLOR) reseatColor()
@@ -578,7 +604,7 @@ fun LiveControlSheet(
                 LiveSheet.FORMAT ->
                     androidx.compose.runtime.key(selectedMode) {
                         CaptureDrumWheel(
-                            options = CaptureLists.fpsDrumLabels(status, selectedMode),
+                            options = CaptureLists.fpsDrumLabels(status, selectedMode, selectedAspect),
                             selection = drumSelection,
                             interactive = enabled,
                             maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = true),
@@ -588,6 +614,16 @@ fun LiveControlSheet(
                             },
                         )
                     }
+            }
+            if (sheet == LiveSheet.FORMAT && formatAspects.size > 1) {
+                ModeBar(
+                    tabs = formatAspects.map { it.label },
+                    selected = formatAspects.indexOf(selectedAspect).coerceAtLeast(0),
+                    enabled = enabled,
+                    uppercase = false,
+                ) { index ->
+                    formatAspects.getOrNull(index)?.let(::handleAspectChange)
+                }
             }
             if (tabs.isNotEmpty()) {
                 ModeBar(
@@ -746,12 +782,18 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
 }
 
 @Composable
-private fun ModeBar(tabs: List<String>, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
+private fun ModeBar(
+    tabs: List<String>,
+    selected: Int,
+    enabled: Boolean,
+    uppercase: Boolean = true,
+    onSelect: (Int) -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         tabs.forEachIndexed { index, title ->
             val active = index == selected
             Text(
-                title.uppercase(),
+                if (uppercase) title.uppercase() else title,
                 style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.5.sp),
                 color = if (active) LiveDesign.accent else LiveDesign.muted,
                 textAlign = TextAlign.Center,
@@ -1511,18 +1553,38 @@ object CaptureLists {
     fun modeTabs(sheet: LiveSheet, expoMode: Int, offersIsoAuto: Boolean): List<String> =
         modeTabs(sheet, CameraStatus(expoMode = expoMode), offersIsoAuto)
 
-    fun modeTabs(sheet: LiveSheet, status: CameraStatus, offersIsoAuto: Boolean): List<String> =
+    fun modeTabs(
+        sheet: LiveSheet,
+        status: CameraStatus,
+        offersIsoAuto: Boolean,
+        selectedAspect: VideoAspect? = null,
+    ): List<String> =
         when {
             sheet == LiveSheet.ISO && offersIsoAuto -> listOf("Auto", "Manual")
             sheet == LiveSheet.SHUTTER -> shutterModeTabs(isEvSheet(sheet, status.expoMode))
             sheet == LiveSheet.WB -> CaptureLists.wbTabs
             sheet == LiveSheet.AUDIO -> CaptureLists.audioTabs
-            sheet == LiveSheet.FORMAT -> formatResolutions(status).map { it.tabTitle }
+            sheet == LiveSheet.FORMAT -> formatResolutions(status, selectedAspect).map { it.tabTitle }
             else -> emptyList()
         }
 
-    fun formatResolutions(status: CameraStatus): List<VideoResolution> =
-        VideoFormat.resolutions(status.availableVideoFormats, VideoFormat.current(status).resolution)
+    fun formatAspects(status: CameraStatus): List<VideoAspect> =
+        VideoFormat.aspects(
+            status.availableVideoFormats,
+            VideoFormat.current(status).resolution.aspect,
+        )
+
+    fun formatResolutions(
+        status: CameraStatus,
+        selectedAspect: VideoAspect? = null,
+    ): List<VideoResolution> {
+        val aspect = if (formatAspects(status).size > 1) selectedAspect else null
+        return VideoFormat.resolutions(
+            status.availableVideoFormats,
+            VideoFormat.current(status).resolution,
+            aspect,
+        )
+    }
 
     fun formatRates(status: CameraStatus, resolution: VideoResolution): List<VideoFrameRate> =
         VideoFormat.frameRates(
@@ -1531,8 +1593,10 @@ object CaptureLists {
             VideoFormat.current(status).frameRate,
         )
 
-    fun fpsDrumLabels(status: CameraStatus, tab: Int): List<String> {
-        val res = formatResolutions(status).getOrNull(tab) ?: VideoFormat.current(status).resolution
+    fun fpsDrumLabels(status: CameraStatus, tab: Int, selectedAspect: VideoAspect? = null): List<String> {
+        val res =
+            formatResolutions(status, selectedAspect).getOrNull(tab)
+                ?: VideoFormat.current(status).resolution
         return formatRates(status, res).map { it.drumLabel }
     }
 
@@ -1541,8 +1605,9 @@ object CaptureLists {
         tab: Int,
         drum: String,
         fromDrum: Boolean,
+        selectedAspect: VideoAspect? = null,
     ): VideoFormat? {
-        val resolutions = formatResolutions(status)
+        val resolutions = formatResolutions(status, selectedAspect)
         val res = resolutions.getOrNull(tab) ?: return null
         val rates = formatRates(status, res)
         val parsed = VideoFrameRate.fromDrumLabel(drum)
