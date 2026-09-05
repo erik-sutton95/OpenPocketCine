@@ -63,7 +63,8 @@ jobs:
           ./scripts/prepare-android-testers-test.sh
 
       - name: Require reviewed notes for TestFlight-triggering pull requests
-        if: ${{ github.event_name == 'pull_request' }}
+        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
+        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -76,7 +77,8 @@ jobs:
           fi
 
       - name: Require reviewed notes for Play-triggering pull requests
-        if: ${{ github.event_name == 'pull_request' }}
+        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
+        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -93,7 +95,7 @@ jobs:
           fi
 
       - name: Spell check
-        uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
+        uses: crate-ci/typos@4d9c206a77c041268485162b8e2579ad7a5cb9a3 # v1.50.0
 
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
