@@ -1,6 +1,6 @@
 New and changed
 
-- A connected game controller's left stick drives the gimbal; small throws crawl, full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face or cancels tracking. L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Connect and unplug toast and rest the stick. Operator Setup → Controls → Gamepad shows Connected. A gimbal stop taps once (Haptics off is silent).
+- A connected game controller's left stick drives the gimbal; small throws crawl, full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face or cancels. L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Operator Setup → Controls → Gamepad shows Connected. A gimbal stop taps once.
 - The on-screen gimbal stick uses the same gradual speed.
 - While live, Operator Setup then Controls has a Shooting Mode row. Switch Video, Photo, and the time-based modes from there. The row follows a mode changed on the body itself.
 - Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform, parade, and assists.
@@ -8,19 +8,19 @@ New and changed
 
 Fixes
 
-- Connecting or recovering live view should not close the app if the camera Wi-Fi drops or the phone jumps back to home Wi-Fi; you see a retry or a return to pairing. If camera Wi-Fi stays up, live view should not fall back to Connecting on its own.
-- On a Nano, Photo now actually switches instead of staying on Video. Video back to Photo should ack and the shutter should take a still, not start a clip.
-- Live view should come up a couple of seconds after Wi-Fi joins, not sit on Waiting for live view, and stay up while you pan or tilt. Record, FORMAT, COLOR, white balance, or a tracking box must not freeze the picture. If it dies, the last frame stays under Reconnecting and live view should return without closing the app. Pause VPNs or ad blockers, or exclude this app, if live view never starts.
+- Connecting or recovering live view should not close the app if camera Wi-Fi drops or the phone hops to home Wi-Fi; you see a retry or a return to pairing. If camera Wi-Fi stays up, live view should not fall back to Connecting. A renamed camera Wi-Fi joins without a re-pair.
+- On a Nano, Photo now actually switches instead of staying on Video; the shutter takes a still, not a clip.
+- Live view should come up a couple of seconds after Wi-Fi joins and stay up while you pan or tilt. Record, FORMAT, COLOR, white balance, or a tracking box must not freeze the picture. If it dies, the last frame stays under Reconnecting and live view returns without closing the app. Pause VPNs or ad blockers, or exclude this app, if it never starts.
 - Leaving live view, rotating, or opening clips must not crash the app. The picture should return after rotation and after clips.
-- Opening clips or Operator Setup over live view, then going back, keeps the live picture, not a black well while the camera still responds.
-- Opening a long clip for in-app playback no longer crashes while the preview is caching. Playback still uses the 720p proxy; share and save still use the original camera file.
-- On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
+- Clips or Operator Setup over live view, then back, keeps the picture moving, not a black well. On Pocket 3, a take you just recorded should list and play.
+- Opening a long clip for in-app playback no longer crashes while the preview is caching. Playback uses the 720p proxy; share and save use the original file.
+- On Pocket 3, COLOR Normal, HDR, and D-Log M match the camera. Auto ISO starts at 50 on Pocket 3 and 4; Pocket 4 Pro still starts at 100.
 - Zebra: Highlight now paints when any color channel runs hot. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged.
 
 What to test
 
-- Tap Share Diagnostics before pairing finishes, then pair a Pocket, go live, and pan with the on-screen stick: half throw slower than full push. Stay live two minutes with LUT on. Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject; the picture must not freeze while timecode moves. If Reconnecting appears, last picture stays and live view returns without closing the app. Leave it idle a few minutes. With a game controller: left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch switches COLOR to D-Log first, then zooms.
+- Tap Share Diagnostics before pairing finishes, then pair a Pocket, go live, and pan with the on-screen stick: half throw slower than full. Stay live two minutes with LUT on. Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject; the picture must not freeze while timecode moves. If Reconnecting appears, last picture stays and live view returns without closing the app. Leave it idle a few minutes. With a game controller: left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch switches COLOR to D-Log first, then zooms.
 - Pair a Nano, go live, open Operator Setup, Controls. Switch Video to Photo and back. The body should follow; Photo should take a still.
-- Record a short take in Video, open it in the library. Share sends the original file, not a preview. Close the library, then Operator Setup: live view still shows a picture. Record a long 4K take and play it from the library: the proxy plays and the app stays up.
-- Go live, then turn camera Wi-Fi off and on or let the phone hop to home Wi-Fi. The app retries or returns to pairing; it must not close. Then leave live view, open clips and return, and rotate the phone while live, a few times over. No crash, and the picture comes back each time.
-- Go live, long-press ZEBRA, tap Highlight, type 95, tap Done: the stripes update. Repeat in landscape and on a clip. On a Pocket 3, open ISO and switch to Auto: ranges read 50–400 and up, same as the camera.
+- Record a short take in Video, open it in the library. Share sends the original file, not a preview. Close the library, then Operator Setup: live view still shows a picture. Record a long 4K take and play it from the library: the proxy plays and the app stays up. On Pocket 3, the take you just recorded must appear and play.
+- Go live, then turn camera Wi-Fi off and on or let the phone hop to home Wi-Fi: the app retries or returns to pairing, never closes. Rename the camera Wi-Fi on the body: it joins the new name without a re-pair. Then leave live view, open clips and return, and rotate while live, a few times over. No crash; the picture comes back each time.
+- Go live, long-press ZEBRA, tap Highlight, type 95, tap Done: the stripes update. Repeat in landscape and on a clip. On a Pocket 3, switch COLOR through Normal, HDR, and D-Log M so the camera follows; Auto ISO starts at 50.
