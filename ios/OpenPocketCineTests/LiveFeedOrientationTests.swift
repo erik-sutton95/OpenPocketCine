@@ -27,6 +27,24 @@ final class LiveFeedOrientationTests: XCTestCase {
         XCTAssertFalse(Self.lut.needsOverlayFeed)
         XCTAssertFalse(Self.falseColor.replacesIdentityFeed)
         XCTAssertTrue(Self.lut.replacesIdentityFeed)
+        var splitOnly = LiveImageEffects()
+        splitOnly.splitComparison = true
+        XCTAssertFalse(
+            splitOnly.needsGPUFeed,
+            "50/50 without a cube must not steal the HEVC layer (#218)")
+        XCTAssertFalse(splitOnly.replacesIdentityFeed)
+        XCTAssertFalse(splitOnly.appliesSplitComparison)
+        var lutSplit = Self.lut
+        lutSplit.splitComparison = true
+        XCTAssertTrue(lutSplit.replacesIdentityFeed)
+        XCTAssertTrue(lutSplit.appliesSplitComparison)
+        lutSplit.falseColor = true
+        lutSplit.falseColorScale = .ire
+        XCTAssertFalse(
+            lutSplit.appliesSplitComparison,
+            "IRE / PStops remap both halves — same gate as Android")
+        lutSplit.falseColorScale = .limits
+        XCTAssertTrue(lutSplit.appliesSplitComparison)
     }
 
     func testCompositorKeepsVerticalMarkerForEveryGPUAssist() {
@@ -56,6 +74,29 @@ final class LiveFeedOrientationTests: XCTestCase {
             let overlay = LiveMonitorCompositor.assistOverlay(from: source, effects: fx)
             XCTAssertEqual(overlay.extent, source.extent, "\(name) must not change extent")
         }
+    }
+
+    func testSplitComparisonKeepsExtentAndLeavesLogHalfUngraded() {
+        let width: CGFloat = 32
+        let height: CGFloat = 16
+        let red = CIImage(color: CIColor(red: 1, green: 0, blue: 0))
+            .cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
+        var fx = Self.lut
+        fx.splitComparison = true
+        fx.splitVertical = true
+        let output = LiveMonitorCompositor.apply(to: red, effects: fx)
+        XCTAssertEqual(output.extent, red.extent, "50/50 must not change feed extent")
+        let context = CIContext(options: [.cacheIntermediates: false])
+        let logHalf = Self.meanRGB(
+            output, rect: CGRect(x: 0, y: 0, width: width / 2, height: height), context: context)
+        let lutHalf = Self.meanRGB(
+            output,
+            rect: CGRect(x: width / 2, y: 0, width: width / 2, height: height),
+            context: context)
+        XCTAssertEqual(
+            logHalf, 1.0 / 3.0, accuracy: 0.05, "left / LOG stays the camera red")
+        XCTAssertGreaterThan(
+            abs(lutHalf - logHalf), 0.05, "right half must be the cube, not a copy of LOG")
     }
 
     func testBakerRoundTripKeepsVerticalMarker() throws {

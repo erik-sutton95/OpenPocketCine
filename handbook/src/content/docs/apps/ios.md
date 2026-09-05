@@ -16,7 +16,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
   cubes. Creative is Mono / Contrast / Warm / Cool. Exposure compensation is
-  −3…+3 at ½ stop before the cube. Auto on a clip reads
+  −3…+3 at ½ stop before the cube. 50/50 log-vs-LUT is monitor-only and must
+  not drop the live picture. Auto on a clip reads
   `com.dji.camera.ColorGammaSxS` from the original take (same field Mimo Color
   Recovery uses) — not the 720p LRF sidecar, which is Rec.709 even for log.
   Last live D-Log / D-Log2 is the fallback when that atom is missing —

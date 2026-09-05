@@ -168,6 +168,13 @@ All notable changes to this project are documented here. The format is based on
 - Pocket 3 media library after a take (#258): `/v2` always uses storage 0
   (single microSD), even when the list handle looks internal, and the newest
   catalog page still lists if enter-playback ACKs E0. Both shells.
+- LUT 50/50 split dropped live view and stayed on Reconnecting until
+  force-quit (#218): split without a cube was treated as replace-grade
+  (empty Metal over HEVC), and overlapping LUT bakes blocked MainActor on
+  `nextDrawable`, which starved HEVC ingest. 50/50 is a LUT option only
+  (same gate as Android); Metal presents latest-wins with one drawable in
+  flight and does not block. Toggling 50/50 does not GOP-reset. iOS present
+  path; Android already skipped GPU split without a cube.
 
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept
