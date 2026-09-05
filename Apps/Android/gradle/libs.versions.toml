@@ -9,7 +9,7 @@ coreSplashscreen = "1.2.0"
 json = "20260814"
 media3 = "1.11.0"
 okhttp = "5.5.0"
-kyantBackdrop = "2.0.0"
+kyantBackdrop = "2.0.1"
 kyantShapes = "1.2.0"
 
 [libraries]
