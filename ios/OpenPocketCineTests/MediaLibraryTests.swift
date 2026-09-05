@@ -264,6 +264,20 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertLessThanOrEqual(needed, usable)
     }
 
+    @MainActor
+    func testPocket3ResolvedStorageUsesSingleSd() {
+        let media = CameraMedia()
+        let file = MediaFile(
+            path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
+            thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
+            handle: 0x4010_0880,
+            storage: 1)
+        XCTAssertEqual(media.resolvedStorage(for: file, singleSd: true), 0)
+        XCTAssertEqual(media.resolvedStorage(for: file, singleSd: false), 1)
+        media.rememberStorage(1, for: file.path)
+        XCTAssertEqual(media.resolvedStorage(for: file, singleSd: true), 0)
+    }
+
     func testClipOpenCopyDoesNotNameSisterApps() {
         XCTAssertFalse(
             MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("OpenZCine"))

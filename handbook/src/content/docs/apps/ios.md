@@ -16,7 +16,8 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
   cubes. Creative is Mono / Contrast / Warm / Cool. Exposure compensation is
-  −3…+3 at ½ stop before the cube. Auto on a clip reads
+  −3…+3 at ½ stop before the cube. 50/50 log-vs-LUT is monitor-only and must
+  not drop the live picture. Auto on a clip reads
   `com.dji.camera.ColorGammaSxS` from the original take (same field Mimo Color
   Recovery uses) — not the 720p LRF sidecar, which is Rec.709 even for log.
   Last live D-Log / D-Log2 is the fallback when that atom is missing —
@@ -56,7 +57,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   SET before any zoom write (the chip stays at 1× until D-Log lands);
   while rolling the chip grays and tap/pinch toast instead of changing
   color.
-- Media library, playback with LUT / peaking / false colour / zebra on the 720p
+- Media library (Pocket 3: newest page lists after a take even if enter-playback ACKs E0; `/v2` is storage 0), playback with LUT / peaking / false colour / zebra on the 720p
   proxy (same present order as live: identity player and Metal are siblings;
   GPU latest-wins, freeze keeps the last frame). Preview LUT grades the
   decoded 420 frame on Metal at 1440 px — not `AVVideoComposition` (that
@@ -71,6 +72,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 
 Verify record start/stop on the camera body until you trust the link.
+
+If live view never starts after Wi-Fi joins, pause local VPNs and ad
+blockers or exclude this app
+([Troubleshooting](../guides/troubleshooting/)).
 
 ## Device requirements
 

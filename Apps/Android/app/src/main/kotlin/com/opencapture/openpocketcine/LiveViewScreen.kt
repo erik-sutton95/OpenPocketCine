@@ -73,8 +73,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import android.os.SystemClock
+import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.SessionRecoveryCopy
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -606,17 +609,41 @@ fun LiveViewScreen(model: AppModel) {
 
             val hasPicture by model.session.decoder.hasPicture.collectAsState()
             if (!hasPicture) {
+                val context = LocalContext.current
+                var showVpnHint by remember { mutableStateOf(false) }
+                LaunchedEffect(hasPicture) {
+                    showVpnHint = false
+                    delay(LocalVPNFilter.LIVE_HINT_DELAY_MS)
+                    showVpnHint =
+                        LocalVPNFilter.shouldHintOnLiveWait(
+                            vpnActive = LocalVPNFilter.isActive(context),
+                            hadVideo = false,
+                            secondsWithoutVideo = LocalVPNFilter.LIVE_HINT_DELAY_SECONDS,
+                        )
+                }
                 Box(
                     Modifier.liveModuleFrame(layout.onFeed).background(Color.Black),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                         CircularProgressIndicator(color = LiveDesign.text.copy(alpha = 0.72f))
                         Text(
                             "WAITING FOR LIVE VIEW",
                             color = LiveDesign.text.copy(alpha = 0.72f),
                             style = LiveType.mono(15f, FontWeight.SemiBold),
                         )
+                        if (showVpnHint) {
+                            Text(
+                                LocalVPNFilter.LIVE_HINT,
+                                color = LiveDesign.muted,
+                                style = LiveType.ui(12f, design = LiveTypeDesign.Rounded),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 28.dp),
+                            )
+                        }
                     }
                 }
             }

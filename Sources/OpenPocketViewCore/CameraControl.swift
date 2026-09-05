@@ -403,13 +403,17 @@ public enum IsoIndex: UInt8, CaseIterable, Sendable {
 
 /// `0x02/0x42` color. No GET — `cam_image_effect` `@2`.
 ///
+/// `rawValue` is the Pocket 4 / 4 Pro / Nano SET byte. Pocket 3 uses a
+/// different map — use `wireByte(for:)` / `fromWire(_:model:)` (#176).
+///
 /// Per body (DJI spec; D-Log2 is Pocket 4 Pro only):
 /// 4 Pro `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2.
 /// Pocket 4 `3F` / `3C` / `17` D-Log (no D-Log2).
-/// Pocket 3 `3F` / `3C` HDR (HLG) / `00` D-Log M — `17` showed "colour 4" (#160).
+/// Pocket 3 `00` Normal / `3C` HDR (HLG) / `3D` D-Log M — `3F` is rejected,
+/// and `00` as D-Log M switched the body to Rec.709 (#176). `17` showed
+/// "colour 4" (#160).
 /// Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D` →
 /// `00` D-Log M / `3F` Normal 8-bit / `3D` Normal 10-bit.
-/// Swap `3D`/`00` if a labeled SET capture says otherwise.
 public enum ColorMode: UInt8, CaseIterable, Sendable {
     case normal = 0x3F
     case hdr = 0x3C
@@ -471,10 +475,32 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
             return [.normal, .hdr, .dLog, .dLog2]
         }
         if n.contains("pocket4") { return [.normal, .hdr, .dLog] }
-        if n.contains("pocket3") || n.contains("muse") {
+        if model.isPocket3 {
             return [.normal, .hdr, .dLogM]
         }
         return available(for: model.family)
+    }
+
+    /// Pocket 3 SET / `cam_image_effect` `@2` (#176). Other bodies use `rawValue`.
+    public func wireByte(for model: CameraModel?) -> UInt8 {
+        guard let model, model.isPocket3 else { return rawValue }
+        switch self {
+        case .normal: return 0x00
+        case .dLogM: return 0x3D
+        default: return rawValue
+        }
+    }
+
+    /// Inverse of `wireByte(for:)`. Unknown Pocket 3 bytes still try `rawValue`.
+    public static func fromWire(_ byte: UInt8, model: CameraModel?) -> ColorMode? {
+        if let model, model.isPocket3 {
+            switch byte {
+            case 0x00: return .normal
+            case 0x3D: return .dLogM
+            default: break
+            }
+        }
+        return ColorMode(rawValue: byte)
     }
 
     /// Indices Mimo offered per color in the labeled take. Do not invent others.
@@ -525,9 +551,9 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         return isoAutoLimits.map { $0.label(base: base) }
     }
 
-    public static func parseImageEffect(_ value: [UInt8]) -> ColorMode? {
+    public static func parseImageEffect(_ value: [UInt8], model: CameraModel? = nil) -> ColorMode? {
         guard value.count > 2 else { return nil }
-        return ColorMode(rawValue: value[2])
+        return fromWire(value[2], model: model)
     }
 }
 

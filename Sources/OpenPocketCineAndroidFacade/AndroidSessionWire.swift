@@ -455,6 +455,8 @@ public enum AndroidSessionWire {
             }
             return Commands.setIsoIndex(index, seq: seq)
         case .setColorMode:
+            // Extra is the body SET byte (Kotlin `wireColorMode`), not always
+            // `ColorMode.rawValue` — Pocket 3 Normal is `00`.
             guard let raw = extra.flatMap({ UInt8($0) }), let mode = ColorMode(rawValue: raw) else {
                 return nil
             }

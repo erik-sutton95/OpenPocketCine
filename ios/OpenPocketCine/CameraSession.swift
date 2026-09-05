@@ -453,6 +453,7 @@ final class CameraSession {
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         connectGeneration += 1
         let generation = connectGeneration
+        LocalVPNProbe.noteIfActive()
         scanTask?.cancel()
         abortInFlightRun(preserveDecoder: preserveMonitor)
         reconnectTarget = nil
@@ -716,7 +717,8 @@ final class CameraSession {
         do {
             _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))  // Pocket 3 may answer e0
         } catch Fail.timeout {
-            ControlLiveLog.line("creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
+            ControlLiveLog.line(
+                "creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
         } catch Fail.disconnected {
             throw Fail.disconnectedDuring("0x53/0x10")
         }
@@ -1442,7 +1444,8 @@ final class CameraSession {
         controlNote = "D-Log — D-Log2 cannot zoom"
         ControlLiveLog.line("zoom: hold 0xB8 until D-Log2 → D-Log")
         fireCamera(
-            Commands.setColorMode(next), name: "D-Log (zoom)", expect: .color(next),
+            Commands.setColorMode(next, model: connectedCamera?.model), name: "D-Log (zoom)",
+            expect: .color(next),
             onFail: { [weak self] in
                 guard let self, self.zoomColorHopGeneration == hopGen else { return }
                 self.colorPin = nil
@@ -1500,7 +1503,8 @@ final class CameraSession {
         status.colorMode = .dLog2
         colorPin = (.dLog2, Date().addingTimeInterval(2))
         fireCamera(
-            Commands.setColorMode(.dLog2), name: "D-Log2", expect: .color(.dLog2),
+            Commands.setColorMode(.dLog2, model: connectedCamera?.model), name: "D-Log2",
+            expect: .color(.dLog2),
             onFail: { [weak self] in self?.colorPin = nil },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line("zoom: restore D-Log2 on 1× ack=\(ok ? "ok" : "failed")")
@@ -2057,7 +2061,8 @@ final class CameraSession {
         }
         colorPin = (mode, Date().addingTimeInterval(2))
         fireCamera(
-            Commands.setColorMode(mode), name: mode.label(for: bodyFamily), expect: .color(mode),
+            Commands.setColorMode(mode, model: connectedCamera?.model),
+            name: mode.label(for: bodyFamily), expect: .color(mode),
             onFail: { [weak self] in self?.colorPin = nil })
         hopNativeISO(from: from, to: mode)
         if mode == .dLog { confirmZoomColorHopIfReady() }
@@ -2915,7 +2920,7 @@ final class CameraSession {
         late: Bool = false, announce: Bool = true
     ) -> Bool {
         var next = status
-        _ = CameraStatusDecoder.apply(reply, to: &next)
+        _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
         absorbStaleAudio(&next)
         status = next
         let parsed = CameraReply.parse(reply.payload)
@@ -4207,7 +4212,7 @@ final class CameraSession {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
-        let applied = CameraStatusDecoder.apply(frame, to: &s)
+        let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
         let flipReply = CameraParam.isSelfieFlipGetReply(
             set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
         if flipReply, let parsed = CameraParam.parseGetReply(frame.payload) {
@@ -4417,10 +4422,14 @@ final class CameraSession {
     }
 
     /// Memory (this launch) or Keychain (camera id / advertised name / last SSID).
-    /// Advertised BLE name is only an SSID fallback after GetSSID refuses — not enough to skip BLE.
+    /// A live BLE name that differs from the cached SSID is a renamed SoftAP —
+    /// join that name with the cached password (GetSSID after Mimo is often 0xE4).
     private func resolvedWifiCreds(for camera: FoundCamera) -> KnownWifi {
         let saved = SavedCameraStore.load().first { $0.id == camera.id }
-        let advertised = camera.name.isEmpty ? saved?.advertisedName : camera.name
+        let advertised =
+            CameraWifiResolution.liveAdvertisedSSID(camera.name)
+            ?? CameraWifiResolution.liveAdvertisedSSID(saved?.advertisedName)
+            ?? (camera.name.isEmpty ? saved?.advertisedName : camera.name)
         let keychain = CameraWifiKeychain.load(
             cameraId: camera.id,
             advertisedName: advertised,
@@ -4437,8 +4446,20 @@ final class CameraSession {
             savedSSID: saved?.lastSSID,
             memory: memory,
             keychainSSID: keychain?.ssid,
-            keychainPassword: keychain?.password
+            keychainPassword: keychain?.password,
+            advertisedName: advertised
         )
+        if let used = resolved.ssid,
+            let live = CameraWifiResolution.liveAdvertisedSSID(advertised),
+            used == live
+        {
+            let cached = [memory?.ssid, keychain?.ssid, saved?.lastSSID]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty }
+            if let cached, cached != used {
+                ControlLiveLog.line("creds: live BLE name \(used) replaces cached SSID \(cached)")
+            }
+        }
         if let ssid = resolved.ssid, ssidBelongsToAnotherBody(ssid, camera: camera) {
             log.info(
                 "creds: dropping \(resolved.source, privacy: .public) SSID \(ssid, privacy: .public) — other body"
@@ -4487,11 +4508,8 @@ final class CameraSession {
     private func leftoverSoftAPSSIDs(besides ssid: String) -> [String] {
         var names = Set<String>()
         if let joined = joinedSSID { names.insert(joined) }
-        if let id = cachedWifiCameraId, id != connectedCamera?.id, let cached = cachedSSID {
-            names.insert(cached)
-        }
+        if let cached = cachedSSID { names.insert(cached) }
         for camera in SavedCameraStore.load() {
-            if camera.id == connectedCamera?.id { continue }
             if let other = camera.lastSSID { names.insert(other) }
         }
         names.remove(ssid)

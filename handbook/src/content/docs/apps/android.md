@@ -11,7 +11,9 @@ phones, Android 10 or newer.
 
 If pairing or live view fails: Connection setup **Share Diagnostics**, or
 Operator Setup → System → **Share Diagnostics**. The report has no name,
-location, or Wi-Fi password.
+location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
+RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
+exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 
 ## How Swift reaches Android
 
@@ -65,22 +67,26 @@ D-Log lands).
 Long-press View Assist options lift above the keyboard so Zebra Highlight /
 Midtone stay visible (Done on the number pad), matching iOS.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
-input-referred before the cube). Next/prev with LUT on keeps the grade on
+input-referred before the cube). 50/50 log-vs-LUT is monitor-only and must
+not drop the live picture (GPU split only while a cube is loaded). Next/prev
+with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /
 ZEBRA grade in `LiveFeedEffectsSession` like live — TextureView is only the
 window). Auto on a clip reads `com.dji.camera.ColorGammaSxS`
 from the original take like iOS — not the LRF/XRF sidecar (Rec.709 even
 for log). Shot color is stored with the cached clip. A **Proxy** tag means
 only the 720p sidecar is on the phone. Storage **Full Resolution Caching**
-matches iOS. Share/save is the original camera file — LUT bake
-(and Bake exposure) is iOS only.
+matches iOS. Pocket 3 `/v2` is storage 0; the newest catalog page lists
+after a take even if enter-playback ACKs E0. Share/save is the original
+camera file — LUT bake (and Bake exposure) is iOS only.
 Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
 Live picture: Vulkan when the device can init it; GLES fallback. HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
-the last frame on freeze, one live-enable write at a time). Opening clips or
+the last frame on freeze, one live-enable write at a time, latest-wins
+present). Opening clips or
 Operator Setup over live view keeps the HEVC GOP and the live SurfaceView;
 returning to the monitor must not leave a black well. Leaving live view,
 opening clips, or rotating must drop the Vulkan swapchain with the window —

@@ -36,7 +36,12 @@ The UDP 9004 socket is connected to `192.168.2.1:9004`. iOS sets `NWParameters.r
 `NEHotspotConfiguration.apply` returning no error means the configuration was applied, not that the phone associated. A wrong passphrase still returns success there; iOS shows **Unable to join the network** and `192.168.2.x` never appears. Both shells treat "no camera address within 15 s" as the join failure.
 
 - **Credentials are known good only after a join succeeds.** A failed join with cached credentials drops the cache (Keychain / Keystore) so the next tap re-reads `GetWifiSsid` / `GetWifiPassword` over BLE. Reset Wi-Fi on a Pocket regenerates the passphrase; a cache kept through that (Keychain survives reinstall, and the wizard has no Forget) could never join again (#235).
+- **A renamed SoftAP must not keep the old SSID.** Pocket BLE local name follows the Wi-Fi name. If that live name differs from the cached SSID, join the live name with the cached password — do not skip to the old Keychain / Keystore SSID while the paired row shows the new name (#257). `GetSSID` after a Mimo session is often `0xE4`, so reconnect still skips that GET when the password is already cached. A nameless first advert (`DJI camera`) does not override the cache.
 - **5.8 GHz takes about a minute.** In a DFS region (UK 5725–5850 MHz) the camera's 5.8 GHz SoftAP may beacon only after a ~60 s channel availability check; Mimo visibly waits it out. One hotspot apply gave up in ~20 s with **Unable to join** (#216, #235). Both shells now keep applying for `CameraSoftAPSwitch.joinDeadlineSeconds` (90 s): iOS re-applies every ~10 s after each miss (each miss is one system alert), Android's `requestNetwork` timeout is 90 s. 2.4 GHz joins at once; the error copy says so.
 - Every join step lands in the diagnostics journal (`wifi:` / `creds:` lines, then `session: connect failed`), so a report from the wizard says why.
+
+### Live view never starts after a successful join
+
+A local VPN or ad blocker (AdGuard, Blokada, RethinkDNS) can join the SoftAP and still drop UDP `9004`. Pairing looks fine; the well stays on Waiting for live view. Pause the filter or exclude this app. Official camera apps do the same — the phone cannot send camera UDP around a VPN that captures every app. Operator FAQ: [Troubleshooting](../guides/troubleshooting/).
 
 Once associated, open the [UDP DUML datalink](../duml-transport/).

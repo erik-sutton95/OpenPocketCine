@@ -16,6 +16,7 @@ import com.opencapture.openpocketcine.feed.SerialSessionGate
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
+import com.opencapture.openpocketcine.pairing.CameraWifiResolution
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -332,6 +333,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         reconnectTarget = null
         _isReconnecting.value = false
+        LocalVPNFilter.noteIfActive(appContext)
         connectJob?.cancel()
         if (!holdsMonitor) publishPhase(ConnectionPhase.CONNECTING_GATT)
         connectJob =
@@ -534,13 +536,34 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun wifiCredsAfterPairing(camera: FoundCamera): Pair<String, String> {
         val cached = wifiCache.load(camera.id)
         if (cached != null) {
-            DiagnosticCenter.log(
-                "info",
-                "session",
-                "creds",
-                "creds: skipping BLE GetSSID/GetPassword — cached SSID ${cached.first}",
-            )
-            return cached
+            val resolved =
+                CameraWifiResolution.resolve(
+                    cameraId = camera.id,
+                    savedSSID = null,
+                    memoryCameraId = camera.id,
+                    memorySsid = cached.first,
+                    memoryPassword = cached.second,
+                    keychainSsid = cached.first,
+                    keychainPassword = cached.second,
+                    advertisedName = camera.name,
+                )
+            if (resolved.skipBle && resolved.ssid != null && resolved.password != null) {
+                if (resolved.ssid != cached.first) {
+                    DiagnosticCenter.log(
+                        "info",
+                        "session",
+                        "creds",
+                        "creds: live BLE name ${resolved.ssid} replaces cached SSID ${cached.first}",
+                    )
+                }
+                DiagnosticCenter.log(
+                    "info",
+                    "session",
+                    "creds",
+                    "creds: skipping BLE GetSSID/GetPassword — ${resolved.source} SSID ${resolved.ssid}",
+                )
+                return resolved.ssid to resolved.password
+            }
         }
         val ssid =
             readWifiString("GetSSID", 0x07, 0x07) {
@@ -1593,7 +1616,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (next.availableColorModes.isEmpty()) {
             next = next.copy(availableColorModes = prev.availableColorModes)
         }
-        next = StatusExtras.apply(frame, next)
+        next = StatusExtras.apply(frame, next, connectedCamera?.model?.name ?: "")
         next = CamFov.absorb(next)
         next = absorbStaleFormat(next)
         next = absorbStaleColor(next)
@@ -2378,13 +2401,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         pinColor(mode)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "$mode",
+            colorModeExtra(mode),
             CameraCommands.colorLabel(mode, family),
             onFail = { colorPin = null },
         )
         hopNativeISO(from, mode, hopEnabled)
         if (mode == CameraCommands.COLOR_DLOG) confirmZoomColorHopIfReady()
     }
+
+    /** JNI extra is the body SET byte — Pocket 3 is not `ColorMode.rawValue`. */
+    private fun colorModeExtra(mode: Int): String =
+        CameraCommands.wireColorMode(mode, connectedCamera?.model?.name ?: "").toString()
 
     /**
      * `0x02/0x18` via Swift `Commands.setVideoFormat`. Optimistic HUD, pin until
@@ -2529,7 +2556,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlNote.value = "D-Log — D-Log2 cannot zoom"
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "$next",
+            colorModeExtra(next),
             "D-Log (zoom)",
             onFail = hopFail@{
                 if (zoomColorHopGeneration != hopGen) return@hopFail
@@ -2587,7 +2614,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         pinColor(CameraCommands.COLOR_DLOG2)
         fireKind(
             SwiftCore.CMD_SET_COLOR_MODE,
-            "${CameraCommands.COLOR_DLOG2}",
+            colorModeExtra(CameraCommands.COLOR_DLOG2),
             "D-Log2",
             onFail = { colorPin = null },
             onSettle = { ok -> if (ok) _controlNote.value = "Zoom 1× · D-Log2" },

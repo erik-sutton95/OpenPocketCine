@@ -127,10 +127,11 @@ final class CameraMedia {
     }
 
     func resolvedStorage(for file: MediaFile, singleSd: Bool) -> Int {
-        if let winner = storageWinner[file.path] { return winner }
-        if file.storage == 0 || file.storage == 1 { return file.storage }
-        let handle = file.handle != 0 ? file.handle : file.cmdHandle
-        return MediaHTTP.storageGuess(handle: handle, singleSdStorage: singleSd)
+        MediaHTTP.resolvedStorage(
+            stamped: file.storage,
+            handle: file.handle != 0 ? file.handle : file.cmdHandle,
+            winner: storageWinner[file.path],
+            singleSdStorage: singleSd)
     }
 
     func rememberStorage(_ storage: Int, for path: String) {
@@ -608,7 +609,7 @@ extension CameraSession {
         mediaFetchInProgress = true
         mediaNote = MediaOperatorCopy.listing
         let id = cameraMedia.nextBrowseID()
-        await listAllMediaPages(id: id)
+        await listAllMediaPages(id: id, includeOlderPages: cameraMedia.playbackHeld)
     }
 
     func ingestMediaListFrame(_ frame: Duml.Frame) {
@@ -933,15 +934,18 @@ extension CameraSession {
         guard id == cameraMedia.browseID else { return }
         let entered = await enterPlaybackForMedia()
         guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-        guard entered else {
-            cameraMedia.playbackHeld = false
+        let decision = MediaBrowsePolicy.afterEnterPlayback(entered)
+        cameraMedia.playbackHeld = entered
+        if !entered {
+            ControlLiveLog.line("media: enter playback failed — listing newest page")
+        }
+        guard decision.keepBrowsing else {
             mediaFetchInProgress = false
             mediaNote = MediaOperatorCopy.playbackFailed
             isBrowsingMedia = false
             return
         }
-        cameraMedia.playbackHeld = true
-        await listAllMediaPages(id: id)
+        await listAllMediaPages(id: id, includeOlderPages: decision.listOlderPages)
     }
 
     private func enterPlaybackForMedia() async -> Bool {
@@ -963,7 +967,7 @@ extension CameraSession {
         return status.inPlayback
     }
 
-    private func listAllMediaPages(id: Int) async {
+    private func listAllMediaPages(id: Int, includeOlderPages: Bool = true) async {
         defer {
             if id == cameraMedia.browseID {
                 mediaFetchInProgress = false
@@ -991,6 +995,7 @@ extension CameraSession {
                 }
             }
             publishMediaFiles(collected)
+            if !includeOlderPages { break }
             let handles = page.map(\.handle)
             let newest =
                 handles.filter { $0 >= MediaListCommand.videoHandleBase }.max()

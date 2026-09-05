@@ -45,3 +45,23 @@ public enum MediaLiveResume: Sendable {
         return presented >= since
     }
 }
+
+/// What to do after `0x02/0x0c` enter-playback. Newest list page needs no playback.
+public struct MediaBrowsePolicy: Equatable, Sendable {
+    public var listNewestPage: Bool
+    public var listOlderPages: Bool
+    public var keepBrowsing: Bool
+
+    public init(listNewestPage: Bool, listOlderPages: Bool, keepBrowsing: Bool) {
+        self.listNewestPage = listNewestPage
+        self.listOlderPages = listOlderPages
+        self.keepBrowsing = keepBrowsing
+    }
+
+    /// Newest `0x00/0x26` page needs no playback. Keep the browse flag so a
+    /// failed `0x02/0x0c` (Pocket 3 E0 after a take) cannot arm stray exit.
+    public static func afterEnterPlayback(_ entered: Bool) -> MediaBrowsePolicy {
+        MediaBrowsePolicy(
+            listNewestPage: true, listOlderPages: entered, keepBrowsing: true)
+    }
+}

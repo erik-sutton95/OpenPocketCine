@@ -48,6 +48,17 @@ Session recovery holds the last frame. A black well is a teardown or present-pat
 bug, not “Waiting for live view” copy over a live socket. Teardown rules:
 [`live-session.md`](live-session.md). Stall policy: [`feed-watchdog.md`](feed-watchdog.md).
 
+Renaming camera Wi-Fi updates the BLE name. Reconnect must join that live
+name, not the previous SoftAP SSID still sitting in Keychain / Keystore
+(#257). Deleting the saved row is not required.
+
+Local VPNs and ad blockers can join camera Wi-Fi and still drop the live
+UDP feed. Join Wi-Fi tells the operator to pause them or exclude this app
+(`LocalVPNFilter.joinWifiPhoneStep`). After 8 s with no picture and a
+tunnel still up, the waiting well uses `LocalVPNFilter.liveHint`. Do not
+name AdGuard / Blokada / sister camera apps in chrome — the handbook FAQ
+does.
+
 Record confirmation is a bottom action sheet, not a centred dialog.
 
 Link health in the top bar is delivery (FPS chip), not RSSI.

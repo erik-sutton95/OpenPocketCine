@@ -56,7 +56,9 @@ How this shell implements [`docs/PARITY.md`](docs/PARITY.md). Contract language 
 
 ### Connection
 
-`bindProcessToNetwork` then UDP `0.0.0.0:0` after `Network.bindSocket`. MediaCodec
+`bindProcessToNetwork` then UDP `0.0.0.0:0` after `Network.bindSocket`. A local
+VPN (AdGuard / Blokada / RethinkDNS) that did not `allowBypass()` still owns
+the process — do not add another bind path (#239). MediaCodec
 uses wall-clock PTS and `KEY_LOW_LATENCY`; do not pace at 30 fps. Cached Wi-Fi
 creds sit in private prefs, not saved-camera JSON. `holdsMonitor` must not latch
 a forever skip after a SoftAP flap. `isProcessBound` stays true while

@@ -833,6 +833,54 @@ class CameraControlTest {
     }
 
     @Test
+    fun pocket3ColorWireSwapsNormalAndDLogM() {
+        val p3 = "Osmo Pocket 3"
+        val muse = "Xtra Muse"
+        val p4 = "Osmo Pocket 4"
+        val nano = "Osmo Nano"
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, p3).contentEquals(byteArrayOf(0x00)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, p3).contentEquals(byteArrayOf(0x3D)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_HDR, p3).contentEquals(byteArrayOf(0x3C)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, muse).contentEquals(byteArrayOf(0x00)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, p4).contentEquals(byteArrayOf(0x3F)))
+        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, nano).contentEquals(byteArrayOf(0x00)))
+        assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, p3))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, p3))
+        assertEquals(CameraCommands.COLOR_HDR, CameraCommands.parseColorMode(0x3C, p3))
+        assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x00, nano))
+        assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3D, nano))
+        assertEquals(0x00, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL, p3))
+        assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, p3))
+
+        val effect = ByteArray(16)
+        effect[2] = 0x00
+        assertEquals(
+            CameraCommands.COLOR_NORMAL,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), p3).colorMode,
+        )
+        effect[2] = 0x3D
+        assertEquals(
+            CameraCommands.COLOR_DLOG_M,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), p3).colorMode,
+        )
+        effect[2] = 0x00
+        assertEquals(
+            CameraCommands.COLOR_DLOG_M,
+            StatusExtras.applyImageEffect(effect, CameraStatus(), nano).colorMode,
+        )
+
+        val cap = hex("01040003003C3D")
+        assertEquals(
+            listOf(
+                CameraCommands.COLOR_NORMAL,
+                CameraCommands.COLOR_HDR,
+                CameraCommands.COLOR_DLOG_M,
+            ),
+            CameraCommands.parseColorModes(cap, p3),
+        )
+    }
+
+    @Test
     fun camcapColorModeListsNanoModes() {
         val value = hex("01040003003F3D")
         assertEquals(

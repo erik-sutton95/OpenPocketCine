@@ -47,17 +47,25 @@ struct LiveImageEffects: Equatable, Sendable {
     /// Peaking / false colour / zebra / LUT / display transforms — painted on the video frame.
     var needsGPUFeed: Bool {
         peaking || zebra || falseColor
-            || lutDimension >= 2 || desqueezeFactor > 1.001 || splitComparison
+            || lutDimension >= 2 || desqueezeFactor > 1.001
     }
 
-    /// LUT / de-squeeze / split remake every pixel. Zebra, peaking, and false
-    /// colour only paint — the identity HEVC / VT layer stays so contrast does
-    /// not shift. A DeviceRGB bake of the Rec.709 picture is a visible
-    /// Rec.709→sRGB re-encode.
+    /// LUT / de-squeeze remake every pixel. Zebra, peaking, and false colour
+    /// only paint — the identity HEVC / VT layer stays so contrast does not
+    /// shift. A DeviceRGB bake of the Rec.709 picture is a visible
+    /// Rec.709→sRGB re-encode. 50/50 is a LUT option, not its own replace
+    /// path — split without a cube covered HEVC with an empty Metal plate.
     var replacesIdentityFeed: Bool {
         lutDimension >= 2
             || desqueezeFactor > 1.001
-            || splitComparison
+    }
+
+    /// GPU 50/50 log-vs-LUT. Same gate as Android `FeedEffectsRenderPlan`.
+    var appliesSplitComparison: Bool {
+        FeedPresentPolicy.appliesSplitComparison(
+            enabled: splitComparison,
+            hasLUTCube: lutDimension >= 2 && !lutRGBA.isEmpty,
+            falseColorPaintsFullFrame: falseColor && falseColorScale != .limits)
     }
 
     /// Transparent stripe / peaking overlay on top of the identity layer.
@@ -216,7 +224,7 @@ enum LiveMonitorCompositor {
             let lut =
                 applyLUT(to: input, dimension: effects.lutDimension, rgba: effects.lutRGBA) ?? input
             graded =
-                effects.splitComparison
+                effects.appliesSplitComparison
                 ? split(lut, over: input, extent: extent, vertical: effects.splitVertical)
                 : lut
         }
@@ -1045,10 +1053,13 @@ final class CIFeedView: UIView {
     private var lastPresentedTimeNs: Int64 = 0
     private var pendingTimeNs: Int64 = 0
     private var presentGeneration = 0
+    private var inFlightPresents = 0
+    private var pendingPresent = false
     private(set) var lastPresentedAt: Date?
     private(set) var presentedFrames = 0
     private(set) var skippedDuplicates = 0
     private(set) var skippedDisabled = 0
+    private(set) var skippedDrawableBusy = 0
     private var fpsWindowStart = Date()
     private var fpsWindowCount = 0
     private(set) var presentFPS = 0
@@ -1060,7 +1071,7 @@ final class CIFeedView: UIView {
     }
 
     var debugLine: String {
-        "feed present fps=\(presentFPS) first=\(hasPresentedFrame ? 1 : 0) frozen=\(isRendering ? 0 : 1) overlay=\(lastPresentWasOverlay ? 1 : 0) skipDup=\(skippedDuplicates) skipOff=\(skippedDisabled)"
+        "feed present fps=\(presentFPS) first=\(hasPresentedFrame ? 1 : 0) frozen=\(isRendering ? 0 : 1) overlay=\(lastPresentWasOverlay ? 1 : 0) skipDup=\(skippedDuplicates) skipOff=\(skippedDisabled) skipBusy=\(skippedDrawableBusy)"
     }
 
     override init(frame: CGRect) {
@@ -1085,6 +1096,10 @@ final class CIFeedView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = false
         metalLayer.contentsScale = UIScreen.main.scale
+        // Blocking nextDrawable on MainActor is the LUT 50/50 live drop:
+        // baker overlap + a heavier graph exhausts the swapchain and HEVC
+        // ingest never runs. Timeout skips; latest-wins presents the next bake.
+        metalLayer.allowsNextDrawableTimeout = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -1138,6 +1153,7 @@ final class CIFeedView: UIView {
     func invalidatePendingPresents() {
         presentGeneration += 1
         pendingTimeNs = 0
+        pendingPresent = false
     }
 
     @discardableResult
@@ -1185,25 +1201,50 @@ final class CIFeedView: UIView {
             let baked = baker.bakedTexture(for: size, pixelFormat: metalLayer.pixelFormat)
         else { return }
         let overlay = baker.lastBakeOverlay
+        if !FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: inFlightPresents) {
+            skippedDrawableBusy += 1
+            pendingPresent = true
+            baker.releaseBakedTexture(baked)
+            return
+        }
         // Unhide only when we already hold a bake. Unhiding then failing
         // `nextDrawable` is an opaque black plate over the player.
         if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
             isHidden = false
         }
         guard isEnabled, let queue = presentQueue,
-            let drawable = metalLayer.nextDrawable(),
-            let commandBuffer = queue.makeCommandBuffer(),
-            encodePresent(baked, to: drawable.texture, commandBuffer: commandBuffer)
+            let commandBuffer = queue.makeCommandBuffer()
         else {
             baker.releaseBakedTexture(baked)
-            if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
+            return
+        }
+        guard let drawable = metalLayer.nextDrawable() else {
+            skippedDrawableBusy += 1
+            pendingPresent = true
+            baker.releaseBakedTexture(baked)
+            // First replace bake: keep HEVC visible. Later: keep the last Metal frame.
+            if !hasPresentedFrame, FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
                 isHidden = true
             }
             return
         }
-        commandBuffer.addCompletedHandler { _ in
+        guard encodePresent(baked, to: drawable.texture, commandBuffer: commandBuffer) else {
+            baker.releaseBakedTexture(baked)
+            drawable.present()
+            return
+        }
+        inFlightPresents += 1
+        let gen = generation
+        commandBuffer.addCompletedHandler { [weak self] _ in
             // The pool slot stays reserved until the GPU has read it.
             baker.releaseBakedTexture(baked)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.inFlightPresents = max(0, self.inFlightPresents - 1)
+                guard self.pendingPresent, self.presentGeneration == gen else { return }
+                self.pendingPresent = false
+                self.presentLatestBake(generation: gen)
+            }
         }
         commandBuffer.present(drawable)
         commandBuffer.commit()

@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
+  operator to pause VPNs and ad blockers or exclude this app. If the well
+  stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same
+  hint appears on the well. Diagnostics reports include `vpn=on|off`.
+  Handbook troubleshooting names AdGuard, Blokada, and RethinkDNS. Not a
+  bind-ladder fix — official camera apps fail the same way.
+
 - On-device diagnostics: redacted journal, exceptions, MetricKit payloads
   (iOS), and **Share Diagnostics** on Connection setup (first pair) and
   Operator Setup → System. A TestFlight screenshot copies a compact paste
@@ -158,6 +165,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Pocket 3 COLOR SET/GET used Pocket 4 / Nano bytes: `00` was sent as D-Log M
+  (the body took Rec.709), `3F` Normal was rejected, and `cam_image_effect`
+  `@2` `3D` showed as Normal 10-bit (#176). Pocket 3 wire is now `00` Normal /
+  `3C` HDR (HLG) / `3D` D-Log M on iOS and Android. Nano `00`/`3F`/`3D` is
+  unchanged.
+
 - Android live picture no longer goes black after Operator Setup or clips on
   API 34+ phones (#248, S25 Ultra / Pocket 4 Pro). Settings / media covering
   the monitor already kept pktType `0x02` ingest (#177); the SurfaceView still
@@ -166,6 +179,23 @@ All notable changes to this project are documented here. The format is based on
   the watchdog never PLI'd. The live surface now stays attached under the
   overlay, a failed attach retries instead of abandoning Vulkan, and
   return-from-gallery treats leftover GOP packets as not a live picture.
+
+- Pocket 3 media library after a take (#258): `/v2` always uses storage 0
+  (single microSD), even when the list handle looks internal, and the newest
+  catalog page still lists if enter-playback ACKs E0. Both shells.
+
+- Renaming the Pocket SoftAP no longer joins the cached old SSID while the
+  paired row shows the new BLE name (#257). Cached password is kept; a live
+  advertised name that differs from Keychain / Keystore wins. Scan rows
+  update when the BLE local name changes. Both shells.
+
+- LUT 50/50 split dropped live view and stayed on Reconnecting until
+  force-quit (#218): split without a cube was treated as replace-grade
+  (empty Metal over HEVC), and overlapping LUT bakes blocked MainActor on
+  `nextDrawable`, which starved HEVC ingest. 50/50 is a LUT option only
+  (same gate as Android); Metal presents latest-wins with one drawable in
+  flight and does not block. Toggling 50/50 does not GOP-reset. iOS present
+  path; Android already skipped GPU split without a cube.
 
 - First pair could never join the Pocket SoftAP again after a camera Wi-Fi
   reset (#235, #216): Wi-Fi credentials were cached before the join and kept
