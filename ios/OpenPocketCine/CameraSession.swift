@@ -4422,10 +4422,14 @@ final class CameraSession {
     }
 
     /// Memory (this launch) or Keychain (camera id / advertised name / last SSID).
-    /// Advertised BLE name is only an SSID fallback after GetSSID refuses — not enough to skip BLE.
+    /// A live BLE name that differs from the cached SSID is a renamed SoftAP —
+    /// join that name with the cached password (GetSSID after Mimo is often 0xE4).
     private func resolvedWifiCreds(for camera: FoundCamera) -> KnownWifi {
         let saved = SavedCameraStore.load().first { $0.id == camera.id }
-        let advertised = camera.name.isEmpty ? saved?.advertisedName : camera.name
+        let advertised =
+            CameraWifiResolution.liveAdvertisedSSID(camera.name)
+            ?? CameraWifiResolution.liveAdvertisedSSID(saved?.advertisedName)
+            ?? (camera.name.isEmpty ? saved?.advertisedName : camera.name)
         let keychain = CameraWifiKeychain.load(
             cameraId: camera.id,
             advertisedName: advertised,
@@ -4442,8 +4446,20 @@ final class CameraSession {
             savedSSID: saved?.lastSSID,
             memory: memory,
             keychainSSID: keychain?.ssid,
-            keychainPassword: keychain?.password
+            keychainPassword: keychain?.password,
+            advertisedName: advertised
         )
+        if let used = resolved.ssid,
+            let live = CameraWifiResolution.liveAdvertisedSSID(advertised),
+            used == live
+        {
+            let cached = [memory?.ssid, keychain?.ssid, saved?.lastSSID]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty }
+            if let cached, cached != used {
+                ControlLiveLog.line("creds: live BLE name \(used) replaces cached SSID \(cached)")
+            }
+        }
         if let ssid = resolved.ssid, ssidBelongsToAnotherBody(ssid, camera: camera) {
             log.info(
                 "creds: dropping \(resolved.source, privacy: .public) SSID \(ssid, privacy: .public) — other body"
@@ -4492,11 +4508,8 @@ final class CameraSession {
     private func leftoverSoftAPSSIDs(besides ssid: String) -> [String] {
         var names = Set<String>()
         if let joined = joinedSSID { names.insert(joined) }
-        if let id = cachedWifiCameraId, id != connectedCamera?.id, let cached = cachedSSID {
-            names.insert(cached)
-        }
+        if let cached = cachedSSID { names.insert(cached) }
         for camera in SavedCameraStore.load() {
-            if camera.id == connectedCamera?.id { continue }
             if let other = camera.lastSSID { names.insert(other) }
         }
         names.remove(ssid)
