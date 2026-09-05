@@ -194,8 +194,8 @@ public enum CamCapIso {
 }
 
 /// Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D`.
-/// Pocket never published this table in our takes. Pocket 3 `@2` / SET
-/// bytes are `00`/`3C`/`3D` (#176) — parse them with the body model.
+/// Wire (with the body model): `00` Normal 8-bit / `3F` Normal 10-bit /
+/// `3D` D-Log M. Pocket 3 `@2` / SET bytes are `00`/`3C`/`3D` (#176).
 public enum CamCapColorMode {
     public static let subscribeKey = "camcap_color_mode"
 

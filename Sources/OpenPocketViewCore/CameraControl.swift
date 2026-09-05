@@ -403,8 +403,9 @@ public enum IsoIndex: UInt8, CaseIterable, Sendable {
 
 /// `0x02/0x42` color. No GET — `cam_image_effect` `@2`.
 ///
-/// `rawValue` is the Pocket 4 / 4 Pro / Nano SET byte. Pocket 3 uses a
-/// different map — use `wireByte(for:)` / `fromWire(_:model:)` (#176).
+/// `rawValue` is the Pocket 4 / 4 Pro SET byte and the cross-shell semantic
+/// id (JNI colorMode, media cache). Pocket 3 and Nano use a different map —
+/// use `wireByte(for:)` / `fromWire(_:model:)` (#176).
 ///
 /// Per body (DJI spec; D-Log2 is Pocket 4 Pro only):
 /// 4 Pro `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2.
@@ -413,7 +414,8 @@ public enum IsoIndex: UInt8, CaseIterable, Sendable {
 /// and `00` as D-Log M switched the body to Rec.709 (#176). `17` showed
 /// "colour 4" (#160).
 /// Nano `camcap_color_mode` (Mimo 2026-08-18): `01 04 00 03 00 3F 3D` →
-/// `00` D-Log M / `3F` Normal 8-bit / `3D` Normal 10-bit.
+/// `00` Normal 8-bit / `3F` Normal 10-bit / `3D` D-Log M (same `00`/`3D` as
+/// Pocket 3 Rec.709 / D-Log M; `3F` is Nano 10-bit, not Pocket 4 Normal).
 public enum ColorMode: UInt8, CaseIterable, Sendable {
     case normal = 0x3F
     case hdr = 0x3C
@@ -481,9 +483,18 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         return available(for: model.family)
     }
 
-    /// Pocket 3 SET / `cam_image_effect` `@2` (#176). Other bodies use `rawValue`.
+    /// Pocket 3 / Nano SET / `cam_image_effect` `@2`. Other bodies use `rawValue`.
     public func wireByte(for model: CameraModel?) -> UInt8 {
-        guard let model, model.isPocket3 else { return rawValue }
+        guard let model else { return rawValue }
+        if model.family == .nano {
+            switch self {
+            case .normal: return 0x00
+            case .normal10: return 0x3F
+            case .dLogM: return 0x3D
+            default: return rawValue
+            }
+        }
+        guard model.isPocket3 else { return rawValue }
         switch self {
         case .normal: return 0x00
         case .dLogM: return 0x3D
@@ -491,8 +502,16 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         }
     }
 
-    /// Inverse of `wireByte(for:)`. Unknown Pocket 3 bytes still try `rawValue`.
+    /// Inverse of `wireByte(for:)`. Unknown body bytes still try `rawValue`.
     public static func fromWire(_ byte: UInt8, model: CameraModel?) -> ColorMode? {
+        if let model, model.family == .nano {
+            switch byte {
+            case 0x00: return .normal
+            case 0x3F: return .normal10
+            case 0x3D: return .dLogM
+            default: break
+            }
+        }
         if let model, model.isPocket3 {
             switch byte {
             case 0x00: return .normal

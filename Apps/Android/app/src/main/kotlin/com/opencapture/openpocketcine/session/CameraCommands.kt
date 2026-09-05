@@ -53,19 +53,28 @@ object CameraCommands {
     const val COLOR_HDR = 0x3C
     const val COLOR_DLOG = 0x17
     const val COLOR_DLOG2 = 0x41
-    /** Nano `camcap_color_mode` `3D` — Normal 10-bit. Pocket 3 D-Log M wire. */
+    /** Semantic Normal 10-bit. Nano SET is `3F`; Pocket 3 D-Log M wire is `3D`. */
     const val COLOR_NORMAL10 = 0x3D
-    /** Nano `camcap_color_mode` `00` — D-Log M 10-bit. Pocket 3 Rec.709 wire. */
+    /** Semantic D-Log M. Nano and Pocket 3 SET is `3D`. */
     const val COLOR_DLOG_M = 0x00
 
     private val COLOR_KNOWN =
         setOf(COLOR_NORMAL, COLOR_HDR, COLOR_DLOG, COLOR_DLOG2, COLOR_NORMAL10, COLOR_DLOG_M)
 
     /**
-     * Pocket 3 SET / `cam_image_effect` `@2` (#176): Normal `00`, HDR `3C`,
-     * D-Log M `3D`. Other bodies use the COLOR_* constants as wire bytes.
+     * Pocket 3 / Nano SET / `cam_image_effect` `@2`. Pocket 3 (#176): Normal
+     * `00`, HDR `3C`, D-Log M `3D`. Nano: Normal 8-bit `00`, Normal 10-bit
+     * `3F`, D-Log M `3D`. Other bodies use the COLOR_* constants as wire bytes.
      */
-    fun wireColorMode(mode: Int, name: String = ""): Int {
+    fun wireColorMode(mode: Int, name: String = "", family: String = ""): Int {
+        if (CameraModel.looksLikeNano(name, family)) {
+            return when (mode) {
+                COLOR_NORMAL -> 0x00
+                COLOR_NORMAL10 -> 0x3F
+                COLOR_DLOG_M -> 0x3D
+                else -> mode
+            }
+        }
         if (!CameraModel.looksLikePocket3(name)) return mode
         return when (mode) {
             COLOR_NORMAL -> 0x00
@@ -75,7 +84,15 @@ object CameraCommands {
     }
 
     /** Inverse of [wireColorMode]. */
-    fun parseColorMode(byte: Int, name: String = ""): Int {
+    fun parseColorMode(byte: Int, name: String = "", family: String = ""): Int {
+        if (CameraModel.looksLikeNano(name, family)) {
+            return when (byte) {
+                0x00 -> COLOR_NORMAL
+                0x3F -> COLOR_NORMAL10
+                0x3D -> COLOR_DLOG_M
+                else -> byte
+            }
+        }
         if (!CameraModel.looksLikePocket3(name)) return byte
         return when (byte) {
             0x00 -> COLOR_NORMAL
@@ -169,8 +186,8 @@ object CameraCommands {
     fun focusMode(continuous: Boolean): ByteArray =
         byteArrayOf(if (continuous) FOCUS_CONTINUOUS.toByte() else FOCUS_SINGLE.toByte())
 
-    fun colorMode(mode: Int, name: String = ""): ByteArray =
-        byteArrayOf(wireColorMode(mode, name).toByte())
+    fun colorMode(mode: Int, name: String = "", family: String = ""): ByteArray =
+        byteArrayOf(wireColorMode(mode, name, family).toByte())
 
     /**
      * D-Log2 cannot zoom. Any step off 1× hops the body to D-Log.
@@ -849,7 +866,7 @@ object CameraCommands {
         return out
     }
 
-    fun parseColorModes(value: ByteArray, name: String = ""): List<Int> {
+    fun parseColorModes(value: ByteArray, name: String = "", family: String = ""): List<Int> {
         if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
         val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
         if (inner < 2 || 3 + inner > value.size) return emptyList()
@@ -857,7 +874,7 @@ object CameraCommands {
         val count = body[0].toInt() and 0xFF
         if (count < 1 || body.size < 1 + count) return emptyList()
         return body.copyOfRange(1, 1 + count)
-            .map { parseColorMode(it.toInt() and 0xFF, name) }
+            .map { parseColorMode(it.toInt() and 0xFF, name, family) }
             .filter { it in COLOR_KNOWN }
     }
 

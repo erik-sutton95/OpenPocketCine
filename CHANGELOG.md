@@ -165,11 +165,17 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Nano COLOR SET/GET labelled `camcap_color_mode` `00 3F 3D` by list order
+  (`00` D-Log M / `3F` Normal 8-bit / `3D` Normal 10-bit). Hardware is `00`
+  Normal 8-bit / `3F` Normal 10-bit / `3D` D-Log M — the same `00`/`3D` as
+  Pocket 3 Rec.709 / D-Log M. iOS and Android translate at the wire
+  boundary (`family == nano`); ColorMode / COLOR_* semantic ids are
+  unchanged.
+
 - Pocket 3 COLOR SET/GET used Pocket 4 / Nano bytes: `00` was sent as D-Log M
   (the body took Rec.709), `3F` Normal was rejected, and `cam_image_effect`
   `@2` `3D` showed as Normal 10-bit (#176). Pocket 3 wire is now `00` Normal /
-  `3C` HDR (HLG) / `3D` D-Log M on iOS and Android. Nano `00`/`3F`/`3D` is
-  unchanged.
+  `3C` HDR (HLG) / `3D` D-Log M on iOS and Android.
 
 - Android live picture no longer goes black after Operator Setup or clips on
   API 34+ phones (#248, S25 Ultra / Pocket 4 Pro). Settings / media covering

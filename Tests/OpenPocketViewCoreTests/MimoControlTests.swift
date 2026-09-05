@@ -170,6 +170,10 @@ import Testing
         #expect(Commands.setColorMode(.dLog2).payload == [0x41])
         #expect(Commands.setColorMode(.normal10).payload == [0x3D])
         #expect(Commands.setColorMode(.dLogM).payload == [0x00])
+        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
+        #expect(Commands.setColorMode(.normal, model: nano).payload == [0x00])
+        #expect(Commands.setColorMode(.normal10, model: nano).payload == [0x3F])
+        #expect(Commands.setColorMode(.dLogM, model: nano).payload == [0x3D])
 
         var effect = [UInt8](repeating: 0, count: 16)
         effect[2] = 0x41

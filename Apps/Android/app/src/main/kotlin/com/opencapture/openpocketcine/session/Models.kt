@@ -60,6 +60,11 @@ data class CameraModel(
             return n.contains("pocket3") || n.contains("muse")
         }
 
+        fun looksLikeNano(name: String, family: String = ""): Boolean {
+            if (family == "nano") return true
+            return name.lowercase().contains("nano")
+        }
+
         /**
          * Rec.709 / HDR / D-Log M Auto ISO range floor. Pocket 3 and Pocket 4
          * start at 50 (DJI spec; #180). Pocket 4 Pro wide is 100 (captured

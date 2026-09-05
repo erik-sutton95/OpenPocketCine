@@ -1616,7 +1616,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (next.availableColorModes.isEmpty()) {
             next = next.copy(availableColorModes = prev.availableColorModes)
         }
-        next = StatusExtras.apply(frame, next, connectedCamera?.model?.name ?: "")
+        val cam = connectedCamera?.model
+        next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
         next = CamFov.absorb(next)
         next = absorbStaleFormat(next)
         next = absorbStaleColor(next)
@@ -2409,9 +2410,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (mode == CameraCommands.COLOR_DLOG) confirmZoomColorHopIfReady()
     }
 
-    /** JNI extra is the body SET byte — Pocket 3 is not `ColorMode.rawValue`. */
-    private fun colorModeExtra(mode: Int): String =
-        CameraCommands.wireColorMode(mode, connectedCamera?.model?.name ?: "").toString()
+    /** JNI extra is the body SET byte — Pocket 3 / Nano is not `COLOR_*` raw. */
+    private fun colorModeExtra(mode: Int): String {
+        val cam = connectedCamera?.model
+        return CameraCommands.wireColorMode(mode, cam?.name ?: "", cam?.family ?: "").toString()
+    }
 
     /**
      * `0x02/0x18` via Swift `Commands.setVideoFormat`. Optimistic HUD, pin until
