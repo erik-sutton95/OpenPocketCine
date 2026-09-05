@@ -53,10 +53,36 @@ object CameraCommands {
     const val COLOR_HDR = 0x3C
     const val COLOR_DLOG = 0x17
     const val COLOR_DLOG2 = 0x41
-    /** Nano `camcap_color_mode` `3D` — Normal 10-bit. */
+    /** Nano `camcap_color_mode` `3D` — Normal 10-bit. Pocket 3 D-Log M wire. */
     const val COLOR_NORMAL10 = 0x3D
-    /** Nano `camcap_color_mode` `00` — D-Log M 10-bit. */
+    /** Nano `camcap_color_mode` `00` — D-Log M 10-bit. Pocket 3 Rec.709 wire. */
     const val COLOR_DLOG_M = 0x00
+
+    private val COLOR_KNOWN =
+        setOf(COLOR_NORMAL, COLOR_HDR, COLOR_DLOG, COLOR_DLOG2, COLOR_NORMAL10, COLOR_DLOG_M)
+
+    /**
+     * Pocket 3 SET / `cam_image_effect` `@2` (#176): Normal `00`, HDR `3C`,
+     * D-Log M `3D`. Other bodies use the COLOR_* constants as wire bytes.
+     */
+    fun wireColorMode(mode: Int, name: String = ""): Int {
+        if (!CameraModel.looksLikePocket3(name)) return mode
+        return when (mode) {
+            COLOR_NORMAL -> 0x00
+            COLOR_DLOG_M -> 0x3D
+            else -> mode
+        }
+    }
+
+    /** Inverse of [wireColorMode]. */
+    fun parseColorMode(byte: Int, name: String = ""): Int {
+        if (!CameraModel.looksLikePocket3(name)) return byte
+        return when (byte) {
+            0x00 -> COLOR_NORMAL
+            0x3D -> COLOR_DLOG_M
+            else -> byte
+        }
+    }
 
     const val EXPO_AUTO = 0x01
     const val EXPO_MANUAL = 0x04
@@ -143,7 +169,8 @@ object CameraCommands {
     fun focusMode(continuous: Boolean): ByteArray =
         byteArrayOf(if (continuous) FOCUS_CONTINUOUS.toByte() else FOCUS_SINGLE.toByte())
 
-    fun colorMode(mode: Int): ByteArray = byteArrayOf(mode.toByte())
+    fun colorMode(mode: Int, name: String = ""): ByteArray =
+        byteArrayOf(wireColorMode(mode, name).toByte())
 
     /**
      * D-Log2 cannot zoom. Any step off 1× hops the body to D-Log.
@@ -822,16 +849,16 @@ object CameraCommands {
         return out
     }
 
-    fun parseColorModes(value: ByteArray): List<Int> {
+    fun parseColorModes(value: ByteArray, name: String = ""): List<Int> {
         if (value.size < 5 || value[0] != 0x01.toByte()) return emptyList()
         val inner = (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
         if (inner < 2 || 3 + inner > value.size) return emptyList()
         val body = value.copyOfRange(3, 3 + inner)
         val count = body[0].toInt() and 0xFF
         if (count < 1 || body.size < 1 + count) return emptyList()
-        val known =
-            setOf(COLOR_NORMAL, COLOR_HDR, COLOR_DLOG, COLOR_DLOG2, COLOR_NORMAL10, COLOR_DLOG_M)
-        return body.copyOfRange(1, 1 + count).map { it.toInt() and 0xFF }.filter { it in known }
+        return body.copyOfRange(1, 1 + count)
+            .map { parseColorMode(it.toInt() and 0xFF, name) }
+            .filter { it in COLOR_KNOWN }
     }
 
     fun parseIsoIndices(value: ByteArray): List<Int> {

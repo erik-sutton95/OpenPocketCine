@@ -354,9 +354,12 @@ public enum Commands {
         camera(0x2A, [index.rawValue], seq: seq)
     }
 
-    /// `0x02/0x42` color. Normal `3F`, HDR `3C`, D-Log `17`, D-Log2 `41`.
-    public static func setColorMode(_ mode: ColorMode, seq: UInt16 = 0) -> Duml.Frame {
-        camera(0x42, [mode.rawValue], seq: seq)
+    /// `0x02/0x42` color. Pocket 4 / Nano use `ColorMode.rawValue`; Pocket 3
+    /// uses `wireByte(for:)` (`00` Normal / `3C` HDR / `3D` D-Log M).
+    public static func setColorMode(
+        _ mode: ColorMode, model: CameraModel? = nil, seq: UInt16 = 0
+    ) -> Duml.Frame {
+        camera(0x42, [mode.wireByte(for: model)], seq: seq)
     }
 
     /// `0x02/0x24` focus. Single `01`, Continuous `02`.

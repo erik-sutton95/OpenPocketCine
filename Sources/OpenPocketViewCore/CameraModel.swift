@@ -57,12 +57,15 @@ public struct CameraModel: Equatable, Sendable {
     /// Mimo Nano pairs `0x02/0x09 …03` with enable. Pocket never sent it.
     public var usesNanoLiveViewGate: Bool { family == .nano }
 
-    /// Pocket 3 first picture needs a 1080→boot-4K `0x02/0x18` after enable.
-    /// Pocket 4 / 4 Pro first picture is captured — do not GOP-cut them.
-    public var needsFirstPictureFormatPoke: Bool {
+    /// Pocket 3 / Xtra Muse. BLE id `0x0020` or the advertised name.
+    public var isPocket3: Bool {
         let n = name.lowercased().replacingOccurrences(of: " ", with: "")
         return n.contains("pocket3") || n.contains("muse")
     }
+
+    /// Pocket 3 first picture needs a 1080→boot-4K `0x02/0x18` after enable.
+    /// Pocket 4 / 4 Pro first picture is captured — do not GOP-cut them.
+    public var needsFirstPictureFormatPoke: Bool { isPocket3 }
 
     /// Rec.709 / HDR / D-Log M Auto ISO range floor. SET bytes are still
     /// `IsoLimit` — only the label changes (#180).

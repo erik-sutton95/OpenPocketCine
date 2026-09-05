@@ -2,7 +2,8 @@ import Foundation
 
 /// Transfer the Pocket live HEVC *picture* is carrying.
 ///
-/// `ColorMode` (`cam_image_effect` `@2`) selects Normal / HDR / D-Log / D-Log2.
+/// `ColorMode` (`cam_image_effect` `@2`, body-mapped on Pocket 3) selects
+/// Normal / HDR / D-Log / D-Log2 / D-Log M.
 /// The camera writes **legal-range scaled** codes in a tv-range container:
 /// `container10 = 64 + curve × 876`. ``LiveFrameTap`` expands that back, so
 /// everything downstream speaks **curve fractions** (`byte/255` = the papers'
