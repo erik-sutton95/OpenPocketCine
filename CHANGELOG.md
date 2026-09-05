@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
+  operator to pause VPNs and ad blockers or exclude this app. If the well
+  stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same
+  hint appears on the well. Diagnostics reports include `vpn=on|off`.
+  Handbook troubleshooting names AdGuard, Blokada, and RethinkDNS. Not a
+  bind-ladder fix — official camera apps fail the same way.
+
 - On-device diagnostics: redacted journal, exceptions, MetricKit payloads
   (iOS), and **Share Diagnostics** on Connection setup (first pair) and
   Operator Setup → System. A TestFlight screenshot copies a compact paste

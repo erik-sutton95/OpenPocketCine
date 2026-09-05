@@ -72,6 +72,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 
 Verify record start/stop on the camera body until you trust the link.
 
+If live view never starts after Wi-Fi joins, pause local VPNs and ad
+blockers or exclude this app
+([Troubleshooting](../guides/troubleshooting/)).
+
 ## Device requirements
 
 BLE, Local Network, and Hotspot Configuration do not work in the Simulator.

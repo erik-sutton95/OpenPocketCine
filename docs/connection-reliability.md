@@ -27,6 +27,7 @@ Match Mimo: diagnose the failure, then the cheapest repair — not rebuild +
 | [#149](https://github.com/erik-sutton95/OpenPocketCine/pull/149) | ACK group 1 = latest pktType `0x03`. Control reliability. **Not** the #148 freeze. TF 29/32 did not include this. |
 | [#193](https://github.com/erik-sutton95/OpenPocketCine/issues/193) | TestFlight 0.1.0 (32): reconnect after a Pocket 4 Pro **power cycle**. `SessionRecovery`, not the watchdog. Recovery outcomes now land in `control-live.log` (`session: drop` / `recovery attempt failed phase=…` / `stalled` / `recovered` / `exhausted`) so a tester log names the stuck stage. iOS keeps the held frame across attempts (Android already did). |
 | [#221](https://github.com/erik-sutton95/OpenPocketCine/issues/221) | Pocket 3 first picture still black until the operator changes FORMAT or COLOR (iPhone and iPad). #147 poke is on 0.1.0 (59); a guessed 4K 30 SET before camcap, or burning the one-shot before the SET left, leaves the encoder off. `feed: first-picture` in `control-live.log`. |
+| [#239](https://github.com/erik-sutton95/OpenPocketCine/issues/239) | **P2 / environment.** AdGuard, Blokada, RethinkDNS (local VPN) drop UDP live view after SoftAP join. Same on Mimo / DJI Fly. Not a bind-ladder bug — `VpnService` without `allowBypass()` wins. Wizard + live-wait copy, `vpn=` on diagnostics, handbook FAQ. |
 
 ## ACK windows vs freeze
 
