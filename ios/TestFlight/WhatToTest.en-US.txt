@@ -1,26 +1,26 @@
 New and changed
 
-- A connected game controller's left stick drives the gimbal; small throws crawl, full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face or cancels tracking. L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Connect and unplug toast and rest the stick.
-- Head tracking is experimental: Operator Setup → Controls, turn Head Tracking (Experimental) on. Wear AirPods with motion, go live, look forward, hold still, tap Calibrate Head Lock. That pose is shared zero: a 53° head turn pans the Pocket 53°. Nod is tilt. Roll is numbers only. STOP clears the lock. Off keeps AirPods as audio only.
+- A connected game controller's left stick drives the gimbal; small throws crawl, full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face or cancels. L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. A gimbal stop taps once.
+- Head tracking is experimental: Operator Setup → Controls, Head Tracking (Experimental). Wear AirPods with motion, go live, look forward, hold still, tap Calibrate Head Lock. A 53° head turn pans the Pocket 53°. Nod is tilt. Roll is numbers only. STOP clears the lock. Off keeps AirPods as audio only.
 - The on-screen gimbal stick uses the same gradual speed.
-- Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view. Record, ISO, white balance, and zoom from the phone.
-- Share Diagnostics is on first pair and in Operator Setup → System. A TestFlight screenshot copies a short paste for the feedback comment. No name or location.
+- Pair over Bluetooth, join camera Wi-Fi, watch live view. Record, ISO, white balance, and zoom from the phone.
+- Share Diagnostics is on first pair and in Operator Setup → System. A TestFlight screenshot copies a short paste for feedback. No name or location.
 
 Fixes
 
-- In D-Log2, zoom waits for the hop to D-Log before the lens moves; the chip stays at 1× until color switches. Zoom keeps the live picture, not just HUD and stick. COLOR lists only what this camera has. Live view should come up a couple of seconds after Wi-Fi joins, not sit on Waiting for live view.
-- Live view should stay up while you pan, tilt, or use head tracking. Record, FORMAT, COLOR, white balance, or a tracking box must not freeze the picture. If it dies, the last frame stays under Reconnecting and live view should return without closing the app.
-- Head tracking no longer bobs past where you look and swings back. Turning your head, then nodding, tilts straight up and down. Rapid look-pause-look gestures no longer freeze the picture.
-- Power-cycling the camera mid-session keeps the last picture under the Reconnecting card instead of going black.
-- With LUT, waveform, peaking, or Face AF on, zooming or the D-Log2 to D-Log hop no longer freeze the picture.
-- Opening clips or Operator Setup over live view, then going back, keeps the live picture while the camera still responds. On Pocket 3, a take you just recorded should list and play.
-- On Pocket 3 and Pocket 4, Auto ISO ranges now start at 50, matching the camera. Pocket 4 Pro still starts at 100.
-- Zebra: Highlight now paints when any color channel runs hot, so a blue-heavy hot sky stripes. Factory Highlight moved from 100 to 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard and Done dismisses the pad; tap outside still closes them.
+- In D-Log2, zoom waits for the hop to D-Log before the lens moves; the chip stays at 1× until color switches. Zoom keeps the live picture. On Pocket 3, COLOR Normal, HDR, and D-Log M match the camera. Live view comes up a couple of seconds after Wi-Fi joins. Pause VPNs or ad blockers, or exclude this app, if it never starts.
+- Live view stays up while you pan, tilt, or head-track. Record, FORMAT, COLOR, white balance, or a tracking box must not freeze the picture. If it dies, the last frame stays under Reconnecting and live view returns without closing the app.
+- Head tracking no longer overshoots and swings back. Turn, then nod: tilt is straight up and down. Rapid look-pause-look no longer freezes the picture.
+- Power-cycling the camera mid-session keeps the last picture under Reconnecting instead of going black. A renamed Pocket Wi-Fi joins without a re-pair.
+- With LUT, waveform, peaking, or Face AF on, zooming or the D-Log2 to D-Log hop no longer freeze the picture. LUT 50/50 must not drop live view or stick on Reconnecting.
+- Clips or Operator Setup over live view, then back, keeps the picture moving, not a black well. On Pocket 3, a take you just recorded should list and play.
+- On Pocket 3 and Pocket 4, Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
+- Zebra: Highlight paints when any color channel runs hot. Factory Highlight is now 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard.
 
 What to test
 
-- Pair a Pocket, go live, pan with the stick (half throw slower than full). Stay live two minutes with LUT and waveform on. Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject. Frozen picture with live timecode is a bug. If Reconnecting appears, last picture stays and live view returns without closing the app.
-- Connect a DualSense or any extended gamepad. Left stick moves the gimbal. Cross records. Circle recenters. Square does 180. Triangle tracks a face. L1/R1 jump zoom. L2/R2 hold-to-zoom. D-pad ISO and shutter. Push into a stop: one buzz, not a rumble. Unplug rests the stick and toasts.
-- On Pocket 4 Pro in D-Log2 (idle): press R2 or pinch. COLOR switches to D-Log first, then the picture zooms. On a Pocket 3, open ISO and switch to Auto: ranges read 50–400 and up, same as the camera. Pocket 4 Pro still starts at 100.
-- Tap Share Diagnostics before pairing finishes. After live: record a short take, open it in the library with LUT on. Share sends the original file. Close the library, then Operator Setup: live view still shows a picture. Power-cycle the Pocket: last picture stays under Reconnecting. On Pocket 3, the take you just recorded must appear and play.
+- Pair a Pocket, go live, pan with the stick (half throw slower than full). Stay live two minutes with LUT and waveform on. In D-Log with LUT on, long-press LUT and toggle 50/50 (Left/Right and Top/Bottom). Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject. Frozen picture with live timecode is a bug. If Reconnecting appears, last picture stays and live view returns without closing the app. Pause VPNs if live view never starts.
+- Connect a DualSense or any extended gamepad: left stick gimbal, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Push into a stop: one buzz, not a rumble. Unplug rests the stick and toasts.
+- On Pocket 4 Pro in D-Log2 (idle): R2 or pinch. COLOR switches to D-Log first, then the picture zooms. On a Pocket 3, switch COLOR through Normal, HDR, and D-Log M so the camera follows; Auto ISO starts at 50 (Pocket 4 Pro: 100).
+- Tap Share Diagnostics before pairing finishes. After live: record a short take, open it in the library with LUT on. Share sends the original file. Close the library, then Operator Setup: live view keeps its picture. Power-cycle the Pocket: last picture stays under Reconnecting. On Pocket 3, the take you just recorded must appear and play. Rename the camera Wi-Fi on the body: the app joins the new name without a re-pair.
 - Go live, long-press ZEBRA, tap Highlight, type 95, tap Done: the stripes update. Repeat in landscape. In D-Log2 at factory Highlight, a hot sky stripes.
