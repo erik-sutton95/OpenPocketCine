@@ -72,6 +72,29 @@ public enum FeedPresentPolicy: Sendable {
         !overlay
     }
 
+    /// Cap in-flight Metal presents. A LUT 50/50 graph on top of PEAK / FALSE /
+    /// ZEBRA pipelines several baker completions; each one calling blocking
+    /// `nextDrawable` on MainActor starved HEVC ingest and left Reconnecting
+    /// up until force-quit (#218). Latest-wins: skip the acquire and present
+    /// the newest bake when a drawable returns.
+    public static let maxInFlightMetalPresents = 1
+
+    public static func shouldAcquireDrawable(inFlightPresents: Int) -> Bool {
+        inFlightPresents < maxInFlightMetalPresents
+    }
+
+    /// GPU 50/50 is log-vs-LUT. Split without a cube is not replace-grade —
+    /// that covered the HEVC layer with an empty Metal plate. IRE / PStops
+    /// false colour remaps both halves, so the split is a no-op (Limits keeps
+    /// holes). Android `FeedEffectsRenderPlan` uses the same gate.
+    public static func appliesSplitComparison(
+        enabled: Bool,
+        hasLUTCube: Bool,
+        falseColorPaintsFullFrame: Bool
+    ) -> Bool {
+        enabled && hasLUTCube && !falseColorPaintsFullFrame
+    }
+
     /// Prefer the 720p LRF/XRF proxy for monitor grade. 4K original is export-only.
     public static func preferProxyForMonitorGrade(hasProxy: Bool) -> Bool {
         hasProxy

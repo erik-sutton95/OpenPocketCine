@@ -63,11 +63,15 @@ jobs:
           ./scripts/prepare-android-testers-test.sh
 
       - name: Require reviewed notes for TestFlight-triggering pull requests
-        if: ${{ github.event_name == 'pull_request' }}
+        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
+        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          changed_files="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          # Files touched by this branch's own commits. A content diff against main
+          # goes blank once a sibling PR lands the same notes, and then a PR that did
+          # write notes fails here.
+          changed_files="$(git log --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
           if grep -Eq '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files"; then
             if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update ios/TestFlight/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
@@ -76,11 +80,15 @@ jobs:
           fi
 
       - name: Require reviewed notes for Play-triggering pull requests
-        if: ${{ github.event_name == 'pull_request' }}
+        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
+        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          changed_files="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          # Files touched by this branch's own commits. A content diff against main
+          # goes blank once a sibling PR lands the same notes, and then a PR that did
+          # write notes fails here.
+          changed_files="$(git log --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
           if grep -Eq '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files"; then
             if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update Apps/Android/Play/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
