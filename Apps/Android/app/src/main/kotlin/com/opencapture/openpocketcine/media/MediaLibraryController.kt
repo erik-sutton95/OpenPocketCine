@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.media
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -48,6 +49,7 @@ class MediaLibraryController(
     private val thumbInFlight = HashSet<String>()
     private val downloadInFlight = HashSet<String>()
     private var browsing = false
+    private var playbackHeld = false
 
     var files by mutableStateOf<List<MediaFile>>(emptyList())
         private set
@@ -73,6 +75,7 @@ class MediaLibraryController(
         browseJob?.cancel()
         loadFavorites()
         loadCachedCatalogIfNeeded()
+        playbackHeld = false
         browsing = true
         session.markBrowsingMedia(true)
         if (!isLive) {
@@ -94,6 +97,7 @@ class MediaLibraryController(
         fetchInProgress = false
         assembler.reset()
         browsing = false
+        playbackHeld = false
         session.markBrowsingMedia(false)
         note = null
         unhookFrames?.invoke()
@@ -125,7 +129,7 @@ class MediaLibraryController(
         fetchInProgress = true
         note = MediaOperatorCopy.LISTING
         val id = nextBrowseId()
-        browseJob = scope.launch { listAllPages(id) }
+        browseJob = scope.launch { listAllPages(id, includeOlderPages = playbackHeld) }
     }
 
     fun isDownloaded(file: MediaFile): Boolean = cache.isDownloaded(file, cameraId)
@@ -330,14 +334,19 @@ class MediaLibraryController(
         hookFrames()
         val entered = enterPlayback()
         if (id != browseGeneration) return
+        val decision = MediaBrowsePolicy.afterEnterPlayback(entered)
+        playbackHeld = entered
         if (!entered) {
+            Log.i(TAG, "media: enter playback failed — listing newest page")
+        }
+        if (!decision.keepBrowsing) {
             fetchInProgress = false
             note = MediaOperatorCopy.PLAYBACK_FAILED
             browsing = false
             session.markBrowsingMedia(false)
             return
         }
-        listAllPages(id)
+        listAllPages(id, includeOlderPages = decision.listOlderPages)
     }
 
     private suspend fun enterPlayback(): Boolean {
@@ -366,7 +375,7 @@ class MediaLibraryController(
         return link.inPlayback
     }
 
-    private suspend fun listAllPages(id: Int) {
+    private suspend fun listAllPages(id: Int, includeOlderPages: Boolean = true) {
         try {
             val collected = ArrayList<MediaFile>()
             val seen = HashSet<String>()
@@ -389,6 +398,7 @@ class MediaLibraryController(
                     }
                 }
                 publish(collected)
+                if (!includeOlderPages) break
                 val handles = page.map { it.handle }
                 val newest =
                     handles.filter { it >= MediaListCommand.VIDEO_HANDLE_BASE }.maxOrNull()
@@ -532,10 +542,13 @@ class MediaLibraryController(
     }
 
     private fun resolvedStorage(file: MediaFile): Int {
-        storageWinner[file.path]?.let { return it }
-        if (file.storage == 0 || file.storage == 1) return file.storage
         val handle = if (file.handle != 0L) file.handle else file.cmdHandle
-        return MediaHTTP.storageGuess(handle, usesSingleSdStorage)
+        return MediaHTTP.resolvedStorage(
+            stamped = file.storage,
+            handle = handle,
+            winner = storageWinner[file.path],
+            singleSdStorage = usesSingleSdStorage,
+        )
     }
 
     private fun rememberStorage(storage: Int, path: String) {
@@ -585,6 +598,7 @@ class MediaLibraryController(
     }
 
     companion object {
+        private const val TAG = "OpenPocketCine"
         private const val PREFS = "openpocketcine.media"
         private val resumeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }

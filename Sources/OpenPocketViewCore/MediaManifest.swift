@@ -170,6 +170,18 @@ public enum MediaHTTP {
         return (handle & MediaListCommand.internalBit) != 0 ? 1 : 0
     }
 
+    /// `/v2?storage=` for a listed clip. Pocket 3 (single microSD) is always 0,
+    /// even when the manifest stamped storage 1 from the internal-handle bit or a
+    /// previous GET remembered 1.
+    public static func resolvedStorage(
+        stamped: Int, handle: UInt32, winner: Int?, singleSdStorage: Bool
+    ) -> Int {
+        if singleSdStorage { return 0 }
+        if let winner, winner == 0 || winner == 1 { return winner }
+        if stamped == 0 || stamped == 1 { return stamped }
+        return storageGuess(handle: handle, singleSdStorage: false)
+    }
+
     public static func originalPath(_ file: MediaFile) -> String { file.path }
 
     /// Clip delivery / export: the original camera file, never the LRF/XRF 720p proxy.

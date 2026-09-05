@@ -46,4 +46,18 @@ import Testing
         #expect(MediaLiveResume.strayPlaybackAction(browsing: true, inPlayback: true) == nil)
         #expect(MediaLiveResume.strayPlaybackAction(browsing: false, inPlayback: false) == nil)
     }
+
+    @Test func newestPageListsWhenEnterPlaybackFails() {
+        // Handbook: newest `0x00/0x26` needs no playback. Pocket 3 often ACKs
+        // `0x02/0x0c` with E0 after a take; aborting the browse drops the new
+        // clip and lets strayPlaybackAction exit gallery while the library is open.
+        let failed = MediaBrowsePolicy.afterEnterPlayback(false)
+        #expect(failed.listNewestPage)
+        #expect(!failed.listOlderPages)
+        #expect(failed.keepBrowsing)
+        let entered = MediaBrowsePolicy.afterEnterPlayback(true)
+        #expect(entered.listNewestPage)
+        #expect(entered.listOlderPages)
+        #expect(entered.keepBrowsing)
+    }
 }

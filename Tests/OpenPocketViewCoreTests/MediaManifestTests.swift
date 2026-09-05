@@ -86,6 +86,32 @@ import Testing
         #expect(thumb?.pathExtension.isEmpty == true)
     }
 
+    @Test func pocket3SingleSdIgnoresStampedInternalStore() {
+        // Pocket 3 handles carry the internal bit, and decodeStores stamps storage 1
+        // from that counter. HTTP still has to hit `/v2?storage=0` — the only mount.
+        // A poisoned winner of 1 (200 on the empty internal store) must not stick.
+        let handle: UInt32 = 0x4010_0880
+        #expect(
+            MediaHTTP.resolvedStorage(
+                stamped: 1, handle: handle, winner: nil, singleSdStorage: true) == 0)
+        #expect(
+            MediaHTTP.resolvedStorage(
+                stamped: 1, handle: handle, winner: 1, singleSdStorage: true) == 0)
+        #expect(
+            MediaHTTP.resolvedStorage(
+                stamped: 1, handle: handle, winner: nil, singleSdStorage: false) == 1)
+        #expect(
+            MediaHTTP.resolvedStorage(
+                stamped: 1, handle: handle, winner: 0, singleSdStorage: false) == 0)
+        let file = MediaManifest.decode(fixture)[0]
+        let first = MediaHTTP.resolvedStorage(
+            stamped: 1, handle: file.handle, winner: nil, singleSdStorage: true)
+        #expect(first == 0)
+        let play = MediaHTTP.playbackCandidates(file: file, firstStorage: first)
+        #expect(play.first?.storage == 0)
+        #expect(play.first?.path.hasSuffix(".LRF") == true)
+    }
+
     @Test func listPayloadMatchesOsmosis() {
         let newest = MediaListCommand.listPayload(counter: 1, cursor: 1)
         #expect(newest[4] == 1)

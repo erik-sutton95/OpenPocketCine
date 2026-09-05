@@ -15,6 +15,7 @@ GET http://192.168.2.1/v2?storage={0|1}&path=
 | --- | --- |
 | Thumbnails | `MISC/THM/…/.scr` (JPEG) |
 | Internal handle bit `0x40000000` | storage 1 |
+| Pocket 3 (single microSD) | always storage 0, even when the handle has that bit |
 
 Do not put camera paths or captured filenames that include secrets into issues.
 
@@ -22,7 +23,7 @@ Do not put camera paths or captured filenames that include secrets into issues.
 
 | set/cmd | meaning | notes |
 | --- | --- | --- |
-| `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Trigger `4a040e10`. Newest page needs no playback; older pages do. |
+| `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Trigger `4a040e10`. Newest page needs no playback (list it even if `0x02/0x0c` ACKs E0); older pages do. |
 | `0x00/0x27` | media list chunks | `[10B sub][chunk]`; subtype `01` is data. Concat in arrival order → CompositePack. |
 | `0x02/0x0c` | enter/exit playback | `01 01 00 01` / `01 01 00 00`. Hold with `0x00/0x88` ~1 Hz. Do not poll `0x02/0x8E` while held. |
 
