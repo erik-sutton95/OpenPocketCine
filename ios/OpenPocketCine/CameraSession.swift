@@ -473,7 +473,9 @@ final class CameraSession {
                     )
                     return
                 }
-                phase = .failed((error as? LocalizedError)?.errorDescription ?? "\(error)")
+                let why = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                ControlLiveLog.line("session: connect failed at \(phase.label) — \(why)")
+                phase = .failed(why)
                 applyLinkPresentation()
             }
         }
@@ -580,12 +582,14 @@ final class CameraSession {
     }
 
     func forgetWifiCreds(for camera: SavedCamera) {
+        forgetWifiCreds(
+            cameraId: camera.id, advertisedName: camera.advertisedName, ssid: camera.lastSSID)
+    }
+
+    private func forgetWifiCreds(cameraId: UUID, advertisedName: String?, ssid: String?) {
         CameraWifiKeychain.delete(
-            cameraId: camera.id,
-            advertisedName: camera.advertisedName,
-            lastSSID: camera.lastSSID
-        )
-        if connectedCamera?.id == camera.id || cachedWifiCameraId == camera.id {
+            cameraId: cameraId, advertisedName: advertisedName, lastSSID: ssid)
+        if connectedCamera?.id == cameraId || cachedWifiCameraId == cameraId {
             cachedSSID = nil
             cachedPassword = nil
             cachedWifiCameraId = nil
@@ -702,17 +706,17 @@ final class CameraSession {
         // settle sleeps; 0x53/0x10 still goes out.
         startKeepalive(ssid: nil)
         phase = .readingWifiCreds
-        let skipAPSettle =
-            WiFiJoiner.isCameraPathReady() && resolvedWifiCreds(for: camera).skipBle
+        let credsFromCache = resolvedWifiCreds(for: camera).skipBle
+        let skipAPSettle = WiFiJoiner.isCameraPathReady() && credsFromCache
         if !skipAPSettle {
             try await Task.sleep(for: .milliseconds(200))
         }
-        log.info("creds: sending 0x53/0x10 (wake AP)")
+        ControlLiveLog.line("creds: sending 0x53/0x10 (wake AP)")
         ble.send(Commands.session5310())
         do {
             _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))  // Pocket 3 may answer e0
         } catch Fail.timeout {
-            log.info("creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
+            ControlLiveLog.line("creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
         } catch Fail.disconnected {
             throw Fail.disconnectedDuring("0x53/0x10")
         }
@@ -722,24 +726,38 @@ final class CameraSession {
         try Task.checkCancellation()
         let (ssid, pass) = try await wifiCredsAfterPairing(camera)
         try assertSSIDBelongs(to: camera, ssid: ssid)
-        log.info(
-            "creds: SSID \(ssid, privacy: .public) (\(pass.count) char password) body=\(camera.model.name, privacy: .public)"
+        ControlLiveLog.line(
+            "creds: SSID \(ssid) (\(pass.count) char password, \(credsFromCache ? "cached" : "from BLE")) body=\(camera.model.name)"
         )
         let persistHotspot = CameraSoftAP.shouldPersistHotspot(
             isSavedCamera: SavedCameraStore.load().contains { $0.id == camera.id }
                 || cachedWifiCameraId == camera.id)
-        persistWifiCreds(camera: camera, ssid: ssid, password: pass)
 
         phase = .joiningWifi
         // Both SoftAPs are 192.168.2.1. Do not wait for that subnet to vanish —
         // iOS stays associated until we apply the Nano (or Pocket) hotspot.
         let otherSSIDs = leftoverSoftAPSSIDs(besides: ssid)
-        log.info(
-            "wifi: switch to \(ssid, privacy: .public) kicking \(otherSSIDs.joined(separator: ","), privacy: .public)"
-        )
-        try await WiFiJoiner.joinCameraAP(
-            ssid: ssid, passphrase: pass, wpa3: camera.model.wpa3,
-            knownOtherSSIDs: otherSSIDs, persist: persistHotspot)
+        ControlLiveLog.line(
+            "wifi: switch to \(ssid) kicking \(otherSSIDs.joined(separator: ","))")
+        do {
+            try await WiFiJoiner.joinCameraAP(
+                ssid: ssid, passphrase: pass, wpa3: camera.model.wpa3,
+                knownOtherSSIDs: otherSSIDs, persist: persistHotspot)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // A Pocket "Reset Wi-Fi" regenerates the passphrase. Cached creds
+            // used to be kept through every failed join (Keychain survives
+            // reinstall, and the wizard has no Forget), so the tester in #235
+            // could never join again. Drop them; the next tap re-reads over BLE.
+            if credsFromCache {
+                ControlLiveLog.line("creds: join failed with cached creds — dropping cache")
+                forgetWifiCreds(cameraId: camera.id, advertisedName: camera.name, ssid: ssid)
+            }
+            throw error
+        }
+        // Known good only once the join worked.
+        persistWifiCreds(camera: camera, ssid: ssid, password: pass)
         joinedSSID = ssid
         timeline.mark("path", now: ProcessInfo.processInfo.systemUptime)
 
@@ -4485,9 +4503,8 @@ final class CameraSession {
     private func wifiCredsAfterPairing(_ camera: FoundCamera) async throws -> (String, String) {
         let known = resolvedWifiCreds(for: camera)
         if known.skipBle, let ssid = known.ssid, let pass = known.password {
-            log.info(
-                "creds: skipping BLE GetSSID/GetPassword — \(known.source, privacy: .public) SSID \(ssid, privacy: .public)"
-            )
+            ControlLiveLog.line(
+                "creds: skipping BLE GetSSID/GetPassword — \(known.source) SSID \(ssid)")
             return (ssid, pass)
         }
 
@@ -4570,23 +4587,23 @@ final class CameraSession {
                 let status = frame.payload.first ?? 0xFF
                 let value = Duml.unpackStatusString(frame.payload)
                 if !value.isEmpty {
-                    log.info("creds: \(name, privacy: .public) ok (\(value.count) chars)")
+                    ControlLiveLog.line("creds: \(name) ok (\(value.count) chars)")
                     return value
                 }
                 // 1-byte or 0xE0–0xEF: camera refused. Retrying the same GET will not help.
                 if frame.payload.count <= 1 || (0xE0...0xEF).contains(status) {
                     if let cached, !cached.isEmpty {
-                        log.info(
-                            "creds: \(name, privacy: .public) status=\(status) (\(frame.payload.count)B) — using cached value"
+                        ControlLiveLog.line(
+                            "creds: \(name) status=\(status) (\(frame.payload.count)B) — using cached value"
                         )
                         return cached
                     }
                     throw Fail.credsRefused(name, status)
                 }
-                log.info("creds: \(name, privacy: .public) empty reply (status=\(status))")
+                ControlLiveLog.line("creds: \(name) empty reply (status=\(status))")
                 last = Fail.credsEmpty(name)
             } catch Fail.timeout {
-                log.info("creds: \(name, privacy: .public) attempt \(attempt) timed out")
+                ControlLiveLog.line("creds: \(name) attempt \(attempt) timed out")
                 last = Fail.commandTimeout(name)
             } catch Fail.disconnected {
                 throw Fail.disconnectedDuring(name)
@@ -4596,7 +4613,7 @@ final class CameraSession {
             try await Task.sleep(for: .milliseconds(400))
         }
         if let cached, !cached.isEmpty {
-            log.info("creds: \(name, privacy: .public) giving up — using cached value")
+            ControlLiveLog.line("creds: \(name) giving up — using cached value")
             return cached
         }
         throw last

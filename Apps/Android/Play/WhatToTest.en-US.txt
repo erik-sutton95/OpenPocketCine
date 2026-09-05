@@ -4,7 +4,7 @@ New and changed
 - The on-screen gimbal stick uses the same gradual speed.
 - While live, Operator Setup then Controls has a Shooting Mode row. Switch Video, Photo, and the time-based modes from there. The row follows a mode changed on the body itself.
 - Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform, parade, and assists.
-- Operator Setup → System → Share Diagnostics sends a report with no name or location.
+- Share Diagnostics is on first pair and in Operator Setup → System. No name or location.
 
 Fixes
 
@@ -19,7 +19,7 @@ Fixes
 
 What to test
 
-- Pair a Pocket, go live, and pan with the on-screen stick: half throw slower than full push. Stay live two minutes with LUT on. Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject; the picture must not freeze while timecode moves. If Reconnecting appears, last picture stays and live view returns without closing the app. Leave it idle on Wi-Fi a few minutes; it should not drop. With a game controller: left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch switches COLOR to D-Log first, then zooms.
+- Tap Share Diagnostics before pairing finishes, then pair a Pocket, go live, and pan with the on-screen stick: half throw slower than full push. Stay live two minutes with LUT on. Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject; the picture must not freeze while timecode moves. If Reconnecting appears, last picture stays and live view returns without closing the app. Leave it idle on Wi-Fi a few minutes; it should not drop. With a game controller: left stick, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 zoom jumps, L2/R2 hold-to-zoom, D-pad ISO/shutter, one buzz at a stop. On Pocket 4 Pro in D-Log2 (idle): R2 or pinch switches COLOR to D-Log first, then zooms.
 - Pair a Nano, go live, open Operator Setup, Controls. Switch Video to Photo and back. The body should follow; Photo should take a still.
 - Record a short take in Video, open it in the library. Share sends the original file, not a preview. Close the library, then Operator Setup: live view still shows a picture. Record a long 4K take and play it from the library: the proxy plays and the app stays up.
 - Go live, then turn camera Wi-Fi off and on or let the phone hop to home Wi-Fi. The app retries or returns to pairing; it must not close. Then leave live view, open clips and return, and rotate the phone while live, a few times over. No crash, and the picture comes back each time.

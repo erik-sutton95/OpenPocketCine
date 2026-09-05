@@ -13,6 +13,7 @@ import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
 import com.opencapture.openpocketcine.feed.SerialSessionGate
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
@@ -344,7 +345,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         return@launch
                     }
                     if (_phase.value == ConnectionPhase.FAILED) return@launch
-                    _failure.value = e.message ?: e.toString()
+                    val why = e.message ?: e.toString()
+                    DiagnosticCenter.log(
+                        "error",
+                        "session",
+                        "connect",
+                        "session: connect failed at ${_phase.value.name.lowercase()} — $why",
+                    )
+                    _failure.value = why
                     _phase.value = ConnectionPhase.FAILED
                 }
             }
@@ -478,18 +486,43 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
         startKeepalive(joinedSSID)
         publishPhase(ConnectionPhase.READING_WIFI_CREDS)
-        val skipApSettle = joiner.isProcessBound() && wifiCache.load(camera.id) != null
+        val credsFromCache = wifiCache.load(camera.id) != null
+        val skipApSettle = joiner.isProcessBound() && credsFromCache
         if (!skipApSettle) delay(200)
         ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_5310, 0x8053))
         runCatching { waitFrame(0x53, 0x10, 2_000) }
         if (!skipApSettle) delay(600)
         val (ssid, pass) = wifiCredsAfterPairing(camera)
+        DiagnosticCenter.log(
+            "info",
+            "session",
+            "creds",
+            "creds: SSID $ssid (${pass.length} char password, ${if (credsFromCache) "cached" else "from BLE"}) body=${camera.model.name}",
+        )
 
         publishPhase(ConnectionPhase.JOINING_WIFI)
         if (!joiner.isProcessBound()) {
             val joined = joiner.join(ssid, pass, camera.model.wpa3)
-            if (!joined) error("couldn't join camera Wi-Fi — tap the system Join prompt if Android asked")
+            if (!joined) {
+                // iOS parity: a Pocket "Reset Wi-Fi" regenerates the passphrase.
+                // Drop cached creds so the next tap re-reads them over BLE.
+                if (credsFromCache) {
+                    DiagnosticCenter.log(
+                        "info",
+                        "session",
+                        "creds",
+                        "creds: join failed with cached creds — dropping cache",
+                    )
+                    wifiCache.remove(camera.id)
+                }
+                error(
+                    "couldn't join camera Wi-Fi — tap the system Join prompt if Android asked. " +
+                        "On 5.8 GHz the camera Wi-Fi can take about a minute to appear. Try again, or set the camera to 2.4 GHz (Settings, Wireless, Frequency) for a faster join.",
+                )
+            }
         }
+        // Known good only once the join worked.
+        wifiCache.save(camera.id, ssid, pass)
         joinedSSID = ssid
         wifiLock.acquire()
 
@@ -501,7 +534,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun wifiCredsAfterPairing(camera: FoundCamera): Pair<String, String> {
         val cached = wifiCache.load(camera.id)
         if (cached != null) {
-            Log.i(TAG, "creds: skipping BLE GetSSID/GetPassword — cached SSID ${cached.first}")
+            DiagnosticCenter.log(
+                "info",
+                "session",
+                "creds",
+                "creds: skipping BLE GetSSID/GetPassword — cached SSID ${cached.first}",
+            )
             return cached
         }
         val ssid =
@@ -512,7 +550,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             readWifiString("GetPassword", 0x07, 0x0E) {
                 ble.send(SwiftCore.command(SwiftCore.CMD_GET_WIFI_PASSWORD, 0x800E))
             }
-        wifiCache.save(camera.id, ssid, pass)
         return ssid to pass
     }
 
@@ -3336,7 +3373,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         var attempt = 0
         while (SystemClock.elapsedRealtime() < deadline) {
             attempt += 1
-            Log.i(TAG, "creds: $name attempt $attempt")
+            DiagnosticCenter.log("info", "session", "creds", "creds: $name attempt $attempt")
             send()
             try {
                 val frame = waitFrame(set, cmd, 6_000)
