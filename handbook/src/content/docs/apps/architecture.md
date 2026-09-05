@@ -16,8 +16,10 @@ live in the shells.
 | Tests | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core. |
 
 Both apps must call the same state machines (`CameraSoftAP`, `FeedWatchdog`,
-`SessionRecovery`, `CameraSetMailbox`). Android reaches those through JNI
-(`cameraSoftAPDecision`, `feedWatchdogTick`). Do not clone that ladder in Kotlin.
+`SessionRecovery`, `CameraSetMailbox`, `CameraWifiResolution`). Android reaches
+those through JNI (`cameraSoftAPDecision`, `feedWatchdogTick`) or a Kotlin
+lockstep (`CameraWifiResolution`). Do not clone the SoftAP / watchdog ladder
+in Kotlin.
 
 HUD glyphs are vendored Lucide SVGs (`OpcIcon` on both shells).
 
