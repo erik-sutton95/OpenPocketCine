@@ -11,7 +11,9 @@ phones, Android 10 or newer.
 
 If pairing or live view fails: Connection setup **Share Diagnostics**, or
 Operator Setup → System → **Share Diagnostics**. The report has no name,
-location, or Wi-Fi password.
+location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
+RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
+exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 
 ## How Swift reaches Android
 
