@@ -30,4 +30,58 @@ class SavedCameraRecordsTest {
         val decoded = SharedPreferencesSavedCameraStore.decode(SharedPreferencesSavedCameraStore.encode(records))
         assertEquals(records, decoded)
     }
+
+    @Test
+    fun renamedSoftAPUsesLiveAdvertisedSSIDNotCache() {
+        val id = "pocket-1"
+        val renamed =
+            CameraWifiResolution.resolve(
+                cameraId = id,
+                savedSSID = "OsmoPocket4P-AAAA",
+                memoryCameraId = id,
+                memorySsid = "OsmoPocket4P-AAAA",
+                memoryPassword = "pocket-pass",
+                keychainSsid = "OsmoPocket4P-AAAA",
+                keychainPassword = "pocket-pass",
+                advertisedName = "VanCam",
+            )
+        assertEquals("VanCam", renamed.ssid)
+        assertEquals("pocket-pass", renamed.password)
+        assertTrue(renamed.skipBle)
+        assertEquals("memory", renamed.source)
+
+        val generic =
+            CameraWifiResolution.resolve(
+                cameraId = id,
+                savedSSID = "OsmoPocket4P-AAAA",
+                memoryCameraId = id,
+                memorySsid = "OsmoPocket4P-AAAA",
+                memoryPassword = "pocket-pass",
+                keychainSsid = "OsmoPocket4P-AAAA",
+                keychainPassword = "pocket-pass",
+                advertisedName = "DJI camera",
+            )
+        assertEquals("OsmoPocket4P-AAAA", generic.ssid)
+        assertTrue(generic.skipBle)
+    }
+
+    @Test
+    fun bleRenameReplacesScanRowName() {
+        assertTrue(
+            FoundCameraIdentity.shouldReplace(
+                existingName = "OsmoPocket4P-AAAA",
+                existingModelId = 0x22,
+                incomingName = "VanCam",
+                incomingModelId = 0x22,
+            )
+        )
+        assertTrue(
+            !FoundCameraIdentity.shouldReplace(
+                existingName = "VanCam",
+                existingModelId = 0x22,
+                incomingName = "DJI camera",
+                incomingModelId = 0x22,
+            )
+        )
+    }
 }

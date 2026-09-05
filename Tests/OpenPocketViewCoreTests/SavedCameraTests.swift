@@ -144,6 +144,15 @@ import Testing
             !FoundCameraIdentity.shouldReplace(
                 existingName: "OsmoNano-ABCD", existingModelId: 0x19,
                 incomingName: "DJI camera", incomingModelId: nil))
+        #expect(
+            FoundCameraIdentity.shouldReplace(
+                existingName: "OsmoPocket4P-AAAA", existingModelId: 0x22,
+                incomingName: "VanCam", incomingModelId: 0x22),
+            "BLE local name follows a SoftAP rename — keep the scan row current")
+        #expect(
+            !FoundCameraIdentity.shouldReplace(
+                existingName: "VanCam", existingModelId: 0x22,
+                incomingName: "DJI camera", incomingModelId: 0x22))
     }
 
     @Test func namelessAdvertKeepsSavedNanoIdentity() {
@@ -191,6 +200,43 @@ import Testing
         #expect(CameraSoftAP.isOsmoSoftAPSSID("OsmoPocket4P-AAAA"))
         #expect(CameraSoftAP.isOsmoSoftAPSSID("OsmoNano-BBBB"))
         #expect(!CameraSoftAP.isOsmoSoftAPSSID("HomeWiFi"))
+    }
+
+    @Test func renamedSoftAPUsesLiveAdvertisedSSIDNotCache() {
+        let id = UUID()
+        let memory = CameraWifiResolution.Memory(
+            cameraId: id, ssid: "OsmoPocket4P-AAAA", password: "pocket-pass")
+        let renamed = CameraWifiResolution.resolve(
+            cameraId: id,
+            savedSSID: "OsmoPocket4P-AAAA",
+            memory: memory,
+            keychainSSID: "OsmoPocket4P-AAAA",
+            keychainPassword: "pocket-pass",
+            advertisedName: "VanCam")
+        #expect(renamed.ssid == "VanCam")
+        #expect(renamed.password == "pocket-pass")
+        #expect(renamed.skipBle)
+        #expect(renamed.source == "memory")
+
+        let generic = CameraWifiResolution.resolve(
+            cameraId: id,
+            savedSSID: "OsmoPocket4P-AAAA",
+            memory: memory,
+            keychainSSID: "OsmoPocket4P-AAAA",
+            keychainPassword: "pocket-pass",
+            advertisedName: "DJI camera")
+        #expect(generic.ssid == "OsmoPocket4P-AAAA")
+        #expect(generic.skipBle)
+
+        let matching = CameraWifiResolution.resolve(
+            cameraId: id,
+            savedSSID: "OsmoPocket4P-AAAA",
+            memory: memory,
+            keychainSSID: "OsmoPocket4P-AAAA",
+            keychainPassword: "pocket-pass",
+            advertisedName: "OsmoPocket4P-AAAA")
+        #expect(matching.ssid == "OsmoPocket4P-AAAA")
+        #expect(matching.skipBle)
     }
 
     @Test func leftoverGATTMustNotDriveTheSelectedSession() {
