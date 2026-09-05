@@ -203,6 +203,9 @@ final class HevcDecoder {
     /// LUT (or other GPU) just ended. Keep the last CI frame until the layer presents.
     private var layerHandoffPending = false
     private var lastNeedsSample = false
+    private var lastNeedGPU = false
+    private var lastOverlayFeed = false
+    private var lastReplacesIdentity = false
     /// Last VT / assist source. LUT-off enqueues this on the layer so the canvas never goes black.
     private var lastDecodedBuffer: CVPixelBuffer?
     private var lastPresentHealthLogAt: Date?
@@ -450,6 +453,9 @@ final class HevcDecoder {
         pendingLayerRelease = false
         layerHandoffPending = false
         lastNeedsSample = false
+        lastNeedGPU = false
+        lastOverlayFeed = false
+        lastReplacesIdentity = false
         sessionOwnsVT = false
         hardwareDecoderUnlocked = false
         lastDecodedBuffer = nil
@@ -624,6 +630,22 @@ final class HevcDecoder {
         processedFeed?.resetPresentDedup()
         let needVT = shouldStartVT
         let needGPU = effects.needsGPUFeed || presentsOnMetal
+        let overlay = effects.needsOverlayFeed && !presentsOnMetal
+        let replace = effects.replacesIdentityFeed
+        // LUT 50/50 is a compositor flag on an already-replacing cube. Do not
+        // rebuild VT, hold IDR, or flip layer ownership — that was the
+        // Reconnecting / force-quit (#218).
+        let pathUnchanged =
+            needVT == lastNeedsSample && needGPU == lastNeedGPU && overlay == lastOverlayFeed
+            && replace == lastReplacesIdentity
+        // Identity (!needGPU) must still restore the HEVC layer even when the
+        // flags look unchanged — tests and LUT-off cover Metal that was left
+        // visible. Skip only while we stay on an already-running GPU path
+        // (LUT 50/50 is a compositor flag, not a layer/VT tear).
+        if pathUnchanged, needGPU, !(needVT && vtSession == nil && format != nil) {
+            syncAssistPolicy()
+            return
+        }
         // A fresh VT session cannot decode mid-GOP P-frames. Once VT owns the
         // session, assist off is a present-path change — keep decoding.
         let vtStarting = needVT && !lastNeedsSample
@@ -643,11 +665,14 @@ final class HevcDecoder {
             if let buffer = lastDecodedBuffer, isDisplayReady {
                 _ = enqueueDecodedFrame(buffer, recoverOnFailure: false)
             }
-        } else if effects.needsOverlayFeed, !presentsOnMetal {
+        } else if overlay {
             // Zebra / peaking / false colour ride on top of the identity layer.
             displayLayer.isHidden = false
         }
         lastNeedsSample = needVT
+        lastNeedGPU = needGPU
+        lastOverlayFeed = overlay
+        lastReplacesIdentity = replace
         syncAssistPolicy()
         if vtStarting {
             // Empty VT cannot join mid-GOP. Hold even if the session skips a
@@ -754,7 +779,11 @@ final class HevcDecoder {
         if !result.shouldPresent { return }
 
         let replaceIdentity = effects.replacesIdentityFeed
-        let metalOwnsPicture = replaceIdentity && (processedFeed?.hasPresentedFrame ?? false)
+        let metalOwnsPicture =
+            replaceIdentity
+            && FeedPresentPolicy.replaceOwnsPicture(
+                hasPresentedFrame: processedFeed?.hasPresentedFrame ?? false,
+                lastPresentWasOverlay: processedFeed?.lastPresentWasOverlay ?? false)
 
         // Identity picture: same VT buffer Face AF already sees. Never skip this
         // for a Metal remake — NSNull / 10-bit layer enqueue is how the well
