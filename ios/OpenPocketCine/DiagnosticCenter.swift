@@ -1,6 +1,7 @@
 import Foundation
 import MetricKit
 import OpenPocketViewCore
+import SwiftUI
 import UIKit
 import os
 
@@ -160,6 +161,13 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         return url
     }
 
+    /// Compact paste plus `report.txt` for the system share sheet.
+    @MainActor
+    func beginShare(session: CameraSession) -> URL? {
+        copyCompactSummaryForTestFlight(session: session)
+        return writeReport(session: session)
+    }
+
     @MainActor
     func compactSummary(session: CameraSession) -> String {
         DiagnosticReport.compactSummary(
@@ -290,6 +298,21 @@ enum AppModelDiagnosticsAnchor {
     @MainActor static var session: CameraSession {
         model?.session ?? CameraSession()
     }
+}
+
+struct DiagnosticSharePayload: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+struct DiagnosticActivityShareView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 private var opcPreviousUncaught: NSUncaughtExceptionHandler?

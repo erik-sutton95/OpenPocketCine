@@ -302,7 +302,7 @@ Ship both shells or write the exception in the table in the same PR.
 | Zoom | Chip 1×→3×→6×→12×; `CamFov` hybrid readout; pinch at 20 Hz without ACK wait; D-Log2 hops to D-Log off 1× | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset | Face detector implementation | **physical** both |
 | Operator Setup | Seven tabs (Link, Sharing, View Assist, Controls, Display, Storage, System); DJI Black; Sora + IBM Plex; NOTICE legal | Frame.io row is “Not configured” until iOS keys exist | **physical** both |
-| Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, independent playback assist rail, live HEVC held while library covers the monitor | Frame.io C2C and LUT bake on export: iOS only. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback chrome is an 82% DJI-black plate (no Kyant). | **physical** both |
+| Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, independent playback assist rail, live HEVC held while library covers the monitor | Frame.io upload and LUT bake on export: iOS only. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback chrome is an 82% DJI-black plate (no Kyant). | **physical** both |
 | Explicit skip | — | VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL / De-SQ / MAG | n/a |
 
 Pixel-level numbers that are the contract (drum faces 27/20 pt, 0.72 plates,
