@@ -132,6 +132,7 @@ internal object FeedEffectsRenderPlanFactory {
                 cameraName = cameraName,
             )
         val lutCube = lutCube(context, look, assist.lutExposureStops, colorMode)
+        // Same gate as iOS `FeedPresentPolicy.appliesSplitComparison` (#218).
         val split =
             assist.splitComparison && lutCube != null && lutOn &&
                 (!falseColor || assist.falseColorScale == FalseColorScale.LIMITS)
