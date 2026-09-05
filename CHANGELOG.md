@@ -165,6 +165,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Renaming the Pocket SoftAP no longer joins the cached old SSID while the
+  paired row shows the new BLE name (#257). Cached password is kept; a live
+  advertised name that differs from Keychain / Keystore wins. Scan rows
+  update when the BLE local name changes. Both shells.
 - LUT 50/50 split dropped live view and stayed on Reconnecting until
   force-quit (#218): split without a cube was treated as replace-grade
   (empty Metal over HEVC), and overlapping LUT bakes blocked MainActor on
