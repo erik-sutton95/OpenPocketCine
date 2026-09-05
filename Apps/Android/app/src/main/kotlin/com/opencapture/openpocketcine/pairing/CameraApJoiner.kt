@@ -10,6 +10,7 @@ import android.net.wifi.WifiNetworkSpecifier
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.Socket
@@ -45,7 +46,9 @@ class CameraApJoiner(context: Context) {
         ssid: String,
         passphrase: String,
         wpa3: Boolean,
-        timeoutMillis: Int = 45_000,
+        // Core `CameraSoftAPSwitch.joinDeadlineSeconds`: a 5.8 GHz SoftAP in a
+        // DFS region beacons ~60 s after power-on; 45 s gave up first (#235).
+        timeoutMillis: Int = 90_000,
     ): Boolean {
         val trimmed = ssid.trim()
         if (trimmed.isEmpty()) return false
@@ -144,6 +147,12 @@ class CameraApJoiner(context: Context) {
                                 joinContinuation = null
                                 wait
                             }
+                        DiagnosticCenter.log(
+                            "info",
+                            "session",
+                            "wifi",
+                            "wifi: join $ssid unavailable after ${timeoutMillis}ms",
+                        )
                         if (pending?.isActive == true) pending.resume(false)
                     }
 
@@ -162,8 +171,20 @@ class CameraApJoiner(context: Context) {
                     return@post
                 }
                 try {
+                    DiagnosticCenter.log(
+                        "info",
+                        "session",
+                        "wifi",
+                        "wifi: request $ssid timeout=${timeoutMillis}ms wpa3=$wpa3",
+                    )
                     connectivity.requestNetwork(request, networkCallback, mainHandler, timeoutMillis)
-                } catch (_: RuntimeException) {
+                } catch (error: RuntimeException) {
+                    DiagnosticCenter.log(
+                        "info",
+                        "session",
+                        "wifi",
+                        "wifi: request $ssid failed ${error.javaClass.simpleName} ${error.message}",
+                    )
                     val pending =
                         synchronized(lock) {
                             val wait = joinContinuation
@@ -241,7 +262,12 @@ class CameraApJoiner(context: Context) {
             joinContinuation = null
             resumeNow = pending
         }
-        Log.i(TAG, "wifi: available $network reassoc=$reassociated")
+        DiagnosticCenter.log(
+            "info",
+            "session",
+            "wifi",
+            "wifi: available $network reassoc=$reassociated",
+        )
         if (resumeNow?.isActive == true) resumeNow.resume(true)
         if (reassociated) onReassociated?.invoke()
     }

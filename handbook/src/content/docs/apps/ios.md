@@ -68,7 +68,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   original. Storage **Full Resolution Caching** (on by default) also caches
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
-- Optional Frame.io Camera to Cloud when you add your own Adobe keys
+- Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 
 Verify record start/stop on the camera body until you trust the link.
 
@@ -89,6 +89,7 @@ change `Sources/`, `ios/`, or `Package.swift` update
 `ios/TestFlight/WhatToTest.en-US.txt` for operators. See
 [`docs/testflight-ci.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md).
 
-If live view fails: Operator Setup → System → **Share Diagnostics**, or take a
-screenshot for TestFlight and paste the copied report into the feedback. The
-report has no name, location, or Wi-Fi password.
+If pairing or live view fails: Connection setup **Share Diagnostics**, or
+Operator Setup → System → **Share Diagnostics**, or take a screenshot for
+TestFlight and paste the copied report into the feedback. The report has no
+name, location, or Wi-Fi password.

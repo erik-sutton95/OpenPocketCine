@@ -141,6 +141,12 @@ _Avoid_: preview (alone), low-res
 Storage switch (on by default). On, opening a clip also downloads the original camera file. Off keeps only the proxy.
 _Avoid_: RAW cache, 4K always (the setting name is Full Resolution Caching)
 
+**Frame.io upload**:
+Optional iOS clip upload through the Frame.io Platform API (v4) with Adobe IMS
+user OAuth (PKCE). Bring-your-own Adobe Native App keys. Not an Adobe
+integrator program.
+_Avoid_: Camera to Cloud, C2C, camera-to-cloud, Camera-to-Cloud
+
 **Physical**:
 Proof on a real phone. Simulator cannot exercise BLE or camera Wi-Fi.
 _Avoid_: on-device (prefer **physical**)

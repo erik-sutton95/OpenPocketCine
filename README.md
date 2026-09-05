@@ -12,7 +12,7 @@
 
 <p align="center">
   <strong>The open field monitor for DJI Osmo.</strong><br>
-  Pro monitoring scopes, playback, camera control, and Camera-to-Cloud export with LUT
+  Pro monitoring scopes, playback, camera control, and optional Frame.io upload with LUT
   baking. Free and open source.
 </p>
 
@@ -49,7 +49,7 @@ iOS (iPhone and iPad) is the daily driver. Android is a Play closed-testing beta
 - **Review before striking the set.** On iOS, browse clips and stills, scrub playback, check
   scopes, and preview the look.
 - **Ship it with the look baked in.** On iOS, built-in or custom `.cube` LUTs, native share, and
-  optional Frame.io Camera to Cloud when you add your own Adobe app keys.
+  optional Frame.io upload when you add your own Adobe app keys.
 
 Verify record start/stop on the camera body until you trust the link. Reverse-engineered control
 can be incomplete.
@@ -107,7 +107,7 @@ delete bad takes before you pack up.
 the playback rail (GPU LUT / peaking / zebra on Android playback is a follow-up; the
 chips already persist). Export with an optional baked LUT on iOS, preview high-frame-rate
 clips at conform speed, share natively, or upload to [Frame.io](https://www.frame.io/)
-when Camera to Cloud is configured.
+when Frame.io is configured.
 
 <p>
   <a href="https://www.frame.io/">
