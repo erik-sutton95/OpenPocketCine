@@ -88,4 +88,17 @@ if [[ -d site/assets/screens ]]; then
   done < <(find site/assets/screens -type f -name '*.webp' -print)
 fi
 
+# Public visitor copy names the optional Frame.io destination "Frame.io upload"
+# (Platform API v4). Adobe's integrator-program name is not ours to use.
+# CONTEXT.md owns the avoid-list.
+public_copy=(site README.md CHANGELOG.md handbook/src/content/docs)
+if hits=$(grep -RInEi --include='*.html' --include='*.md' \
+  -e 'Camera[[:space:]-]+to[[:space:]-]+Cloud' \
+  -e '(^|[^[:alnum:]])C2C([^[:alnum:]]|$)' \
+  "${public_copy[@]}" 2>/dev/null); then
+  echo "Public copy must not use Adobe's integrator-program name. Call it Frame.io upload:" >&2
+  printf '%s\n' "$hits" >&2
+  exit 1
+fi
+
 echo "Landing-page check passed (${mode} tree)."

@@ -84,7 +84,7 @@ struct SettingsRootView: View {
     @State private var showLUTPicker = false
     @State private var expandedDisp: PocketDispMode?
     @State private var confirmClearCache = false
-    @State private var diagnosticsShare: SharePayload?
+    @State private var diagnosticsShare: DiagnosticSharePayload?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -140,7 +140,7 @@ struct SettingsRootView: View {
             LUTPicker(assist: model.assist)
         }
         .sheet(item: $diagnosticsShare) { payload in
-            ActivityShareView(items: [payload.url])
+            DiagnosticActivityShareView(items: [payload.url])
         }
     }
 
@@ -894,10 +894,8 @@ struct SettingsRootView: View {
             }
             SettingsInlineRow(title: "Share Diagnostics", help: SettingsHelpCopy.shareDiagnostics) {
                 SettingsActionPill(title: "Share") {
-                    DiagnosticCenter.shared.copyCompactSummaryForTestFlight(
-                        session: model.session)
-                    if let url = DiagnosticCenter.shared.writeReport(session: model.session) {
-                        diagnosticsShare = SharePayload(url: url)
+                    if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
+                        diagnosticsShare = DiagnosticSharePayload(url: url)
                     }
                 }
             }
@@ -971,21 +969,6 @@ struct SettingsRootView: View {
         let build = info?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
     }
-}
-
-private struct SharePayload: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct ActivityShareView: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 /// One switch per cinema view-assist tool — the DISP 2 keep list.

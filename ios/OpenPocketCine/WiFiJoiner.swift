@@ -3,7 +3,6 @@ import Foundation
 import Network
 import NetworkExtension
 import OpenPocketViewCore
-import os
 
 /// Joins the camera's SoftAP with the credentials read over BLE. Requires the
 /// `com.apple.developer.networking.HotspotConfiguration` entitlement. The camera is an
@@ -19,15 +18,19 @@ enum WiFiJoiner {
         case stillOnOtherBody(String)
         var errorDescription: String? {
             switch self {
-            case .failed(let s): s
-            case .pathNotReady: "camera Wi-Fi joined but 192.168.2.x never appeared"
+            case .failed(let s):
+                "couldn't join camera Wi-Fi (\(s)). \(CameraSoftAPSwitch.frequencyHint)"
+            case .pathNotReady:
+                "camera Wi-Fi joined but 192.168.2.x never appeared. \(CameraSoftAPSwitch.frequencyHint)"
             case .stillOnOtherBody(let ssid):
                 "couldn't switch from \(ssid) — tap Connect again"
             }
         }
     }
 
-    private static let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "wifi")
+    /// Journal (`control-live.log`), not only os_log: the diagnostic report
+    /// showed `phase: joiningWifi` with no line about why (#235).
+    private static func journal(_ text: String) { ControlLiveLog.line(text) }
 
     /// Leave the other Osmo SoftAP and join `ssid`. Pocket and Nano share
     /// `192.168.2.1`, so a leftover camera DHCP address is not a stop — apply
@@ -43,38 +46,48 @@ enum WiFiJoiner {
         leave(ssids: Array(kick))
         await leaveOtherOsmoSoftAPs(except: ssid)
 
-        var lastForeign: String?
-        for attempt in 1...CameraSoftAPSwitch.maxJoinAttempts {
+        let deadline = Date().addingTimeInterval(CameraSoftAPSwitch.joinDeadlineSeconds)
+        var lastError: Error = JoinError.pathNotReady
+        var attempt = 0
+        while true {
+            attempt += 1
             try Task.checkCancellation()
             if let foreign = CameraSoftAPSwitch.ssidToKick(
                 currentSSID: await currentSSID(), target: ssid)
             {
-                log.info(
-                    "wifi: kick \(foreign, privacy: .public) then join \(ssid, privacy: .public) #\(attempt)"
-                )
+                journal("wifi: kick \(foreign) then join \(ssid) #\(attempt)")
                 leave(ssid: foreign)
                 kick.insert(foreign)
-                lastForeign = foreign
             }
             leave(ssids: Array(kick))
             await leaveOtherOsmoSoftAPs(except: ssid)
             try? await Task.sleep(for: .milliseconds(250))
-            try await join(ssid: ssid, passphrase: passphrase, wpa3: wpa3, persist: persist)
-            try await waitUntilCameraPathReady()
-            let now = await currentSSID()
-            if CameraSoftAPSwitch.isOnTarget(currentSSID: now, target: ssid) {
-                log.info(
-                    "wifi: on \(ssid, privacy: .public) (current=\(now ?? "nil", privacy: .public)) #\(attempt)"
-                )
-                return
+            do {
+                try await join(ssid: ssid, passphrase: passphrase, wpa3: wpa3, persist: persist)
+                try await waitUntilCameraPathReady()
+                let now = await currentSSID()
+                if CameraSoftAPSwitch.isOnTarget(currentSSID: now, target: ssid) {
+                    journal("wifi: on \(ssid) (current=\(now ?? "nil")) #\(attempt)")
+                    return
+                }
+                journal("wifi: still on \(now ?? "?") after join \(ssid) — retry")
+                if let now { leave(ssid: now) }
+                lastError = JoinError.stillOnOtherBody(now ?? "other camera")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                lastError = error
             }
-            lastForeign = now
-            log.info(
-                "wifi: still on \(now ?? "?", privacy: .public) after join \(ssid, privacy: .public) — retry"
+            let left = deadline.timeIntervalSinceNow
+            guard CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: left) else { throw lastError }
+            // 5.8 GHz DFS: the AP may not beacon yet. Drop the config so the
+            // next apply associates fresh instead of "already applied".
+            journal(
+                "wifi: join \(ssid) #\(attempt) missed (\(lastError.localizedDescription)) — retry, \(Int(left)) s left"
             )
-            if let now { leave(ssid: now) }
+            leave(ssid: ssid)
+            try await Task.sleep(for: .seconds(CameraSoftAPSwitch.joinRetryPauseSeconds))
         }
-        throw JoinError.stillOnOtherBody(lastForeign ?? "other camera")
     }
 
     static func currentSSID() async -> String? {
@@ -106,11 +119,18 @@ enum WiFiJoiner {
                     if error.domain == NEHotspotConfigurationErrorDomain,
                         error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue
                     {
+                        journal("wifi: apply \(ssid) already associated")
                         c.resume()
                         return
                     }
+                    journal(
+                        "wifi: apply \(ssid) failed \(error.domain) \(error.code) \(error.localizedDescription)"
+                    )
                     c.resume(throwing: JoinError.failed(error.localizedDescription))
                 } else {
+                    // nil error is "config applied", not "associated" — a wrong
+                    // passphrase still returns here and iOS shows Unable to join.
+                    journal("wifi: apply \(ssid) ok persist=\(persist)")
                     c.resume()
                 }
             }
@@ -130,21 +150,25 @@ enum WiFiJoiner {
     /// Block until `192.168.2.2…254` exists. Second connect returns immediately.
     static func waitUntilCameraPathReady(timeout: TimeInterval = 15) async throws {
         if isCameraPathReady() { return }
-        log.info("wifi: waiting for 192.168.2.x (first join / DHCP)")
+        journal("wifi: waiting for 192.168.2.x (first join / DHCP)")
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             try Task.checkCancellation()
             if isCameraPathReady() {
                 try await Task.sleep(for: .milliseconds(200))
                 if isCameraPathReady() {
-                    log.info(
-                        "wifi: camera path ready (\(ipv4Addresses().filter(CameraSoftAP.isAssociatedIPv4).joined(separator: ","), privacy: .public))"
+                    journal(
+                        "wifi: camera path ready (\(ipv4Addresses().filter(CameraSoftAP.isAssociatedIPv4).joined(separator: ",")))"
                     )
                     return
                 }
             }
             try await Task.sleep(for: .milliseconds(100))
         }
+        let current = await currentSSID() ?? "nil"
+        journal(
+            "wifi: no 192.168.2.x after \(Int(timeout)) s current=\(current) ipv4=\(ipv4Addresses().joined(separator: ","))"
+        )
         throw JoinError.pathNotReady
     }
 
@@ -165,8 +189,8 @@ enum WiFiJoiner {
         let configured = await configuredSSIDs()
         let extras = configured.filter { $0 != keep && CameraSoftAP.isOsmoSoftAPSSID($0) }
         if !extras.isEmpty {
-            log.info(
-                "wifi: removing other Osmo SoftAPs \(extras.joined(separator: ","), privacy: .public)"
+            journal(
+                "wifi: removing other Osmo SoftAPs \(extras.joined(separator: ","))"
             )
             leave(ssids: extras)
         }
@@ -184,14 +208,14 @@ enum WiFiJoiner {
     /// so the next join cannot inherit that path.
     static func waitUntilCameraPathGone(timeout: TimeInterval = 6) async {
         if !isCameraPathReady() { return }
-        log.info("wifi: waiting for 192.168.2.x to drop after leaving the other AP")
+        journal("wifi: waiting for 192.168.2.x to drop after leaving the other AP")
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if Task.isCancelled { return }
             if !isCameraPathReady() { return }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        log.info("wifi: 192.168.2.x still present after leave")
+        journal("wifi: 192.168.2.x still present after leave")
     }
 
     static func ipv4Addresses() -> [String] {

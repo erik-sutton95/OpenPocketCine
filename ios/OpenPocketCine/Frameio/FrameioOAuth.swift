@@ -7,14 +7,14 @@ import Foundation
     import Crypto
 #endif
 
-/// Configuration for the Frame.io V4 OAuth + API integration.
+/// Configuration for Frame.io Platform API v4 OAuth.
 ///
 /// This is an **external-service module** (not camera protocol); it lives in the portable core so the
 /// OAuth/PKCE logic stays UI-free and unit-testable. The `clientID` and `redirectURI` come from the
 /// app's Info.plist — register an OAuth **Native App** credential in the **Adobe Developer Console**
 /// (with the Frame.io API added to the project). Adobe assigns a unique custom-scheme redirect URI
 /// per credential; copy it verbatim into `Frameio.local.xcconfig`. Auth endpoints default to Adobe
-/// IMS and the API to Frame.io V4; all are overridable for tests.
+/// IMS and the API to Frame.io Platform API v4; all are overridable for tests.
 public struct FrameioConfiguration: Sendable, Equatable {
     public var clientID: String
     public var redirectURI: String
