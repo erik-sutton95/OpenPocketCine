@@ -34,6 +34,13 @@ object MediaLiveResume {
         if (browsing || !inPlayback) return null
         return Action.EXIT_PLAYBACK
     }
+
+    /**
+     * Leftover GOP packets are not a live picture. Resume is done only when a
+     * frame presented after the resume started.
+     */
+    fun isPictureFresh(lastPresentedAt: Long?, since: Long): Boolean =
+        lastPresentedAt != null && lastPresentedAt >= since
 }
 
 /** What to do after `0x02/0x0c` enter-playback. Newest list page needs no playback. */

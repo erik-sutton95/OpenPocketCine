@@ -451,10 +451,11 @@ class MediaLibraryController(
 
     private suspend fun resumeLiveView(token: Int) {
         var exitAcked = false
-        val packetsAtStart = link.videoPackets
+        val resumeAt = SystemClock.elapsedRealtime()
         for (attempt in 1..(MediaLiveResume.MAX_EXIT_ATTEMPTS + 2)) {
             if (token != resumeGeneration || browsing) return
-            val pictureFresh = link.videoPackets > packetsAtStart && link.hasVideoFormat
+            val pictureFresh =
+                MediaLiveResume.isPictureFresh(session.decoder.lastPresentedAt, resumeAt)
             when (
                 MediaLiveResume.action(
                     attempt = attempt,

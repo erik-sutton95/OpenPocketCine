@@ -37,6 +37,13 @@ public enum MediaLiveResume: Sendable {
         guard !browsing, inPlayback else { return nil }
         return .exitPlayback
     }
+
+    /// Leftover GOP packets are not a live picture. Resume is done only when a
+    /// frame presented after the resume started.
+    public static func isPictureFresh(lastPresentedAt: Date?, since: Date) -> Bool {
+        guard let presented = lastPresentedAt else { return false }
+        return presented >= since
+    }
 }
 
 /// What to do after `0x02/0x0c` enter-playback. Newest list page needs no playback.

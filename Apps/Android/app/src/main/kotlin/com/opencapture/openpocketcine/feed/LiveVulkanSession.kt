@@ -54,6 +54,7 @@ internal class LiveVulkanSession(
     @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
     private var lastSampleNs = 0L
+    private var attachedSurface: Surface? = null
     val windowReady: Boolean
         get() = presentGate.windowReady
 
@@ -63,14 +64,39 @@ internal class LiveVulkanSession(
     fun attachWindow(surface: Surface, width: Int, height: Int) {
         val native = handle
         if (native == 0L || presentGate.isReleased) return
-        val ok = OpcVulkan.nativeAttachWindow(native, surface, width, height)
-        if (!ok) {
-            Log.w(TAG, "swapchain attach failed")
-            onFailed()
+        if (!VulkanWindowAttach.shouldCreateSwapchain(width, height)) {
+            Log.w(TAG, "swapchain attach skipped ${width}x${height}")
             return
         }
+        if (presentGate.windowReady && attachedSurface === surface) {
+            OpcVulkan.nativeResize(native, width, height)
+            redrawLast()
+            return
+        }
+        val ok = OpcVulkan.nativeAttachWindow(native, surface, width, height)
+        if (!ok) {
+            Log.w(TAG, "swapchain attach failed ${width}x${height}")
+            // Do not fall back to GLES — that unbound MediaCodec from the
+            // ImageReader and left a black well while UDP stayed live (#248).
+            if (VulkanWindowAttach.shouldFallbackToGlesOnAttachFailure()) onFailed()
+            return
+        }
+        attachedSurface = surface
         presentGate.attach()
         ensureReader()
+        redrawLast()
+    }
+
+    /** Re-present the last imported AHB after overlay dismiss or a swapchain rebuild. */
+    fun redrawLast() {
+        val native = handle
+        if (native == 0L || presentGate.isReleased || !presentGate.windowReady) return
+        if (!presentGate.beginSubmit()) return
+        try {
+            OpcVulkan.nativeRedraw(native)
+        } finally {
+            presentGate.endSubmit()
+        }
     }
 
     fun resize(width: Int, height: Int) {
@@ -228,6 +254,7 @@ internal class LiveVulkanSession(
     /** Must run from `surfaceDestroyed` before that callback returns. */
     fun detachWindow() {
         presentGate.detach()
+        attachedSurface = null
         val native = handle
         if (native != 0L) OpcVulkan.nativeDetachWindow(native)
     }
