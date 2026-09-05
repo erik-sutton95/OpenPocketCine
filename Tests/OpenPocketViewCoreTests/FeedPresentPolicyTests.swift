@@ -64,6 +64,32 @@ import Testing
         #expect(!FeedPresentPolicy.unhideMetalBeforeBake(overlay: true))
     }
 
+    @Test func metalPresentIsLatestWinsOneDrawable() {
+        #expect(FeedPresentPolicy.maxInFlightMetalPresents == 1)
+        #expect(FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 0))
+        #expect(
+            !FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 1),
+            "a second nextDrawable on MainActor is the LUT 50/50 stall")
+        #expect(!FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 3))
+    }
+
+    @Test func splitComparisonNeedsACubeAndIsNotFullFalseColor() {
+        #expect(
+            FeedPresentPolicy.appliesSplitComparison(
+                enabled: true, hasLUTCube: true, falseColorPaintsFullFrame: false))
+        #expect(
+            !FeedPresentPolicy.appliesSplitComparison(
+                enabled: true, hasLUTCube: false, falseColorPaintsFullFrame: false),
+            "50/50 without a cube must not steal the identity layer")
+        #expect(
+            !FeedPresentPolicy.appliesSplitComparison(
+                enabled: false, hasLUTCube: true, falseColorPaintsFullFrame: false))
+        #expect(
+            !FeedPresentPolicy.appliesSplitComparison(
+                enabled: true, hasLUTCube: true, falseColorPaintsFullFrame: true),
+            "IRE / PStops remap both halves — Android skips GPU split too")
+    }
+
     @Test func monitorGradePrefersProxy() {
         #expect(FeedPresentPolicy.preferProxyForMonitorGrade(hasProxy: true))
         #expect(!FeedPresentPolicy.preferProxyForMonitorGrade(hasProxy: false))
