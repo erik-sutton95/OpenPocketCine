@@ -453,6 +453,7 @@ final class CameraSession {
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         connectGeneration += 1
         let generation = connectGeneration
+        LocalVPNProbe.noteIfActive()
         scanTask?.cancel()
         abortInFlightRun(preserveDecoder: preserveMonitor)
         reconnectTarget = nil

@@ -30,6 +30,7 @@ Gotchas that only agents need stay in `docs/live-session.md`.
 | Architecture seams (core vs shell) | [Architecture](../apps/architecture/) if the public map changed; `docs/ARCHITECTURE.md` is the seam table |
 | Live-path budgets (ACK Hz, HUD Hz) | `docs/PERFORMANCE.md` (not duplicated here) |
 | First-run / operator copy | `docs/UX.md`; handbook only if the public FTUE description changed |
+| Pairing / live-view operator FAQ (VPN, Wi-Fi join, black well) | [Troubleshooting](../guides/troubleshooting/) and `site/support/` |
 
 A task is not done until those pages match the code. Preview with `just handbook`.
 Merge to `main` deploys Pages when `handbook/` or `site/` changed.

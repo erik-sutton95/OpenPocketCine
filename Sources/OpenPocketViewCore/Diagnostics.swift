@@ -70,6 +70,9 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
     public var cameraFamily: String
     public var cameraModel: String
     public var phase: String
+    /// Local VPN / ad-blocker tunnel (AdGuard, Blokada, RethinkDNS). Not a
+    /// personal identifier. Testers' reports for a black live well need this.
+    public var vpnActive: Bool
 
     public init(
         appVersion: String,
@@ -79,7 +82,8 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
         deviceModel: String,
         cameraFamily: String = "unknown",
         cameraModel: String = "none",
-        phase: String = "none"
+        phase: String = "none",
+        vpnActive: Bool = false
     ) {
         self.appVersion = appVersion
         self.appBuild = appBuild
@@ -89,6 +93,7 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
         self.cameraFamily = cameraFamily
         self.cameraModel = cameraModel
         self.phase = phase
+        self.vpnActive = vpnActive
     }
 }
 
@@ -206,7 +211,7 @@ public enum DiagnosticReport: Sendable {
         var lines = [
             "OpenPocketCine diagnostics (no name, no location)",
             "app \(environment.appVersion) (\(environment.appBuild)) \(environment.osName) \(environment.osVersion) \(environment.deviceModel)",
-            "camera \(environment.cameraModel) family=\(environment.cameraFamily) phase=\(environment.phase)",
+            "camera \(environment.cameraModel) family=\(environment.cameraFamily) phase=\(environment.phase) vpn=\(environment.vpnActive ? "on" : "off")",
         ]
         let tail = recent.suffix(12)
         if !tail.isEmpty {
@@ -236,9 +241,11 @@ public enum DiagnosticReport: Sendable {
             camera: \(environment.cameraModel)
             family: \(environment.cameraFamily)
             phase: \(environment.phase)
+            vpn: \(environment.vpnActive ? "on" : "off")
             """)
         if !exceptions.isEmpty {
-            sections.append("Exceptions / faults\n" + exceptions.suffix(exceptionCap).joined(separator: "\n"))
+            sections.append(
+                "Exceptions / faults\n" + exceptions.suffix(exceptionCap).joined(separator: "\n"))
         }
         for extra in extras where !extra.body.isEmpty {
             sections.append("\(extra.name)\n\(extra.body)")

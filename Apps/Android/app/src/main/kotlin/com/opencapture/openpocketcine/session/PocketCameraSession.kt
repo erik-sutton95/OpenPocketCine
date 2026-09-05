@@ -333,6 +333,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         reconnectTarget = null
         _isReconnecting.value = false
+        LocalVPNFilter.noteIfActive(appContext)
         connectJob?.cancel()
         if (!holdsMonitor) publishPhase(ConnectionPhase.CONNECTING_GATT)
         connectJob =

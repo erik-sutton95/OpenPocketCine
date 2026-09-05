@@ -36,6 +36,12 @@ jobs:
       - name: Gitleaks
         # Digest-pinned for reproducibility. Update the version manually when needed. v8.30.1
         uses: docker://ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+        # The container's uid differs from the checkout owner on some runner images, and
+        # git then refuses the repo ("dubious ownership"). Mark the workspace safe via env.
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: /github/workspace
         with:
           args: "detect --source=. --redact --no-banner --config=.gitleaks.toml"
 
@@ -87,7 +93,7 @@ jobs:
           fi
 
       - name: Spell check
-        uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
+        uses: crate-ci/typos@4d9c206a77c041268485162b8e2579ad7a5cb9a3 # v1.50.0
 
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
@@ -101,7 +107,8 @@ jobs:
           fail: true
 
       - name: EditorConfig check
-        uses: editorconfig-checker/action-editorconfig-checker@d2ed4fd072ae6f887e9407c909af0f585d2ad9f4 # v2
+        # editorconfig-checker 4.0 renamed its release assets; the v2 action only knows `ec-*`.
+        uses: editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393 # v3.0.0
 
       - name: Actionlint
         # Digest-pinned for reproducibility. Update the version manually when needed. v1.7.12

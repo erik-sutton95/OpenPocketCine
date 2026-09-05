@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.openpocketcine.session.LocalVPNFilter
 
 private val prepareSteps =
     listOf(
@@ -427,7 +429,11 @@ private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
     )
     StartupDeviceInstructionCard(
         "On this phone",
-        listOf("Tap Join when Android asks to join the camera network", "Stay on this screen until we open the datalink"),
+        listOf(
+            "Tap Join when Android asks to join the camera network",
+            "Stay on this screen until we open the datalink",
+            LocalVPNFilter.JOIN_WIFI_PHONE_STEP,
+        ),
         tight,
         glyph = StartupGlyphKind.PHONE,
     )
@@ -436,6 +442,11 @@ private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
 
 @Composable
 private fun DatalinkStep(phase: ConnectionPhase, tight: Boolean) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { LocalVPNFilter.noteIfActive(context) }
+    if (LocalVPNFilter.isActive(context)) {
+        StartupInfoBanner(LocalVPNFilter.WIZARD_BANNER, tight)
+    }
     StartupConnectionProgress(
         label = "Opening the video link…",
         detail = StartupConnectionCopy.phaseLabel(phase, null),
