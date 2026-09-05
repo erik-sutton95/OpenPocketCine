@@ -64,7 +64,8 @@ jobs:
 
       - name: Require reviewed notes for TestFlight-triggering pull requests
         # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
-        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
+        # Keyed on the PR author: `github.actor` is whoever last pushed or updated the branch.
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -81,7 +82,8 @@ jobs:
 
       - name: Require reviewed notes for Play-triggering pull requests
         # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
-        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
+        # Keyed on the PR author: `github.actor` is whoever last pushed or updated the branch.
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
