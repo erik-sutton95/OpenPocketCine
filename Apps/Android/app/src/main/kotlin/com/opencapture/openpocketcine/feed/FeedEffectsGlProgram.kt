@@ -23,7 +23,7 @@ private const val PEAKING_MASK_FRAGMENT_SHADER = "shaders/peaking_mask_fragment_
  */
 internal class FeedEffectsGlProgram(
     context: Context,
-    plan: FeedEffectsRenderPlan,
+    private val plan: FeedEffectsRenderPlan,
     flipInputVertically: Boolean = false,
 ) {
     private val program = GlProgram(context, FEED_EFFECTS_VERTEX_SHADER, FEED_EFFECTS_FRAGMENT_SHADER)
@@ -74,6 +74,11 @@ internal class FeedEffectsGlProgram(
         }
     }
 
+    /**
+     * [look] true cubes at this raster (iOS bakeSize). False is present of that
+     * bake — bilinear, or Catmull-Rom when Fast magnifies. Cubing after the
+     * upsample blotches D-Log2.
+     */
     fun draw(
         inputTexture: Int,
         sourceWidth: Float,
@@ -81,8 +86,15 @@ internal class FeedEffectsGlProgram(
         displayWidth: Float,
         displayHeight: Float,
         mirrored: Boolean = false,
+        look: Boolean = true,
+        upscale: Boolean = !look,
     ) {
-        val mask = renderPeakingMask(inputTexture, sourceWidth, sourceHeight)
+        val mask =
+            if (look && plan.peaking) {
+                renderPeakingMask(inputTexture, sourceWidth, sourceHeight)
+            } else {
+                maskStub()
+            }
         program.use()
         program.setSamplerTexIdUniform("uTexSampler", inputTexture, 0)
         program.setSamplerTexIdUniform("uPeakingMask", mask, 4)
@@ -97,19 +109,32 @@ internal class FeedEffectsGlProgram(
             "uDisplaySize",
             floatArrayOf(displayWidth.coerceAtLeast(1f), displayHeight.coerceAtLeast(1f)),
         )
-        program.setFloatsUniform(
-            "uFeedUpscale",
-            flag(
-                FeedUpscaleSwitch.rendererReads == FeedUpscaler.FAST &&
-                    FeedUpscaler.shouldReconstructToDisplay(
-                        sourceWidth,
-                        sourceHeight,
-                        displayWidth,
-                        displayHeight,
-                    ),
-            ),
-        )
-        program.setFloatsUniform("uMirror", flag(mirrored))
+        if (look) {
+            bindStaticUniforms(plan)
+            program.setFloatsUniform("uFeedUpscale", flag(false))
+            program.setFloatsUniform("uMirror", flag(mirrored))
+        } else {
+            program.setFloatsUniform("uLutSize", floatArrayOf(0f))
+            program.setFloatsUniform("uLimitsOn", flag(false))
+            program.setFloatsUniform("uPeakingOn", flag(false))
+            program.setFloatsUniform("uZebraHighlightOn", flag(false))
+            program.setFloatsUniform("uZebraMidtoneOn", flag(false))
+            program.setFloatsUniform("uSplitOn", flag(false))
+            program.setFloatsUniform("uMirror", flag(false))
+            program.setFloatsUniform(
+                "uFeedUpscale",
+                flag(
+                    upscale &&
+                        FeedUpscaleSwitch.rendererReads == FeedUpscaler.FAST &&
+                        FeedUpscaler.shouldReconstructToDisplay(
+                            sourceWidth,
+                            sourceHeight,
+                            displayWidth,
+                            displayHeight,
+                        ),
+                ),
+            )
+        }
         program.bindAttributesAndUniforms()
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         GlUtil.checkGlError()

@@ -3,10 +3,10 @@ package com.opencapture.openpocketcine.feed
 /**
  * Bake→drawable upscaler. Labels match iOS `FeedUpscaler` raw values.
  *
- * GLES2 offers a plain bilinear sample ([OFF]) and the existing Catmull-Rom
- * reconstruction ([FAST], the portable Lanczos analogue). Quality / AI have
- * no GLES equivalent, so they are omitted the same way iOS hides unsupported
- * options.
+ * Present of the 720p bake (iOS `bakeSize` then fit). Off is bilinear of
+ * Rec.709; Fast is Catmull-Rom of that bake (portable Lanczos analogue).
+ * Quality / AI have no GLES equivalent, so they are omitted the same way
+ * iOS hides unsupported options. Do not reconstruct log RGB and then cube.
  */
 enum class FeedUpscaler(val label: String) {
     OFF("Off"),

@@ -30,7 +30,8 @@ private const val DEFAULT_SOURCE_WIDTH = 1280
 private const val DEFAULT_SOURCE_HEIGHT = 720
 
 /**
- * HEVC → `GL_TEXTURE_EXTERNAL_OES` → 2D FBO → [FeedEffectsGlProgram] → TextureView.
+ * HEVC → `GL_TEXTURE_EXTERNAL_OES` → 2D FBO → cube at that raster → present
+ * Rec.709 (bilinear / Fast Catmull-Rom) → TextureView. iOS bakeSize then fit.
  *
  * The decoder never owns the TextureView surface. The GPU path stays mounted so
  * toggling LUT / PEAK / FALSE / ZEBRA does not swap the decoder output surface.
@@ -216,6 +217,7 @@ internal class LiveFeedEffectsSession(
         var oesSurfaceTexture: SurfaceTexture? = null
         var decoderSurface: Surface? = null
         var sourceTarget: SourceTarget? = null
+        var gradedTarget: SourceTarget? = null
         var tapTarget: SourceTarget? = null
         var tapPixels: ByteBuffer? = null
         var tapScratch: ByteArray? = null
@@ -254,6 +256,7 @@ internal class LiveFeedEffectsSession(
                 }
             }
             sourceTarget = SourceTarget.create(srcW, srcH)
+            gradedTarget = SourceTarget.create(srcW, srcH)
             tapTarget = SourceTarget.create(tapSize.first, tapSize.second)
             val tapBytes = tapSize.first * tapSize.second * 4
             tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
@@ -286,6 +289,8 @@ internal class LiveFeedEffectsSession(
                     oesSurfaceTexture.setDefaultBufferSize(srcW, srcH)
                     sourceTarget?.release()
                     sourceTarget = SourceTarget.create(srcW, srcH)
+                    gradedTarget?.release()
+                    gradedTarget = SourceTarget.create(srcW, srcH)
                     val nextTap = PocketScopeSampler.tapSize(srcW, srcH)
                     tapTarget?.release()
                     tapTarget = SourceTarget.create(nextTap.first, nextTap.second)
@@ -324,8 +329,6 @@ internal class LiveFeedEffectsSession(
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)
                 GLES20.glViewport(0, 0, source.width, source.height)
                 copy.draw(oesTexture, texMatrix)
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
-                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 val content =
                     if (letterboxSource) {
                         liveFeedContentRect(
@@ -339,18 +342,53 @@ internal class LiveFeedEffectsSession(
                     }
                 val presentWidth = content?.width ?: width
                 val presentHeight = content?.height ?: height
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 if (content != null) {
                     GLES20.glViewport(content.left, content.top, content.width, content.height)
                 } else {
                     GLES20.glViewport(0, 0, width, height)
                 }
-                effects.draw(
-                    source.textureId,
-                    source.width.toFloat(),
-                    source.height.toFloat(),
-                    presentWidth.toFloat(),
-                    presentHeight.toFloat(),
-                )
+                // First picture is a bilinear blit of 720p RGB. Cube then stretch
+                // on that submit missed the enable IDR (WAITING FOR LIVE VIEW).
+                if (!signaledFirstFrame) {
+                    effects.draw(
+                        source.textureId,
+                        source.width.toFloat(),
+                        source.height.toFloat(),
+                        presentWidth.toFloat(),
+                        presentHeight.toFloat(),
+                        look = false,
+                        upscale = false,
+                    )
+                } else {
+                    val graded = checkNotNull(gradedTarget)
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, graded.framebufferId)
+                    GLES20.glViewport(0, 0, graded.width, graded.height)
+                    effects.draw(
+                        source.textureId,
+                        source.width.toFloat(),
+                        source.height.toFloat(),
+                        presentWidth.toFloat(),
+                        presentHeight.toFloat(),
+                        look = true,
+                    )
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                    if (content != null) {
+                        GLES20.glViewport(content.left, content.top, content.width, content.height)
+                    } else {
+                        GLES20.glViewport(0, 0, width, height)
+                    }
+                    effects.draw(
+                        graded.textureId,
+                        source.width.toFloat(),
+                        source.height.toFloat(),
+                        presentWidth.toFloat(),
+                        presentHeight.toFloat(),
+                        look = false,
+                    )
+                }
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
                 if (!signaledFirstFrame) {
                     signaledFirstFrame = true
@@ -373,6 +411,7 @@ internal class LiveFeedEffectsSession(
             runCatching { effects?.release() }
             runCatching { oesCopy?.release() }
             sourceTarget?.release()
+            gradedTarget?.release()
             tapTarget?.release()
             decoderSurface?.release()
             oesSurfaceTexture?.release()

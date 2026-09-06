@@ -158,6 +158,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.okhttp)
+    implementation(libs.mlkit.face.detection)
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.json)

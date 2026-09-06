@@ -173,6 +173,15 @@ class TrackingBoxTest {
     }
 
     @Test
+    fun faceStructureNeedsEyesNotAnOval() {
+        assertTrue(FaceStructurePolicy.hasFaceLandmarks(0.30, 0.70, hasNose = false))
+        assertTrue(!FaceStructurePolicy.hasFaceLandmarks(0.48, 0.52, hasNose = false))
+        assertTrue(FaceStructurePolicy.hasFaceLandmarks(0.35, null, hasNose = true))
+        assertTrue(!FaceStructurePolicy.hasFaceLandmarks(null, null, hasNose = false))
+        assertTrue(!FaceStructurePolicy.hasFaceLandmarks(null, null, hasNose = true))
+    }
+
+    @Test
     fun cancelSitsOnTopRightCornerOfTrackingBox() {
         val box = TrackingBox(0.20, 0.20, 0.40, 0.40)
         val feedW = 640f
@@ -188,5 +197,28 @@ class TrackingBoxTest {
         val mirroredRight = ((1.0 - 0.20 - 0.40).toFloat() + 0.40f) * feedW
         assertEquals(mirroredRight, mirrored.midX, 0.5f)
         assertEquals(subjectTop, mirrored.midY, 0.5f)
+    }
+
+    @Test
+    fun imageRectMapsToNormalizedTopLeftBox() {
+        val box = TrackingBox.fromImageRect(160, 90, 320, 270, 640, 360)!!
+        assertEquals(0.25, box.x, 1e-9)
+        assertEquals(0.25, box.y, 1e-9)
+        assertEquals(0.25, box.width, 1e-9)
+        assertEquals(0.50, box.height, 1e-9)
+        assertNull(TrackingBox.fromImageRect(0, 0, 4, 4, 640, 360))
+        assertNull(TrackingBox.fromImageRect(0, 0, 10, 10, 4, 4))
+    }
+
+    @Test
+    fun overlayMirrorsCameraSpaceFaceOntoDisplayedPicture() {
+        // Face on the right in identity/camera space. TT180/MIRROR shows it on
+        // the left; the overlay must mirror too or the bracket sits opposite.
+        val camera = TrackingBox.fromCenter(0.75, 0.40, 0.20, 0.28)
+        val drawn = camera.mirrored()
+        assertEquals(1.0 - camera.centerX, drawn.centerX, 1e-9)
+        assertEquals(camera.centerY, drawn.centerY, 1e-9)
+        assertTrue(drawn.centerX < 0.5)
+        assertTrue(camera.centerX > 0.5)
     }
 }

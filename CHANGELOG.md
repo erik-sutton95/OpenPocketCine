@@ -165,6 +165,70 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android WAITING FOR LIVE VIEW took 5–10 s after the 720p cube-then-stretch
+  present (S25 / Pocket 4 Pro). Compiling `feed.frag` before the decoder
+  surface, then on the ImageReader thread, missed `0x09/0xa8`. The
+  constructor now creates ImageReader immediately; copy+blit compile on
+  `opc.vk.gpu`; LUT pipes after the first picture. A failed GPU submit
+  re-signals the present fence (frozen well, live HUD).
+
+- Android live LUT still blotched D-Log2 next to iOS (S25 / Pocket 4 Pro).
+  The 3D cube ran after bilinear-sampling 720p log RGB at the panel;
+  iOS cubes at `bakeSize` (720p) then stretches Rec.709. Vulkan and the
+  GLES fallback now cube at 720p, then blit that Rec.709 bake.
+
+- Android live LUT looked like a chroma blotch next to iOS (S25 / Pocket
+  4 Pro, D-Log2). The cube was an 8-column 2D atlas, so bilinear filtering
+  mixed neighbouring blue slices — iOS uses `CIColorCube` (3D). Vulkan now
+  uploads a 3D LUT and converts 4:2:0 1:1 at 720p (panel-rate 420 is the
+  Adreno mosaic).
+
+- Android live kept pixelated patches until something moved in that part
+  of the frame (S25 / Pocket 4 Pro). Vulkan acquired the ImageReader
+  AHB from the decoder but never released it, so static HEVC skip-blocks
+  stayed in the GPU cache. Present now acquire/releases around the 720p
+  YCbCr copy.
+
+- Android Operator Setup over live view remounted the monitor (immersive
+  system bars used two composition slots) and released MediaCodec while
+  UDP stayed live — black well, no watchdog PLI. One content slot, and
+  `setOutputSurface` failure rebuilds the decoder.
+
+- Android live still looked pixelated with LUT off (S25 / Pocket 4 Pro).
+  Operator Setup Fast was on, so every frame took the grade path, but
+  Catmull-Rom was hard-coded off and an intermediate well sometimes stayed
+  720p then stretched. Present now samples 720p RGB at the swapchain
+  (Catmull-Rom when Fast; cube in the same pass when LUT is on).
+
+- Android AF-C after ML Kit was a tad eager vs iOS. Lock now needs an eye
+  landmark (`FaceStructurePolicy`), min face 0.10, and no ML Kit tracking
+  IDs — `FaceTrackHold` owns the miss window.
+
+- Android AF-C face lock was timid next to iOS Vision. The platform
+  `FaceDetector` only finds frontal eyes and we fed it a 320×180 tap.
+  Face AF now runs ML Kit (FAST, landmarks) on a 640×360 identity raster.
+
+- Android WAITING FOR LIVE VIEW hung a GOP after connect. LiveViewScreen
+  only exists once handshake publishes LIVE, and swapchain create compiled
+  the LUT fragment shader on the UI thread before MediaCodec had a
+  surface, so the enable IDR was dropped. The ImageReader now latches
+  before that compile.
+
+- Android live LUT looked pixelated against LUT-off (S25 / Pocket 4 Pro).
+  The cube ran at 720p, then that contrast-stretched grid was scaled up.
+  Present now bilinear-samples 720p RGB at the panel and applies the cube
+  per display pixel, same scaler as identity.
+
+- Android live face bracket sat on the opposite side of the subject on
+  Vulkan. Detector PixelCopied the swapchain (already X-flipped when
+  TT180/MIRROR is on) and the overlay mirrored again. Face AF now samples
+  unmanaged 720p RGB, like iOS Vision on the identity VT buffer.
+
+- Android live PEAK did not paint on the Vulkan path (S25 / Pocket 4 Pro).
+  GLES already ran the 3-pass blur-radius detector; Vulkan graded LUT /
+  FALSE / ZEBRA only. Live peaking now matches GLES/iOS: 720p re-blur,
+  mask, closed stroke + hairline over identity (or over LUT).
+
 - Nano COLOR SET/GET labelled `camcap_color_mode` `00 3F 3D` by list order
   (`00` D-Log M / `3F` Normal 8-bit / `3D` Normal 10-bit). Hardware is `00`
   Normal 8-bit / `3F` Normal 10-bit / `3D` D-Log M — the same `00`/`3D` as

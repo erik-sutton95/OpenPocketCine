@@ -65,6 +65,32 @@ class FeedEffectsCubeAtlasTest {
     }
 
     @Test
+    fun `vulkan 3d lattice is r along x then g then b`() {
+        val size = 2
+        val source = ByteArray(size * size * size * 4)
+        for (green in 0 until size) {
+            for (blue in 0 until size) {
+                for (red in 0 until size) {
+                    val value = (blue * 40 + green * 10 + red).toByte()
+                    val offset = (green * size * size + blue * size + red) * 4
+                    source.fill(value, offset, offset + 4)
+                }
+            }
+        }
+        val volume = feedEffectsCubeVk3d(FeedEffectsCube(size, source))
+        assertEquals(32, volume.size)
+        for (blue in 0 until size) {
+            for (green in 0 until size) {
+                for (red in 0 until size) {
+                    val expected = (blue * 40 + green * 10 + red).toByte()
+                    val dst = (blue * size * size + green * size + red) * 4
+                    assertEquals(expected, volume[dst])
+                }
+            }
+        }
+    }
+
+    @Test
     fun `fromPacked rejects a truncated payload`() {
         assertNull(FeedEffectsCube.fromPacked(ByteArray(7)))
         assertNull(FeedEffectsCube.fromPacked(ByteArray(12)))

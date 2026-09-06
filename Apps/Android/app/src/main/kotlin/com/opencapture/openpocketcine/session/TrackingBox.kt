@@ -54,6 +54,23 @@ data class TrackingBox(
             return TrackingBox(x0, y0, x1 - x0, y1 - y0)
         }
 
+        /** Pixel rect on an identity tap → normalized top-left box (Vision-style). */
+        fun fromImageRect(
+            left: Int,
+            top: Int,
+            right: Int,
+            bottom: Int,
+            imageWidth: Int,
+            imageHeight: Int,
+        ): TrackingBox? {
+            if (imageWidth < 8 || imageHeight < 8) return null
+            val w = imageWidth.toDouble()
+            val h = imageHeight.toDouble()
+            val box = normalized(left / w, top / h, right / w, bottom / h)
+            if (box.width < MINIMUM_NORMALIZED_SIZE || box.height < MINIMUM_NORMALIZED_SIZE) return null
+            return box
+        }
+
         fun fromCenter(cx: Double, cy: Double, width: Double, height: Double): TrackingBox {
             val w = min(max(width, 0.02), 1.0)
             val h = min(max(height, 0.02), 1.0)
@@ -271,6 +288,28 @@ object FaceTrackHold {
                 else TrackingBoxSmoothing.FACE_POSITION_TIME_CONSTANT,
             size = TrackingBoxSmoothing.FACE_SIZE_TIME_CONSTANT,
         )
+    }
+}
+
+/**
+ * iOS `FaceStructurePolicy`. ML Kit has no Vision confidence, so an oval
+ * with no eye landmark is not a lock (that was the over-eager AF-C).
+ */
+object FaceStructurePolicy {
+    const val MINIMUM_EYE_SEPARATION = 0.12
+
+    fun hasFaceLandmarks(
+        leftEyeX: Double?,
+        rightEyeX: Double?,
+        hasNose: Boolean,
+    ): Boolean {
+        val left = leftEyeX
+        val right = rightEyeX
+        if (left != null && right != null) {
+            return abs(right - left) >= MINIMUM_EYE_SEPARATION
+        }
+        if ((left != null || right != null) && hasNose) return true
+        return false
     }
 }
 

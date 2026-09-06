@@ -3,9 +3,10 @@ layout(location = 0) in vec2 vUv;
 layout(location = 0) out vec4 oColor;
 
 layout(set = 0, binding = 0) uniform sampler2D uFeed;
-layout(set = 0, binding = 1) uniform sampler2D uLut;
-layout(set = 0, binding = 2) uniform sampler2D uLimitsPaint;
-layout(set = 0, binding = 3) uniform sampler2D uLimitsWeight;
+layout(set = 0, binding = 1) uniform sampler3D uLut;
+layout(set = 0, binding = 2) uniform sampler3D uLimitsPaint;
+layout(set = 0, binding = 3) uniform sampler3D uLimitsWeight;
+layout(set = 0, binding = 4) uniform sampler2D uPeakingMask;
 
 layout(push_constant) uniform PC {
     vec2 sourceSize;
@@ -23,32 +24,47 @@ layout(push_constant) uniform PC {
     float zebraMidtoneHalf;
     float feedUpscale;
     float mirror;
-    vec3 zebraHighlightColor;
-    vec3 zebraMidtoneColor;
+    float peakingOn;
+    float _pad0;
+    float _pad1;
+    vec4 zebraHighlightColor;
+    vec4 zebraMidtoneColor;
+    vec4 peakingColor;
 } pc;
 
 const vec3 LUMA_709 = vec3(0.2126, 0.7152, 0.0722);
-const float ATLAS_COLUMNS = 8.0;
 const float ZEBRA_GAIN = 40.0;
 const float STRIPE_PITCH = 14.14;
+const vec3 PEAKING_UNDER_COLOR = vec3(0.04, 0.04, 0.05);
 
-vec2 atlasCoordinate(float slice, vec2 redGreen, float cubeSize) {
-    float tileX = mod(slice, ATLAS_COLUMNS);
-    float tileY = floor(slice / ATLAS_COLUMNS);
-    vec2 pixel = vec2(
-        tileX * cubeSize + clamp(redGreen.x, 0.0, 1.0) * (cubeSize - 1.0) + 0.5,
-        tileY * cubeSize + clamp(redGreen.y, 0.0, 1.0) * (cubeSize - 1.0) + 0.5);
-    return pixel / (cubeSize * ATLAS_COLUMNS);
+float peakingClosedStroke(vec2 centre, vec2 texel) {
+    float m00 = texture(uPeakingMask, centre).r;
+    float mR = texture(uPeakingMask, centre + vec2(texel.x, 0.0)).r;
+    float mL = texture(uPeakingMask, centre - vec2(texel.x, 0.0)).r;
+    float mD = texture(uPeakingMask, centre + vec2(0.0, texel.y)).r;
+    float mU = texture(uPeakingMask, centre - vec2(0.0, texel.y)).r;
+    float mRR = texture(uPeakingMask, centre + vec2(2.0 * texel.x, 0.0)).r;
+    float mLL = texture(uPeakingMask, centre - vec2(2.0 * texel.x, 0.0)).r;
+    float mDD = texture(uPeakingMask, centre + vec2(0.0, 2.0 * texel.y)).r;
+    float mUU = texture(uPeakingMask, centre - vec2(0.0, 2.0 * texel.y)).r;
+    float mRD = texture(uPeakingMask, centre + vec2(texel.x, texel.y)).r;
+    float mRU = texture(uPeakingMask, centre + vec2(texel.x, -texel.y)).r;
+    float mLD = texture(uPeakingMask, centre + vec2(-texel.x, texel.y)).r;
+    float mLU = texture(uPeakingMask, centre + vec2(-texel.x, -texel.y)).r;
+    float dC = max(max(max(m00, mR), max(mL, mD)), mU);
+    float dR = max(max(max(mR, mRR), max(m00, mRD)), mRU);
+    float dL = max(max(max(mL, m00), max(mLL, mLD)), mLU);
+    float dD = max(max(max(mD, mRD), max(mLD, mDD)), m00);
+    float dU = max(max(max(mU, mRU), max(mLU, m00)), mUU);
+    return min(min(min(dC, dR), min(dL, dD)), dU);
 }
 
-vec3 sampleLut(sampler2D cube, float cubeSize, vec3 color) {
+vec3 sampleLut(sampler3D cube, float cubeSize, vec3 color) {
     if (cubeSize < 2.0) return color;
-    float blue = clamp(color.b, 0.0, 1.0) * (cubeSize - 1.0);
-    float lowerSlice = floor(blue);
-    float upperSlice = min(lowerSlice + 1.0, cubeSize - 1.0);
-    vec3 lower = texture(cube, atlasCoordinate(lowerSlice, color.rg, cubeSize)).rgb;
-    vec3 upper = texture(cube, atlasCoordinate(upperSlice, color.rg, cubeSize)).rgb;
-    return mix(lower, upper, blue - lowerSlice);
+    // Match CIColorCube: R fastest in x, then G, then B. Half-texel so
+    // linear filter stays inside the lattice (2D atlases bled across tiles).
+    vec3 coord = (clamp(color, 0.0, 1.0) * (cubeSize - 1.0) + 0.5) / cubeSize;
+    return texture(cube, coord).rgb;
 }
 
 vec3 sampleSource(vec2 uv) {
@@ -97,6 +113,16 @@ void main() {
         float weight = sampleLut(uLimitsWeight, pc.limitsWeightSize, source).r;
         color = mix(color, paint, clamp(weight, 0.0, 1.0));
     }
+    if (pc.peakingOn > 0.5) {
+        vec2 sourceSize = max(pc.sourceSize, vec2(1.0));
+        vec2 texel = 1.0 / sourceSize;
+        vec2 mirrored = vec2(mix(uv.x, 1.0 - uv.x, pc.mirror), uv.y);
+        vec2 centre = (floor(mirrored * sourceSize) + 0.5) * texel;
+        float stroke = peakingClosedStroke(centre, texel);
+        float under = texture(uPeakingMask, centre).g;
+        color = mix(color, PEAKING_UNDER_COLOR, under);
+        color = mix(color, pc.peakingColor.rgb, stroke);
+    }
     if (pc.zebraHighlightOn > 0.5 || pc.zebraMidtoneOn > 0.5) {
         float luma = dot(source, LUMA_709);
         vec2 displayCoordinate = vec2(uv.x * pc.displaySize.x, (1.0 - uv.y) * pc.displaySize.y);
@@ -105,14 +131,14 @@ void main() {
             // Highlight reads the max channel — the byte WAVE draws at 100 (#136).
             float hot = max(source.r, max(source.g, source.b));
             float highlightMask = clamp((hot - pc.zebraHighlight) * ZEBRA_GAIN + 1.0, 0.0, 1.0);
-            color = mix(color, pc.zebraHighlightColor, highlightMask * stripe);
+            color = mix(color, pc.zebraHighlightColor.rgb, highlightMask * stripe);
         }
         if (pc.zebraMidtoneOn > 0.5) {
             float halfWidth = max(pc.zebraMidtoneHalf, 1e-6);
             float midtoneMask =
                 clamp((luma - (pc.zebraMidtone - halfWidth)) * ZEBRA_GAIN + 1.0, 0.0, 1.0)
                 * clamp(((pc.zebraMidtone + halfWidth) - luma) * ZEBRA_GAIN + 1.0, 0.0, 1.0);
-            color = mix(color, pc.zebraMidtoneColor, midtoneMask * stripe);
+            color = mix(color, pc.zebraMidtoneColor.rgb, midtoneMask * stripe);
         }
     }
     oColor = vec4(color, 1.0);

@@ -451,6 +451,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun close() {
         disconnect()
+        faceDetector.shutdown()
         ble.stopScan()
         ble.close()
     }

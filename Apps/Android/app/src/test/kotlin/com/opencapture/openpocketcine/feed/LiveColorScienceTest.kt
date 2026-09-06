@@ -12,6 +12,7 @@ import kotlin.test.assertTrue
 class FeedUpscaleTest {
     @Test
     fun reconstructsOnlyWhenThePanelMagnifies() {
+        // Fast reconstructs the 720p Rec.709 bake, not log RGB before the cube.
         assertTrue(
             FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1920f, 1080f),
         )

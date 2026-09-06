@@ -113,10 +113,10 @@ class HevcDecoder {
             val decoder = codec
             if (decoder != null) {
                 val swapped = runCatching { decoder.setOutputSurface(next) }
-                if (swapped.isFailure) {
-                    Log.w(TAG, "setOutputSurface failed — keep decoder", swapped.exceptionOrNull())
-                }
-                return
+                if (swapped.isSuccess) return
+                Log.w(TAG, "setOutputSurface failed — rebuild decoder", swapped.exceptionOrNull())
+                releaseCodecLocked()
+                configured = false
             }
         }
         val csd = pendingCsd ?: return

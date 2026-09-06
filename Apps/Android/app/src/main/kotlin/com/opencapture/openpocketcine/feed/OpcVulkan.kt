@@ -83,12 +83,23 @@ internal object OpcVulkan {
         zebraMidHalf: Float,
         upscale: Float,
         mirror: Float,
+        peakingOn: Float,
+        peakingRatioThreshold: Float,
+        peakingNoiseGate: Float,
+        peakingR: Float,
+        peakingG: Float,
+        peakingB: Float,
     )
 
     @JvmStatic external fun nativeCopyHisto(handle: Long, out: IntArray)
 
     @JvmStatic external fun nativeSetNeedTap(handle: Long, on: Boolean)
 
+    @JvmStatic external fun nativeSetNeedFace(handle: Long, on: Boolean)
+
     /** 213×120 RGBA8 tap (PocketScopeSampler.tapSize 1280×720). */
     @JvmStatic external fun nativeCopyTap(handle: Long, out: ByteArray): Boolean
+
+    /** 320×180 identity RGB for FaceDetector (not a mirrored swapchain copy). */
+    @JvmStatic external fun nativeCopyFace(handle: Long, out: ByteArray): Boolean
 }
