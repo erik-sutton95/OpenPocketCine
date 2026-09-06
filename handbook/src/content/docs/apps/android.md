@@ -84,8 +84,8 @@ Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
-PEAK / FALSE / ZEBRA sample the 720p HEVC raster at the panel (peaking is the same 3-pass
-as GLES). Fast upscale is Catmull-Rom when the panel is larger than 720p. HUD liquid
+PEAK / FALSE / ZEBRA convert the 720p 4:2:0 HEVC at the panel so chroma is
+interpolated before the cube (peaking is the same 3-pass as GLES). HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
 the last frame on freeze, one live-enable write at a time, latest-wins

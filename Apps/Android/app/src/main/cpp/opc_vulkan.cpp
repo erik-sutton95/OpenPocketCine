@@ -36,13 +36,11 @@
 
 namespace {
 
-// Native Pocket HEVC is 1280×720. Convert YCbCr at that raster — iOS
-// `LiveMonitorFx.bakeSize` never enlarges. Present samples that RGB at the
-// swapchain (`FeedPresentScaler` Fast / Catmull-Rom when the panel is
-// larger than 720p). LUT / FALSE / ZEBRA / PEAK run in that same pass —
-// do not bake an intermediate well and stretch it (S25 slat stairsteps,
-// LUT on or off). Peaking is the GLES 3-pass on unmanaged 720p RGB.
-// Scopes tap that grid. Kawase glass keeps a 720p well.
+// Native Pocket HEVC is 1280×720 4:2:0. A 720p RGB bake locks chroma at
+// 640×360; the Rec.709 cube then posterizes those tiles (S25 blotch).
+// Present converts YCbCr at the picture rect so LINEAR chroma interpolates
+// per panel fragment, then the cube — GLES OES / iOS VT do the same.
+// 720p RGB stays for peaking, scopes, and face. Kawase glass keeps a 720p well.
 constexpr uint32_t kSourceW = 1280;
 constexpr uint32_t kSourceH = 720;
 constexpr uint32_t kVectorN = 128;
@@ -172,6 +170,7 @@ struct OpcVk {
     VkRenderPass loadPass = VK_NULL_HANDLE;
 
     ImageMem source{};
+    ImageMem presentRgb{};
     ImageMem tap{};
     ImageMem face{};
     ImageMem well{};
@@ -181,6 +180,7 @@ struct OpcVk {
     ImageMem peakingBlur{};
     ImageMem peakingMask{};
     VkFramebuffer sourceFb = VK_NULL_HANDLE;
+    VkFramebuffer presentRgbFb = VK_NULL_HANDLE;
     VkFramebuffer wellFb = VK_NULL_HANDLE;
     VkFramebuffer gradedFb = VK_NULL_HANDLE;
     VkFramebuffer vectorFb = VK_NULL_HANDLE;
@@ -250,6 +250,7 @@ struct OpcVk {
 
     VkDescriptorSet blitSets[8]{};
     VkDescriptorSet feedSet = VK_NULL_HANDLE;
+    VkDescriptorSet feedPresentSet = VK_NULL_HANDLE;
     VkDescriptorSet scopeSet = VK_NULL_HANDLE;
     VkDescriptorSet histoSet = VK_NULL_HANDLE;
     VkDescriptorSet remapSet = VK_NULL_HANDLE;
@@ -649,8 +650,34 @@ static bool ensureCubeImages(OpcVk* r) {
         writeCombined(r->device, r->feedSet, 1, r->lut.view, r->linearSampler);
         writeCombined(r->device, r->feedSet, 2, r->limitsPaint.view, r->linearSampler);
         writeCombined(r->device, r->feedSet, 3, r->limitsWeight.view, r->linearSampler);
+        if (r->feedPresentSet) {
+            writeCombined(r->device, r->feedPresentSet, 1, r->lut.view, r->linearSampler);
+            writeCombined(r->device, r->feedPresentSet, 2, r->limitsPaint.view, r->linearSampler);
+            writeCombined(r->device, r->feedPresentSet, 3, r->limitsWeight.view, r->linearSampler);
+        }
     }
     return true;
+}
+
+static bool ensurePresentRgb(OpcVk* r, uint32_t w, uint32_t h) {
+    w = std::max(1u, w);
+    h = std::max(1u, h);
+    if (r->presentRgb.width == w && r->presentRgb.height == h && r->presentRgbFb) return true;
+    vkDeviceWaitIdle(r->device);
+    destroyFb(r->device, &r->presentRgbFb);
+    destroyImage(r->device, &r->presentRgb);
+    auto usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (makeImage(r, w, h, VK_FORMAT_R8G8B8A8_UNORM, usage, &r->presentRgb)) return false;
+    r->presentRgbFb = makeFb(r->device, r->offscreenPass, r->presentRgb.view, w, h);
+    if (r->blitSets[7] && r->presentRgb.view) {
+        writeCombined(r->device, r->blitSets[7], 0, r->presentRgb.view, r->linearSampler);
+    }
+    if (r->feedPresentSet && r->presentRgb.view) {
+        writeCombined(r->device, r->feedPresentSet, 0, r->presentRgb.view, r->linearSampler);
+    }
+    LOGI("present rgb %ux%u (ycbcr at panel, scopes stay %ux%u)", w, h, kSourceW, kSourceH);
+    return r->presentRgbFb != VK_NULL_HANDLE;
 }
 
 static void imageBarrier(VkCommandBuffer cmd, VkImage img, VkImageLayout oldL, VkImageLayout newL,
@@ -964,7 +991,7 @@ static bool createResources(OpcVk* r) {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 8},
     };
     VkDescriptorPoolCreateInfo dpi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    dpi.maxSets = 32;
+    dpi.maxSets = 40;
     dpi.poolSizeCount = 3;
     dpi.pPoolSizes = sizes;
     vkCreateDescriptorPool(r->device, &dpi, nullptr, &r->descPool);
@@ -978,6 +1005,7 @@ static bool createResources(OpcVk* r) {
     };
     alloc(r->copySetLayout, &r->copySet);
     alloc(r->feedSetLayout, &r->feedSet);
+    alloc(r->feedSetLayout, &r->feedPresentSet);
     alloc(r->scopeSetLayout, &r->scopeSet);
     alloc(r->histoSetLayout, &r->histoSet);
     alloc(r->remapSetLayout, &r->remapSet);
@@ -992,6 +1020,10 @@ static bool createResources(OpcVk* r) {
     writeCombined(r->device, r->feedSet, 2, r->limitsPaint.view, r->linearSampler);
     writeCombined(r->device, r->feedSet, 3, r->limitsWeight.view, r->linearSampler);
     writeCombined(r->device, r->feedSet, 4, r->peakingMask.view, r->nearestSampler);
+    writeCombined(r->device, r->feedPresentSet, 1, r->lut.view, r->linearSampler);
+    writeCombined(r->device, r->feedPresentSet, 2, r->limitsPaint.view, r->linearSampler);
+    writeCombined(r->device, r->feedPresentSet, 3, r->limitsWeight.view, r->linearSampler);
+    writeCombined(r->device, r->feedPresentSet, 4, r->peakingMask.view, r->nearestSampler);
     writeCombined(r->device, r->peakingMaskSet, 0, r->source.view, r->nearestSampler);
     writeCombined(r->device, r->peakingMaskSet, 1, r->peakingBlur.view, r->nearestSampler);
     writeCombined(r->device, r->scopeSet, 0, r->source.view, r->linearSampler);
@@ -1633,6 +1665,11 @@ static bool renderFrame(OpcVk* r) {
     if (acq == VK_ERROR_OUT_OF_DATE_KHR) return false;
     vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     vkResetFences(r->device, 1, &r->fence);
+    float destX, destY, destW, destH;
+    feedDest(r, &destX, &destY, &destW, &destH);
+    const uint32_t presentW = (uint32_t)std::max(1, (int)std::lround(destW));
+    const uint32_t presentH = (uint32_t)std::max(1, (int)std::lround(destH));
+    const bool panelChroma = ensurePresentRgb(r, presentW, presentH) && r->copyPipe && r->presentRgbFb;
     vkResetCommandBuffer(r->cmd, 0);
     VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(r->cmd, &bi);
@@ -1644,17 +1681,34 @@ static bool renderFrame(OpcVk* r) {
     float ahbW = r->imported.width ? (float)r->imported.width : (float)kSourceW;
     float ahbH = r->imported.height ? (float)r->imported.height : (float)kSourceH;
 
-    // YCbCr → RGB at the HEVC raster (iOS bakeSize). Do not sample 4:2:0 at
-    // view size — that is the Adreno mosaic. Bilinear-fit happens at present.
-    beginPass(r->cmd, r->offscreenPass, r->sourceFb, kSourceW, kSourceH, true);
-    vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
-    vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0, nullptr);
-    vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
-    if (ahbW != (float)kSourceW || ahbH != (float)kSourceH) {
-        setCoverViewport(r->cmd, ahbW, ahbH, (float)kSourceW, (float)kSourceH);
+    const bool need720 =
+        tap || r->needFace || r->peakingOn > 0.5f || !panelChroma || r->plateCount || r->slots[3].visible;
+    if (need720) {
+        // Peaking / scopes / face stay on unmanaged 720p RGB.
+        beginPass(r->cmd, r->offscreenPass, r->sourceFb, kSourceW, kSourceH, true);
+        vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
+        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0,
+                                nullptr);
+        vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
+        if (ahbW != (float)kSourceW || ahbH != (float)kSourceH) {
+            setCoverViewport(r->cmd, ahbW, ahbH, (float)kSourceW, (float)kSourceH);
+        }
+        vkCmdDraw(r->cmd, 3, 1, 0, 0);
+        vkCmdEndRenderPass(r->cmd);
     }
-    vkCmdDraw(r->cmd, 3, 1, 0, 0);
-    vkCmdEndRenderPass(r->cmd);
+
+    // YCbCr → RGB at the picture rect so LINEAR chroma interpolates per panel
+    // fragment. Baking 4:2:0 into 720p RGB then cubing it is the S25 blotch.
+    if (panelChroma) {
+        beginPass(r->cmd, r->offscreenPass, r->presentRgbFb, presentW, presentH, true);
+        vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
+        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0,
+                                nullptr);
+        vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
+        setCoverViewport(r->cmd, ahbW, ahbH, (float)presentW, (float)presentH);
+        vkCmdDraw(r->cmd, 3, 1, 0, 0);
+        vkCmdEndRenderPass(r->cmd);
+    }
     releaseAhb(r);
 
     auto blitBakeToSwap = [&](VkDescriptorSet srcSet, float srcW, float srcH) {
@@ -1679,7 +1733,11 @@ static bool renderFrame(OpcVk* r) {
                          &bakeBarrier, 0, nullptr, 0, nullptr);
 
     if (!grade && !tap) {
-        blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
+        if (panelChroma) {
+            blitBakeToSwap(r->blitSets[7], (float)presentW, (float)presentH);
+        } else {
+            blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
+        }
         recordCpuTaps(r);
         vkEndCommandBuffer(r->cmd);
         VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -1758,8 +1816,6 @@ static bool renderFrame(OpcVk* r) {
         float peakingColor[4];
     } fpc{};
     static_assert(sizeof(FeedPC) == 128, "feed push constants are 128 bytes");
-    float destX, destY, destW, destH;
-    feedDest(r, &destX, &destY, &destW, &destH);
     fpc.sourceSize[0] = (float)kSourceW;
     fpc.sourceSize[1] = (float)kSourceH;
     fpc.displaySize[0] = destW;
@@ -1782,21 +1838,19 @@ static bool renderFrame(OpcVk* r) {
     memcpy(fpc.zebraMidColor, r->zebraMidColor, 12);
     memcpy(fpc.peakingColor, r->peakingColor, 12);
 
-    auto drawFeed = [&](VkPipeline pipe) {
+    auto drawFeed = [&](VkPipeline pipe, VkDescriptorSet set) {
         vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->feedLayout, 0, 1, &r->feedSet, 0,
-                                nullptr);
+        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->feedLayout, 0, 1, &set, 0, nullptr);
         vkCmdPushConstants(r->cmd, r->feedLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(fpc), &fpc);
         vkCmdDraw(r->cmd, 3, 1, 0, 0);
     };
 
     // 720p well is only for kawase glass, or if the swap feed pipe is missing.
-    // Picture present samples 720p at the swapchain (Catmull-Rom when Fast).
     const bool swapFeed = grade && r->feedSwapPipe;
     if (grade && (r->plateCount || !swapFeed)) {
         fpc.feedUpscale = 0.f;
         beginPass(r->cmd, r->offscreenPass, r->gradedFb, kSourceW, kSourceH, true);
-        drawFeed(r->feedPipe);
+        drawFeed(r->feedPipe, r->feedSet);
         vkCmdEndRenderPass(r->cmd);
         fpc.feedUpscale = r->feedUpscale;
         vkCmdPipelineBarrier(r->cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1849,16 +1903,21 @@ static bool renderFrame(OpcVk* r) {
 
     beginPass(r->cmd, r->swapPass, r->swapFbs[idx], r->swapExtent.width, r->swapExtent.height, true, 0.078f,
               0.078f, 0.078f, 1);
-    if (swapFeed) {
+    if (swapFeed && panelChroma && r->feedPresentSet) {
+        fpc.feedUpscale = 0.f;
+        setCoverViewportAt(r->cmd, (float)presentW, (float)presentH, destX, destY, destW, destH,
+                           r->swapExtent.width, r->swapExtent.height);
+        drawFeed(r->feedSwapPipe, r->feedPresentSet);
+    } else if (swapFeed) {
         setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
                            r->swapExtent.width, r->swapExtent.height);
-        drawFeed(r->feedSwapPipe);
+        drawFeed(r->feedSwapPipe, r->feedSet);
     } else {
-        const float blitSrcW = grade ? (float)r->well.width : (float)kSourceW;
-        const float blitSrcH = grade ? (float)r->well.height : (float)kSourceH;
+        const float blitSrcW = panelChroma ? (float)presentW : (grade ? (float)r->well.width : (float)kSourceW);
+        const float blitSrcH = panelChroma ? (float)presentH : (grade ? (float)r->well.height : (float)kSourceH);
+        VkDescriptorSet blitSet = panelChroma ? r->blitSets[7] : (grade ? r->blitSets[0] : r->blitSets[5]);
         vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitPipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1,
-                                grade ? &r->blitSets[0] : &r->blitSets[5], 0, nullptr);
+        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1, &blitSet, 0, nullptr);
         float blitPc[2] = {1.f, 0.f};
         vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
         setCoverViewportAt(r->cmd, blitSrcW, blitSrcH, destX, destY, destW, destH, r->swapExtent.width,
@@ -2127,6 +2186,8 @@ static void destroyAll(OpcVk* r) {
     if (r->copyPool) vkDestroyDescriptorPool(r->device, r->copyPool, nullptr);
     if (r->descPool) vkDestroyDescriptorPool(r->device, r->descPool, nullptr);
     if (r->sourceFb) vkDestroyFramebuffer(r->device, r->sourceFb, nullptr);
+    destroyFb(r->device, &r->presentRgbFb);
+    destroyImage(r->device, &r->presentRgb);
     if (r->peakingBlurFb) vkDestroyFramebuffer(r->device, r->peakingBlurFb, nullptr);
     if (r->peakingMaskFb) vkDestroyFramebuffer(r->device, r->peakingMaskFb, nullptr);
     if (r->vectorFb) vkDestroyFramebuffer(r->device, r->vectorFb, nullptr);

@@ -70,11 +70,11 @@ the production `CameraSoftAP` ladder.
 ### Live picture
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
-AHardwareBuffer → YCbCr convert at the 720p HEVC raster (iOS `bakeSize`
-never enlarges) → present samples that RGB at the swapchain (`FeedPresentScaler`
-Fast / Catmull-Rom when the panel is larger than 720p). LUT / FALSE /
-ZEBRA / PEAK run in the same present-rate pass — do not bake an intermediate
-well and stretch it (that grid showed up with LUT off as well as on). Peaking is the GLES 3-pass (vertical re-blur, mask, closed
+AHardwareBuffer → YCbCr convert at the picture rect so LINEAR chroma
+interpolates per panel fragment, then the cube (GLES OES / iOS VT sample
+4:2:0 at the layer). Baking 4:2:0 into 720p RGB then cubing it posterizes
+chroma (S25 D-Log2 blotch). 720p RGB stays for peaking, scopes, and face.
+Peaking is the GLES 3-pass (vertical re-blur, mask, closed
 stroke) on the unmanaged 720p RGB, then composited over the grade.
 Assists-off with Fast off is the 720p RGB blit. GLES
 `FeedEffectsGlProgram` on `GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
@@ -104,9 +104,9 @@ stay solid fills.
 
 ### Assists GPU
 
-Assists-off with Fast off is one YCbCr blit of the MediaCodec AHB (hardware `c2.qti` / Exynos
-HEVC, not `c2.android`). Fast, LUT / FALSE / ZEBRA / PEAK sample 720p RGB at
-the swapchain. WAVE / PARADE /
+Assists-off converts YCbCr at the picture rect (hardware `c2.qti` / Exynos
+HEVC, not `c2.android`). LUT / FALSE / ZEBRA / PEAK cube that panel RGB.
+WAVE / PARADE /
 VECTOR / HISTO tap a 200-wide downsample (213×120 on 720p) at 25 Hz
 (10 Hz with three or more scopes) and paint in Compose Canvas.
 Face AF samples unmanaged 720p RGB at 640×360 through ML Kit Face
