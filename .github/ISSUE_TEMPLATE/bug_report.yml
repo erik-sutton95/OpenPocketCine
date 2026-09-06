@@ -6,7 +6,10 @@ body:
     attributes:
       value: |
         Thanks for helping improve OpenPocketCine. Describe what you saw in your own words.
-        Only the first question is required, and you can skip anything marked **optional**.
+        **What went wrong** and **App version** are required. Skip anything marked **optional**.
+
+        App version lives in Operator Setup → System (and at the top of Share Diagnostics).
+        Copy the whole string, including the number in parentheses — `0.1.0` alone is not enough.
 
         Open the signed-in [bug-report form](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml) directly at
         any time. Do not include camera Wi-Fi passwords, packet captures, or other secrets.
@@ -39,6 +42,17 @@ body:
       description: Paste from your clipboard, drag and drop files here, or click below to choose files.
       placeholder: You can also paste log text or add any other information that helps explain the problem.
 
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: >
+        Operator Setup → System → App Version, or the `app:` line in Share Diagnostics.
+        We need the build number in parentheses so we can tell Play / TestFlight builds apart.
+      placeholder: "0.1.0 (36)"
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: |
@@ -56,9 +70,9 @@ body:
   - type: input
     id: platform
     attributes:
-      label: App version and device (optional)
-      description: Include your OpenPocketCine version, device model, and OS version, if you know.
-      placeholder: "Example: OpenPocketCine on iPhone 16 Pro on iOS 18.5, or Pixel 9 on Android 16"
+      label: Phone or tablet (optional)
+      description: Device model and OS version.
+      placeholder: "Example: iPhone 16 Pro on iOS 18.5, or Pixel 9 on Android 16"
 
   - type: dropdown
     id: frequency

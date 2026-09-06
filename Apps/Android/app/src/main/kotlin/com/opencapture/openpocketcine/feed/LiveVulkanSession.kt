@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.media.Image
 import android.media.ImageReader
@@ -12,6 +13,8 @@ import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -53,6 +56,10 @@ internal class LiveVulkanSession(
     @Volatile private var lastPlan: FeedEffectsRenderPlan? = null
     @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
+    private val faceWanted = AtomicBoolean(false)
+    private val faceLock = Any()
+    private val faceBytes = ByteArray(FACE_W * FACE_H * 4)
+    @Volatile private var faceValid = false
     private var lastSampleNs = 0L
     private var attachedSurface: Surface? = null
     val windowReady: Boolean
@@ -61,11 +68,24 @@ internal class LiveVulkanSession(
     val isReady: Boolean
         get() = handle != 0L
 
+    init {
+        // Decoder surface must exist before the swapchain. Handshake + 0x09/0xa8
+        // run as LIVE is published; compiling extra swapchain pipes before
+        // ImageReader missed that IDR and left WAITING FOR LIVE VIEW up.
+        if (handle != 0L) imageHandler.post { ensureReader() }
+    }
+
     fun attachWindow(surface: Surface, width: Int, height: Int) {
         val native = handle
         if (native == 0L || presentGate.isReleased) return
         if (!VulkanWindowAttach.shouldCreateSwapchain(width, height)) {
             Log.w(TAG, "swapchain attach skipped ${width}x${height}")
+            DiagnosticCenter.log(
+                "warning",
+                "feed",
+                "surface",
+                "feed: swapchain attach skipped ${width}x${height}",
+            )
             return
         }
         if (presentGate.windowReady && attachedSurface === surface) {
@@ -73,9 +93,18 @@ internal class LiveVulkanSession(
             redrawLast()
             return
         }
+        // Latch MediaCodec before swapchain pipes compile. 0x09/0xa8's IDR
+        // lands in this window; waiting on feed.frag compile missed it.
+        ensureReader()
         val ok = OpcVulkan.nativeAttachWindow(native, surface, width, height)
         if (!ok) {
             Log.w(TAG, "swapchain attach failed ${width}x${height}")
+            DiagnosticCenter.log(
+                "warning",
+                "feed",
+                "surface",
+                "feed: swapchain attach failed ${width}x${height}",
+            )
             // Do not fall back to GLES — that unbound MediaCodec from the
             // ImageReader and left a black well while UDP stayed live (#248).
             if (VulkanWindowAttach.shouldFallbackToGlesOnAttachFailure()) onFailed()
@@ -83,7 +112,12 @@ internal class LiveVulkanSession(
         }
         attachedSurface = surface
         presentGate.attach()
-        ensureReader()
+        DiagnosticCenter.log(
+            "info",
+            "feed",
+            "surface",
+            "feed: swapchain attach ok ${width}x${height}",
+        )
         redrawLast()
     }
 
@@ -200,8 +234,15 @@ internal class LiveVulkanSession(
                 0f
             },
             if (pictureMirrored) 1f else 0f,
+            if (plan.peaking) 1f else 0f,
+            plan.peakingRatioThreshold,
+            plan.peakingNoiseGate,
+            plan.peakingColor.getOrElse(0) { 1f },
+            plan.peakingColor.getOrElse(1) { 72f / 255f },
+            plan.peakingColor.getOrElse(2) { 64f / 255f },
         )
         packScopeSlotsOff()
+        redrawLast()
     }
 
     /** Compose owns the plates; drag does not re-present the swapchain. */
@@ -217,6 +258,20 @@ internal class LiveVulkanSession(
         }
         OpcVulkan.nativeSetSlots(native, slots)
         OpcVulkan.nativeSetStack(native, intArrayOf())
+    }
+
+    /** Arm a 320×180 identity RGB copy on the next present (iOS Vision on VT). */
+    fun requestFaceTap() {
+        faceWanted.set(true)
+    }
+
+    fun takeFaceBitmap(): Bitmap? {
+        synchronized(faceLock) {
+            if (!faceValid) return null
+            val bmp = Bitmap.createBitmap(FACE_W, FACE_H, Bitmap.Config.ARGB_8888)
+            bmp.copyPixelsFromBuffer(ByteBuffer.wrap(faceBytes))
+            return bmp
+        }
     }
 
     fun copyHistogram(): IntArray {
@@ -257,6 +312,7 @@ internal class LiveVulkanSession(
         attachedSurface = null
         val native = handle
         if (native != 0L) OpcVulkan.nativeDetachWindow(native)
+        DiagnosticCenter.log("info", "feed", "surface", "feed: swapchain detach")
     }
 
     fun release() {
@@ -279,6 +335,7 @@ internal class LiveVulkanSession(
         if (native != 0L) OpcVulkan.nativeDestroy(native)
     }
 
+    @Synchronized
     private fun ensureReader() {
         val native = handle
         if (reader != null || native == 0L || presentGate.isReleased) return
@@ -332,18 +389,26 @@ internal class LiveVulkanSession(
             }
         // 1280→213 blit is per-submit. Arm it only on the sample tick;
         // leaving needTap on made WAVE/PARADE/VECTOR stall every frame.
+        val takeFace = faceWanted.compareAndSet(true, false)
         OpcVulkan.nativeSetNeedTap(native, takeTap)
+        OpcVulkan.nativeSetNeedFace(native, takeFace)
         val ok = OpcVulkan.nativeSubmit(native, hb)
         hb.close()
         held?.close()
         held = image
         if (!ok) {
             if (takeTap) sampleBusy.set(false)
+            if (takeFace) faceWanted.set(true)
             if (presentGate.shouldFallbackOnSubmitFailure()) main.post(onFailed)
             return
         }
         framesPresented.incrementAndGet()
         if (started.compareAndSet(false, true)) main.post(onFirstFrame)
+        if (takeFace) {
+            synchronized(faceLock) {
+                faceValid = OpcVulkan.nativeCopyFace(native, faceBytes)
+            }
+        }
         if (!takeTap) return
         lastSampleNs = now
         val transfer = MonitorTransfer.fromColorMode(policy.colorMode)
@@ -427,6 +492,8 @@ internal class LiveVulkanSession(
         private const val TAG = "OpcVulkan"
         const val SOURCE_W = 1280
         const val SOURCE_H = 720
+        const val FACE_W = 640
+        const val FACE_H = 360
         val TAP_W = PocketScopeSampler.tapSize(SOURCE_W, SOURCE_H).first
         val TAP_H = PocketScopeSampler.tapSize(SOURCE_W, SOURCE_H).second
     }

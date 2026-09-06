@@ -48,20 +48,27 @@ fun applyImmersiveSystemBars(window: Window) {
  * Pointer events are not consumed — chrome and pairing still get the tap.
  *
  * Only the live monitor runs immersive. With [enabled] false the bars are the
- * platform's to draw, so the cycle stands down entirely — otherwise a stray
- * edge swipe on setup would `hide()` them and take the status-bar inset with it.
+ * platform's to draw and the swipe cycle stands down — otherwise a stray edge
+ * swipe on setup would `hide()` them and take the status-bar inset with it.
+ *
+ * [content] must be invoked from **one** composition slot. Branching
+ * `if (!enabled) content() else Box { content() }` remounts LiveViewScreen
+ * when Operator Setup opens (immersive flips). That disposed the Vulkan
+ * session and released MediaCodec while UDP `0x02` stayed live, so the
+ * watchdog never PLI'd — black well, live HUD (#248 / S25).
  */
 @Composable
 fun ImmersiveSystemBarCycle(enabled: Boolean = true, content: @Composable () -> Unit) {
-    if (!enabled) {
-        CompositionLocalProvider(LocalImmersiveBarInsets provides Insets.NONE) { content() }
-        return
-    }
     var barsShown by remember { mutableStateOf(false) }
     var barInsets by remember { mutableStateOf(Insets.NONE) }
     val view = LocalView.current
     val activity = LocalActivity.current
-    LaunchedEffect(barsShown) {
+    LaunchedEffect(enabled, barsShown) {
+        if (!enabled) {
+            barInsets = Insets.NONE
+            barsShown = false
+            return@LaunchedEffect
+        }
         if (!barsShown) return@LaunchedEffect
         val window = activity?.window ?: return@LaunchedEffect
         val controller = WindowCompat.getInsetsController(window, view)
@@ -85,11 +92,13 @@ fun ImmersiveSystemBarCycle(enabled: Boolean = true, content: @Composable () -> 
         barInsets = Insets.NONE
         barsShown = false
     }
-    CompositionLocalProvider(LocalImmersiveBarInsets provides barInsets) {
+    val insets = if (enabled) barInsets else Insets.NONE
+    CompositionLocalProvider(LocalImmersiveBarInsets provides insets) {
         Box(
             Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(pass = PointerEventPass.Initial)
                         val edge = 24.dp.toPx()

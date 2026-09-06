@@ -70,13 +70,22 @@ the production `CameraSoftAP` ladder.
 ### Live picture
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
-AHardwareBuffer → YCbCr blit at the feed well. GLES `FeedEffectsGlProgram` on
-`GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
+AHardwareBuffer → YCbCr convert at the 720p HEVC raster (iOS `bakeSize`
+never enlarges) → present samples that RGB at the swapchain (`FeedPresentScaler`
+Fast / Catmull-Rom when the panel is larger than 720p). LUT / FALSE /
+ZEBRA / PEAK run in the same present-rate pass — do not bake an intermediate
+well and stretch it (that grid showed up with LUT off as well as on). Peaking is the GLES 3-pass (vertical re-blur, mask, closed
+stroke) on the unmanaged 720p RGB, then composited over the grade.
+Assists-off with Fast off is the 720p RGB blit. GLES
+`FeedEffectsGlProgram` on `GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
 cover the monitor; they must not drop pktType `0x02` ingest (parity: live
 HEVC held). API 34+ SurfaceView stays attached while that overlay covers it
 (`SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT`) — visibility-follow destroyed the
 swapchain on S25 and left a black well while UDP stayed live (#248). A
 failed swapchain attach retries; it is not a GLES fallback.
+The decoder ImageReader is latched as soon as the Vulkan session exists,
+before swapchain pipes compile — handshake `0x09/0xa8` IDR must not wait
+on `feed.frag`.
 Return-from-gallery uses `restartLiveViewAfterMedia` (captured live-start),
 not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
 `surfaceDestroyed` before Android destroys the window mutex; drain
@@ -86,15 +95,23 @@ not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
 
 Kyant `AndroidLiquidGlass` on API 33+ / ≥4 GB devices that are not
 `isLowRamDevice`. FULL stays FULL (no frame-budget demote). Kyant cannot sample
-a SurfaceView, so FULL glass PixelCopies the feed well at ~20 Hz. Pairing,
-Operator Setup, and media list rows stay solid fills.
+a SurfaceView. Do not blit a PixelCopy over the well — that 20 Hz nearest copy
+became the picture (S25 mosaic). Pairing, Operator Setup, and media list rows
+stay solid fills.
 
 ### Assists GPU
 
-Assists-off is one YCbCr blit of the MediaCodec AHB (hardware `c2.qti` / Exynos
-HEVC, not `c2.android`). LUT / FALSE / ZEBRA add the grade pass. WAVE / PARADE /
+Assists-off with Fast off is one YCbCr blit of the MediaCodec AHB (hardware `c2.qti` / Exynos
+HEVC, not `c2.android`). Fast, LUT / FALSE / ZEBRA / PEAK sample 720p RGB at
+the swapchain. WAVE / PARADE /
 VECTOR / HISTO tap a 200-wide downsample (213×120 on 720p) at 25 Hz
 (10 Hz with three or more scopes) and paint in Compose Canvas.
+Face AF samples unmanaged 720p RGB at 640×360 through ML Kit Face
+Detection (Vision-class, 3/4 views) — not `android.media.FaceDetector`
+and not a PixelCopy of the swapchain (that copy is already mirrored
+when TT180/MIRROR is on, and the overlay mirrors again). Lock requires
+an eye landmark (iOS `FaceStructurePolicy`); ML Kit tracking IDs stay
+off so `FaceTrackHold` owns persistence.
 WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread; VECTOR uses
 the 128-bin raster.
 

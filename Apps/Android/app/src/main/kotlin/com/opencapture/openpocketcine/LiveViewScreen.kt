@@ -97,6 +97,7 @@ import com.opencapture.openpocketcine.feed.LocalGpuLive
 import com.opencapture.openpocketcine.feed.OpcVulkan
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -523,6 +524,9 @@ fun LiveViewScreen(model: AppModel) {
                             .onGloballyPositioned { canvasOrigin = it.positionInRoot() },
                 )
                 if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
+                    // Record the well for HUD glass. Do not blit PixelCopy here —
+                    // SurfaceView sits behind the window, and an opaque 20 Hz
+                    // copy became the picture (blocky S25 feed, LUT on or off).
                     Box(
                         Modifier
                             .liveModuleFrame(layout.onFeed)
@@ -530,7 +534,11 @@ fun LiveViewScreen(model: AppModel) {
                             .clipToBounds(),
                     ) {
                         vulkanSurfaceView?.let { view ->
-                            VulkanKyantCapture(view, Modifier.fillMaxSize())
+                            VulkanKyantCapture(
+                                surfaceView = view,
+                                displayCopy = false,
+                                modifier = Modifier.fillMaxSize(),
+                            )
                         }
                     }
                 }
@@ -553,7 +561,7 @@ fun LiveViewScreen(model: AppModel) {
             ) {
                 LiveFeedPresenter(
                     mirrored = liveViewFlip,
-                    captureFrames = glass.tier == GlassTier.FULL,
+                    captureFrames = false,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
@@ -862,7 +870,24 @@ fun LiveViewScreen(model: AppModel) {
             val panel = model.liveOperatorPanel
             LaunchedEffect(panel) {
                 model.session.setOperatorOverlayHeld(panel != null)
-                if (panel == null) vulkanSession?.redrawLast()
+                if (panel == null) {
+                    val ready = vulkanSession?.windowReady == true
+                    DiagnosticCenter.log(
+                        "info",
+                        "feed",
+                        "overlay",
+                        "feed: overlay dismissed windowReady=${if (ready) 1 else 0} " +
+                            "frames=${vulkanSession?.framesPresented?.get() ?: -1}",
+                    )
+                    vulkanSession?.redrawLast()
+                } else {
+                    DiagnosticCenter.log(
+                        "info",
+                        "feed",
+                        "overlay",
+                        "feed: overlay held $panel windowReady=${if (vulkanSession?.windowReady == true) 1 else 0}",
+                    )
+                }
             }
             if (panel != null && !model.isEditingChrome) {
                 Box(Modifier.fillMaxSize().zIndex(10f)) {
@@ -950,12 +975,24 @@ private fun LiveFaceFramePump(
     val handler = remember { Handler(Looper.getMainLooper()) }
     val inFlight = remember { AtomicBoolean(false) }
     val latest = rememberUpdatedState(onFrame)
-    LaunchedEffect(surfaceView, textureView, enabled, feed.x, feed.y, feed.width, feed.height) {
+    val vulkan = LocalGpuLive.current
+    LaunchedEffect(surfaceView, textureView, vulkan, enabled, feed.x, feed.y, feed.width, feed.height) {
         if (!enabled) return@LaunchedEffect
-        val tapW = 320
+        val tapW = com.opencapture.openpocketcine.session.LiveFaceDetector.TAP_WIDTH
         while (isActive) {
             delay(com.opencapture.openpocketcine.session.LiveFaceDetector.INTERVAL_MS)
             if (!inFlight.compareAndSet(false, true)) continue
+            // Vulkan: identity 720p RGB, same space as iOS Vision / 0xA6.
+            // PixelCopy of the swapchain is already mirrored when TT180/MIRROR
+            // is on, and the overlay mirrors again — box on the opposite side.
+            val session = vulkan
+            if (session != null) {
+                session.requestFaceTap()
+                val src = session.takeFaceBitmap()
+                inFlight.set(false)
+                if (src != null) latest.value(src)
+                continue
+            }
             val tapH =
                 ((tapW * feed.height / feed.width.coerceAtLeast(1f)).toInt() and 1.inv())
                     .coerceAtLeast(16)
@@ -1009,7 +1046,9 @@ private fun LiveFaceFramePump(
 
 private val GLASS_BLIT_PAINT =
     Paint().apply {
-        isFilterBitmap = false
+        // Filter when a copy is scaled. The live well must not *display* this
+        // bitmap — nearest 20 Hz PixelCopy over SurfaceView is the S25 mosaic.
+        isFilterBitmap = true
         isAntiAlias = false
         isDither = false
     }
@@ -1037,7 +1076,14 @@ private fun VulkanLivePresenter(
                 onSurfaceView(this)
                 holder.addCallback(
                     object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) = Unit
+                        override fun surfaceCreated(holder: SurfaceHolder) {
+                            DiagnosticCenter.log(
+                                "info",
+                                "feed",
+                                "surface",
+                                "feed: surface created",
+                            )
+                        }
 
                         override fun surfaceChanged(
                             holder: SurfaceHolder,
@@ -1046,10 +1092,22 @@ private fun VulkanLivePresenter(
                             height: Int,
                         ) {
                             this@apply.unsplitMotionEvents()
+                            DiagnosticCenter.log(
+                                "info",
+                                "feed",
+                                "surface",
+                                "feed: surface changed ${width}x${height}",
+                            )
                             session.attachWindow(holder.surface, width, height)
                         }
 
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
+                            DiagnosticCenter.log(
+                                "info",
+                                "feed",
+                                "surface",
+                                "feed: surface destroyed",
+                            )
                             session.detachWindow()
                         }
                     },
@@ -1070,12 +1128,17 @@ private fun View.unsplitMotionEvents() {
 }
 
 /**
- * Kyant cannot sample a SurfaceView. FULL glass copies the feed well from the
- * Vulkan surface into a Compose Canvas so [Modifier.layerBackdrop] records it.
+ * Kyant cannot sample a SurfaceView. FULL glass PixelCopies the well so
+ * [Modifier.layerBackdrop] can record it for HUD frost.
+ *
+ * Do not display that copy in the well. SurfaceView is behind the window;
+ * an opaque Canvas there is what the operator sees, and a 20 Hz nearest
+ * PixelCopy is a mosaic (S25 / Pocket 4 Pro).
  */
 @Composable
 private fun VulkanKyantCapture(
     surfaceView: SurfaceView,
+    displayCopy: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var frameGen by remember { mutableIntStateOf(0) }
@@ -1084,7 +1147,8 @@ private fun VulkanKyantCapture(
     val inFlight = remember { AtomicBoolean(false) }
     val handler = remember { Handler(Looper.getMainLooper()) }
 
-    LaunchedEffect(surfaceView) {
+    LaunchedEffect(surfaceView, displayCopy) {
+        if (!displayCopy) return@LaunchedEffect
         while (isActive) {
             withFrameNanos { }
             val rect = Rect(srcRect)
@@ -1122,7 +1186,7 @@ private fun VulkanKyantCapture(
         @Suppress("UNUSED_EXPRESSION")
         val gen = frameGen
         val bmp = frameBmp[0]
-        if (gen > 0 && bmp != null && !bmp.isRecycled) {
+        if (displayCopy && gen > 0 && bmp != null && !bmp.isRecycled) {
             drawIntoCanvas { canvas ->
                 val dstW = size.width.toInt()
                 val dstH = size.height.toInt()
@@ -1252,6 +1316,12 @@ private class EffectsFeedListener(
         width: Int,
         height: Int,
     ) {
+        DiagnosticCenter.log(
+            "info",
+            "feed",
+            "surface",
+            "feed: gles surface available ${width}x${height}",
+        )
         session.attachDisplay(surfaceTexture, width, height)
     }
 
@@ -1264,6 +1334,7 @@ private class EffectsFeedListener(
     }
 
     override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+        DiagnosticCenter.log("info", "feed", "surface", "feed: gles surface destroyed")
         session.detachDisplay()
         return true
     }
