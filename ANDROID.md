@@ -73,20 +73,25 @@ Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr convert 1:1 at the 720p HEVC raster (sampling 4:2:0
 at panel size is the Adreno mosaic). The Rec.709 cube is a 3D texture
 (`CIColorCube`); a 2D blue-slice atlas bled across tiles and blotched
-D-Log2. Present bilinear-samples that 720p RGB at the panel, then the cube.
-Peaking / scopes / face stay on 720p RGB.
+D-Log2. Cube at 720p, then stretch Rec.709 (iOS `bakeSize` then bilinear).
+Cubing after the upsample blotched D-Log2 vs iOS. Peaking / scopes / face
+stay on 720p RGB.
 Peaking is the GLES 3-pass (vertical re-blur, mask, closed
 stroke) on the unmanaged 720p RGB, then composited over the grade.
-Assists-off with Fast off is the 720p RGB blit. GLES
+Assists-off is the 720p RGB blit. GLES
 `FeedEffectsGlProgram` on `GL_TEXTURE_EXTERNAL_OES` is the fallback. Settings and the media library
 cover the monitor; they must not drop pktType `0x02` ingest (parity: live
 HEVC held). API 34+ SurfaceView stays attached while that overlay covers it
 (`SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT`) — visibility-follow destroyed the
 swapchain on S25 and left a black well while UDP stayed live (#248). A
 failed swapchain attach retries; it is not a GLES fallback.
-The decoder ImageReader is latched as soon as the Vulkan session exists,
-before swapchain pipes compile — handshake `0x09/0xa8` IDR must not wait
-on `feed.frag`. Each present acquires the AHB from `FOREIGN_EXT` and
+The decoder ImageReader is created in the Vulkan session constructor
+(same tick as LIVE). `nativeCreate` runs on `opc.vk.gpu` and compiles
+only YCbCr copy + blit — `feed.frag` waits until after the first
+picture. Compiling the LUT pipes on the ImageReader thread missed
+`0x09/0xa8` and left WAITING FOR LIVE VIEW up 5–10 s. Present never
+waits forever on the GPU fence. LUT stretch is the blit of the 720p
+bake. Each present acquires the AHB from `FOREIGN_EXT` and
 releases it after the 720p YCbCr copy — a missing release left static
 skip-blocks in the GPU cache until motion overwrote them.
 

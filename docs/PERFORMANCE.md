@@ -56,7 +56,8 @@ LUT replace as a black plate; overlay stripes still showed through. Once
 Metal owns the cube, hide the player — a second HEVC present under the grade
 is the hitch. Overlay (PEAK / FALSE / ZEBRA) keeps the identity layer.
 Export bake stays `AVVideoComposition`. The cube bakes at feed resolution and
-bilinear-fits the panel; Lanczos / MetalFX stay opt-in Quality/AI. The baker
+bilinear-fits the panel; Lanczos / MetalFX stay opt-in Quality/AI. Android
+live matches that order (Vulkan / GLES cube 720p, then stretch Rec.709). The baker
 pipelines the next cube while the GPU finishes the last. Next/prev clip does
 not recreate the playback `CAMetalLayer` — a slide `.id` rebuild stole the
 session and left LUT off until the chip was cycled. Playback Auto reads

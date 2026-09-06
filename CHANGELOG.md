@@ -165,6 +165,18 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android WAITING FOR LIVE VIEW took 5–10 s after the 720p cube-then-stretch
+  present (S25 / Pocket 4 Pro). Compiling `feed.frag` before the decoder
+  surface, then on the ImageReader thread, missed `0x09/0xa8`. The
+  constructor now creates ImageReader immediately; copy+blit compile on
+  `opc.vk.gpu`; LUT pipes after the first picture. A failed GPU submit
+  re-signals the present fence (frozen well, live HUD).
+
+- Android live LUT still blotched D-Log2 next to iOS (S25 / Pocket 4 Pro).
+  The 3D cube ran after bilinear-sampling 720p log RGB at the panel;
+  iOS cubes at `bakeSize` (720p) then stretches Rec.709. Vulkan and the
+  GLES fallback now cube at 720p, then blit that Rec.709 bake.
+
 - Android live LUT looked like a chroma blotch next to iOS (S25 / Pocket
   4 Pro, D-Log2). The cube was an 8-column 2D atlas, so bilinear filtering
   mixed neighbouring blue slices — iOS uses `CIColorCube` (3D). Vulkan now

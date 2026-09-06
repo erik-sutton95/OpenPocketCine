@@ -35,12 +35,15 @@ internal class LiveVulkanSession(
     private val main = Handler(Looper.getMainLooper())
     private val imageThread = HandlerThread("opc.vk.img").apply { start() }
     private val imageHandler = Handler(imageThread.looper)
+    private val gpuThread = HandlerThread("opc.vk.gpu").apply { start() }
+    private val gpuHandler = Handler(gpuThread.looper)
     private val sampleExecutor =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "opc.vk.scope").apply { isDaemon = true }
         }
     private val sampleBusy = AtomicBoolean(false)
-    private var handle = if (OpcVulkan.isAvailable) OpcVulkan.nativeCreate() else 0L
+    @Volatile private var handle = 0L
+    private var pendingAttach: Triple<Surface, Int, Int>? = null
     private val presentGate = VulkanPresentGate()
     private val slots = FloatArray(GpuLiveLayout.SLOT_STRIDE * 4)
     private val plates = AtomicReference(FloatArray(0))
@@ -68,16 +71,39 @@ internal class LiveVulkanSession(
     val isReady: Boolean
         get() = handle != 0L
 
+    private var feedW = SOURCE_W.toFloat()
+    private var feedH = SOURCE_H.toFloat()
+    private var sourceW = SOURCE_W
+    private var sourceH = SOURCE_H
+
     init {
-        // Decoder surface must exist before the swapchain. Handshake + 0x09/0xa8
-        // run as LIVE is published; compiling extra swapchain pipes before
-        // ImageReader missed that IDR and left WAITING FOR LIVE VIEW up.
-        if (handle != 0L) imageHandler.post { ensureReader() }
+        // Decoder surface on this thread, now. nativeCreate compiles on opc.vk.gpu
+        // so ImageReader callbacks are not stuck behind feed.frag (5–10 s WAITING).
+        ensureReader()
+        gpuHandler.post {
+            if (presentGate.isReleased) return@post
+            if (!OpcVulkan.isAvailable) {
+                main.post(onFailed)
+                return@post
+            }
+            val created = OpcVulkan.nativeCreate()
+            if (presentGate.isReleased) {
+                if (created != 0L) OpcVulkan.nativeDestroy(created)
+                return@post
+            }
+            if (created == 0L) {
+                Log.w(TAG, "vulkan nativeCreate failed")
+                main.post(onFailed)
+                return@post
+            }
+            handle = created
+            Log.i(TAG, "vulkan renderer ready")
+            imageHandler.post { flushAttach() }
+        }
     }
 
     fun attachWindow(surface: Surface, width: Int, height: Int) {
-        val native = handle
-        if (native == 0L || presentGate.isReleased) return
+        if (presentGate.isReleased) return
         if (!VulkanWindowAttach.shouldCreateSwapchain(width, height)) {
             Log.w(TAG, "swapchain attach skipped ${width}x${height}")
             DiagnosticCenter.log(
@@ -88,13 +114,29 @@ internal class LiveVulkanSession(
             )
             return
         }
+        pendingAttach = Triple(surface, width, height)
+        if (handle == 0L) {
+            ensureReader()
+            return
+        }
+        if (Looper.myLooper() == imageHandler.looper) {
+            flushAttach()
+        } else {
+            imageHandler.post { flushAttach() }
+        }
+    }
+
+    private fun flushAttach() {
+        val pending = pendingAttach ?: return
+        val native = handle
+        if (native == 0L || presentGate.isReleased) return
+        val (surface, width, height) = pending
         if (presentGate.windowReady && attachedSurface === surface) {
             OpcVulkan.nativeResize(native, width, height)
             redrawLast()
+            presentHeld(native)
             return
         }
-        // Latch MediaCodec before swapchain pipes compile. 0x09/0xa8's IDR
-        // lands in this window; waiting on feed.frag compile missed it.
         ensureReader()
         val ok = OpcVulkan.nativeAttachWindow(native, surface, width, height)
         if (!ok) {
@@ -105,9 +147,7 @@ internal class LiveVulkanSession(
                 "surface",
                 "feed: swapchain attach failed ${width}x${height}",
             )
-            // Do not fall back to GLES — that unbound MediaCodec from the
-            // ImageReader and left a black well while UDP stayed live (#248).
-            if (VulkanWindowAttach.shouldFallbackToGlesOnAttachFailure()) onFailed()
+            if (VulkanWindowAttach.shouldFallbackToGlesOnAttachFailure()) main.post(onFailed)
             return
         }
         attachedSurface = surface
@@ -118,6 +158,7 @@ internal class LiveVulkanSession(
             "surface",
             "feed: swapchain attach ok ${width}x${height}",
         )
+        presentHeld(native)
         redrawLast()
     }
 
@@ -139,11 +180,6 @@ internal class LiveVulkanSession(
         OpcVulkan.nativeResize(native, width, height)
     }
 
-    private var feedW = SOURCE_W.toFloat()
-    private var feedH = SOURCE_H.toFloat()
-    private var sourceW = SOURCE_W
-    private var sourceH = SOURCE_H
-
     /** Pocket screen flip — coded raster is 720×1280. Recreate the decoder AHB. */
     fun setSourceSize(width: Int, height: Int) {
         if (presentGate.isReleased) return
@@ -161,7 +197,7 @@ internal class LiveVulkanSession(
             held = null
             reader?.close()
             reader = null
-            if (windowReady) ensureReader()
+            ensureReader()
         }
     }
 
@@ -308,6 +344,7 @@ internal class LiveVulkanSession(
 
     /** Must run from `surfaceDestroyed` before that callback returns. */
     fun detachWindow() {
+        pendingAttach = null
         presentGate.detach()
         attachedSurface = null
         val native = handle
@@ -318,9 +355,12 @@ internal class LiveVulkanSession(
     fun release() {
         presentGate.release()
         reader?.setOnImageAvailableListener(null, null)
+        gpuHandler.removeCallbacksAndMessages(null)
         imageHandler.removeCallbacksAndMessages(null)
+        gpuThread.quitSafely()
         imageThread.quitSafely()
         try {
+            gpuThread.join()
             imageThread.join()
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -337,15 +377,17 @@ internal class LiveVulkanSession(
 
     @Synchronized
     private fun ensureReader() {
-        val native = handle
-        if (reader != null || native == 0L || presentGate.isReleased) return
-        val next = ImageReader.newInstance(sourceW, sourceH, ImageFormat.PRIVATE, 5)
+        if (reader != null || presentGate.isReleased) return
+        val w = sourceW.coerceAtLeast(2)
+        val h = sourceH.coerceAtLeast(2)
+        val next = ImageReader.newInstance(w, h, ImageFormat.PRIVATE, 5)
         reader = next
         next.setOnImageAvailableListener(
             { rdr ->
                 val image = rdr.acquireLatestImage() ?: return@setOnImageAvailableListener
-                if (!presentGate.beginSubmit()) {
-                    image.close()
+                val native = handle
+                if (native == 0L || !presentGate.beginSubmit()) {
+                    holdImage(image)
                     return@setOnImageAvailableListener
                 }
                 try {
@@ -357,6 +399,26 @@ internal class LiveVulkanSession(
             imageHandler,
         )
         onDecoderSurface(next.surface)
+        Log.i(TAG, "decoder ImageReader ${sourceW}x$sourceH")
+    }
+
+    private fun holdImage(image: Image) {
+        held?.close()
+        held = image
+    }
+
+    private fun presentHeld(native: Long) {
+        val image = held ?: return
+        held = null
+        if (!presentGate.beginSubmit()) {
+            holdImage(image)
+            return
+        }
+        try {
+            presentImage(native, image)
+        } finally {
+            presentGate.endSubmit()
+        }
     }
 
     private fun presentImage(native: Long, image: Image) {

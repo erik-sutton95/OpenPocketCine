@@ -39,8 +39,9 @@ namespace {
 // Native Pocket HEVC is 1280×720 4:2:0. Convert YCbCr 1:1 at that raster
 // (sampling 420 at panel size is the Adreno mosaic). The Rec.709 cube is a
 // 3D texture like iOS CIColorCube — a 2D blue-slice atlas bilinear-filters
-// across tiles and blotches D-Log2. Present bilinear-samples that 720p RGB
-// at the panel, then the cube. Peaking / scopes / face stay on 720p RGB.
+// across tiles and blotches D-Log2. Cube at 720p, then stretch Rec.709
+// (iOS bakeSize → bilinear). Cubing after the upsample blotches D-Log2.
+// Peaking / scopes / face stay on 720p RGB.
 constexpr uint32_t kSourceW = 1280;
 constexpr uint32_t kSourceH = 720;
 constexpr uint32_t kVectorN = 128;
@@ -272,6 +273,7 @@ struct OpcVk {
     uint32_t windowW = 1;
     uint32_t windowH = 1;
     bool gpuBusy = false;
+    bool hasPresented = false;
 
     Slot slots[kSlotCount]{};
     int stackOrder[4] = {0, 1, 3, 0};
@@ -587,6 +589,9 @@ static void bindWellChain(OpcVk* r) {
     if (r->feedSet && r->source.view) {
         writeCombined(r->device, r->feedSet, 0, r->source.view, r->linearSampler);
     }
+    if (r->feedPresentSet && r->graded.view) {
+        writeCombined(r->device, r->feedPresentSet, 0, r->graded.view, r->linearSampler);
+    }
     if (r->glassSet && r->kawase[2].view && r->graded.view) {
         writeCombined(r->device, r->glassSet, 0, r->kawase[2].view, r->linearSampler);
         writeCombined(r->device, r->glassSet, 1, r->graded.view, r->linearSampler);
@@ -625,7 +630,7 @@ static bool allocWellChain(OpcVk* r, uint32_t w, uint32_t h) {
 }
 
 static bool ensureWell(OpcVk* r) {
-    // Kawase / glass only. Picture present samples 720p RGB at the swapchain.
+    // 720p Rec.709 bake (iOS bakeSize) plus Kawase / glass.
     uint32_t w = kSourceW;
     uint32_t h = kSourceH;
     if (r->well.width == w && r->well.height == h && r->wellFb) return true;
@@ -677,9 +682,6 @@ static bool ensurePresentRgb(OpcVk* r, uint32_t w, uint32_t h) {
     r->presentRgbFb = makeFb(r->device, r->offscreenPass, r->presentRgb.view, w, h);
     if (r->blitSets[7] && r->presentRgb.view) {
         writeCombined(r->device, r->blitSets[7], 0, r->presentRgb.view, r->linearSampler);
-    }
-    if (r->feedPresentSet && r->presentRgb.view) {
-        writeCombined(r->device, r->feedPresentSet, 0, r->presentRgb.view, r->linearSampler);
     }
     LOGI("present rgb %ux%u (ycbcr at panel, scopes stay %ux%u)", w, h, kSourceW, kSourceH);
     return r->presentRgbFb != VK_NULL_HANDLE;
@@ -833,6 +835,27 @@ static bool createDevice(OpcVk* r) {
     return true;
 }
 
+// UINT64_MAX wait on an unsignaled fence (failed acquire/submit) froze the
+// well while HUD and the stick kept moving — same class as iOS #148 present
+// stall with UDP alive. Recreate signaled only when the GPU does not own it.
+static constexpr uint64_t kFenceTimeoutNs = 1000000000ull;
+
+static void recaptureSignaledFence(OpcVk* r) {
+    if (!r->device) return;
+    if (r->fence) vkDestroyFence(r->device, r->fence, nullptr);
+    r->fence = VK_NULL_HANDLE;
+    VkFenceCreateInfo fi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    fi.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    vkCreateFence(r->device, &fi, nullptr, &r->fence);
+}
+
+static bool waitFence(OpcVk* r, const char* where) {
+    VkResult w = vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, kFenceTimeoutNs);
+    if (w == VK_SUCCESS) return true;
+    LOGE("fence %s result=%d", where, (int)w);
+    return false;
+}
+
 static bool createResources(OpcVk* r) {
     auto usage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -929,66 +952,15 @@ static bool createResources(OpcVk* r) {
                                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 80);
     r->peakingMaskLayout = makeLayout(r->device, r->glassSetLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 16);
 
+    // First picture is YCbCr copy + blit. Compiling feed.frag here made
+    // nativeCreate take seconds and missed 0x09/0xa8 (WAITING FOR LIVE VIEW).
     auto vs = makeShader(r->device, fullscreen_vert_spv, fullscreen_vert_spv_count);
     auto fsBlit = makeShader(r->device, blit_frag_spv, blit_frag_spv_count);
-    auto fsFeed = makeShader(r->device, feed_frag_spv, feed_frag_spv_count);
-    auto fsPeakBlur = makeShader(r->device, peaking_blur_frag_spv, peaking_blur_frag_spv_count);
-    auto fsPeakMask = makeShader(r->device, peaking_mask_frag_spv, peaking_mask_frag_spv_count);
-    auto fsKawase = makeShader(r->device, kawase_frag_spv, kawase_frag_spv_count);
-    auto vsGlass = makeShader(r->device, glass_vert_spv, glass_vert_spv_count);
-    auto fsGlass = makeShader(r->device, glass_frag_spv, glass_frag_spv_count);
-    auto vsScope = makeShader(r->device, scope_vert_spv, scope_vert_spv_count);
-    auto fsScope = makeShader(r->device, scope_frag_spv, scope_frag_spv_count);
-    auto vsVec = makeShader(r->device, vector_vert_spv, vector_vert_spv_count);
-    auto fsVec = makeShader(r->device, vector_frag_spv, vector_frag_spv_count);
-    auto fsHisto = makeShader(r->device, histo_plot_frag_spv, histo_plot_frag_spv_count);
-    auto csHisto = makeShader(r->device, histo_comp_spv, histo_comp_spv_count);
-    auto csRemap = makeShader(r->device, histo_remap_comp_spv, histo_remap_comp_spv_count);
-
     r->copyPipe = makeGfx(r, r->copyLayout, r->offscreenPass, vs, fsBlit, false, false, 16);
-    r->feedPipe = makeGfx(r, r->feedLayout, r->offscreenPass, vs, fsFeed, false, false, 128);
-    // Present-rate feed.frag against both UNORM swap formats. createSwapchain
-    // must not compile this — that blocked ImageReader and dropped the enable IDR.
     r->swapPassBgra = makePass(r->device, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, false);
     r->swapPassRgba = makePass(r->device, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, false);
-    r->feedSwapPipeBgra = makeGfx(r, r->feedLayout, r->swapPassBgra, vs, fsFeed, false, false, 128);
-    r->feedSwapPipeRgba = makeGfx(r, r->feedLayout, r->swapPassRgba, vs, fsFeed, false, false, 128);
-    r->peakingBlurPipe = makeGfx(r, r->blitLayout, r->offscreenPass, vs, fsPeakBlur, false, false, 16);
-    r->peakingMaskPipe = makeGfx(r, r->peakingMaskLayout, r->offscreenPass, vs, fsPeakMask, false, false, 16);
-    r->kawasePipe = makeGfx(r, r->blitLayout, r->offscreenPass, vs, fsKawase, false, false, 16);
-    r->blitPipe = makeGfx(r, r->blitLayout, r->swapPass ? r->swapPass : r->offscreenPass, vs, fsBlit, false, false, 16);
-    r->blitAlphaPipe = makeGfx(r, r->blitLayout, r->swapPass ? r->swapPass : r->offscreenPass, vs, fsBlit, false, false, 16, true);
-    r->glassPipe = makeGfx(r, r->glassLayout, r->swapPass ? r->swapPass : r->offscreenPass, vsGlass, fsGlass, false, false, 80, true);
-    r->scopePipe = makeGfx(r, r->scopeLayout, r->swapPass ? r->swapPass : r->offscreenPass, vsScope, fsScope, true, true, 128);
-    r->vectorPipe = makeGfx(r, r->vectorLayout, r->offscreenPass, vsVec, fsVec, true, true, 64);
-    r->histoPlotPipe = makeGfx(r, r->histoPlotLayout, r->swapPass ? r->swapPass : r->offscreenPass, vs, fsHisto, false, true, 80);
-
-    VkComputePipelineCreateInfo cci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-    cci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    cci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    cci.stage.pName = "main";
-    cci.stage.module = csHisto;
-    cci.layout = r->histoLayout;
-    vkCreateComputePipelines(r->device, r->cache, 1, &cci, nullptr, &r->histoPipe);
-    cci.stage.module = csRemap;
-    cci.layout = r->remapLayout;
-    vkCreateComputePipelines(r->device, r->cache, 1, &cci, nullptr, &r->remapPipe);
-
     vkDestroyShaderModule(r->device, vs, nullptr);
     vkDestroyShaderModule(r->device, fsBlit, nullptr);
-    vkDestroyShaderModule(r->device, fsFeed, nullptr);
-    vkDestroyShaderModule(r->device, fsPeakBlur, nullptr);
-    vkDestroyShaderModule(r->device, fsPeakMask, nullptr);
-    vkDestroyShaderModule(r->device, fsKawase, nullptr);
-    vkDestroyShaderModule(r->device, vsGlass, nullptr);
-    vkDestroyShaderModule(r->device, fsGlass, nullptr);
-    vkDestroyShaderModule(r->device, vsScope, nullptr);
-    vkDestroyShaderModule(r->device, fsScope, nullptr);
-    vkDestroyShaderModule(r->device, vsVec, nullptr);
-    vkDestroyShaderModule(r->device, fsVec, nullptr);
-    vkDestroyShaderModule(r->device, fsHisto, nullptr);
-    vkDestroyShaderModule(r->device, csHisto, nullptr);
-    vkDestroyShaderModule(r->device, csRemap, nullptr);
 
     VkDescriptorPoolSize sizes[] = {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64},
@@ -1051,8 +1023,61 @@ static bool createResources(OpcVk* r) {
     writeCombined(r->device, r->blitSets[5], 0, r->source.view, r->linearSampler);
     writeCombined(r->device, r->blitSets[6], 0, r->source.view, r->nearestSampler);
     writeCombined(r->device, r->copySet, 0, r->source.view, r->linearSampler);
-    return r->peakingBlurPipe && r->peakingMaskPipe && r->peakingMaskSet && r->nearestSampler &&
-           r->feedPipe && r->feedSwapPipeBgra && r->feedSwapPipeRgba;
+    return r->copyPipe && r->linearSampler && r->nearestSampler;
+}
+
+static bool ensureGradePipes(OpcVk* r) {
+    if (r->feedPipe && r->peakingBlurPipe && r->peakingMaskPipe && r->kawasePipe && r->vectorPipe &&
+        r->histoPipe && r->remapPipe)
+        return true;
+    LOGI("compiling grade pipelines");
+    auto vs = makeShader(r->device, fullscreen_vert_spv, fullscreen_vert_spv_count);
+    auto fsFeed = makeShader(r->device, feed_frag_spv, feed_frag_spv_count);
+    auto fsPeakBlur = makeShader(r->device, peaking_blur_frag_spv, peaking_blur_frag_spv_count);
+    auto fsPeakMask = makeShader(r->device, peaking_mask_frag_spv, peaking_mask_frag_spv_count);
+    auto fsKawase = makeShader(r->device, kawase_frag_spv, kawase_frag_spv_count);
+    auto vsVec = makeShader(r->device, vector_vert_spv, vector_vert_spv_count);
+    auto fsVec = makeShader(r->device, vector_frag_spv, vector_frag_spv_count);
+    auto csHisto = makeShader(r->device, histo_comp_spv, histo_comp_spv_count);
+    auto csRemap = makeShader(r->device, histo_remap_comp_spv, histo_remap_comp_spv_count);
+    if (!r->feedPipe)
+        r->feedPipe = makeGfx(r, r->feedLayout, r->offscreenPass, vs, fsFeed, false, false, 128);
+    if (!r->peakingBlurPipe)
+        r->peakingBlurPipe = makeGfx(r, r->blitLayout, r->offscreenPass, vs, fsPeakBlur, false, false, 16);
+    if (!r->peakingMaskPipe)
+        r->peakingMaskPipe = makeGfx(r, r->peakingMaskLayout, r->offscreenPass, vs, fsPeakMask, false, false, 16);
+    if (!r->kawasePipe)
+        r->kawasePipe = makeGfx(r, r->blitLayout, r->offscreenPass, vs, fsKawase, false, false, 16);
+    if (!r->vectorPipe)
+        r->vectorPipe = makeGfx(r, r->vectorLayout, r->offscreenPass, vsVec, fsVec, true, true, 64);
+    if (!r->histoPipe) {
+        VkComputePipelineCreateInfo cci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        cci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        cci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        cci.stage.pName = "main";
+        cci.stage.module = csHisto;
+        cci.layout = r->histoLayout;
+        vkCreateComputePipelines(r->device, r->cache, 1, &cci, nullptr, &r->histoPipe);
+    }
+    if (!r->remapPipe) {
+        VkComputePipelineCreateInfo cci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        cci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        cci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        cci.stage.pName = "main";
+        cci.stage.module = csRemap;
+        cci.layout = r->remapLayout;
+        vkCreateComputePipelines(r->device, r->cache, 1, &cci, nullptr, &r->remapPipe);
+    }
+    vkDestroyShaderModule(r->device, vs, nullptr);
+    vkDestroyShaderModule(r->device, fsFeed, nullptr);
+    vkDestroyShaderModule(r->device, fsPeakBlur, nullptr);
+    vkDestroyShaderModule(r->device, fsPeakMask, nullptr);
+    vkDestroyShaderModule(r->device, fsKawase, nullptr);
+    vkDestroyShaderModule(r->device, vsVec, nullptr);
+    vkDestroyShaderModule(r->device, fsVec, nullptr);
+    vkDestroyShaderModule(r->device, csHisto, nullptr);
+    vkDestroyShaderModule(r->device, csRemap, nullptr);
+    return r->feedPipe != VK_NULL_HANDLE;
 }
 
 static void destroySwapchain(OpcVk* r) {
@@ -1168,32 +1193,16 @@ static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
         r->swapFbs[i] = makeFb(r->device, r->swapPass, r->swapViews[i], r->swapExtent.width, r->swapExtent.height);
     }
 
-    // Recreate swapchain-bound graphics pipes now that swapPass exists.
+    // First picture only needs blit. Glass / scope / histo-plot compile later.
     auto vs = makeShader(r->device, fullscreen_vert_spv, fullscreen_vert_spv_count);
     auto fsBlit = makeShader(r->device, blit_frag_spv, blit_frag_spv_count);
-    auto vsGlass = makeShader(r->device, glass_vert_spv, glass_vert_spv_count);
-    auto fsGlass = makeShader(r->device, glass_frag_spv, glass_frag_spv_count);
-    auto vsScope = makeShader(r->device, scope_vert_spv, scope_vert_spv_count);
-    auto fsScope = makeShader(r->device, scope_frag_spv, scope_frag_spv_count);
-    auto fsHisto = makeShader(r->device, histo_plot_frag_spv, histo_plot_frag_spv_count);
     if (r->blitPipe) vkDestroyPipeline(r->device, r->blitPipe, nullptr);
     if (r->blitAlphaPipe) vkDestroyPipeline(r->device, r->blitAlphaPipe, nullptr);
-    if (r->glassPipe) vkDestroyPipeline(r->device, r->glassPipe, nullptr);
-    if (r->scopePipe) vkDestroyPipeline(r->device, r->scopePipe, nullptr);
-    if (r->histoPlotPipe) vkDestroyPipeline(r->device, r->histoPlotPipe, nullptr);
     r->blitPipe = makeGfx(r, r->blitLayout, r->swapPass, vs, fsBlit, false, false, 16);
     r->blitAlphaPipe = makeGfx(r, r->blitLayout, r->swapPass, vs, fsBlit, false, false, 16, true);
-    r->glassPipe = makeGfx(r, r->glassLayout, r->swapPass, vsGlass, fsGlass, false, false, 80, true);
-    r->scopePipe = makeGfx(r, r->scopeLayout, r->swapPass, vsScope, fsScope, true, true, 128);
-    r->histoPlotPipe = makeGfx(r, r->histoPlotLayout, r->swapPass, vs, fsHisto, false, true, 80);
     vkDestroyShaderModule(r->device, vs, nullptr);
     vkDestroyShaderModule(r->device, fsBlit, nullptr);
-    vkDestroyShaderModule(r->device, vsGlass, nullptr);
-    vkDestroyShaderModule(r->device, fsGlass, nullptr);
-    vkDestroyShaderModule(r->device, vsScope, nullptr);
-    vkDestroyShaderModule(r->device, fsScope, nullptr);
-    vkDestroyShaderModule(r->device, fsHisto, nullptr);
-    return r->blitPipe && r->scopePipe;
+    return r->blitPipe != VK_NULL_HANDLE;
 }
 
 static void destroyImportedImage(OpcVk* r) {
@@ -1597,8 +1606,9 @@ static void noteAhbReleased(OpcVk* r) {
 }
 
 static bool feedNeedsGrade(const OpcVk* r) {
+    // Fast is present of the bake (or of identity RGB), not a reason to cube.
     return r->lutSize >= 2.f || r->limitsOn > 0.5f || r->zebraHiOn > 0.5f || r->zebraMidOn > 0.5f ||
-           r->splitOn > 0.5f || r->feedUpscale > 0.5f || r->mirror > 0.5f || r->peakingOn > 0.5f;
+           r->splitOn > 0.5f || r->mirror > 0.5f || r->peakingOn > 0.5f;
 }
 
 static void beginPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebuffer fb, uint32_t w, uint32_t h,
@@ -1660,15 +1670,21 @@ static void recordCpuTaps(OpcVk* r) {
 
 static bool renderFrame(OpcVk* r) {
     if (!r->swapchain || !r->window || !r->imported.view) return false;
-    vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
-    const bool grade = feedNeedsGrade(r);
-    const bool tap = r->needTap != 0;
-    if ((grade || tap) && (!ensureWell(r) || !ensureCubeImages(r))) return false;
+    if (!waitFence(r, "begin")) return false;
+    // First picture is the 720p RGB blit. Cube / 3D LUT upload / Fast of the
+    // bake on that submit missed the enable IDR and left WAITING FOR LIVE VIEW.
+    const bool firstPicture = !r->hasPresented;
+    const bool grade = !firstPicture && feedNeedsGrade(r);
+    const bool tap = !firstPicture && r->needTap != 0;
+    if ((grade || tap) && (!ensureGradePipes(r) || !ensureWell(r) || !ensureCubeImages(r))) return false;
     vkResetFences(r->device, 1, &r->fence);
     uint32_t idx = 0;
     VkResult acq = vkAcquireNextImageKHR(r->device, r->swapchain, UINT64_MAX, VK_NULL_HANDLE, r->fence, &idx);
-    if (acq == VK_ERROR_OUT_OF_DATE_KHR) return false;
-    vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
+    if (acq == VK_ERROR_OUT_OF_DATE_KHR || acq == VK_ERROR_SURFACE_LOST_KHR) {
+        recaptureSignaledFence(r);
+        return false;
+    }
+    if (!waitFence(r, "acquire")) return false;
     vkResetFences(r->device, 1, &r->fence);
     float destX, destY, destW, destH;
     feedDest(r, &destX, &destY, &destW, &destH);
@@ -1724,7 +1740,11 @@ static bool renderFrame(OpcVk* r) {
         VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
         si.commandBufferCount = 1;
         si.pCommandBuffers = &r->cmd;
-        if (vkQueueSubmit(r->queue, 1, &si, r->fence)) return false;
+        if (vkQueueSubmit(r->queue, 1, &si, r->fence)) {
+            LOGE("identity submit failed first=%d", firstPicture ? 1 : 0);
+            recaptureSignaledFence(r);
+            return false;
+        }
         noteAhbReleased(r);
         VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
         pi.swapchainCount = 1;
@@ -1732,6 +1752,10 @@ static bool renderFrame(OpcVk* r) {
         pi.pImageIndices = &idx;
         vkQueuePresentKHR(r->queue, &pi);
         r->gpuBusy = false;
+        if (firstPicture) {
+            r->hasPresented = true;
+            LOGI("first picture identity blit (LUT bake follows)");
+        }
         return true;
     }
 
@@ -1826,9 +1850,9 @@ static bool renderFrame(OpcVk* r) {
         vkCmdDraw(r->cmd, 3, 1, 0, 0);
     };
 
-    // 720p well is only for kawase glass, or if the swap feed pipe is missing.
-    const bool swapFeed = grade && r->feedSwapPipe;
-    if (grade && (r->plateCount || !swapFeed)) {
+    // Cube / peaking / zebra at 720p (iOS bakeSize). Fast Catmull-Rom is present
+    // of that Rec.709 bake — cubing after the upsample blotches D-Log2.
+    if (grade) {
         fpc.feedUpscale = 0.f;
         beginPass(r->cmd, r->offscreenPass, r->gradedFb, kSourceW, kSourceH, true);
         drawFeed(r->feedPipe, r->feedSet);
@@ -1838,7 +1862,7 @@ static bool renderFrame(OpcVk* r) {
                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1, &bakeBarrier, 0, nullptr, 0, nullptr);
     }
 
-    if (r->plateCount) {
+    if (r->plateCount && r->kawasePipe) {
         ImageMem* prev = (grade && r->graded.view) ? &r->graded : &r->source;
         VkDescriptorSet prevSet = (grade && r->graded.view) ? r->blitSets[0] : r->blitSets[5];
         for (int i = 0; i < 3; ++i) {
@@ -1884,25 +1908,19 @@ static bool renderFrame(OpcVk* r) {
 
     beginPass(r->cmd, r->swapPass, r->swapFbs[idx], r->swapExtent.width, r->swapExtent.height, true, 0.078f,
               0.078f, 0.078f, 1);
-    if (swapFeed) {
-        fpc.feedUpscale = 0.f;
-        setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
-                           r->swapExtent.width, r->swapExtent.height);
-        drawFeed(r->feedSwapPipe, r->feedSet);
-    } else {
-        const float blitSrcW = grade ? (float)r->well.width : (float)kSourceW;
-        const float blitSrcH = grade ? (float)r->well.height : (float)kSourceH;
-        vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitPipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1,
-                                grade ? &r->blitSets[0] : &r->blitSets[5], 0, nullptr);
-        float blitPc[2] = {1.f, 0.f};
-        vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
-        setCoverViewportAt(r->cmd, blitSrcW, blitSrcH, destX, destY, destW, destH, r->swapExtent.width,
-                           r->swapExtent.height);
-        vkCmdDraw(r->cmd, 3, 1, 0, 0);
-    }
+    // Rec.709 bake is already 720p. Stretch with blitPipe — feedSwapPipe
+    // Catmull-Rom of the bake compiled on first LUT frame and could fail
+    // the submit, leaving the fence unsignaled (frozen well, live HUD).
+    vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitPipe);
+    vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1,
+                            grade ? &r->blitSets[0] : &r->blitSets[5], 0, nullptr);
+    float blitPc[2] = {1.f, 0.f};
+    vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
+    setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
+                       r->swapExtent.width, r->swapExtent.height);
+    vkCmdDraw(r->cmd, 3, 1, 0, 0);
 
-    if (r->plateCount) {
+    if (r->plateCount && r->glassPipe) {
         vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->glassPipe);
         vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->glassLayout, 0, 1, &r->glassSet, 0,
                                 nullptr);
@@ -1995,6 +2013,7 @@ static bool renderFrame(OpcVk* r) {
             VkRect2D clip{{sx, sy}, {(uint32_t)sw, (uint32_t)sh}};
             vkCmdSetScissor(r->cmd, 0, 1, &clip);
         }
+        if (!r->scopePipe) return;
         vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->scopePipe);
         vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->scopeLayout, 0, 1, &r->scopeSet, 0,
                                 nullptr);
@@ -2102,7 +2121,11 @@ static bool renderFrame(OpcVk* r) {
     VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     si.commandBufferCount = 1;
     si.pCommandBuffers = &r->cmd;
-    if (vkQueueSubmit(r->queue, 1, &si, r->fence)) return false;
+    if (vkQueueSubmit(r->queue, 1, &si, r->fence)) {
+        LOGE("grade submit failed");
+        recaptureSignaledFence(r);
+        return false;
+    }
     noteAhbReleased(r);
     if (tap) vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
@@ -2111,6 +2134,7 @@ static bool renderFrame(OpcVk* r) {
     pi.pImageIndices = &idx;
     vkQueuePresentKHR(r->queue, &pi);
     r->gpuBusy = false;
+    r->hasPresented = true;
     return true;
 }
 
@@ -2212,7 +2236,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCreate(JNIEnv*, jclass)
         return 0;
     }
     r->ready = true;
-    LOGI("vulkan renderer ready");
+    LOGI("vulkan renderer ready (copy+blit only)");
     return reinterpret_cast<jlong>(r);
 }
 
