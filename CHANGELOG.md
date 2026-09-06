@@ -166,9 +166,10 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - Android live LUT looked like a chroma blotch next to iOS (S25 / Pocket
-  4 Pro, D-Log2). Vulkan baked 4:2:0 into 720p RGB, then the Rec.709 cube
-  posterized those tiles. Present now converts YCbCr at the picture rect
-  so chroma interpolates per panel pixel before the cube.
+  4 Pro, D-Log2). The cube was an 8-column 2D atlas, so bilinear filtering
+  mixed neighbouring blue slices — iOS uses `CIColorCube` (3D). Vulkan now
+  uploads a 3D LUT and converts 4:2:0 1:1 at 720p (panel-rate 420 is the
+  Adreno mosaic).
 
 - Android live kept pixelated patches until something moved in that part
   of the frame (S25 / Pocket 4 Pro). Vulkan acquired the ImageReader

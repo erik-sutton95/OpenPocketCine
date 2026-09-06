@@ -3,9 +3,9 @@ layout(location = 0) in vec2 vUv;
 layout(location = 0) out vec4 oColor;
 
 layout(set = 0, binding = 0) uniform sampler2D uFeed;
-layout(set = 0, binding = 1) uniform sampler2D uLut;
-layout(set = 0, binding = 2) uniform sampler2D uLimitsPaint;
-layout(set = 0, binding = 3) uniform sampler2D uLimitsWeight;
+layout(set = 0, binding = 1) uniform sampler3D uLut;
+layout(set = 0, binding = 2) uniform sampler3D uLimitsPaint;
+layout(set = 0, binding = 3) uniform sampler3D uLimitsWeight;
 layout(set = 0, binding = 4) uniform sampler2D uPeakingMask;
 
 layout(push_constant) uniform PC {
@@ -33,7 +33,6 @@ layout(push_constant) uniform PC {
 } pc;
 
 const vec3 LUMA_709 = vec3(0.2126, 0.7152, 0.0722);
-const float ATLAS_COLUMNS = 8.0;
 const float ZEBRA_GAIN = 40.0;
 const float STRIPE_PITCH = 14.14;
 const vec3 PEAKING_UNDER_COLOR = vec3(0.04, 0.04, 0.05);
@@ -60,23 +59,12 @@ float peakingClosedStroke(vec2 centre, vec2 texel) {
     return min(min(min(dC, dR), min(dL, dD)), dU);
 }
 
-vec2 atlasCoordinate(float slice, vec2 redGreen, float cubeSize) {
-    float tileX = mod(slice, ATLAS_COLUMNS);
-    float tileY = floor(slice / ATLAS_COLUMNS);
-    vec2 pixel = vec2(
-        tileX * cubeSize + clamp(redGreen.x, 0.0, 1.0) * (cubeSize - 1.0) + 0.5,
-        tileY * cubeSize + clamp(redGreen.y, 0.0, 1.0) * (cubeSize - 1.0) + 0.5);
-    return pixel / (cubeSize * ATLAS_COLUMNS);
-}
-
-vec3 sampleLut(sampler2D cube, float cubeSize, vec3 color) {
+vec3 sampleLut(sampler3D cube, float cubeSize, vec3 color) {
     if (cubeSize < 2.0) return color;
-    float blue = clamp(color.b, 0.0, 1.0) * (cubeSize - 1.0);
-    float lowerSlice = floor(blue);
-    float upperSlice = min(lowerSlice + 1.0, cubeSize - 1.0);
-    vec3 lower = texture(cube, atlasCoordinate(lowerSlice, color.rg, cubeSize)).rgb;
-    vec3 upper = texture(cube, atlasCoordinate(upperSlice, color.rg, cubeSize)).rgb;
-    return mix(lower, upper, blue - lowerSlice);
+    // Match CIColorCube: R fastest in x, then G, then B. Half-texel so
+    // linear filter stays inside the lattice (2D atlases bled across tiles).
+    vec3 coord = (clamp(color, 0.0, 1.0) * (cubeSize - 1.0) + 0.5) / cubeSize;
+    return texture(cube, coord).rgb;
 }
 
 vec3 sampleSource(vec2 uv) {

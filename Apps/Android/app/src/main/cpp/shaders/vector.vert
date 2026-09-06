@@ -2,7 +2,7 @@
 layout(location = 0) out vec4 vColor;
 
 layout(set = 0, binding = 0) uniform sampler2D uFeed;
-layout(set = 0, binding = 1) uniform sampler2D uLut;
+layout(set = 0, binding = 1) uniform sampler3D uLut;
 
 layout(push_constant) uniform PC {
     vec2 tapSize;
@@ -13,26 +13,10 @@ layout(push_constant) uniform PC {
     vec3 lumaW;
 } pc;
 
-const float ATLAS_COLUMNS = 8.0;
-
 vec3 mapLook(vec3 color) {
     if (pc.lutSize < 2.0) return color;
-    float blue = clamp(color.b, 0.0, 1.0) * (pc.lutSize - 1.0);
-    float lowerSlice = floor(blue);
-    float upperSlice = min(lowerSlice + 1.0, pc.lutSize - 1.0);
-    float tileXL = mod(lowerSlice, ATLAS_COLUMNS);
-    float tileYL = floor(lowerSlice / ATLAS_COLUMNS);
-    float tileXU = mod(upperSlice, ATLAS_COLUMNS);
-    float tileYU = floor(upperSlice / ATLAS_COLUMNS);
-    vec2 rg = clamp(color.rg, 0.0, 1.0);
-    vec2 pixelL = vec2(tileXL * pc.lutSize + rg.x * (pc.lutSize - 1.0) + 0.5,
-                       tileYL * pc.lutSize + rg.y * (pc.lutSize - 1.0) + 0.5);
-    vec2 pixelU = vec2(tileXU * pc.lutSize + rg.x * (pc.lutSize - 1.0) + 0.5,
-                       tileYU * pc.lutSize + rg.y * (pc.lutSize - 1.0) + 0.5);
-    vec2 atlas = vec2(pc.lutSize * ATLAS_COLUMNS);
-    vec3 lower = texture(uLut, pixelL / atlas).rgb;
-    vec3 upper = texture(uLut, pixelU / atlas).rgb;
-    return mix(lower, upper, blue - lowerSlice);
+    vec3 coord = (clamp(color, 0.0, 1.0) * (pc.lutSize - 1.0) + 0.5) / pc.lutSize;
+    return texture(uLut, coord).rgb;
 }
 
 void main() {

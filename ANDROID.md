@@ -70,10 +70,11 @@ the production `CameraSoftAP` ladder.
 ### Live picture
 
 Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
-AHardwareBuffer → YCbCr convert at the picture rect so LINEAR chroma
-interpolates per panel fragment, then the cube (GLES OES / iOS VT sample
-4:2:0 at the layer). Baking 4:2:0 into 720p RGB then cubing it posterizes
-chroma (S25 D-Log2 blotch). 720p RGB stays for peaking, scopes, and face.
+AHardwareBuffer → YCbCr convert 1:1 at the 720p HEVC raster (sampling 4:2:0
+at panel size is the Adreno mosaic). The Rec.709 cube is a 3D texture
+(`CIColorCube`); a 2D blue-slice atlas bled across tiles and blotched
+D-Log2. Present bilinear-samples that 720p RGB at the panel, then the cube.
+Peaking / scopes / face stay on 720p RGB.
 Peaking is the GLES 3-pass (vertical re-blur, mask, closed
 stroke) on the unmanaged 720p RGB, then composited over the grade.
 Assists-off with Fast off is the 720p RGB blit. GLES
@@ -104,8 +105,8 @@ stay solid fills.
 
 ### Assists GPU
 
-Assists-off converts YCbCr at the picture rect (hardware `c2.qti` / Exynos
-HEVC, not `c2.android`). LUT / FALSE / ZEBRA / PEAK cube that panel RGB.
+Assists-off is one YCbCr blit of the MediaCodec AHB (hardware `c2.qti` / Exynos
+HEVC, not `c2.android`). LUT / FALSE / ZEBRA / PEAK add the 3D-cube grade pass.
 WAVE / PARADE /
 VECTOR / HISTO tap a 200-wide downsample (213×120 on 720p) at 25 Hz
 (10 Hz with three or more scopes) and paint in Compose Canvas.

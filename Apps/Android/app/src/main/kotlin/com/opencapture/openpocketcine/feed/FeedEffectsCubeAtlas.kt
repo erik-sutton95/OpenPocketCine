@@ -38,3 +38,22 @@ internal fun feedEffectsCubeAtlas(cube: FeedEffectsCube): FeedEffectsCubeAtlas {
     }
     return FeedEffectsCubeAtlas(size, width, height, atlas)
 }
+
+/**
+ * Vulkan 3D LUT: R along X, G along Y, B along Z — same lattice as iOS
+ * `CIColorCube`. The 8-column 2D atlas bilinear-filters across blue tiles.
+ */
+internal fun feedEffectsCubeVk3d(cube: FeedEffectsCube): ByteArray {
+    val n = cube.size
+    val out = ByteArray(n * n * n * 4)
+    for (blue in 0 until n) {
+        for (green in 0 until n) {
+            for (red in 0 until n) {
+                val src = (green * n * n + blue * n + red) * 4
+                val dst = (blue * n * n + green * n + red) * 4
+                cube.rgba.copyInto(out, dst, src, src + 4)
+            }
+        }
+    }
+    return out
+}

@@ -36,11 +36,11 @@
 
 namespace {
 
-// Native Pocket HEVC is 1280×720 4:2:0. A 720p RGB bake locks chroma at
-// 640×360; the Rec.709 cube then posterizes those tiles (S25 blotch).
-// Present converts YCbCr at the picture rect so LINEAR chroma interpolates
-// per panel fragment, then the cube — GLES OES / iOS VT do the same.
-// 720p RGB stays for peaking, scopes, and face. Kawase glass keeps a 720p well.
+// Native Pocket HEVC is 1280×720 4:2:0. Convert YCbCr 1:1 at that raster
+// (sampling 420 at panel size is the Adreno mosaic). The Rec.709 cube is a
+// 3D texture like iOS CIColorCube — a 2D blue-slice atlas bilinear-filters
+// across tiles and blotches D-Log2. Present bilinear-samples that 720p RGB
+// at the panel, then the cube. Peaking / scopes / face stay on 720p RGB.
 constexpr uint32_t kSourceW = 1280;
 constexpr uint32_t kSourceH = 720;
 constexpr uint32_t kVectorN = 128;
@@ -83,6 +83,7 @@ struct ImageMem {
     VkImageView view = VK_NULL_HANDLE;
     uint32_t width = 0;
     uint32_t height = 0;
+    uint32_t depth = 1;
 };
 
 struct ImportedAhb {
@@ -190,8 +191,9 @@ struct OpcVk {
 
     struct CubeUpload {
         std::vector<uint8_t> rgba;
-        uint32_t w = 8;
-        uint32_t h = 8;
+        uint32_t w = 2;
+        uint32_t h = 2;
+        uint32_t d = 2;
         float cubeSize = 0;
         bool dirty = false;
         bool shaderReady = false;
@@ -320,13 +322,15 @@ static VkResult makeBuffer(OpcVk* r, VkDeviceSize size, VkBufferUsageFlags usage
 }
 
 static VkResult makeImage(OpcVk* r, uint32_t w, uint32_t h, VkFormat format,
-                          VkImageUsageFlags usage, ImageMem* out) {
+                          VkImageUsageFlags usage, ImageMem* out, uint32_t depth = 1) {
     out->width = w;
     out->height = h;
+    out->depth = std::max(1u, depth);
+    const bool is3d = out->depth > 1;
     VkImageCreateInfo ii{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    ii.imageType = VK_IMAGE_TYPE_2D;
+    ii.imageType = is3d ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
     ii.format = format;
-    ii.extent = {w, h, 1};
+    ii.extent = {w, h, out->depth};
     ii.mipLevels = 1;
     ii.arrayLayers = 1;
     ii.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -346,7 +350,7 @@ static VkResult makeImage(OpcVk* r, uint32_t w, uint32_t h, VkFormat format,
     vkBindImageMemory(r->device, out->image, out->memory, 0);
     VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     vi.image = out->image;
-    vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    vi.viewType = is3d ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
     vi.format = format;
     vi.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     return vkCreateImageView(r->device, &vi, nullptr, &out->view);
@@ -636,11 +640,12 @@ static bool ensureCubeImages(OpcVk* r) {
         if (!r->cube[i].dirty) continue;
         uint32_t w = std::max(1u, r->cube[i].w);
         uint32_t h = std::max(1u, r->cube[i].h);
-        if (imgs[i]->width == w && imgs[i]->height == h && imgs[i]->image) continue;
+        uint32_t d = std::max(1u, r->cube[i].d);
+        if (imgs[i]->width == w && imgs[i]->height == h && imgs[i]->depth == d && imgs[i]->image) continue;
         vkDeviceWaitIdle(r->device);
         destroyImage(r->device, imgs[i]);
         if (makeImage(r, w, h, VK_FORMAT_R8G8B8A8_UNORM,
-                      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, imgs[i])) {
+                      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, imgs[i], d)) {
             return false;
         }
         r->cube[i].shaderReady = false;
@@ -701,7 +706,7 @@ static void recordCubeUploads(OpcVk* r) {
     struct Item {
         int i;
         VkDeviceSize off;
-        uint32_t w, h;
+        uint32_t w, h, d;
     };
     Item items[3];
     int n = 0;
@@ -715,7 +720,7 @@ static void recordCubeUploads(OpcVk* r) {
         VkDeviceSize bytes = r->cube[i].rgba.size();
         if (stagingOff + bytes > r->cubeStaging.size) break;
         memcpy(static_cast<uint8_t*>(r->cubeStaging.mapped) + stagingOff, r->cube[i].rgba.data(), (size_t)bytes);
-        items[n++] = {i, stagingOff, r->cube[i].w, r->cube[i].h};
+        items[n++] = {i, stagingOff, r->cube[i].w, r->cube[i].h, std::max(1u, r->cube[i].d)};
         stagingOff += bytes;
         r->cube[i].dirty = false;
     }
@@ -730,7 +735,7 @@ static void recordCubeUploads(OpcVk* r) {
         VkBufferImageCopy c{};
         c.bufferOffset = it.off;
         c.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        c.imageExtent = {it.w, it.h, 1};
+        c.imageExtent = {it.w, it.h, it.d};
         vkCmdCopyBufferToImage(r->cmd, r->cubeStaging.buffer, im->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &c);
         imageBarrier(r->cmd, im->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -843,14 +848,14 @@ static bool createResources(OpcVk* r) {
     if (makeImage(r, kVectorN, kVectorN, VK_FORMAT_R8G8B8A8_UNORM,
                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &r->vectorTarget))
         return false;
-    if (makeImage(r, 8, 8, VK_FORMAT_R8G8B8A8_UNORM,
-                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->lut))
+    if (makeImage(r, 2, 2, VK_FORMAT_R8G8B8A8_UNORM,
+                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->lut, 2))
         return false;
-    if (makeImage(r, 8, 8, VK_FORMAT_R8G8B8A8_UNORM,
-                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->limitsPaint))
+    if (makeImage(r, 2, 2, VK_FORMAT_R8G8B8A8_UNORM,
+                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->limitsPaint, 2))
         return false;
-    if (makeImage(r, 8, 8, VK_FORMAT_R8G8B8A8_UNORM,
-                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->limitsWeight))
+    if (makeImage(r, 2, 2, VK_FORMAT_R8G8B8A8_UNORM,
+                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, &r->limitsWeight, 2))
         return false;
 
     makeBuffer(r, kHistoInts * 4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -1667,9 +1672,6 @@ static bool renderFrame(OpcVk* r) {
     vkResetFences(r->device, 1, &r->fence);
     float destX, destY, destW, destH;
     feedDest(r, &destX, &destY, &destW, &destH);
-    const uint32_t presentW = (uint32_t)std::max(1, (int)std::lround(destW));
-    const uint32_t presentH = (uint32_t)std::max(1, (int)std::lround(destH));
-    const bool panelChroma = ensurePresentRgb(r, presentW, presentH) && r->copyPipe && r->presentRgbFb;
     vkResetCommandBuffer(r->cmd, 0);
     VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(r->cmd, &bi);
@@ -1681,34 +1683,17 @@ static bool renderFrame(OpcVk* r) {
     float ahbW = r->imported.width ? (float)r->imported.width : (float)kSourceW;
     float ahbH = r->imported.height ? (float)r->imported.height : (float)kSourceH;
 
-    const bool need720 =
-        tap || r->needFace || r->peakingOn > 0.5f || !panelChroma || r->plateCount || r->slots[3].visible;
-    if (need720) {
-        // Peaking / scopes / face stay on unmanaged 720p RGB.
-        beginPass(r->cmd, r->offscreenPass, r->sourceFb, kSourceW, kSourceH, true);
-        vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0,
-                                nullptr);
-        vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
-        if (ahbW != (float)kSourceW || ahbH != (float)kSourceH) {
-            setCoverViewport(r->cmd, ahbW, ahbH, (float)kSourceW, (float)kSourceH);
-        }
-        vkCmdDraw(r->cmd, 3, 1, 0, 0);
-        vkCmdEndRenderPass(r->cmd);
+    // 1:1 YCbCr → RGB at the HEVC raster. Sampling 4:2:0 at panel size is the
+    // Adreno mosaic. The Rec.709 cube is a 3D texture (CIColorCube), not a 2D atlas.
+    beginPass(r->cmd, r->offscreenPass, r->sourceFb, kSourceW, kSourceH, true);
+    vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
+    vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0, nullptr);
+    vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
+    if (ahbW != (float)kSourceW || ahbH != (float)kSourceH) {
+        setCoverViewport(r->cmd, ahbW, ahbH, (float)kSourceW, (float)kSourceH);
     }
-
-    // YCbCr → RGB at the picture rect so LINEAR chroma interpolates per panel
-    // fragment. Baking 4:2:0 into 720p RGB then cubing it is the S25 blotch.
-    if (panelChroma) {
-        beginPass(r->cmd, r->offscreenPass, r->presentRgbFb, presentW, presentH, true);
-        vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0,
-                                nullptr);
-        vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
-        setCoverViewport(r->cmd, ahbW, ahbH, (float)presentW, (float)presentH);
-        vkCmdDraw(r->cmd, 3, 1, 0, 0);
-        vkCmdEndRenderPass(r->cmd);
-    }
+    vkCmdDraw(r->cmd, 3, 1, 0, 0);
+    vkCmdEndRenderPass(r->cmd);
     releaseAhb(r);
 
     auto blitBakeToSwap = [&](VkDescriptorSet srcSet, float srcW, float srcH) {
@@ -1733,11 +1718,7 @@ static bool renderFrame(OpcVk* r) {
                          &bakeBarrier, 0, nullptr, 0, nullptr);
 
     if (!grade && !tap) {
-        if (panelChroma) {
-            blitBakeToSwap(r->blitSets[7], (float)presentW, (float)presentH);
-        } else {
-            blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
-        }
+        blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
         recordCpuTaps(r);
         vkEndCommandBuffer(r->cmd);
         VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -1903,21 +1884,17 @@ static bool renderFrame(OpcVk* r) {
 
     beginPass(r->cmd, r->swapPass, r->swapFbs[idx], r->swapExtent.width, r->swapExtent.height, true, 0.078f,
               0.078f, 0.078f, 1);
-    if (swapFeed && panelChroma && r->feedPresentSet) {
+    if (swapFeed) {
         fpc.feedUpscale = 0.f;
-        setCoverViewportAt(r->cmd, (float)presentW, (float)presentH, destX, destY, destW, destH,
-                           r->swapExtent.width, r->swapExtent.height);
-        drawFeed(r->feedSwapPipe, r->feedPresentSet);
-    } else if (swapFeed) {
         setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
                            r->swapExtent.width, r->swapExtent.height);
         drawFeed(r->feedSwapPipe, r->feedSet);
     } else {
-        const float blitSrcW = panelChroma ? (float)presentW : (grade ? (float)r->well.width : (float)kSourceW);
-        const float blitSrcH = panelChroma ? (float)presentH : (grade ? (float)r->well.height : (float)kSourceH);
-        VkDescriptorSet blitSet = panelChroma ? r->blitSets[7] : (grade ? r->blitSets[0] : r->blitSets[5]);
+        const float blitSrcW = grade ? (float)r->well.width : (float)kSourceW;
+        const float blitSrcH = grade ? (float)r->well.height : (float)kSourceH;
         vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitPipe);
-        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1, &blitSet, 0, nullptr);
+        vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1,
+                                grade ? &r->blitSets[0] : &r->blitSets[5], 0, nullptr);
         float blitPc[2] = {1.f, 0.f};
         vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
         setCoverViewportAt(r->cmd, blitSrcW, blitSrcH, destX, destY, destW, destH, r->swapExtent.width,
@@ -2419,17 +2396,22 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetCube(
     auto& c = r->cube[slot];
     if (!rgba || width < 2 || height < 2 || cubeSize < 2.f) {
         c.rgba.clear();
-        c.w = 8;
-        c.h = 8;
+        c.w = 2;
+        c.h = 2;
+        c.d = 2;
         c.cubeSize = 0;
         c.dirty = true;
     } else {
         jsize n = env->GetArrayLength(rgba);
-        if (n != width * height * 4) return;
+        const uint32_t dim = (uint32_t)std::lround(cubeSize);
+        const bool volume = width == (int)dim && height == (int)dim && dim >= 2 &&
+                            (uint32_t)n == dim * dim * dim * 4u;
+        if (!volume) return;
         c.rgba.resize((size_t)n);
         env->GetByteArrayRegion(rgba, 0, n, reinterpret_cast<jbyte*>(c.rgba.data()));
-        c.w = (uint32_t)width;
-        c.h = (uint32_t)height;
+        c.w = dim;
+        c.h = dim;
+        c.d = dim;
         c.cubeSize = cubeSize;
         c.dirty = true;
     }

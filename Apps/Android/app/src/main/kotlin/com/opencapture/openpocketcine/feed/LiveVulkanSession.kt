@@ -293,13 +293,13 @@ internal class LiveVulkanSession(
         if (cube == null) {
             OpcVulkan.nativeSetCube(native, slot, null, 0, 0, 0f)
         } else {
-            val atlas = feedEffectsCubeAtlas(cube)
+            val volume = feedEffectsCubeVk3d(cube)
             OpcVulkan.nativeSetCube(
                 native,
                 slot,
-                atlas.rgba,
-                atlas.width,
-                atlas.height,
+                volume,
+                cube.size,
+                cube.size,
                 cube.size.toFloat(),
             )
         }
