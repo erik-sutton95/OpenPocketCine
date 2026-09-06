@@ -165,6 +165,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android live kept pixelated patches until something moved in that part
+  of the frame (S25 / Pocket 4 Pro). Vulkan acquired the ImageReader
+  AHB from the decoder but never released it, so static HEVC skip-blocks
+  stayed in the GPU cache. Present now acquire/releases around the 720p
+  YCbCr copy.
+
 - Android Operator Setup over live view remounted the monitor (immersive
   system bars used two composition slots) and released MediaCodec while
   UDP stayed live — black well, no watchdog PLI. One content slot, and

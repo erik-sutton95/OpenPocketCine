@@ -108,6 +108,10 @@ struct AhbSlot {
     VkImageView view = VK_NULL_HANDLE;
     uint32_t width = 0;
     uint32_t height = 0;
+    // Last submitted command buffer released this image to FOREIGN in GENERAL.
+    // The next acquire must match that layout — UNDEFINED discards producer
+    // writes, so static HEVC skip-blocks stayed pixelated until motion.
+    bool released = false;
 };
 
 struct BufferMem {
@@ -1521,6 +1525,40 @@ static void setCoverViewport(VkCommandBuffer cmd, float srcW, float srcH, float 
                        (uint32_t)std::lround(dstH));
 }
 
+static void acquireAhb(OpcVk* r) {
+    AhbSlot* slot = findAhbSlot(r, r->imported.hb);
+    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+    barrier.dstQueueFamilyIndex = r->queueFamily;
+    barrier.oldLayout = (slot && slot->released) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier.image = r->imported.image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    vkCmdPipelineBarrier(r->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                         nullptr, 0, nullptr, 1, &barrier);
+}
+
+static void releaseAhb(OpcVk* r) {
+    if (!r->imported.image) return;
+    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcQueueFamilyIndex = r->queueFamily;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier.dstAccessMask = 0;
+    barrier.image = r->imported.image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    vkCmdPipelineBarrier(r->cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
+                         nullptr, 0, nullptr, 1, &barrier);
+}
+
+static void noteAhbReleased(OpcVk* r) {
+    if (AhbSlot* slot = findAhbSlot(r, r->imported.hb)) slot->released = true;
+}
+
 static bool feedNeedsGrade(const OpcVk* r) {
     return r->lutSize >= 2.f || r->limitsOn > 0.5f || r->zebraHiOn > 0.5f || r->zebraMidOn > 0.5f ||
            r->splitOn > 0.5f || r->feedUpscale > 0.5f || r->mirror > 0.5f || r->peakingOn > 0.5f;
@@ -1600,17 +1638,7 @@ static bool renderFrame(OpcVk* r) {
     vkBeginCommandBuffer(r->cmd, &bi);
     if (grade) recordCubeUploads(r);
 
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-    barrier.dstQueueFamilyIndex = r->queueFamily;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.image = r->imported.image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdPipelineBarrier(r->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &barrier);
+    acquireAhb(r);
 
     float copyPc[2] = {1.f, r->copyUvMode};
     float ahbW = r->imported.width ? (float)r->imported.width : (float)kSourceW;
@@ -1627,6 +1655,7 @@ static bool renderFrame(OpcVk* r) {
     }
     vkCmdDraw(r->cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(r->cmd);
+    releaseAhb(r);
 
     auto blitBakeToSwap = [&](VkDescriptorSet srcSet, float srcW, float srcH) {
         float dx, dy, dw, dh;
@@ -1657,6 +1686,7 @@ static bool renderFrame(OpcVk* r) {
         si.commandBufferCount = 1;
         si.pCommandBuffers = &r->cmd;
         if (vkQueueSubmit(r->queue, 1, &si, r->fence)) return false;
+        noteAhbReleased(r);
         VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
         pi.swapchainCount = 1;
         pi.pSwapchains = &r->swapchain;
@@ -2037,6 +2067,7 @@ static bool renderFrame(OpcVk* r) {
     si.commandBufferCount = 1;
     si.pCommandBuffers = &r->cmd;
     if (vkQueueSubmit(r->queue, 1, &si, r->fence)) return false;
+    noteAhbReleased(r);
     if (tap) vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
     VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     pi.swapchainCount = 1;

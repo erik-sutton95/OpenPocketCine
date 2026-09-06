@@ -85,7 +85,10 @@ swapchain on S25 and left a black well while UDP stayed live (#248). A
 failed swapchain attach retries; it is not a GLES fallback.
 The decoder ImageReader is latched as soon as the Vulkan session exists,
 before swapchain pipes compile — handshake `0x09/0xa8` IDR must not wait
-on `feed.frag`.
+on `feed.frag`. Each present acquires the AHB from `FOREIGN_EXT` and
+releases it after the 720p YCbCr copy — a missing release left static
+skip-blocks in the GPU cache until motion overwrote them.
+
 Return-from-gallery uses `restartLiveViewAfterMedia` (captured live-start),
 not `DatalinkDriver.startLiveView` alone. Drop the swapchain in
 `surfaceDestroyed` before Android destroys the window mutex; drain
