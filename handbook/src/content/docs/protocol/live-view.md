@@ -18,6 +18,8 @@ Nano uses the same DJI `00 00 01 ff` marker and fragment layout; SPS `67 64 00 1
 
 The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 9004**, carried as datalink **pktType `0x02`** packets. It is *not* on a separate port or protocol.
 
+That media is **unicast** to one client 5-tuple: camera `192.168.2.1:9004` → the phone's camera DHCP IPv4 and an ephemeral local port. The body does not multicast or broadcast HEVC/AVC, and a second phone on the SoftAP does not get a copy. Operator Setup → Sharing stays parked. A watcher feed would be a phone-side relay on another interface, not camera multicast.
+
 ## Enable
 
 Pocket live-entry also sends DUML **`0x02/0x68`** payload `08` (AE Lock Status Set, same bytes as the tap-focus hint) **immediately before** `0x09/0xa8`. Mimo `mimo-disconnect-20260822-105228`: first live after gallery is `0x68` then an `0xa8` burst then a 137 B VPS (NAL 32/33/34). Return-from-gallery on the same 5-tuple can skip `0x68` and still start on VPS. There is **no** live-stop command — Disconnect leaves the last GOP running, which is why handshake can see leftover TRAIL P-frames (`nals=1,35,40`) before enable. Nano has no captured `0x68` pair. Clients must keep ingesting pktType `0x02` while the library or settings cover the monitor — dropping those packets blacks the well on return (no periodic GOP). The live present surface must stay attached under that overlay too: Android API 34+ SurfaceView otherwise destroys the window when it is covered, and leftover GOP packets are not a replacement picture.

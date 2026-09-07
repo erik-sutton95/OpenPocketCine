@@ -8,6 +8,8 @@ Freeze-in-seconds vs ACK windows vs repair owner:
 ## 5-tuple
 
 One UDP flow: camera `192.168.2.1:9004` is the **remote** only.
+That flow is **unicast** to the associated client. Camera multicast is
+won't-do ([one client vs many](protocol-notes.md#one-client-vs-many)).
 
 - iOS binds the camera DHCP IPv4 plus an **ephemeral local port**
   (`NWParameters.requiredLocalEndpoint` port 0).
@@ -223,3 +225,4 @@ the live well repeats it after 8 s with no picture when a tunnel is on.
 - Live-path SLOs: [`PERFORMANCE.md`](PERFORMANCE.md)
 - Wire format: [protocol handbook live view](https://openpocketcine.app/docs/protocol/live-view/)
   (Markdown source: `handbook/src/content/docs/protocol/live-view.md`)
+- One client vs many (camera multicast won't-do): [`protocol-notes.md`](protocol-notes.md#one-client-vs-many)
