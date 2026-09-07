@@ -103,7 +103,11 @@
         }
 
         public static func isIOSurfaceBacked(_ buffer: CVPixelBuffer) -> Bool {
-            CVPixelBufferGetIOSurface(buffer) != nil
+            #if os(watchOS)
+                false
+            #else
+                CVPixelBufferGetIOSurface(buffer) != nil
+            #endif
         }
 
         // MARK: - Readers

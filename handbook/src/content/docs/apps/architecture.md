@@ -11,6 +11,7 @@ live in the shells.
 | --- | --- | --- |
 | Shared core | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. Foundation only — **portable**. |
 | iOS app | `ios/OpenPocketCine/` | SwiftUI shell, CoreBluetooth, Hotspot Configuration, VideoToolbox/Metal. |
+| Watch companion | `ios/OpenPocketCineWatch/` | watchOS remote over WatchConnectivity. Phone stays the radio. |
 | Android app | `Apps/Android/app/` | Jetpack Compose shell, Vulkan/GLES live picture, MediaCodec. |
 | Android facade | `Sources/OpenPocketCineAndroidFacade/` | JNI session boundary. Android does not SPM-link the core at runtime. |
 | Tests | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core. |

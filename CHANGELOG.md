@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Apple Watch companion (#101): live preview, timecode, storage, camera
+  battery, and record / shutter on the wrist. The iPhone stays the radio.
+  A watch rec tap starts and stops without the phone confirmation sheet.
+  Wear OS and a complication are follow-ons.
+
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
   stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same

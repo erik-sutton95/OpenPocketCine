@@ -93,6 +93,8 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// Wrist preview. Identity pixel buffer, or the LUT bake when Metal owns the picture.
+    var onWatchPreview: ((CIImage) -> Void)?
     /// View-space X flip applied on the host view at present time (not SwiftUI).
     var poseViewFlip = false
     var assistMirror = false
@@ -775,6 +777,10 @@ final class HevcDecoder {
         if result.shouldPresent {
             lastDecodedBuffer = result.source
             onSourceFrame?(result.source)
+            let preview =
+                result.needsGPU && effects.replacesIdentityFeed
+                ? result.output : CIImage(cvPixelBuffer: result.source)
+            onWatchPreview?(preview)
         }
         if !result.shouldPresent { return }
 

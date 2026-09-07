@@ -21,6 +21,6 @@ Issues are for bugs only.
 
 ## Later
 
-- Wear / Watch companions (OpenZCine has these; Pocket does not yet)
+- Wear OS companion (Apple Watch shipped; Wear follows when Android is operator-ready)
 - Anonymous in-app bug reporter
 - Dual-platform parity for every operator-visible feature

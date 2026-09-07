@@ -9,7 +9,7 @@ import PackageDescription
 // (`just android-core`) — keep this module UI-free and platform-agnostic.
 let package = Package(
     name: "OpenPocketViewCore",
-    platforms: [.iOS(.v17), .macOS(.v12)],
+    platforms: [.iOS(.v17), .macOS(.v12), .watchOS(.v10)],
     products: [
         .library(name: "OpenPocketViewCore", targets: ["OpenPocketViewCore"]),
         // JNI facade consumed by the Android app (`just android-core`). The JNI

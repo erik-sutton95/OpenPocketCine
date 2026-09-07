@@ -73,6 +73,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
+- Apple Watch companion: live preview, timecode, storage, camera battery,
+  record / shutter. The iPhone stays on camera Wi-Fi; the Watch cannot join
+  it. Keep the iPhone app open. Rec on the wrist does not ask for
+  confirmation.
 
 Verify record start/stop on the camera body until you trust the link.
 

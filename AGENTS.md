@@ -41,6 +41,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 ## Read when
 
 - **naming** — fuzzy term, new name: [`CONTEXT.md`](CONTEXT.md)
+- **watch-companion** — Apple Watch remote, WatchConnectivity, not the link-health band: [`CONTEXT.md`](CONTEXT.md), [`docs/PARITY.md`](docs/PARITY.md)
 - **seams** — new module, core vs shell, spine order: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **parity** — chrome, assist, connection UX, one-platform feature: [`docs/PARITY.md`](docs/PARITY.md)
 - **JNI** — Gradle, Swift-for-Android, `.so`, facade, OpenZCine pattern: [`ANDROID.md`](ANDROID.md)

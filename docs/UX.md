@@ -59,7 +59,12 @@ tunnel still up, the waiting well uses `LocalVPNFilter.liveHint`. Do not
 name AdGuard / Blokada / sister camera apps in chrome — the handbook FAQ
 does.
 
-Record confirmation is a bottom action sheet, not a centred dialog.
+Record confirmation is a bottom action sheet, not a centred dialog. Apple
+Watch rec / shutter skips that sheet (the phone may be in a cage), same as
+gamepad Cross/A.
+
+Watch placeholders: **Open OpenPocketCine on iPhone**, **No camera
+connected**, **Waiting for live view**.
 
 Link health in the top bar is delivery (FPS chip), not RSSI.
 
