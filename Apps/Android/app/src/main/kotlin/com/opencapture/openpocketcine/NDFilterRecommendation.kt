@@ -4,44 +4,47 @@ import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import kotlin.math.abs
 import kotlin.math.floor
-import kotlin.math.log2
 
-/** Screw-on ND stop so 180° shutter holds. Recommendation only — not a SET. */
+/** Live-picture ND reading. Suggestion only — not a SET. */
 data class NDFilterSuggestion(
-    val stops: Int,
+    val pictureStops: Double,
+    val ndStops: Int,
     val opticalFactor: Int,
-    val label: String,
-    val line: String,
-)
+    val ndLabel: String,
+    val stopsLabel: String,
+) {
+    val needsGlass: Boolean
+        get() = ndStops >= 1
+}
 
 /**
- * How many ND stops would keep 180° (and native ISO, when the curve has one)
- * given the live shutter, ISO, and an optional picture meter.
- *
- * Lockstep of core `NDFilterRecommendation`.
+ * Meters the live luma histogram against middle gray and names a screw-on ND
+ * that would balance the picture. Lockstep of core `NDFilterRecommendation`.
  */
 object NDFilterRecommendation {
     const val MIN_STOPS = 1
     const val MAX_STOPS = 10
     val opticalFactors = listOf(2, 4, 8, 16, 32, 64, 128, 256, 512, 1_000)
-    const val PICTURE_DEADBAND_STOPS = 1.0 / 3.0
+    const val NONE_LABEL = "—"
 
     fun opticalFactor(stops: Int): Int {
+        if (stops < MIN_STOPS) return 1
         val idx = stops.coerceIn(MIN_STOPS, MAX_STOPS) - 1
         return opticalFactors[idx]
     }
 
-    fun label(stops: Int): String = "ND${opticalFactor(stops)}"
+    fun ndLabel(stops: Int): String {
+        if (stops < MIN_STOPS) return NONE_LABEL
+        return "ND${opticalFactor(stops)}"
+    }
 
-    /** Native base ISO for the live transfer. Rec.709 / HLG have none. */
-    fun baseISO(transfer: MonitorTransfer?): Int? =
-        when (transfer) {
-            MonitorTransfer.DLOG -> 400
-            MonitorTransfer.DLOG2 -> 1600
-            else -> null
-        }
+    fun stopsLabel(stops: Double): String {
+        if (!stops.isFinite()) return "—"
+        if (abs(stops) < 0.05) return "0.0"
+        val sign = if (stops > 0) "+" else "−"
+        return sign + String.format("%.1f", abs(stops))
+    }
 
-    /** Median luma vs 18% grey, in stops. Null when the histogram is empty. */
     fun pictureStops(lumaHistogram: IntArray, transfer: MonitorTransfer): Double? {
         if (lumaHistogram.size < 2) return null
         var total = 0
@@ -61,45 +64,25 @@ object NDFilterRecommendation {
         return null
     }
 
-    /** Manual expo only. Null when already within half a stop of 180° / native. */
-    fun suggest(
-        expoIsManual: Boolean,
-        shutterDenom: Int,
-        fps: Int,
-        iso: Int,
-        isoIsAuto: Boolean,
-        transfer: MonitorTransfer?,
-        pictureStops: Double? = null,
-    ): NDFilterSuggestion? {
-        if (!expoIsManual) return null
-        if (shutterDenom <= 0 || fps !in 8..240) return null
-        val targetDenom = ShutterAngle.denom(ShutterAngle.DEFAULT_DEGREES, fps)
-        if (targetDenom <= 0) return null
-        val shutterStops = log2(shutterDenom.toDouble() / targetDenom.toDouble())
-        var isoStops = 0.0
-        val native = if (!isoIsAuto && iso > 0) baseISO(transfer) else null
-        if (native != null) {
-            isoStops = log2(iso.toDouble() / native.toDouble())
-        }
-        val picture =
-            if (pictureStops != null && pictureStops.isFinite() &&
-                abs(pictureStops) >= PICTURE_DEADBAND_STOPS
-            ) {
-                pictureStops
+    fun suggestion(pictureStops: Double): NDFilterSuggestion {
+        val picture = if (pictureStops.isFinite()) pictureStops else 0.0
+        val ndStops =
+            if (picture >= 0.5) {
+                floor(picture + 0.5).toInt().coerceIn(MIN_STOPS, MAX_STOPS)
             } else {
-                0.0
+                0
             }
-        val needed = shutterStops + isoStops + picture
-        if (!needed.isFinite() || needed < 0.5) return null
-        val stops = floor(needed + 0.5).toInt().coerceIn(MIN_STOPS, MAX_STOPS)
-        val factor = opticalFactor(stops)
-        val name = label(stops)
-        val angle = ShutterAngle.label(ShutterAngle.DEFAULT_DEGREES)
         return NDFilterSuggestion(
-            stops = stops,
-            opticalFactor = factor,
-            label = name,
-            line = "Try $name so $angle holds",
+            pictureStops = picture,
+            ndStops = ndStops,
+            opticalFactor = opticalFactor(ndStops),
+            ndLabel = ndLabel(ndStops),
+            stopsLabel = stopsLabel(picture),
         )
+    }
+
+    fun reading(lumaHistogram: IntArray, transfer: MonitorTransfer): NDFilterSuggestion? {
+        val picture = pictureStops(lumaHistogram, transfer) ?: return null
+        return suggestion(picture)
     }
 }

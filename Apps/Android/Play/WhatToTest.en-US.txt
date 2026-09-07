@@ -1,6 +1,6 @@
 New and changed
 
-- In manual, the shutter sheet can suggest a screw-on ND so 180° holds (Try ND32). Optional; the app cannot set a filter.
+- View Assist ND meters the live picture and suggests a screw-on ND in stops and ND number (ND32 / +5.0) to balance the frame. Off until you tap the chip. The app cannot set a filter.
 - Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
 - Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
 
@@ -13,6 +13,6 @@ Fixes
 
 What to test
 
-- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off. On a bright take in manual, open SHUTTER: if faster than 180°, it should say Try NDx so 180° holds; ND Suggestion off hides the line.
+- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off. On a bright take, tap ND: the plate should show an ND number and a stop count that move with the picture.
 - With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, then back: the picture must still be there.
 - Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.

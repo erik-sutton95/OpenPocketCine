@@ -1,40 +1,55 @@
 import Foundation
 
-/// Screw-on ND stop so 180° shutter holds. Recommendation only — not a SET.
+/// Live-picture ND reading. Suggestion only — not a SET.
 public struct NDFilterSuggestion: Equatable, Sendable {
-    public var stops: Int
+    /// Stops vs 18% grey. Positive is hot.
+    public var pictureStops: Double
+    /// Rounded glass, 0…10. Zero means no ND.
+    public var ndStops: Int
     public var opticalFactor: Int
-    public var label: String
-    public var line: String
+    /// `"ND32"` or `"—"`.
+    public var ndLabel: String
+    /// `"+2.3"`, `"−1.0"`, or `"0.0"`.
+    public var stopsLabel: String
 
-    public init(stops: Int, opticalFactor: Int, label: String, line: String) {
-        self.stops = stops
+    public var needsGlass: Bool { ndStops >= 1 }
+
+    public init(
+        pictureStops: Double, ndStops: Int, opticalFactor: Int, ndLabel: String, stopsLabel: String
+    ) {
+        self.pictureStops = pictureStops
+        self.ndStops = ndStops
         self.opticalFactor = opticalFactor
-        self.label = label
-        self.line = line
+        self.ndLabel = ndLabel
+        self.stopsLabel = stopsLabel
     }
 }
 
-/// How many ND stops would keep 180° (and native ISO, when the curve has one)
-/// given the live shutter, ISO, and an optional picture meter.
-///
-/// Does not write the camera. Shells show ``NDFilterSuggestion/line`` and must
-/// not dress it as a control.
+/// Meters the live luma histogram against middle gray and names a screw-on ND
+/// that would balance the picture. Does not write the camera.
 public enum NDFilterRecommendation: Sendable {
     public static let minStops = 1
     public static let maxStops = 10
     /// 1…9 are powers of two; 10 stops is the conventional ND1000, not 1024.
     public static let opticalFactors = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1_000]
-    /// Ignore a meter inside a third of a stop so sky noise does not hunt ND.
-    public static let pictureDeadbandStops = 1.0 / 3.0
+    public static let noneLabel = "—"
 
     public static func opticalFactor(stops: Int) -> Int {
+        guard stops >= minStops else { return 1 }
         let idx = min(max(stops, minStops), maxStops) - 1
         return opticalFactors[idx]
     }
 
-    public static func label(stops: Int) -> String {
-        "ND\(opticalFactor(stops: stops))"
+    public static func ndLabel(stops: Int) -> String {
+        guard stops >= minStops else { return noneLabel }
+        return "ND\(opticalFactor(stops: stops))"
+    }
+
+    public static func stopsLabel(_ stops: Double) -> String {
+        guard stops.isFinite else { return "—" }
+        if abs(stops) < 0.05 { return "0.0" }
+        let sign = stops > 0 ? "+" : "−"
+        return sign + String(format: "%.1f", abs(stops))
     }
 
     /// Median luma vs 18% grey, in stops. Nil when the histogram is empty.
@@ -58,45 +73,32 @@ public enum NDFilterRecommendation: Sendable {
         return nil
     }
 
-    /// Manual expo only. Nil when already within half a stop of 180° / native.
-    public static func suggest(
-        expoMode: ExpoMode?,
-        shutterDenom: Int,
-        fps: Int,
-        iso: Int,
-        isoIsAuto: Bool,
-        transfer: MonitorTransfer?,
-        pictureStops: Double? = nil
-    ) -> NDFilterSuggestion? {
-        guard expoMode == .manual else { return nil }
-        guard shutterDenom > 0, (8...240).contains(fps) else { return nil }
-        let targetDenom = ShutterAngle.denom(
-            degrees: ShutterAngle.defaultDegrees, fps: fps)
-        guard targetDenom > 0 else { return nil }
-
-        let shutterStops = log2(Double(shutterDenom) / Double(targetDenom))
-        var isoStops = 0.0
-        if !isoIsAuto, iso > 0, let native = CamCapIso.baseISO(transfer: transfer) {
-            isoStops = log2(Double(iso) / Double(native))
-        }
-        let picture: Double
-        if let p = pictureStops, p.isFinite, abs(p) >= pictureDeadbandStops {
-            picture = p
+    /// Map measured picture stops onto glass. Under half a stop is no ND.
+    public static func suggestion(pictureStops: Double) -> NDFilterSuggestion {
+        let picture = pictureStops.isFinite ? pictureStops : 0
+        let ndStops: Int
+        if picture >= 0.5 {
+            ndStops = min(
+                max(Int((picture + 0.5).rounded(.down)), minStops),
+                maxStops)
         } else {
-            picture = 0
+            ndStops = 0
         }
-        let needed = shutterStops + isoStops + picture
-        guard needed.isFinite, needed >= 0.5 else { return nil }
-        let stops = min(
-            max(Int((needed + 0.5).rounded(.down)), minStops),
-            maxStops)
-        let factor = opticalFactor(stops: stops)
-        let name = label(stops: stops)
-        let angle = ShutterAngle.label(ShutterAngle.defaultDegrees)
         return NDFilterSuggestion(
-            stops: stops,
-            opticalFactor: factor,
-            label: name,
-            line: "Try \(name) so \(angle) holds")
+            pictureStops: picture,
+            ndStops: ndStops,
+            opticalFactor: opticalFactor(stops: ndStops),
+            ndLabel: ndLabel(stops: ndStops),
+            stopsLabel: stopsLabel(picture))
+    }
+
+    /// Dynamic reading from the live tap. Nil only when the histogram is empty.
+    public static func reading(lumaHistogram bins: [Int], transfer: MonitorTransfer)
+        -> NDFilterSuggestion?
+    {
+        guard let picture = pictureStops(lumaHistogram: bins, transfer: transfer) else {
+            return nil
+        }
+        return suggestion(pictureStops: picture)
     }
 }

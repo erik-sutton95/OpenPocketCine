@@ -63,8 +63,6 @@ class AppModel(context: Context) {
         private set
     var nativeISOHopEnabled by mutableStateOf(OperatorPrefs.nativeISOHopEnabled(appContext))
         private set
-    var ndSuggestionEnabled by mutableStateOf(OperatorPrefs.ndSuggestionEnabled(appContext))
-        private set
     var facePriorityExposureEnabled by mutableStateOf(OperatorPrefs.facePriorityExposureEnabled(appContext))
         private set
     var shutterUsesAngle by mutableStateOf(OperatorPrefs.shutterUsesAngle(appContext))
@@ -179,11 +177,6 @@ class AppModel(context: Context) {
     fun updateNativeISOHopEnabled(value: Boolean) {
         nativeISOHopEnabled = value
         OperatorPrefs.setNativeISOHopEnabled(appContext, value)
-    }
-
-    fun updateNdSuggestionEnabled(value: Boolean) {
-        ndSuggestionEnabled = value
-        OperatorPrefs.setNdSuggestionEnabled(appContext, value)
     }
 
     fun updateFacePriorityExposureEnabled(value: Boolean) {

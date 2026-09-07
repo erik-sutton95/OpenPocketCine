@@ -566,22 +566,6 @@ class CaptureSheetTest {
         assertTrue(CaptureLists.NATIVE_ISO_HOP_HELP.isNotEmpty())
         assertTrue(!CaptureLists.NATIVE_ISO_HOP_HELP.contains("400 ↔ 1600"))
         assertEquals("Face Priority", CaptureLists.FACE_PRIORITY_TITLE)
-        assertEquals("ND Suggestion", CaptureLists.ND_SUGGESTION_TITLE)
-        assertTrue(CaptureLists.ND_SUGGESTION_HELP.contains("cannot set a filter"))
-        val bright =
-            CameraStatus(
-                iso = 400,
-                shutterDenom = 1_536,
-                fps = 24,
-                expoMode = CameraCommands.EXPO_MANUAL,
-                isoIndex = 0x05,
-                colorMode = CameraCommands.COLOR_DLOG,
-            )
-        assertEquals("ND32", CaptureLists.ndSuggestion(bright)?.label)
-        assertEquals("Try ND32 so 180° holds", CaptureLists.ndSuggestion(bright)?.line)
-        assertNull(
-            CaptureLists.ndSuggestion(bright.copy(expoMode = CameraCommands.EXPO_AUTO)),
-        )
     }
 
     @Test

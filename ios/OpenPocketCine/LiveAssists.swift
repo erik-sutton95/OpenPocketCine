@@ -15,6 +15,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     case histogram = "HISTO"
     case vectorscope = "VECTOR"
     case trafficLights = "LIGHTS"
+    case ndMeter = "ND"
     case audioMeters = "AUDIO"
     case guides = "GUIDES"
     case grid = "GRID"
@@ -39,11 +40,18 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
 
     /// OpenZCine `activeCases` minus photography-only, AUDIO, Level, and De-SQ.
     /// AUDIO is appended as its own trailing section in `LiveAssistBar`.
-    static var toolbarCases: [LiveAssistTool] {
-        allCases.filter {
-            !$0.isRetired && !$0.isPhotographyOnly && !$0.isPocketOmitted && $0 != .audioMeters
-        }
+    /// ND sits with the exposure meters (HISTO / VECTOR / LIGHTS).
+    static var toolbarGroups: [[LiveAssistTool]] {
+        [
+            [.lut, .peaking, .falseColor],
+            [.zebra, .waveform, .parade],
+            [.histogram, .vectorscope, .trafficLights, .ndMeter],
+            [.guides, .grid, .crosshair],
+            [.mirror],
+        ]
     }
+
+    static var toolbarCases: [LiveAssistTool] { toolbarGroups.flatMap { $0 } }
 
     /// View Assist settings list — same cinema set as the bar, plus AUDIO.
     static var settingsCases: [LiveAssistTool] {
@@ -57,6 +65,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var displaySettingsTitle: String {
         switch self {
         case .parade: "Parade"
+        case .ndMeter: "ND"
         case .audioMeters: "Audio Levels"
         default: title
         }
@@ -86,6 +95,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .histogram: .audioLines
         case .vectorscope: .crosshair
         case .trafficLights: .sun
+        case .ndMeter: .aperture
         case .audioMeters: .slidersVertical
         case .guides: .squareDashed
         case .grid: .grid3x3
@@ -110,6 +120,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .histogram: "Histogram"
         case .vectorscope: "Vectorscope"
         case .trafficLights: "Traffic Lights"
+        case .ndMeter: "ND Suggestion"
         case .audioMeters: "Audio Levels"
         case .guides: "Guides"
         case .grid: "Grid"
@@ -203,6 +214,7 @@ final class LiveAssistState {
     var parade = false
     var vectorscope = false
     var trafficLights = false
+    var ndMeter = false
     var audioMeters = false
     var grid = false
     var crosshair = false
@@ -300,6 +312,7 @@ final class LiveAssistState {
             parade: isVisible(.parade),
             vectorscope: isVisible(.vectorscope),
             trafficLights: isVisible(.trafficLights),
+            ndMeter: isVisible(.ndMeter),
             lutDimension: isVisible(.lut) ? lutDimension : 0,
             lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
             peakingColor: peakingColor,
@@ -332,6 +345,7 @@ final class LiveAssistState {
         fx.parade = isPlaybackVisible(.parade)
         fx.vectorscope = isPlaybackVisible(.vectorscope)
         fx.trafficLights = isPlaybackVisible(.trafficLights)
+        fx.ndMeter = isPlaybackVisible(.ndMeter)
         fx.lutDimension = isPlaybackVisible(.lut) ? lutDimension : 0
         fx.lutRGBA = isPlaybackVisible(.lut) ? lutRGBA : Data()
         fx.splitComparison = splitComparison && isPlaybackVisible(.lut)
@@ -369,6 +383,7 @@ final class LiveAssistState {
         case .histogram: histogram
         case .vectorscope: vectorscope
         case .trafficLights: trafficLights
+        case .ndMeter: ndMeter
         case .audioMeters: audioMeters
         case .guides: guides
         case .grid: grid
@@ -444,6 +459,7 @@ final class LiveAssistState {
         case .histogram: histogram.toggle()
         case .vectorscope: vectorscope.toggle()
         case .trafficLights: trafficLights.toggle()
+        case .ndMeter: ndMeter.toggle()
         case .audioMeters: audioMeters.toggle()
         case .guides:
             guides.toggle()
@@ -709,7 +725,6 @@ enum OperatorPrefs {
     private static let cacheFullResolutionKey = "OpenPocketCine.CacheFullResolution"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
     private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
-    private static let ndSuggestionKey = "OpenPocketCine.NDSuggestion"
     private static let facePriorityExposureKey = "OpenPocketCine.FacePriorityExposure"
     private static let shutterUsesAngleKey = "OpenPocketCine.ShutterUsesAngle"
     private static let shutterAngleKey = "OpenPocketCine.ShutterAngleDegrees"
@@ -814,15 +829,6 @@ enum OperatorPrefs {
             return UserDefaults.standard.bool(forKey: nativeISOHopKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
-    }
-
-    /// Shutter sheet can suggest a screw-on ND. Off if the operator already knows their glass.
-    static var ndSuggestionEnabled: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: ndSuggestionKey) == nil { return true }
-            return UserDefaults.standard.bool(forKey: ndSuggestionKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: ndSuggestionKey) }
     }
 
     /// Last live `ColorMode` so Auto LUT can bind a cube from the offline library.
@@ -1052,6 +1058,7 @@ enum OperatorPrefs {
             s.parade = on.contains(LiveAssistTool.parade.rawValue)
             s.vectorscope = on.contains(LiveAssistTool.vectorscope.rawValue)
             s.trafficLights = on.contains(LiveAssistTool.trafficLights.rawValue)
+            s.ndMeter = on.contains(LiveAssistTool.ndMeter.rawValue)
             s.audioMeters = on.contains(LiveAssistTool.audioMeters.rawValue)
             s.guides = on.contains(LiveAssistTool.guides.rawValue)
             s.grid = on.contains(LiveAssistTool.grid.rawValue)

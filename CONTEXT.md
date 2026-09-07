@@ -126,8 +126,8 @@ A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
 
 **ND suggestion**:
-Screw-on ND stop recommended from shutter vs 180°, native ISO, and an optional live meter so 180° holds. Not a camera SET. Optional; off if the operator already knows their glass.
-_Avoid_: ND filter (as an assist), auto ND, ND SET
+View-assist meter on the live picture (toolbar **ND**, next to LIGHTS). Reads luma vs middle gray and names a screw-on ND in stops and ND number to balance the frame. Not a camera SET. Off unless the operator turns the chip on.
+_Avoid_: auto ND, ND SET, shutter-sheet nag
 
 **LUT exposure compensation**:
 Input-referred stops applied before the Rec.709 cube (half-stop −3…+3). Pull after ETTR so the cube's mid-grey lands. Not camera EV. iOS Share **Bake exposure** writes that pull into the file.

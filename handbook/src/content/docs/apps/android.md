@@ -43,9 +43,9 @@ when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
-on Pocket 4 Pro. In manual, the shutter sheet can suggest a screw-on ND so
-180° holds (`Try ND32 so 180° holds`). Optional; the app cannot set a filter.
-The gimbal stick and zoom chip sit together as a cluster in the
+on Pocket 4 Pro. View Assist **ND** meters the live picture against middle
+gray and suggests a screw-on ND in stops and ND number to balance the
+frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. Stick throw is analog with
 an ease-in curve (small push crawls; full throw is fastest). A connected
 game controller's left stick drives the same path. Cross/A records.

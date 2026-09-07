@@ -83,9 +83,6 @@ final class AppModel {
     var nativeISOHopEnabled: Bool = OperatorPrefs.nativeISOHopEnabled {
         didSet { OperatorPrefs.nativeISOHopEnabled = nativeISOHopEnabled }
     }
-    var ndSuggestionEnabled: Bool = OperatorPrefs.ndSuggestionEnabled {
-        didSet { OperatorPrefs.ndSuggestionEnabled = ndSuggestionEnabled }
-    }
     var facePriorityExposureEnabled: Bool = OperatorPrefs.facePriorityExposureEnabled {
         didSet {
             OperatorPrefs.facePriorityExposureEnabled = facePriorityExposureEnabled

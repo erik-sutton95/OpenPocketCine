@@ -273,6 +273,19 @@ private fun StackedScopePanel(
                     ),
                     { state.setScale(LiveAssistTool.LIGHTS, it) },
                 )
+            LiveAssistTool.ND ->
+                ScopePanelSpec(
+                    ScopePanelSize.ndMeter,
+                    state.ndScale,
+                    state.ndCenter,
+                    MovablePanelMath.defaultCenterBottomTrailing(
+                        feed,
+                        panelPx(ScopePanelSize.ndMeter, state.ndScale, density),
+                        canvas,
+                        bottomClearance = 80f,
+                    ),
+                    { state.setScale(LiveAssistTool.ND, it) },
+                )
             LiveAssistTool.LUT,
             LiveAssistTool.PEAK,
             LiveAssistTool.FALSE,
@@ -296,7 +309,7 @@ private fun StackedScopePanel(
             onScale = onScale,
             onOpenOptions = onOpenOptions?.let { present -> { frame -> present(tool, frame) } },
             onActivate = { state.bringToFront(tool) },
-            fillPlate = tool == LiveAssistTool.LIGHTS,
+            fillPlate = tool == LiveAssistTool.LIGHTS || tool == LiveAssistTool.ND,
         ) {
             when (tool) {
                 LiveAssistTool.WAVE -> WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())
@@ -304,6 +317,7 @@ private fun StackedScopePanel(
                 LiveAssistTool.VECTOR -> VectorscopePanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.HISTO -> HistogramPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.LIGHTS -> TrafficLightsPanel(state, Modifier.fillMaxSize())
+                LiveAssistTool.ND -> NDMeterPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.LUT,
                 LiveAssistTool.PEAK,
                 LiveAssistTool.FALSE,
