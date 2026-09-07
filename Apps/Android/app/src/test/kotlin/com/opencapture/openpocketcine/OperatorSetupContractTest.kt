@@ -270,6 +270,7 @@ class OperatorSetupContractTest {
     @Test
     fun assistHelpCopyMatchesIos() {
         assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("PStops"))
+        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("EL Zone"))
         assertEquals("Show a compact color key over live view while False Color is active.", SettingsHelpCopy.FALSE_COLOR_REFERENCE)
         assertTrue(SettingsHelpCopy.PEAKING_SENSITIVITY.contains("finer edges"))
         assertTrue(SettingsHelpCopy.ZEBRA_UNITS.contains("0-255"))

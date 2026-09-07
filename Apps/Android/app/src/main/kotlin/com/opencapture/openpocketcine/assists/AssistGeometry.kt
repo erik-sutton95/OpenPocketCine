@@ -597,6 +597,11 @@ object FalseColorBands {
         when (scale) {
             FalseColorScale.STOPS ->
                 listOf("Minimum", "−3", "18%", "Skin +1", "+2", "⅔ below max", "⅓ below max", "Maximum")
+            FalseColorScale.EL_ZONE ->
+                listOf(
+                    "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
+                    "+½", "+1", "+2", "+3", "+4", "+5", "+6",
+                )
             FalseColorScale.IRE ->
                 listOf("0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95", "96–98", "99–100")
             FalseColorScale.LIMITS -> listOf("0–4", "5–9", "94–98", "99–100")
@@ -605,6 +610,7 @@ object FalseColorBands {
     fun bands(scale: FalseColorScale, transfer: MonitorTransfer): List<Band> =
         when (scale) {
             FalseColorScale.STOPS -> stopBands(transfer)
+            FalseColorScale.EL_ZONE -> elZoneBands()
             FalseColorScale.IRE -> ireBands()
             FalseColorScale.LIMITS -> limitBands()
         }
@@ -644,6 +650,26 @@ object FalseColorBands {
             Band(5.0, 10.0, 0.28, 0.37, 0.85, "5–9"),
             Band(94.0, 99.0, 0.89, 0.72, 0.29, "94–98"),
             Band(99.0, Double.POSITIVE_INFINITY, 0.78, 0.28, 0.18, "99–100"),
+        )
+
+    /** iOS `LiveColorScience.elZoneBands` — scene EV ±6, not IRE 0–100. */
+    fun elZoneBands(): List<Band> =
+        listOf(
+            Band(Double.NEGATIVE_INFINITY, -5.5, 0 / 255.0, 0 / 255.0, 0 / 255.0, "−6"),
+            Band(-5.5, -4.5, 158 / 255.0, 127 / 255.0, 183 / 255.0, "−5"),
+            Band(-4.5, -3.5, 30 / 255.0, 114 / 255.0, 163 / 255.0, "−4"),
+            Band(-3.5, -2.5, 54 / 255.0, 174 / 255.0, 226 / 255.0, "−3"),
+            Band(-2.5, -1.5, 36 / 255.0, 164 / 255.0, 78 / 255.0, "−2"),
+            Band(-1.5, -0.75, 97 / 255.0, 185 / 255.0, 78 / 255.0, "−1"),
+            Band(-0.75, -0.25, 147 / 255.0, 198 / 255.0, 72 / 255.0, "−½"),
+            Band(-0.25, 0.25, 143 / 255.0, 139 / 255.0, 132 / 255.0, "18%"),
+            Band(0.25, 0.75, 251 / 255.0, 227 / 255.0, 51 / 255.0, "+½"),
+            Band(0.75, 1.5, 255 / 255.0, 247 / 255.0, 170 / 255.0, "+1"),
+            Band(1.5, 2.5, 241 / 255.0, 113 / 255.0, 53 / 255.0, "+2"),
+            Band(2.5, 3.5, 242 / 255.0, 165 / 255.0, 81 / 255.0, "+3"),
+            Band(3.5, 4.5, 234 / 255.0, 34 / 255.0, 46 / 255.0, "+4"),
+            Band(4.5, 5.5, 224 / 255.0, 127 / 255.0, 142 / 255.0, "+5"),
+            Band(5.5, Double.POSITIVE_INFINITY, 255 / 255.0, 255 / 255.0, 255 / 255.0, "+6"),
         )
 }
 
@@ -707,7 +733,7 @@ object FalseColorReference {
 
     fun axisLabels(scale: FalseColorScale): List<String> =
         when (scale) {
-            FalseColorScale.STOPS -> emptyList()
+            FalseColorScale.STOPS, FalseColorScale.EL_ZONE -> emptyList()
             FalseColorScale.IRE -> listOf("clip / shadows", "18%", "skin hi", "highlights → clip")
             FalseColorScale.LIMITS -> listOf("crushed", "midtones untouched", "clipped")
         }
@@ -720,8 +746,8 @@ object FalseColorReference {
     fun segments(scale: FalseColorScale, transfer: MonitorTransfer): List<Segment> {
         val bands = FalseColorBands.bands(scale, transfer)
         return when (scale) {
-            FalseColorScale.STOPS -> {
-                val domain = stopReferenceDomain(transfer)
+            FalseColorScale.STOPS, FalseColorScale.EL_ZONE -> {
+                val domain = stopReferenceDomain(scale, transfer)
                 bands.map { band ->
                     Segment(
                         lowerFraction = stopFraction(band.lowerBound, domain, 0.0),
@@ -747,7 +773,7 @@ object FalseColorReference {
     }
 
     fun stopAxisMarkers(transfer: MonitorTransfer): List<AxisMarker> {
-        val domain = stopReferenceDomain(transfer)
+        val domain = stopReferenceDomain(FalseColorScale.STOPS, transfer)
         val maximum = maximumSceneStop(transfer)
         return listOf(
             "Min" to MINIMUM_SCENE_STOP,
@@ -759,7 +785,24 @@ object FalseColorReference {
         ).map { (label, stop) -> AxisMarker(label, stopFraction(stop, domain, 0.0)) }
     }
 
-    private fun stopReferenceDomain(transfer: MonitorTransfer): ClosedRange<Double> {
+    fun elZoneAxisMarkers(): List<AxisMarker> {
+        val domain = EL_ZONE_REFERENCE_DOMAIN
+        return listOf(
+            "−6" to -6.0,
+            "−3" to -3.0,
+            "18%" to 0.0,
+            "+3" to 3.0,
+            "+6" to 6.0,
+        ).map { (label, stop) -> AxisMarker(label, stopFraction(stop, domain, 0.0)) }
+    }
+
+    private val EL_ZONE_REFERENCE_DOMAIN = -6.5..6.5
+
+    private fun stopReferenceDomain(
+        scale: FalseColorScale,
+        transfer: MonitorTransfer,
+    ): ClosedRange<Double> {
+        if (scale == FalseColorScale.EL_ZONE) return EL_ZONE_REFERENCE_DOMAIN
         val lower = MINIMUM_SCENE_STOP - 1.0 / 6
         val upper = maxOf(6.0, maximumSceneStop(transfer) + 1.0 / 6)
         return lower..upper

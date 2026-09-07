@@ -1,6 +1,7 @@
 New and changed
 
-- Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
+- Long-press FALSE → Scale now includes EL Zone: 15 stop colors from 18% gray. +6 and brighter is white; −6 and darker is black.
+- Live PEAK paints a closed outline on sharp edges, including with LUT on.
 - Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
 
 Fixes
@@ -12,6 +13,6 @@ Fixes
 
 What to test
 
-- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off.
+- Pair a Pocket 4 Pro, join Wi-Fi, and go live. Long-press FALSE, pick EL Zone: mid-gray is gray, a hot sky goes white. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off.
 - With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, then back: the picture must still be there.
 - Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.

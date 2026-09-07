@@ -152,10 +152,11 @@ object SettingsHelpCopy {
     const val FALSE_COLOR_SCALE =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
             "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
-            "highlight levels over luminance grayscale. IRE uses RED Video Mode-style monitor " +
-            "ranges on the WAVE axis: paper black at 0, D-Log2 18% grey at 30.50, live-tap EI " +
-            "ceiling at 100. Limits paints only shadow and highlight warnings, leaving other " +
-            "colors untouched."
+            "highlight levels over luminance grayscale. EL Zone paints 15 contiguous stops " +
+            "from 18% gray: +6 and above white, −6 and below black. IRE uses RED Video " +
+            "Mode-style monitor ranges on the WAVE axis: paper black at 0, D-Log2 18% grey " +
+            "at 30.50, live-tap EI ceiling at 100. Limits paints only shadow and highlight " +
+            "warnings, leaving other colors untouched."
     const val FALSE_COLOR_REFERENCE =
         "Show a compact color key over live view while False Color is active."
     const val PEAKING_SENSITIVITY =
@@ -947,7 +948,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState) {
             stacked = true,
         ) {
             SettingsSegmented(
-                options = listOf("PStops", "IRE", "Limits"),
+                options = listOf("PStops", "EL Zone", "IRE", "Limits"),
                 selected = assist.falseColorScale.menuLabel,
             ) { label ->
                 assist.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))

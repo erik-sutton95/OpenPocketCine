@@ -109,6 +109,7 @@ enum FalseColorScaleKind: String, CaseIterable, Codable, Sendable {
     case stops = "ZC Stops"
     case ire = "IRE"
     case limits = "Limits"
+    case elZone = "EL Zone"
 }
 
 enum ZebraPaint: String, CaseIterable, Codable, Sendable {
@@ -319,8 +320,8 @@ enum LiveMonitorCompositor {
 
     /// Paint from pre-LUT camera codes, composited over the displayed look.
     /// Limits is holes-only (shadow / highlight warnings over the picture).
-    /// IRE / PStops paint the full remap — WAVE grayscale in the gaps, not a
-    /// hole onto camera colour. Cube data is `nil` while the async lattice
+    /// IRE / PStops / EL Zone paint the full remap — WAVE grayscale in the gaps,
+    /// not a hole onto camera colour. Cube data is `nil` while the async lattice
     /// warm runs — show the plain look rather than stall the frame path.
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects

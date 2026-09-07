@@ -1,8 +1,8 @@
 New and changed
 
+- FALSE Scale now includes EL Zone: 15 stops from 18% gray. +6 and up is white; −6 and down is black.
 - A connected game controller's left stick drives the gimbal; small throws crawl, full throw is fastest. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face or cancels. L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. A gimbal stop taps once.
 - Head tracking is experimental: Operator Setup → Controls, Head Tracking (Experimental). Wear AirPods with motion, go live, look forward, hold still, tap Calibrate Head Lock. A 53° head turn pans the Pocket 53°. Nod is tilt. Roll is numbers only. STOP clears the lock. Off keeps AirPods as audio only.
-- The on-screen gimbal stick uses the same gradual speed.
 - Pair over Bluetooth, join camera Wi-Fi, watch live view. Record, ISO, white balance, and zoom from the phone.
 - Share Diagnostics is on first pair and in Operator Setup → System. A TestFlight screenshot copies a short paste for feedback. No name or location.
 
@@ -15,7 +15,7 @@ Fixes
 - With LUT, waveform, peaking, or Face AF on, zooming or the D-Log2 to D-Log hop no longer freeze the picture. LUT 50/50 must not drop live view or stick on Reconnecting.
 - Clips or Operator Setup over live view, then back, keeps the picture moving, not a black well. On Pocket 3, a take you just recorded should list and play.
 - On Pocket 3 and Pocket 4, Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
-- Zebra: Highlight paints when any color channel runs hot. Factory Highlight is now 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard.
+- Zebra: Highlight paints when any color channel runs hot. Factory Highlight is 99 IRE; saved thresholds stay. Number fields stay above the keyboard.
 
 What to test
 
@@ -23,4 +23,4 @@ What to test
 - Connect a DualSense or any extended gamepad: left stick gimbal, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Push into a stop: one buzz, not a rumble. Unplug rests the stick and toasts.
 - On Pocket 4 Pro in D-Log2 (idle): R2 or pinch. COLOR switches to D-Log first, then the picture zooms. On Pocket 3, switch COLOR Normal/HDR/D-Log M; on a Nano, 8-bit/10-bit/D-Log M and FORMAT 2.7K/4:3. Auto ISO starts at 50 (Pocket 4 Pro: 100).
 - Tap Share Diagnostics before pairing finishes. After live: record a short take, open it in the library with LUT on. Share sends the original file. Close the library, then Operator Setup: live view keeps its picture. Power-cycle the Pocket: last picture stays under Reconnecting. On Pocket 3, the take you just recorded must appear and play. Rename the camera Wi-Fi on the body: the app joins the new name without a re-pair.
-- Go live, long-press ZEBRA, tap Highlight, type 95, tap Done: the stripes update. Repeat in landscape. In D-Log2 at factory Highlight, a hot sky stripes.
+- Go live, long-press FALSE, pick EL Zone: mid-gray is gray, a hot sky goes white. Long-press ZEBRA, tap Highlight, type 95, tap Done. Repeat in landscape.

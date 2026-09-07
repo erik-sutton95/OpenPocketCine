@@ -66,7 +66,9 @@ tap/pinch toast; idle hops to D-Log on the first step off 1× and waits
 for that color SET before any zoom write (the chip stays at 1× until
 D-Log lands).
 Long-press View Assist options lift above the keyboard so Zebra Highlight /
-Midtone stay visible (Done on the number pad), matching iOS.
+Midtone stay visible (Done on the number pad), matching iOS. False color
+Scale is PStops / EL Zone / IRE / Limits (EL Zone is 15 contiguous stops
+from 18% gray; +6 white, −6 black).
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). 50/50 log-vs-LUT is monitor-only and must
 not drop the live picture (GPU split only while a cube is loaded). Next/prev

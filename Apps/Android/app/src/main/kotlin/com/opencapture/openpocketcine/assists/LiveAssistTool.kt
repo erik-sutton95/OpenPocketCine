@@ -180,6 +180,7 @@ enum class FalseColorScale(val persisted: String, val menuLabel: String) {
     STOPS("ZC Stops", "PStops"),
     IRE("IRE", "IRE"),
     LIMITS("Limits", "Limits"),
+    EL_ZONE("EL Zone", "EL Zone"),
     ;
 
     companion object {
@@ -192,6 +193,7 @@ enum class FalseColorScale(val persisted: String, val menuLabel: String) {
             when (label) {
                 "IRE" -> IRE
                 "Limits" -> LIMITS
+                "EL Zone" -> EL_ZONE
                 else -> STOPS
             }
     }

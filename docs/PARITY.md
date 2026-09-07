@@ -57,6 +57,9 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   `ScopeDisplayScale.signalNative`.
 - PStops reference ruler paints EV-domain bands + Min/−3/18%/Skin/+2/Max
   markers, not IRE labels.
+- EL Zone is a fourth FALSE Scale (PStops / EL Zone / IRE / Limits). Fifteen
+  contiguous scene-EV bands around 18% gray; +6 and above white, −6 and below
+  black. The reference ruler is −6/−3/18%/+3/+6, not stretched to live-tap clip.
 - Gimbal cluster: stick + zoom chip (+ reserved gimbal controls) as one
   trailing-bottom parking spot in every orientation. Zoom stacks above the
   stick, trailing-aligned — not glued to record. On width-constrained iPad,

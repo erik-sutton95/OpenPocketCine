@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
+  gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
+  stays white, not a separate clip stripe. iOS and Android.
+
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
   stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same

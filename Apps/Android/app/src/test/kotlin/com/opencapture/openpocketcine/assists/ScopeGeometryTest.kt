@@ -363,4 +363,48 @@ class ScopeGeometryTest {
         assertEquals(0.28, ire[3].lowerFraction, 1e-4)
         assertEquals(0.34, ire[3].upperFraction, 1e-4)
     }
+
+    @Test
+    fun falseColorElZoneIsFifteenContiguousSceneStops() {
+        assertEquals(FalseColorScale.EL_ZONE, FalseColorScale.fromMenuLabel("EL Zone"))
+        assertEquals("EL Zone", FalseColorScale.EL_ZONE.menuLabel)
+        assertEquals(
+            listOf(
+                "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
+                "+½", "+1", "+2", "+3", "+4", "+5", "+6",
+            ),
+            FalseColorBands.legendLabels(FalseColorScale.EL_ZONE),
+        )
+        val transfer = MonitorTransfer.DLOG2
+        val bands = FalseColorBands.elZoneBands()
+        assertEquals(15, bands.size)
+        for (i in 0 until bands.lastIndex) {
+            assertEquals(bands[i].upperBound, bands[i + 1].lowerBound, 1e-12)
+        }
+        val gray = bands.first { it.contains(0.0) }
+        assertEquals("18%", gray.label)
+        assertEquals(gray.red, gray.green, 0.05)
+        assertEquals(gray.green, gray.blue, 0.05)
+        val over = bands.first { it.contains(7.0) }
+        assertEquals("+6", over.label)
+        assertEquals(1.0, over.red, 1e-12)
+        assertEquals(1.0, over.green, 1e-12)
+        assertEquals(1.0, over.blue, 1e-12)
+        val under = bands.first { it.contains(-7.0) }
+        assertEquals("−6", under.label)
+        assertEquals(0.0, under.red, 1e-12)
+
+        val segments = FalseColorReference.segments(FalseColorScale.EL_ZONE, transfer)
+        assertEquals(15, segments.size)
+        assertEquals(0.0, segments.first().lowerFraction, 1e-9)
+        assertEquals(1.0, segments.last().upperFraction, 1e-9)
+        for (i in 0 until segments.lastIndex) {
+            assertEquals(segments[i].upperFraction, segments[i + 1].lowerFraction, 1e-9)
+        }
+        assertEquals(
+            listOf("−6", "−3", "18%", "+3", "+6"),
+            FalseColorReference.elZoneAxisMarkers().map { it.label },
+        )
+        assertTrue(FalseColorReference.axisLabels(FalseColorScale.EL_ZONE).isEmpty())
+    }
 }

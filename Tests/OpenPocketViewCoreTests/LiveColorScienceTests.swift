@@ -504,6 +504,52 @@ struct LiveColorScienceTests {
         #expect(LiveColorScience.stops(linear: 0) == -.infinity)
     }
 
+    @Test func elZoneIsFifteenContiguousSceneStops() {
+        let bands = LiveColorScience.falseColorBands(.elZone, transfer: .dlog2)
+        #expect(
+            bands.map(\.label) == [
+                "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
+                "+½", "+1", "+2", "+3", "+4", "+5", "+6",
+            ])
+        for index in 0..<(bands.count - 1) {
+            #expect(abs(bands[index].upperBound - bands[index + 1].lowerBound) < 1e-12)
+        }
+        let gray = LiveColorScience.falseColorBand(value: 0, scale: .elZone, transfer: .dlog2)
+        #expect(gray?.label == "18%")
+        #expect(abs((gray?.red ?? 0) - (gray?.green ?? 1)) < 0.05)
+        #expect(abs((gray?.green ?? 0) - (gray?.blue ?? 1)) < 0.05)
+
+        let over = LiveColorScience.falseColorBand(value: 7, scale: .elZone, transfer: .dlog2)
+        #expect(over?.label == "+6")
+        #expect((over?.red ?? 0) > 0.95)
+        #expect((over?.green ?? 0) > 0.95)
+        #expect((over?.blue ?? 0) > 0.95)
+
+        let under = LiveColorScience.falseColorBand(value: -7, scale: .elZone, transfer: .dlog2)
+        #expect(under?.label == "−6")
+        #expect((under?.red ?? 1) < 0.05)
+        #expect((under?.green ?? 1) < 0.05)
+        #expect((under?.blue ?? 1) < 0.05)
+
+        let rec709Clip = LiveColorScience.stops(linear: 1)
+        #expect(rec709Clip < 3)
+        #expect(
+            LiveColorScience.falseColorBand(
+                value: rec709Clip, scale: .elZone, transfer: .rec709
+            )?.label != "+6")
+
+        let clipStops = LiveColorScience.stops(
+            encoded: ScopeExposureCeiling.clipEncoded(transfer: .dlog2),
+            transfer: .dlog2)
+        #expect(clipStops > 6)
+        #expect(
+            LiveColorScience.falseColorBand(
+                value: clipStops, scale: .elZone, transfer: .dlog2
+            )?.label == "+6")
+        #expect(LiveFalseColorScale.elZone.usesSceneStops)
+        #expect(!LiveFalseColorScale.ire.usesSceneStops)
+    }
+
     @Test func monitorIREIsTheWaveAxis() {
         for transfer in transfers {
             let paper = LiveColorScience.paperIRE(
