@@ -25,7 +25,6 @@ enum PocketFalseColorMap {
     /// 64³ keyed on encoded luma (not linearized Reinhard IRE). 33³ + the old
     /// tone map quantized live D-Log2 into four posters.
     static let cubeSize = 64
-    static let zcStopsDetailBlend = 0.4
     static let minimumSceneStop = -6.0
 
     /// Value key — the old per-frame interpolated-String keys allocated on every preview tick.
@@ -134,7 +133,7 @@ enum PocketFalseColorMap {
                 scale: scale, transfer: MonitorTransfer(mode)))
     }
 
-    /// IRE / PStops / EL Zone full lattice: WAVE-axis grayscale with the painted zones.
+    /// IRE / CineStop / EL Zone full lattice: WAVE-axis grayscale with the painted zones.
     /// Not used on the live path — replacing the identity feed with this cube
     /// was the DeviceRGB contrast shift. Tests still sample it.
     static func fullPaintData(scale: FalseColorScaleKind, mode: ColorMode) -> (Int, Data)? {
@@ -331,7 +330,7 @@ enum PocketFalseColorMap {
         return w.red * red + w.green * green + w.blue * blue
     }
 
-    /// Band colour + coverage. Limits: weight 0 leaves the picture. IRE / PStops /
+    /// Band colour + coverage. Limits: weight 0 leaves the picture. IRE / CineStop /
     /// EL Zone always paint — gaps are WAVE grayscale, not a hole onto the camera image.
     private static func overlayPaint(
         value: Double, scale: FalseColorScaleKind, bands: [LiveFalseColorBand], monitorGray: Double
@@ -409,14 +408,8 @@ enum PocketFalseColorMap {
     private static func renderedBandColor(
         _ band: LiveFalseColorBand, scale: FalseColorScaleKind, detailGray: Double
     ) -> (red: Double, green: Double, blue: Double) {
-        guard scale == .stops else { return (band.red, band.green, band.blue) }
-        let gray = min(1, max(0, detailGray))
-        let colorWeight = 1 - zcStopsDetailBlend
-        return (
-            band.red * colorWeight + gray * zcStopsDetailBlend,
-            band.green * colorWeight + gray * zcStopsDetailBlend,
-            band.blue * colorWeight + gray * zcStopsDetailBlend
-        )
+        _ = detailGray
+        return (band.red, band.green, band.blue)
     }
 
     private static func bandWeight(
@@ -456,15 +449,15 @@ extension FalseColorScaleKind {
 
     var transitionWidth: Double {
         switch self {
-        case .stops, .elZone: 0.05
-        case .ire, .limits: 0.5
+        case .elZone: 0.05
+        case .stops, .ire, .limits: 0.5
         }
     }
 
     /// OpenZCine `FalseColorReference.scaleLabel`.
     var referenceScaleLabel: String {
         switch self {
-        case .stops: "PStops"
+        case .stops: "CineStop"
         case .ire: "IRE"
         case .limits: "Limits"
         case .elZone: "EL Zone"

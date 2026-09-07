@@ -5,7 +5,7 @@ import UIKit
 /// OpenZCine `AssistQuickSettingsContent.falseColorRows` + `FalseColorReference`.
 ///
 /// Long-press options:
-/// * Scale — PStops / EL Zone / IRE / Limits
+/// * Scale — CineStop / EL Zone / IRE / Limits
 /// * Reference Display — compact color key over live view; turning it on arms False Color
 enum FalseColorAssist {
     /// OpenZCine `assistPanelWidth` for tools other than guides.
@@ -20,19 +20,19 @@ enum FalseColorAssist {
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. "
-        + "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative "
-        + "highlight levels over luminance grayscale. EL Zone paints 15 contiguous stops "
-        + "from 18% gray: +6 and above white, −6 and below black. IRE uses RED Video "
-        + "Mode-style monitor ranges on the WAVE axis: paper black at 0, D-Log2 18% grey "
-        + "at 30.50, live-tap EI ceiling at 100. Limits paints only shadow and highlight "
-        + "warnings, leaving other colors untouched."
+        + "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) "
+        + "over luminance grayscale. EL Zone paints 15 contiguous stops from 18% gray: "
+        + "+6 and above white, −6 and below black. IRE paints six video-level zones over "
+        + "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one "
+        + "stop over, yellow near clip, red clip. Limits paints only shadow and "
+        + "highlight warnings, leaving other colors untouched."
 
     /// OpenZCine `falseColorRows` Reference Display help.
     static let referenceHelp =
         "Show a compact color key over live view while False Color is active."
 
     /// OpenZCine `AssistQuickSettingsContent` Scale segments.
-    static let scaleOptions = ["PStops", "EL Zone", "IRE", "Limits"]
+    static let scaleOptions = ["CineStop", "EL Zone", "IRE", "Limits"]
 
     struct Options: Equatable, Codable, Sendable {
         var scale: FalseColorScaleKind
@@ -55,18 +55,12 @@ enum FalseColorAssist {
         scale.referenceScaleLabel
     }
 
-    /// OpenZCine `FalseColorScale.legendStops` labels.
-    ///
-    /// IRE keeps Pocket WAVE copy (`18%`, `55–61`) instead of RED Video Mode
-    /// `41–48` / `61–70` — those numbers are Reinhard-mapped 18% / skin on
-    /// OpenZCine's 42-IRE grey axis. LiveColorScience paints the same semantic
-    /// zones at 28–34 and 52–62 on the WAVE axis.
     static func legendLabels(scale: FalseColorScaleKind) -> [String] {
         switch scale {
         case .stops:
             [
-                "Minimum", "−3", "18%", "Skin +1", "+2",
-                "⅔ below max", "⅓ below max", "Maximum",
+                "0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95",
+                "96–98", "99–100",
             ]
         case .elZone:
             [
@@ -74,10 +68,7 @@ enum FalseColorAssist {
                 "+½", "+1", "+2", "+3", "+4", "+5", "+6",
             ]
         case .ire:
-            [
-                "0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95",
-                "96–98", "99–100",
-            ]
+            ["BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC"]
         case .limits:
             ["0–4", "5–9", "94–98", "99–100"]
         }
@@ -284,8 +275,8 @@ struct FalseColorReference: View {
     /// OpenZCine `FalseColorReference.axisLabels`.
     static func axisLabels(scale: FalseColorScaleKind) -> [String] {
         switch scale {
-        case .stops, .elZone: []
-        case .ire: ["clip / shadows", "18%", "skin hi", "highlights → clip"]
+        case .elZone: []
+        case .stops, .ire: ["crush", "18%", "skin", "clip"]
         case .limits: ["crushed", "midtones untouched", "clipped"]
         }
     }
@@ -339,7 +330,7 @@ struct FalseColorReference: View {
     ) -> [Segment] {
         let bands = PocketFalseColorMap.bands(scale: scale, transfer: transfer)
         switch scale {
-        case .stops, .elZone:
+        case .elZone:
             let domain = stopReferenceDomain(scale: scale, transfer: transfer)
             return bands.enumerated().map { index, band in
                 Segment(
@@ -350,7 +341,7 @@ struct FalseColorReference: View {
                         band.upperBound, in: domain, infiniteFallback: 1),
                     band: band)
             }
-        case .ire, .limits:
+        case .stops, .ire, .limits:
             return bands.enumerated().map { index, band in
                 Segment(
                     id: index,
@@ -410,13 +401,9 @@ struct FalseColorReference: View {
     }
 
     @ViewBuilder private var axisView: some View {
-        if scale == .stops || scale == .elZone {
+        if scale == .elZone {
             GeometryReader { geometry in
-                ForEach(
-                    scale == .elZone
-                        ? Self.elZoneAxisMarkers()
-                        : Self.stopAxisMarkers(transfer: transfer)
-                ) { marker in
+                ForEach(Self.elZoneAxisMarkers()) { marker in
                     Text(marker.label)
                         .font(.system(size: 5.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -446,8 +433,8 @@ struct FalseColorReference: View {
 
     private var neutralGradientColors: [Color] {
         switch scale {
-        case .stops, .elZone: [Color(white: 0.04), Color(white: 0.86)]
-        case .ire, .limits: [Color(white: 0.54), Color(white: 0.75)]
+        case .elZone: [Color(white: 0.04), Color(white: 0.86)]
+        case .stops, .ire, .limits: [Color(white: 0.54), Color(white: 0.75)]
         }
     }
 }

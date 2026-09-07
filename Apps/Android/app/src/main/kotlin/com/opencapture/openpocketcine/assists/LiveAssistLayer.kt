@@ -418,9 +418,7 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
     val transfer = MonitorTransfer.fromColorMode(colorMode)
     val segments = FalseColorReference.segments(state.falseColorScale, transfer)
     val markers =
-        if (state.falseColorScale == FalseColorScale.STOPS) {
-            FalseColorReference.stopAxisMarkers(transfer)
-        } else if (state.falseColorScale == FalseColorScale.EL_ZONE) {
+        if (state.falseColorScale == FalseColorScale.EL_ZONE) {
             FalseColorReference.elZoneAxisMarkers()
         } else {
             emptyList()

@@ -225,15 +225,15 @@ private fun FalseColorOptions(state: LiveAssistState) {
         "Scale",
         help =
             "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-                "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
-                "highlight levels. EL Zone paints 15 contiguous stops from 18% gray: +6 and " +
-                "above white, −6 and below black. IRE uses WAVE-axis monitor ranges. Limits " +
+                "CineStop paints video-level IRE stripes over luminance grayscale. EL Zone " +
+                "paints 15 contiguous stops from 18% gray: +6 and above white, −6 and below " +
+                "black. IRE paints six video-level zones over luminance grayscale. Limits " +
                 "paints only shadow and highlight warnings.",
         showTopDivider = false,
         stacked = true,
     ) {
         SettingsSegmented(
-            options = listOf("PStops", "EL Zone", "IRE", "Limits"),
+            options = listOf("CineStop", "EL Zone", "IRE", "Limits"),
             selected = state.falseColorScale.menuLabel,
         ) { label ->
             haptics.selection()

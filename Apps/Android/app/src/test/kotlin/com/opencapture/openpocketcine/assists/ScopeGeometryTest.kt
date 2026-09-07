@@ -293,7 +293,7 @@ class ScopeGeometryTest {
         assertEquals(FalseColorScale.STOPS, state.falseColorScale)
         assertTrue(state.falseColorReference)
         assertEquals(
-            listOf("0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95", "96–98", "99–100"),
+            listOf("BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC"),
             FalseColorBands.legendLabels(FalseColorScale.IRE),
         )
         val red = PeakingColor.RED.rgb
@@ -342,26 +342,35 @@ class ScopeGeometryTest {
     }
 
     @Test
-    fun falseColorPStopsRulerUsesStopDomainNotIreBands() {
+    fun falseColorCineStopRulerUsesVideoModeIre() {
+        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromMenuLabel("CineStop"))
+        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("PStops"))
+        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("ZC Stops"))
+        assertEquals("CineStop", FalseColorScale.STOPS.menuLabel)
         val transfer = MonitorTransfer.DLOG2
         val stops = FalseColorReference.segments(FalseColorScale.STOPS, transfer)
-        assertEquals(8, stops.size)
-        assertEquals(0.0, stops.first().lowerFraction, 1e-9)
+        assertEquals(9, stops.size)
+        assertEquals(0.0, stops[0].lowerFraction, 1e-4)
+        assertEquals(0.05, stops[0].upperFraction, 1e-4)
+        assertEquals(0.41, stops[3].lowerFraction, 1e-4)
+        assertEquals(0.49, stops[3].upperFraction, 1e-4)
         assertEquals(1.0, stops.last().upperFraction, 1e-9)
-        assertTrue(stops[0].upperFraction < stops[1].lowerFraction)
-        assertTrue(stops[1].upperFraction < stops[2].lowerFraction)
+        assertTrue(stops[2].upperFraction < stops[3].lowerFraction)
         assertEquals(
-            listOf("Min", "−3", "18%", "Skin", "+2", "Max"),
-            FalseColorReference.stopAxisMarkers(transfer).map { it.label },
+            listOf("crush", "18%", "skin", "clip"),
+            FalseColorReference.axisLabels(FalseColorScale.STOPS),
         )
-        assertTrue(FalseColorReference.axisLabels(FalseColorScale.STOPS).isEmpty())
         assertEquals("D-Log2", FalseColorReference.curveKeyLabel(CameraCommands.COLOR_DLOG2))
         val ire = FalseColorReference.segments(FalseColorScale.IRE, transfer)
-        assertEquals(9, ire.size)
+        assertEquals(6, ire.size)
         assertEquals(0.0, ire[0].lowerFraction, 1e-4)
-        assertEquals(0.05, ire[0].upperFraction, 1e-4)
-        assertEquals(0.28, ire[3].lowerFraction, 1e-4)
-        assertEquals(0.34, ire[3].upperFraction, 1e-4)
+        assertEquals(0.025, ire[0].upperFraction, 1e-4)
+        assertEquals(0.38, ire[2].lowerFraction, 1e-4)
+        assertEquals(0.42, ire[2].upperFraction, 1e-4)
+        assertEquals(0.80, ire[4].lowerFraction, 1e-4)
+        assertEquals(0.95, ire[4].upperFraction, 1e-4)
+        assertEquals(1.0, ire.last().upperFraction, 1e-9)
+        assertTrue(ire[1].upperFraction < ire[2].lowerFraction)
     }
 
     @Test

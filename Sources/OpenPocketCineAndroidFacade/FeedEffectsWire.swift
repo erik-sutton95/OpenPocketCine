@@ -9,7 +9,6 @@ import OpenPocketViewCore
 public enum FeedEffectsWire {
     public static let falseColorCubeSize = 64
     public static let assistScalarCount = 4
-    public static let stopsDetailBlend = 0.4
 
     public static func monitorTransfer(colorModeCode: Int) -> MonitorTransfer {
         guard (0...255).contains(colorModeCode),
@@ -43,7 +42,7 @@ public enum FeedEffectsWire {
         }
     }
 
-    /// Packed-2D RGBA8 overlay weight. IRE / PStops / EL Zone are opaque; Limits is holes-only.
+    /// Packed-2D RGBA8 overlay weight. IRE / CineStop / EL Zone are opaque; Limits is holes-only.
     public static func packedFalseColorWeight(
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
@@ -216,14 +215,8 @@ public enum FeedEffectsWire {
     private static func renderedBandColor(
         _ band: LiveFalseColorBand, scale: LiveFalseColorScale, detailGray: Double
     ) -> (red: Double, green: Double, blue: Double) {
-        guard scale == .stops else { return (band.red, band.green, band.blue) }
-        let gray = min(1, max(0, detailGray))
-        let colorWeight = 1 - stopsDetailBlend
-        return (
-            band.red * colorWeight + gray * stopsDetailBlend,
-            band.green * colorWeight + gray * stopsDetailBlend,
-            band.blue * colorWeight + gray * stopsDetailBlend
-        )
+        _ = detailGray
+        return (band.red, band.green, band.blue)
     }
 
     private static func bandWeight(
@@ -252,8 +245,8 @@ public enum FeedEffectsWire {
 
     private static func transitionWidth(_ scale: LiveFalseColorScale) -> Double {
         switch scale {
-        case .stops, .elZone: 0.05
-        case .ire, .limits: 0.5
+        case .elZone: 0.05
+        case .stops, .ire, .limits: 0.5
         }
     }
 

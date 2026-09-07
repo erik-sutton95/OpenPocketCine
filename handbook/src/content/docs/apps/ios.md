@@ -12,8 +12,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
 - HEVC live view on Pocket 4 / 4 Pro; AVC on Osmo Nano
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
-  False color Scale is PStops / EL Zone / IRE / Limits (EL Zone is 15
-  contiguous stops from 18% gray; +6 white, −6 black).
+  False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
+  video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
+  from 18% gray (+6 white, −6 black). IRE is six video-level zones over
+  grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip).
   Long-press options lift above the keyboard so number fields (Zebra
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
