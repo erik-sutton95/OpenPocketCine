@@ -89,6 +89,23 @@ final class CaptureListTests: XCTestCase {
         XCTAssertFalse(CaptureLists.nativeIsoHopHelp.contains("400 ↔ 1600"))
     }
 
+    func testNDSuggestionCopyAndManualBrightTake() {
+        XCTAssertEqual(CaptureLists.ndSuggestionTitle, "ND Suggestion")
+        XCTAssertTrue(CaptureLists.ndSuggestionHelp.contains("cannot set a filter"))
+        XCTAssertFalse(CaptureLists.ndSuggestionHelp.localizedCaseInsensitiveContains("set ND"))
+        var status = CameraStatus()
+        status.expoMode = .manual
+        status.shutterDenom = 1_536
+        status.fps = 24
+        status.iso = 400
+        status.isoIndex = .iso400
+        status.colorMode = .dLog
+        XCTAssertEqual(CaptureLists.ndSuggestion(from: status)?.label, "ND32")
+        XCTAssertEqual(CaptureLists.ndSuggestion(from: status)?.line, "Try ND32 so 180° holds")
+        status.expoMode = .auto
+        XCTAssertNil(CaptureLists.ndSuggestion(from: status))
+    }
+
     func testDLog2HasNoIsoAuto() {
         var status = CameraStatus()
         status.colorMode = .dLog2

@@ -81,6 +81,8 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.assists.AssistLongPress
+import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
+import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.settings.SettingsHelpBadge
@@ -516,6 +518,28 @@ fun LiveControlSheet(
                                 checked = model.facePriorityExposureEnabled,
                                 enabled = enabled,
                                 onCheckedChange = model::updateFacePriorityExposureEnabled,
+                            )
+                        } else {
+                            if (model.ndSuggestionEnabled) {
+                                val picture =
+                                    NDFilterRecommendation.pictureStops(
+                                        LiveScopeSampleBus.bundle.samples.histogramLuma,
+                                        MonitorTransfer.fromColorMode(status.colorMode),
+                                    )
+                                CaptureLists.ndSuggestion(status, picture)?.line?.let { line ->
+                                    Text(
+                                        line,
+                                        style = LiveType.ui(13f, FontWeight.SemiBold),
+                                        color = LiveDesign.muted,
+                                    )
+                                }
+                            }
+                            PrefToggle(
+                                title = CaptureLists.ND_SUGGESTION_TITLE,
+                                help = CaptureLists.ND_SUGGESTION_HELP,
+                                checked = model.ndSuggestionEnabled,
+                                enabled = enabled,
+                                onCheckedChange = model::updateNdSuggestionEnabled,
                             )
                         }
                     }
@@ -1672,6 +1696,21 @@ object CaptureLists {
     const val NATIVE_ISO_HOP_TITLE = "Auto Native ISO"
     const val NATIVE_ISO_HOP_HELP =
         "On: switching D-Log ↔ D-Log2 hops ISO to that curve's starred native if you were still on native. Off: keep the ISO you set."
+    const val ND_SUGGESTION_TITLE = "ND Suggestion"
+    const val ND_SUGGESTION_HELP =
+        "On: suggest a screw-on ND so 180° holds. Off if you already know your glass. The app cannot set a filter."
+
+    fun ndSuggestion(status: CameraStatus, pictureStops: Double? = null): NDFilterSuggestion? =
+        NDFilterRecommendation.suggest(
+            expoIsManual = status.expoMode == CameraCommands.EXPO_MANUAL,
+            shutterDenom = status.shutterDenom,
+            fps = status.fps,
+            iso = status.iso,
+            isoIsAuto = status.isoIndex == 0,
+            transfer =
+                if (status.colorMode >= 0) MonitorTransfer.fromColorMode(status.colorMode) else null,
+            pictureStops = pictureStops,
+        )
 
     val evLabels: List<String> = EvComp.allCases.map { it.label }
 

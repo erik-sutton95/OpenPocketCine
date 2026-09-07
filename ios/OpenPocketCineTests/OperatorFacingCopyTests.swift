@@ -103,6 +103,8 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.keepScreenAwake,
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,
+            CaptureLists.ndSuggestionTitle,
+            CaptureLists.ndSuggestionHelp,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.supportHelp,
             SettingsHelpCopy.reportHelp,

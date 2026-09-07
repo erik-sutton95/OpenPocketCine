@@ -709,6 +709,7 @@ enum OperatorPrefs {
     private static let cacheFullResolutionKey = "OpenPocketCine.CacheFullResolution"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
     private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
+    private static let ndSuggestionKey = "OpenPocketCine.NDSuggestion"
     private static let facePriorityExposureKey = "OpenPocketCine.FacePriorityExposure"
     private static let shutterUsesAngleKey = "OpenPocketCine.ShutterUsesAngle"
     private static let shutterAngleKey = "OpenPocketCine.ShutterAngleDegrees"
@@ -813,6 +814,15 @@ enum OperatorPrefs {
             return UserDefaults.standard.bool(forKey: nativeISOHopKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
+    }
+
+    /// Shutter sheet can suggest a screw-on ND. Off if the operator already knows their glass.
+    static var ndSuggestionEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: ndSuggestionKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: ndSuggestionKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: ndSuggestionKey) }
     }
 
     /// Last live `ColorMode` so Auto LUT can bind a cube from the offline library.

@@ -210,6 +210,7 @@ object OperatorPrefs {
     private const val CLEAN_PINS = "OpenPocketCine.CleanViewPins.v1"
     private const val PORTRAIT_ASPECT = "OpenPocketCine.PortraitFeedAspect"
     private const val NATIVE_ISO_HOP = "OpenPocketCine.NativeISOHop"
+    private const val ND_SUGGESTION = "OpenPocketCine.NDSuggestion"
     private const val FACE_PRIORITY = "OpenPocketCine.FacePriorityExposure"
     private const val SHUTTER_ANGLE = "OpenPocketCine.ShutterUsesAngle"
     private const val SHUTTER_DEGREES = "OpenPocketCine.ShutterAngleDegrees"
@@ -311,6 +312,13 @@ object OperatorPrefs {
 
     fun setNativeISOHopEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(NATIVE_ISO_HOP, value).apply()
+    }
+
+    fun ndSuggestionEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(ND_SUGGESTION, true)
+
+    fun setNdSuggestionEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(ND_SUGGESTION, value).apply()
     }
 
     fun facePriorityExposureEnabled(context: Context): Boolean =

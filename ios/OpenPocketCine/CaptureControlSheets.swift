@@ -267,12 +267,26 @@ struct CapturePickerPanel: View {
                     .id(evLabels)
                     facePriorityToggle
                 }
-            } else if isAngleSheet {
-                CaptureDrumWheel(options: shutterAngleLabels, selection: $drumSelection)
-                    .id(shutterAngleLabels)
             } else {
-                CaptureDrumWheel(options: shutterLabels, selection: $drumSelection)
-                    .id(shutterLabels)
+                VStack(alignment: .leading, spacing: 12) {
+                    if isAngleSheet {
+                        CaptureDrumWheel(
+                            options: shutterAngleLabels, selection: $drumSelection
+                        )
+                        .id(shutterAngleLabels)
+                    } else {
+                        CaptureDrumWheel(options: shutterLabels, selection: $drumSelection)
+                            .id(shutterLabels)
+                    }
+                    if model.ndSuggestionEnabled, let line = ndSuggestionLine {
+                        Text(line)
+                            .font(LiveType.ui(size: 13, weight: .semibold, design: .default))
+                            .foregroundStyle(LiveDesign.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityLabel(line)
+                    }
+                    ndSuggestionToggle
+                }
             }
         case .wb:
             if selectedMode == 0 {
@@ -506,6 +520,41 @@ struct CapturePickerPanel: View {
             .tint(LiveDesign.accent)
             .accessibilityLabel(CaptureLists.facePriorityTitle)
             .accessibilityHint(CaptureLists.facePriorityHelp)
+        }
+    }
+
+    private var ndSuggestionLine: String? {
+        let transfer = model.session.status.monitorTransfer ?? model.frameSamples.transfer
+        let picture = NDFilterRecommendation.pictureStops(
+            lumaHistogram: model.frameSamples.bundle.samples.histogramLuma,
+            transfer: transfer)
+        return CaptureLists.ndSuggestion(
+            from: model.session.status, pictureStops: picture
+        )?.line
+    }
+
+    private var ndSuggestionToggle: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(CaptureLists.ndSuggestionTitle)
+                .font(LiveType.ui(size: 13, weight: .bold, design: .default))
+                .kerning(0.4)
+                .textCase(.uppercase)
+                .foregroundStyle(LiveDesign.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            HelpBadge(text: CaptureLists.ndSuggestionHelp)
+            Spacer(minLength: 8)
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { model.ndSuggestionEnabled },
+                    set: { model.ndSuggestionEnabled = $0 }
+                )
+            )
+            .labelsHidden()
+            .tint(LiveDesign.accent)
+            .accessibilityLabel(CaptureLists.ndSuggestionTitle)
+            .accessibilityHint(CaptureLists.ndSuggestionHelp)
         }
     }
 
@@ -1192,6 +1241,23 @@ enum CaptureLists {
     static let nativeIsoHopTitle = "Auto Native ISO"
     static let nativeIsoHopHelp =
         "On: switching D-Log ↔ D-Log2 hops ISO to that curve's starred native if you were still on native. Off: keep the ISO you set."
+
+    static let ndSuggestionTitle = "ND Suggestion"
+    static let ndSuggestionHelp =
+        "On: suggest a screw-on ND so 180° holds. Off if you already know your glass. The app cannot set a filter."
+
+    static func ndSuggestion(from status: CameraStatus, pictureStops: Double? = nil)
+        -> NDFilterSuggestion?
+    {
+        NDFilterRecommendation.suggest(
+            expoMode: status.expoMode,
+            shutterDenom: status.shutterDenom,
+            fps: status.fps,
+            iso: status.iso,
+            isoIsAuto: status.isoIndex == .auto,
+            transfer: status.monitorTransfer,
+            pictureStops: pictureStops)
+    }
 
     static let kelvinValues = Array(stride(from: 2_000, through: 10_000, by: 100))
     static let kelvinLabels = kelvinValues.map { "\($0)K" }

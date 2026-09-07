@@ -52,6 +52,7 @@ SDK). Both apps must call the same state machines:
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`; Android JNI |
 | Diagnostics redaction and report shape | `PrivacyRedactor`, `DiagnosticReport` | iOS `DiagnosticCenter` (os.Logger, MetricKit, screenshot paste); Android `diagnostics/DiagnosticCenter` (logcat + share) |
+| Screw-on ND stop so 180° holds (shutter / ISO / optional meter) | `NDFilterRecommendation` | iOS shutter sheet; Android shutter sheet (Kotlin lockstep). Suggestion copy only — not a SET. Uses the existing scope histogram when present; no extra tap. |
 
 Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering,
 storage, and UI. Do not import SwiftUI, UIKit, Android, or Compose into the core.

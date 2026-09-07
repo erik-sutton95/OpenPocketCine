@@ -125,6 +125,10 @@ _Avoid_: pixel-identical, 1:1 clone
 A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
 
+**ND suggestion**:
+Screw-on ND stop recommended from shutter vs 180°, native ISO, and an optional live meter so 180° holds. Not a camera SET. Optional; off if the operator already knows their glass.
+_Avoid_: ND filter (as an assist), auto ND, ND SET
+
 **LUT exposure compensation**:
 Input-referred stops applied before the Rec.709 cube (half-stop −3…+3). Pull after ETTR so the cube's mid-grey lands. Not camera EV. iOS Share **Bake exposure** writes that pull into the file.
 _Avoid_: LUT gain, LUT mix, intensity, EV (the body SET)

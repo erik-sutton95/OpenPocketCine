@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- ND suggestion (discussion #196): in manual, the shutter sheet can
+  suggest a screw-on ND so 180° holds (`Try ND32 so 180° holds`). From
+  shutter vs 180°, native ISO, and the live histogram when a scope is
+  already metering. Optional; off if you already know your glass. The
+  app cannot set a filter. iOS and Android.
+
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
   stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same
