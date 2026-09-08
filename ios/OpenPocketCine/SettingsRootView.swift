@@ -28,7 +28,7 @@ enum SettingsHelpCopy {
     static let haptics =
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     static let headTracking =
-        "Experimental. Calibrate Head Lock (centered above the bottom bars) is shared forward: that AirPods pose and that gimbal pose are zero. A 53° head turn pans the Pocket 53°. Nod is tilt. Roll is shown only — the Pocket stick has no roll axis. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. STOP clears the lock. On-screen stick and a game controller win while you hold them."
+        "Experimental. Calibrate Head Lock (centered above the bottom bars) is shared forward: that AirPods pose and that gimbal pose are zero. Head turns set matching pan and tilt angles within the gimbal’s range. Roll is shown only. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. STOP clears the lock. On-screen stick, a game controller, and Motion Control takes priority."
     static let joystickSensitivity =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
     static let gamepad =

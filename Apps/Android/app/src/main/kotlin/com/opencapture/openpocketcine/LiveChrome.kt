@@ -974,36 +974,36 @@ data class LiveMonitorLayout(
     val onFeed: ChromeRect
         get() = if (picture.width > 1f) picture else feed
 
-    val gimbalCluster: GimbalCluster
-        get() {
-            val inset = LiveChromeMetrics.STICK_INSET
-            val gap = LiveChromeMetrics.STICK_GAP
-            var barTop = Float.POSITIVE_INFINITY
-            if (showsBottomBars) {
-                if (assist.height > 1f) barTop = min(barTop, assist.minY)
-                if (capture.height > 1f) barTop = min(barTop, capture.minY)
-            }
-            val floorY =
-                if (barTop < Float.POSITIVE_INFINITY) min(feed.maxY - inset, barTop - gap)
-                else feed.maxY - inset
-            val avoid = if (record.width > 1f) record else null
-            return GimbalCluster.inTrailingBottom(
-                well = feed,
-                floorY = floorY,
-                canvasMaxY = viewportHeight - max(0f, safeBottom),
-                avoid = avoid,
-                stickSize = LiveChromeMetrics.STICK,
-                zoomSize = LiveChromeMetrics.ZOOM,
-                gap = gap,
-                inset = inset,
-            )
+    fun gimbalCluster(showGimbalButton: Boolean = false): GimbalCluster {
+        val inset = LiveChromeMetrics.STICK_INSET
+        val gap = LiveChromeMetrics.STICK_GAP
+        var barTop = Float.POSITIVE_INFINITY
+        if (showsBottomBars) {
+            if (assist.height > 1f) barTop = min(barTop, assist.minY)
+            if (capture.height > 1f) barTop = min(barTop, capture.minY)
         }
+        val floorY =
+            if (barTop < Float.POSITIVE_INFINITY) min(feed.maxY - inset, barTop - gap)
+            else feed.maxY - inset
+        val avoid = if (record.width > 1f) record else null
+        return GimbalCluster.inTrailingBottom(
+            well = feed,
+            floorY = floorY,
+            canvasMaxY = viewportHeight - max(0f, safeBottom),
+            avoid = avoid,
+            stickSize = LiveChromeMetrics.STICK,
+            zoomSize = LiveChromeMetrics.ZOOM,
+            gap = gap,
+            inset = inset,
+            showGimbalButton = showGimbalButton,
+        )
+    }
 
     val zoomButton: ChromeRect
-        get() = gimbalCluster.zoom
+        get() = gimbalCluster().zoom
 
     val gimbalStick: ChromeRect
-        get() = gimbalCluster.stick
+        get() = gimbalCluster().stick
 
     val focusReset: ChromeRect
         get() {

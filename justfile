@@ -228,3 +228,7 @@ android-play-sync-secrets:
 # Dispatch Android Play on main (signed AAB; Play API upload if PLAY_SERVICE_ACCOUNT_JSON exists).
 android-play-dispatch track="alpha" status="completed":
     gh workflow run android-play.yml --ref main --field track={{track}} --field status={{status}}
+
+# Fast programmed-motion regression loop.
+gimbal-test:
+    swift test --filter 'Gimbal(Repeatability|SafeRoute)Tests'

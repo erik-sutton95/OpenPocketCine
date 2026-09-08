@@ -701,6 +701,7 @@ enum OperatorPrefs {
     private static let hapticsKey = "OpenPocketCine.HapticsEnabled"
     private static let headTrackingKey = "OpenPocketCine.HeadTrackingEnabled"
     private static let gimbalStickSensitivityKey = "OpenPocketCine.GimbalStickSensitivity"
+    private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
     private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
     private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
@@ -749,6 +750,17 @@ enum OperatorPrefs {
     static var headTrackingEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: headTrackingKey) }
         set { UserDefaults.standard.set(newValue, forKey: headTrackingKey) }
+    }
+
+    static var gimbalRamp: GimbalRamp {
+        get {
+            guard UserDefaults.standard.object(forKey: gimbalRampKey) != nil else {
+                return .off
+            }
+            return GimbalRamp(rawValue: UserDefaults.standard.integer(forKey: gimbalRampKey))
+                ?? .off
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gimbalRampKey) }
     }
 
     static var gimbalStickSensitivity: Int {

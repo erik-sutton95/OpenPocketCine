@@ -6,7 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Experimental AirPods head tracking now maps shared-forward head direction to
+  native gimbal angles with a 100 ms command horizon. Stale measurements,
+  inactive scenes and old control callbacks cannot continue driving. Manual
+  and programmed movement take priority; physical response qualification is ongoing.
+
 ### Added
+
+- Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
+  One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
+  stick ramp Off / Soft / Medium, and Motion Control. The sheet parks
+  like a capture picker (slide-up glass above the capture bar). Locked
+  toasts — no lock-all opcode on the wire yet (#174). Ramp is local
+  ease-in/out on the stick path (#260), not camera speed. Motion Control
+  uses camera-timed A→B (optional C) trajectories with waypoint verification.
+  It preserves durations from 0.5 to 120 seconds without rate calibration or
+  an artificial speed ceiling. C enables adjustable Bézier smoothing and a
+  dashed preview; markers compensate for measured motion between reports.
+  Start counts down three seconds. Pause holds the remaining path; Resume
+  continues from the stopped pose. Stop discards the continuation. The wider
+  editor has swipeable duration dials (left increases, right decreases),
+  refresh icons and C hidden until B is set. Hold anywhere to move the editor;
+  dragging the minimized pill suppresses button taps. Debug chrome is removed.
+  Preparation selects Fast and tilt unlocked. No zoom SET during movement.
+  Manual control, disconnect and ActiveTrack cancel the path. Native targets
+  respect the reachable pan arc and tilt limits, including selfie orientation.
+  Nano hides the button. Both shells; physical precision remains experimental.
 
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well

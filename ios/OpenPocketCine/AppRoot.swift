@@ -52,6 +52,16 @@ final class AppModel {
     var gimbalAnalogHeld: Bool { gimbalScreenHeld || gimbalPadHeld }
     /// Extended gamepad is bound. Toast on rising/falling edge.
     var gamepadConnected = false
+    var liveGimbalPanel: LiveGimbalPanel = .none
+    /// Canvas-space centre of the programmed-move editor / Run pill. Nil until first open or drag.
+    var gimbalFloatCenter: CGPoint?
+    /// Canvas-space centre of the programmed-move debug plate.
+    var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp {
+        didSet {
+            OperatorPrefs.gimbalRamp = gimbalRamp
+            session.gimbalRamp = gimbalRamp
+        }
+    }
     var gimbalStickSensitivity: Int = OperatorPrefs.gimbalStickSensitivity {
         didSet {
             let clamped = GimbalStick.clampedSensitivity(gimbalStickSensitivity)
@@ -167,6 +177,7 @@ final class AppModel {
     /// Leaves Settings and switches the monitor to `mode` so badges land on the real thing.
     func beginChromeEditing(_ mode: PocketDispMode) {
         liveOperatorPanel = nil
+        liveGimbalPanel = .none
         setDisplayMode(clean: mode == .clean)
         chromeEditorMode = mode
     }

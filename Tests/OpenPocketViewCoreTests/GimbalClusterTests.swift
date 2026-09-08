@@ -43,18 +43,18 @@ import Testing
         #expect(!cluster.zoom.intersects(record.insetBy(dx: -1, dy: -1)))
     }
 
-    @Test func controlsGrowLeadingOfTheStickWithoutMovingIt() {
+    @Test func gimbalButtonSitsLeadingOfZoomWithoutMovingTheStick() {
         let bare = GimbalCluster.inTrailingBottom(
             well: well, floorY: 330, canvasMaxY: canvasMaxY)
-        let withControls = GimbalCluster.inTrailingBottom(
-            well: well, floorY: 330, canvasMaxY: canvasMaxY, controlsWidth: 72)
-        #expect(abs(withControls.stick.x - bare.stick.x) < 0.05)
-        #expect(abs(withControls.stick.y - bare.stick.y) < 0.05)
-        #expect(abs(withControls.zoom.x - bare.zoom.x) < 0.05)
-        #expect(abs(withControls.controls.maxX - (withControls.stick.x - GimbalCluster.gap)) < 0.05)
-        #expect(abs(withControls.controls.y - withControls.stick.y) < 0.05)
-        #expect(abs(withControls.controls.height - withControls.stick.height) < 0.05)
-        #expect(withControls.controls.width == 72)
+        let withButton = GimbalCluster.inTrailingBottom(
+            well: well, floorY: 330, canvasMaxY: canvasMaxY, showGimbalButton: true)
+        #expect(abs(withButton.stick.x - bare.stick.x) < 0.05)
+        #expect(abs(withButton.stick.y - bare.stick.y) < 0.05)
+        #expect(abs(withButton.controls.maxX - withButton.stick.maxX) < 0.05)
+        #expect(abs(withButton.controls.y - withButton.zoom.y) < 0.05)
+        #expect(abs(withButton.controls.width - GimbalCluster.zoomSize) < 0.05)
+        #expect(abs(withButton.zoom.maxX - (withButton.controls.x - GimbalCluster.gap)) < 0.05)
+        #expect(withButton.zoom.x < bare.zoom.x)
     }
 
     @Test func belowWellKeepsZoomUnderTheStrip() {

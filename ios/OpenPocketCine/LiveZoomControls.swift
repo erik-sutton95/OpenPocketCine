@@ -71,6 +71,7 @@ struct LiveZoomPinchWell: View {
     var feed: CGRect
     var chip: CGRect
     var stick: CGRect = .zero
+    var gimbalButton: CGRect = .zero
     var reset: CGRect = .zero
     var cancel: CGRect = .zero
     var calibrate: CGRect = .zero
@@ -81,6 +82,7 @@ struct LiveZoomPinchWell: View {
     var body: some View {
         let chipInFeed = chip.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let stickInFeed = stick.offsetBy(dx: -feed.minX, dy: -feed.minY)
+        let gimbalInFeed = gimbalButton.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let resetInFeed = reset.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let cancelInFeed = cancel.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let calibrateInFeed = calibrate.offsetBy(dx: -feed.minX, dy: -feed.minY)
@@ -94,7 +96,7 @@ struct LiveZoomPinchWell: View {
         .contentShape(
             .interaction,
             LiveZoomPinchHitShape(holes: [
-                chipInFeed, stickInFeed, resetInFeed, cancelInFeed, calibrateInFeed,
+                chipInFeed, stickInFeed, gimbalInFeed, resetInFeed, cancelInFeed, calibrateInFeed,
             ]),
             eoFill: true
         )
