@@ -33,7 +33,8 @@ public enum WatcherRelayFraming: Sendable {
 
     public static func decode(from buffer: Data) throws -> Decoded? {
         guard buffer.count >= headerBytes else { return nil }
-        let declared = Int(buffer[buffer.startIndex]) << 24
+        let declared =
+            Int(buffer[buffer.startIndex]) << 24
             | Int(buffer[buffer.startIndex + 1]) << 16
             | Int(buffer[buffer.startIndex + 2]) << 8
             | Int(buffer[buffer.startIndex + 3])

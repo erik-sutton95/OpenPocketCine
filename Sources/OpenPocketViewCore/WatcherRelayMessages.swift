@@ -128,7 +128,8 @@ public enum WatcherRelayFrameBlob: Sendable {
         guard payload.count >= 4 else {
             throw WatcherRelayFraming.DecodeError.payloadTooLarge(declared: payload.count)
         }
-        let n = Int(payload[payload.startIndex]) << 24
+        let n =
+            Int(payload[payload.startIndex]) << 24
             | Int(payload[payload.startIndex + 1]) << 16
             | Int(payload[payload.startIndex + 2]) << 8
             | Int(payload[payload.startIndex + 3])

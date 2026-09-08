@@ -90,6 +90,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             "couldn't switch from other camera — tap Connect again",
             SettingsHelpCopy.frameIO,
             SettingsHelpCopy.shareThisFeed,
+            SettingsHelpCopy.watchAFeed,
             SettingsHelpCopy.broadcastPriority,
             SettingsHelpCopy.watcherPasscode,
             SettingsHelpCopy.controlRequests,

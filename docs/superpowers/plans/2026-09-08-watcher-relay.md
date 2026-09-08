@@ -24,6 +24,7 @@
 ## File map
 
 **Create (core):**
+
 - `Sources/OpenPocketViewCore/WatcherRelayProtocol.swift` — type, version, kinds, max payload, TXT keys
 - `Sources/OpenPocketViewCore/WatcherRelayFraming.swift` — length-prefix encode/decode
 - `Sources/OpenPocketViewCore/WatcherRelayMessages.swift` — hello, join-denied, state, frame, token, command
@@ -33,6 +34,7 @@
 - `Tests/OpenPocketViewCoreTests/WatcherRelayTests.swift`
 
 **Create (iOS):**
+
 - `ios/OpenPocketCine/WatcherRelayHost.swift` — listener, peers, encode fan-out
 - `ios/OpenPocketCine/WatcherRelayEncoder.swift` — VTCompressionSession HEVC → Annex-B
 - `ios/OpenPocketCine/WatcherRelayBrowser.swift` — NWBrowser
@@ -42,6 +44,7 @@
 - `ios/OpenPocketCine/WatcherBrowseView.swift` — nearby hosts list
 
 **Modify:**
+
 - `ios/OpenPocketCine/LiveAssists.swift` — OperatorPrefs share/passcode/control/priority
 - `ios/OpenPocketCine/AppRoot.swift` — host/browser/client, Watch a feed
 - `ios/OpenPocketCine/SettingsRootView.swift` — Sharing rows + copy
@@ -60,11 +63,13 @@
 ### Task 1: Protocol constants + framing
 
 **Files:**
+
 - Create: `Sources/OpenPocketViewCore/WatcherRelayProtocol.swift`
 - Create: `Sources/OpenPocketViewCore/WatcherRelayFraming.swift`
 - Test: `Tests/OpenPocketViewCoreTests/WatcherRelayTests.swift`
 
 **Produces:**
+
 ```swift
 public enum WatcherRelayProtocol {
     public static let serviceType = "_opc-mon._tcp"
@@ -96,11 +101,13 @@ public enum WatcherRelayFraming {
 ### Task 2: Messages, join gate, frame blob
 
 **Files:**
+
 - Create: `Sources/OpenPocketViewCore/WatcherRelayMessages.swift`
 - Create: `Sources/OpenPocketViewCore/WatcherRelayJoin.swift`
 - Modify: `Tests/OpenPocketViewCoreTests/WatcherRelayTests.swift`
 
 **Produces:**
+
 ```swift
 public struct WatcherRelayHello: Codable, Equatable, Sendable {
     public var version: Int
@@ -167,11 +174,13 @@ Frame blob: `[u32be metadata length][metadata JSON][HEVC bytes]`.
 ### Task 3: Bitrate ladder + control lease
 
 **Files:**
+
 - Create: `Sources/OpenPocketViewCore/WatcherRelayBitrate.swift`
 - Create: `Sources/OpenPocketViewCore/WatcherRelayControlLease.swift`
 - Modify: tests
 
 **Produces:**
+
 ```swift
 public struct WatcherRelayBitrate: Equatable, Sendable {
     public static let ladder = [10_000_000, 7_000_000, 4_500_000, 3_000_000]
@@ -201,6 +210,7 @@ Lease: empty watcherID park releases immediately. Matching watcherID within 20 s
 ### Task 4: iOS encoder + host listener
 
 **Files:**
+
 - Create: `ios/OpenPocketCine/WatcherRelayEncoder.swift`
 - Create: `ios/OpenPocketCine/WatcherRelayHost.swift`
 - Modify: `ios/OpenPocketCine/HevcDecoder.swift` — `onIdentityFrame: ((CVPixelBuffer) -> Void)?` called from `handleDecodedFrame` with the raw buffer **and** after extra-mirror is committed for present; host applies extra-mirror via CI X-flip when `presentedPictureFlip` is true before encode.
@@ -208,6 +218,7 @@ Lease: empty watcherID park releases immediately. Matching watcherID within 20 s
 - Modify: `ios/project.yml` — Local Network string: "OpenPocketCine talks to your camera over its own Wi-Fi and can share the live picture with nearby OpenPocketCine phones."
 
 **Host API:**
+
 ```swift
 @MainActor
 final class WatcherRelayHost {
@@ -235,6 +246,7 @@ Join: first message from peer must be hello; run `WatcherRelayJoin.hostAccepts`;
 ### Task 5: Browser, client, watcher live view
 
 **Files:**
+
 - Create: `ios/OpenPocketCine/WatcherRelayBrowser.swift`
 - Create: `ios/OpenPocketCine/WatcherRelayClient.swift`
 - Create: `ios/OpenPocketCine/WatcherLiveView.swift`
@@ -253,6 +265,7 @@ Watcher live view: reuse `HevcDecoder` + `CIFeedView` + local assist. HUD from `
 ### Task 6: Sharing chrome, prefs, control dispatch
 
 **Files:**
+
 - Modify: `ios/OpenPocketCine/LiveAssists.swift` OperatorPrefs
 - Create: `ios/OpenPocketCine/WatcherRelayKeychain.swift`
 - Modify: `ios/OpenPocketCine/SettingsRootView.swift`
@@ -265,6 +278,7 @@ Watcher live view: reuse `HevcDecoder` + `CIFeedView` + local assist. HUD from `
 Prefs: `shareThisFeed` (bool, default false), `controlRequests` (bool, default true), `broadcastPriority` (ceilingIndex 0...3, default 0). Host passcode Keychain account `watcher-relay-passcode`. Remembered watcher codes Keychain service `watcher-relay-codes` keyed by host Bonjour name.
 
 Copy (operator-facing, no sister apps):
+
 - shareThisFeed: "This phone re-serves the live picture. Other phones do not join the camera Wi-Fi."
 - watcherPasscode: "Watchers enter this once. Leave empty for an open feed."
 - controlRequests: "A watcher can ask to record, focus, and change exposure. You grant or deny on this phone."

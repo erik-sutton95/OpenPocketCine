@@ -18,7 +18,7 @@ Nano uses the same DJI `00 00 01 ff` marker and fragment layout; SPS `67 64 00 1
 
 The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 9004**, carried as datalink **pktType `0x02`** packets. It is *not* on a separate port or protocol.
 
-That media is **unicast** to one client 5-tuple: camera `192.168.2.1:9004` → the phone's camera DHCP IPv4 and an ephemeral local port. The body does not multicast or broadcast HEVC/AVC, and a second phone on the SoftAP does not get a copy. Operator Setup → Sharing stays parked. A watcher feed would be a phone-side relay on another interface, not camera multicast.
+That media is **unicast** to one client 5-tuple: camera `192.168.2.1:9004` → the phone's camera DHCP IPv4 and an ephemeral local port. The body does not multicast or broadcast HEVC/AVC, and a second phone on the SoftAP does not get a copy. A second screen is a **phone-side relay**: the operator iPhone re-encodes the live picture and advertises Bonjour `_opc-mon._tcp` (Operator Setup → Sharing). Other OpenPocketCine iPhones watch; they do not join camera Wi-Fi.
 
 ## Enable
 

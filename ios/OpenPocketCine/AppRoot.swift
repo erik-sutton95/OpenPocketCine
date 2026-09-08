@@ -1,3 +1,4 @@
+import CoreVideo
 import Observation
 import OpenPocketViewCore
 import SwiftUI
@@ -93,6 +94,23 @@ final class AppModel {
     var frameioConnecting = false
     var frameioUser: FrameioUser?
     var delivery = MediaDeliveryCoordinator()
+    var relayHost = WatcherRelayHost()
+    var relayBrowser = WatcherRelayBrowser()
+    var relayClient = WatcherRelayClient()
+    var isWatchingFeed = false
+    var showsWatcherBrowse = false
+    var shareThisFeed: Bool = OperatorPrefs.shareThisFeed
+    var sharePasscode: String = WatcherRelayKeychain.hostPasscode
+    var controlRequestsAllowed: Bool = OperatorPrefs.controlRequests {
+        didSet { OperatorPrefs.controlRequests = controlRequestsAllowed }
+    }
+    var broadcastPriority: Int = OperatorPrefs.broadcastPriority {
+        didSet {
+            OperatorPrefs.broadcastPriority = broadcastPriority
+            relayHost.setCeiling(broadcastPriority)
+        }
+    }
+    var watcherRecordConfirm = false
     var internetHopActive = false
     @ObservationIgnored private var internetHopSSID: String?
     @ObservationIgnored private var liveChromeArmTask: Task<Void, Never>?
@@ -249,6 +267,131 @@ final class AppModel {
     }
 
     /// Connect shows the monitor — never leftover Operator Setup, Media, or Edit view.
+    func setShareThisFeed(_ on: Bool) {
+        shareThisFeed = on
+        OperatorPrefs.shareThisFeed = on
+        if on {
+            startRelayHost()
+        } else {
+            relayHost.stop()
+            session.decoder.onIdentityFrame = nil
+        }
+    }
+
+    func startRelayHost() {
+        guard isLive, shareThisFeed else { return }
+        WatcherRelayKeychain.hostPasscode = sharePasscode
+        let name = UIDevice.current.name
+        let camera = session.connectedCamera?.name ?? ""
+        relayHost.start(
+            hostName: name,
+            cameraName: camera,
+            passcode: sharePasscode,
+            ceilingIndex: broadcastPriority,
+            allowsControl: controlRequestsAllowed,
+            includePeerToPeer: WiFiJoiner.isCameraPathReady())
+        if relayHost.encoderFailed {
+            shareThisFeed = false
+            OperatorPrefs.shareThisFeed = false
+            session.controlNote = "Sharing could not start"
+            return
+        }
+        session.decoder.onIdentityFrame = { [weak self] buffer in
+            Task { @MainActor in
+                self?.ingestRelayFrame(buffer)
+            }
+        }
+    }
+
+    private func ingestRelayFrame(_ buffer: CVPixelBuffer) {
+        guard shareThisFeed, isLive else { return }
+        let s = session.status
+        let state = WatcherRelayState(
+            isRecording: s.isRecording,
+            format: s.videoResolution?.label ?? "",
+            color: s.colorMode?.label ?? "",
+            zoom: CamFov.displayLabel(factor: session.zoomReadout),
+            liveFPS: session.liveFPS,
+            batteryPercent: s.batteryPercent,
+            cameraName: session.connectedCamera?.name ?? "",
+            iso: s.isoIndex?.label ?? "\(s.iso)",
+            shutter: s.shutterDenom > 0 ? "1/\(s.shutterDenom)" : "",
+            allowsControlRequests: controlRequestsAllowed)
+        relayHost.ingest(
+            identity: buffer,
+            extraMirrored: session.decoder.presentedPictureFlip ?? false,
+            state: state)
+    }
+
+    func openWatcherBrowse() {
+        showsWatcherBrowse = true
+        startWatcherBrowse()
+    }
+
+    func startWatcherBrowse() {
+        guard !isLive else { return }
+        relayBrowser.start(includePeerToPeer: true)
+    }
+
+    func joinWatcher(_ host: WatcherRelayDiscovery) {
+        let code = WatcherRelayKeychain.rememberedPasscode(forHost: host.name)
+        relayClient.join(
+            endpoint: host.endpoint,
+            hostName: host.name,
+            passcode: code,
+            watcherID: WatcherRelayKeychain.installID,
+            deviceName: UIDevice.current.name)
+        isWatchingFeed = true
+        showsWatcherBrowse = false
+        homePanel = nil
+    }
+
+    func retryWatcherPasscode(_ code: String) {
+        WatcherRelayKeychain.rememberPasscode(code, forHost: relayClient.hostTitle)
+        relayClient.retryPasscode(code)
+    }
+
+    func stopWatching() {
+        relayClient.leave()
+        isWatchingFeed = false
+        showsWatcherBrowse = false
+        relayBrowser.stop()
+    }
+
+    func handleWatcherRelayCommand(_ command: WatcherRelayCommand, from watcherID: String?) {
+        guard let allowed = relayHost.applyCommand(command, from: watcherID) else { return }
+        switch allowed {
+        case .toggleRecording:
+            if recordConfirmationEnabled {
+                watcherRecordConfirm = true
+            } else {
+                session.pressShutter()
+            }
+        case .tapFocus(let x, let y, let w, let h):
+            let nx = w > 0 ? Double(x) / Double(w) : 0.5
+            let ny = h > 0 ? Double(y) / Double(h) : 0.5
+            session.markFocus(at: CGPoint(x: nx, y: ny))
+        case .setISO(let raw):
+            if let idx = IsoIndex(rawValue: UInt8(clamping: raw)) {
+                session.setISO(idx)
+            }
+        case .setShutterDenom(let denom):
+            session.setShutterDenom(denom)
+        case .setWhiteBalance(let mode, let kelvin, let tint):
+            if mode == 0 {
+                session.setWhiteBalanceAuto(tint: tint)
+            } else {
+                session.setWhiteBalanceCustom(kelvin: kelvin, tint: tint)
+            }
+        case .setColor(let raw):
+            if let mode = ColorMode(rawValue: UInt8(clamping: raw)) {
+                session.setColorMode(mode)
+            }
+        case .setZoom(let hundredths):
+            session.setZoom(Double(hundredths) / 100.0)
+        }
+    }
+
     func noteBecameLive() {
         homePanel = nil
         liveOperatorPanel = nil
@@ -263,6 +406,8 @@ final class AppModel {
             self?.liveChromeInteractive = true
         }
         persistConnectedCameraIfNeeded()
+        if shareThisFeed { startRelayHost() }
+        relayBrowser.stop()
     }
 
     /// A dropped link must not keep Operator Setup or Edit view around for the next connect.
@@ -274,6 +419,9 @@ final class AppModel {
         chromeEditorMode = nil
         chromeEditorReturnMode = nil
         captureSheet = nil
+        relayHost.stop()
+        session.decoder.onIdentityFrame = nil
+        watcherRecordConfirm = false
     }
 
     func persistConnectedCameraIfNeeded() {
@@ -340,7 +488,11 @@ struct AppRoot: View {
     var body: some View {
         ZStack {
             ZCBackground()
-            if model.isLive {
+            if model.isWatchingFeed, model.relayClient.status == .live {
+                WatcherLiveView()
+                    .environment(model)
+                    .transition(.opacity)
+            } else if model.isLive {
                 LiveViewScreen()
                     .environment(model)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -356,11 +508,21 @@ struct AppRoot: View {
                     .zIndex(100)
             }
 
-            if model.homePanel != nil, !model.isLive {
+            if model.homePanel != nil, !model.isLive, !model.isWatchingFeed {
                 AppPanelHost()
                     .environment(model)
                     .transition(.opacity)
                     .zIndex(80)
+            }
+
+            if model.showsWatcherBrowse, !model.isLive {
+                ZCBackground()
+                    .ignoresSafeArea()
+                    .overlay {
+                        WatcherBrowseView()
+                            .environment(model)
+                    }
+                    .zIndex(90)
             }
         }
         .environment(model)
@@ -385,12 +547,46 @@ struct AppRoot: View {
                 model.showsLaunchSplash = false
             }
         }
+        .onChange(of: model.gimbalAnalogHeld) { _, held in
+            if held { model.relayHost.reclaimControl() }
+        }
         .onChange(of: model.isLive) { _, live in
             if live {
                 model.noteBecameLive()
             } else {
                 model.noteLeftLive()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .opcWatcherRelayCommand)) { note in
+            let command = note.userInfo?["command"] as? WatcherRelayCommand
+            let id = note.userInfo?["watcherID"] as? String
+            if let command {
+                model.handleWatcherRelayCommand(command, from: id)
+            }
+        }
+        .confirmationDialog(
+            model.session.status.isRecording ? "Stop recording?" : "Start recording?",
+            isPresented: Bindable(model).watcherRecordConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(
+                model.session.status.isRecording ? "Stop" : "Start",
+                role: model.session.status.isRecording ? .destructive : nil
+            ) {
+                model.session.pressShutter()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Allow \(model.relayHost.pendingControlRequest?.name ?? "a watcher") to control the camera?",
+            isPresented: Binding(
+                get: { model.relayHost.pendingControlRequest != nil },
+                set: { if !$0 { model.relayHost.denyControl() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Grant") { model.relayHost.grantControl() }
+            Button("Deny", role: .cancel) { model.relayHost.denyControl() }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

@@ -67,7 +67,9 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
 
 - Long-press View Assist → options + help.
 - Operator Setup: seven tabs (Link, Sharing, View Assist, Controls, Display,
-  Storage, System).
+  Storage, System). iOS Sharing: Share this feed, optional passcode, control
+  requests, broadcast priority. Watch a feed from home. Android Sharing stays
+  Coming soon.
 - TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
 - Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a

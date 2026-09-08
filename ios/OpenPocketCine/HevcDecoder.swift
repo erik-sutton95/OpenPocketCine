@@ -93,12 +93,14 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// Decoded identity buffer before LUT/PEAK. Watcher-relay encode tap.
+    nonisolated(unsafe) var onIdentityFrame: ((CVPixelBuffer) -> Void)?
     /// View-space X flip applied on the host view at present time (not SwiftUI).
     var poseViewFlip = false
     var assistMirror = false
     /// Set by `VideoView` so MIRROR assist commits in the same tick as enqueue.
     var applyPictureMirror: ((Bool) -> Void)?
-    private var presentedPictureFlip: Bool?
+    private(set) var presentedPictureFlip: Bool?
     /// Holds the last picture across extra-mirror so the current frame is not X-flipped in place.
     private var extraMirrorHold = ExtraMirrorHold()
     /// First time VT takes HEVC this session. Mid-GOP P-frames cannot start a
@@ -415,6 +417,7 @@ final class HevcDecoder {
         effects: LiveImageEffects? = nil,
         transfer: MonitorTransfer? = nil
     ) {
+        onIdentityFrame?(imageBuffer)
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
         assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: 0) {
