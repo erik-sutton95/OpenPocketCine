@@ -1,17 +1,19 @@
 New and changed
 
-- Share this feed in Operator Setup → Sharing sends the live picture to nearby OpenPocketCine iPhones and iPads. Watchers do not join camera Wi-Fi. Set an optional passcode and allow control requests.
+- Share this feed in Operator Setup → Sharing sends the live picture to OpenPocketCine iPhones and iPads on the same camera Wi-Fi. Show Wi-Fi code on the host, scan it with Camera on the watcher, accept Join Network, then return to Watch a feed. Only the host pairs with the camera in the app.
+- Watchers now have local view assists and scopes, camera readings, REC tally, and Clean view. Request control to record, focus, or change supported ISO, shutter, and zoom settings. Release gives control back.
 - Broadcast priority sets the quality ceiling. Sharing can lower its bitrate when the host picture slows.
 
 Fixes
 
-- Joining and camera readouts no longer crowd out the shared picture.
-- Sharing limits pending video work to prevent growing delay. A slow watcher waits for a fresh keyframe while other watchers continue.
-- Leaving and rejoining ignores callbacks from the previous connection.
+- Interrupted feeds keep the last picture and retry three times. A stopped feed leaves its error and Choose a feed visible instead of opening camera pairing.
+- Passcode refusals arrive before the connection closes, so the watcher can enter the correct code.
+- A slow watcher waits for a fresh keyframe while other watchers continue. Local assists and mirror stay selected as frames arrive.
 
 What to test
 
+- Start the watcher on a different Wi-Fi. Follow Show Wi-Fi code and join the camera Wi-Fi before finding the host. Try a wrong watcher passcode, then the correct one.
 - Note host FPS with sharing off. Turn sharing on, join one watcher, then two or more. Pan and record for five minutes with LUT and waveform on. Check both host and watchers for stutter or growing delay.
-- Move one watcher out of range, then return it. The host and other watchers should keep moving; the returning picture should resume.
-- Stop and restart sharing. Leave and rejoin a feed. Try a wrong passcode, then the correct one. Request control, grant it, and reclaim it on the host.
-- Try each Broadcast priority setting with several watchers. If the picture slows, share diagnostics and report device models, watcher count, and whether the host or watchers slowed first.
+- Move one watcher out of range, then return it. The host and other watchers should keep moving; the returning picture should reconnect. Leave during retries to cancel them.
+- Stop and restart sharing. Leave and rejoin. Request control, grant it, test focus at the picture edges with mirror on and off, then reclaim control on the host. The watcher must stop sending camera commands after losing control.
+- Try Clean view and assists in portrait and landscape. Report device models, watcher count, and whether the host or watchers slowed first. Multiple-watcher capacity still needs device testing.
