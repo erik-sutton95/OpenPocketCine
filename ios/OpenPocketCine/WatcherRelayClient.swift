@@ -40,6 +40,7 @@ final class WatcherRelayClient {
         self.deviceName = deviceName
         hostTitle = hostName
         status = .connecting
+        ControlLiveLog.line("relay watcher: joining local network feed")
         decoder.attach(sampleBus: samples, effects: { LiveImageEffects() }, transfer: { nil })
         let params = WatcherRelayNetwork.parameters()
         let conn = NWConnection(to: endpoint, using: params)
@@ -77,7 +78,7 @@ final class WatcherRelayClient {
         conn = nil
         reader = nil
         decoder.reset()
-        if status != .needsPasscode { status = .idle }
+        status = .idle
     }
 
     func requestControl() {
@@ -150,10 +151,12 @@ final class WatcherRelayClient {
                 }
             }
             status = .live
+            ControlLiveLog.line("relay watcher: host accepted join")
         case .joinDenied:
             let denied = try JSONDecoder().decode(WatcherRelayJoinDenied.self, from: msg.payload)
             if denied.passcodeRequired {
                 status = .needsPasscode
+                ControlLiveLog.line("relay watcher: passcode required")
             } else {
                 fail(denied.reason)
             }
@@ -170,5 +173,6 @@ final class WatcherRelayClient {
         conn?.cancel()
         conn = nil
         status = .failed(message)
+        ControlLiveLog.line("relay watcher: connection failed — \(message)")
     }
 }

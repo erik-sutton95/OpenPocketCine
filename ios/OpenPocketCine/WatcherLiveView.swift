@@ -2,7 +2,7 @@ import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
-/// Watcher monitor. Local assist only. No BLE, no SoftAP.
+/// Watcher monitor on shared camera Wi-Fi. Local assist only; no camera session.
 struct WatcherLiveView: View {
     @Environment(AppModel.self) private var model
 
@@ -42,7 +42,9 @@ struct WatcherLiveView: View {
                         .font(LiveType.ui(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))
                     Spacer()
-                    if model.relayClient.state.allowsControlRequests {
+                    if model.relayClient.status == .live,
+                        model.relayClient.state.allowsControlRequests
+                    {
                         if model.relayClient.token.holderIsRecipient {
                             Button("Release") { model.relayClient.releaseControl() }
                                 .font(LiveType.ui(size: 14, weight: .semibold))
@@ -61,17 +63,26 @@ struct WatcherLiveView: View {
             }
 
             if case .failed(let message) = model.relayClient.status {
-                Text(message)
-                    .font(LiveType.ui(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding()
-                    .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+                VStack(spacing: 16) {
+                    Text(message)
+                        .font(LiveType.ui(size: 15, weight: .medium))
+                        .multilineTextAlignment(.center)
+                    Button("Choose a feed") {
+                        model.stopWatching()
+                        model.openWatcherBrowse()
+                    }
+                    .buttonStyle(StartupFilledButtonStyle())
+                }
+                .foregroundStyle(.white)
+                .padding()
+                .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
             }
         }
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 0).onEnded { value in
-                guard model.relayClient.token.holderIsRecipient else { return }
+                guard model.relayClient.status == .live, model.relayClient.token.holderIsRecipient
+                else { return }
                 let size = UIScreen.main.bounds.size
                 let x = Int((value.location.x / max(size.width, 1)) * 1000)
                 let y = Int((value.location.y / max(size.height, 1)) * 1000)

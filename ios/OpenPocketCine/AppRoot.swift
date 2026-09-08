@@ -99,6 +99,17 @@ final class AppModel {
     var relayBrowser = WatcherRelayBrowser()
     var relayClient = WatcherRelayClient()
     var isWatchingFeed = false
+    /// Once accepted, transport failure belongs on the watcher screen until explicit Leave.
+    var showsWatcherMonitor: Bool { isWatchingFeed }
+
+    func noteWatcherStatusChanged(_ status: WatcherRelayClientStatus) {
+        if status == .live, showsWatcherBrowse {
+            isWatchingFeed = true
+            showsWatcherBrowse = false
+            homePanel = nil
+        }
+    }
+
     var showsWatcherBrowse = false
     var shareThisFeed: Bool = OperatorPrefs.shareThisFeed
     var sharePasscode: String = WatcherRelayKeychain.hostPasscode
@@ -500,7 +511,7 @@ struct AppRoot: View {
     var body: some View {
         ZStack {
             ZCBackground()
-            if model.isWatchingFeed, model.relayClient.status == .live {
+            if model.showsWatcherMonitor {
                 WatcherLiveView()
                     .environment(model)
                     .transition(.opacity)
@@ -551,11 +562,7 @@ struct AppRoot: View {
             UIApplication.shared.isIdleTimerDisabled = model.keepScreenAwake
         }
         .onChange(of: model.relayClient.status) { _, status in
-            if status == .live, model.showsWatcherBrowse {
-                model.isWatchingFeed = true
-                model.showsWatcherBrowse = false
-                model.homePanel = nil
-            }
+            model.noteWatcherStatusChanged(status)
         }
         .onChange(of: model.keepScreenAwake) { _, awake in
             UIApplication.shared.isIdleTimerDisabled = awake

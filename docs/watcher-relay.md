@@ -24,7 +24,11 @@ connections: `includePeerToPeer = false`, cellular prohibited, interactive video
 and TCP no-delay. There is no peer-to-peer discovery or streaming fallback. A
 watcher on another network sees join guidance rather than an off-network host.
 The join screen remains visible through connecting, passcode entry, and errors;
-the live screen opens only after the host accepts the join.
+the live screen opens only after the host accepts the join. After acceptance,
+connection failures keep that watcher screen visible with the error, Leave, and
+Choose a feed. Transport status never routes a watcher to camera pairing.
+Join acceptance, passcode requests, and failures are recorded in the redacted
+device journal without credentials.
 
 The QR payload contains credentials and is generated only for an explicitly
 opened sheet, using credentials matched to the current camera and joined SSID.
