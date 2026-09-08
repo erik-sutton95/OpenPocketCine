@@ -432,11 +432,9 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(decoder.hasFormat)
         XCTAssertFalse(decoder.videoToolboxActive, "clean feed stays on the HEVC layer")
 
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline, decoder.lastPresentedAt == nil {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
+        // Seed a real layer presentation. The clean path does not run VT;
+        // injecting a decoded callback alone must not manufacture a present.
+        XCTAssertTrue(decoder.enqueueDecodedFrame(ScopeTestBuffers.makeEdgeBuffer()))
         XCTAssertNotNil(decoder.lastPresentedAt)
 
         var lut = LiveImageEffects()

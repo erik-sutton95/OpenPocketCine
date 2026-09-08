@@ -11,6 +11,29 @@ import XCTest
 /// tests pin the plumbing, throttle, layer handoff, and effect compositing.
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
+    func testFailedPresentationDoesNotEmitPictureHeartbeat() async throws {
+        let bus = LiveFrameSampleBus()
+        let decoder = HevcDecoder()
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        decoder.sampleBus = bus
+        var heartbeats = 0
+        decoder.onPresentedFrame = { heartbeats += 1 }
+        var buffer: CVPixelBuffer?
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault, 1, 1, kCVPixelFormatType_32BGRA, nil, &buffer),
+            kCVReturnSuccess)
+        decoder.handleDecodedFrame(try XCTUnwrap(buffer))
+        let deadline = Date().addingTimeInterval(2)
+        while bus.decodedFrames == 0, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(bus.decodedFrames, 1, "Exercise the real assist completion")
+        XCTAssertEqual(heartbeats, 0, "A rejected display buffer must not hide a picture stall")
+        XCTAssertNil(decoder.lastPresentedAt)
+    }
+
     func testHandleDecodedFramePublishesScopes() async {
         let bus = LiveFrameSampleBus()
         let decoder = HevcDecoder()

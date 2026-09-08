@@ -23,6 +23,14 @@ final class AppModel {
     var assist = LiveAssistState()
     /// Decoded-frame scopes. Filled by `HevcDecoder.handleDecodedFrame` — not camera DUML.
     var frameSamples = LiveFrameSampleBus()
+    /// Monitor tools follow the displayed source; watcher scopes must never read the camera bus.
+    var monitorSamples: LiveFrameSampleBus { isWatchingFeed ? relayClient.samples : frameSamples }
+    var monitorColorMode: ColorMode? {
+        isWatchingFeed ? relayClient.colorMode : session.status.colorMode
+    }
+    var monitorTransfer: MonitorTransfer? {
+        isWatchingFeed ? relayClient.transfer : session.status.monitorTransfer
+    }
     var homePanel: AppPanel?
     var captureSheet: CaptureSheet?
     var keepScreenAwake: Bool = OperatorPrefs.keepScreenAwake {
@@ -103,6 +111,11 @@ final class AppModel {
     var showsWatcherMonitor: Bool { isWatchingFeed }
 
     func noteWatcherStatusChanged(_ status: WatcherRelayClientStatus) {
+        if status == .needsPasscode, isWatchingFeed {
+            isWatchingFeed = false
+            showsWatcherBrowse = true
+            startWatcherBrowse()
+        }
         if status == .live, showsWatcherBrowse {
             isWatchingFeed = true
             showsWatcherBrowse = false
@@ -342,12 +355,22 @@ final class AppModel {
             cameraName: session.connectedCamera?.name ?? "",
             iso: s.isoIndex?.label ?? "\(s.iso)",
             shutter: s.shutterDenom > 0 ? "1/\(s.shutterDenom)" : "",
-            allowsControlRequests: controlRequestsAllowed)
+            allowsControlRequests: controlRequestsAllowed,
+            controlOptions: .init(
+                isoIndices: s.availableIsoIndices.map { Int($0.rawValue) },
+                shutterDenominators: s.availableShutterDenoms,
+                zoomHundredths: session.zoomStops.map { Int(($0 * 100).rounded()) }),
+            cameraModel: session.connectedCamera?.model.name,
+            isNano: session.bodyFamily == .nano)
         relayHost.update(state: state)
     }
 
     func openWatcherBrowse() {
         showsWatcherBrowse = true
+        relayClient.resolveEndpoint = { [weak self] name in
+            self?.relayBrowser.hosts.first { $0.name == name }?.endpoint
+        }
+        relayClient.onReconnect = { [weak self] in self?.startWatcherBrowse() }
         startWatcherBrowse()
     }
 

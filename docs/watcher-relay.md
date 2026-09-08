@@ -36,6 +36,42 @@ It is never advertised in Bonjour, logged, or saved as an image. The sheet clear
 its image when backgrounded, disconnected, or the joined SSID changes. Payload
 escaping follows the [Wi-Fi QR format](https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11).
 
+## Watcher monitor and recovery
+
+The iOS watcher adapts OpenZCine's on-picture request/release controls and visible
+failure handling using Pocket's own monitor components. It shows camera telemetry,
+REC tally, presentation FPS, and clean view. LUT, peaking, false colour, zebra,
+scopes, guides, grid, crosshair, and mirror operate locally on the received source;
+they do not alter the host's picture. Audio meters are hidden because the relay
+does not carry audio. Scope samples and colour transfer come from the watcher
+decoder, not an idle local camera session.
+
+After the host grants control, the watcher can record, tap to focus, and select
+host-advertised ISO, shutter, and zoom choices. Focus coordinates use the fitted
+picture rectangle and compensate for mirror; letterbox taps do nothing. Commands
+require the live control token at send time as well as host-side authorization.
+Loss of connection clears the watcher's grant and pending recording confirmation.
+
+A transport interruption holds the last picture and retries three times with
+1/2/4-second backoff. Each join has a 15-second deadline. Accepted connections
+have separate five-second telemetry and picture silence deadlines, with ten
+seconds for the first picture. Telemetry cannot hide a stalled decoder. Only ten
+seconds of continuing picture delivery resets the retry budget. Leave cancels
+pending retries. Reconnection resolves the service again because a restarted
+host can listen on a different port. It flushes decoder references and waits for
+the relay encoder's keyframe; it never enables camera live view.
+
+Frame metadata optionally carries the host's monotonic encode time. The watcher
+compares growth against its own best delivery offset; over 750 ms of added queue
+delay triggers bounded recovery. This needs no synchronized clocks and is not an
+absolute latency measurement. Older peers without this field retain silence
+recovery. New camera/control metadata fields are optional for wire compatibility.
+
+The host flushes passcode refusals and explicit stop reasons before closing the
+socket, with a three-second close bound. An unexplained EOF is a recoverable
+interruption, not evidence that the operator stopped sharing. Exhausted retries
+leave the error and Choose a feed visible. Passcode refusals reopen the join form.
+
 ## Ownership and bounds
 
 - The decoder calls the relay sink directly. A lock admits at most two retained
@@ -111,6 +147,11 @@ following stop, and bounded state traffic. A real VideoToolbox encode checks the
 output callback and standalone HEVC parameter sets. Core tests cover admission
 and keyframe cooldown. Shell regressions also cover fragmented loopback reads,
 camera-driven bitrate reduction, orientation capture, and control reclaim.
+iOS real-socket tests cover passcode refusal/retry, explicit shutdown, a restarted
+host on a fresh endpoint, cancellation on Leave, and preservation of local assists
+across incoming frames. Core tests bound retries, distinguish picture stalls from
+telemetry, and test clock-independent backlog detection and fitted focus mapping.
+Rendered iPhone portrait/landscape and iPad landscape fixtures check monitor chrome.
 These are load regressions, not proof of radio capacity.
 
 Physical acceptance (pending until measured on the changed build):

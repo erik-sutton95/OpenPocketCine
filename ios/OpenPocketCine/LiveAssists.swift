@@ -1194,7 +1194,7 @@ struct FeedAlignedAssists: View {
                     HStack(alignment: .bottom, spacing: 8) {
                         extraScopes(assist)
                         Spacer(minLength: 0)
-                        if assist.isVisible(.audioMeters) {
+                        if !model.isWatchingFeed, assist.isVisible(.audioMeters) {
                             AudioAssist.meter(
                                 levels: model.session.status.audioMeters,
                                 sensitivity: model.session.status.audioChannel?.label
@@ -1215,10 +1215,10 @@ struct FeedAlignedAssists: View {
             if assist.isVisible(.falseColor), assist.falseColorReference {
                 FalseColorLegend(
                     scale: assist.falseColorScale,
-                    colorMode: model.session.status.colorMode ?? .normal
+                    colorMode: model.monitorColorMode ?? .normal
                 )
             }
-            if assist.evMeter {
+            if !model.isWatchingFeed, assist.evMeter {
                 EVMeterOverlay()
             }
         }

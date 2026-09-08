@@ -41,6 +41,13 @@ final class WatcherRelayTransport: @unchecked Sendable {
     }
 
     private var listener: NWListener?
+    /// Transport-queue snapshot used by local integration checks.
+    var listeningPort: NWEndpoint.Port? {
+        guard let listener, case .ready = listener.state, let port = listener.port,
+            port.rawValue != 0
+        else { return nil }
+        return port
+    }
     var peers: [ObjectIdentifier: Peer] = [:]
     private let encoder = WatcherRelayEncoder()
     private var bitrate = WatcherRelayBitrate()
@@ -99,12 +106,18 @@ final class WatcherRelayTransport: @unchecked Sendable {
         }
     }
 
-    func stop() {
+    func stop(reason: String? = nil) {
         active = false
         admission.stop()
         listener?.cancel()
         listener = nil
-        for peer in peers.values { peer.conn.cancel() }
+        for peer in peers.values {
+            if let reason {
+                closeAfterSending(.init(reason: reason, passcodeRequired: false), to: peer)
+            } else {
+                peer.conn.cancel()
+            }
+        }
         peers.removeAll()
         watcherCount = 0
         pendingControlRequest = nil
@@ -157,7 +170,10 @@ final class WatcherRelayTransport: @unchecked Sendable {
                     guard self.active else { return }
                     guard !failed else {
                         self.encoderFailed = true
-                        self.stop()
+                        self.stop(
+                            reason:
+                                "The host could not encode the shared picture. Restart sharing on the host."
+                        )
                         self.onChange?()
                         return
                     }
@@ -279,14 +295,14 @@ final class WatcherRelayTransport: @unchecked Sendable {
     }
 
     func onMessage(peer: Peer, msg: WatcherRelayFraming.Decoded) throws {
+        guard !peer.closing else { return }
         switch msg.kind {
         case .hello:
             guard !peer.authorized else { return }
             let hello = try JSONDecoder().decode(WatcherRelayHello.self, from: msg.payload)
             switch WatcherRelayJoin.hostAccepts(hello: hello, requiredPasscode: passcode) {
             case .failure(let denied):
-                send(denied, kind: .joinDenied, on: peer)
-                drop(peer)
+                closeAfterSending(denied, to: peer)
             case .success:
                 peer.authorized = true
                 peer.name = hello.hostName
@@ -326,7 +342,7 @@ final class WatcherRelayTransport: @unchecked Sendable {
     ) {
         let meta = WatcherRelayFrameMetadata(
             isKeyframe: isKey, parameterSets: sets, isRecording: recording,
-            extraMirrored: mirrored)
+            extraMirrored: mirrored, encodedAt: now())
         guard let payload = try? WatcherRelayFrameBlob.encode(metadata: meta, hevc: hevc) else {
             return
         }
@@ -383,6 +399,40 @@ final class WatcherRelayTransport: @unchecked Sendable {
         }
     }
 
+    /// Flush refusal/stop reasons before closing, as in the OpenZCine relay.
+    /// A dead peer cannot retain the connection forever waiting for a send completion.
+    private func closeAfterSending(_ denial: WatcherRelayJoinDenied, to peer: Peer) {
+        guard !peer.closing else { return }
+        peer.closing = true
+        guard let payload = try? JSONEncoder().encode(denial) else {
+            drop(peer)
+            return
+        }
+        #if os(iOS)
+            ControlLiveLog.line("relay host: closing peer — \(denial.reason)")
+        #endif
+        let finish = { [weak self, weak peer] in
+            guard let self, let peer else { return }
+            self.queue.async {
+                guard self.peers[ObjectIdentifier(peer)] === peer else {
+                    peer.conn.cancel()
+                    return
+                }
+                self.drop(peer)
+            }
+        }
+        // The completion retains the connection even when a whole-host stop removes peers.
+        let connection = peer.conn
+        sendWire(WatcherRelayFraming.encode(kind: .joinDenied, payload: payload), connection) {
+            connection.cancel()
+            finish()
+        }
+        queue.asyncAfter(deadline: .now() + 3) { [weak connection] in
+            connection?.cancel()
+            finish()
+        }
+    }
+
     func drop(_ peer: Peer) {
         peer.conn.cancel()
         if lease.shouldProxy(commandFrom: peer.watcherID) {
@@ -402,6 +452,7 @@ final class WatcherRelayTransport: @unchecked Sendable {
         let conn: NWConnection
         var buffer = Data()
         var authorized = false
+        var closing = false
         var needsKeyframe = true
         var inFlight = 0
         var stateInFlight = false
@@ -483,7 +534,9 @@ final class WatcherRelayHost {
     }
 
     func stop() {
-        if let transport { transport.queue.async { transport.stop() } }
+        if let transport {
+            transport.queue.async { transport.stop(reason: "The host ended this shared feed.") }
+        }
         transport = nil
         holderWatcherID = nil
         watcherCount = 0

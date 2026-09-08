@@ -34,6 +34,10 @@ final class WatcherNavigationTests: XCTestCase {
             "Keep the watcher error and Leave controls visible; never reveal the camera pairing wizard"
         )
 
+        model.relayClient.status = .needsPasscode
+        model.noteWatcherStatusChanged(.needsPasscode)
+        XCTAssertTrue(model.showsWatcherBrowse)
+        XCTAssertFalse(model.showsWatcherMonitor)
         model.stopWatching()
         XCTAssertFalse(model.showsWatcherMonitor)
     }

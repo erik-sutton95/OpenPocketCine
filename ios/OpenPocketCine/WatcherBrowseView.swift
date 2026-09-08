@@ -38,6 +38,10 @@ struct WatcherBrowseView: View {
                     Text(message)
                         .font(LiveType.ui(size: 14, weight: .medium))
                         .foregroundStyle(LiveDesign.rec)
+                case .reconnecting(let attempt):
+                    Text("Reconnecting… \(attempt) of \(WatcherRelayRecovery.maximumRetries)")
+                        .font(LiveType.ui(size: 14, weight: .medium))
+                        .foregroundStyle(StartupColors.muted)
                 case .connecting:
                     Text("Joining…")
                         .font(LiveType.ui(size: 14, weight: .medium))
@@ -48,7 +52,8 @@ struct WatcherBrowseView: View {
 
                 if model.relayBrowser.hosts.isEmpty {
                     Text(
-                        "No shared feeds on this network. Check that both devices joined the same camera Wi-Fi and Share this feed is on. Allow Local Network if asked."
+                        model.relayBrowser.browseError
+                            ?? "No shared feeds on this network. Check that both devices joined the same camera Wi-Fi and Share this feed is on. Allow Local Network if asked."
                     )
                     .font(LiveType.ui(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(StartupColors.muted)

@@ -317,3 +317,41 @@ extension WatcherRelayLoadTests {
         XCTAssertEqual(mirrors, [false, true])
     }
 }
+
+extension WatcherRelayLoadTests {
+    func testJoinDenialFinishesSendingBeforeClosingConnection() throws {
+        var finishDenial: (() -> Void)?
+        var denial: WatcherRelayJoinDenied?
+        let host = WatcherRelayTransport(sendWire: { wire, _, completion in
+            if let message = try? WatcherRelayFraming.decode(from: wire),
+                message.kind == .joinDenied
+            {
+                denial = try? JSONDecoder().decode(
+                    WatcherRelayJoinDenied.self, from: message.payload)
+                finishDenial = completion
+            }
+        })
+        let peer = WatcherRelayTransport.Peer(
+            conn: NWConnection(host: "127.0.0.1", port: 9, using: .tcp))
+        try host.queue.sync {
+            host.start(
+                hostName: "Test host", cameraName: "Test camera", passcode: "example-only",
+                ceilingIndex: 3, allowsControl: false)
+            host.peers[ObjectIdentifier(peer)] = peer
+            let hello = try JSONEncoder().encode(WatcherRelayHello(hostName: "Test watcher"))
+            try host.onMessage(
+                peer: peer, msg: .init(kind: .hello, payload: hello, consumedBytes: 0))
+            XCTAssertTrue(denial?.passcodeRequired == true)
+            XCTAssertNotNil(
+                host.peers[ObjectIdentifier(peer)],
+                "Keep the connection until the denial write completes, so the watcher can show its passcode prompt"
+            )
+            XCTAssertFalse(peer.authorized)
+        }
+        try XCTUnwrap(finishDenial)()
+        host.queue.sync {
+            XCTAssertNil(host.peers[ObjectIdentifier(peer)])
+            host.stop()
+        }
+    }
+}

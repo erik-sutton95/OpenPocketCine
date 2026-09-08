@@ -32,6 +32,19 @@ public struct WatcherRelayJoinDenied: Codable, Equatable, Error, Sendable {
     }
 }
 
+/// Only choices advertised by the host are exposed to watcher controls.
+public struct WatcherRelayControlOptions: Codable, Equatable, Sendable {
+    public var isoIndices: [Int]
+    public var shutterDenominators: [Int]
+    public var zoomHundredths: [Int]
+    public init(isoIndices: [Int] = [], shutterDenominators: [Int] = [], zoomHundredths: [Int] = [])
+    {
+        self.isoIndices = isoIndices
+        self.shutterDenominators = shutterDenominators
+        self.zoomHundredths = zoomHundredths
+    }
+}
+
 public struct WatcherRelayState: Codable, Equatable, Sendable {
     public var isRecording: Bool
     public var format: String
@@ -43,6 +56,9 @@ public struct WatcherRelayState: Codable, Equatable, Sendable {
     public var iso: String
     public var shutter: String
     public var allowsControlRequests: Bool
+    public var controlOptions: WatcherRelayControlOptions?
+    public var cameraModel: String?
+    public var isNano: Bool?
 
     public init(
         isRecording: Bool = false,
@@ -54,7 +70,10 @@ public struct WatcherRelayState: Codable, Equatable, Sendable {
         cameraName: String = "",
         iso: String = "",
         shutter: String = "",
-        allowsControlRequests: Bool = true
+        allowsControlRequests: Bool = true,
+        controlOptions: WatcherRelayControlOptions? = nil,
+        cameraModel: String? = nil,
+        isNano: Bool? = nil
     ) {
         self.isRecording = isRecording
         self.format = format
@@ -66,6 +85,9 @@ public struct WatcherRelayState: Codable, Equatable, Sendable {
         self.iso = iso
         self.shutter = shutter
         self.allowsControlRequests = allowsControlRequests
+        self.controlOptions = controlOptions
+        self.cameraModel = cameraModel
+        self.isNano = isNano
     }
 }
 
@@ -75,19 +97,23 @@ public struct WatcherRelayFrameMetadata: Codable, Equatable, Sendable {
     public var parameterSets: [Data]?
     public var isRecording: Bool
     public var extraMirrored: Bool
+    /// Host monotonic clock at encoding output; optional for older senders.
+    public var encodedAt: TimeInterval?
 
     public init(
         codec: Int = WatcherRelayProtocol.hevcCodec,
         isKeyframe: Bool,
         parameterSets: [Data]? = nil,
         isRecording: Bool = false,
-        extraMirrored: Bool = false
+        extraMirrored: Bool = false,
+        encodedAt: TimeInterval? = nil
     ) {
         self.codec = codec
         self.isKeyframe = isKeyframe
         self.parameterSets = parameterSets
         self.isRecording = isRecording
         self.extraMirrored = extraMirrored
+        self.encodedAt = encodedAt
     }
 }
 

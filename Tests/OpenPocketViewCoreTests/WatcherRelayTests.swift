@@ -4,6 +4,20 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct WatcherRelayTests {
+    @Test func legacyMetadataOmitsNewWatcherFields() throws {
+        let stateJSON = Data(
+            #"{"isRecording":false,"format":"4K","color":"Normal","zoom":"1×","liveFPS":"25","batteryPercent":80,"cameraName":"Camera","iso":"400","shutter":"1/50","allowsControlRequests":true}"#
+                .utf8)
+        let state = try JSONDecoder().decode(WatcherRelayState.self, from: stateJSON)
+        #expect(state.controlOptions == nil)
+        #expect(state.cameraModel == nil)
+        #expect(state.isNano == nil)
+        let frameJSON = Data(
+            #"{"codec":1,"isKeyframe":true,"isRecording":false,"extraMirrored":false}"#.utf8)
+        let frame = try JSONDecoder().decode(WatcherRelayFrameMetadata.self, from: frameJSON)
+        #expect(frame.encodedAt == nil)
+    }
+
     @Test func serviceTypeFitsBonjourLimit() {
         let name = WatcherRelayProtocol.serviceType
         #expect(name.hasPrefix("_") && name.hasSuffix("._tcp"))

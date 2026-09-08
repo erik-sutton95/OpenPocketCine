@@ -15,6 +15,7 @@ struct WatcherRelayDiscovery: Identifiable, Equatable {
 @Observable
 final class WatcherRelayBrowser {
     var hosts: [WatcherRelayDiscovery] = []
+    var browseError: String?
     private var browser: NWBrowser?
 
     func start() {
@@ -23,9 +24,11 @@ final class WatcherRelayBrowser {
         let browser = NWBrowser(
             for: .bonjourWithTXTRecord(type: WatcherRelayProtocol.serviceType, domain: nil),
             using: params)
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
             Task { @MainActor in
-                self?.hosts = results.compactMap { result in
+                guard let self, let browser, self.browser === browser else { return }
+                self.browseError = nil
+                self.hosts = results.compactMap { result in
                     guard case .service(let name, _, _, _) = result.endpoint else { return nil }
                     var camera = ""
                     if case .bonjour(let txt) = result.metadata {
@@ -38,13 +41,24 @@ final class WatcherRelayBrowser {
                 .sorted { $0.name < $1.name }
             }
         }
-        browser.start(queue: .main)
+        browser.stateUpdateHandler = { [weak self, weak browser] state in
+            Task { @MainActor in
+                guard let self, let browser, self.browser === browser else { return }
+                if case .failed = state {
+                    self.hosts = []
+                    self.browseError =
+                        "Could not find shared feeds. Check Local Network permission and camera Wi-Fi, then tap Find shared feeds."
+                }
+            }
+        }
         self.browser = browser
+        browser.start(queue: .main)
     }
 
     func stop() {
         browser?.cancel()
         browser = nil
         hosts = []
+        browseError = nil
     }
 }

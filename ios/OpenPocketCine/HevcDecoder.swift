@@ -197,15 +197,18 @@ final class HevcDecoder {
         return error > presented
     }
 
+    /// Replacement Metal reports completion, not asynchronous bake admission.
+    var monitorPresentedAt: Date? {
+        if effects.replacesIdentityFeed, let feed = processedFeed, feed.hasPresentedFrame {
+            return feed.lastPresentedAt
+        }
+        return lastPresentedAt
+    }
+
     /// UDP may still be alive. This is a present hitch, not a recover enable.
     var isPresentFrozen: Bool {
-        let age: TimeInterval?
-        if effects.replacesIdentityFeed, let feed = processedFeed, feed.hasPresentedFrame {
-            age = feed.lastPresentedAt.map { Date().timeIntervalSince($0) }
-        } else {
-            age = lastPresentedAt.map { Date().timeIntervalSince($0) }
-        }
-        return FeedPresentPolicy.isFrozen(secondsSinceLastPresent: age)
+        FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: monitorPresentedAt.map { Date().timeIntervalSince($0) })
     }
 
     /// Last HEVC picture is still on the layer; release it only when a VT frame is in hand.
@@ -432,12 +435,11 @@ final class HevcDecoder {
             [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.applyAssistResult(result)
-                // Once per drained frame; the late scope-bundle callback must not double-count.
-                if result.shouldPresent {
-                    self.notePresentedFrame(sampleRate: true)
-                    self.sampleBus?.noteDecodedFrame()
-                }
+                let presented = self.applyAssistResult(result)
+                // Decoding and presentation are distinct: failed output must not keep
+                // watcher recovery or the camera's presentation health alive.
+                if result.shouldPresent { self.sampleBus?.noteDecodedFrame() }
+                if presented { self.notePresentedFrame(sampleRate: true) }
             }
         }
     }
@@ -775,7 +777,7 @@ final class HevcDecoder {
         }
     }
 
-    private func applyAssistResult(_ result: LiveAssistEngine.Result) {
+    private func applyAssistResult(_ result: LiveAssistEngine.Result) -> Bool {
         if let bundle = result.bundle {
             sampleBus?.publish(
                 source: result.source,
@@ -787,7 +789,8 @@ final class HevcDecoder {
             lastDecodedBuffer = result.source
             onSourceFrame?(result.source)
         }
-        if !result.shouldPresent { return }
+        if !result.shouldPresent { return false }
+        var presentedIdentity = false
 
         let replaceIdentity = effects.replacesIdentityFeed
         let metalOwnsPicture =
@@ -801,7 +804,7 @@ final class HevcDecoder {
         // went black while tracking still worked.
         if usesPixelBufferDisplay, !metalOwnsPicture {
             displayLayer.isHidden = false
-            _ = enqueueDecodedFrame(result.source, recoverOnFailure: false)
+            presentedIdentity = enqueueDecodedFrame(result.source, recoverOnFailure: false)
         } else if !replaceIdentity {
             displayLayer.isHidden = false
         }
@@ -811,11 +814,11 @@ final class HevcDecoder {
                 processedFeed?.setOverlayChrome(false)
                 processedFeed?.isHidden = true
             }
-            return
+            return presentedIdentity
         }
-        guard let feed = processedFeed else { return }
+        guard let feed = processedFeed else { return presentedIdentity }
         if metalOwnsPicture, !commitPictureFlipIfNeeded() {
-            return
+            return presentedIdentity
         }
 
         if result.overlayOnly, !replaceIdentity, !prefersPixelBufferDisplay {
@@ -827,7 +830,7 @@ final class HevcDecoder {
                 feed.setOverlayChrome(false)
                 feed.isHidden = true
             }
-            return
+            return presentedIdentity
         }
 
         if prefersPixelBufferDisplay, result.overlayOnly {
@@ -836,8 +839,9 @@ final class HevcDecoder {
                 || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
+                return true
             }
-            return
+            return presentedIdentity
         }
 
         if replaceIdentity {
@@ -846,8 +850,10 @@ final class HevcDecoder {
                 || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
+                return true
             }
         }
+        return presentedIdentity
     }
 
     private func buildFormatIfReady() {
@@ -1143,10 +1149,10 @@ final class HevcDecoder {
 
     /// Zero-copy present of a VT frame. Uncompressed — the layer must not start a second HEVC decoder.
     @discardableResult
-    private func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
+    func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
         -> Bool
     {
-        guard commitPictureFlipIfNeeded() else { return true }
+        guard commitPictureFlipIfNeeded() else { return false }
         guard Self.isPresentable(imageBuffer) else { return false }
         var format: CMVideoFormatDescription?
         guard
