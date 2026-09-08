@@ -117,7 +117,10 @@ public enum WatcherRelayFrameBlob: Sendable {
         let n = UInt32(meta.count)
         var out = Data(capacity: 4 + meta.count + hevc.count)
         out.append(contentsOf: [
-            UInt8(n >> 24), UInt8(n >> 16), UInt8(n >> 8), UInt8(n),
+            UInt8(truncatingIfNeeded: n >> 24),
+            UInt8(truncatingIfNeeded: n >> 16),
+            UInt8(truncatingIfNeeded: n >> 8),
+            UInt8(truncatingIfNeeded: n),
         ])
         out.append(meta)
         out.append(hevc)

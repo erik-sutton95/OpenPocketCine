@@ -8,7 +8,10 @@ public enum WatcherRelayFraming: Sendable {
         let declared = UInt32(payload.count + 1)
         var out = Data(capacity: headerBytes + payload.count)
         out.append(contentsOf: [
-            UInt8(declared >> 24), UInt8(declared >> 16), UInt8(declared >> 8), UInt8(declared),
+            UInt8(truncatingIfNeeded: declared >> 24),
+            UInt8(truncatingIfNeeded: declared >> 16),
+            UInt8(truncatingIfNeeded: declared >> 8),
+            UInt8(truncatingIfNeeded: declared),
             kind.rawValue,
         ])
         out.append(payload)

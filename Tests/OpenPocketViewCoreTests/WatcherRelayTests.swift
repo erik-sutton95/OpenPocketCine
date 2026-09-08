@@ -21,6 +21,17 @@ import Testing
         #expect(decoded?.consumedBytes == wire.count)
     }
 
+    /// HEVC frames are thousands of bytes. `UInt8(length)` traps above 255
+    /// (iPhone crash on Share this feed, IPS 2026-09-08-224509).
+    @Test func framingRoundTripHevcSizedPayload() throws {
+        let payload = Data(repeating: 0x40, count: 80_000)
+        let wire = WatcherRelayFraming.encode(kind: .frame, payload: payload)
+        let decoded = try WatcherRelayFraming.decode(from: wire)
+        #expect(decoded?.kind == .frame)
+        #expect(decoded?.payload.count == 80_000)
+        #expect(decoded?.consumedBytes == wire.count)
+    }
+
     @Test func framingPartialReturnsNil() throws {
         let wire = WatcherRelayFraming.encode(kind: .state, payload: Data(repeating: 1, count: 40))
         #expect(try WatcherRelayFraming.decode(from: wire.prefix(3)) == nil)

@@ -100,6 +100,7 @@ final class WatcherRelayHost {
         _ = bitrate.recordTick(
             saturated: allFull, cameraStarving: false, now: CFAbsoluteTimeGetCurrent())
         encoder.bitsPerSecond = bitrate.bitsPerSecond
+        if peers.values.allSatisfy({ !$0.authorized }) { return }
         if WatcherRelayBitrate.shouldSkipEncode(allPeersSaturated: allFull) { return }
         let needKey = peers.values.contains { $0.needsKeyframe } || lastKeyframePeerNeed
         lastKeyframePeerNeed = false
