@@ -10,13 +10,13 @@ enum SettingsHelpCopy {
     static let stream =
         "The Pocket sends HEVC over the camera access point. Stream quality presets are not on this body."
     static let shareFeed =
-        "This phone re-serves the live picture. Other phones do not join the camera Wi-Fi."
+        "Watching devices join this camera’s Wi-Fi, then receive the shared picture from this phone."
     static let editView =
         "Opens the monitor with an eye on each element you can show or hide."
     static let frameIO =
         "Sign in to upload clips from the share popup. Frame.io needs the internet, so the phone hops off the camera Wi‑Fi for the upload."
     static let shareThisFeed =
-        "This phone re-serves the live picture. Other phones do not join the camera Wi-Fi."
+        "Watching devices join this camera’s Wi-Fi, then receive the shared picture from this phone."
     static let broadcastPriority =
         "Steadier picture uses more delay when the radio is busy."
     static let watcherPasscode =
@@ -84,6 +84,7 @@ struct SettingsRootView: View {
     @State private var keyboardInset: CGFloat = 0
     @State private var legalKind: LegalDocumentView.Kind?
     @State private var showLUTPicker = false
+    @State private var showWatcherWiFiCode = false
     @State private var expandedDisp: PocketDispMode?
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
@@ -137,6 +138,9 @@ struct SettingsRootView: View {
             if let legalKind {
                 LegalDocumentView(kind: legalKind, onClose: { self.legalKind = nil })
             }
+        }
+        .sheet(isPresented: $showWatcherWiFiCode) {
+            WatcherWiFiCodeView().environment(model)
         }
         .sheet(isPresented: $showLUTPicker) {
             LUTPicker(assist: model.assist)
@@ -319,7 +323,7 @@ struct SettingsRootView: View {
     private var subtitle: String {
         switch model.operatorSettingsTab {
         case .link: "Connection state and link behavior."
-        case .sharing: "Share this feed with nearby OpenPocketCine phones."
+        case .sharing: "Share this feed with OpenPocketCine devices on the same camera Wi-Fi."
         case .assist: "Behavior for live-view tools."
         case .controls: "Touch behavior and safety."
         case .display: "Live view buttons and chrome."
@@ -449,6 +453,14 @@ struct SettingsRootView: View {
                     isOn: model.shareThisFeed
                 ) {
                     model.setShareThisFeed(!model.shareThisFeed)
+                }
+                SettingsInlineRow(
+                    title: "Join camera Wi-Fi",
+                    help:
+                        "On the watching device, scan this code with Camera, join the Wi-Fi, then open Watch a feed."
+                ) {
+                    Button("Show Wi-Fi code") { showWatcherWiFiCode = true }
+                        .font(LiveType.ui(size: 13, weight: .medium))
                 }
                 SettingsInlineRow(
                     title: "Watcher passcode",

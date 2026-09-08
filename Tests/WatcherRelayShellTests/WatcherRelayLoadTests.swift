@@ -7,6 +7,19 @@ import XCTest
 @testable import WatcherRelayShell
 
 final class WatcherRelayLoadTests: XCTestCase {
+    func testRelayNeverEnablesPeerToPeerFallback() {
+        let parameters = WatcherRelayNetwork.parameters()
+        XCTAssertFalse(parameters.includePeerToPeer)
+        XCTAssertTrue(parameters.prohibitedInterfaceTypes?.contains(.cellular) == true)
+        XCTAssertEqual(parameters.serviceClass, .interactiveVideo)
+        let tcp = parameters.defaultProtocolStack.transportProtocol as? NWProtocolTCP.Options
+        XCTAssertTrue(tcp?.noDelay == true)
+        XCTAssertTrue(tcp?.enableKeepalive == true)
+        XCTAssertEqual(tcp?.keepaliveIdle, 10)
+        XCTAssertEqual(tcp?.keepaliveInterval, 5)
+        XCTAssertEqual(tcp?.keepaliveCount, 3)
+    }
+
     @MainActor
     func testControlTrafficDoesNotDropVideoFrames() throws {
         var frames = 0
@@ -252,7 +265,7 @@ extension WatcherRelayLoadTests {
         let host = WatcherRelayHost()
         host.start(
             hostName: "Relay test", cameraName: "Test", passcode: "", ceilingIndex: 0,
-            allowsControl: true, includePeerToPeer: false)
+            allowsControl: true)
         defer { host.stop() }
         let transport = try XCTUnwrap(host.transport)
         let unexpected = expectation(forNotification: .opcWatcherRelayCommand, object: nil)

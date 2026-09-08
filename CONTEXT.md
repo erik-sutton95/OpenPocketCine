@@ -39,12 +39,13 @@ The phone that holds the Pocket datalink and may advertise the watcher relay.
 _Avoid_: broadcaster (in operator copy)
 
 **Watcher**:
-Another OpenPocketCine install that joins the relay. Does not join SoftAP.
+Another OpenPocketCine install on the same camera Wi-Fi that joins the host’s
+shared feed. Does not open its own camera session.
 _Avoid_: client, viewer (in operator copy)
 
 **Watcher relay**:
 Phone-as-encoder second-screen. Bonjour `_opc-mon._tcp`, iOS host + iOS watcher.
-The host re-encodes identity HEVC and fans out over TCP (AWDL while on camera AP).
+The host shares its camera picture with watchers on the same camera Wi-Fi.
 _Avoid_: camera multicast, NDI, SRT, monitor relay
 
 **Enable-once**:

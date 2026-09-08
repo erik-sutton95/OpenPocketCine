@@ -41,12 +41,7 @@ final class WatcherRelayClient {
         hostTitle = hostName
         status = .connecting
         decoder.attach(sampleBus: samples, effects: { LiveImageEffects() }, transfer: { nil })
-        let params = NWParameters.tcp
-        params.includePeerToPeer = true
-        params.serviceClass = .interactiveVideo
-        if let tcp = params.defaultProtocolStack.transportProtocol as? NWProtocolTCP.Options {
-            tcp.noDelay = true
-        }
+        let params = WatcherRelayNetwork.parameters()
         let conn = NWConnection(to: endpoint, using: params)
         self.conn = conn
         let reader = WatcherRelayReader()

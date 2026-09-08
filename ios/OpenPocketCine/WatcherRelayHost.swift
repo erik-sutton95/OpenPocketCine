@@ -61,7 +61,7 @@ final class WatcherRelayTransport: @unchecked Sendable {
 
     func start(
         hostName: String, cameraName: String, passcode: String, ceilingIndex: Int,
-        allowsControl: Bool, includePeerToPeer: Bool
+        allowsControl: Bool
     ) {
         active = true
         self.hostName = hostName
@@ -73,7 +73,7 @@ final class WatcherRelayTransport: @unchecked Sendable {
         encoderFailed = false
         encoder.bitsPerSecond = bitrate.bitsPerSecond
         do {
-            let listener = try NWListener(using: Self.parameters(peerToPeer: includePeerToPeer))
+            let listener = try NWListener(using: WatcherRelayNetwork.parameters())
             var txt = NWTXTRecord()
             txt[WatcherRelayProtocol.txtCamera] = cameraName
             txt[WatcherRelayProtocol.txtWatchable] = "1"
@@ -398,20 +398,6 @@ final class WatcherRelayTransport: @unchecked Sendable {
         onChange?()
     }
 
-    private static func parameters(peerToPeer: Bool) -> NWParameters {
-        let p = NWParameters.tcp
-        p.includePeerToPeer = peerToPeer
-        p.serviceClass = .interactiveVideo
-        if let tcp = p.defaultProtocolStack.transportProtocol as? NWProtocolTCP.Options {
-            tcp.noDelay = true
-            tcp.enableKeepalive = true
-            tcp.keepaliveIdle = 10
-            tcp.keepaliveInterval = 5
-            tcp.keepaliveCount = 3
-        }
-        return p
-    }
-
     final class Peer: @unchecked Sendable {
         let conn: NWConnection
         var buffer = Data()
@@ -439,7 +425,7 @@ final class WatcherRelayHost {
 
     func start(
         hostName: String, cameraName: String, passcode: String, ceilingIndex: Int,
-        allowsControl: Bool, includePeerToPeer: Bool
+        allowsControl: Bool
     ) {
         stop()
         encoderFailed = false
@@ -478,8 +464,7 @@ final class WatcherRelayHost {
         transport.queue.async {
             transport.start(
                 hostName: hostName, cameraName: cameraName, passcode: passcode,
-                ceilingIndex: ceilingIndex, allowsControl: allowsControl,
-                includePeerToPeer: includePeerToPeer)
+                ceilingIndex: ceilingIndex, allowsControl: allowsControl)
         }
     }
 

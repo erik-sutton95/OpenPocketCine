@@ -30,7 +30,7 @@ A second phone on the SoftAP does not get a copy.
 | Path | Call |
 | --- | --- |
 | Camera SoftAP multicast / multi-client live | **won't-do** |
-| Phone-as-encoder watcher relay | **iOS:** host re-encodes identity HEVC, Bonjour `_opc-mon._tcp` (AWDL on camera AP). Watchers never join SoftAP and never send `0x09/0xa8`. Android Sharing stays parked. |
+| Phone-as-encoder watcher relay | **iOS:** host re-encodes identity HEVC, Bonjour `_opc-mon._tcp` on shared camera Wi-Fi (peer-to-peer disabled). Watchers join SoftAP but only connect to the host relay; they never open a camera datalink or send `0x09/0xa8`. Android Sharing stays parked. |
 | Keep 1:1 | **Yes** — one phone talks to one Pocket |
 
 Public summary: [live view](https://openpocketcine.app/docs/protocol/live-view/).

@@ -1,5 +1,9 @@
 # Watcher Relay Implementation Plan
 
+Network topology superseded on 2026-09-09: watchers join the same camera Wi-Fi;
+peer-to-peer discovery and streaming are disabled after physical stuttering.
+Current behavior and onboarding: [watcher relay](../../watcher-relay.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** iOS host re-encodes Pocket live HEVC and serves other OpenPocketCine iPhones over Bonjour `_opc-mon._tcp` (AWDL on camera AP), with passcode and proxied control.

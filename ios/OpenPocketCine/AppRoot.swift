@@ -292,8 +292,7 @@ final class AppModel {
             cameraName: camera,
             passcode: sharePasscode,
             ceilingIndex: broadcastPriority,
-            allowsControl: controlRequestsAllowed,
-            includePeerToPeer: WiFiJoiner.isCameraPathReady())
+            allowsControl: controlRequestsAllowed)
         if relayHost.encoderFailed {
             shareThisFeed = false
             OperatorPrefs.shareThisFeed = false
@@ -343,7 +342,7 @@ final class AppModel {
 
     func startWatcherBrowse() {
         guard !isLive else { return }
-        relayBrowser.start(includePeerToPeer: true)
+        relayBrowser.start()
     }
 
     func joinWatcher(_ host: WatcherRelayDiscovery) {
@@ -354,9 +353,6 @@ final class AppModel {
             passcode: code,
             watcherID: WatcherRelayKeychain.installID,
             deviceName: UIDevice.current.name)
-        isWatchingFeed = true
-        showsWatcherBrowse = false
-        homePanel = nil
     }
 
     func retryWatcherPasscode(_ code: String) {
@@ -553,6 +549,13 @@ struct AppRoot: View {
             }
             model.prepareStartup()
             UIApplication.shared.isIdleTimerDisabled = model.keepScreenAwake
+        }
+        .onChange(of: model.relayClient.status) { _, status in
+            if status == .live, model.showsWatcherBrowse {
+                model.isWatchingFeed = true
+                model.showsWatcherBrowse = false
+                model.homePanel = nil
+            }
         }
         .onChange(of: model.keepScreenAwake) { _, awake in
             UIApplication.shared.isIdleTimerDisabled = awake

@@ -1,5 +1,9 @@
 # Watcher relay (Bonjour second-screen)
 
+Network topology superseded on 2026-09-09: watchers join the same camera Wi-Fi;
+peer-to-peer discovery and streaming are disabled after physical stuttering.
+Current behavior and onboarding: [watcher relay](../../watcher-relay.md).
+
 **Date:** 2026-09-08
 **Status:** design
 **Product:** discussion [#53](https://github.com/erik-sutton95/OpenPocketCine/discussions/53), follow-on [#303](https://github.com/erik-sutton95/OpenPocketCine/issues/303)

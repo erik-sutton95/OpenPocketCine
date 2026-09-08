@@ -1,7 +1,7 @@
 # Watcher relay performance
 
 The iOS host decodes once and shares one identity HEVC encode across watcher
-TCP connections. The camera still sends to one phone. Android Sharing remains
+TCP connections over the same camera Wi-Fi. The camera still sends to one phone. Android Sharing remains
 an explicit [parity exception](PARITY.md).
 
 Forwarding camera HEVC/AVC would avoid re-encoding, but the Pocket has no regular
@@ -10,6 +10,27 @@ need the original keyframe and every dependent frame since it, or a new camera
 keyframe. Camera keyframe requests reset live view and remain watchdog-owned.
 The shared phone encode supplies independent keyframes and adjustable bitrate
 without interrupting the camera session.
+
+## Join and network boundary
+
+All watchers join the host camera’s Wi-Fi before discovering a relay. Operator
+Setup → Sharing → Show Wi-Fi code reveals a standard Wi-Fi QR code on the host.
+The watcher scans with Camera, accepts the system Wi-Fi join, then returns to
+Watch a feed. Manual Wi-Fi join in Settings also works. Only the host opens BLE
+and the camera datalink; watchers connect to the host’s relay service.
+
+`WatcherRelayNetwork` supplies parameters for discovery, listener, and watcher
+connections: `includePeerToPeer = false`, cellular prohibited, interactive video,
+and TCP no-delay. There is no peer-to-peer discovery or streaming fallback. A
+watcher on another network sees join guidance rather than an off-network host.
+The join screen remains visible through connecting, passcode entry, and errors;
+the live screen opens only after the host accepts the join.
+
+The QR payload contains credentials and is generated only for an explicitly
+opened sheet, using credentials matched to the current camera and joined SSID.
+It is never advertised in Bonjour, logged, or saved as an image. The sheet clears
+its image when backgrounded, disconnected, or the joined SSID changes. Payload
+escaping follows the [Wi-Fi QR format](https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11).
 
 ## Ownership and bounds
 
@@ -51,12 +72,33 @@ samples its own measured picture FPS independently of video sends, so a camera
 stall can lower relay bitrate even when no new picture reaches the encoder.
 
 One encode saves encoder work as watchers join; TCP still sends N copies over
-the radio. There is no hardware-proven receiver-count guarantee. SoftAP + AWDL
-shares radio time, so physical testing must include the host picture, not only
-watcher FPS. Console category `relay` emits counters every five seconds:
+the radio. There is no physically verified multi-watcher capacity guarantee.
+Physical testing must include the host picture, not only watcher FPS. Console category `relay` emits counters every five seconds:
 `peers`, `bps`, `sent`, `skipped`, `keys`, and `cameraFPS`. No peer names or codes.
 
 ## Verification
+
+### Physical finding, 2026-09-09
+
+The original peer-to-peer iPhone 16 Pro Max → iPad Pro 11 M4 test
+**failed the picture-cadence budget** with one watcher. Queue/load tests below do not establish smooth wireless viewing.
+Five-second diagnostic windows showed hardware encode averaging 6–7 ms, no
+receiver decode rejections, and no saturated watcher send windows. However,
+complete camera access units already arrived with roughly 317 ms worst gaps
+before decoding, and receiver gaps repeatedly reached 500–900 ms.
+The host's median presentation counter was 18 while watching and 26 after the
+watcher stopped; the median worst camera-arrival gap fell to 129 ms. These
+counters are coarse presentation windows, not a glass-to-glass latency measure.
+
+Radio contention is the leading explanation. Stopping discovery before joining
+did not establish a working improvement and was reverted after a join failure.
+The operator then joined the iPad to the camera Wi-Fi and reported the relay
+“buttery smooth”. This establishes that station-to-station relay works on the
+tested Pocket and identifies the shared-network setup as the working path.
+The new enforced network policy and QR onboarding still need device acceptance. Do not claim that lowering bitrate, forwarding the
+camera bitstream, or the existing queue bounds solve this measured failure.
+
+### Automated and operator checks
 
 `just relay-test` compiles the real Apple relay shell on macOS. Delayed completion
 injection checks control/video isolation, eight healthy watchers beside one
@@ -65,11 +107,11 @@ following stop, and bounded state traffic. A real VideoToolbox encode checks the
 output callback and standalone HEVC parameter sets. Core tests cover admission
 and keyframe cooldown. Shell regressions also cover fragmented loopback reads,
 camera-driven bitrate reduction, orientation capture, and control reclaim.
-These are load regressions, not proof of AWDL performance.
+These are load regressions, not proof of radio capacity.
 
 Physical acceptance (pending until measured on the changed build):
 
-1. Host on Pocket Wi-Fi, sharing off: record baseline FPS and pan for one minute.
+1. Host and watchers on the same Pocket Wi-Fi, sharing off: record baseline FPS and pan for one minute.
 2. Sharing on: repeat with one, then two or more watchers for five minutes each.
    Repeat LUT + WAVE, pan, and REC. Compare host and watcher picture cadence and
    glass-to-glass delay; neither may accumulate delay through the take.
@@ -77,5 +119,8 @@ Physical acceptance (pending until measured on the changed build):
    must keep moving; the returning watcher resumes from a relay keyframe.
 4. Stop/start sharing, leave/rejoin, and change the bitrate ceiling. No old frames
    may enter the new session. Check passcode denial/retry and control reclaim.
-5. Confirm the host's existing [performance budgets](PERFORMANCE.md), especially
+5. Start a watcher on another Wi-Fi: no off-network discovery or peer-to-peer
+   fallback. Scan the host Wi-Fi code, approve the system join, return to Watch
+   a feed, and verify discovery, passcode retry, and smooth picture.
+6. Confirm the host's existing [performance budgets](PERFORMANCE.md), especially
    picture cadence and 40 Hz ACK, and no watcher-triggered `0x09/0xa8`.

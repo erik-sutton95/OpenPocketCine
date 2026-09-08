@@ -10,18 +10,16 @@ struct WatcherRelayDiscovery: Identifiable, Equatable {
     var endpoint: NWEndpoint
 }
 
-/// Browses `_opc-mon._tcp`. Peer-to-peer on so a watcher not on camera Wi-Fi can still see the host.
+/// Finds sharing hosts on the same Wi-Fi. Never browses over peer-to-peer.
 @MainActor
 @Observable
 final class WatcherRelayBrowser {
     var hosts: [WatcherRelayDiscovery] = []
     private var browser: NWBrowser?
 
-    func start(includePeerToPeer: Bool) {
+    func start() {
         stop()
-        let params = NWParameters.tcp
-        params.includePeerToPeer = includePeerToPeer
-        params.serviceClass = .interactiveVideo
+        let params = WatcherRelayNetwork.parameters()
         let browser = NWBrowser(
             for: .bonjourWithTXTRecord(type: WatcherRelayProtocol.serviceType, domain: nil),
             using: params)
