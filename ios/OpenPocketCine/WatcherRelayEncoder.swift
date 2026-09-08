@@ -6,67 +6,79 @@ import VideoToolbox
 
 /// HEVC re-encode of identity live buffers. Keyframes come from this session, never `0x09/0xa8`.
 final class WatcherRelayEncoder: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "opc.watcher-relay.encode", qos: .userInitiated)
     var bitsPerSecond: Int = WatcherRelayBitrate.ladder[0] {
-        didSet { applyBitrate() }
+        didSet {
+            guard bitsPerSecond != oldValue else { return }
+            let next = bitsPerSecond
+            queue.async {
+                self.targetBitrate = next
+                self.applyBitrateLocked()
+            }
+        }
     }
-
+    private var targetBitrate = WatcherRelayBitrate.ladder[0]
     private var session: VTCompressionSession?
     private var width = 0
     private var height = 0
-    private var lastKeyAt: CFAbsoluteTime = 0
-    private let lock = NSLock()
-    var onEncoded: ((Data, Bool, [Data]?) -> Void)?
+    private var keyPolicy = WatcherRelayEncodePolicy()
 
     func invalidate() {
-        lock.lock()
-        defer { lock.unlock() }
-        if let session {
-            VTCompressionSessionInvalidate(session)
+        queue.async {
+            if let session = self.session { VTCompressionSessionInvalidate(session) }
+            self.session = nil
+            self.width = 0
+            self.height = 0
         }
-        session = nil
-        width = 0
-        height = 0
     }
 
-    func encode(_ buffer: CVPixelBuffer, forceKey: Bool) {
-        let w = CVPixelBufferGetWidth(buffer)
-        let h = CVPixelBufferGetHeight(buffer)
-        guard w > 8, h > 8 else { return }
-        lock.lock()
-        if session == nil || w != width || h != height {
-            rebuildLocked(width: w, height: h)
+    /// The transport holds its admission slot through the output callback, not just submission.
+    func encode(
+        _ buffer: CVPixelBuffer, forceKey: Bool,
+        completion: @escaping (Annex?, Bool) -> Void
+    ) {
+        queue.async { [self] in
+            let w = CVPixelBufferGetWidth(buffer)
+            let h = CVPixelBufferGetHeight(buffer)
+            guard w > 8, h > 8 else {
+                completion(nil, true)
+                return
+            }
+            if session == nil || w != width || h != height { rebuildLocked(width: w, height: h) }
+            guard let session else {
+                completion(nil, true)
+                return
+            }
+            let now = ProcessInfo.processInfo.systemUptime
+            let key = keyPolicy.forceKeyframe(requested: forceKey, now: now)
+            let props = key ? [kVTEncodeFrameOptionKey_ForceKeyFrame: true] as CFDictionary : nil
+            let pts = CMTime(value: CMTimeValue(now * 90_000), timescale: 90_000)
+            let output = Output(completion)
+            var info = VTEncodeInfoFlags()
+            let status = VTCompressionSessionEncodeFrame(
+                session, imageBuffer: buffer, presentationTimeStamp: pts, duration: .invalid,
+                frameProperties: props, infoFlagsOut: &info,
+                outputHandler: { status, _, sample in
+                    output.finish(sample.flatMap(Self.annexB), failed: status != noErr)
+                })
+            if status != noErr || info.contains(.frameDropped) {
+                output.finish(nil, failed: status != noErr)
+            }
         }
-        guard let session else {
+    }
+
+    /// VT may complete on another thread, including before EncodeFrame returns.
+    private final class Output: @unchecked Sendable {
+        private let lock = NSLock()
+        private var completion: ((Annex?, Bool) -> Void)?
+        init(_ completion: @escaping (Annex?, Bool) -> Void) { self.completion = completion }
+        func finish(_ value: Annex?, failed: Bool) {
+            lock.lock()
+            let callback = completion
+            completion = nil
             lock.unlock()
-            return
+            callback?(value, failed)
         }
-        let now = CFAbsoluteTimeGetCurrent()
-        var key = forceKey
-        if now - lastKeyAt >= 1, forceKey {
-            lastKeyAt = now
-        } else if forceKey, now - lastKeyAt < 1 {
-            key = false
-        } else if forceKey {
-            lastKeyAt = now
-        }
-        var props: [NSString: Any] = [:]
-        if key { props[kVTEncodeFrameOptionKey_ForceKeyFrame] = true }
-        lock.unlock()
-        var info = VTEncodeInfoFlags()
-        let pts = CMTime(value: CMTimeValue(now * 90_000), timescale: 90_000)
-        VTCompressionSessionEncodeFrame(
-            session, imageBuffer: buffer, presentationTimeStamp: pts, duration: .invalid,
-            frameProperties: props as CFDictionary, infoFlagsOut: &info,
-            outputHandler: { [weak self] _, _, sample in
-                guard let self, let sample else { return }
-                if let annex = Self.annexB(from: sample) {
-                    self.onEncoded?(annex.data, annex.isKey, annex.sets)
-                }
-            })
-    }
-
-    func requestKeyframe() {
-        lastKeyAt = 0
     }
 
     private func rebuildLocked(width: Int, height: Int) {
@@ -99,28 +111,26 @@ final class WatcherRelayEncoder: @unchecked Sendable {
             sess, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: 50 as CFNumber)
         VTSessionSetProperty(
             sess, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
+        // The admission window is two frames. VT must emit before it needs a third.
+        VTSessionSetProperty(
+            sess, key: kVTCompressionPropertyKey_MaxFrameDelayCount,
+            value: 1 as CFNumber)
         session = sess
         applyBitrateLocked()
         VTCompressionSessionPrepareToEncodeFrames(sess)
     }
 
-    private func applyBitrate() {
-        lock.lock()
-        applyBitrateLocked()
-        lock.unlock()
-    }
-
     private func applyBitrateLocked() {
         guard let session else { return }
-        let bps = bitsPerSecond as CFNumber
+        let bps = targetBitrate as CFNumber
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: bps)
-        let bytes = Int64(bitsPerSecond / 8) as CFNumber
+        let bytes = Int64(targetBitrate / 8) as CFNumber
         VTSessionSetProperty(
             session, key: kVTCompressionPropertyKey_DataRateLimits,
             value: [bytes, 1] as CFArray)
     }
 
-    private struct Annex {
+    struct Annex {
         var data: Data
         var isKey: Bool
         var sets: [Data]?
@@ -148,7 +158,7 @@ final class WatcherRelayEncoder: @unchecked Sendable {
             out.append(UnsafeBufferPointer(start: bytes + offset, count: n))
             offset += n
         }
-        var isKey = false
+        var isKey = true
         if let atts = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false)
             as? [Any],
             let dict = atts.first as? [NSString: Any]
@@ -156,7 +166,7 @@ final class WatcherRelayEncoder: @unchecked Sendable {
             isKey = (dict[kCMSampleAttachmentKey_NotSync] as? Bool) != true
         }
         var sets: [Data] = []
-        if let desc = CMSampleBufferGetFormatDescription(sample) {
+        if isKey, let desc = CMSampleBufferGetFormatDescription(sample) {
             var count = 0
             CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(
                 desc, parameterSetIndex: 0, parameterSetPointerOut: nil,

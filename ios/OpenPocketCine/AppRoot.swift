@@ -95,6 +95,7 @@ final class AppModel {
     var frameioUser: FrameioUser?
     var delivery = MediaDeliveryCoordinator()
     var relayHost = WatcherRelayHost()
+    private var relayStateTask: Task<Void, Never>?
     var relayBrowser = WatcherRelayBrowser()
     var relayClient = WatcherRelayClient()
     var isWatchingFeed = false
@@ -273,8 +274,11 @@ final class AppModel {
         if on {
             startRelayHost()
         } else {
+            relayStateTask?.cancel()
+            relayStateTask = nil
             relayHost.stop()
             session.decoder.onIdentityFrame = nil
+            session.decoder.onIdentityOrientation = nil
         }
     }
 
@@ -296,14 +300,26 @@ final class AppModel {
             session.controlNote = "Sharing could not start"
             return
         }
-        session.decoder.onIdentityFrame = { [weak self] buffer in
-            Task { @MainActor in
-                self?.ingestRelayFrame(buffer)
+        session.decoder.onIdentityOrientation = relayHost.orientationSink()
+        session.decoder.onIdentityOrientation?(session.decoder.presentedPictureFlip ?? false)
+        session.decoder.onIdentityFrame = relayHost.frameSink()
+        relayStateTask?.cancel()
+        updateRelayState()
+        relayStateTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled, let self, self.shareThisFeed, self.isLive else { return }
+                if self.relayHost.encoderFailed {
+                    self.setShareThisFeed(false)
+                    self.session.controlNote = "Sharing could not start"
+                    return
+                }
+                self.updateRelayState()
             }
         }
     }
 
-    private func ingestRelayFrame(_ buffer: CVPixelBuffer) {
+    private func updateRelayState() {
         guard shareThisFeed, isLive else { return }
         let s = session.status
         let state = WatcherRelayState(
@@ -317,10 +333,7 @@ final class AppModel {
             iso: s.isoIndex?.label ?? "\(s.iso)",
             shutter: s.shutterDenom > 0 ? "1/\(s.shutterDenom)" : "",
             allowsControlRequests: controlRequestsAllowed)
-        relayHost.ingest(
-            identity: buffer,
-            extraMirrored: session.decoder.presentedPictureFlip ?? false,
-            state: state)
+        relayHost.update(state: state)
     }
 
     func openWatcherBrowse() {
@@ -419,8 +432,11 @@ final class AppModel {
         chromeEditorMode = nil
         chromeEditorReturnMode = nil
         captureSheet = nil
+        relayStateTask?.cancel()
+        relayStateTask = nil
         relayHost.stop()
         session.decoder.onIdentityFrame = nil
+        session.decoder.onIdentityOrientation = nil
         watcherRecordConfirm = false
     }
 

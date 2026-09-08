@@ -23,7 +23,7 @@ final class WatcherRelayClient {
     let samples = LiveFrameSampleBus()
 
     private var conn: NWConnection?
-    private var buffer = Data()
+    private var reader: WatcherRelayReader?
     private var endpoint: NWEndpoint?
     private var passcode = ""
     private var watcherID = ""
@@ -49,13 +49,16 @@ final class WatcherRelayClient {
         }
         let conn = NWConnection(to: endpoint, using: params)
         self.conn = conn
-        conn.stateUpdateHandler = { [weak self] state in
+        let reader = WatcherRelayReader()
+        self.reader = reader
+        conn.stateUpdateHandler = { [weak self, weak conn] state in
             Task { @MainActor in
+                guard let self, let conn, self.conn === conn else { return }
                 switch state {
                 case .ready:
-                    self?.sendHello()
+                    self.sendHello()
                 case .failed(let error):
-                    self?.fail(error.localizedDescription)
+                    self.fail(error.localizedDescription)
                 case .cancelled:
                     break
                 default:
@@ -63,7 +66,7 @@ final class WatcherRelayClient {
                 }
             }
         }
-        conn.start(queue: .main)
+        conn.start(queue: reader.queue)
         receive()
     }
 
@@ -77,7 +80,7 @@ final class WatcherRelayClient {
     func leave() {
         conn?.cancel()
         conn = nil
-        buffer.removeAll()
+        reader = nil
         decoder.reset()
         if status != .needsPasscode { status = .idle }
     }
@@ -109,27 +112,31 @@ final class WatcherRelayClient {
     }
 
     private func receive() {
-        conn?.receive(minimumIncompleteLength: 1, maximumLength: 256 * 1024) {
-            [weak self] data, _, isComplete, error in
+        guard let conn, let reader else { return }
+        reader.receive(on: conn) { [weak self, weak conn] messages, complete, error in
             Task { @MainActor in
-                guard let self else { return }
-                if let data, !data.isEmpty {
-                    self.buffer.append(data)
-                    do {
-                        while let msg = try WatcherRelayFraming.decode(from: self.buffer) {
-                            self.buffer.removeFirst(msg.consumedBytes)
-                            try self.onMessage(msg)
+                guard let self, let conn, self.conn === conn else { return }
+                do {
+                    for message in messages {
+                        switch message {
+                        case .control(let message): try self.onMessage(message)
+                        case .frame(let meta, let hevc):
+                            self.decoder.poseViewFlip = meta.extraMirrored
+                            self.decoder.assistMirror = false
+                            _ = self.decoder.decode(accessUnit: hevc)
                         }
-                    } catch {
-                        self.fail("The feed ended.")
-                        return
+                        guard self.conn === conn else { return }
+                        if self.status == .needsPasscode { return }
                     }
+                } catch {
+                    self.fail("The feed ended.")
+                    return
                 }
                 if let error {
                     self.fail(error.localizedDescription)
                     return
                 }
-                if isComplete {
+                if complete {
                     self.fail("The host stopped sharing.")
                     return
                 }
@@ -159,14 +166,6 @@ final class WatcherRelayClient {
             state = try JSONDecoder().decode(WatcherRelayState.self, from: msg.payload)
         case .controlToken:
             token = try JSONDecoder().decode(WatcherRelayControlToken.self, from: msg.payload)
-        case .frame:
-            let (meta, hevc) = try WatcherRelayFrameBlob.decode(msg.payload)
-            decoder.poseViewFlip = false
-            decoder.assistMirror = false
-            if meta.extraMirrored {
-                decoder.poseViewFlip = true
-            }
-            _ = decoder.decode(accessUnit: [UInt8](hevc))
         default:
             break
         }

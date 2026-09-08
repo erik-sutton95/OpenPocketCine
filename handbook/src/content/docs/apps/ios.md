@@ -73,7 +73,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
-- **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones over Bonjour. They do not join the camera Wi-Fi. Optional passcode and control requests. Not camera multicast. Android Sharing is not in this build.
+- **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones over Bonjour. They do not join the camera Wi-Fi. Optional passcode and control requests. The host shares one encode; a slow watcher waits for a fresh keyframe while other watchers continue. Broadcast priority sets the quality ceiling, and sharing can lower bitrate when the host picture slows. More watchers use more Wi-Fi airtime; choose a steadier priority or reduce watchers if the host stutters. Not camera multicast. Android Sharing is not in this build.
 
 Verify record start/stop on the camera body until you trust the link.
 

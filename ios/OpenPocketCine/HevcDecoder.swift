@@ -100,7 +100,15 @@ final class HevcDecoder {
     var assistMirror = false
     /// Set by `VideoView` so MIRROR assist commits in the same tick as enqueue.
     var applyPictureMirror: ((Bool) -> Void)?
-    private(set) var presentedPictureFlip: Bool?
+    /// Relay metadata follows the actual flip commit, independently of the 5 Hz HUD.
+    var onIdentityOrientation: ((Bool) -> Void)?
+    private(set) var presentedPictureFlip: Bool? {
+        didSet {
+            if presentedPictureFlip != oldValue {
+                onIdentityOrientation?(presentedPictureFlip ?? false)
+            }
+        }
+    }
     /// Holds the last picture across extra-mirror so the current frame is not X-flipped in place.
     private var extraMirrorHold = ExtraMirrorHold()
     /// First time VT takes HEVC this session. Mid-GOP P-frames cannot start a
