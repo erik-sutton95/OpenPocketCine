@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Experimental iOS Multiview for Osmo cameras on shared Wi-Fi: identity-verified
+  discovery, saved stages, adaptive grid/Center stage, per-camera LUTs and
+  timecode, individual/group recording, tally borders and borrowed Live View.
+  Pocket 4 Pro, Pocket 3 and Nano have been monitored and recorded together.
+  Android Multiview is deferred; setup cleanup and hardware validation remain
+  open before release. See the Multiview handbook and `docs/PARITY.md`.
+
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
   stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same
@@ -164,6 +171,16 @@ All notable changes to this project are documented here. The format is based on
   identification mark on clip upload.
 
 ### Fixed
+
+- Pocket 3 initial AVC decode, Nano large-frame assembly and private metadata
+  handling, plus bounded iOS Multiview foreground recovery. Pocket 3 recovery
+  can still take about a minute after an app switch.
+- iOS false-color continuity during exposure updates and video/assist alignment
+  during rotation and Fit/Fill. D-Log M scopes now use direct signal levels in
+  both shells; estimated scene stops are not calibrated sensor limits.
+- Pocket 3 normal-video FORMAT choices include 2.7K and documented aspect/rate
+  combinations when the camera does not supply capabilities. Reported tables
+  retain priority; physical format/reconnect verification remains pending.
 
 - Android WAITING FOR LIVE VIEW took 5–10 s after the 720p cube-then-stretch
   present (S25 / Pocket 4 Pro). Compiling `feed.frag` before the decoder

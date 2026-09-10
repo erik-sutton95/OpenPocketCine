@@ -9,6 +9,7 @@ import UIKit
 @Observable
 final class AppModel {
     var session = CameraSession()
+    var multiviewExit: (() -> Void)?
     /// Live view-space X flip: TT180 extra-mirror XOR MIRROR assist.
     var livePictureViewFlip: Bool {
         GimbalStick.liveViewFlip(

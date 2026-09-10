@@ -132,11 +132,24 @@ final class DisplayLayerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        pictureHost.bounds = CGRect(origin: .zero, size: bounds.size)
-        pictureHost.center = CGPoint(x: bounds.midX, y: bounds.midY)
-        displayLayer.frame = pictureHost.bounds
-        ciFeed.frame = pictureHost.bounds
-        applyPictureTransform()
+        // UIKit can resize the overlay immediately while the standalone video
+        // layer implicitly interpolates its bounds. Commit both as one geometry
+        // update; any enclosing rotation animation then moves the complete picture.
+        UIView.performWithoutAnimation {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            for layer in [pictureHost.layer, displayLayer, ciFeed.layer] {
+                layer.removeAnimation(forKey: "bounds")
+                layer.removeAnimation(forKey: "position")
+            }
+            pictureHost.bounds = CGRect(origin: .zero, size: bounds.size)
+            pictureHost.center = CGPoint(x: bounds.midX, y: bounds.midY)
+            displayLayer.frame = pictureHost.bounds
+            ciFeed.frame = pictureHost.bounds
+            ciFeed.layoutIfNeeded()
+            applyPictureTransform()
+            CATransaction.commit()
+        }
         ciFeed.isEnabled = window != nil && bounds.width > 1 && bounds.height > 1
         if bounds.width > 1, bounds.height > 1 { onReady?() }
     }

@@ -1,18 +1,16 @@
 import Foundation
 
-/// Reassembles the Osmo live-view video from datalink packets. Feed it every UDP payload from the
-/// datalink; it keeps the pktType-0x02 ones, groups their fragments into frames by the frame counter
-/// (byte 16), and emits a complete HEVC access unit (Annex-B, DJI marker stripped) each time a frame
-/// boundary is crossed. Pure — the app hands the access units to VideoToolbox.
-///
-/// Loss-aware: fragments within a frame carry a position (`byte18 * 2 + byte17>>7`) that increments
-/// by exactly 1 (verified across a full capture). If a fragment is lost or reordered over Wi-Fi, the
-/// position jumps, the frame is marked corrupt and dropped — better to skip a frame than feed a
-/// broken access unit to the decoder (which stalls VideoToolbox).
-///
-/// One frame of latency by design: a frame is known complete only when the next frame's first
-/// fragment arrives (its byte-16 counter differs). At ~25 fps that's ~40 ms.
+/// Reassembles Osmo live video. A DJI marker carries a 16-byte header and the
+/// little-endian encoded byte count. A large Nano picture spans several transport
+/// groups (byte 16 changes after 63 fragments); only the declared size ends it.
+/// Sized frames validate the video transport sequence and emit on their final
+/// packet. Older/unsized input retains the group-boundary fallback below.
 public struct HevcDepacketizer {
+    private static let maxEncodedBytes = 4 * 1024 * 1024
+    private var sizedMode = false
+    private var expectedSize: Int?
+    private var sizedBuffer: [UInt8] = []
+    private var lastSizedSequence: UInt16?
     private var currentFrame: UInt8?
     private var buffer: [UInt8] = []
     private var lastPosition: Int?
@@ -22,9 +20,22 @@ public struct HevcDepacketizer {
 
     public init() {}
 
-    /// Returns a finished (and complete) access unit when `payload` starts a new frame, else nil.
+    /// Returns a finished (and complete) access unit when its final packet arrives (or a legacy group ends).
     public mutating func feed(_ payload: [UInt8]) -> [UInt8]? {
         guard payload.count > 20, payload[6] == 0x02 else { return nil }  // video packets only
+        let body = payload[20...]
+        let marker = body.starts(with: [0, 0, 1, 0xff])
+        let declared = Self.declaredSize(body)
+        let nonzeroDeclaration =
+            marker && body.count >= 16
+            && body.dropFirst(4).prefix(4).contains(where: { $0 != 0 })
+        if sizedMode || nonzeroDeclaration {
+            if !sizedMode {
+                sizedMode = true
+                buffer.removeAll(keepingCapacity: false)
+            }
+            return feedSized(payload, body: body, marker: marker, declared: declared)
+        }
         let frameNo = payload[16]
         let position = Int(payload[18]) * 2 + Int(payload[17] >> 7)  // fragment index within the frame
 
@@ -61,11 +72,62 @@ public struct HevcDepacketizer {
             }
         }
         lastPosition = position
-        buffer.append(contentsOf: payload[20...])
+        if payload.count - 20 <= Self.maxEncodedBytes + 16 - buffer.count {
+            buffer.append(contentsOf: payload[20...])
+        } else {
+            corrupt = true
+        }
         return completed
     }
 
+    private static func declaredSize(_ body: ArraySlice<UInt8>) -> Int? {
+        guard body.count >= 16, body.starts(with: [0, 0, 1, 0xff]) else { return nil }
+        let count = (0..<4).reduce(UInt32(0)) {
+            $0 | (UInt32(body[body.startIndex + 4 + $1]) << ($1 * 8))
+        }
+        guard count > 0, count <= maxEncodedBytes else { return nil }
+        return Int(count) + 16
+    }
+
+    private mutating func feedSized(
+        _ packet: [UInt8], body: ArraySlice<UInt8>, marker: Bool, declared: Int?
+    ) -> [UInt8]? {
+        let sequence = UInt16(packet[4]) | (UInt16(packet[5]) << 8)
+        if sequence == lastSizedSequence { return nil }
+        if marker {
+            if expectedSize != nil { droppedIncomplete += 1 }
+            sizedBuffer.removeAll(keepingCapacity: true)
+            expectedSize = declared
+            lastSizedSequence = nil
+        }
+        guard let expectedSize else { return nil }
+        if let last = lastSizedSequence, sequence != last &+ 8 {
+            droppedIncomplete += 1
+            self.expectedSize = nil
+            sizedBuffer.removeAll(keepingCapacity: true)
+            lastSizedSequence = sequence
+            return nil
+        }
+        lastSizedSequence = sequence
+        guard body.count <= expectedSize - sizedBuffer.count else {
+            droppedIncomplete += 1
+            self.expectedSize = nil
+            sizedBuffer.removeAll(keepingCapacity: true)
+            return nil
+        }
+        sizedBuffer.append(contentsOf: body)
+        guard sizedBuffer.count == expectedSize else { return nil }
+        let accessUnit = Array(sizedBuffer.dropFirst(16))
+        sizedBuffer.removeAll(keepingCapacity: true)
+        self.expectedSize = nil
+        return accessUnit
+    }
+
     public mutating func reset() {
+        sizedMode = false
+        expectedSize = nil
+        sizedBuffer.removeAll(keepingCapacity: false)
+        lastSizedSequence = nil
         currentFrame = nil
         buffer.removeAll(keepingCapacity: true)
         lastPosition = nil

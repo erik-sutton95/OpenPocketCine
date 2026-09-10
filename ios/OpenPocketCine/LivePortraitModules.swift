@@ -101,17 +101,30 @@ struct LivePortraitRecOptionsButton: View {
 /// parks above the capture strip / system rail so the rail cannot cover it.
 struct LivePortraitAspectToggle: View {
     @Binding var aspect: PortraitFeedAspect
+    var showsLabel = false
 
     var body: some View {
         Button {
             aspect = aspect == .fill ? .fit16x9 : .fill
         } label: {
-            (aspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
-                .frame(width: 15, height: 15)
+            if showsLabel {
+                VStack(spacing: 3) {
+                    (aspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
+                        .frame(width: 20, height: 20)
+                    Text(aspect == .fill ? "FILL" : "FIT")
+                        .font(LiveType.text(11, weight: .semibold))
+                }
                 .foregroundStyle(LiveDesign.text)
-                .frame(width: 40, height: 40)
-                .background(.black.opacity(0.55), in: Circle())
-                .overlay(Circle().strokeBorder(LiveDesign.hairline, lineWidth: 1))
+                .frame(minWidth: 54, minHeight: 50)
+                .contentShape(Rectangle())
+            } else {
+                (aspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
+                    .frame(width: 15, height: 15)
+                    .foregroundStyle(LiveDesign.text)
+                    .frame(width: 40, height: 40)
+                    .background(.black.opacity(0.55), in: Circle())
+                    .overlay(Circle().strokeBorder(LiveDesign.hairline, lineWidth: 1))
+            }
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel(aspect == .fill ? "Fit feed in frame" : "Fill frame with feed")

@@ -201,7 +201,7 @@ struct CapturePickerPanel: View {
             guard sheet == .iso else { return }
             reseatIso()
         }
-        .onChange(of: model.session.status.availableVideoFormats) { _, _ in
+        .onChange(of: pickerVideoFormats) { _, _ in
             guard sheet == .resolution else { return }
             guard !model.session.isFormatPinActive else { return }
             seed()
@@ -793,7 +793,7 @@ struct CapturePickerPanel: View {
         case .resolution:
             let res = resolutionForTab(index)
             let rates = CamCapVideoFormat.frameRates(
-                available: model.session.status.availableVideoFormats,
+                available: pickerVideoFormats,
                 resolution: res,
                 current: currentVideoFormat.frameRate)
             let rate =
@@ -885,23 +885,29 @@ struct CapturePickerPanel: View {
         return VideoFormat(resolution: res, frameRate: rate)
     }
 
+    private var pickerVideoFormats: [VideoFormat] {
+        CamCapVideoFormat.pickerFormats(
+            available: model.session.status.availableVideoFormats,
+            model: connectedBody, shootingMode: model.session.status.shootingMode)
+    }
+
     private var formatAspects: [VideoAspect] {
         CamCapVideoFormat.aspects(
-            available: model.session.status.availableVideoFormats,
+            available: pickerVideoFormats,
             current: currentVideoFormat.resolution.aspect)
     }
 
     private var formatResolutions: [VideoResolution] {
         let aspect = formatAspects.count > 1 ? selectedAspect : nil
         return CamCapVideoFormat.resolutions(
-            available: model.session.status.availableVideoFormats,
+            available: pickerVideoFormats,
             aspect: aspect,
             current: currentVideoFormat.resolution)
     }
 
     private var formatRates: [VideoFrameRate] {
         CamCapVideoFormat.frameRates(
-            available: model.session.status.availableVideoFormats,
+            available: pickerVideoFormats,
             resolution: resolutionForTab(selectedMode),
             current: currentVideoFormat.frameRate)
     }
@@ -926,7 +932,7 @@ struct CapturePickerPanel: View {
             ?? currentVideoFormat.resolution
         selectedMode = sizes.firstIndex(of: match) ?? 0
         let rates = CamCapVideoFormat.frameRates(
-            available: model.session.status.availableVideoFormats,
+            available: pickerVideoFormats,
             resolution: match,
             current: currentVideoFormat.frameRate)
         let rate =

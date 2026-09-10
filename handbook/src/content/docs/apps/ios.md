@@ -101,3 +101,24 @@ If pairing or live view fails: Connection setup **Share Diagnostics**, or
 Operator Setup → System → **Share Diagnostics**, or take a screenshot for
 TestFlight and paste the copied report into the feedback. The report has no
 name, location, or Wi-Fi password.
+
+### False color during exposure changes
+
+False color keeps its previous complete color map while an updated exposure map
+is prepared. The picture continues updating; paint and coverage switch together.
+The first activation can still take a moment to prepare the map.
+
+D-Log M scopes use their own signal scale. Sensor clipping and shadow limits
+remain uncalibrated; see the D-Log M scope notes below.
+
+Video and assist overlays resize together when rotating the phone or switching
+between Fit and Fill, keeping false color, peaking, and zebra paint aligned with
+the picture during the transition.
+
+### D-Log M scopes
+
+D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
+and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
+do not establish where the camera sensor loses detail. PStops (`DLM ≈`) and the
+gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
+especially on other D-Log M cameras. Live-preview calibration remains pending.

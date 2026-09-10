@@ -123,6 +123,21 @@ fun LiveControlSheet(
     onDismiss: () -> Unit,
     maxHeightDp: Float? = null,
 ) {
+    val formats = VideoFormat.pickerFormats(
+        status.availableVideoFormats, model.session.connectedCamera?.model, status.shootingMode,
+    )
+    LiveControlSheetContent(sheet, model, status.copy(availableVideoFormats = formats), locked, onDismiss, maxHeightDp)
+}
+
+@Composable
+private fun LiveControlSheetContent(
+    sheet: LiveSheet,
+    model: AppModel,
+    status: CameraStatus,
+    locked: Boolean,
+    onDismiss: () -> Unit,
+    maxHeightDp: Float?,
+) {
     val context = LocalContext.current
     val enabled = !locked
     val isEvSheet = CaptureLists.isEvSheet(sheet, status.expoMode)

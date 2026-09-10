@@ -254,6 +254,7 @@ struct LiveViewScreen: View {
             )
             .clipped()
             .opacity(model.session.isFeedWarming ? 1 : 0)
+            .accessibilityHidden(!model.session.isFeedWarming)
             .allowsHitTesting(false)
 
             if let portrait {
@@ -352,7 +353,13 @@ struct LiveViewScreen: View {
                     .position(x: layout.topDeck.midX, y: layout.topDeck.midY)
             }
 
-            if showsLock {
+            if let exit = model.multiviewExit {
+                Button(action: exit) {
+                    OpcIcon.layoutGrid.frame(width: 22, height: 22).frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Return to Multiview").liveModuleFrame(layout.lock)
+            } else if showsLock {
                 LiveLockButton(locked: $interfaceLocked)
                     .chromeEditable(.lockButton, editing: editingMode)
                     .liveModuleFrame(layout.lock)
@@ -373,7 +380,7 @@ struct LiveViewScreen: View {
                     .chromeEditable(.railSettings, editing: editingMode)
                     .liveModuleFrame(layout.settings)
             }
-            if model.chromeSectionMounts(.railMedia) {
+            if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton { model.liveOperatorPanel = .media }
                     .chromeEditable(.railMedia, editing: editingMode)
                     .liveModuleFrame(layout.media)

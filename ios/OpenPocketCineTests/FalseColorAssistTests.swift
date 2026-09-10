@@ -11,6 +11,59 @@ final class FalseColorAssistTests: XCTestCase {
         ScopeExposureCeiling.reset()
     }
 
+    func testExposureChangeKeepsFalseColorPaintAvailable() throws {
+        ScopeExposureCeiling.setISO(1600)
+        try warmOverlayCubes(scale: .ire, mode: .dLog2)
+        for iso in [125, 200, 400, 800, 1600] {
+            let previous = try XCTUnwrap(
+                PocketFalseColorMap.overlayPairData(scale: .ire, mode: .dLog2))
+            ScopeExposureCeiling.setISO(iso)
+            let retained = try XCTUnwrap(
+                PocketFalseColorMap.overlayPairData(scale: .ire, mode: .dLog2),
+                "Exposure updates must not remove false color while warming")
+            XCTAssertEqual(retained.clipByte, previous.clipByte)
+            XCTAssertEqual(retained.paint, previous.paint)
+            XCTAssertEqual(retained.weight, previous.weight)
+            try warmOverlayCubes(scale: .ire, mode: .dLog2)
+            XCTAssertEqual(
+                PocketFalseColorMap.overlayPairData(scale: .ire, mode: .dLog2)?.clipByte,
+                ScopeExposureCeiling.clipByte(transfer: .dlog2))
+        }
+    }
+
+    func testExposureReturningToCachedMapDiscardsObsoleteBuild() throws {
+        ScopeExposureCeiling.setISO(1600)
+        try warmOverlayCubes(scale: .limits, mode: .dLog2)
+        let original = try XCTUnwrap(
+            PocketFalseColorMap.overlayPairData(scale: .limits, mode: .dLog2))
+        ScopeExposureCeiling.setISO(125)
+        _ = PocketFalseColorMap.overlayPairData(scale: .limits, mode: .dLog2)
+        ScopeExposureCeiling.setISO(1600)
+        for _ in 0..<50 {
+            let maps = try XCTUnwrap(
+                PocketFalseColorMap.overlayPairData(scale: .limits, mode: .dLog2))
+            XCTAssertEqual(maps.clipByte, original.clipByte)
+            XCTAssertEqual(maps.paint, original.paint)
+            XCTAssertEqual(maps.weight, original.weight)
+            usleep(20_000)
+        }
+    }
+
+    func testFalseColorExposureSnapshotSurvivesGlobalISOChange() {
+        let anchors = ScopeAnchors.make(transfer: .dlog2, clipByte: 200)
+        let bands = LiveColorScience.falseColorBands(
+            .stops, transfer: .dlog2, clipEncoded: anchors.clip)
+        let before = ScopeDisplayScale.waveformLevel(0.7, anchors: anchors)
+        ScopeExposureCeiling.setISO(100)
+        ScopeExposureCeiling.observeTapMax(170, transfer: .dlog2)
+        XCTAssertEqual(ScopeDisplayScale.waveformLevel(0.7, anchors: anchors), before)
+        XCTAssertEqual(
+            LiveColorScience.falseColorBands(
+                .stops, transfer: .dlog2,
+                clipEncoded: anchors.clip), bands)
+        XCTAssertEqual(anchors.clip, 200.0 / 255.0)
+    }
+
     func testLiveTapCeilingPaintsClipBand() {
         let cube = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .dlog2)
         let c = Float(247) / 255
@@ -236,12 +289,13 @@ final class FalseColorAssistTests: XCTestCase {
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
             let ready =
-                PocketFalseColorMap.overlayPaintData(scale: scale, mode: mode) != nil
-                && PocketFalseColorMap.overlayWeightData(scale: scale, mode: mode) != nil
+                PocketFalseColorMap.overlayPairData(scale: scale, mode: mode)?.clipByte
+                == ScopeExposureCeiling.clipByte(transfer: MonitorTransfer(mode))
             if ready { return }
             usleep(20_000)
         }
-        throw XCTSkip("false-colour cube warm did not finish in time")
+        XCTFail("false-colour cube warm did not finish in time")
+        throw NSError(domain: "FalseColorWarm", code: 1)
     }
 
     func testCompositorFalseColorIgnoresOperatorLUT() throws {

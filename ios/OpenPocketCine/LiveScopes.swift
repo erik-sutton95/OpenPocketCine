@@ -280,6 +280,7 @@ extension MonitorTransfer {
         case .rec709: "709"
         case .hdr: "HLG"
         case .dlog: "DLOG"
+        case .dlogm: "DLM ≈"
         case .dlog2: "DL2"
         }
     }

@@ -24,7 +24,9 @@ enum FalseColorAssist {
         + "highlight levels over luminance grayscale. IRE uses RED Video Mode-style monitor "
         + "ranges on the WAVE axis: paper black at 0, D-Log2 18% grey at 30.50, live-tap EI "
         + "ceiling at 100. Limits paints only shadow and highlight warnings, leaving other "
-        + "colors untouched."
+        + "colors untouched. D-Log M uses a direct 0–100 signal scale. Its PStops and "
+        + "gray guide are estimates from a Pocket 3 fit, not calibrated sensor limits. "
+        + "Use IRE for signal measurements on other D-Log M cameras."
 
     /// OpenZCine `falseColorRows` Reference Display help.
     static let referenceHelp =
@@ -270,6 +272,7 @@ struct FalseColorReference: View {
         case .rec709: "709"
         case .hdr: "HLG"
         case .dlog: "D-Log"
+        case .dlogm: "DLM ≈"
         case .dlog2: "D-Log2"
         }
     }

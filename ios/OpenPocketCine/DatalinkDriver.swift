@@ -14,6 +14,15 @@ import os
 /// re-armed on the UDP queue (never the main actor) so a busy UI cannot stall the socket.
 @MainActor
 final class DatalinkDriver {
+    private let stationHost: String?
+    private let stationHotspot: Bool
+    private var remoteHost: String { stationHost ?? CameraSoftAP.host }
+    private var pathReady: Bool {
+        stationHost == nil
+            ? WiFiJoiner.isCameraPathReady()
+            : SharedWiFiPath.address(hotspot: stationHotspot) != nil
+    }
+    nonisolated private let initialStationWindow = OSAllocatedUnfairLock(initialState: UInt16?.none)
     private let port: UInt16
     private let tcpPoke: Bool
     private let pairingToken: String
@@ -142,7 +151,7 @@ final class DatalinkDriver {
     }
 
     private var flowHealth: CameraSoftAP.DatalinkFlowHealth {
-        if !WiFiJoiner.isCameraPathReady() { return .pathLost }
+        if !pathReady { return .pathLost }
         guard let conn else { return .notReady }
         switch conn.state {
         case .ready: return writeHealthy ? .ready : .writeRejected
@@ -152,7 +161,12 @@ final class DatalinkDriver {
         }
     }
 
-    init(port: UInt16, tcpPoke: Bool, pairingToken: String) {
+    init(
+        port: UInt16, tcpPoke: Bool, pairingToken: String, stationHost: String? = nil,
+        stationHotspot: Bool = false
+    ) {
+        self.stationHost = stationHost
+        self.stationHotspot = stationHotspot
         self.port = port
         self.tcpPoke = tcpPoke
         self.pairingToken = pairingToken
@@ -160,7 +174,10 @@ final class DatalinkDriver {
     }
 
     private var handshakeAcked: Bool {
-        get { handshakeFlag.withLock { $0 } }
+        get {
+            handshakeFlag.withLock { $0 }
+                && (stationHost == nil || initialStationWindow.withLock { $0 != nil })
+        }
         set { handshakeFlag.withLock { $0 = newValue } }
     }
 
@@ -169,22 +186,28 @@ final class DatalinkDriver {
     ///
     /// `afterHandshake` runs after register + subscribe — send `0x09/0xa8`
     /// there. Enable before subscribe is ignored on first boot.
-    func open(afterHandshake: (@MainActor () async -> Void)? = nil) async throws {
+    func open(identityOnly: Bool = false, afterHandshake: (@MainActor () async -> Void)? = nil)
+        async throws
+    {
         try throwIfClosed()
         // Sockets created before 192.168.2.x exist bind to the old Wi-Fi, then
         // RST when the camera AP finishes associating (first-connect black feed).
-        try await WiFiJoiner.waitUntilCameraPathReady()
+        try await waitForCameraPath()
         try throwIfClosed()
         try await refreshCameraPath()
         try throwIfClosed()
         try await ensurePoke()
         try throwIfClosed()
 
+        let stationDeadline = Date().addingTimeInterval(15)
         var rebinds = 0
         var haveSocket = false
         var keepBind = false
         while true {
             try throwIfClosed()
+            if stationHost != nil && Date() >= stationDeadline {
+                throw DatalinkError.noHandshake
+            }
             if !keepBind {
                 resetHandshakeSession()
                 // Do not discard before the first bind — that was a no-op on a
@@ -223,11 +246,14 @@ final class DatalinkDriver {
                 // Protocol: register + subscribe, then 0x09/0xa8. Enable before
                 // subscribe is ignored; first-boot then piled mid-GOP P-frames
                 // and first-picture tore UDP during the IDR gap.
-                if camChannel != 0 { udpSeq = camChannel &+ 8 }
+                if let initial = initialStationWindow.withLock({ $0 }), stationHost != nil {
+                    udpSeq = initial
+                } else if camChannel != 0 {
+                    udpSeq = camChannel &+ 8
+                }
                 primeWireSeqs()
                 sendAck()
-                register()
-                subscribe()
+                if !identityOnly { completeRegistration() }
                 startAckPump()
                 // Mimo 20260828: HEVC 17 ms after DHCP, 0xa8 at +3 s. Arm ingest
                 // on handshake ack. Decoder still latches VPS only.
@@ -243,7 +269,7 @@ final class DatalinkDriver {
             }
 
             let inbound = handshakeInbound.withLock { $0 }
-            let pathReady = WiFiJoiner.isCameraPathReady()
+            let pathReady = self.pathReady
             switch CameraSoftAP.handshakeTimeoutStep(
                 pathReady: pathReady, rebindsUsed: rebinds, inboundDatagrams: inbound)
             {
@@ -286,6 +312,7 @@ final class DatalinkDriver {
         dumlSeq = 0xA000
         cmdCounter = 0
         handshakeAcked = false
+        initialStationWindow.withLock { $0 = nil }
         handshakeInbound.withLock { $0 = 0 }
         videoGate.withLock { $0 = VideoGate() }
         videoAssembler.reset()
@@ -448,7 +475,7 @@ final class DatalinkDriver {
         // Pre-rebuild lastStatus is the old 5-tuple. Leaving it young looks
         // like encoder-pause on the new bind and GOP-cuts immediately.
         lastStatusDate = nil
-        try await WiFiJoiner.waitUntilCameraPathReady(timeout: 5)
+        try await waitForCameraPath(timeout: 5)
         if closed { return }
         try await refreshCameraPath()
         if closed { return }
@@ -480,6 +507,13 @@ final class DatalinkDriver {
     }
 
     // ---- registration ----------------------------------------------------------------------------
+
+    /// Called only after station discovery verifies the selected BLE camera identity.
+    func completeRegistration() {
+        guard !closed else { return }
+        register()
+        subscribe()
+    }
 
     private func register() {
         sendDuml(Commands.appDeviceInfo(seq: 0))
@@ -867,6 +901,7 @@ final class DatalinkDriver {
         // it from the UDP callback hopped to main and froze the feed when the UI was busy.
         let assembler = videoAssembler
         let handshake = handshakeFlag
+        let stationWindow = initialStationWindow
         let inbound = handshakeInbound
         let gate = videoGate
         let flipReplyAt = lastSelfieFlipReply
@@ -917,6 +952,9 @@ final class DatalinkDriver {
                     Task { @MainActor in
                         self?.log.info("datalink: handshake reply pktType=0x00")
                     }
+                }
+                if let initial = MulticamCommands.controlSequence(fromInitialWindow: bytes) {
+                    stationWindow.withLock { if $0 == nil { $0 = initial } }
                 }
                 self?.noteAckWindows(bytes)
                 let video = bytes.count > 6 && bytes[6] == 0x02
@@ -1120,18 +1158,32 @@ final class DatalinkDriver {
 
     private func openUDPOnce(label: String) async throws {
         let params = wifiUDP()
-        let host = CameraSoftAP.host
+        let host = remoteHost
         conn = NWConnection(
             host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!, using: params)
         log.info(
-            "datalink: UDP \(label, privacy: .public) \(host, privacy: .public):\(self.port) if=\(self.cameraInterface?.name ?? "-", privacy: .public) local=\(self.cameraLocalIPv4 ?? "-", privacy: .public)"
+            "datalink: UDP \(label, privacy: .public) \(host, privacy: .private):\(self.port) if=\(self.cameraInterface?.name ?? "-", privacy: .public) local=\(self.cameraLocalIPv4 ?? "-", privacy: .public)"
         )
         try await start(conn!)
         startReceiveLoop()
         if let conn { installStateWatch(conn) }
     }
 
+    private func waitForCameraPath(timeout: TimeInterval = 15) async throws {
+        if stationHost == nil {
+            try await WiFiJoiner.waitUntilCameraPathReady(timeout: timeout)
+        } else if !pathReady {
+            throw DatalinkError.notReady
+        }
+    }
+
     private func refreshCameraPath() async throws {
+        if stationHost != nil {
+            cameraLocalIPv4 = SharedWiFiPath.address(hotspot: stationHotspot)
+            cameraInterface = nil
+            guard cameraLocalIPv4 != nil else { throw DatalinkError.notReady }
+            return
+        }
         cameraLocalIPv4 = WiFiJoiner.cameraLocalIPv4()
         cameraInterface = await WiFiJoiner.resolveCameraInterface()
         #if !targetEnvironment(simulator)
@@ -1179,7 +1231,7 @@ final class DatalinkDriver {
         monitor.pathUpdateHandler = { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                if !WiFiJoiner.isCameraPathReady() {
+                if !self.pathReady {
                     self.writeHealthy = false
                     self.log.info("datalink: camera 192.168.2.x left the path")
                 } else if !self.writeHealthy {
@@ -1281,7 +1333,7 @@ final class DatalinkDriver {
 
     private func poke7001Once() async throws {
         let tcp = NWConnection(
-            host: NWEndpoint.Host(CameraSoftAP.host), port: 7001, using: wifiTCP())
+            host: NWEndpoint.Host(remoteHost), port: 7001, using: wifiTCP())
         pokeConn = tcp
         try await start(tcp, timeout: 2)
         tcp.send(
@@ -1309,7 +1361,7 @@ final class DatalinkDriver {
 
 /// HEVC reassembly on the UDP queue. Main hops only complete access units (~25 Hz),
 /// not every SoftAP datagram.
-private final class SoftAPVideoAssembler: @unchecked Sendable {
+final class SoftAPVideoAssembler: @unchecked Sendable {
     struct Snapshot {
         var packets = 0
         var dropped = 0
@@ -1322,10 +1374,12 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
         var accessUnit: [UInt8]?
         var firstPacket = false
         var shouldHop = false
+        var droppedPending = 0
     }
 
     private struct State {
         var depacketizer = HevcDepacketizer()
+        var codec: LiveVideoCodec?
         var packets = 0
         var accessUnits = 0
         var lastPacket: Date?
@@ -1355,20 +1409,24 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
             if first { state.loggedFirst = true }
             let au = state.depacketizer.feed(datagram)
             var shouldHop = false
+            var droppedPending = 0
             if let au {
+                if state.codec == nil { state.codec = LiveVideo.detect(annexB: au) }
                 state.accessUnits += 1
                 state.lastAU = Date()
                 state.pending.append(au)
                 if state.pending.count > 8 {
-                    // MainActor hop can stall behind Flip/GET. Drop TRAIL only —
-                    // dropping VPS/IDR left format=0 / WAITING FOR LIVE VIEW.
+                    // Classify with the latched codec: Nano AVC 0x41 P-slices
+                    // otherwise look like HEVC VPS, while its IDRs get dropped.
+                    let codec = state.codec ?? .hevc
                     while state.pending.count > 8 {
                         guard
                             let i = state.pending.firstIndex(where: {
-                                !Hevc.accessUnitCarriesKeyframe($0)
+                                !LiveVideo.accessUnitCarriesKeyframe($0, codec: codec)
                             })
                         else { break }
                         state.pending.remove(at: i)
+                        droppedPending += 1
                     }
                 }
                 if !state.hopScheduled {
@@ -1376,7 +1434,9 @@ private final class SoftAPVideoAssembler: @unchecked Sendable {
                     shouldHop = true
                 }
             }
-            return Ingest(accessUnit: au, firstPacket: first, shouldHop: shouldHop)
+            return Ingest(
+                accessUnit: au, firstPacket: first, shouldHop: shouldHop,
+                droppedPending: droppedPending)
         }
     }
 

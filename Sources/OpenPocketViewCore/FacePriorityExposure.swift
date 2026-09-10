@@ -80,6 +80,8 @@ public enum FacePriorityExposure: Sendable {
         encoded: Double,
         transfer: MonitorTransfer
     ) -> EvComp? {
+        // Scope calibration must not silently change automatic camera exposure.
+        let transfer = transfer == .dlogm ? MonitorTransfer.dlog : transfer
         let stops = LiveColorScience.stops(encoded: encoded, transfer: transfer)
         guard stops.isFinite else { return nil }
         if abs(stops) < deadbandStops { return nil }

@@ -5,6 +5,7 @@ import SwiftUI
 struct SavedCamerasView: View {
     @Environment(AppModel.self) private var model
     let compact: Bool
+    @State private var showMultiview = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -27,6 +28,9 @@ struct SavedCamerasView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        }
+        .fullScreenCover(isPresented: $showMultiview, onDismiss: { model.session.startScan() }) {
+            MultiviewView()
         }
     }
 
@@ -97,14 +101,30 @@ struct SavedCamerasView: View {
 
     private var cameraListCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("CAMERA LIST")
-                .font(LiveType.ui(size: 11, weight: .semibold, design: .rounded))
-                .tracking(1.4)
-                .foregroundStyle(StartupColors.muted)
-            Text("Tap a camera to connect")
-                .font(LiveType.ui(size: 25, weight: .bold, design: .rounded))
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CAMERA LIST")
+                        .font(LiveType.ui(size: 11, weight: .semibold, design: .rounded))
+                        .tracking(1.4).foregroundStyle(StartupColors.muted)
+                    Text("Tap a camera to connect")
+                        .font(LiveType.ui(size: 25, weight: .bold, design: .rounded))
+                        .foregroundStyle(StartupColors.ink)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    model.session.disconnect()
+                    showMultiview = true
+                } label: {
+                    OpcIcon.layoutGrid.frame(width: 22, height: 22)
+                        .frame(width: 44, height: 44)
+                        .background(StartupColors.tile, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
                 .foregroundStyle(StartupColors.ink)
-                .padding(.top, 6)
+                .accessibilityLabel("Open Multiview")
+                .accessibilityIdentifier("cameras.multiview")
+                .disabled(model.isBusy)
+            }
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 12) {

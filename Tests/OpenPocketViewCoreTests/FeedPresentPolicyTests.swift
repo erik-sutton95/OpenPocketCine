@@ -3,6 +3,15 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct FeedPresentPolicyTests {
+    @Test func repaintingAnOldLUTFrameDoesNotCountAsRecovery() {
+        #expect(FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: 0.01, secondsSinceLastDecodedFrame: 10))
+        #expect(!FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: 0.01, secondsSinceLastDecodedFrame: 0.01))
+        #expect(FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: 10, secondsSinceLastDecodedFrame: 0.01))
+    }
+
     @Test func freezeThresholdMatchesWatchdogStall() {
         #expect(FeedPresentPolicy.freezeThreshold == FeedWatchdog.stallThreshold)
         #expect(FeedPresentPolicy.freezeThreshold == 2)

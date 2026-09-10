@@ -25,6 +25,17 @@ public enum LiveVideoCodec: Equatable, Sendable {
 }
 
 public enum LiveVideo {
+    /// Preserve parameter sets and random-access frames using the negotiated codec.
+    public static func accessUnitCarriesKeyframe(_ annexB: [UInt8], codec: LiveVideoCodec) -> Bool {
+        Hevc.nalUnits(annexB).contains { nal in
+            guard let first = nal.first else { return false }
+            switch codec {
+            case .avc: return Avc.isKeyframeNal(Avc.nalType(first))
+            case .hevc: return Hevc.isKeyframeNal(Hevc.nalType(first))
+            }
+        }
+    }
+
     /// Classify from a NAL's first byte. Parameter sets are unambiguous;
     /// P-slices and IRAP slices alone are not classified.
     public static func codec(ofNAL firstByte: UInt8) -> LiveVideoCodec? {

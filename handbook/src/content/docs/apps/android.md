@@ -101,3 +101,11 @@ need a **physical** Android phone.
 ## What not to copy from OpenZCine Android
 
 Nikon PTP-IP, AccessorySetupKit, OCR SSID scanner, USB-C/HDMI paths.
+
+### D-Log M scopes
+
+D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
+and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
+do not establish where the camera sensor loses detail. PStops (`DLM ≈`) and the
+gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
+especially on other D-Log M cameras. Live-preview calibration remains pending.

@@ -49,3 +49,13 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x02/0xA6` | **tracking box SET** | `01 00 00` + u16 + 4×f32 **centre + size**; all-zero clears |
 | `0x02/0xA5` | **tracking poll** | GET `00`; reply `00 01 00 00` locked / `00 00 00 00` idle. **No box.** |
 | `0x02/0x89` | **live subject box** | camera notify flags `0x00`, 23 B; 4×f32 LE @7 = **centre + size** (~15 Hz) |
+
+## Pocket 3 format choices without a capability table
+
+The tested Pocket 3 returned a nonzero reply to `camcap_video_format`, while
+`cam_video_param_v2` subscription and status reports worked. For normal Video,
+the app uses DJI's [Pocket 3 specification](https://www.dji.com/osmo-pocket-3/specs)
+when the capability table is empty: 1080p/2.7K/4K in 16:9, 1080p/2160p/3K in 1:1,
+and 1080p/2.7K/3K in 9:16, at 24/25/30/48/50/60 fps. Camera-reported tables take
+precedence. This fallback is not applied to SlowMo, livestream or an unknown
+shooting mode. Existing `02/18` SET and camera-status confirmation are used.

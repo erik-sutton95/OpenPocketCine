@@ -546,7 +546,9 @@ import Testing
         #expect(VideoResolution.labeledVideo.map(\.tabTitle) == ["1080", "4K"])
         #expect(VideoFrameRate.labeledVideo.map(\.fps) == [24, 25, 30, 48, 50, 60])
         #expect(
-            VideoFrameRate.labeledVideo.map(\.drumLabel) == ["24p", "25p", "30p", "48p", "50p", "60p"])
+            VideoFrameRate.labeledVideo.map(\.drumLabel) == [
+                "24p", "25p", "30p", "48p", "50p", "60p",
+            ])
         #expect(VideoFrameRate(drumLabel: "48p") == .fps48)
         #expect(VideoFrameRate(drumLabel: "120p") == .fps120)
         #expect(

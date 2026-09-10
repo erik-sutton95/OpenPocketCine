@@ -101,6 +101,10 @@ ios-generate:
 ios-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
+# Build a development-signed app for a connected iPhone/iPad prototype test.
+ios-device-build: ios-generate
+    xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+
 # Run the iOS shell's XCTest suite on the first available iPhone simulator.
 ios-test: ios-generate
     #!/usr/bin/env bash

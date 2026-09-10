@@ -21,6 +21,10 @@ write the exception in the table in the same PR.
 | Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, independent playback assist rail, LUT / PEAK / FALSE / ZEBRA grade that proxy (identity player + overlay/replace feed), live HEVC held while library or Operator Setup covers the monitor (do not drop pktType `0x02` ingest — #177; Android keeps the SurfaceView attached under that overlay — #248). Next/prev keeps the processed-feed host so an armed LUT rebakes the new item without cycling the chip. Shot color lives in the media cache (`color.json`) so Auto LUT works disconnected. **Proxy** tag when only the 720p sidecar is on the phone. Storage **Full Resolution Caching** (on by default) also caches the original on open. Playback LUT replace hides the identity player once the GPU owns the cube (live already does). Pocket 3 `/v2` is always storage 0 (single microSD), even when the list handle has the internal bit. Newest catalog page lists even if `0x02/0x0c` ACKs E0 after a take; older pages still need playback. | Frame.io upload and LUT bake on export: iOS only. iOS Share **Bake LUT** has **Bake exposure** (on by default) so the LUT exposure pull is written into the file; off keeps the cube at 0.0. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback chrome is an 82% DJI-black plate (no Kyant). GPU backends: iOS `CIFeedView` vs Android GLES. iOS playback stacks `AVPlayerLayer` and `CIFeedView` as siblings — Metal nested in `AVPlayerLayer` is a black LUT plate. Android playback already matches live: ExoPlayer writes an OES surface and `LiveFeedEffectsSession` grades LUT/FALSE/PEAK/ZEBRA in GLES (`PlaybackFeedView`); TextureView is only the window. | **physical** both |
 | Present path | `FeedPresentPolicy`: skip duplicate timestamps, latest-wins bake, freeze ≠ flush (2 s keep last sample), unhide replace-grade before the drawable, offscreen `isEnabled = false`, one `0x09/0xa8` in flight (`SerialSessionGate`), one Metal/GLES present in flight (`maxInFlightMetalPresents`). LUT 50/50 is a cube option, not a decoder/swapchain tear — split without a cube must not cover identity. LUT cubes at the 720p feed raster then stretches Rec.709 (`bakeSize` then bilinear). | iOS Metal / `CIFeedView` vs Android Vulkan / GLES `LiveFeedEffectsSession`; debug line is `control-live.log` / logcat, not operator chrome. Extra-mirror commits on the feed host at present (TT180) after holding the last picture 3 frames / 120 ms so the current orientation is not X-flipped in place. iOS `CAMetalLayer.allowsNextDrawableTimeout` (no MainActor block). Android already gates GPU split on a loaded cube. | **physical** both |
 | Diagnostics | Operator Setup → System **and** Connection setup (first pair) → **Share Diagnostics** (redacted report). Journal in app documents. No analytics upload. | iOS copies a compact paste on screenshot for TestFlight feedback (Apple cannot attach files to that form). Android has no TestFlight screenshot hook — Share only. MetricKit is iOS. | **physical** both |
+| Multiview prototype | Experimental shared Wi-Fi with independent per-camera BLE provisioning, bounded identity-verified LAN discovery, normal UDP preview, per-camera and group recording with fresh status confirmation. | iOS only; Android deferred. Pocket 3/4/4 Pro and Nano have preview profiles. Action/360 and unprofiled Osmo can attempt network-only setup. Audio, phone hotspot, unprofiled models and four-camera thermal behavior remain unverified. | Physical iPhone: Pocket 4 Pro, Pocket 3 and Nano preview together, automatic discovery, all three record starts/stops and tally borders confirmed. Dedicated parallel-setup, saved-stage restoration and AP-return checks remain pending. |
+| Multiview stage polish | Camera-list grid icon, adaptive grid/Center stage, floating names, settings/timecode, per-camera Auto LUT, Live View record lamp, compact Layout/Wi-Fi/Fit/Fill bar, centered network setup and Add picker, device-only credentials, bounded recovery and borrowed Live View. | iOS experimental only; Android deferred. Hotspot status is interface detection, not a reliable Settings-switch flag. No frame-accurate synchronization. | Physical iPhone: setup navigation, scan cancellation, all Add buttons, password bounds, touch targets, three-camera portrait/landscape Fit/Fill and tally checks pass. All three feeds resumed after app switching; Pocket 3 took roughly a minute. Borrowed full controls, hotspot transitions and repeated Wi-Fi joins still need physical verification. |
+| Nano transport assembly | Shared length-based assembly across transport groups and length-aware private AVC metadata parsing. | Both shells use shared assembly. Android passes raw access units to MediaCodec, so applying the private metadata filter to its decoder input and physical regression remain pending. | iPhone captured-stream replay: 359/359 decoded, zero errors. Nano normal monitor physically confirmed smooth by the operator; live counters matched ~25 fps with no missing decoded pictures. Android and Pocket regression pending. |
+| Nano frame-queue protection | Preserve AVC parameter sets and IDR when trimming a live frame backlog. | iOS queue uses a latched codec; Android has a different buffering path. The iOS regression fix is not yet physically verified as a stutter fix. | iOS synthetic overload regression plus physical cadence comparison pending |
 | Explicit skip | — | VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL / De-SQ / MAG | n/a |
 
 Datalink bind, ACK, enable-write, and decoder latch facts live in
@@ -63,3 +67,130 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   record sits on the canvas floor: the cluster stays on the right edge and
   lifts above the record button. Follow / speed / A·B·C attach leading of
   the stick later without moving it.
+
+## Multiview saved stage and shutdown (in validation)
+
+The iOS development shell saves tile assignments, layout, focus, LUT selection,
+experimental setup choice and verified identity/address hints in device-only
+Keychain storage. Network passwords remain in the separate network Keychain
+record. Reopening restores the selected network and starts camera connections
+independently, with per-address reservations during LAN identity verification.
+The standard single-camera BLE path retains exclusive-camera cleanup.
+
+Closing the stage closes monitoring, then attempts the documented AP switch over
+independent BLE links. Failed cleanup remains saved and the operator may close
+anyway; the next Multiview entry retries it. Force quit cannot guarantee cleanup.
+No record-stop command is sent. Camera AP availability, recording continuity,
+concurrent pairing, and restore across app relaunch still require physical proof.
+Known blocker: network scanning switches an unassigned camera to station mode,
+but cancellation/close does not include that camera in the cleanup ledger.
+Scan-only camera restoration must be fixed and verified before release.
+Android Multiview remains deferred.
+
+## First-picture random-access gate
+
+The iOS compressed-frame decoder waits for initial AVC IDR / HEVC IRAP submission
+before treating inter frames as picture. This prevents a Pocket 3 P-only stream
+from settling first-picture recovery. Android has a different presentation path;
+its equivalent behavior and physical regression remain to be checked. iOS
+regression reproduced false presentation before the fix. Five consecutive
+Pocket 3 normal-monitor joins passed on iPhone; broader model regression remains
+pending.
+
+AVC now starts in VideoToolbox before the first IDR, avoiding a compressed-layer
+to VT handoff that stranded Pocket 3 mid-GOP. HEVC routing is unchanged. Nano
+uses the same AVC route: repeated parameter sets and assist toggles preserve the
+VT session in regression tests; physical cadence verification is pending. Pocket
+3 first picture at approximately 25 fps is physically observed across five
+consecutive normal-monitor joins. Android's MediaCodec ownership does not use this iOS
+handoff; its physical regression remains pending.
+
+### False-color map continuity (iOS)
+
+The iOS asynchronous CI cube cache now retains coherent paint/mask pairs during
+exposure updates and builds from immutable core exposure anchors. Android does
+not use this CI cache; its rendering path is unchanged. D-Log M now has a distinct transfer in both shells: scopes use direct signal
+percentages, and scene-stop math is explicitly an empirical Pocket 3 estimate.
+Calibrated sensor clipping warnings require separate curve/range validation. See `docs/pocket3-dlogm-curve.md`.
+
+Pocket 3/iPhone continuity was physically checked on 2026-09-10: 60 screen samples
+across approximately 30 seconds retained the paint with auto ISO active. D-Log M
+calibration and other camera-model regression checks remain outstanding.
+
+### Live assist alignment during resize (iOS)
+
+The iOS shell commits video and assist child geometry together during rotation
+and portrait fit/fill changes. This fixes independent AVSampleBufferDisplayLayer
+animation relative to its Metal overlay; Android does not use that layer pair.
+Pocket 3/iPhone physical verification covered eight fit/fill changes and four
+rotations with false color, peaking, and zebras active. See `docs/live-session.md`.
+
+### D-Log M signal scopes
+
+Swift and Kotlin preserve the full normalized signal axis for D-Log M without
+D-Log black/EI anchors. The iOS scope chip is `DLM ≈`; PStops reference is `DLM ≈`
+on both shells, with help explaining the Pocket 3 estimate. No implicit D-Log
+vectorscope LUT is used. Signal endpoints are not measured sensor limits.
+Synthetic all-code/ISO tests cover the mapping. Pocket 3/iPhone was checked on
+2026-09-10: active RGB waveform, approximately 25 fps, and a journal confirming
+`transfer=dlogm clip=255` at ISO 320. Android camera validation remains pending. See `docs/pocket3-dlogm-curve.md`.
+
+LUT exposure compensation (including baked exports) and Face Priority EV retain
+their pre-existing D-Log-based approximation for D-Log M in this scope-only fix.
+They are not calibrated D-Log M operations. Changing scopes must not silently
+change saved looks, exported images, or automatic camera exposure; correcting
+those operations requires separate validation. PStops estimates do not drive them.
+
+### Multiview foreground recovery and reconnect
+
+The iOS decoder checks both decoded-picture age and GPU-present age: repainting
+an old LUT image does not establish a recovered camera. A failed foreground decoder repair escalates through the
+existing bounded session-rejoin budget. Each failed tile offers one Reconnect
+action plus Remove. Reconnect tries saved identity/LAN discovery first, then
+camera network setup if needed, preserving the LUT choice. Android Multiview
+remains deferred. Pocket 3 LUT-on foreground freeze was reproduced physically;
+post-fix physical app-switch testing confirmed all three feeds resumed. Pocket 3
+required a full rejoin and took roughly a minute; this is recovery proof, not a
+claim of seamless foreground return.
+
+Multiview shows reported camera timecode below each tile name, including compact
+side tiles; Nano has no timecode readout. It follows the existing 5 Hz settings
+updates. The bottom bar contains Layout, Wi-Fi, and Fit/Fill, with Add camera retained in
+the tiles. Enlarged one/two-camera grids put Add in a tile header so adding the
+next camera remains available without the bottom-bar shortcut.
+
+### Multiview portrait composition (iOS)
+
+Center stage puts the selected camera above a two-column secondary grid in
+portrait, using the stage width instead of shrinking the landscape arrangement.
+The portrait main tile stays 16:9 in both Fit and Fill; the choice fits or crops
+the image inside it. Fill can expand landscape main tiles and grid cells. The
+Close control sits at the upper screen corner, and the shared Fit/Fill control
+has a visible FIT/FILL label in the bottom bar in both orientations. The
+choice is saved with the stage; older saved stages default to Fit. Viewport size
+drives orientation on iPhone and iPad. Tile/decoder identity is retained during
+layout changes. Android Multiview remains deferred. Physical iPhone verification
+on 2026-09-10 covered a three-camera stage, Fit → Fill → landscape → portrait → Fit,
+with the bottom controls visible and the reported timecodes retained. A follow-up
+physical iPhone check confirmed the main tile stays 16:9 in both modes, the Close
+target is fully on-screen near the upper corner, and FIT/FILL remains visible and
+hittable through portrait → landscape → portrait.
+
+Multiview recording tiles reuse Live View's red tally border, inset around each
+tile including compact secondary previews. Borders follow per-camera reported
+recording state, not a pending Record all request. Empty and stopped tiles have
+no tally. Physical iPhone verification on 2026-09-10 confirmed red borders on
+Pocket 4 Pro, Pocket 3 and Nano after Record all, and none after Stop all. The
+journal confirmed all three starts and all three stops. Android Multiview remains
+deferred.
+
+### Pocket 3 FORMAT fallback
+
+Pocket 3 returns a nonzero result for the `camcap_video_format` subscription
+while ordinary status subscriptions succeed. In normal Video mode, both shells
+therefore use the documented Pocket 3 list when the reported table is empty:
+1080p/2.7K/4K landscape, 1080p/2160p/3K square, and 1080p/2.7K/3K vertical, each
+at 24/25/30/48/50/60 fps. A reported table always wins. Unknown modes, SlowMo and
+livestream retain their existing handling. This is a picker fallback; it does
+not rewrite reported camera capabilities. Synthetic picker tests cover model and
+mode isolation. Physical format SET/reconnect verification is pending.

@@ -1,17 +1,15 @@
 New and changed
 
-- Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
-- Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
+- Pocket 3 FORMAT offers its documented normal-video resolutions, including 2.7K and square/vertical choices, when the camera does not supply a format list.
+- D-Log M scopes use a direct preview-signal scale. DLM approximate stop readings use an estimated Pocket 3 curve; they do not identify measured sensor clipping limits.
 
 Fixes
 
-- Live picture is no longer blocky with LUT on or off.
-- WAITING FOR LIVE VIEW should not sit on screen after Wi-Fi joins.
-- Opening Operator Setup or clips, then back, keeps the live picture (not a black well).
-- Face lock is closer to iOS: it tracks the face without grabbing every oval, and the box is not mirrored onto the wrong side.
+- D-Log M waveform and zebras no longer use the D-Log black point or exposure ceiling.
+- Shared frame assembly now preserves complete large Nano pictures across transport groups. Android Nano smoothness still needs camera testing.
 
 What to test
 
-- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off.
-- With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, then back: the picture must still be there.
-- Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.
+- On Pocket 3 in normal Video, select 2.7K at 25p, confirm the camera setting, record a short clip and reconnect. Camera-supplied format lists should still take priority.
+- Enable D-Log M waveform, histogram and zebras, then change ISO. Check the signal scale does not jump to D-Log limits. Use IRE for signal measurements; approximate stop readings need further calibration.
+- With Pocket and Nano cameras, watch live view with LUT off and on, record a short clip, then reconnect. Report freezes and corrupted pictures using Share Diagnostics. Multiview is not available on Android in this build.

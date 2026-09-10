@@ -83,7 +83,7 @@ public enum FeedEffectsWire {
         case .rec709, .hdr:
             let gradient = 1.57
             return gradient * gradient
-        case .dlog, .dlog2:
+        case .dlog, .dlog2, .dlogm:
             return 1
         }
     }

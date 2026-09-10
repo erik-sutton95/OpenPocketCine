@@ -227,7 +227,8 @@ private fun FalseColorOptions(state: LiveAssistState) {
             "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
                 "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
                 "highlight levels. IRE uses WAVE-axis monitor ranges. Limits paints only shadow " +
-                "and highlight warnings.",
+                "and highlight warnings. D-Log M uses a direct 0–100 signal scale. PStops and its " +
+                "gray guide are Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras.",
         showTopDivider = false,
         stacked = true,
     ) {
