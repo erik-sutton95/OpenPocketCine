@@ -175,6 +175,10 @@ final class MultiviewSession {
     private var restoration: Task<Void, Never>?
     private var addressReservations: [String: UUID] = [:]
     private var pendingReset: [MultiviewStageStore.Camera] = []
+    private var stationResetTasks: [UUID: Task<Bool, Never>] = [:]
+    private let resetCamera: ((MultiviewStageStore.Camera) async -> Bool)?
+    private let saveStage: (MultiviewStageStore.Stage?) -> Bool
+    private var cleanupJournalWritten = false
     private let ble = BleLink(allowsConcurrentCameras: true)
     private var scanTask: Task<Void, Never>?
     private var router: Task<Void, Never>?
@@ -184,6 +188,14 @@ final class MultiviewSession {
     private var replies: [UInt16: Duml.Frame] = [:]
     private var approved = false
     private var running = false
+
+    init(
+        resetCamera: ((MultiviewStageStore.Camera) async -> Bool)? = nil,
+        saveStage: @escaping (MultiviewStageStore.Stage?) -> Bool = MultiviewStageStore.save
+    ) {
+        self.resetCamera = resetCamera
+        self.saveStage = saveStage
+    }
 
     private enum ProvisioningFailure: LocalizedError {
         case message(String)
@@ -386,7 +398,7 @@ final class MultiviewSession {
     }
 
     func prepareNetworks(_ camera: FoundCamera) async {
-        guard camera.hasMultiviewPreview, !busy else { return }
+        guard camera.hasMultiviewPreview, !busy, running, !closing else { return }
         busy = true
         networkScanning = true
         networkMessage = "Connecting · approve on camera if asked"
@@ -404,6 +416,10 @@ final class MultiviewSession {
                 }
             }
             networkMessage = "Preparing camera Wi-Fi"
+            // A lost setter reply can still mean the camera changed roles.
+            guard recordStationChange(camera) else {
+                throw ProvisioningFailure.message("Could not save camera Wi-Fi cleanup. Try again.")
+            }
             let role = try await exchange(MulticamCommands.stationMode(true, seq: next()))
             guard role.payload.first == 0 else { throw Failure.rejected }
             try await Task.sleep(for: .seconds(10))
@@ -416,11 +432,25 @@ final class MultiviewSession {
                 : "Choose the same Wi-Fi for this device and your cameras."
         } catch {
             networkMessage = "Could not scan. Retry or enter your network name."
-            if Task.isCancelled {
-                disconnectBLE()
-                if running { scan() }
-            }
         }
+        disconnectBLE()
+        if let saved = pendingReset.first(where: { $0.id == camera.id }) {
+            let scanMessage = networkMessage
+            networkMessage = "Returning camera to its Wi-Fi"
+            if !(await resetStationOnce(saved)) {
+                networkSetupError = "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
+            }
+            networkMessage = scanMessage
+        }
+        if running, !closing { scan() }
+    }
+
+    @discardableResult func recordStationChange(_ camera: FoundCamera) -> Bool {
+        let saved = MultiviewStageStore.Camera(
+            slot: 0, id: camera.id, name: camera.name, modelId: camera.modelId,
+            identity: nil, address: "", experimental: false, lutEnabled: false)
+        pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, including: [saved])
+        return persistStage()
     }
 
     /// The setup view cancels its task first; disconnect also unblocks BLE's
@@ -1176,37 +1206,46 @@ final class MultiviewSession {
                 experimental: tile.experimentalNetwork, lutEnabled: tile.lutEnabled)
         }
     }
-    func persistStage() {
-        guard networkConfigured else { return }
-        if !MultiviewStageStore.save(
+    @discardableResult func persistStage() -> Bool {
+        if !networkConfigured, pendingReset.isEmpty {
+            guard cleanupJournalWritten else { return true }
+            let success = saveStage(nil)
+            if success { cleanupJournalWritten = false }
+            return success
+        }
+        let saved = savedCameras()
+        let success = saveStage(
             .init(
-                ssid: ssid, hotspot: usePhoneHotspot,
-                layout: layout.rawValue, focusedIndex: focusedIndex, cameras: savedCameras(),
-                pendingReset: running && !closing ? savedCameras() : pendingReset,
+                ssid: networkConfigured ? ssid : "", hotspot: usePhoneHotspot,
+                layout: layout.rawValue, focusedIndex: focusedIndex, cameras: saved,
+                pendingReset: running && !closing
+                    ? MultiviewStageStore.cleanupTargets(pendingReset, including: saved) : pendingReset,
                 returnedToCameraWiFi: !running && pendingReset.isEmpty,
                 fill: feedAspect == .fill))
-        {
-            ControlLiveLog.line("multiview: could not save stage")
-        }
+        if !success { ControlLiveLog.line("multiview: could not save stage") }
+        if success, !networkConfigured { cleanupJournalWritten = true }
+        return success
     }
     private func restoredCamera(_ saved: MultiviewStageStore.Camera) -> FoundCamera {
         FoundCamera(
             id: saved.id, name: saved.name,
             model: .resolve(modelId: saved.modelId, name: saved.name), modelId: saved.modelId)
     }
-    private func restoreStage() {
-        guard let stage = MultiviewStageStore.load(),
-            let network = MultiviewNetworkStore.load(ssid: stage.ssid, hotspot: stage.hotspot)
-        else { return }
-        ssid = network.ssid
-        password = network.password
-        usePhoneHotspot = stage.hotspot
-        networkConfigured = true
+    func restoreStage(_ savedStage: MultiviewStageStore.Stage? = MultiviewStageStore.load()) {
+        guard let stage = savedStage else { return }
+        pendingReset = stage.pendingReset ?? []
+        if !stage.ssid.isEmpty,
+            let network = MultiviewNetworkStore.load(ssid: stage.ssid, hotspot: stage.hotspot) {
+            ssid = network.ssid
+            password = network.password
+            usePhoneHotspot = stage.hotspot
+            networkConfigured = true
+        }
+        cleanupJournalWritten = !networkConfigured
         layout = MultiviewLayout(rawValue: stage.layout) ?? .centerStage
         feedAspect = stage.fill == true ? .fill : .fit16x9
         focusedIndex = stage.focusedIndex
-        pendingReset = stage.pendingReset ?? []
-        for saved in stage.cameras {
+        for saved in stage.cameras where networkConfigured {
             let tile = tiles[saved.slot]
             let camera = restoredCamera(saved)
             guard camera.appearsInMultiview else { continue }
@@ -1217,11 +1256,11 @@ final class MultiviewSession {
             tile.lutEnabled = saved.lutEnabled
             tile.status = "Reconnecting saved camera"
         }
+        busy = !pendingReset.isEmpty
         restoration = Task { [weak self] in
             guard let self else { return }
             if !pendingReset.isEmpty {
-                busy = true
-                pendingReset = await resetStations(pendingReset)
+                await resetStations(pendingReset)
                 busy = false
                 guard running, !Task.isCancelled else { return }
                 persistStage()
@@ -1276,10 +1315,12 @@ final class MultiviewSession {
     func closeStage() async -> Bool {
         guard !closing else { return false }
         closing = true
-        pendingReset = savedCameras()
+        if running {
+            pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, including: savedCameras())
+        }
         persistStage()
         stop()
-        pendingReset = await resetStations(pendingReset)
+        await resetStations(pendingReset)
         persistStage()
         closing = false
         if !pendingReset.isEmpty {
@@ -1289,17 +1330,29 @@ final class MultiviewSession {
         }
         return true
     }
-    private func resetStations(_ cameras: [MultiviewStageStore.Camera]) async
-        -> [MultiviewStageStore.Camera]
-    {
-        await withTaskGroup(of: MultiviewStageStore.Camera?.self) { group in
+    private func resetStations(_ cameras: [MultiviewStageStore.Camera]) async {
+        await withTaskGroup(of: Void.self) { group in
             for saved in cameras {
-                group.addTask { await self.resetStation(saved) ? nil : saved }
+                group.addTask { _ = await self.resetStationOnce(saved) }
             }
-            var failed: [MultiviewStageStore.Camera] = []
-            for await camera in group { if let camera { failed.append(camera) } }
-            return failed
         }
+    }
+    /// Shared by scan completion/cancellation, close and restored cleanup. Its task
+    /// survives caller cancellation and prevents two BLE resets for the same camera.
+    @discardableResult func resetStationOnce(_ saved: MultiviewStageStore.Camera) async -> Bool {
+        if let task = stationResetTasks[saved.id] { return await task.value }
+        guard pendingReset.contains(where: { $0.id == saved.id }) else { return true }
+        let task = Task {
+            let success: Bool
+            if let resetCamera { success = await resetCamera(saved) }
+            else { success = await resetStation(saved) }
+            if success { pendingReset.removeAll { $0.id == saved.id } }
+            persistStage()
+            stationResetTasks.removeValue(forKey: saved.id)
+            return success
+        }
+        stationResetTasks[saved.id] = task
+        return await task.value
     }
     private func resetStation(_ saved: MultiviewStageStore.Camera) async -> Bool {
         let client = MultiviewProvisioner()

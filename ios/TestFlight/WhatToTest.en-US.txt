@@ -17,5 +17,5 @@ What to test
 - Pocket 3: connect repeatedly, choose 2.7K at 25p in normal Video, confirm the camera setting, record a short clip, then reconnect. Check the preview returns and the selected format remains correct.
 - Nano: watch for short freezes with LUT off and on, then start and stop recording. Compare smoothness with your previous build.
 - Multiview: add Pocket 3, Pocket 4 Pro and Nano on shared Wi-Fi. Try Record all/Stop all, individual recording, tile borders, LUTs and both layouts. Rotate and toggle Fit/Fill; controls and overlays must stay aligned.
-- Switch to another app briefly and return. Test Reconnect on a failed tile. Close and reopen Multiview to check saved cameras and network restoration. Scan-only cancellation has a known cleanup gap: if the camera's own Wi-Fi stays unavailable, restart the camera.
+- Switch to another app briefly and return. Test Reconnect on a failed tile. Close and reopen Multiview to check saved cameras and network restoration. Cancel a network scan before adding a camera: check its own Wi-Fi returns; retry closing if it was unavailable.
 - In D-Log M, enable waveform and false color while exposure changes. Report flashing paint, mismatched overlays or frozen pictures using Share Diagnostics. Hotspot, setup cancellation and restoration remain experimental.

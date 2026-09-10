@@ -212,10 +212,11 @@ Multiview entry retries it. Force-quitting iOS cannot reliably send cleanup
 commands. Removing a tile does not reset that camera's network. No stop-recording
 command is sent, but recording continuity during the AP switch is not yet verified.
 Saved-stage restoration, parallel setup and AP return still need dedicated physical
-regression testing. Known cleanup gap: a camera used only to scan nearby networks
-is switched to station mode but is not in the assigned-camera cleanup list.
-Exiting setup before adding it can leave its Wi-Fi mode changed; use the camera
-network settings or restart it if necessary. This must be corrected before release.
+regression testing. A camera used only to scan nearby networks is saved for cleanup
+before its Wi-Fi mode changes, even if you have not selected a network or added a
+tile. Finishing or cancelling the scan attempts to return it to its own Wi-Fi.
+Failed restores remain saved for retry when closing or reopening Multiview.
+This scan-only restoration path still needs physical camera verification.
 
 ### Reconnecting a camera
 

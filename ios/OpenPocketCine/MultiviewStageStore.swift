@@ -25,14 +25,29 @@ enum MultiviewStageStore {
         var fill: Bool?
 
         var validated: Stage? {
-            guard version == 1, !ssid.isEmpty, cameras.count <= 4, (pendingReset?.count ?? 0) <= 4,
+            let cleanup = pendingReset ?? []
+            guard version == 1,
+                !ssid.isEmpty || (cameras.isEmpty && !cleanup.isEmpty), cameras.count <= 4,
                 (0..<4).contains(focusedIndex),
                 Set(cameras.map(\.slot)).count == cameras.count,
                 Set(cameras.map(\.id)).count == cameras.count,
+                Set(cleanup.map(\.id)).count == cleanup.count,
+                cleanup.allSatisfy({ !$0.name.isEmpty }),
                 cameras.allSatisfy({ (0..<4).contains($0.slot) && !$0.name.isEmpty })
             else { return nil }
             return self
         }
+    }
+    static func cleanupTargets(_ pending: [Camera], including cameras: [Camera]) -> [Camera] {
+        var result = pending
+        for camera in cameras {
+            if let index = result.firstIndex(where: { $0.id == camera.id }) {
+                result[index] = camera
+            } else {
+                result.append(camera)
+            }
+        }
+        return result
     }
     private static var query: [String: Any] {
         [
@@ -51,7 +66,11 @@ enum MultiviewStageStore {
         else { return nil }
         return (try? JSONDecoder().decode(Stage.self, from: data))?.validated
     }
-    @discardableResult static func save(_ stage: Stage) -> Bool {
+    @discardableResult static func save(_ stage: Stage?) -> Bool {
+        guard let stage else {
+            let deleted = SecItemDelete(query as CFDictionary)
+            return deleted == errSecSuccess || deleted == errSecItemNotFound
+        }
         guard stage.validated != nil, let data = try? JSONEncoder().encode(stage) else {
             return false
         }

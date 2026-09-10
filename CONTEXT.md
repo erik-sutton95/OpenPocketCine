@@ -29,6 +29,12 @@ _Avoid_: hotspot (except when naming the iOS API)
 UDP port 9004 DUML transport between phone and camera.
 _Avoid_: media port, stream
 
+**One client**:
+Live HEVC/AVC on the camera SoftAP is unicast UDP to one phone 5-tuple.
+Camera multicast is won't-do. A second-screen watcher would be a
+phone-as-encoder relay on another interface — not in this build.
+_Avoid_: camera multicast, NDI (as this path), SRT (as this path)
+
 **Enable-once**:
 `0x09/0xa8` starts live view and is the only PLI; it is not a 1 Hz keyframe loop.
 _Avoid_: IDR loop, live-start (alone)

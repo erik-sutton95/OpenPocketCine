@@ -82,9 +82,12 @@ independent BLE links. Failed cleanup remains saved and the operator may close
 anyway; the next Multiview entry retries it. Force quit cannot guarantee cleanup.
 No record-stop command is sent. Camera AP availability, recording continuity,
 concurrent pairing, and restore across app relaunch still require physical proof.
-Known blocker: network scanning switches an unassigned camera to station mode,
-but cancellation/close does not include that camera in the cleanup ledger.
-Scan-only camera restoration must be fixed and verified before release.
+Network scanning records an unassigned camera in the device-only cleanup ledger
+before requesting station mode, even before a network is configured. Scan completion
+and cancellation attempt AP restoration; failed resets survive closure and relaunch.
+Concurrent scan cancellation and stage closure share one reset task per camera.
+Automated cancellation/retry/persistence tests pass; physical scan-only AP restoration
+still needs verification before release.
 Android Multiview remains deferred.
 
 ## First-picture random-access gate
