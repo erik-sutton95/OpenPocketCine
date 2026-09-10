@@ -35,6 +35,15 @@ Gotchas that only agents need stay in `docs/live-session.md`.
 A task is not done until those pages match the code. Preview with `just handbook`.
 Merge to `main` deploys Pages when `handbook/` or `site/` changed.
 
+## Release notes
+
+Write release notes for camera operators and include only features available on
+the target platform. A short **New features** summary can cover a chosen set of
+merged PRs without fixes, dependency updates or test instructions. Detailed tester
+notes can also include fixes and actions to try. Formats and limits live in the
+[TestFlight notes guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md#tester-facing-release-notes)
+and [Play notes guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/android-play-ci.md#tester-facing-release-notes).
+
 ## One home per fact
 
 The handbook summarizes. The contract files own the numbers and exceptions.

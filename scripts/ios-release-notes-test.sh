@@ -43,6 +43,36 @@ if [[ "$printed_notes" == *"check passed"* || "$printed_notes" != *"Osmo Pocket"
   exit 1
 fi
 
+cat > "${temp_dir}/features.txt" <<'EOF'
+New features
+
+- ND assist suggests a filter strength.
+EOF
+expect_pass "${temp_dir}/features.txt"
+if [[ "$("$printer" "${temp_dir}/features.txt" 2>/dev/null)" != "$(cat "${temp_dir}/features.txt")" ]]; then
+  printf 'Release-notes printer changed the feature summary.\n' >&2
+  exit 1
+fi
+
+printf 'New features\n' > "${temp_dir}/empty-features.txt"
+expect_fail "${temp_dir}/empty-features.txt"
+
+for suffix in 'New features' 'New and changed' 'Fixes' 'What to test'; do
+  cat "${temp_dir}/features.txt" > "${temp_dir}/mixed-features.txt"
+  printf '\n%s\n\n- Another visible change.\n' "$suffix" >> "${temp_dir}/mixed-features.txt"
+  expect_fail "${temp_dir}/mixed-features.txt"
+done
+
+for _ in {2..6}; do
+  printf '%s\n' '- Another visible feature.' >> "${temp_dir}/features.txt"
+done
+expect_pass "${temp_dir}/features.txt"
+printf '%s\n' '- A seventh feature exceeds the limit.' >> "${temp_dir}/features.txt"
+expect_fail "${temp_dir}/features.txt"
+
+printf 'New features\n\n- Added a GUID migration.\n' > "${temp_dir}/feature-jargon.txt"
+expect_fail "${temp_dir}/feature-jargon.txt"
+
 cat > "${temp_dir}/jargon.txt" <<'EOF'
 New and changed
 
@@ -149,7 +179,7 @@ What to test
 EOF
 expect_fail "${temp_dir}/out-of-order.txt"
 
-# All three sections are required — a release with no Fixes section is a format error.
+# The detailed format still requires all three sections.
 cat > "${temp_dir}/missing-fixes.txt" <<'EOF'
 New and changed
 
