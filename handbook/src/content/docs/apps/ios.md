@@ -88,7 +88,11 @@ project with XcodeGen — see [Setup](../guides/setup/).
   tag means only the 720p sidecar is on the phone — connect to share the
   original. Storage **Full Resolution Caching** (on by default) also caches
   the original when you open a clip. LUT bake on export can include the
-  LUT exposure pull (Bake exposure under Bake LUT; on by default)
+  LUT exposure pull (Bake exposure under Bake LUT; on by default).
+  Convert log (off by default, exclusive with Bake LUT) rewrites D-Log as
+  D-Log2 or the reverse so mixed zoom takes share one curve — a technical
+  transform, not a look. Rec.709 stays Bake LUT. Camera original is
+  untouched. D-Log M is not converted.
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 - **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
 

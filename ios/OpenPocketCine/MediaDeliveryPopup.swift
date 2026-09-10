@@ -17,11 +17,11 @@ struct MediaDeliveryPopupOverlay: View {
                 MediaDeliveryPopup(
                     files: files,
                     preferredDestination: preferredDestination,
+                    maxCardHeight: cap,
                     onClose: onDismiss
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
-                .frame(maxHeight: cap, alignment: .bottom)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -32,6 +32,7 @@ struct MediaDeliveryPopupOverlay: View {
 struct MediaDeliveryPopup: View {
     let files: [MediaFile]
     var preferredDestination: MediaDeliveryDestination? = nil
+    var maxCardHeight: CGFloat = MediaDeliveryChrome.maxCardHeight
     let onClose: () -> Void
 
     @Environment(AppModel.self) private var model
@@ -56,10 +57,12 @@ struct MediaDeliveryPopup: View {
     init(
         files: [MediaFile],
         preferredDestination: MediaDeliveryDestination? = nil,
+        maxCardHeight: CGFloat = MediaDeliveryChrome.maxCardHeight,
         onClose: @escaping () -> Void
     ) {
         self.files = files
         self.preferredDestination = preferredDestination
+        self.maxCardHeight = maxCardHeight
         self.onClose = onClose
         _destination = State(initialValue: preferredDestination)
         _step = State(initialValue: preferredDestination == nil ? .destination : .options)
@@ -89,46 +92,52 @@ struct MediaDeliveryPopup: View {
         if FrameioDestination.loaded != nil { return true }
         return model.isOnCameraAccessPoint
     }
+    private var convertLogAvailable: Bool {
+        MediaDelivery.convertLogAvailable(
+            files: files,
+            shotColors: files.compactMap { session.shotColor(for: $0) })
+    }
+    private var previewTransform: LogColorTransform? {
+        guard configuration.convertLog, let file = files.first,
+            let color = session.shotColor(for: file)
+        else { return nil }
+        return LogColorTransform.converting(from: color)
+    }
+    private var convertLogBinding: Binding<Bool> {
+        Binding(
+            get: { configuration.convertLog },
+            set: { on in
+                configuration.convertLog = on
+                if on { configuration.bakeLUT = false }
+            })
+    }
+    private var bakeLUTBinding: Binding<Bool> {
+        Binding(
+            get: { configuration.bakeLUT },
+            set: { on in
+                configuration.bakeLUT = on
+                if on { configuration.convertLog = false }
+            })
+    }
     private var canContinue: Bool {
         destination != nil
             && (!cached.isEmpty || (isConnected && !files.isEmpty))
             && !(configuration.bakeLUT && !lutAvailable)
+            && !(configuration.convertLog && !convertLogAvailable)
             && !(destination == .frameio && !frameioProjectReady)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    summary
-                    switch step {
-                    case .destination: destinations
-                    case .options: options
-                    }
-                    if let statusMessage {
-                        Text(statusMessage)
-                            .font(LiveType.ui(size: 12))
-                            .foregroundStyle(LiveDesign.accent)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 12)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            if step == .options, !frameioHopGateActive {
-                footer.padding(.top, 12)
-            }
+        ViewThatFits(in: .vertical) {
+            card(scrolling: false)
+            card(scrolling: true)
+                .frame(maxHeight: maxCardHeight)
         }
-        .padding(16)
         .frame(maxWidth: 420)
-        .fixedSize(horizontal: false, vertical: true)
-        .liquidGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
-            interactive: false
-        )
+        .frame(maxHeight: maxCardHeight, alignment: .bottom)
         .onAppear {
             if !lutAvailable { configuration.bakeLUT = false }
+            if !convertLogAvailable { configuration.convertLog = false }
             if let saved = FrameioDestination.loaded {
                 selectedFrameioProjectID = saved.projectID
             }
@@ -155,6 +164,45 @@ struct MediaDeliveryPopup: View {
                 "We'll hop to home Wi‑Fi or cellular so you can sign in and pick a project. The camera reconnects automatically when you're done."
             )
         }
+    }
+
+    @ViewBuilder
+    private func card(scrolling: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if scrolling {
+                ScrollView {
+                    mainColumn
+                }
+            } else {
+                mainColumn
+            }
+            if step == .options, !frameioHopGateActive {
+                footer.padding(.top, 12)
+            }
+        }
+        .padding(16)
+        .liquidGlass(
+            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
+            interactive: false
+        )
+    }
+
+    private var mainColumn: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            summary
+            switch step {
+            case .destination: destinations
+            case .options: options
+            }
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(LiveType.ui(size: 12))
+                    .foregroundStyle(LiveDesign.accent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
     }
 
     private var header: some View {
@@ -491,9 +539,12 @@ struct MediaDeliveryPopup: View {
                     Text("Filename")
                         .font(LiveType.ui(size: 12, weight: .semibold))
                         .foregroundStyle(LiveDesign.muted)
-                    Text(MediaDelivery.filename(for: file, configuration: configuration))
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(LiveDesign.text)
+                    Text(
+                        MediaDelivery.filename(
+                            for: file, configuration: configuration, transform: previewTransform)
+                    )
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(LiveDesign.text)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -503,11 +554,18 @@ struct MediaDeliveryPopup: View {
                         cornerRadius: DesignTokens.cornerRadius, style: .continuous))
             }
             toggleRow(
+                MediaDeliveryCopy.convertLog,
+                help: convertLogAvailable
+                    ? MediaDeliveryCopy.convertLogHelp
+                    : MediaDeliveryCopy.convertLogHelpUnavailable,
+                isOn: convertLogBinding,
+                enabled: convertLogAvailable)
+            toggleRow(
                 MediaDeliveryCopy.bakeLUT,
                 help: lutAvailable
                     ? MediaDeliveryCopy.bakeLUTHelp(statusLabel: model.assist.lutStatusLabel)
                     : MediaDeliveryCopy.bakeLUTHelpUnavailable,
-                isOn: $configuration.bakeLUT,
+                isOn: bakeLUTBinding,
                 enabled: lutAvailable)
             if configuration.bakeLUT {
                 toggleRow(
@@ -516,7 +574,7 @@ struct MediaDeliveryPopup: View {
                     isOn: $configuration.bakeLUTExposure,
                     enabled: lutAvailable)
             }
-            if configuration.bakeLUT || destination == .nativeShare {
+            if configuration.bakeLUT || configuration.convertLog || destination == .nativeShare {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 4) {
                         Text("Format")

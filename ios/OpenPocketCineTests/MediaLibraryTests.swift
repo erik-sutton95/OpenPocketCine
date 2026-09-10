@@ -194,6 +194,9 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertEqual(
             MediaDeliveryDestination.allCases.map(\.title),
             ["Share", "Frame.io"])
+        XCTAssertEqual(
+            MediaDeliveryDestination.nativeShare.subtitle,
+            "Convert log, Bake LUT, AirDrop, Files")
         XCTAssertEqual(MediaExportFormat.allCases.map(\.label), ["MOV", "MP4"])
         let file = MediaFile(
             path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
@@ -212,6 +215,7 @@ final class MediaLibraryTests: XCTestCase {
             for: file, configuration: exposure, lutName: "Auto · D-Log2 → Rec.709",
             cameraName: nil, lutExposureStops: -1)
         XCTAssertEqual(baked?.lutExposureStops, -1)
+        XCTAssertNil(baked?.convertLog)
         exposure.bakeLUTExposure = false
         let cubeOnly = MediaDelivery.metadata(
             for: file, configuration: exposure, lutName: "Auto · D-Log2 → Rec.709",
@@ -222,6 +226,57 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertEqual(
             MediaDeliveryChrome.maxCardHeight, 520,
             "portrait share card must hug; 520 matches Android heightIn(max = 520.dp)")
+    }
+
+    func testConvertLogExportNamesTheDestinationLog() {
+        let file = MediaFile(
+            path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
+            thumbPath: "MISC/THM/clip.scr")
+        var config = MediaDeliveryConfiguration()
+        config.bakeLUT = false
+        config.convertLog = true
+        config.exportFormat = .mov
+        XCTAssertEqual(
+            MediaDelivery.filename(
+                for: file, configuration: config, transform: .dLogToDLog2),
+            "DJI_20260814125250_0034_D.dlog2.mov")
+        XCTAssertEqual(
+            MediaDelivery.filename(
+                for: file, configuration: config, transform: .dLog2ToDLog),
+            "DJI_20260814125250_0034_D.dlog.mov")
+        config.convertLog = false
+        XCTAssertEqual(
+            MediaDelivery.filename(
+                for: file, configuration: config, transform: .dLogToDLog2),
+            file.filename)
+        var converting = MediaDeliveryConfiguration()
+        converting.convertLog = true
+        converting.bakeLUT = true
+        converting.bakeLUTExposure = true
+        let meta = MediaDelivery.metadata(
+            for: file, configuration: converting, lutName: "Auto · D-Log2 → Rec.709",
+            cameraName: nil, lutExposureStops: -1, convertLog: .dLogToDLog2)
+        XCTAssertEqual(meta?.convertLog, "D-Log → D-Log2")
+        XCTAssertNil(meta?.lutName)
+        XCTAssertNil(meta?.lutExposureStops)
+        XCTAssertEqual(MediaDeliveryCopy.convertLog, "Convert log")
+        XCTAssertFalse(MediaDeliveryCopy.convertLogHelp.isEmpty)
+        XCTAssertFalse(MediaDeliveryCopy.convertLogHelpUnavailable.isEmpty)
+        if case .convertLogNotLog(let name) = MediaDeliveryError.convertLogNotLog(file.filename) {
+            XCTAssertEqual(name, file.filename)
+        } else {
+            XCTFail("expected convertLogNotLog")
+        }
+        XCTAssertEqual(
+            MediaDeliveryError.convertLogNotLog(file.filename).errorDescription,
+            "DJI_20260814125250_0034_D.MP4 isn't D-Log or D-Log2.")
+        let photo = MediaFile(
+            path: "DCIM/DJI_001/DJI_20260814125250_0034_D.JPG",
+            thumbPath: "MISC/THM/clip.scr")
+        XCTAssertFalse(MediaDelivery.convertLogAvailable(files: [photo], shotColors: []))
+        XCTAssertTrue(MediaDelivery.convertLogAvailable(files: [file], shotColors: []))
+        XCTAssertTrue(MediaDelivery.convertLogAvailable(files: [file], shotColors: [.dLog]))
+        XCTAssertFalse(MediaDelivery.convertLogAvailable(files: [file], shotColors: [.normal]))
     }
 
     func testPlaybackCandidatesPreferProxyThenOriginalOnBothStores() {

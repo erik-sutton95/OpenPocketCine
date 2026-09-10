@@ -66,7 +66,7 @@ enum MediaDeliveryDestination: String, CaseIterable, Identifiable, Sendable {
     }
     var subtitle: String {
         switch self {
-        case .nativeShare: "AirDrop, Files, and other apps"
+        case .nativeShare: "Convert log, Bake LUT, AirDrop, Files"
         case .frameio: "Upload to your Frame.io project"
         }
     }
@@ -94,6 +94,8 @@ struct MediaDeliveryConfiguration: Sendable {
     /// When ``bakeLUT`` is on, write ``LUTExposureCompensation`` into the file.
     /// Off keeps the cube at 0.0. Default on so the export matches the monitor.
     var bakeLUTExposure = true
+    /// Technical D-Log ↔ D-Log2 convert. Exclusive with ``bakeLUT``.
+    var convertLog = false
     var exportFormat: MediaExportFormat = .mov
     var includeMetadata = true
     var forceFrameioReupload = false
@@ -111,6 +113,11 @@ enum MediaDeliveryCopy {
     static let bakeExposure = "Bake exposure"
     static let bakeExposureHelp =
         "Write the LUT exposure pull into the file so it matches the monitor. Off bakes the cube at 0.0."
+    static let convertLog = "Convert log"
+    static let convertLogHelp =
+        "Technical transform so D-Log and D-Log2 clips share one curve. Not a look. Camera original is untouched."
+    static let convertLogHelpUnavailable =
+        "Needs a D-Log or D-Log2 clip — Rec.709 stays as-shot."
 
     static func bakeLUTHelp(statusLabel: String) -> String {
         "Apply \(statusLabel) to exports."
@@ -124,6 +131,7 @@ struct MediaClipDeliveryMetadata: Codable, Sendable {
     let cameraName: String?
     let lutName: String?
     let lutExposureStops: Double?
+    let convertLog: String?
     let exportedAt: Date
 }
 
@@ -136,6 +144,7 @@ struct MediaDeliveryPresentation: Identifiable {
 enum MediaDeliveryError: LocalizedError {
     case clipNotCached(String)
     case noLUTSelected
+    case convertLogNotLog(String)
     case photosDenied
     case emptySelection
 
@@ -143,6 +152,7 @@ enum MediaDeliveryError: LocalizedError {
         switch self {
         case .clipNotCached(let name): "\(name) isn't fully cached yet."
         case .noLUTSelected: "Turn on a LUT before baking one into the file."
+        case .convertLogNotLog(let name): "\(name) isn't D-Log or D-Log2."
         case .photosDenied: "Photos access is required to save the clip."
         case .emptySelection: "Select at least one clip."
         }
@@ -171,19 +181,35 @@ struct MediaDeliveryBatchResult: Sendable {
 }
 
 enum MediaDelivery {
-    static func filename(for file: MediaFile, configuration: MediaDeliveryConfiguration) -> String {
-        guard configuration.bakeLUT else { return file.filename }
+    /// Convert log is video-only. Unknown shot color stays available until export
+    /// reads the original; Rec.709 / HLG / D-Log M disable the toggle.
+    static func convertLogAvailable(files: [MediaFile], shotColors: [ColorMode]) -> Bool {
+        guard files.contains(where: { $0.kind == .video }) else { return false }
+        if shotColors.isEmpty { return true }
+        return shotColors.contains { LogColorTransform.converting(from: $0) != nil }
+    }
+
+    static func filename(
+        for file: MediaFile, configuration: MediaDeliveryConfiguration,
+        transform: LogColorTransform? = nil
+    ) -> String {
         let stem = (file.filename as NSString).deletingPathExtension
+        if configuration.convertLog, let transform {
+            return "\(stem).\(transform.filenameToken).\(configuration.exportFormat.rawValue)"
+        }
+        guard configuration.bakeLUT || configuration.convertLog else { return file.filename }
         return "\(stem).\(configuration.exportFormat.rawValue)"
     }
 
     static func metadata(
         for file: MediaFile, configuration: MediaDeliveryConfiguration, lutName: String?,
-        cameraName: String?, lutExposureStops: Double = 0
+        cameraName: String?, lutExposureStops: Double = 0,
+        convertLog: LogColorTransform? = nil
     ) -> MediaClipDeliveryMetadata? {
         guard configuration.includeMetadata else { return nil }
+        let converting = configuration.convertLog
         let bakedStops: Double?
-        if configuration.bakeLUT, configuration.bakeLUTExposure {
+        if !converting, configuration.bakeLUT, configuration.bakeLUTExposure {
             bakedStops = LUTExposureCompensation.snap(lutExposureStops)
         } else {
             bakedStops = nil
@@ -193,8 +219,9 @@ enum MediaDelivery {
             captureDate: file.filenameTimestamp ?? "",
             sizeBytes: file.sizeBytes,
             cameraName: cameraName,
-            lutName: configuration.bakeLUT ? lutName : nil,
+            lutName: !converting && configuration.bakeLUT ? lutName : nil,
             lutExposureStops: bakedStops,
+            convertLog: converting ? convertLog?.label : nil,
             exportedAt: Date())
     }
 

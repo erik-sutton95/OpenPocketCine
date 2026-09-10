@@ -13,6 +13,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Convert log on iOS Share
+  ([discussion #295](https://github.com/erik-sutton95/OpenPocketCine/discussions/295)):
+  technical D-Log ↔ D-Log2 rewrite so mixed 1× / zoom takes share one
+  curve. Off by default. Exclusive with Bake LUT. Rec.709 display stays
+  Bake LUT. Camera original untouched. D-Log M is out. Android share
+  still the original (`docs/PARITY.md`).
+
 - False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
   gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
   stays white, not a separate clip stripe. iOS and Android.
