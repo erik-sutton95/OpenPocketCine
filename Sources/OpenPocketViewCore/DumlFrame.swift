@@ -62,7 +62,7 @@ public enum Duml {
         return bytes.count > limit ? head + "…" : head
     }
 
-    public struct Frame: Equatable {
+    public struct Frame: Equatable, Sendable {
         public var sender: UInt8
         public var receiver: UInt8
         public var seq: UInt16

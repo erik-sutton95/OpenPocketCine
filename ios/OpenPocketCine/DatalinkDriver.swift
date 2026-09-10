@@ -17,7 +17,7 @@ final class DatalinkDriver {
     private let port: UInt16
     private let tcpPoke: Bool
     private let pairingToken: String
-    private let q = DispatchQueue(label: "opv.datalink.udp")
+    nonisolated private let q = DispatchQueue(label: "opv.datalink.udp")
     /// All UDP TX (ACK, stick, Flip GET, SET) serializes here. MainActor
     /// `conn.send` interleaved with this pump starved window ACK.
     private static let qKey = DispatchSpecificKey<UInt8>()
@@ -80,6 +80,21 @@ final class DatalinkDriver {
     private var receiveErrors = 0
     private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "datalink")
 
+    private struct NativeProgramRun {
+        var token: UInt64
+        var epoch: UInt64
+        var engine: GimbalMoveEngine
+        var timer: DispatchSourceTimer
+        var lastTickAt: TimeInterval
+        var logsAllTargets: Bool
+        var finalTarget: GimbalWaypoint?
+        var lastProgressAt: TimeInterval = -.infinity
+        var pausedAt: TimeInterval?
+        var pauseAnchor: GimbalWaypoint?
+        var pauseStableSince: TimeInterval?
+        var onProgress: @MainActor @Sendable (UInt64, GimbalMoveEngine, GimbalWaypoint) -> Void
+    }
+
     private struct WireState {
         var sessionId: UInt16 = 0
         var baseSeq: UInt16 = 0
@@ -96,6 +111,11 @@ final class DatalinkDriver {
         var lastAckedDataLogAt: TimeInterval = 0
         var gimbalAxis0: UInt16 = GimbalStick.center
         var gimbalAxis1: UInt16 = GimbalStick.center
+        var nativeTargetStream = GimbalNativeTargetStream()
+        var nativeProgram: NativeProgramRun?
+        var nativeProgramEpoch: UInt64 = 0
+        var nativeProgramPose: GimbalWaypoint?
+        var nativeProgramPoseAt: TimeInterval?
         var gimbalStickHeld = false
         var gimbalSendRest = false
         var lastGimbalStickAt: TimeInterval = 0
@@ -377,6 +397,286 @@ final class DatalinkDriver {
         return sendDuml(frame, trackCommand: false)
     }
 
+    /// The take's engine and feedback clock live on the UDP queue, independent of UI work.
+    func startNativeProgram(
+        program: GimbalProgram, token: UInt64,
+        onProgress: @escaping @MainActor @Sendable (UInt64, GimbalMoveEngine, GimbalWaypoint) -> Void
+    ) -> Bool {
+        guard !closed else { return false }
+        var started = false
+        onUDPQueueSync {
+            let now = ProcessInfo.processInfo.systemUptime
+            var engine = GimbalMoveEngine()
+            let pose = wire.withLock { w -> GimbalWaypoint? in
+                guard let conn = w.conn, case .ready = conn.state,
+                    let pose = w.nativeProgramPose, let receivedAt = w.nativeProgramPoseAt,
+                    now >= receivedAt, now - receivedAt <= 0.3 else { return nil }
+                return pose
+            }
+            guard let pose, engine.start(program: program, live: pose) else { return }
+            _ = cancelNativeProgramOnQueue()
+            let (headWasActive, needsRest) = wire.withLock { w in
+                let active = w.nativeTargetStream.cancel()
+                let rest = w.gimbalStickHeld || w.gimbalSendRest
+                w.gimbalStickHeld = false
+                w.gimbalSendRest = false
+                w.gimbalAxis0 = GimbalStick.center
+                w.gimbalAxis1 = GimbalStick.center
+                return (active, rest)
+            }
+            if headWasActive { _ = sendNativeProgramFrame(Commands.gimbalTimedStop()) }
+            if needsRest {
+                _ = sendNativeProgramFrame(Commands.gimbalStick(axis0: GimbalStick.center, axis1: GimbalStick.center))
+            }
+            let timer = DispatchSource.makeTimerSource(queue: q)
+            let epoch = wire.withLock { w in
+                w.nativeProgramEpoch &+= 1
+                w.nativeProgram = NativeProgramRun(token: token, epoch: w.nativeProgramEpoch, engine: engine,
+                    timer: timer, lastTickAt: now,
+                    logsAllTargets: GimbalProgramCurve(program: program) == nil,
+                    finalTarget: program.c ?? program.b, onProgress: onProgress)
+                return w.nativeProgramEpoch
+            }
+            timer.setEventHandler { [weak self] in self?.tickNativeProgram(epoch: epoch) }
+            timer.schedule(deadline: .now() + engine.nextWakeInterval, repeating: .never,
+                leeway: .milliseconds(1))
+            timer.resume()
+            started = true
+        }
+        return started
+    }
+
+    @discardableResult
+    func pauseNativeProgram(token: UInt64) -> Bool {
+        guard !closed else { return false }
+        var paused = false
+        onUDPQueueSync {
+            let snapshot = wire.withLock { w -> (NativeProgramRun, GimbalWaypoint)? in
+                guard var run = w.nativeProgram, run.token == token, !run.engine.isPaused,
+                    let pose = w.nativeProgramPose, run.engine.pause(live: pose) else { return nil }
+                w.nativeProgramEpoch &+= 1
+                run.epoch = w.nativeProgramEpoch
+                run.pauseAnchor = nil
+                run.pauseStableSince = nil
+                run.pausedAt = ProcessInfo.processInfo.systemUptime
+                w.nativeProgram = run
+                return (run, pose)
+            }
+            guard let (run, pose) = snapshot else { return }
+            run.timer.cancel()
+            guard sendNativeProgramFrame(Commands.gimbalTimedStop()) else {
+                _ = cancelNativeProgramOnQueue(token: token, reportInterruption: true)
+                return
+            }
+            wire.withLock { $0.nativeProgram?.pausedAt = ProcessInfo.processInfo.systemUptime }
+            publishNativeProgram(run, pose: pose)
+            paused = true
+        }
+        return paused
+    }
+
+    @discardableResult
+    func resumeNativeProgram(token: UInt64) -> Bool {
+        guard !closed else { return false }
+        var resumed = false
+        onUDPQueueSync {
+            let now = ProcessInfo.processInfo.systemUptime
+            let snapshot = wire.withLock { w -> (NativeProgramRun, GimbalWaypoint)? in
+                guard var run = w.nativeProgram, run.token == token, run.engine.isPaused,
+                    let conn = w.conn, case .ready = conn.state,
+                    let pose = w.nativeProgramPose, let receivedAt = w.nativeProgramPoseAt,
+                    now >= receivedAt, now - receivedAt <= 0.3,
+                    let stableSince = run.pauseStableSince, receivedAt - stableSince >= 0.2 - 1e-9,
+                    let anchor = run.pauseAnchor,
+                    GimbalMoveEngine.angularDistance(anchor, pose) <= 0.100001,
+                    run.engine.resume(live: pose) else { return nil }
+                w.nativeProgramEpoch &+= 1
+                run.epoch = w.nativeProgramEpoch
+                run.timer = DispatchSource.makeTimerSource(queue: q)
+                run.lastTickAt = now - 0.000001
+                run.lastProgressAt = -.infinity
+                run.pausedAt = nil
+                run.pauseAnchor = nil
+                run.pauseStableSince = nil
+                w.nativeProgram = run
+                return (run, pose)
+            }
+            guard let (run, _) = snapshot else { return }
+            let epoch = run.epoch
+            run.timer.setEventHandler { [weak self] in self?.tickNativeProgram(epoch: epoch) }
+            // Balance the new source before the immediate tick either rearms or cancels it.
+            run.timer.resume()
+            tickNativeProgram(epoch: epoch)
+            resumed = true
+        }
+        return resumed
+    }
+
+    @discardableResult
+    func cancelNativeProgram(token: UInt64) -> Bool {
+        var canceled = false
+        onUDPQueueSync { canceled = cancelNativeProgramOnQueue(token: token) }
+        return canceled
+    }
+
+    /// Runs on q: invalidate queued timer handlers before placing STOP on the wire.
+    @discardableResult
+    nonisolated private func cancelNativeProgramOnQueue(
+        token: UInt64? = nil, reportInterruption: Bool = false
+    ) -> Bool {
+        let removed = wire.withLock { w -> (NativeProgramRun, GimbalWaypoint?)? in
+            guard var run = w.nativeProgram, token == nil || run.token == token else { return nil }
+            w.nativeProgramEpoch &+= 1
+            run.epoch = w.nativeProgramEpoch
+            w.nativeProgram = nil
+            return (run, w.nativeProgramPose)
+        }
+        guard let removed else { return false }
+        var run = removed.0
+        let pose = removed.1
+        run.timer.cancel()
+        if reportInterruption, let pose { _ = run.engine.tick(dt: .infinity, live: pose) }
+        run.engine.cancel()
+        _ = sendNativeProgramFrame(Commands.gimbalTimedStop())
+        if let pose { publishNativeProgram(run, pose: pose) }
+        return true
+    }
+
+    nonisolated private func tickNativeProgram(epoch: UInt64) {
+        let now = ProcessInfo.processInfo.systemUptime
+        let step = wire.withLock { w -> (NativeProgramRun, GimbalWaypoint, GimbalMoveEngine.Output, Bool)? in
+            guard w.nativeProgramEpoch == epoch, var run = w.nativeProgram,
+                !run.engine.isPaused, let pose = w.nativeProgramPose else { return nil }
+            let ready: Bool
+            if let conn = w.conn, case .ready = conn.state { ready = true } else { ready = false }
+            let dt = ready ? now - run.lastTickAt : .infinity
+            run.lastTickAt = now
+            let age = w.nativeProgramPoseAt.map { now - $0 } ?? .infinity
+            if dt > 0.12 || age > 0.3 {
+                ControlLiveLog.line("gimbal-native: interrupted dt=\(dt) feedbackAge=\(age) ready=\(ready)")
+            }
+            guard let output = run.engine.tick(dt: dt, live: pose, telemetryAge: age) else { return nil }
+            let publish = output.finished || now - run.lastProgressAt >= 0.2
+            if publish { run.lastProgressAt = now }
+            w.nativeProgram = run
+            return (run, pose, output, publish)
+        }
+        guard let step else { return }
+        var run = step.0
+        let (pose, output, publish) = (step.1, step.2, step.3)
+        if let target = output.target {
+            guard GimbalMoveEngine.canSendNativeTarget(from: pose, to: target),
+                let frame = Commands.gimbalTimedTarget(waypoint: target, duration: output.duration),
+                sendNativeProgramFrame(frame,
+                    logTarget: run.logsAllTargets || target == run.finalTarget ? target : nil,
+                    duration: output.duration) else {
+                _ = cancelNativeProgramOnQueue(token: run.token, reportInterruption: true)
+                return
+            }
+        }
+        if output.finished {
+            run.epoch = wire.withLock { w in
+                w.nativeProgramEpoch &+= 1
+                w.nativeProgram = nil
+                return w.nativeProgramEpoch
+            }
+            run.timer.cancel()
+            if output.stop { _ = sendNativeProgramFrame(Commands.gimbalTimedStop()) }
+        } else {
+            let remaining = run.lastTickAt + run.engine.nextWakeInterval - ProcessInfo.processInfo.systemUptime
+            run.timer.schedule(deadline: .now() + max(0.000_001, remaining), repeating: .never,
+                leeway: .milliseconds(1))
+        }
+        if publish { publishNativeProgram(run, pose: pose) }
+    }
+
+    nonisolated private func publishNativeProgram(_ run: NativeProgramRun, pose: GimbalWaypoint) {
+        let engine = run.engine
+        let token = run.token
+        let callback = run.onProgress
+        let epoch = run.epoch
+        Task { @MainActor [weak self] in
+            guard self?.wire.withLock({ $0.nativeProgramEpoch == epoch }) == true else { return }
+            callback(token, engine, pose)
+        }
+    }
+
+    /// q-only direct native write: no actor hop and no mailbox latency at a deadline.
+    nonisolated private func sendNativeProgramFrame(
+        _ frame: Duml.Frame, logTarget: GimbalWaypoint? = nil, duration: TimeInterval = 0
+    ) -> Bool {
+        let packet = wire.withLock { w -> (NWConnection, [UInt8], UInt16)? in
+            guard let conn = w.conn, case .ready = conn.state else { return nil }
+            var frame = frame
+            frame.seq = w.dumlSeq
+            w.dumlSeq &+= 1
+            w.cmdCounter &+= 1
+            let routing = DumlTransport.routingHeader(seq: w.udpSeq, cmdCounter: w.cmdCounter)
+            let duml = Duml.encode(frame)
+            let bytes = DumlTransport.transportHeader(pktType: 0x05,
+                payloadLen: routing.count + duml.count, sessionId: w.sessionId, seq: w.udpSeq) + routing + duml
+            w.udpSeq &+= 8
+            return (conn, bytes, frame.seq)
+        }
+        guard let (conn, bytes, seq) = packet, case .ready = conn.state else { return false }
+        conn.send(content: Data(bytes), completion: .idempotent)
+        if let target = logTarget {
+            let now = ProcessInfo.processInfo.systemUptime
+            ControlLiveLog.line("gimbal-native: seq=\(seq) target=\(target.yawDeg),\(target.pitchDeg) nativePitch=\(target.nativePitchDeg ?? 0) duration=\(duration) monotonic=\(now)")
+        }
+        return true
+    }
+
+    nonisolated private func noteNativeProgramPose(_ frames: [Duml.Frame]) {
+        for frame in frames where frame.cmdSet == 0x04 && frame.cmdId == 0x05 && frame.payload.count >= 22 {
+            guard let pose = GimbalWaypoint.from(yawTenth: GimbalStick.yawTenthDeg(frame.payload),
+                pitchTenth: GimbalStick.pitchTenthDeg(frame.payload), zoom: 1,
+                nativePitchTenth: GimbalStick.i16LE(frame.payload, at: 0)) else { continue }
+            let now = ProcessInfo.processInfo.systemUptime
+            wire.withLock { w in
+                if var run = w.nativeProgram, run.engine.isPaused,
+                    let pausedAt = run.pausedAt, now > pausedAt {
+                    if let anchor = run.pauseAnchor, let previousAt = w.nativeProgramPoseAt,
+                        now - previousAt <= 0.3,
+                        GimbalMoveEngine.angularDistance(anchor, pose) <= 0.100001 {
+                        // Keep the anchor fixed: accumulated drift must reset the settling window.
+                    } else {
+                        run.pauseAnchor = pose
+                        run.pauseStableSince = now
+                    }
+                    w.nativeProgram = run
+                }
+                w.nativeProgramPose = pose
+                w.nativeProgramPoseAt = now
+            }
+        }
+    }
+
+    func beginNativeTargets(token: UInt64) {
+        onUDPQueueSync {
+            _ = cancelNativeProgramOnQueue()
+            wire.withLock { $0.nativeTargetStream.begin(token: token) }
+        }
+    }
+
+    func noteNativeTarget(_ frame: Duml.Frame, token: UInt64) -> Bool {
+        guard !closed else { return false }
+        return wire.withLock {
+            $0.nativeTargetStream.submit(frame, token: token, now: ProcessInfo.processInfo.systemUptime)
+        }
+    }
+
+    /// Clear pending targets and finish the stop on the same queue before a
+    /// manual/program command can take ownership. Stale owners do nothing.
+    func endNativeTargets(token: UInt64) {
+        onUDPQueueSync {
+            let stopped = wire.withLock { $0.nativeTargetStream.cancel(token: token) }
+            if stopped, case .ready = conn?.state {
+                _ = sendDumlOnQueue(Commands.gimbalTimedStop(), trackCommand: false)
+            }
+        }
+    }
+
     /// Latest `0x04/0x01` axes. The ACK pump emits them on the UDP queue.
     func noteGimbalStick(axis0: UInt16, axis1: UInt16) {
         if closed { return }
@@ -384,6 +684,7 @@ final class DatalinkDriver {
             restGimbalStick()
             return
         }
+        onUDPQueueSync { _ = cancelNativeProgramOnQueue() }
         wire.withLock {
             $0.gimbalAxis0 = axis0
             $0.gimbalAxis1 = axis1
@@ -471,10 +772,20 @@ final class DatalinkDriver {
         udpGeneration += 1
         let generation = udpGeneration
         liveGeneration.withLock { $0 = generation }
+        onUDPQueueSync {
+            _ = cancelNativeProgramOnQueue(reportInterruption: true)
+            wire.withLock {
+                $0.nativeProgramPose = nil
+                $0.nativeProgramPoseAt = nil
+            }
+        }
         receiveArmed = false
         let old = conn
         conn = nil
-        wire.withLock { $0.conn = nil }
+        wire.withLock {
+            $0.conn = nil
+            $0.nativeTargetStream.cancel()
+        }
         old?.stateUpdateHandler = nil
         old?.cancel()
     }
@@ -660,6 +971,7 @@ final class DatalinkDriver {
             self?.sendWindowAck()
             self?.tickSelfieFlipGET()
             self?.tickGimbalStick()
+            self?.tickNativeTarget()
         }
         t.resume()
         ackTimer = t
@@ -740,6 +1052,43 @@ final class DatalinkDriver {
                 self?.lastSelfieFlipSendAt = Date()
             }
         }
+    }
+
+    nonisolated private func tickNativeTarget() {
+        let packet: (NWConnection, [UInt8])? = wire.withLock { w in
+            guard w.liveAccepting, !w.gimbalStickHeld, !w.gimbalSendRest,
+                let conn = w.conn else { return nil }
+            let ready: Bool
+            if case .ready = conn.state { ready = true } else { ready = false }
+            guard var frame = w.nativeTargetStream.next(
+                now: ProcessInfo.processInfo.systemUptime, connectionReady: ready)
+            else { return nil }
+            if frame.payload.count >= 8, frame.payload[6] == 0x05 {
+                let now = ProcessInfo.processInfo.systemUptime
+                let safe = w.nativeProgramPose.map { live in
+                    var target = live
+                    target.yawDeg = Double(GimbalStick.i16LE(frame.payload, at: 0) ?? 0) / 10
+                    return w.nativeProgramPoseAt.map { now >= $0 && now - $0 <= 0.3 } == true
+                        && GimbalMoveEngine.canSendNativeTarget(from: live, to: target)
+                } ?? false
+                if !safe {
+                    _ = w.nativeTargetStream.cancel()
+                    frame = Commands.gimbalTimedStop()
+                }
+            }
+            w.cmdCounter &+= 1
+            frame.seq = w.dumlSeq
+            w.dumlSeq &+= 1
+            let routing = DumlTransport.routingHeader(seq: w.udpSeq, cmdCounter: w.cmdCounter)
+            let duml = Duml.encode(frame)
+            let packet = DumlTransport.transportHeader(
+                pktType: 0x05, payloadLen: routing.count + duml.count,
+                sessionId: w.sessionId, seq: w.udpSeq) + routing + duml
+            w.udpSeq &+= 8
+            return (conn, packet)
+        }
+        guard let (conn, bytes) = packet, case .ready = conn.state else { return }
+        conn.send(content: Data(bytes), completion: .idempotent)
     }
 
     /// Stick notify on the ACK queue. MainActor `sendUntracked` shared the
@@ -956,6 +1305,7 @@ final class DatalinkDriver {
                 }
                 let pktType = bytes.count > 6 ? bytes[6] : 0xFF
                 let frames = DumlTransport.scanFrames(bytes)
+                self?.noteNativeProgramPose(frames)
                 for frame in frames where frame.cmdSet == 0x02 && frame.cmdId == 0x8E {
                     let pid: String
                     if let parsed = CameraParam.parseGetReply(frame.payload) {

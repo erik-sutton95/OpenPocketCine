@@ -232,3 +232,7 @@ android-play-dispatch track="alpha" status="completed":
 # Deterministic macOS load tests against the iOS relay transport and encoder shell.
 relay-test:
     ./scripts/test-watcher-relay.sh
+
+# Fast programmed-motion regression loop.
+gimbal-test:
+    swift test --filter 'Gimbal(Repeatability|SafeRoute)Tests'

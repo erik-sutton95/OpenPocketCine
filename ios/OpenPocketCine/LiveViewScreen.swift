@@ -25,6 +25,35 @@ struct LiveViewScreen: View {
     }
     private var showsLock: Bool { model.chromeSectionMounts(.lockButton) || interfaceLocked }
     private var showsBatteries: Bool { model.chromeSectionMounts(.batteries) }
+    private var showsGimbalButton: Bool {
+        model.session.hasGimbal && model.chromeSectionMounts(.gimbalStick)
+    }
+
+    private func gimbalCluster(_ layout: LiveMonitorLayout) -> GimbalCluster {
+        layout.gimbalCluster(showGimbalButton: showsGimbalButton)
+    }
+
+    /// Portrait parks the cluster on the picture; landscape uses the cinema well.
+    private func activeGimbalCluster(
+        _ layout: LiveMonitorLayout, portrait: MonitorPortraitZones?
+    ) -> GimbalCluster {
+        guard let zones = portrait else { return gimbalCluster(layout) }
+        let choice = Self.portraitChoice(model: model)
+        let captureH =
+            choice.fill && model.chromeSectionMounts(.cameraValues) && zones.controls.height > 1
+            ? CGFloat(zones.controls.height) : 0
+        return Self.portraitOnFeedControls(
+            picture: layout.onFeed,
+            fill: choice.fill,
+            bottomClearance: captureH + 10,
+            floorY: Self.portraitBelowFeedFloor(fill: choice.fill, zones: zones),
+            showGimbalButton: showsGimbalButton
+        )
+    }
+
+    private static func cgRect(_ region: MonitorLayoutRegion) -> CGRect {
+        CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -102,12 +131,15 @@ struct LiveViewScreen: View {
             if locked {
                 gamepad.noteBlocked()
                 headphones.noteBlocked()
+                model.liveGimbalPanel = .none
+                model.session.cancelProgrammedMove()
             }
         }
         .onChange(of: model.liveOperatorPanel) { _, panel in
             if panel != nil {
                 gamepad.noteBlocked()
                 headphones.noteBlocked()
+                model.liveGimbalPanel = .none
             } else {
                 headphones.sync()
             }
@@ -118,6 +150,7 @@ struct LiveViewScreen: View {
         .onChange(of: model.isEditingChrome) { _, editing in
             if editing {
                 headphones.noteBlocked()
+                model.liveGimbalPanel = .none
             } else {
                 headphones.sync()
             }
@@ -270,7 +303,7 @@ struct LiveViewScreen: View {
             LiveRecordingTallyGate()
                 .frame(width: layout.viewport.width, height: layout.viewport.height)
 
-            popups(layout)
+            popups(layout, portrait: portrait)
                 .zIndex(10)
 
             if let panel = model.liveOperatorPanel, !model.isEditingChrome {
@@ -337,8 +370,9 @@ struct LiveViewScreen: View {
             // chrome `Color.clear` must not cover this well.
             LiveZoomPinchWell(
                 feed: layout.onFeed,
-                chip: layout.zoomButton,
-                stick: layout.gimbalStick,
+                chip: Self.cgRect(self.gimbalCluster(layout).zoom),
+                stick: Self.cgRect(self.gimbalCluster(layout).stick),
+                gimbalButton: Self.cgRect(self.gimbalCluster(layout).controls),
                 reset: model.session.isFocusResetAvailable ? layout.focusReset : .zero,
                 cancel: trackingCancelRect(in: layout),
                 calibrate: model.headTrackingEnabled ? layout.gimbalCalibrate : .zero,
@@ -395,7 +429,14 @@ struct LiveViewScreen: View {
             if model.chromeSectionMounts(.zoomChip) {
                 LiveZoomChip()
                     .chromeEditable(.zoomChip, editing: editingMode)
-                    .liveModuleFrame(layout.zoomButton)
+                    .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
+                    .allowsHitTesting(!interfaceLocked)
+                    .zIndex(2)
+            }
+
+            if showsGimbalButton {
+                LiveGimbalButton()
+                    .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
                     .allowsHitTesting(!interfaceLocked)
                     .zIndex(2)
             }
@@ -405,10 +446,10 @@ struct LiveViewScreen: View {
                     enabled: !interfaceLocked && model.liveOperatorPanel == nil
                         && chromeInteractive,
                     feed: layout.onFeed,
-                    frame: layout.gimbalStick
+                    frame: Self.cgRect(self.gimbalCluster(layout).stick)
                 )
                 .chromeEditable(.gimbalStick, editing: editingMode)
-                .liveModuleFrame(layout.gimbalStick)
+                .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .zIndex(3)
             }
 
@@ -445,6 +486,16 @@ struct LiveViewScreen: View {
                 feed: layout.onFeed,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
+
+            if showsGimbalButton, chromeInteractive, !interfaceLocked,
+                model.liveOperatorPanel == nil
+            {
+                LiveGimbalOverlay(
+                    layout: layout,
+                    feed: layout.onFeed
+                )
+                .zIndex(5)
+            }
 
             if model.chromeSectionMounts(.toolBar) {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -487,10 +538,12 @@ struct LiveViewScreen: View {
             picture: picture,
             fill: isFill,
             bottomClearance: keyClearance,
-            floorY: Self.portraitBelowFeedFloor(fill: isFill, zones: zones)
+            floorY: Self.portraitBelowFeedFloor(fill: isFill, zones: zones),
+            showGimbalButton: showsGimbalButton
         )
-        let stickFrame = onFeed.stick
-        let zoomFrame = onFeed.zoom
+        let stickFrame = Self.cgRect(onFeed.stick)
+        let zoomFrame = Self.cgRect(onFeed.zoom)
+        let gimbalButtonFrame = Self.cgRect(onFeed.controls)
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
 
@@ -498,6 +551,7 @@ struct LiveViewScreen: View {
                 feed: picture,
                 chip: zoomFrame,
                 stick: stickFrame,
+                gimbalButton: gimbalButtonFrame,
                 reset: .zero,
                 cancel: trackingCancelRect(in: layout),
                 calibrate: model.headTrackingEnabled
@@ -591,6 +645,13 @@ struct LiveViewScreen: View {
                     .zIndex(2)
             }
 
+            if showsGimbalButton {
+                LiveGimbalButton()
+                    .liveModuleFrame(gimbalButtonFrame)
+                    .allowsHitTesting(!interfaceLocked)
+                    .zIndex(2)
+            }
+
             if model.chromeSectionMounts(.gimbalStick) {
                 LiveGimbalStick(
                     enabled: !interfaceLocked && model.liveOperatorPanel == nil
@@ -601,6 +662,13 @@ struct LiveViewScreen: View {
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(stickFrame)
                 .zIndex(3)
+            }
+
+            if showsGimbalButton, chromeInteractive, !interfaceLocked,
+                model.liveOperatorPanel == nil
+            {
+                LiveGimbalOverlay(layout: layout, feed: picture)
+                    .zIndex(5)
             }
 
             if model.headTrackingEnabled, !interfaceLocked, chromeInteractive,
@@ -656,7 +724,7 @@ struct LiveViewScreen: View {
 
     /// Full-screen overlays — not in-flow, not `.sheet` for live capture.
     @ViewBuilder
-    private func popups(_ layout: LiveMonitorLayout) -> some View {
+    private func popups(_ layout: LiveMonitorLayout, portrait: MonitorPortraitZones?) -> some View {
         let floorY =
             showsBottomBars
             ? min(layout.assist.minY, layout.capture.minY) - LiveChromeMetrics.popupGap
@@ -691,6 +759,13 @@ struct LiveViewScreen: View {
             .transition(.opacity)
             .animation(AssistLongPressChrome.revealCurve, value: tool)
             .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
+        }
+
+        if chromeInteractive, showsGimbalButton, model.liveGimbalPanel == .sheet, !interfaceLocked {
+            LiveGimbalSheetHost(
+                layout: layout,
+                cluster: activeGimbalCluster(layout, portrait: portrait)
+            )
         }
 
         if chromeInteractive, showsBottomBars, model.captureSheet != nil, !interfaceLocked {
@@ -729,39 +804,32 @@ struct LiveViewScreen: View {
         picture: CGRect,
         fill: Bool,
         bottomClearance: CGFloat,
-        floorY: Double
-    ) -> (stick: CGRect, zoom: CGRect) {
+        floorY: Double,
+        showGimbalButton: Bool
+    ) -> GimbalCluster {
         let feed = MonitorLayoutRegion(
             x: Double(picture.minX), y: Double(picture.minY),
             width: Double(picture.width), height: Double(picture.height))
-        let cluster: GimbalCluster
         if fill {
-            cluster = GimbalCluster.inTrailingBottom(
+            return GimbalCluster.inTrailingBottom(
                 well: feed,
                 floorY: Double(picture.maxY - bottomClearance),
                 canvasMaxY: Double(picture.maxY),
                 stickSize: Double(LiveChromeMetrics.gimbalStickSize),
                 zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
                 gap: Double(LiveChromeMetrics.gimbalStickGap),
-                inset: Double(LiveChromeMetrics.gimbalStickInset)
-            )
-        } else {
-            cluster = GimbalCluster.belowWell(
-                well: feed,
-                floorY: floorY,
-                stickSize: Double(LiveChromeMetrics.gimbalStickSize),
-                zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
-                gap: Double(LiveChromeMetrics.gimbalStickGap),
-                inset: Double(LiveChromeMetrics.gimbalStickInset)
+                inset: Double(LiveChromeMetrics.gimbalStickInset),
+                showGimbalButton: showGimbalButton
             )
         }
-        return (
-            CGRect(
-                x: cluster.stick.x, y: cluster.stick.y, width: cluster.stick.width,
-                height: cluster.stick.height),
-            CGRect(
-                x: cluster.zoom.x, y: cluster.zoom.y, width: cluster.zoom.width,
-                height: cluster.zoom.height)
+        return GimbalCluster.belowWell(
+            well: feed,
+            floorY: floorY,
+            stickSize: Double(LiveChromeMetrics.gimbalStickSize),
+            zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
+            gap: Double(LiveChromeMetrics.gimbalStickGap),
+            inset: Double(LiveChromeMetrics.gimbalStickInset),
+            showGimbalButton: showGimbalButton
         )
     }
 

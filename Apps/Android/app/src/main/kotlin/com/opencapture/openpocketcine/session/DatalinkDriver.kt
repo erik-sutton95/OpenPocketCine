@@ -18,7 +18,126 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
+
+/** Latest-value native stream. Scheduling and writes run on one serial TX executor.
+ * Caller operations never hold this lock across a write, so STOP can fence queued work immediately.
+ */
+internal class NativeCurveDispatch(
+    private val nowMs: () -> Long,
+    private val schedule: (Long, () -> Unit) -> Unit,
+    private val send: (ByteArray) -> Unit,
+) {
+    private val lock = Any()
+    private var generation = 0L
+    private var pending: Pair<ByteArray, Long>? = null
+    private var drainQueued = false
+    private var lastCompletedAt: Long? = null
+    private var lastPayload: ByteArray? = null
+
+    fun note(payload: ByteArray) {
+        synchronized(lock) {
+            pending = payload.copyOf() to nowMs()
+            if (!drainQueued) enqueueLocked(generation, 0)
+        }
+    }
+
+    fun clear() {
+        synchronized(lock) {
+            generation += 1
+            pending = null
+            drainQueued = false
+            lastPayload = null
+        }
+    }
+
+    private fun enqueueLocked(token: Long, delay: Long) {
+        drainQueued = true
+        schedule(delay) { drain(token) }
+    }
+
+    private fun drain(token: Long) {
+        val payload = synchronized(lock) {
+            if (token != generation) return
+            val next = pending
+            if (next == null || nowMs() - next.second > 120 ||
+                lastPayload?.contentEquals(next.first) == true) {
+                pending = null
+                drainQueued = false
+                return
+            }
+            val remaining = lastCompletedAt?.let { 40 - (nowMs() - it) } ?: 0
+            if (remaining > 0) {
+                enqueueLocked(token, remaining)
+                return
+            }
+            pending = null
+            drainQueued = false
+            next.first
+        }
+        // A clear may race this already executing write. Serial TX orders it before STOP;
+        // subsequent queued drains carry the invalidated generation and cannot send after STOP.
+        send(payload)
+        synchronized(lock) {
+            lastCompletedAt = nowMs()
+            if (token == generation) lastPayload = payload
+        }
+    }
+}
+
+/** One queued ACK-pump tick; its TX callback reads current stick state, never captured axes. */
+internal class CoalescedGimbalTick(
+    private val schedule: (() -> Unit) -> Unit,
+    private val tick: () -> Unit,
+) {
+    private val lock = Any()
+    private var generation = 0L
+    private var pending = false
+
+    fun request() {
+        synchronized(lock) {
+            if (pending) return
+            pending = true
+            val token = generation
+            schedule {
+                synchronized(lock) {
+                    if (token != generation) return@schedule
+                    pending = false
+                }
+                tick()
+            }
+        }
+    }
+
+    fun invalidate() {
+        synchronized(lock) {
+            generation += 1
+            pending = false
+        }
+    }
+}
+
+/** Closing fences callers synchronously, but STOP and socket teardown stay on serial TX. */
+internal class DatalinkCloseSequence(
+    private val closed: AtomicBoolean,
+    private val fence: () -> Unit,
+    private val enqueue: (() -> Unit) -> Unit,
+    private val stop: () -> Unit,
+    private val teardown: () -> Unit,
+) {
+    fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        fence()
+        enqueue {
+            try {
+                runCatching { stop() }
+            } finally {
+                teardown()
+            }
+        }
+    }
+}
 
 /** iOS `DatalinkError.noHandshake` — recoverable, never `error()` / crash. */
 class DatalinkHandshakeException(message: String) : IOException(message)
@@ -36,7 +155,46 @@ class DatalinkDriver(
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
     private val sendLock = Any()
-    private val sendExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.datalink.tx") }
+    private val sendExecutor = Executors.newSingleThreadScheduledExecutor { Thread(it, "opc.datalink.tx") }
+    private val nativeCurveDispatch = NativeCurveDispatch(
+        nowMs = SystemClock::elapsedRealtime,
+        schedule = { delay, action ->
+            if (!sendExecutor.isShutdown) {
+                runCatching { sendExecutor.schedule(action, delay, TimeUnit.MILLISECONDS) }
+            }
+        },
+        send = { payload ->
+            if (!closed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE, payload, 0,
+                CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+        },
+    )
+    private val nativeProgramUsed = AtomicBoolean(false)
+    private var closeNeedsStickRest = false
+    private val nativeFeedbackEpoch = AtomicLong(0)
+    private val nativeProgramFeedback = AtomicReference<Pair<Long, NativeGimbalFeedback>?>(null)
+    private val nativeProgramProgress = AtomicReference<(() -> Unit)?>(null)
+    private val nativeProgramProgressQueued = AtomicBoolean(false)
+    private val nativeProgramRunner = NativeGimbalProgramRunner(
+        now = { SystemClock.elapsedRealtimeNanos() / 1e9 },
+        schedule = { delay, action ->
+            if (!sendExecutor.isShutdown) {
+                runCatching { sendExecutor.schedule(action, (delay * 1e9).toLong(), TimeUnit.NANOSECONDS) }
+            }
+        },
+        feedback = ::readNativeProgramFeedback,
+        send = { target, duration ->
+            val payload = CameraCommands.gimbalTimedTarget(target, duration)
+            if (closed.get() || payload == null || !nativeGimbalTargetIsSafe(target,
+                    readNativeProgramFeedback(), SystemClock.elapsedRealtimeNanos() / 1e9)) false else {
+                sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE, payload, 0,
+                    CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+            }
+        },
+        stop = {
+            if (!closed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
+                CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+        },
+    )
     private val decodeExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.hevc") }
     private var socket: DatagramSocket? = null
     private var pokeSocket: Socket? = null
@@ -76,6 +234,7 @@ class DatalinkDriver(
     private val sendFailLogs = AtomicInteger(0)
     private val writeRejected = AtomicBoolean(false)
     private val gimbalLock = Any()
+    private val gimbalTickDispatch = CoalescedGimbalTick(::enqueueTx, ::tickGimbalStickOnTx)
     @Volatile private var gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
     @Volatile private var gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
     @Volatile private var gimbalStickHeld = false
@@ -331,7 +490,47 @@ class DatalinkDriver(
         sender: Int = CameraCommands.SENDER_APP,
     ) {
         if (closed.get() || !SwiftCore.isAvailable) return
-        onSendThread { sendDumlLocked(cmdSet, cmdId, payload, flags, receiver, sender) }
+        enqueueTx { sendDumlLocked(cmdSet, cmdId, payload, flags, receiver, sender) }
+    }
+
+    private fun readNativeProgramFeedback(): NativeGimbalFeedback? =
+        nativeProgramFeedback.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second
+
+    internal val latestNativeProgramFeedback: NativeGimbalFeedback?
+        get() = readNativeProgramFeedback()
+
+    internal fun startNativeProgram(program: GimbalProgram,
+        onProgress: (NativeGimbalProgramRunner.Progress) -> Unit): Long {
+        nativeProgramUsed.set(true)
+        return nativeProgramRunner.start(program) { progress ->
+            // A stalled UI only retains the newest immutable progress snapshot.
+            nativeProgramProgress.set { if (nativeProgramRunner.isCurrentProgress(progress)) onProgress(progress) }
+            if (nativeProgramProgressQueued.compareAndSet(false, true)) {
+                main.post {
+                    nativeProgramProgressQueued.set(false)
+                    nativeProgramProgress.getAndSet(null)?.invoke()
+                }
+            }
+        }
+
+    }
+
+    internal fun cancelNativeProgram(token: Long) = nativeProgramRunner.cancel(token)
+    internal fun pauseNativeProgram(token: Long) = nativeProgramRunner.pause(token)
+    internal fun resumeNativeProgram(token: Long) = nativeProgramRunner.resume(token)
+
+    /** Coalesce, deduplicate and pace curve targets on the serial TX executor. */
+    fun noteNativeCurveTarget(payload: ByteArray) {
+        if (closed.get() || !SwiftCore.isAvailable) return
+        nativeProgramUsed.set(true)
+        nativeCurveDispatch.note(payload)
+    }
+
+    fun clearNativeCurveTargets() = nativeCurveDispatch.clear()
+
+    private fun enqueueTx(body: () -> Unit) {
+        if (closed.get() || sendExecutor.isShutdown) return
+        runCatching { sendExecutor.execute { if (!closed.get()) body() } }
     }
 
     private fun sendDumlLocked(
@@ -341,38 +540,69 @@ class DatalinkDriver(
         flags: Int,
         receiver: Int,
         sender: Int,
-    ) {
+    ): Boolean {
         synchronized(sendLock) {
-            if (socket == null) return
+            if (socket == null) return false
             val frameBytes =
                 SwiftCore.encodeDuml(sender, receiver, dumlSeq, flags, cmdSet, cmdId, payload)
-                    ?: return
+                    ?: return false
             cmdCounter = (cmdCounter + 1) and 0xFF
-            val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return
+            val routing = SwiftCore.routingHeader(udpSeq, cmdCounter, false) ?: return false
             val header =
                 SwiftCore.transportHeader(0x05, routing.size + frameBytes.size, sessionId, udpSeq)
-                    ?: return
-            writeOnNetwork(header + routing + frameBytes)
+                    ?: return false
+            val accepted = writeOnNetwork(header + routing + frameBytes)
             dumlSeq = (dumlSeq + 1) and 0xFFFF
             udpSeq = (udpSeq + 8) and 0xFFFF
+            return accepted
         }
     }
 
-    fun close() {
-        closed.set(true)
-        liveViewEnabled = false
-        onAccessUnit = null
-        onStatusFrame = null
-        discardUdp(keepPoke = false)
-        runCatching { pokeSocket?.close() }
-        pokeSocket = null
-        sendExecutor.shutdownNow()
-        decodeExecutor.shutdownNow()
-        if (depacketizer != 0L && SwiftCore.isAvailable) {
-            SwiftCore.depacketizerDestroy(depacketizer)
-            depacketizer = 0L
-        }
-    }
+    private val closeSequence = DatalinkCloseSequence(
+        closed = closed,
+        fence = {
+            nativeProgramRunner.invalidate()
+            nativeFeedbackEpoch.incrementAndGet()
+            nativeProgramFeedback.set(null)
+            nativeProgramProgress.set(null)
+            clearNativeCurveTargets()
+            synchronized(gimbalLock) {
+                gimbalTickDispatch.invalidate()
+                closeNeedsStickRest = gimbalStickHeld || gimbalSendRest
+                gimbalStickHeld = false
+                gimbalSendRest = false
+                gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+                gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+            }
+            running.set(false)
+            liveViewEnabled = false
+            onAccessUnit = null
+            onStatusFrame = null
+        },
+        // This is the sole send admitted after closed=true. The executor is shut
+        // down only by this queued task, after its best-effort STOP has run.
+        enqueue = { action -> sendExecutor.execute(action) },
+        stop = {
+            if (SwiftCore.isAvailable) {
+                if (nativeProgramUsed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
+                    CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+                if (closeNeedsStickRest) synchronized(sendLock) {
+                    sendGimbalStickLocked(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.GIMBAL_STICK_CENTER)
+                }
+            }
+        },
+        teardown = {
+            discardUdp(keepPoke = false)
+            sendExecutor.shutdownNow()
+            decodeExecutor.shutdownNow()
+            if (depacketizer != 0L && SwiftCore.isAvailable) {
+                SwiftCore.depacketizerDestroy(depacketizer)
+                depacketizer = 0L
+            }
+        },
+    )
+
+    fun close() = closeSequence.close()
 
     private fun resetHandshakeSession() {
         sessionId = Random.nextInt(0x1000, 0xFFFE)
@@ -448,6 +678,17 @@ class DatalinkDriver(
 
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
+        if (!closed.get()) nativeProgramRunner.interrupt()
+        nativeFeedbackEpoch.incrementAndGet()
+        nativeProgramFeedback.set(null)
+        nativeCurveDispatch.clear()
+        synchronized(gimbalLock) {
+            gimbalTickDispatch.invalidate()
+            gimbalStickHeld = false
+            gimbalSendRest = false
+            gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
+            gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
+        }
         liveViewEnabled = false
         running.set(false)
         val rx = receiver
@@ -527,7 +768,7 @@ class DatalinkDriver(
         }
     }
 
-    /** Latest `0x04/0x01` axes. The ACK pump emits them on the UDP send lock. */
+    /** Latest `0x04/0x01` axes. ACK ticks request one coalesced TX read of this state. */
     fun noteGimbalStick(axis0: Int, axis1: Int) {
         if (closed.get()) return
         if (axis0 == CameraCommands.GIMBAL_STICK_CENTER &&
@@ -544,9 +785,10 @@ class DatalinkDriver(
         }
     }
 
-    /** One center packet, then silence. Same ACK thread as window ACK. */
+    /** Invalidate queued throws; the next TX tick emits one center packet, then silence. */
     fun restGimbalStick() {
         synchronized(gimbalLock) {
+            gimbalTickDispatch.invalidate()
             gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
             gimbalAxis1 = CameraCommands.GIMBAL_STICK_CENTER
             gimbalStickHeld = false
@@ -555,6 +797,10 @@ class DatalinkDriver(
     }
 
     private fun tickGimbalStick() {
+        if (!closed.get() && SwiftCore.isAvailable) gimbalTickDispatch.request()
+    }
+
+    private fun tickGimbalStickOnTx() {
         val now = SystemClock.elapsedRealtime()
         val packet: Pair<Int, Int>? =
             synchronized(gimbalLock) {
@@ -584,15 +830,7 @@ class DatalinkDriver(
                 axis0 to axis1
             }
         val axes = packet ?: return
-        sendGimbalStick(axes.first, axes.second)
-    }
-
-    /** `0x04/0x01` flags `0x00`, no ACK. Built with `encodeDuml` so it works on the shipped core. */
-    fun sendGimbalStick(axis0: Int, axis1: Int) {
-        if (!SwiftCore.isAvailable) return
-        synchronized(sendLock) {
-            sendGimbalStickLocked(axis0, axis1)
-        }
+        synchronized(sendLock) { sendGimbalStickLocked(axes.first, axes.second) }
     }
 
     private fun sendGimbalStickLocked(axis0: Int, axis1: Int) {
@@ -672,8 +910,8 @@ class DatalinkDriver(
         body()
     }
 
-    private fun writeOnNetwork(bytes: ByteArray) {
-        val sock = socket ?: return
+    private fun writeOnNetwork(bytes: ByteArray): Boolean {
+        val sock = socket ?: return false
         val packet =
             if (sock.isConnected) {
                 DatagramPacket(bytes, bytes.size)
@@ -681,7 +919,7 @@ class DatalinkDriver(
                 DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
             }
         synchronized(sendLock) {
-            runCatching { sock.send(packet) }
+            val attempt = runCatching { sock.send(packet) }
                 .onSuccess { writeRejected.set(false) }
                 .onFailure { err ->
                     writeRejected.set(true)
@@ -689,6 +927,7 @@ class DatalinkDriver(
                         Log.w(TAG, "datalink: UDP send failed", err)
                     }
                 }
+            return attempt.isSuccess
         }
     }
 
@@ -696,10 +935,11 @@ class DatalinkDriver(
         val buf = ByteArray(2048)
         while (running.get()) {
             val sock = socket ?: break
+            val receiveEpoch = nativeFeedbackEpoch.get()
             val packet = DatagramPacket(buf, buf.size)
             try {
                 sock.receive(packet)
-                if (packet.length > 0) ingest(packet.data.copyOf(packet.length))
+                if (packet.length > 0) ingest(packet.data.copyOf(packet.length), receiveEpoch)
             } catch (_: java.net.SocketTimeoutException) {
             } catch (e: Exception) {
                 if (!running.get()) break
@@ -708,7 +948,7 @@ class DatalinkDriver(
         }
     }
 
-    private fun ingest(datagram: ByteArray) {
+    private fun ingest(datagram: ByteArray, receiveEpoch: Long) {
         val nIn = inboundLogs.incrementAndGet()
         val pktType = if (datagram.size > 6) datagram[6].toInt() and 0xFF else -1
         if (nIn <= 16) {
@@ -773,6 +1013,11 @@ class DatalinkDriver(
         if (frames.isEmpty()) return
         lastStatusElapsed.set(SystemClock.elapsedRealtime())
         frames.forEach { frame ->
+            NativeGimbalFeedback.from(frame, SystemClock.elapsedRealtimeNanos() / 1e9)?.let {
+                if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                    nativeProgramFeedback.set(receiveEpoch to it)
+                }
+            }
             if (frame.cmdSet == 0x09 && (frame.cmdId and 0xFF) == 0xA8) {
                 val pay0 = frame.payload.firstOrNull()?.toInt()?.and(0xFF) ?: -1
                 lastLiveViewReplyElapsed.set(SystemClock.elapsedRealtime())

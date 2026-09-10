@@ -313,7 +313,9 @@ object CameraCommands {
     const val CMD_TRACK_SET = 0xA6
     const val CMD_TRACK_POLL = 0xA5
     const val CMD_PLAYBACK = 0x0C
+    const val CMD_GIMBAL_ANGLE = 0x14
     const val CMD_GIMBAL_MODE = 0x4C
+    const val CMD_GIMBAL_PARAMS = 0x50
     const val CMD_MEDIA_LIST = 0x26
     const val CMD_MEDIA_DELETE = 0x28
     const val CMD_MEDIA_FAVORITE = 0xBF
@@ -422,9 +424,41 @@ object CameraCommands {
 
     fun zoomForFactor(factor: Double): ByteArray = zoomLens(lensForZoomFactor(factor))
 
+    /** Native timed target: yaw/roll/pitch i16 LE, absolute + ignore roll, duration in 0.1s. */
+    fun gimbalTimedTarget(target: GimbalWaypoint, duration: Double): ByteArray? {
+        if (target.pitchDeg !in GimbalWaypoint.TILT_MIN_DEG..GimbalWaypoint.TILT_MAX_DEG) return null
+        val nativePitch = target.nativePitchDeg ?: return null
+        return gimbalTimedTarget(target.yawDeg, nativePitch, duration)
+    }
+
+    fun gimbalTimedTarget(yawDeg: Double, nativePitchDeg: Double, duration: Double): ByteArray? {
+        if (!yawDeg.isFinite() || !nativePitchDeg.isFinite() || !duration.isFinite() ||
+            yawDeg !in GimbalWaypoint.PAN_MIN_DEG..GimbalWaypoint.PAN_MAX_DEG ||
+            nativePitchDeg !in -180.0..180.0 || duration !in 0.1..25.5 ||
+            kotlin.math.abs(duration * 10 - kotlin.math.round(duration * 10)) >= 1e-6) return null
+        fun tenth(value: Double): Int =
+            java.lang.Math.copySign(kotlin.math.floor(kotlin.math.abs(value * 10) + 0.5), value).toInt()
+        return u16LE(tenth(yawDeg)) + u16LE(0) + u16LE(tenth(nativePitchDeg)) +
+            byteArrayOf(0x05, tenth(duration).toByte())
+    }
+
+    fun gimbalTimedStop(): ByteArray = byteArrayOf(0, 0, 0, 0, 0, 0, 4, 1)
+
     fun gimbalRecenter(): ByteArray = byteArrayOf(0xFE.toByte(), 0x08)
 
     fun gimbalFlip(): ByteArray = byteArrayOf(0xFE.toByte(), 0x09)
+
+    fun gimbalFollowFamily(): ByteArray = byteArrayOf(0x02, 0x08)
+
+    fun gimbalFpv(): ByteArray = byteArrayOf(0x01, 0x08)
+
+    fun gimbalParamsGet(): ByteArray = byteArrayOf(0x01, 0x04, 0x05)
+
+    fun setGimbalSpeed(speed: Int): ByteArray =
+        byteArrayOf(0x00, 0x05, 0x01, (speed and 0xFF).toByte())
+
+    fun setGimbalTiltLock(locked: Boolean): ByteArray =
+        byteArrayOf(0x00, 0x04, 0x01, if (locked) 0x01 else 0x00)
 
     fun liveViewEnablePayload(): ByteArray =
         byteArrayOf(0x00, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
@@ -625,6 +659,14 @@ object CameraCommands {
     }
 
     /** `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0). */
+    fun gimbalAxisLinear(normalized: Float): Int {
+        val n = normalized.coerceIn(-1f, 1f)
+        if (kotlin.math.abs(n) < 0.02f) return GIMBAL_STICK_CENTER
+        return (GIMBAL_STICK_CENTER + n * GIMBAL_STICK_TRAVEL)
+            .roundToInt()
+            .coerceIn(GIMBAL_STICK_MIN, GIMBAL_STICK_MAX)
+    }
+
     fun gimbalAxis(normalized: Float, sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY): Int {
         val curved = gimbalAnalogCurve(normalized)
         if (curved == 0f) return GIMBAL_STICK_CENTER

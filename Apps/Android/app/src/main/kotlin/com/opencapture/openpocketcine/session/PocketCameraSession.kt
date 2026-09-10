@@ -38,6 +38,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
@@ -116,6 +117,47 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     @Volatile private var pendingGimbalAxes: Pair<Int, Int> =
         CameraCommands.GIMBAL_STICK_CENTER to CameraCommands.GIMBAL_STICK_CENTER
     @Volatile private var gimbalStickHeld = false
+    private val gimbalRampFilter = GimbalRampFilter()
+    private var moveCountdownJob: Job? = null
+    private val _gimbalMoveCountdown = MutableStateFlow<Int?>(null)
+    val gimbalMoveCountdown: StateFlow<Int?> = _gimbalMoveCountdown.asStateFlow()
+    private var moveToken: Long? = null
+    private var moveDatalink: DatalinkDriver? = null
+    private var lastMoveReadout: GimbalMoveEngine.Readout? = null
+    private val gimbalOverlayMotion = GimbalOverlayMotion()
+    @Volatile private var lastValidGimbalAttitudeAt = 0L
+    @Volatile private var lastNativeGimbalPose: GimbalWaypoint? = null
+    private var captureStableSince = 0L
+    private var captureStablePose: GimbalWaypoint? = null
+    private var gimbalRestedAt = 0L
+    @Volatile private var moveDriving = false
+    private var lastMoveHudAt = 0L
+    private var lastMoveLogAt = 0L
+    private val _gimbalMoveReadout = MutableStateFlow("")
+    val gimbalMoveReadout: StateFlow<String> = _gimbalMoveReadout.asStateFlow()
+    private var gimbalParamsRequested = false
+    private var wasRecording = false
+    var gimbalRamp: GimbalRamp = GimbalRamp.OFF
+    private val _gimbalMode = MutableStateFlow(GimbalMode.FOLLOW)
+    val gimbalMode: StateFlow<GimbalMode> = _gimbalMode.asStateFlow()
+    private val _gimbalSpeed = MutableStateFlow(GimbalSpeed.DEFAULT)
+    val gimbalSpeed: StateFlow<GimbalSpeed> = _gimbalSpeed.asStateFlow()
+    private val _gimbalProgram = MutableStateFlow(GimbalProgram())
+    val gimbalProgram: StateFlow<GimbalProgram> = _gimbalProgram.asStateFlow()
+    private val _gimbalMovePaused = MutableStateFlow(false)
+    val gimbalMovePaused: StateFlow<Boolean> = _gimbalMovePaused.asStateFlow()
+    private val _gimbalMoveRunning = MutableStateFlow(false)
+    val gimbalMoveRunning: StateFlow<Boolean> = _gimbalMoveRunning.asStateFlow()
+    val hasGimbal: Boolean
+        get() = connectedCamera?.model?.hasGimbal == true
+    val canRunProgrammedMove: Boolean
+        get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() && _gimbalProgram.value.canRun
+
+    fun gimbalDebugText(): String = GimbalMoveEngine.formatDebug(_gimbalProgram.value, liveGimbalWaypoint, lastMoveReadout)
+    fun predictedGimbalWaypoint(nowSeconds: Double): GimbalWaypoint? = gimbalOverlayMotion.pose(nowSeconds)
+
+    val liveGimbalWaypoint: GimbalWaypoint?
+        get() = lastNativeGimbalPose?.copy(zoom = _zoomReadout.value)
     private val commandTimeoutsAt = mutableListOf<Long>()
 
     var connectedCamera: FoundCamera? = null
@@ -376,6 +418,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         connectJob?.cancel()
         keepaliveJob?.cancel()
         frameJob?.cancel()
+        resetGimbalControls()
         endGimbalStick()
         failAllWaiters(IllegalStateException("the camera disconnected"))
         pairingHold.clear()
@@ -1207,6 +1250,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun sendRecoverEnable(force: Boolean, reason: String) {
+        cancelProgrammedMove()
         endGimbalStick()
         if (isBrowsingMedia) return
         if (_status.value.inPlayback) {
@@ -1229,6 +1273,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun startFeedRecovery(work: suspend () -> Unit) {
+        cancelProgrammedMove()
         val inFlight = datalink?.isRebuilding == true || feedRecoveryJob != null
         if (!LiveViewEnablePolicy.shouldStartFeedRecovery(inFlight)) return
         feedRecoveryJob =
@@ -1247,6 +1292,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** iOS `CameraSession.noteSceneBecameInactive`. */
     fun noteSceneBecameInactive() {
+        cancelProgrammedMove()
         if (_phase.value == ConnectionPhase.LIVE) needsForegroundRecover = true
         Log.i(TAG, "live: scene inactive — will recover feed on active")
     }
@@ -1445,6 +1491,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** Drop the live UDP session so the next connect cannot inherit a half-closed driver. */
     private fun disposeDatalink() {
+        cancelProgrammedMove()
         val link = datalink
         datalink = null
         if (link == null) return
@@ -1634,7 +1681,30 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             syncGimbalPose()
         }
         if (frame.cmdSet == 0x04 && frame.cmdId == 0x05) {
+            requestGimbalParams()
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
+            if (frame.payload.size >= 22) {
+                val now = SystemClock.elapsedRealtime()
+                val previousAt = lastValidGimbalAttitudeAt
+                val rawPitch = ((frame.payload[0].toInt() and 0xFF) or
+                    ((frame.payload[1].toInt() and 0xFF) shl 8)).toShort().toInt()
+                lastNativeGimbalPose = GimbalWaypoint.from(
+                    CameraCommands.yawTenthDeg(frame.payload), CameraCommands.pitchTenthDeg(frame.payload),
+                    _zoomReadout.value, rawPitch)
+                lastValidGimbalAttitudeAt = now
+                val pose = liveGimbalWaypoint
+                pose?.let { gimbalOverlayMotion.observe(it, now / 1000.0) }
+                val anchor = captureStablePose
+                if (gimbalStickHeld || moveDriving || now - gimbalRestedAt < 500 || pose == null) {
+                    captureStableSince = 0L
+                    captureStablePose = null
+                } else if (anchor == null || now - previousAt > 300 ||
+                    GimbalMoveEngine.angularDistance(anchor, pose) > GimbalMoveEngine.ARRIVE_DEG) {
+                    // Keep this window's anchor fixed; small consecutive deltas can hide a slow drift.
+                    captureStableSince = now
+                    captureStablePose = pose
+                }
+            }
             syncGimbalPose()
             tickGimbalLimit()
         }
@@ -1662,6 +1732,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             val (held, nextPin) = pin.absorb(next, _status.value, SystemClock.elapsedRealtime())
             next = held
             audioPin = nextPin
+        }
+        if (wasRecording && !next.isRecording) {
+            cancelProgrammedMove()
+        }
+        wasRecording = next.isRecording
+        if (next.gimbalTiltLock >= 0) {
+            _gimbalMode.value =
+                GimbalControl.modeFromGet(next.gimbalTiltLock == 1, _gimbalMode.value)
+        }
+        if (next.gimbalSpeed >= 0) {
+            GimbalSpeed.fromWire(next.gimbalSpeed)?.let { _gimbalSpeed.value = it }
         }
         if (next != prev) {
             if (next.inPlayback != prev.inPlayback) {
@@ -1894,6 +1975,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun recenterGimbal() {
+        cancelProgrammedMove()
+        captureStableSince = 0L
+        captureStablePose = null
+        gimbalRestedAt = SystemClock.elapsedRealtime()
         endGimbalStick()
         datalink?.sendDuml(
             cmdSet = 0x04,
@@ -1905,6 +1990,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun flipGimbal() {
+        cancelProgrammedMove()
+        captureStableSince = 0L
+        captureStablePose = null
+        gimbalRestedAt = SystemClock.elapsedRealtime()
         endGimbalStick()
         gimbalStickMapping = gimbalStickMapping.noteRotate180()
         datalink?.sendDuml(
@@ -1951,6 +2040,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun startTracking(box: TrackingBox) {
+        cancelProgrammedMove()
         if (box.isTooSmall) {
             noteFrameTooSmall()
             return
@@ -2802,15 +2892,35 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         y: Float,
         sensitivity: Int = CameraCommands.GIMBAL_STICK_DEFAULT_SENSITIVITY,
         assistMirror: Boolean = false,
+        linear: Boolean = false,
     ) {
-        if (isLiveVideoStale()) {
+        if (isLiveVideoStale() && !moveDriving) {
             endGimbalStick()
             return
         }
+        if (_gimbalMoveRunning.value && !linear) {
+            if (hypot(x.toDouble(), y.toDouble()) > CameraCommands.GIMBAL_STICK_DEADZONE) {
+                cancelProgrammedMove()
+            } else {
+                return
+            }
+        }
+        var throwX = x
+        var throwY = y
+        if (!linear) {
+            val last = lastGimbalStickAt
+            val rawDt =
+                if (last == null) 0.04
+                else (SystemClock.elapsedRealtime() - last) / 1000.0
+            val dt = rawDt.coerceIn(0.001, 0.12)
+            val ramped = gimbalRampFilter.tick(x.toDouble(), y.toDouble(), gimbalRamp, dt)
+            throwX = ramped.first.toFloat()
+            throwY = ramped.second.toFloat()
+        }
         lastAssistMirror = assistMirror
         lastGimbalStickAt = SystemClock.elapsedRealtime()
-        lastGimbalCommand = x to y
-        pendingGimbalAxes = encodedGimbalAxes(x, y, sensitivity)
+        lastGimbalCommand = throwX to throwY
+        pendingGimbalAxes = encodedGimbalAxes(throwX, throwY, sensitivity, linear)
         val axes = pendingGimbalAxes
         if (axes.first == CameraCommands.GIMBAL_STICK_CENTER &&
             axes.second == CameraCommands.GIMBAL_STICK_CENTER
@@ -2820,18 +2930,293 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         lastGimbalThrowAt = lastGimbalStickAt
         tickGimbalLimit()
+        captureStableSince = 0L
+        captureStablePose = null
         gimbalStickHeld = true
         datalink?.noteGimbalStick(axes.first, axes.second)
     }
 
     fun endGimbalStick() {
+        if (moveDriving) return
+        if (_gimbalMoveRunning.value) {
+            cancelProgrammedMove()
+            return
+        }
+        restGimbalStickWire()
+    }
+
+    private fun restGimbalStickWire() {
+        gimbalRampFilter.reset()
         val wasHeld = gimbalStickHeld
+        if (wasHeld) gimbalRestedAt = SystemClock.elapsedRealtime()
         gimbalStickHeld = false
         lastGimbalCommand = 0f to 0f
         gimbalLimitWatch.reset()
         pendingGimbalAxes =
             CameraCommands.GIMBAL_STICK_CENTER to CameraCommands.GIMBAL_STICK_CENTER
         if (wasHeld) datalink?.restGimbalStick()
+    }
+
+    fun setGimbalMode(mode: GimbalMode) {
+        if (!hasGimbal) return
+        cancelProgrammedMove()
+        if (mode == GimbalMode.LOCKED) {
+            _gimbalMode.value = GimbalMode.LOCKED
+            _controlNote.value = GimbalHudCopy.LOCK_UNAVAILABLE
+            return
+        }
+        _gimbalMode.value = mode
+        when (mode) {
+            GimbalMode.FOLLOW, GimbalMode.TILT_LOCKED -> {
+                datalink?.sendDuml(
+                    cmdSet = 0x04,
+                    cmdId = CameraCommands.CMD_GIMBAL_MODE,
+                    payload = CameraCommands.gimbalFollowFamily(),
+                    receiver = CameraCommands.RX_GIMBAL,
+                )
+                datalink?.sendDuml(
+                    cmdSet = 0x04,
+                    cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+                    payload = CameraCommands.setGimbalTiltLock(mode == GimbalMode.TILT_LOCKED),
+                    receiver = CameraCommands.RX_GIMBAL,
+                )
+            }
+            GimbalMode.FPV ->
+                datalink?.sendDuml(
+                    cmdSet = 0x04,
+                    cmdId = CameraCommands.CMD_GIMBAL_MODE,
+                    payload = CameraCommands.gimbalFpv(),
+                    receiver = CameraCommands.RX_GIMBAL,
+                )
+            GimbalMode.LOCKED -> Unit
+        }
+    }
+
+    fun setGimbalSpeed(speed: GimbalSpeed) {
+        if (!hasGimbal) return
+        cancelProgrammedMove()
+        _gimbalSpeed.value = speed
+        datalink?.sendDuml(
+            cmdSet = 0x04,
+            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+            payload = CameraCommands.setGimbalSpeed(speed.wire),
+            receiver = CameraCommands.RX_GIMBAL,
+        )
+    }
+
+    fun setGimbalWaypoint(slot: GimbalWaypointSlot) {
+        val point = liveGimbalWaypoint
+        if (point == null || gimbalTelemetryAge() > 0.3) {
+            _controlNote.value = GimbalHudCopy.POSE_NOT_READY
+            return
+        }
+        if (point != point.clamped()) {
+            _controlNote.value = "Set the gimbal within its tilt limits"
+            return
+        }
+        if (point.nativePitchDeg == null) {
+            _controlNote.value = GimbalHudCopy.POSE_NOT_READY
+            return
+        }
+        if (gimbalStickHeld || moveDriving || captureStableSince == 0L ||
+            lastValidGimbalAttitudeAt - captureStableSince < 500) {
+            _controlNote.value = GimbalHudCopy.HOLD_STILL
+            return
+        }
+        _gimbalProgram.value = _gimbalProgram.value.withPoint(slot, point)
+    }
+
+    fun clearGimbalWaypoint(slot: GimbalWaypointSlot) {
+        cancelProgrammedMove()
+        _gimbalProgram.value = _gimbalProgram.value.withPoint(slot, null)
+        if (!_gimbalProgram.value.canRun) cancelProgrammedMove()
+    }
+
+    fun setGimbalLegDuration(ab: Double? = null, bc: Double? = null) {
+        cancelProgrammedMove()
+        var next = _gimbalProgram.value
+        if (ab != null) {
+            val floor = GimbalProgram.minTravelDuration(next.a, next.b)
+            next = next.copy(durationAB = GimbalProgram.snapDuration(maxOf(ab, floor)))
+        }
+        if (bc != null) {
+            val floor = GimbalProgram.minTravelDuration(next.b, next.c)
+            next = next.copy(durationBC = GimbalProgram.snapDuration(maxOf(bc, floor)))
+        }
+        _gimbalProgram.value = next
+    }
+
+    fun setGimbalSmoothness(value: Double) {
+        if (!value.isFinite()) return
+        cancelProgrammedMove()
+        _gimbalProgram.value = _gimbalProgram.value.copy(smoothness = value.coerceIn(0.0, 1.0))
+    }
+
+    fun clearGimbalProgram() {
+        cancelProgrammedMove()
+        val keep = _gimbalProgram.value
+        _gimbalProgram.value = GimbalProgram(durationAB = keep.durationAB, durationBC = keep.durationBC)
+    }
+
+    fun runProgrammedMove() {
+        if (!hasGimbal) return
+        if (_gimbalMoveRunning.value) {
+            cancelProgrammedMove()
+            return
+        }
+        if (!firstPictureSettled || decoder.lastPresentedAt == null || isLiveVideoStale()) {
+            _controlNote.value = "Wait for live video before running a move"
+            return
+        }
+        val link = datalink ?: return
+        val live = link.latestNativeProgramFeedback
+        if (live == null || SystemClock.elapsedRealtimeNanos() / 1e9 - live.receivedAt !in 0.0..0.3) {
+            _controlNote.value = GimbalHudCopy.POSE_NOT_READY
+            return
+        }
+        val program = _gimbalProgram.value
+        if (live.pose.nativePitchDeg == null || listOfNotNull(program.a, program.b, program.c)
+                .any { it.nativePitchDeg == null }) {
+            _controlNote.value = "Set the gimbal points again"
+            return
+        }
+        restGimbalStickWire()
+        _gimbalMoveRunning.value = true
+        _gimbalMovePaused.value = false
+        moveDriving = true
+        lastMoveHudAt = 0L
+        lastMoveLogAt = 0L
+        lastMoveReadout = null
+        moveDatalink = link
+        _gimbalMoveCountdown.value = 3
+        moveCountdownJob = scope.launch {
+            awaitMotionStartCountdown(pause = { delay(1_000) }) { _gimbalMoveCountdown.value = it }
+            moveCountdownJob = null
+            if (moveDatalink !== link || !_gimbalMoveRunning.value) return@launch
+            if (!canRunProgrammedMove) {
+                cancelProgrammedMove()
+                _controlNote.value = "Wait for live video before running a move"
+                return@launch
+            }
+            prepProgrammedMoveGimbal()
+            moveToken = link.startNativeProgram(program) { progress ->
+                if (moveDatalink !== link || moveToken != progress.token) return@startNativeProgram
+                _gimbalMovePaused.value = progress.paused
+                progress.note?.let { _controlNote.value = it }
+                lastMoveReadout = progress.readout
+                publishMoveDebug(GimbalMoveEngine.formatDebug(progress.program, progress.live, progress.readout),
+                    force = progress.finished)
+                if (progress.finished) {
+                    progress.failure?.let { _controlNote.value = it }
+                    restGimbalStickWire()
+                    gimbalRestedAt = SystemClock.elapsedRealtime()
+                    _gimbalMoveRunning.value = false
+                    _gimbalMovePaused.value = false
+                    moveDriving = false
+                    moveToken = null
+                    moveDatalink = null
+                }
+            }
+        }
+    }
+
+    fun pauseProgrammedMove() {
+        if (_gimbalMovePaused.value || _gimbalMoveCountdown.value != null) return
+        val token = moveToken ?: return
+        if (moveDatalink?.pauseNativeProgram(token) == true) _gimbalMovePaused.value = true
+    }
+
+    fun resumeProgrammedMove() {
+        if (!_gimbalMovePaused.value) return
+        val token = moveToken ?: return
+        moveDatalink?.resumeNativeProgram(token)
+    }
+
+    fun cancelProgrammedMove() {
+        moveCountdownJob?.cancel()
+        moveCountdownJob = null
+        _gimbalMoveCountdown.value = null
+        val token = moveToken
+        val link = moveDatalink
+        moveToken = null
+        moveDatalink = null
+        val was = _gimbalMoveRunning.value
+        _gimbalMoveRunning.value = false
+        _gimbalMovePaused.value = false
+        moveDriving = false
+        if (token != null) link?.cancelNativeProgram(token)
+        if (was) {
+            gimbalRestedAt = SystemClock.elapsedRealtime()
+            restGimbalStickWire()
+            lastMoveReadout = lastMoveReadout?.copy(phase = "STOP")
+        }
+        publishMoveDebug(gimbalDebugText(), force = true)
+    }
+
+    private fun gimbalTelemetryAge(nowMs: Long = SystemClock.elapsedRealtime()): Double =
+        if (lastValidGimbalAttitudeAt == 0L) Double.POSITIVE_INFINITY else (nowMs - lastValidGimbalAttitudeAt) / 1000.0
+
+    private fun prepProgrammedMoveGimbal() {
+        datalink?.sendDuml(
+            cmdSet = 0x04,
+            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+            payload = CameraCommands.setGimbalTiltLock(false),
+            receiver = CameraCommands.RX_GIMBAL,
+        )
+        datalink?.sendDuml(
+            cmdSet = 0x04,
+            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+            payload = CameraCommands.setGimbalSpeed(GimbalSpeed.FAST.wire),
+            receiver = CameraCommands.RX_GIMBAL,
+        )
+        Log.i(TAG, "gimbal-move: Fast+unlock")
+    }
+
+    private fun publishMoveDebug(text: String, force: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        if (GimbalMoveEngine.DEBUG_HUD) {
+            val hudDue = lastMoveHudAt == 0L || now - lastMoveHudAt >= 200L
+            if (hudDue || force) {
+                lastMoveHudAt = now
+                _gimbalMoveReadout.value = text
+            }
+        } else if (_gimbalMoveReadout.value.isNotEmpty()) {
+            _gimbalMoveReadout.value = ""
+        }
+        val logDue = lastMoveLogAt == 0L || now - lastMoveLogAt >= 500L
+        if ((logDue || force) && text.isNotEmpty()) {
+            lastMoveLogAt = now
+            Log.i(TAG, "gimbal-move: ${text.replace("\n", " | ")}")
+        }
+    }
+
+    private fun requestGimbalParams() {
+        if (!hasGimbal || gimbalParamsRequested) return
+        gimbalParamsRequested = true
+        datalink?.sendDuml(
+            cmdSet = 0x04,
+            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+            payload = CameraCommands.gimbalParamsGet(),
+            receiver = CameraCommands.RX_GIMBAL,
+        )
+    }
+
+    private fun resetGimbalControls() {
+        cancelProgrammedMove()
+        lastValidGimbalAttitudeAt = 0L
+        lastNativeGimbalPose = null
+        gimbalOverlayMotion.reset()
+        captureStableSince = 0L
+        captureStablePose = null
+        gimbalRestedAt = 0L
+        _gimbalProgram.value = GimbalProgram()
+        _gimbalMode.value = GimbalMode.FOLLOW
+        _gimbalSpeed.value = GimbalSpeed.DEFAULT
+        gimbalParamsRequested = false
+        gimbalRampFilter.reset()
+        wasRecording = false
+        _gimbalMoveReadout.value = ""
+        lastMoveReadout = null
     }
 
     private fun isLiveVideoStale(): Boolean {
@@ -2843,9 +3228,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     /** Prefer the Swift `GimbalStick.encode` wire; Kotlin copies the same gain/deadzone. */
-    private fun encodedGimbalAxes(x: Float, y: Float, sensitivity: Int): Pair<Int, Int> {
+    private fun encodedGimbalAxes(
+        x: Float,
+        y: Float,
+        sensitivity: Int,
+        linear: Boolean = false,
+    ): Pair<Int, Int> {
         val invertPan =
             CameraCommands.liveInvertPan(gimbalStickMapping.invertPan, lastAssistMirror)
+        if (linear) {
+            // Linear callers (programmed move) speak `0x04/0x05` space: no screen invert.
+            return CameraCommands.gimbalAxisLinear(y) to CameraCommands.gimbalAxisLinear(x)
+        }
         if (SwiftCore.isAvailable) {
             val packed =
                 SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), invertPan, sensitivity)

@@ -177,23 +177,23 @@ private struct PocketSim {
         #expect(travel < 2, "settled loop must not keep sawing")
     }
 
-    /// A look past the +58° pan stop pins the target at the stop: arrive,
+    /// A look past the −48° pan stop pins the target at the stop: arrive,
     /// rest, no pressing. Looking back inside the box leaves the stop.
     @Test func lookPastPanStopRestsThenFollowsBack() {
         var track = HeadTrack()
         _ = track.center(gimbalYawTenth: 0, gimbalPitchTenth: 0)
         var sim = PocketSim()
         sim.panStop = HeadTrack.Reach.panMinDeg...HeadTrack.Reach.panMaxDeg
-        run(&track, &sim, seconds: 4, lookRight: { min(90, 120 * $0) })
-        #expect(abs(sim.yaw - HeadTrack.Reach.panMaxDeg) < 1.5, "projected look is the stop")
+        run(&track, &sim, seconds: 4, lookRight: { max(-90, -120 * $0) })
+        #expect(abs(sim.yaw - HeadTrack.Reach.panMinDeg) < 1.5, "projected look is the stop")
         var rested = true
         run(
-            &track, &sim, seconds: 1, lookRight: { _ in 90 },
+            &track, &sim, seconds: 1, lookRight: { _ in -90 },
             onTick: { _, cmd, _ in
                 if cmd?.rest != true { rested = false }
             })
         #expect(rested, "pinned at the stop must rest, not press")
-        run(&track, &sim, seconds: 4, lookRight: { max(20, 90 - 120 * $0) })
+        run(&track, &sim, seconds: 4, lookRight: { min(20, -90 + 120 * $0) })
         #expect(abs(sim.yaw - 20) < 1.5, "looking back inside the box leaves the stop")
     }
 
@@ -343,7 +343,7 @@ private struct PocketSim {
 
     @Test func projectClampsToControllableBox() {
         let past = HeadTrack.Reach.project(
-            lookRight: 90, lookUp: 80, yaw0: 0, pitch0: 0)
+            lookRight: 300, lookUp: 80, yaw0: 0, pitch0: 0)
         #expect(past.yaw == HeadTrack.Reach.panMaxDeg)
         #expect(past.pitch == HeadTrack.Reach.tiltMaxDeg)
         let left = HeadTrack.Reach.project(
@@ -351,8 +351,8 @@ private struct PocketSim {
         #expect(left.yaw == HeadTrack.Reach.panMinDeg)
         #expect(left.pitch == HeadTrack.Reach.tiltMinDeg)
         let selfie = HeadTrack.Reach.project(
-            lookRight: 20, lookUp: 0, yaw0: -170, pitch0: 0)
-        #expect(selfie.yaw == -150)
+            lookRight: 20, lookUp: 0, yaw0: 190, pitch0: 0)
+        #expect(selfie.yaw == 210)
     }
 
     @Test func unwrapKeepsSpinningPast180() {

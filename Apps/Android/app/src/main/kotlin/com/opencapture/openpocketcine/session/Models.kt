@@ -26,6 +26,9 @@ data class CameraModel(
 ) {
     val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
 
+    /** Pocket 3-axis gimbal. Nano has none. */
+    val hasGimbal: Boolean get() = family == "pocket"
+
     val isoAutoRangeFloor: Int get() = Companion.isoAutoRangeFloorFor(name)
 
     /**
@@ -271,6 +274,10 @@ data class CameraStatus(
     val selfieFlip: Boolean? = null,
     /** `0x04/0x27` `@2` bit `0x40`. `0` front / `1` selfie / `-1` unknown. */
     val gimbalFace: Int = CameraCommands.GIMBAL_FACE_UNKNOWN,
+    /** `0x04/0x50` param `04`. `0` Follow / `1` Tilt locked. `-1` unknown. */
+    val gimbalTiltLock: Int = -1,
+    /** `0x04/0x50` param `05`. `0` Fast / `1` Default / `2` Slow. `-1` unknown. */
+    val gimbalSpeed: Int = -1,
     /** Live VU from `cam_audio_status_v2`, dBFS. Floor is −60. */
     val audioMetersLeft: Double = -60.0,
     val audioMetersRight: Double = -60.0,

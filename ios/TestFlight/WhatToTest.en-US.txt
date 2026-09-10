@@ -1,23 +1,22 @@
 New and changed
 
 - Share this feed in Operator Setup → Sharing sends the picture to OpenPocketCine iPhones and iPads on the same camera Wi-Fi. Show Wi-Fi code on the host, scan it with Camera on the watcher, accept Join Network, then return to Watch a feed. Only the host pairs with the camera in the app.
-- Watchers have local assists and scopes, camera readings, REC tally, and Clean view. Request control to record, focus, or change supported ISO, shutter, and zoom settings. Release gives control back.
-- Broadcast priority sets the quality ceiling. Sharing can lower its bitrate when the host picture slows.
-- FALSE Scale adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE over gray.
-- Tap ND for a suggested screw-on filter and stop count. It starts off; the app cannot set a filter.
-- Game controllers drive the gimbal, recording, zoom, tracking, and exposure. Experimental AirPods head tracking is in Controls; calibrate while still and live. STOP clears the lock.
+- Watchers have local assists and scopes, camera readings, REC tally, and Clean view. Request control to record, focus, or change supported ISO, shutter, and zoom. Release gives control back. Broadcast priority sets the quality ceiling; sharing can lower bitrate if the host slows.
+- FALSE adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE over gray. Tap ND for a suggested screw-on filter and stop count. It starts off; the app cannot set a filter.
+- Motion Control uses timed A→B moves with optional C and adjustable smoothing. Duration dials run from 0.5 to 120 seconds; swipe left to increase. Start counts down three seconds. Pause holds the path; Resume continues from the stopped pose; Stop discards it. Hold to move the editor; dragging suppresses button taps.
+- Experimental AirPods head tracking uses camera angle targets. Calibrate Head Lock while still and live. Manual controls and Motion Control take priority; STOP clears the lock. Wearer response remains under qualification.
 
 Fixes
 
-- Interrupted watcher feeds keep the last picture and retry three times. A stopped feed leaves its error and Choose a feed visible instead of opening camera pairing.
-- Passcode refusals arrive before the connection closes, so the watcher can enter the correct code.
-- A slow watcher waits for a fresh keyframe while other watchers continue. Local assists and mirror stay selected as frames arrive.
+- Interrupted watcher feeds keep the last picture and retry three times. A stopped feed leaves its error and Choose a feed visible instead of opening camera pairing. Passcode refusals arrive before closure.
+- A slow watcher waits for a fresh keyframe while others continue. Local assists and mirror stay selected as frames arrive.
+- Motion Control respects the reachable pan arc and tilt limits, including selfie returns. Stale feedback or missed waypoints stop the move. Wide or fast exact turns can still fail verification; rehearse before a take.
 - The camera picture stays through settings and clips, zoom, exposure changes, and recovery. A frozen picture with live timecode is a bug. Pause VPNs or ad blockers if live view never starts.
 
 What to test
 
-- Start a watcher on different Wi-Fi. Follow Show Wi-Fi code and join the camera Wi-Fi before finding the host. Try a wrong watcher passcode, then the correct one.
-- Note host FPS with sharing off. Turn sharing on, join one watcher, then two or more. Pan and record for five minutes with LUT and waveform on. Check host and watchers for stutter or growing delay.
-- Move one watcher out of range, then return it. The host and other watchers should keep moving; the returning picture should reconnect. Leave during retries to cancel them.
-- Stop and restart sharing. Leave and rejoin. Request control, grant it, test focus at the picture edges with mirror on and off, then reclaim control on the host. The watcher must stop sending camera commands after losing control.
-- Try Clean view and assists in portrait and landscape. Long-press FALSE and compare CineStop, EL Zone (mid-gray gray, hot sky white), and IRE. Tap ND on a bright take and check its filter/stop reading changes with the picture. Report device models, watcher count, and which picture slowed first. Multiple-watcher capacity still needs device testing.
+- Pair a Pocket and go live with LUT and waveform. Long-press FALSE and compare CineStop, EL Zone (mid-gray gray, hot sky white), and IRE. Tap ND on a bright take and check its filter/stop reading changes with the picture. Try portrait, landscape, settings, clips, zoom, and recording.
+- Rehearse A→B→C exact and smoothed moves, including long durations. Test countdown cancellation, repeated Pause/Resume/Stop, duration swipes, and dragging both editor sizes without activating buttons. With AirPods, calibrate while still, turn and nod, then stop; note drift or overshoot.
+- Start a watcher on different Wi-Fi. Follow Show Wi-Fi code, join the camera Wi-Fi, then find the host. Try a wrong passcode, then the correct one. Stop/restart sharing and leave/rejoin.
+- Note host FPS with sharing off, then with one watcher and two or more. Pan and record five minutes with LUT and waveform. Move one watcher out of range and back; other pictures should keep moving. Leave during retries to cancel. Report device models, watcher count, stutter, and growing delay.
+- Request watcher control, grant it, focus at picture edges with mirror on/off, then reclaim control on the host. The watcher must stop sending commands after losing control. Try Clean view and local assists in portrait and landscape. Multiple-watcher capacity still needs device testing.

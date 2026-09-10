@@ -46,8 +46,18 @@ only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 on Pocket 4 Pro. View Assist **ND** meters the live picture against middle
 gray and suggests a screw-on ND in stops and ND number to balance the
 frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
-trailing-bottom of the picture, same as iOS. Stick throw is analog with
-an ease-in curve (small push crawls; full throw is fastest). A connected
+trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
+beside zoom (Pocket only). That sheet parks like a capture picker and
+sets Follow / Tilt locked / FPV, Slow / Default / Fast, stick ramp, and
+a Motion Control A→B (optional C) take (set A and B, choose each
+leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
+Zero hits B exactly; higher values bypass B while preserving A/C and total
+duration. There is no artificial speed cap. Moves are experimental: keep
+the camera fixed, rehearse, and check framing before a take. Tilt targets stay
+within −44° to +70°. A missed timed
+point stops the move; professional positional/timing accuracy has not been qualified. Stick throw is analog with
+an ease-in curve (small push crawls; full throw is fastest). Off / Soft /
+Medium ramp eases the throw over time. A connected
 game controller's left stick drives the same path. Cross/A records.
 Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
 in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
@@ -88,6 +98,16 @@ after a take even if enter-playback ACKs E0. Share/save is the original
 camera file — LUT bake (and Bake exposure) is iOS only.
 Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
+
+Motion Control durations use half-second dials up to 120 seconds. Swipe left
+to increase duration and right to decrease it. Move the expanded
+window by holding anywhere, or drag the minimized pill directly. Dragging
+does not activate Start/Stop or expand. Start shows a cancellable three-second
+countdown before preparation and approach to A. Pause holds the move; Resume
+continues from the stopped position without another countdown. Stop clears the
+continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
+the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
+does not reverse stored mechanical angles; MIRROR changes the preview only.
 
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
 PEAK / FALSE / ZEBRA grade the 720p HEVC raster with a 3D cube (same lattice
