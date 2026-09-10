@@ -92,4 +92,29 @@ import Testing
         #expect(NDFilterRecommendation.stopsLabel(2.3) == "+2.3")
         #expect(NDFilterRecommendation.stopsLabel(-1) == "−1.0")
     }
+
+    @Test func densityIsThreeTenthsPerStop() {
+        #expect(NDFilterRecommendation.densityPerStop == 0.3)
+        #expect(NDFilterRecommendation.densityLabel(0) == "ND 0.0")
+        #expect(NDFilterRecommendation.densityLabel(1) == "ND 0.3")
+        #expect(NDFilterRecommendation.densityLabel(4.0 / 3.0) == "ND 0.4")
+        #expect(NDFilterRecommendation.densityLabel(5) == "ND 1.5")
+        #expect(NDFilterRecommendation.densityLabel(-1) == "ND −0.3")
+    }
+
+    @Test func chipLabelFollowsNotation() {
+        let hot = NDFilterRecommendation.suggestion(pictureStops: 5)
+        #expect(hot.chipLabel(.stops) == "+5.0")
+        #expect(hot.chipLabel(.factor) == "ND32")
+        #expect(hot.chipLabel(.density) == "ND 1.5")
+        let tiffen = NDFilterRecommendation.suggestion(pictureStops: 4.0 / 3.0)
+        #expect(tiffen.chipLabel(.density) == "ND 0.4")
+        #expect(tiffen.chipLabel(.factor) == "ND2")
+        let under = NDFilterRecommendation.suggestion(pictureStops: -1.5)
+        #expect(under.chipLabel(.factor) == "—")
+        #expect(under.chipLabel(.stops) == "−1.5")
+        #expect(NDFilterNotation.stops.editorLabel == "Stops")
+        #expect(NDFilterNotation.factor.editorLabel == "ND32")
+        #expect(NDFilterNotation.density.editorLabel == "ND 0.3")
+    }
 }

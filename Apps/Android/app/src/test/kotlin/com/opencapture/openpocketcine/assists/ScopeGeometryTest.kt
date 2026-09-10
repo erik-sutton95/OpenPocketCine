@@ -22,8 +22,8 @@ class ScopeGeometryTest {
         assertEquals(190f, ScopePanelSize.vectorscope.height)
         assertEquals(74f, ScopePanelSize.trafficLights.width)
         assertEquals(168f, ScopePanelSize.trafficLights.height)
-        assertEquals(88f, ScopePanelSize.ndMeter.width)
-        assertEquals(92f, ScopePanelSize.ndMeter.height)
+        assertEquals(84f, ScopePanelSize.ndMeter.width)
+        assertEquals(30f, ScopePanelSize.ndMeter.height)
         assertEquals(28f, ScopePanelSize.audio.width)
         assertEquals(168f, ScopePanelSize.audio.height)
     }
@@ -207,6 +207,11 @@ class ScopeGeometryTest {
         assertTrue(offFeed.x < feed.minX)
         val topTrailing = MovablePanelMath.defaultCenterTopTrailing(feed, ScopePanelSize.vectorscope, bounds)
         assertEquals(feed.maxX - 190f / 2f, topTrailing.x, 0.5f)
+        val nd = ScopePanelSize.ndMeter
+        val ndPark =
+            MovablePanelMath.defaultCenterBottomLeading(feed, nd, bounds, bottomClearance = 80f)
+        assertEquals(feed.minX + nd.width / 2f, ndPark.x, 0.5f)
+        assertTrue(ndPark.y > feed.midY)
         val stored = StoredCenter(AssistPoint(750f, 125f), AssistRect(0f, 0f, 1000f, 500f))
         assertEquals(0.75, stored.xFraction, 0.001)
         assertEquals(0.25, stored.yFraction, 0.001)

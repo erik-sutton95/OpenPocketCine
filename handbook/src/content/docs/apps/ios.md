@@ -36,9 +36,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
-  View Assist **ND** meters the live picture against middle gray and
-  suggests a screw-on ND in stops and ND number to balance the frame.
-  The app cannot set a filter.
+  View Assist **ND** is a small chip on the live picture (bottom-left,
+  above the assist bar; hold-drag to move). Long-press to switch Stops,
+  ND32, or ND 0.3. It meters against middle gray and suggests a screw-on
+  ND to balance the frame. The app cannot set a filter.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A

@@ -5,6 +5,23 @@ import com.opencapture.openpocketcine.feed.MonitorTransfer
 import kotlin.math.abs
 import kotlin.math.floor
 
+/** How the ND chip names the reading. Operator setting, not a camera SET. */
+enum class NDFilterNotation(val persisted: String, val editorLabel: String) {
+    STOPS("stops", "Stops"),
+    FACTOR("factor", "ND32"),
+    DENSITY("density", "ND 0.3"),
+    ;
+
+    companion object {
+        fun fromPersisted(raw: String): NDFilterNotation =
+            entries.firstOrNull { it.persisted.equals(raw, ignoreCase = true) || it.editorLabel == raw }
+                ?: FACTOR
+
+        fun fromEditorLabel(label: String): NDFilterNotation =
+            entries.firstOrNull { it.editorLabel == label } ?: FACTOR
+    }
+}
+
 /** Live-picture ND reading. Suggestion only — not a SET. */
 data class NDFilterSuggestion(
     val pictureStops: Double,
@@ -15,6 +32,13 @@ data class NDFilterSuggestion(
 ) {
     val needsGlass: Boolean
         get() = ndStops >= 1
+
+    fun chipLabel(notation: NDFilterNotation): String =
+        when (notation) {
+            NDFilterNotation.STOPS -> stopsLabel
+            NDFilterNotation.FACTOR -> ndLabel
+            NDFilterNotation.DENSITY -> NDFilterRecommendation.densityLabel(pictureStops)
+        }
 }
 
 /**
@@ -26,6 +50,8 @@ object NDFilterRecommendation {
     const val MAX_STOPS = 10
     val opticalFactors = listOf(2, 4, 8, 16, 32, 64, 128, 256, 512, 1_000)
     const val NONE_LABEL = "—"
+    /** Cinema optical density: 1 stop ≈ ND 0.3 (Tiffen ND 0.4 is 1⅓ stops). */
+    const val DENSITY_PER_STOP = 0.3
 
     fun opticalFactor(stops: Int): Int {
         if (stops < MIN_STOPS) return 1
@@ -39,10 +65,19 @@ object NDFilterRecommendation {
     }
 
     fun stopsLabel(stops: Double): String {
-        if (!stops.isFinite()) return "—"
+        if (!stops.isFinite()) return NONE_LABEL
         if (abs(stops) < 0.05) return "0.0"
         val sign = if (stops > 0) "+" else "−"
         return sign + String.format("%.1f", abs(stops))
+    }
+
+    /** Optical density of the picture (`ND 0.4`). Signed when under. */
+    fun densityLabel(stops: Double): String {
+        if (!stops.isFinite()) return NONE_LABEL
+        val density = stops * DENSITY_PER_STOP
+        if (abs(density) < 0.05) return "ND 0.0"
+        val sign = if (density > 0) "" else "−"
+        return "ND $sign${String.format("%.1f", abs(density))}"
     }
 
     fun pictureStops(lumaHistogram: IntArray, transfer: MonitorTransfer): Double? {

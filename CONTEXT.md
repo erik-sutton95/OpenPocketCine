@@ -152,7 +152,7 @@ A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
 
 **ND suggestion**:
-View-assist meter on the live picture (toolbar **ND**, next to LIGHTS). Reads luma vs middle gray and names a screw-on ND in stops and ND number to balance the frame. Not a camera SET. Off unless the operator turns the chip on.
+View-assist HUD chip on the live picture (toolbar **ND**, next to LIGHTS). Parks bottom-left above the assist bar; hold-drag to move. Long-press **Units** switches Stops (`+5.0`), filter factor (`ND32`), and optical density (`ND 0.3` / `ND 0.4`). Reads luma vs middle gray. Not a camera SET. Off unless the operator turns the chip on.
 _Avoid_: auto ND, ND SET, shutter-sheet nag
 
 **LUT exposure compensation**:

@@ -3,7 +3,7 @@ New and changed
 - Experimental Multiview: the grid icon in Your cameras connects up to four supported cameras on shared Wi-Fi. Saved stages, adaptive grid/Center stage, portrait Fit/Fill, per-camera LUTs and timecode, individual/group recording, and red tally borders are included. Double-tap opens Live View; the grid returns to the stage. Personal Hotspot is experimental.
 - Share this feed in Operator Setup → Sharing sends one camera picture to nearby OpenPocketCine iPhones/iPads on the same camera Wi-Fi. Show Wi-Fi code on the host, scan with Camera, join, then return to Watch a feed. Only the host pairs with the camera in the app.
 - Watchers have local assists/scopes, camera readings, REC tally, Clean view, and granted control of recording, focus, ISO, shutter, and zoom. Release returns control. Broadcast priority sets the quality ceiling; bitrate can lower if the host slows.
-- FALSE adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE. Tap ND for a suggested screw-on filter and stop count; it starts off and cannot set a filter.
+- FALSE adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE. ND is a small chip bottom-left; hold-drag. Long-press Stops / ND32 / ND 0.3. Off until tapped.
 - Motion Control adds timed A→B→C moves and smoothing. Duration dials span 0.5–120 seconds; swipe left to increase. Start counts down three seconds. Pause holds the path, Resume continues from the stopped pose, and Stop discards it. Dragging the editor suppresses button taps. Experimental AirPods tracking uses angle targets; calibrate still and live. Manual controls take priority.
 - Pocket 3 FORMAT offers normal-video resolutions including 2.7K when the camera supplies no list. D-Log M scopes use direct preview signal; scene-stop readings remain estimated, not measured sensor clipping limits.
 
@@ -15,7 +15,7 @@ Fixes
 
 What to test
 
-- Pocket 3: repeat connections, select 2.7K at 25p in normal Video, confirm on the camera, record and reconnect. Nano: compare smoothness with LUT off/on, recording and reconnect. In D-Log M, change ISO with waveform and FALSE on; check stable signal scale, paint and alignment. Compare CineStop, EL Zone and IRE; try ND on a bright take.
+- Pocket 3: repeat connections, select 2.7K at 25p in normal Video, confirm on the camera, record and reconnect. Nano: compare smoothness with LUT off/on, recording and reconnect. In D-Log M, change ISO with waveform and FALSE on; check stable signal scale, paint and alignment. Compare CineStop, EL Zone and IRE; tap ND on a bright take (chip; long-press Units).
 - Multiview: add Pocket 3, Pocket 4 Pro and Nano. Try individual/group recording, borders, LUTs, layouts, Fit/Fill and rotation. App-switch, retry a failed tile, then close/reopen to check saved stages and camera Wi-Fi restoration. Cancel a network scan before adding a camera: check its own Wi-Fi returns; retry closing if it was unavailable.
 - Rehearse exact/smoothed A→B→C moves and long durations. Test countdown cancellation, repeated Pause/Resume/Stop, duration swipes, and dragging both editor sizes without button activation. With AirPods, calibrate, turn, nod and stop; report drift or overshoot.
 - Join a watcher from different Wi-Fi using the host code. Try wrong/correct passcodes and stop/restart sharing. Compare host FPS with sharing off, one watcher, then two or more during five minutes of pans, LUT, waveform and recording. Move one watcher out of range/back; others should keep moving. Leave during retries to cancel.
