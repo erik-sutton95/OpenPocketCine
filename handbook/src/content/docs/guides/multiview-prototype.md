@@ -152,6 +152,9 @@ If discovery replaces the transport, controls stay detached until the replacemen
 has passed camera identity verification. The tile’s video host is recreated on
 return without disconnecting its camera. Media browsing is hidden in this borrowed
 station-mode view because its file-transfer path is not yet adapted to shared Wi-Fi.
+Sharing is unavailable in a Multiview tile. Connect to one camera from Your cameras
+to share its feed with watchers. Returning to the stage stops any programmed motion
+or head tracking started in the tile’s Live View.
 Hardware validation of full Live View controls and return-to-tile continuity is
 still required.
 

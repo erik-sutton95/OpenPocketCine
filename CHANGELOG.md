@@ -6,7 +6,47 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Experimental AirPods head tracking now maps shared-forward head direction to
+  native gimbal angles with a 100 ms command horizon. Stale measurements,
+  inactive scenes and old control callbacks cannot continue driving. Manual
+  and programmed movement take priority; physical response qualification is ongoing.
+
 ### Added
+
+- False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
+  gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
+  stays white, not a separate clip stripe. iOS and Android.
+
+- False color **IRE** is six video-level WAVE zones over grayscale
+  (crush / near-black / 18% gray / +1 stop / 80 / 95 clip). **CineStop**
+  (formerly PStops) is Video Mode IRE stripes over grayscale. Saved
+  PStops still load as CineStop.
+
+- ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
+  meters the live picture against middle gray and suggests a screw-on
+  ND in stops and ND number (`ND32` / `+5.0`) to balance the frame.
+  Off unless you turn the chip on. The app cannot set a filter. iOS
+  and Android.
+
+- Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
+  One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
+  stick ramp Off / Soft / Medium, and Motion Control. The sheet parks
+  like a capture picker (slide-up glass above the capture bar). Locked
+  toasts — no lock-all opcode on the wire yet (#174). Ramp is local
+  ease-in/out on the stick path (#260), not camera speed. Motion Control
+  uses camera-timed A→B (optional C) trajectories with waypoint verification.
+  It preserves durations from 0.5 to 120 seconds without rate calibration or
+  an artificial speed ceiling. C enables adjustable Bézier smoothing and a
+  dashed preview; markers compensate for measured motion between reports.
+  Start counts down three seconds. Pause holds the remaining path; Resume
+  continues from the stopped pose. Stop discards the continuation. The wider
+  editor has swipeable duration dials (left increases, right decreases),
+  refresh icons and C hidden until B is set. Hold anywhere to move the editor;
+  dragging the minimized pill suppresses button taps. Debug chrome is removed.
+  Preparation selects Fast and tilt unlocked. No zoom SET during movement.
+  Manual control, disconnect and ActiveTrack cancel the path. Native targets
+  respect the reachable pan arc and tilt limits, including selfie orientation.
+  Nano hides the button. Both shells; physical precision remains experimental.
 
 - Experimental iOS Multiview for Osmo cameras on shared Wi-Fi: identity-verified
   discovery, saved stages, adaptive grid/Center stage, per-camera LUTs and

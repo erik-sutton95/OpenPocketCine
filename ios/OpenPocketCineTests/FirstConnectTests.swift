@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import QuartzCore
 import VideoToolbox
 import XCTest
 
@@ -6,24 +7,52 @@ import XCTest
 
 @MainActor
 final class FirstConnectTests: XCTestCase {
-    func testCachedFrameRedrawDoesNotAdvanceSourceFreshness() async {
+    func testCachedFrameRedrawDoesNotAdvanceSourceFreshness() async throws {
         let decoder = HevcDecoder()
+        let bus = LiveFrameSampleBus()
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        decoder.sampleBus = bus
+        var completions = 0
+        var heartbeats = 0
+        let identity = expectation(description: "Only the new source reaches the relay")
+        identity.assertForOverFulfill = true
+        decoder.onIdentityFrame = { _ in identity.fulfill() }
+        decoder.onSourceFrame = { _ in completions += 1 }
+        decoder.onPresentedFrame = { heartbeats += 1 }
         let buffer = ScopeTestBuffers.makeEdgeBuffer()
         decoder.handleDecodedFrame(buffer)
         let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline, decoder.lastSourceFrameAt == nil {
+        while Date() < deadline, decoder.lastPresentedAt == nil {
             try? await Task.sleep(for: .milliseconds(20))
         }
-        let source = decoder.lastSourceFrameAt
-        XCTAssertNotNil(source)
-        let presented = decoder.lastPresentedAt
+        let source = try XCTUnwrap(decoder.lastSourceFrameAt)
+        let presented = try XCTUnwrap(decoder.lastPresentedAt)
+        let decoded = bus.decodedFrames
+        let firstHeartbeats = heartbeats
+        let firstCompletions = completions
         decoder.handleDecodedFrame(buffer, isNewSourceFrame: false)
         let redrawDeadline = Date().addingTimeInterval(2)
-        while Date() < redrawDeadline, decoder.lastPresentedAt == presented {
+        while Date() < redrawDeadline, completions == firstCompletions {
             try? await Task.sleep(for: .milliseconds(20))
         }
-        XCTAssertNotEqual(decoder.lastPresentedAt, presented)
+        XCTAssertGreaterThan(completions, firstCompletions, "Exercise the cached repaint")
+        XCTAssertEqual(decoder.lastPresentedAt, presented)
         XCTAssertEqual(decoder.lastSourceFrameAt, source)
+        XCTAssertEqual(bus.decodedFrames, decoded)
+        XCTAssertEqual(heartbeats, firstHeartbeats)
+        await fulfillment(of: [identity], timeout: 1)
+
+        // Dropping the final assist re-enqueues the held identity buffer directly.
+        let container = CALayer()
+        container.addSublayer(decoder.displayLayer)
+        decoder.displayLayer.bounds = CGRect(x: 0, y: 0, width: 64, height: 64)
+        XCTAssertTrue(decoder.isDisplayReady)
+        decoder.effects = LiveImageEffects()
+        XCTAssertEqual(decoder.lastPresentedAt, presented)
+        XCTAssertEqual(decoder.lastSourceFrameAt, source)
+        XCTAssertEqual(heartbeats, firstHeartbeats)
+        decoder.displayLayer.removeFromSuperlayer()
         decoder.reset()
         XCTAssertNil(decoder.lastSourceFrameAt)
     }
@@ -489,11 +518,9 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(decoder.hasFormat)
         XCTAssertFalse(decoder.videoToolboxActive, "clean feed stays on the HEVC layer")
 
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline, decoder.lastPresentedAt == nil {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
+        // Seed a real layer presentation. The clean path does not run VT;
+        // injecting a decoded callback alone must not manufacture a present.
+        XCTAssertTrue(decoder.enqueueDecodedFrame(ScopeTestBuffers.makeEdgeBuffer()))
         XCTAssertNotNil(decoder.lastPresentedAt)
 
         var lut = LiveImageEffects()

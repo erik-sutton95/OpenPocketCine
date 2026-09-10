@@ -12,6 +12,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
 - HEVC live view on Pocket 4 / 4 Pro; AVC on Osmo Nano
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
+  False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
+  video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
+  from 18% gray (+6 white, −6 black). IRE is six video-level zones over
+  grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip).
   Long-press options lift above the keyboard so number fields (Zebra
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
@@ -32,17 +36,30 @@ project with XcodeGen — see [Setup](../guides/setup/).
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
+  View Assist **ND** meters the live picture against middle gray and
+  suggests a screw-on ND in stops and ND number to balance the frame.
+  The app cannot set a filter.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
-  picture — the same on iPhone and iPad, portrait and landscape. Stick
+  picture — the same on iPhone and iPad, portrait and landscape. A
+  gimbal-controls button sits beside zoom (Pocket only). That sheet parks
+  like a capture picker and sets Follow / Tilt locked / FPV, Slow /
+  Default / Fast, stick ramp, and a Motion Control A→B (optional C) take
+  (set A and B, choose each leg’s duration; hold and drag
+  anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
+  Zero hits B exactly; higher values bypass B while preserving A/C and total
+  duration. There is no artificial speed cap. Moves are experimental: keep the camera fixed, rehearse,
+  and check framing before a take. Programmed and head-tracking tilt targets
+  stay within −44° to +70°. A missed timed point stops the move;
+  professional positional/timing accuracy has not been qualified. Stick
   throw is analog with an ease-in curve (small push crawls; full throw is
-  fastest). Head tracking is experimental (Operator Setup → Controls,
+  fastest). Off / Soft / Medium ramp eases the throw over time. Head tracking is experimental (Operator Setup → Controls,
   off by default). With AirPods that report motion, Calibrate Head Lock —
   centered above the bottom bars — is shared forward: that head pose and
   that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.
-  The gimbal follows that look. Roll is shown, not driven. Fast + tilt
-  unlocked at calibrate. STOP clears the
-  lock. A connected game controller's left stick drives the same path.
+  The gimbal follows that direction using direct angle targets. Roll is shown,
+  not driven. STOP clears the lock. Manual controls and Motion Control takes take
+  priority; lost head motion pauses tracking. Responsiveness remains experimental. A connected game controller's left stick drives the same path.
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
   hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter.
@@ -73,6 +90,17 @@ project with XcodeGen — see [Setup](../guides/setup/).
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
+- **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
+
+Motion Control durations use half-second dials up to 120 seconds. Swipe left
+to increase duration and right to decrease it. Move the expanded
+window by holding anywhere, or drag the minimized pill directly. Dragging
+does not activate Start/Stop or expand. Start shows a cancellable three-second
+countdown before preparation and approach to A. Pause holds the move; Resume
+continues from the stopped position without another countdown. Stop clears the
+continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
+the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
+does not reverse stored mechanical angles; MIRROR changes the preview only.
 
 Verify record start/stop on the camera body until you trust the link.
 
@@ -119,6 +147,6 @@ the picture during the transition.
 
 D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
 and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
-do not establish where the camera sensor loses detail. PStops (`DLM ≈`) and the
+do not establish where the camera sensor loses detail. EL Zone (`DLM ≈`) and the
 gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.

@@ -3,7 +3,7 @@ package com.opencapture.openpocketcine.assists
 /**
  * OpenZCine cinema live-monitor set. Pocket omits LEVEL, DE-SQ, MAG, EV, PLAY.
  *
- * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS |
+ * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS ND |
  * GUIDES GRID CROSS | MIRROR | AUDIO.
  */
 enum class LiveAssistTool {
@@ -16,6 +16,7 @@ enum class LiveAssistTool {
     HISTO,
     VECTOR,
     LIGHTS,
+    ND,
     AUDIO,
     GUIDES,
     GRID,
@@ -41,6 +42,7 @@ enum class LiveAssistTool {
                 HISTO -> "Histogram"
                 VECTOR -> "Vectorscope"
                 LIGHTS -> "Traffic Lights"
+                ND -> "ND Suggestion"
                 AUDIO -> "Audio Levels"
                 GUIDES -> "Guides"
                 GRID -> "Grid"
@@ -57,9 +59,17 @@ enum class LiveAssistTool {
             }
 
     companion object {
-        /** Groups of three, then MIRROR. AUDIO is appended as its own trailing section. */
-        val toolbarCases: List<LiveAssistTool> =
-            listOf(LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, GUIDES, GRID, CROSS, MIRROR)
+        val toolbarGroups: List<List<LiveAssistTool>> =
+            listOf(
+                listOf(LUT, PEAK, FALSE),
+                listOf(ZEBRA, WAVE, PARADE),
+                listOf(HISTO, VECTOR, LIGHTS, ND),
+                listOf(GUIDES, GRID, CROSS),
+                listOf(MIRROR),
+            )
+
+        /** AUDIO is appended as its own trailing section. */
+        val toolbarCases: List<LiveAssistTool> = toolbarGroups.flatten()
 
         /** Playback drops nothing Pocket already omits; AUDIO rides last like live. */
         val playbackToolbarCases: List<LiveAssistTool> = toolbarCases + AUDIO
@@ -177,21 +187,24 @@ enum class PeakingSense(val label: String) {
 }
 
 enum class FalseColorScale(val persisted: String, val menuLabel: String) {
-    STOPS("ZC Stops", "PStops"),
+    STOPS("CineStop", "CineStop"),
     IRE("IRE", "IRE"),
     LIMITS("Limits", "Limits"),
+    EL_ZONE("EL Zone", "EL Zone"),
     ;
 
     companion object {
         fun fromPersisted(raw: String): FalseColorScale =
             entries.firstOrNull {
-                it.persisted == raw || it.menuLabel == raw || it.name == raw || raw == "Stops"
+                it.persisted == raw || it.menuLabel == raw || it.name == raw
+                    || raw == "Stops" || raw == "ZC Stops" || raw == "PStops"
             } ?: STOPS
 
         fun fromMenuLabel(label: String): FalseColorScale =
             when (label) {
                 "IRE" -> IRE
                 "Limits" -> LIMITS
+                "EL Zone" -> EL_ZONE
                 else -> STOPS
             }
     }

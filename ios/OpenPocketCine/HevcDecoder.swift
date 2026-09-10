@@ -96,12 +96,22 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// Decoded identity buffer before LUT/PEAK. Watcher-relay encode tap.
+    nonisolated(unsafe) var onIdentityFrame: ((CVPixelBuffer) -> Void)?
     /// View-space X flip applied on the host view at present time (not SwiftUI).
     var poseViewFlip = false
     var assistMirror = false
     /// Set by `VideoView` so MIRROR assist commits in the same tick as enqueue.
     var applyPictureMirror: ((Bool) -> Void)?
-    private var presentedPictureFlip: Bool?
+    /// Relay metadata follows the actual flip commit, independently of the 5 Hz HUD.
+    var onIdentityOrientation: ((Bool) -> Void)?
+    private(set) var presentedPictureFlip: Bool? {
+        didSet {
+            if presentedPictureFlip != oldValue {
+                onIdentityOrientation?(presentedPictureFlip ?? false)
+            }
+        }
+    }
     /// Holds the last picture across extra-mirror so the current frame is not X-flipped in place.
     private var extraMirrorHold = ExtraMirrorHold()
     /// First time VT takes HEVC this session. Mid-GOP P-frames cannot start a
@@ -193,17 +203,20 @@ final class HevcDecoder {
         return error > presented
     }
 
+    /// Replacement Metal reports completion, not asynchronous bake admission.
+    var monitorPresentedAt: Date? {
+        if effects.replacesIdentityFeed, let feed = processedFeed, feed.hasPresentedFrame {
+            return feed.lastPresentedAt
+        }
+        return lastPresentedAt
+    }
+
     /// UDP may still be alive. This is a present hitch, not a recover enable.
     var isPresentFrozen: Bool {
-        let age: TimeInterval?
-        if effects.replacesIdentityFeed, let feed = processedFeed, feed.hasPresentedFrame {
-            age = feed.lastPresentedAt.map { Date().timeIntervalSince($0) }
-        } else {
-            age = lastPresentedAt.map { Date().timeIntervalSince($0) }
-        }
+        let now = Date()
         return FeedPresentPolicy.isFrozen(
-            secondsSinceLastPresent: age,
-            secondsSinceLastDecodedFrame: lastSourceFrameAt.map { Date().timeIntervalSince($0) })
+            secondsSinceLastPresent: monitorPresentedAt.map { now.timeIntervalSince($0) },
+            secondsSinceLastDecodedFrame: lastSourceFrameAt.map { now.timeIntervalSince($0) })
     }
 
     /// Last HEVC picture is still on the layer; release it only when a VT frame is in hand.
@@ -434,18 +447,22 @@ final class HevcDecoder {
         isNewSourceFrame: Bool = true
     ) {
         let sourceTime = Date()
+        if isNewSourceFrame { onIdentityFrame?(imageBuffer) }
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
         assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: 0) {
             [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.applyAssistResult(result)
-                // Once per drained frame; the late scope-bundle callback must not double-count.
-                if result.shouldPresent {
-                    if isNewSourceFrame { self.lastSourceFrameAt = sourceTime }
-                    self.notePresentedFrame(sampleRate: true)
+                let presented = self.applyAssistResult(
+                    result, isNewSourceFrame: isNewSourceFrame)
+                // Cached repaints cannot refresh camera or watcher liveness.
+                if result.shouldPresent && isNewSourceFrame {
+                    self.lastSourceFrameAt = sourceTime
                     self.sampleBus?.noteDecodedFrame()
+                }
+                if presented && isNewSourceFrame {
+                    self.notePresentedFrame(sampleRate: true)
                 }
             }
         }
@@ -685,7 +702,8 @@ final class HevcDecoder {
             processedFeed?.setOverlayChrome(false)
             processedFeed?.isHidden = true
             if let buffer = lastDecodedBuffer, isDisplayReady {
-                _ = enqueueDecodedFrame(buffer, recoverOnFailure: false)
+                _ = enqueueDecodedFrame(
+                    buffer, recoverOnFailure: false, isNewSourceFrame: false)
             }
         } else if overlay {
             // Zebra / peaking / false colour ride on top of the identity layer.
@@ -786,7 +804,9 @@ final class HevcDecoder {
         }
     }
 
-    private func applyAssistResult(_ result: LiveAssistEngine.Result) {
+    private func applyAssistResult(
+        _ result: LiveAssistEngine.Result, isNewSourceFrame: Bool = true
+    ) -> Bool {
         if let bundle = result.bundle {
             sampleBus?.publish(
                 source: result.source,
@@ -798,7 +818,8 @@ final class HevcDecoder {
             lastDecodedBuffer = result.source
             onSourceFrame?(result.source)
         }
-        if !result.shouldPresent { return }
+        if !result.shouldPresent { return false }
+        var presentedIdentity = false
 
         let replaceIdentity = effects.replacesIdentityFeed
         let metalOwnsPicture =
@@ -812,7 +833,8 @@ final class HevcDecoder {
         // went black while tracking still worked.
         if usesPixelBufferDisplay, !metalOwnsPicture {
             displayLayer.isHidden = false
-            _ = enqueueDecodedFrame(result.source, recoverOnFailure: false)
+            presentedIdentity = enqueueDecodedFrame(
+                result.source, recoverOnFailure: false, isNewSourceFrame: isNewSourceFrame)
         } else if !replaceIdentity {
             displayLayer.isHidden = false
         }
@@ -822,11 +844,11 @@ final class HevcDecoder {
                 processedFeed?.setOverlayChrome(false)
                 processedFeed?.isHidden = true
             }
-            return
+            return presentedIdentity
         }
-        guard let feed = processedFeed else { return }
+        guard let feed = processedFeed else { return presentedIdentity }
         if metalOwnsPicture, !commitPictureFlipIfNeeded() {
-            return
+            return presentedIdentity
         }
 
         if result.overlayOnly, !replaceIdentity, !prefersPixelBufferDisplay {
@@ -838,7 +860,7 @@ final class HevcDecoder {
                 feed.setOverlayChrome(false)
                 feed.isHidden = true
             }
-            return
+            return presentedIdentity
         }
 
         if prefersPixelBufferDisplay, result.overlayOnly {
@@ -847,8 +869,9 @@ final class HevcDecoder {
                 || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
+                return true
             }
-            return
+            return presentedIdentity
         }
 
         if replaceIdentity {
@@ -857,8 +880,10 @@ final class HevcDecoder {
                 || feed.display(result.identity, unmanaged: false, timeNs: result.timeNs)
             {
                 adoptReplacingMetalFeed(feed)
+                return true
             }
         }
+        return presentedIdentity
     }
 
     private func buildFormatIfReady() {
@@ -1154,10 +1179,11 @@ final class HevcDecoder {
 
     /// Zero-copy present of a VT frame. Uncompressed — the layer must not start a second HEVC decoder.
     @discardableResult
-    private func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
-        -> Bool
+    func enqueueDecodedFrame(
+        _ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true, isNewSourceFrame: Bool = true
+    ) -> Bool
     {
-        guard commitPictureFlipIfNeeded() else { return true }
+        guard commitPictureFlipIfNeeded() else { return false }
         guard Self.isPresentable(imageBuffer) else { return false }
         var format: CMVideoFormatDescription?
         guard
@@ -1211,7 +1237,11 @@ final class HevcDecoder {
             return false
         }
         finishLayerHandoffIfNeeded()
-        notePresentedFrame()
+        if isNewSourceFrame {
+            notePresentedFrame()
+        } else {
+            displayedImageRemoved = false
+        }
         return true
     }
 

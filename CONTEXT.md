@@ -31,9 +31,22 @@ _Avoid_: media port, stream
 
 **One client**:
 Live HEVC/AVC on the camera SoftAP is unicast UDP to one phone 5-tuple.
-Camera multicast is won't-do. A second-screen watcher would be a
-phone-as-encoder relay on another interface — not in this build.
+Camera multicast is won't-do.
 _Avoid_: camera multicast, NDI (as this path), SRT (as this path)
+
+**Host**:
+The phone that holds the Pocket datalink and may advertise the watcher relay.
+_Avoid_: broadcaster (in operator copy)
+
+**Watcher**:
+Another OpenPocketCine install on the same camera Wi-Fi that joins the host’s
+shared feed. Does not open its own camera session.
+_Avoid_: client, viewer (in operator copy)
+
+**Watcher relay**:
+Phone-as-encoder second-screen. Bonjour `_opc-mon._tcp`, iOS host + iOS watcher.
+The host shares its camera picture with watchers on the same camera Wi-Fi.
+_Avoid_: camera multicast, NDI, SRT, monitor relay
 
 **Enable-once**:
 `0x09/0xa8` starts live view and is the only PLI; it is not a 1 Hz keyframe loop.
@@ -60,9 +73,10 @@ Operator HUD around the picture (bars, chips, DISP), not the picture.
 _Avoid_: UI, overlay
 
 **Gimbal cluster**:
-Stick, zoom chip, and (later) gimbal controls (follow / speed / A·B·C) as one
-trailing-bottom parking spot in every orientation. Zoom stacks above the stick.
-Controls grow leading of the stick without moving it.
+Stick, zoom chip, and gimbal-controls button as one trailing-bottom parking
+spot in every orientation. Zoom stacks above the stick. The button sits
+leading of zoom (same size). Follow / speed / ramp / A·B·C live in the
+button's sheet, not leading of the stick.
 _Avoid_: joystick pack, gimbal HUD
 
 **Gimbal pad**:
@@ -78,26 +92,32 @@ wins while held. Controls **Gamepad** row shows Connected / Not connected.
 Limit haptic fires only after that axis moves, then stalls at a stop.
 _Avoid_: DualSense (alone) in operator copy
 
+**Motion Control**:
+A repeatable pan/tilt take through A→B and optional C with a chosen duration
+for each leg. Preparation at A is outside the take. At zero **Smoothness**,
+B is an exact target; above zero a timed Bézier fillet rounds near B, preserving
+A/C and total duration. The dashed curve is a preview, not a tracking box.
+A failed required checkpoint invalidates the take. Physical accuracy remains experimental.
+_Avoid_: Programmed move, camera-native path, guaranteed precision
+
+**Gimbal lock (all axes)**:
+Latched joystick-hold. No captured opcode. The Locked chip toasts and does
+not SET. Distinct from Tilt locked (param `04`).
+_Avoid_: treating Locked as Tilt locked
+
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
-Tracking (Experimental)**, off by default. **Calibrate Head Lock** is
-shared identity. Look is the SET-relative nose azimuth/elevation
-(quaternion, +Y forward) — Euler Δatt yaw wobbles during a nod at a
-yawed heading (diagonal drift). Pocket has no angle SET — only rate
-stick `0x04/0x01`. Throw closes a **dead-reckoned model** (full linear
-stick ≈ 40°/s, Fast) onto the look, plus target-rate feed-forward;
-live `0x04/0x05` is ~0.25 s stale at ~10 Hz and closing on it
-limit-cycled (bobbing). Stale telemetry only bleeds drift out of the
-model; it is adopted once provably stationary, and ignored while dead
-(`@20` froze mid-nod; yaw froze 8 s in the 18:29 take). Fast + tilt
-unlocked at calibrate. Arrival streams **center for ~1 s** before the
-lift — rest/throw grab cycles in the same second paused HEVC (22:24
-and 18:29). Sustained center still lifts: 25 Hz center paused HEVC at
-15–30 s — including a leftover throw below the linear snap (`y=-0.01`).
-Encoder-pause: two enables then one UDP rebuild; keepalive must not
-flap while status is young. Roll is readout only. STOP clears SET.
-On-screen stick and gimbal pad win while thrown. Android has no
-AirPods IMU.
+Tracking (Experimental)**, off by default. **Calibrate Head Lock** captures
+shared forward: a still head quaternion and a fresh camera-native pose.
+Look uses nose azimuth/elevation (`HeadTrack.look`), not Euler differences.
+`HeadTrackNative` maps that look to native timed-angle targets, with a
+100 ms command horizon. Neither native path has an artificial speed ceiling.
+Pitch uses the captured native attitude `@0`; display look-up remains `−@20`.
+Clamp the body-relative reach before mapping pitch into native coordinates.
+Roll is readout only. STOP clears Head Lock. Manual control, programmed moves
+and inactive scenes suspend head driving. Samples expire by measurement age;
+old stream callbacks cannot regain control. Android has no AirPods IMU.
+See [head tracking](docs/head-tracking.md) for transport and qualification.
 _Avoid_: spatial audio in operator copy
 
 **Triple-tap 180 (TT180)**:
@@ -130,6 +150,10 @@ _Avoid_: pixel-identical, 1:1 clone
 **Assist**:
 A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
+
+**ND suggestion**:
+View-assist meter on the live picture (toolbar **ND**, next to LIGHTS). Reads luma vs middle gray and names a screw-on ND in stops and ND number to balance the frame. Not a camera SET. Off unless the operator turns the chip on.
+_Avoid_: auto ND, ND SET, shutter-sheet nag
 
 **LUT exposure compensation**:
 Input-referred stops applied before the Rec.709 cube (half-stop −3…+3). Pull after ETTR so the cube's mid-grey lands. Not camera EV. iOS Share **Bake exposure** writes that pull into the file.

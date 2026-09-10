@@ -1,21 +1,22 @@
 New and changed
 
-- Experimental Multiview: tap the grid icon in Your cameras. Put supported cameras on one Wi-Fi network and monitor up to four from this device, with independent LUTs, settings readouts and reported timecode where supported.
-- Center stage and adaptive grid layouts include portrait Fit/Fill, per-camera recording and Record all/Stop all. Recording tiles show a red border. Double-tap a feed for Live View controls; the grid icon returns to the stage.
-- Multiview remembers cameras and layout. Network passwords are saved securely on this device. Personal Hotspot is experimental and must be enabled in Settings.
-- Pocket 3 FORMAT now offers its documented normal-video resolutions, including 2.7K, when the camera does not supply a format list.
+- Experimental Multiview: the grid icon in Your cameras connects up to four supported cameras on shared Wi-Fi. Saved stages, adaptive grid/Center stage, portrait Fit/Fill, per-camera LUTs and timecode, individual/group recording, and red tally borders are included. Double-tap opens Live View; the grid returns to the stage. Personal Hotspot is experimental.
+- Share this feed in Operator Setup → Sharing sends one camera picture to nearby OpenPocketCine iPhones/iPads on the same camera Wi-Fi. Show Wi-Fi code on the host, scan with Camera, join, then return to Watch a feed. Only the host pairs with the camera in the app.
+- Watchers have local assists/scopes, camera readings, REC tally, Clean view, and granted control of recording, focus, ISO, shutter, and zoom. Release returns control. Broadcast priority sets the quality ceiling; bitrate can lower if the host slows.
+- FALSE adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE. Tap ND for a suggested screw-on filter and stop count; it starts off and cannot set a filter.
+- Motion Control adds timed A→B→C moves and smoothing. Duration dials span 0.5–120 seconds; swipe left to increase. Start counts down three seconds. Pause holds the path, Resume continues from the stopped pose, and Stop discards it. Dragging the editor suppresses button taps. Experimental AirPods tracking uses angle targets; calibrate still and live. Manual controls take priority.
+- Pocket 3 FORMAT offers normal-video resolutions including 2.7K when the camera supplies no list. D-Log M scopes use direct preview signal; scene-stop readings remain estimated, not measured sensor clipping limits.
 
 Fixes
 
-- Pocket 3 first-picture startup and Nano short preview freezes have decoder and frame-assembly fixes.
-- False color keeps its paint during exposure changes. False color, peaking and zebras resize with the picture during rotation and Fit/Fill changes.
-- D-Log M scopes use the preview signal directly instead of D-Log limits. DLM approximate stop readings are estimates, not measured sensor clipping limits.
-- Multiview checks for new pictures after returning from another app, including with LUT on. Pocket 3 recovery can still take about a minute.
+- Pocket 3 startup and Nano short freezes have decoder/frame-assembly fixes. False color retains paint during exposure changes; assists resize with the picture. Multiview checks for new pictures after app switching; Pocket 3 recovery can still take about a minute.
+- Interrupted watchers keep the last picture and retry three times. Errors leave Choose a feed visible. Passcode refusals arrive before closure; a slow watcher does not hold up the others. Local assists and mirror stay selected.
+- Motion Control respects pan/tilt limits and stops on stale feedback or missed waypoints. Wide or fast exact turns can still fail verification; rehearse before a take.
 
 What to test
 
-- Pocket 3: connect repeatedly, choose 2.7K at 25p in normal Video, confirm the camera setting, record a short clip, then reconnect. Check the preview returns and the selected format remains correct.
-- Nano: watch for short freezes with LUT off and on, then start and stop recording. Compare smoothness with your previous build.
-- Multiview: add Pocket 3, Pocket 4 Pro and Nano on shared Wi-Fi. Try Record all/Stop all, individual recording, tile borders, LUTs and both layouts. Rotate and toggle Fit/Fill; controls and overlays must stay aligned.
-- Switch to another app briefly and return. Test Reconnect on a failed tile. Close and reopen Multiview to check saved cameras and network restoration. Cancel a network scan before adding a camera: check its own Wi-Fi returns; retry closing if it was unavailable.
-- In D-Log M, enable waveform and false color while exposure changes. Report flashing paint, mismatched overlays or frozen pictures using Share Diagnostics. Hotspot, setup cancellation and restoration remain experimental.
+- Pocket 3: repeat connections, select 2.7K at 25p in normal Video, confirm on the camera, record and reconnect. Nano: compare smoothness with LUT off/on, recording and reconnect. In D-Log M, change ISO with waveform and FALSE on; check stable signal scale, paint and alignment. Compare CineStop, EL Zone and IRE; try ND on a bright take.
+- Multiview: add Pocket 3, Pocket 4 Pro and Nano. Try individual/group recording, borders, LUTs, layouts, Fit/Fill and rotation. App-switch, retry a failed tile, then close/reopen to check saved stages and camera Wi-Fi restoration. Cancel a network scan before adding a camera: check its own Wi-Fi returns; retry closing if it was unavailable.
+- Rehearse exact/smoothed A→B→C moves and long durations. Test countdown cancellation, repeated Pause/Resume/Stop, duration swipes, and dragging both editor sizes without button activation. With AirPods, calibrate, turn, nod and stop; report drift or overshoot.
+- Join a watcher from different Wi-Fi using the host code. Try wrong/correct passcodes and stop/restart sharing. Compare host FPS with sharing off, one watcher, then two or more during five minutes of pans, LUT, waveform and recording. Move one watcher out of range/back; others should keep moving. Leave during retries to cancel.
+- Grant watcher control, focus at picture edges with mirror off/on, then reclaim it; watcher commands must stop. Try Clean view and assists in both orientations. Report device models, camera/watcher count and which picture slowed first. Hotspot, cleanup, and multi-camera/watcher capacity still need device testing.

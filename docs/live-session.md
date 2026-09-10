@@ -280,7 +280,7 @@ The hidden warmup overlay is also removed from accessibility when picture is rea
 
 The iOS compositor retains an atomic paint/mask pair for each cached look while
 exposure changes warm its replacement. Async cube construction uses captured
-exposure anchors, including the Stops clipping bands; it never reads changing ISO
+exposure anchors for WAVE-axis mapping; it never reads changing ISO
 inside the lattice walk. Pending exposure updates coalesce, and a return to the
 currently displayed exposure cancels adoption of an obsolete build. The initial
 map still warms asynchronously. This addresses paint disappearing while zebra and

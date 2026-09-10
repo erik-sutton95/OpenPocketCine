@@ -366,7 +366,7 @@ struct WaveformOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = WaveformAssist.store.options
         let size = WaveformAssist.panelSize(scale: options.scale)
         let intensity = WaveformAssist.intensity(options.brightness)
@@ -531,7 +531,7 @@ struct ParadeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let transfer = assist.transfer
         let options = ParadeAssist.store.options
         let size = ParadeAssist.panelSize(scale: options.scale)
@@ -638,7 +638,7 @@ struct HistogramOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = HistogramAssist.store.options
         let size = HistogramAssist.panelSize(scale: options.scale)
         let plot = ScopeMiniChrome(
@@ -763,7 +763,7 @@ struct VectorscopeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = VectorscopeAssist.store.options
         let plot = ScopeMiniChrome(
             title: "Vector",
@@ -947,7 +947,7 @@ struct TrafficLightsOverlay: View {
         ) {
             // Metered once in the sampler with the operator threshold riding
             // `LiveImageEffects.trafficThreshold` — render the bundle directly.
-            TrafficLightsMeterMini(reading: model.frameSamples.bundle.traffic)
+            TrafficLightsMeterMini(reading: model.monitorSamples.bundle.traffic)
         }
     }
 }

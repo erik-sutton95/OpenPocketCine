@@ -254,6 +254,67 @@ import XCTest
         XCTAssertFalse(driver.isClosed)
         driver.close()
     }
+    func testLeavingBorrowedLiveViewCancelsProgrammedMove() async throws {
+        let decoder = HevcDecoder()
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        let borrowed = CameraSession(borrowing: decoder)
+        let driver = DatalinkDriver(
+            port: 9004, tcpPoke: false, pairingToken: "test", stationHost: "192.168.1.10")
+        defer {
+            borrowed.releaseMultiview()
+            driver.close()
+            decoder.reset()
+        }
+        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, decoder.lastPresentedAt == nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertNotNil(decoder.lastPresentedAt)
+        let camera = FoundCamera(
+            id: UUID(), name: "OsmoPocket4P-Test",
+            model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22)
+        borrowed.updateMultiview(camera: camera, driver: driver, status: CameraStatus())
+        borrowed.receiveMultiview(.init(
+            sender: 0, receiver: 0, seq: 1, flags: 0, cmdSet: 4, cmdId: 5,
+            payload: [UInt8](repeating: 0, count: 22)))
+        let start = try XCTUnwrap(borrowed.freshGimbalWaypoint)
+        var end = start
+        end.yawDeg += 10
+        borrowed.gimbalProgram = GimbalProgram(a: start, b: end)
+        borrowed.runProgrammedMove()
+        XCTAssertTrue(borrowed.gimbalMoveRunning, borrowed.controlNote ?? "Move did not start")
+        XCTAssertEqual(borrowed.gimbalStartCountdown, 3)
+
+        borrowed.releaseMultiview()
+
+        XCTAssertFalse(borrowed.gimbalMoveRunning)
+        XCTAssertNil(borrowed.gimbalStartCountdown)
+        XCTAssertNil(borrowed.datalink)
+        XCTAssertFalse(driver.isClosed, "The tile still owns its transport")
+    }
+
+    func testBorrowedLiveViewCannotStartSharingOrChangeItsPreference() {
+        let model = AppModel()
+        model.session = CameraSession(borrowing: HevcDecoder())
+        model.session.updateMultiview(
+            camera: FoundCamera(id: UUID(), name: "OsmoPocket4P-Test",
+                model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
+            driver: nil, status: CameraStatus())
+        let savedPreference = OperatorPrefs.shareThisFeed
+        model.shareThisFeed = false
+        model.setShareThisFeed(true)
+        XCTAssertFalse(model.shareThisFeed)
+        XCTAssertEqual(OperatorPrefs.shareThisFeed, savedPreference)
+
+        // Automatic startup must also reject a previously saved sharing preference.
+        model.shareThisFeed = true
+        model.startRelayHost()
+        XCTAssertNil(model.session.decoder.onIdentityFrame)
+        XCTAssertNil(model.session.decoder.onIdentityOrientation)
+    }
+
     func testReplacingTileDriverDetachesBorrowedControlsUntilVerified() {
         let tile = MultiviewSession.Tile()
         let model = AppModel()

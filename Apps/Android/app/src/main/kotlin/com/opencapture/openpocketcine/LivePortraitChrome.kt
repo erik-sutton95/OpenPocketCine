@@ -207,29 +207,30 @@ fun portraitOnFeedControls(
     fill: Boolean,
     bottomClearance: Float,
     floorY: Float,
-): Pair<ChromeRect, ChromeRect> {
-    val cluster =
-        if (fill) {
-            GimbalCluster.inTrailingBottom(
-                well = picture,
-                floorY = picture.maxY - bottomClearance,
-                canvasMaxY = picture.maxY,
-                stickSize = LiveChromeMetrics.STICK,
-                zoomSize = LiveChromeMetrics.ZOOM,
-                gap = LiveChromeMetrics.STICK_GAP,
-                inset = LiveChromeMetrics.STICK_INSET,
-            )
-        } else {
-            GimbalCluster.belowWell(
-                well = picture,
-                floorY = floorY,
-                stickSize = LiveChromeMetrics.STICK,
-                zoomSize = LiveChromeMetrics.ZOOM,
-                gap = LiveChromeMetrics.STICK_GAP,
-                inset = LiveChromeMetrics.STICK_INSET,
-            )
-        }
-    return cluster.stick to cluster.zoom
+    showGimbalButton: Boolean = false,
+): GimbalCluster {
+    return if (fill) {
+        GimbalCluster.inTrailingBottom(
+            well = picture,
+            floorY = picture.maxY - bottomClearance,
+            canvasMaxY = picture.maxY,
+            stickSize = LiveChromeMetrics.STICK,
+            zoomSize = LiveChromeMetrics.ZOOM,
+            gap = LiveChromeMetrics.STICK_GAP,
+            inset = LiveChromeMetrics.STICK_INSET,
+            showGimbalButton = showGimbalButton,
+        )
+    } else {
+        GimbalCluster.belowWell(
+            well = picture,
+            floorY = floorY,
+            stickSize = LiveChromeMetrics.STICK,
+            zoomSize = LiveChromeMetrics.ZOOM,
+            gap = LiveChromeMetrics.STICK_GAP,
+            inset = LiveChromeMetrics.STICK_INSET,
+            showGimbalButton = showGimbalButton,
+        )
+    }
 }
 
 @Composable
@@ -264,13 +265,19 @@ fun LivePortraitChrome(
             zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
             else -> zones.systemBar.minY
         }
-    val (stick, zoom) =
+    val showGimbalButton =
+        model.session.hasGimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
+    val cluster =
         portraitOnFeedControls(
             picture = layout.onFeed,
             fill = fill,
             bottomClearance = captureH + 10f,
             floorY = floorY,
+            showGimbalButton = showGimbalButton,
         )
+    val stick = cluster.stick
+    val zoom = cluster.zoom
+    val gimbalButton = cluster.controls
     val toggle = portraitAspectToggle(layout.onFeed, floorY)
     var railExpanded by remember { mutableStateOf(false) }
     val captureTop = if (captureH > 1f) zones.controls.minY else null
@@ -399,6 +406,20 @@ fun LivePortraitChrome(
             )
         }
 
+        if (showGimbalButton && !gimbalButton.isEmpty) {
+            LiveGimbalButton(
+                locked = uiLocked,
+                onClick = {
+                    model.liveGimbalPanel =
+                        if (model.liveGimbalPanel == LiveGimbalPanel.SHEET) LiveGimbalPanel.NONE
+                        else LiveGimbalPanel.SHEET
+                },
+                modifier =
+                    Modifier
+                        .liveModuleFrame(gimbalButton)
+                        .alpha(if (uiLocked) 0.4f else 1f),
+            )
+        }
         if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)) {
             Box(Modifier.liveModuleFrame(stick).chromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
@@ -409,6 +430,14 @@ fun LivePortraitChrome(
                     onFlip = { model.session.flipGimbal() },
                 )
             }
+        }
+        if (showGimbalButton && chromeInteractive && !uiLocked && model.liveOperatorPanel == null) {
+            LiveGimbalOverlay(
+                model = model,
+                layout = layout,
+                feed = layout.onFeed,
+                uiLocked = uiLocked,
+            )
         }
 
         Box(

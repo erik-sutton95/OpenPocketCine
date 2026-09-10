@@ -49,6 +49,7 @@ internal fun rememberLiveFeedEffectsPlan(
     val histogram = assist.histogram
     val vectorscope = assist.vectorscope
     val trafficLights = assist.trafficLights
+    val ndMeter = assist.ndMeter
     val crushClip = assist.crushClipCompensation
     val playbackTools = assist.playbackVisibleTools
     val lutExposureStops = assist.lutExposureStops
@@ -78,6 +79,7 @@ internal fun rememberLiveFeedEffectsPlan(
         histogram,
         vectorscope,
         trafficLights,
+        ndMeter,
         crushClip,
         lutExposureStops,
         status.colorMode,

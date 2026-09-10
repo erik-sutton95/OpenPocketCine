@@ -44,6 +44,8 @@ class LiveAssistState(
         private set
     var trafficLights by mutableStateOf(false)
         private set
+    var ndMeter by mutableStateOf(false)
+        private set
     var audioMeters by mutableStateOf(false)
         private set
     var guides by mutableStateOf(false)
@@ -122,6 +124,8 @@ class LiveAssistState(
     var crushClipCompensation by mutableStateOf(CrushClipCompensation.ZERO)
     var lightsScale by mutableDoubleStateOf(1.0)
     var lightsCenter by mutableStateOf<StoredCenter?>(null)
+    var ndScale by mutableDoubleStateOf(1.0)
+    var ndCenter by mutableStateOf<StoredCenter?>(null)
 
     /** Last-moved / last-selected is last. Compose and Vulkan draw in this order. */
     var scopeStack by mutableStateOf(defaultScopeStack)
@@ -165,6 +169,7 @@ class LiveAssistState(
             LiveAssistTool.HISTO -> histogram
             LiveAssistTool.VECTOR -> vectorscope
             LiveAssistTool.LIGHTS -> trafficLights
+            LiveAssistTool.ND -> ndMeter
             LiveAssistTool.AUDIO -> audioMeters
             LiveAssistTool.GUIDES -> guides
             LiveAssistTool.GRID -> grid
@@ -210,6 +215,7 @@ class LiveAssistState(
             LiveAssistTool.HISTO -> histogram = !histogram
             LiveAssistTool.VECTOR -> vectorscope = !vectorscope
             LiveAssistTool.LIGHTS -> trafficLights = !trafficLights
+            LiveAssistTool.ND -> ndMeter = !ndMeter
             LiveAssistTool.AUDIO -> audioMeters = !audioMeters
             LiveAssistTool.GUIDES -> {
                 guides = !guides
@@ -362,6 +368,7 @@ class LiveAssistState(
             LiveAssistTool.HISTO -> histoCenter = center
             LiveAssistTool.VECTOR -> vectorCenter = center
             LiveAssistTool.LIGHTS -> lightsCenter = center
+            LiveAssistTool.ND -> ndCenter = center
             else -> return
         }
         persist()
@@ -375,6 +382,7 @@ class LiveAssistState(
             LiveAssistTool.HISTO -> histoScale = clamped
             LiveAssistTool.VECTOR -> vectorScale = clamped
             LiveAssistTool.LIGHTS -> lightsScale = clamped
+            LiveAssistTool.ND -> ndScale = clamped
             else -> return
         }
         persist()
@@ -391,6 +399,7 @@ class LiveAssistState(
         histogram = LiveAssistTool.HISTO in tools
         vectorscope = LiveAssistTool.VECTOR in tools
         trafficLights = LiveAssistTool.LIGHTS in tools
+        ndMeter = LiveAssistTool.ND in tools
         audioMeters = LiveAssistTool.AUDIO in tools
         guides = LiveAssistTool.GUIDES in tools
         grid = LiveAssistTool.GRID in tools
@@ -457,6 +466,8 @@ class LiveAssistState(
             .put("vectorCenter", encodeCenter(vectorCenter))
             .put("lightsScale", lightsScale)
             .put("lightsCenter", encodeCenter(lightsCenter))
+            .put("ndScale", ndScale)
+            .put("ndCenter", encodeCenter(ndCenter))
             .put("scopeStack", JSONArray(scopeStack.map { it.name }))
             .toString()
     }
@@ -477,6 +488,8 @@ class LiveAssistState(
         histogram = LiveAssistTool.HISTO in on
         vectorscope = LiveAssistTool.VECTOR in on
         trafficLights = LiveAssistTool.LIGHTS in on
+        ndMeter = LiveAssistTool.ND in on
+        ndMeter = LiveAssistTool.ND in on
         audioMeters = LiveAssistTool.AUDIO in on
         guides = LiveAssistTool.GUIDES in on
         grid = LiveAssistTool.GRID in on
@@ -528,6 +541,8 @@ class LiveAssistState(
         vectorCenter = decodeCenter(obj.optJSONObject("vectorCenter"))
         lightsScale = MovablePanelMath.clampedScale(obj.optDouble("lightsScale", 1.0))
         lightsCenter = decodeCenter(obj.optJSONObject("lightsCenter"))
+        ndScale = MovablePanelMath.clampedScale(obj.optDouble("ndScale", 1.0))
+        ndCenter = decodeCenter(obj.optJSONObject("ndCenter"))
         scopeStack = decodeScopeStack(obj.optJSONArray("scopeStack"))
     }
 
@@ -542,6 +557,7 @@ class LiveAssistState(
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.HISTO,
                 LiveAssistTool.LIGHTS,
+                LiveAssistTool.ND,
             )
 
         val defaultScopeStack: List<LiveAssistTool>
@@ -566,6 +582,7 @@ class LiveAssistState(
                 LiveAssistTool.HISTO,
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
+                LiveAssistTool.ND,
             )
 
         fun from(context: Context): LiveAssistState {

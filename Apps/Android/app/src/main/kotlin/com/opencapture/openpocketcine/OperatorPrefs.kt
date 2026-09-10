@@ -205,6 +205,7 @@ object OperatorPrefs {
     private const val RECORD_CONFIRM = "OpenPocketCine.RecordConfirmation"
     private const val HAPTICS = "OpenPocketCine.HapticsEnabled"
     private const val GIMBAL = "OpenPocketCine.GimbalStickSensitivity"
+    private const val GIMBAL_RAMP = "OpenPocketCine.GimbalRamp"
     private const val DISP_LIVE = "OpenPocketCine.DispChrome.Live"
     private const val DISP_CLEAN = "OpenPocketCine.DispChrome.Clean"
     private const val CLEAN_PINS = "OpenPocketCine.CleanViewPins.v1"
@@ -263,6 +264,13 @@ object OperatorPrefs {
 
     fun setGimbalStickSensitivity(context: Context, value: Int) {
         prefs(context).edit().putInt(GIMBAL, value.coerceIn(1, 5)).apply()
+    }
+
+    fun gimbalRamp(context: Context): com.opencapture.openpocketcine.session.GimbalRamp =
+        com.opencapture.openpocketcine.session.GimbalRamp.fromRaw(prefs(context).getInt(GIMBAL_RAMP, 0))
+
+    fun setGimbalRamp(context: Context, value: com.opencapture.openpocketcine.session.GimbalRamp) {
+        prefs(context).edit().putInt(GIMBAL_RAMP, value.raw).apply()
     }
 
     fun dispLive(context: Context): PocketDispChrome =

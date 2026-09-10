@@ -67,7 +67,15 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
 
 - Long-press View Assist → options + help.
 - Operator Setup: seven tabs (Link, Sharing, View Assist, Controls, Display,
-  Storage, System).
+  Storage, System). iOS Sharing: Share this feed, optional passcode, control
+  requests, broadcast priority, and an explicit Show Wi-Fi code sheet. Watch a
+  feed from home prompts joining the same camera Wi-Fi first: scan the host code
+  with Camera, accept Join Network, then return and select the shared feed. Only
+  the host opens a camera session. Discovery and streaming never use peer-to-peer. Android Sharing stays
+  Coming soon. The watcher monitor keeps local assists/scopes, telemetry and REC
+  tally around the picture. Request/Release control stays on the monitor; camera
+  controls appear only with the host grant. Interrupted feeds hold the last frame,
+  show bounded reconnect progress, and retain Leave / Choose a feed after failure.
 - TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
 - Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a

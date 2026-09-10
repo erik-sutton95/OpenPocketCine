@@ -130,6 +130,13 @@ struct ConnectionSetupView: View {
                 if showsFooter {
                     footer
                 }
+                Button {
+                    model.openWatcherBrowse()
+                } label: {
+                    Text(SettingsHelpCopy.watchAFeed)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StartupQuietButtonStyle())
                 StartupShareDiagnosticsButton()
             }
             .padding(.top, 10)

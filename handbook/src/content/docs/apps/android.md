@@ -43,9 +43,21 @@ when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
-on Pocket 4 Pro. The gimbal stick and zoom chip sit together as a cluster in the
-trailing-bottom of the picture, same as iOS. Stick throw is analog with
-an ease-in curve (small push crawls; full throw is fastest). A connected
+on Pocket 4 Pro. View Assist **ND** meters the live picture against middle
+gray and suggests a screw-on ND in stops and ND number to balance the
+frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
+trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
+beside zoom (Pocket only). That sheet parks like a capture picker and
+sets Follow / Tilt locked / FPV, Slow / Default / Fast, stick ramp, and
+a Motion Control A→B (optional C) take (set A and B, choose each
+leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
+Zero hits B exactly; higher values bypass B while preserving A/C and total
+duration. There is no artificial speed cap. Moves are experimental: keep
+the camera fixed, rehearse, and check framing before a take. Tilt targets stay
+within −44° to +70°. A missed timed
+point stops the move; professional positional/timing accuracy has not been qualified. Stick throw is analog with
+an ease-in curve (small push crawls; full throw is fastest). Off / Soft /
+Medium ramp eases the throw over time. A connected
 game controller's left stick drives the same path. Cross/A records.
 Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
 in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
@@ -66,7 +78,11 @@ tap/pinch toast; idle hops to D-Log on the first step off 1× and waits
 for that color SET before any zoom write (the chip stays at 1× until
 D-Log lands).
 Long-press View Assist options lift above the keyboard so Zebra Highlight /
-Midtone stay visible (Done on the number pad), matching iOS.
+Midtone stay visible (Done on the number pad), matching iOS. False color
+Scale is CineStop / EL Zone / IRE / Limits. CineStop is video-level IRE
+stripes over grayscale. EL Zone is 15 contiguous stops from 18% gray
+(+6 white, −6 black). IRE is six video-level zones over grayscale
+(crush, near-black, 18% gray, +1 stop, near clip, clip).
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). 50/50 log-vs-LUT is monitor-only and must
 not drop the live picture (GPU split only while a cube is loaded). Next/prev
@@ -82,6 +98,16 @@ after a take even if enter-playback ACKs E0. Share/save is the original
 camera file — LUT bake (and Bake exposure) is iOS only.
 Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
+
+Motion Control durations use half-second dials up to 120 seconds. Swipe left
+to increase duration and right to decrease it. Move the expanded
+window by holding anywhere, or drag the minimized pill directly. Dragging
+does not activate Start/Stop or expand. Start shows a cancellable three-second
+countdown before preparation and approach to A. Pause holds the move; Resume
+continues from the stopped position without another countdown. Stop clears the
+continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
+the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
+does not reverse stored mechanical angles; MIRROR changes the preview only.
 
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
 PEAK / FALSE / ZEBRA grade the 720p HEVC raster with a 3D cube (same lattice
@@ -106,6 +132,6 @@ Nikon PTP-IP, AccessorySetupKit, OCR SSID scanner, USB-C/HDMI paths.
 
 D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
 and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
-do not establish where the camera sensor loses detail. PStops (`DLM ≈`) and the
+do not establish where the camera sensor loses detail. EL Zone (`DLM ≈`) and the
 gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.

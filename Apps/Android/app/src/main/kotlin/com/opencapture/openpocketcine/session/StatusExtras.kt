@@ -20,6 +20,8 @@ object StatusExtras {
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_PARAM -> applyParamReply(frame.payload, status)
             frame.cmdSet == 0x02 && frame.cmdId == CameraCommands.CMD_AUDIO_DSP_GET ->
                 applyAudioDsp(frame.payload, status).first
+            frame.cmdSet == 0x04 && frame.cmdId == CameraCommands.CMD_GIMBAL_PARAMS ->
+                applyGimbalParams(frame.payload, status)
             else -> status
         }
     }
@@ -167,6 +169,21 @@ object StatusExtras {
         }
         CamFov.lensAt14(value)?.let { lens -> next = next.copy(zoomLens = lens) }
         return CamFov.absorb(next)
+    }
+
+    fun applyGimbalParams(payload: ByteArray, status: CameraStatus): CameraStatus {
+        if (payload.size < 8) return status
+        if (payload[0] != 0.toByte() || payload[1] != 0x01.toByte() || payload[2] != 0x04.toByte() ||
+            payload[3] != 0x01.toByte() || payload[5] != 0x05.toByte() || payload[6] != 0x01.toByte()
+        ) {
+            return status
+        }
+        val tilt = payload[4].toInt() and 0xFF
+        val speed = payload[7].toInt() and 0xFF
+        return status.copy(
+            gimbalTiltLock = if (tilt == 0 || tilt == 1) tilt else status.gimbalTiltLock,
+            gimbalSpeed = if (speed in 0..2) speed else status.gimbalSpeed,
+        )
     }
 
     fun applyParamReply(payload: ByteArray, status: CameraStatus): CameraStatus {

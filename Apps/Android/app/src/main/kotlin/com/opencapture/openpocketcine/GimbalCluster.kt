@@ -4,9 +4,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Lockstep with Swift `GimbalCluster`. Stick, zoom chip, and (later) gimbal
- * controls as one parking spot. Follow / speed / A·B·C attach to [controls]
- * without moving the stick.
+ * Lockstep with Swift `GimbalCluster`. Stick, zoom chip, and gimbal-controls
+ * button as one parking spot. The button is a zoom-sized circle leading of
+ * zoom. The stick does not move.
  */
 data class GimbalCluster(
     val stick: ChromeRect,
@@ -46,7 +46,7 @@ data class GimbalCluster(
             zoomSize: Float = ZOOM,
             gap: Float = GAP,
             inset: Float = INSET,
-            controlsWidth: Float = 0f,
+            showGimbalButton: Boolean = false,
         ): GimbalCluster {
             val stickSize = max(0f, stickSize)
             val inset = max(0f, inset)
@@ -63,7 +63,7 @@ data class GimbalCluster(
                     stickSize = stickSize,
                     zoomSize = zoomSize,
                     gap = gap,
-                    controlsWidth = controlsWidth,
+                    showGimbalButton = showGimbalButton,
                 )
             cluster = dodge(cluster, avoid, well, gap, inset)
             return cluster
@@ -76,7 +76,7 @@ data class GimbalCluster(
             zoomSize: Float = ZOOM,
             gap: Float = GAP,
             inset: Float = INSET,
-            controlsWidth: Float = 0f,
+            showGimbalButton: Boolean = false,
         ): GimbalCluster {
             val stickSize = max(0f, stickSize)
             val zoomSize = max(0f, zoomSize)
@@ -92,7 +92,7 @@ data class GimbalCluster(
                 stickSize = stickSize,
                 zoomSize = zoomSize,
                 gap = gap,
-                controlsWidth = controlsWidth,
+                showGimbalButton = showGimbalButton,
                 zoomFloor = ceiling,
             )
         }
@@ -104,24 +104,27 @@ data class GimbalCluster(
             stickSize: Float,
             zoomSize: Float,
             gap: Float,
-            controlsWidth: Float,
+            showGimbalButton: Boolean,
             zoomFloor: Float? = null,
         ): GimbalCluster {
             val zoomSize = max(0f, zoomSize)
             val gap = max(0f, gap)
-            val controlsWidth = max(0f, controlsWidth)
             val stick = ChromeRect(stickX, stickY, stickSize, stickSize)
-            val zoomX = min(max(well.minX, stick.maxX - zoomSize), max(well.minX, well.maxX - zoomSize))
             val stackedY = stick.minY - gap - zoomSize
             val zoomY = max(zoomFloor ?: well.minY, stackedY)
+            val button: ChromeRect
+            val zoomX: Float
+            if (showGimbalButton) {
+                val trailing = min(stick.maxX, well.maxX)
+                val buttonX = trailing - zoomSize
+                button = ChromeRect(buttonX, zoomY, zoomSize, zoomSize)
+                zoomX = min(max(well.minX, button.minX - gap - zoomSize), max(well.minX, well.maxX - zoomSize))
+            } else {
+                button = ChromeRect(stick.minX, stick.minY, 0f, 0f)
+                zoomX = min(max(well.minX, stick.maxX - zoomSize), max(well.minX, well.maxX - zoomSize))
+            }
             val zoom = ChromeRect(zoomX, zoomY, zoomSize, zoomSize)
-            val controls =
-                if (controlsWidth > 0f) {
-                    ChromeRect(stick.minX - gap - controlsWidth, stick.minY, controlsWidth, stickSize)
-                } else {
-                    ChromeRect(stick.minX, stick.minY, 0f, 0f)
-                }
-            return GimbalCluster(stick, zoom, controls)
+            return GimbalCluster(stick, zoom, button)
         }
 
         private fun dodge(

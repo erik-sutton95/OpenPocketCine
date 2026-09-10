@@ -37,7 +37,7 @@ parade, histogram and zebra coordinates preserve normalized preview signal:
 **signal**, not proven sensor crush or saturation. Range expansion still happens
 once in the existing decoder-to-scope path.
 
-Scene-stop calculations use the empirical Pocket 3 neutral fit above. PStops
+Scene-stop calculations use the empirical Pocket 3 neutral fit above. EL Zone
 is marked `DLM ≈`; its gray guide and stop landmarks are estimates. The input
 endpoint is not a measured sensor maximum. This fallback is unvalidated on the
 Pocket 3 live stream and on other D-Log M bodies; use IRE for signal measurements
@@ -75,4 +75,4 @@ LUT exposure compensation (including baked exports) and Face Priority EV retain
 their pre-existing D-Log-based approximation for D-Log M in this scope-only fix.
 They are not calibrated D-Log M operations. Changing scopes must not silently
 change saved looks, exported images, or automatic camera exposure; correcting
-those operations requires separate validation. PStops estimates do not drive them.
+those operations requires separate validation. EL Zone estimates do not drive them.

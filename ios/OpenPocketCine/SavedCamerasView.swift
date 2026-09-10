@@ -78,6 +78,15 @@ struct SavedCamerasView: View {
                 .disabled(model.isBusy)
 
                 Button {
+                    model.openWatcherBrowse()
+                } label: {
+                    Text(SettingsHelpCopy.watchAFeed)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StartupFilledButtonStyle())
+                .disabled(model.isBusy)
+
+                Button {
                     model.homePanel = .media
                 } label: {
                     Text("Media library")

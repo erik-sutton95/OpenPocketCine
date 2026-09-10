@@ -14,7 +14,7 @@ final class AssistBarChromeTests: XCTestCase {
             LiveAssistTool.toolbarCases,
             [
                 .lut, .peaking, .falseColor, .zebra, .waveform, .parade, .histogram,
-                .vectorscope, .trafficLights, .guides, .grid, .crosshair, .mirror,
+                .vectorscope, .trafficLights, .ndMeter, .guides, .grid, .crosshair, .mirror,
             ]
         )
         XCTAssertFalse(LiveAssistTool.toolbarCases.contains(.level))

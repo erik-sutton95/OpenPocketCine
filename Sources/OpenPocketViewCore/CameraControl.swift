@@ -190,6 +190,15 @@ public enum ControlHud {
     public static let recordingColorLockNote =
         "Can't change color while recording — D-Log2 can't zoom"
 
+    /// #174 lock-all — no captured opcode. Do not invent a SET.
+    public static let gimbalLockUnavailable = "Can't lock all axes yet"
+
+    public static let gimbalPoseNotReady = "Gimbal pose not ready"
+    public static let gimbalHoldStill = "Hold the gimbal still"
+
+    public static let programmedMoveNeedAB = "Set A and B to run"
+    public static let gimbalNeedsCalibration = "Calibrate the gimbal to run"
+
     /// Center Y for the control toast. Parks under a mounted top bar when that
     /// bar overlays the feed (DISP 1). Falls back to the feed edge when the
     /// bar is off or already sits above the picture (DISP 2 / portrait).
@@ -1200,7 +1209,7 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
 }
 
 /// `0x04/0x50` param `05`. Fast `00`, Default `01`, Slow `02`.
-public enum GimbalSpeed: UInt8, CaseIterable, Sendable {
+public enum GimbalSpeed: UInt8, CaseIterable, Sendable, Hashable {
     case fast = 0x00
     case defaultSpeed = 0x01
     case slow = 0x02
@@ -1210,6 +1219,82 @@ public enum GimbalSpeed: UInt8, CaseIterable, Sendable {
         case .fast: "Fast"
         case .defaultSpeed: "Default"
         case .slow: "Slow"
+        }
+    }
+
+    /// Live sheet order (Slow | Default | Fast), not wire numeric order.
+    public static let pickerOrder: [GimbalSpeed] = [.slow, .defaultSpeed, .fast]
+}
+
+/// Live gimbal mode. Follow / Tilt Locked / FPV are captured SETs. Locked
+/// (latched joystick-hold) has no opcode yet — HUD only.
+public enum GimbalMode: String, CaseIterable, Sendable, Hashable {
+    case follow
+    case tiltLocked
+    case fpv
+    case locked
+
+    public var label: String {
+        switch self {
+        case .follow: "Follow"
+        case .tiltLocked: "Tilt locked"
+        case .fpv: "FPV"
+        case .locked: "Locked"
+        }
+    }
+
+    public static let pickerOrder: [GimbalMode] = [.follow, .tiltLocked, .fpv, .locked]
+}
+
+/// Local stick ease-in/out on top of analog expo. Not camera Fast/Default/Slow.
+public enum GimbalRamp: Int, CaseIterable, Sendable, Hashable {
+    case off = 0
+    case soft = 1
+    case medium = 2
+
+    public var label: String {
+        switch self {
+        case .off: "Off"
+        case .soft: "Soft"
+        case .medium: "Medium"
+        }
+    }
+
+    /// First-order follow time. Zero is today's throw.
+    public var tau: TimeInterval {
+        switch self {
+        case .off: 0
+        case .soft: 0.35
+        case .medium: 0.18
+        }
+    }
+
+    public static let pickerOrder: [GimbalRamp] = [.off, .soft, .medium]
+}
+
+/// SET frames for a mode tap. Locked is empty — no opcode on the wire.
+public enum GimbalControl {
+    public static func setModeFrames(_ mode: GimbalMode) -> [Duml.Frame] {
+        switch mode {
+        case .follow:
+            [Commands.gimbalFollowFamily(), Commands.setGimbalTiltLock(.unlocked)]
+        case .tiltLocked:
+            [Commands.gimbalFollowFamily(), Commands.setGimbalTiltLock(.locked)]
+        case .fpv:
+            [Commands.gimbalFpv()]
+        case .locked:
+            []
+        }
+    }
+
+    /// GET cannot tell FPV from Tilt Locked. Keep FPV / Locked as commanded.
+    public static func modeFromGet(_ params: GimbalParamState, commanded: GimbalMode) -> GimbalMode
+    {
+        switch commanded {
+        case .fpv, .locked:
+            return commanded
+        case .follow, .tiltLocked:
+            return params.tiltLock == .locked ? .tiltLocked : .follow
         }
     }
 }
