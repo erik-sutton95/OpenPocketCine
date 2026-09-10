@@ -141,6 +141,7 @@ class OperatorSetupContractTest {
                 "HISTO",
                 "VECTOR",
                 "LIGHTS",
+                "ND",
                 "GUIDES",
                 "GRID",
                 "CROSS",
@@ -269,7 +270,10 @@ class OperatorSetupContractTest {
 
     @Test
     fun assistHelpCopyMatchesIos() {
-        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("PStops"))
+        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("CineStop"))
+        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("EL Zone"))
+        assertTrue(SettingsHelpCopy.FALSE_COLOR_SCALE.contains("six video-level zones"))
+        assertTrue(!SettingsHelpCopy.FALSE_COLOR_SCALE.contains("Blackmagic", ignoreCase = true))
         assertEquals("Show a compact color key over live view while False Color is active.", SettingsHelpCopy.FALSE_COLOR_REFERENCE)
         assertTrue(SettingsHelpCopy.PEAKING_SENSITIVITY.contains("finer edges"))
         assertTrue(SettingsHelpCopy.ZEBRA_UNITS.contains("0-255"))

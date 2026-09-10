@@ -63,6 +63,7 @@ enum AssistLongPressChrome {
         case .histogram: HistogramAssist.longPressMenu(assist: assist)
         case .vectorscope: VectorscopeAssist.longPressMenu(assist: assist)
         case .trafficLights: TrafficLightsAssist.longPressMenu(assist: assist)
+        case .ndMeter: NDAssist.longPressMenu(assist: assist)
         case .guides: GuidesAssist.longPressMenu(assist: assist)
         case .grid: GridAssist.longPressMenu(assist: assist)
         case .crosshair: CrosshairAssist.longPressMenu(assist: assist)

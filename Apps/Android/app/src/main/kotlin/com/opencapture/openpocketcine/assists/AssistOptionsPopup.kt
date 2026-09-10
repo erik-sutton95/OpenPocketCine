@@ -187,6 +187,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.HISTO -> HistogramOptions(state)
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
+        LiveAssistTool.ND -> OptionCopy(NDAssist.HELP)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
         LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
@@ -225,14 +226,15 @@ private fun FalseColorOptions(state: LiveAssistState) {
         "Scale",
         help =
             "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-                "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
-                "highlight levels. IRE uses WAVE-axis monitor ranges. Limits paints only shadow " +
-                "and highlight warnings.",
+                "CineStop paints video-level IRE stripes over luminance grayscale. EL Zone " +
+                "paints 15 contiguous stops from 18% gray: +6 and above white, −6 and below " +
+                "black. IRE paints six video-level zones over luminance grayscale. Limits " +
+                "paints only shadow and highlight warnings.",
         showTopDivider = false,
         stacked = true,
     ) {
         SettingsSegmented(
-            options = listOf("PStops", "IRE", "Limits"),
+            options = listOf("CineStop", "EL Zone", "IRE", "Limits"),
             selected = state.falseColorScale.menuLabel,
         ) { label ->
             haptics.selection()

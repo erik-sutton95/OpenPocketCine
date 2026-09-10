@@ -8,7 +8,7 @@ import UIKit
 /// Level and De-SQ are not on this bar (Pocket has no anamorphic squeeze; horizon
 /// is not shipped). Grouping matches OpenZCine `MonitorAssistStrip` after those
 /// two chips are removed: LUT/PEAK/FALSE | ZEBRA/WAVE/PARADE | HISTO/VECTOR/LIGHTS
-/// | GUIDES/GRID/CROSS | MIRROR | AUDIO.
+/// | GUIDES/GRID/CROSS | MIRROR | AUDIO. ND sits with HISTO/VECTOR/LIGHTS.
 struct LiveAssistBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var environmentLocked
@@ -62,23 +62,25 @@ struct LiveAssistBar: View {
         .allowsHitTesting(!locked)
     }
 
-    /// OpenZCine `MonitorAssistStrip.toolRow`: groups of three, AUDIO in its own last section.
+    /// Groups from ``LiveAssistTool/toolbarGroups``, AUDIO in its own last section.
     private var toolRow: some View {
-        let tools = LiveAssistTool.toolbarCases
+        let groups = LiveAssistTool.toolbarGroups
         return HStack(spacing: 2) {
-            ForEach(Array(tools.enumerated()), id: \.element.id) { index, tool in
-                if index > 0 && index.isMultiple(of: 3) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { groupIndex, group in
+                if groupIndex > 0 {
                     assistDivider
                 }
-                AssistBarButton(
-                    tool: tool,
-                    assist: assist,
-                    isLocked: locked,
-                    onPresent: presentOptions
-                )
+                ForEach(group) { tool in
+                    AssistBarButton(
+                        tool: tool,
+                        assist: assist,
+                        isLocked: locked,
+                        onPresent: presentOptions
+                    )
+                }
             }
             if showsAudio {
-                if !tools.isEmpty { assistDivider }
+                if !groups.isEmpty { assistDivider }
                 AssistBarButton(
                     tool: .audioMeters, assist: assist, isLocked: locked, onPresent: presentOptions)
             }

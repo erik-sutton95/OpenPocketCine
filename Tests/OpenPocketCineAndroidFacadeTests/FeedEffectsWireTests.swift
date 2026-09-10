@@ -58,4 +58,18 @@ struct FeedEffectsWireTests {
         #expect(opaque > 0)
         #expect(clear > 0)
     }
+
+    @Test
+    func packedElZoneWeightIsOpaqueAndOrdinalThree() throws {
+        #expect(FeedEffectsWire.falseColorScale(3) == .elZone)
+        let packed = try #require(
+            FeedEffectsWire.packedFalseColorWeight(
+                scaleOrdinal: 3,
+                colorModeCode: Int(ColorMode.dLog2.rawValue),
+                iso: 1600))
+        let size = FeedEffectsWire.falseColorCubeSize
+        #expect(packed.count == size * size * size * 4)
+        #expect(packed[0] == 255)
+        #expect(packed[packed.count - 4] == 255)
+    }
 }

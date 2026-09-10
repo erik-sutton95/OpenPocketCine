@@ -29,6 +29,12 @@ final class OperatorFacingCopyTests: XCTestCase {
                 text.localizedCaseInsensitiveContains("Nikon"),
                 "operator copy names Nikon: \(text)")
             XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Blackmagic"),
+                "operator copy names Blackmagic: \(text)")
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Black Magic"),
+                "operator copy names Black Magic: \(text)")
+            XCTAssertFalse(
                 text.localizedCaseInsensitiveContains("Camera to Cloud"),
                 "operator copy uses Camera to Cloud: \(text)")
             XCTAssertFalse(
@@ -104,6 +110,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.keepScreenAwake,
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,
+            NDAssist.helpCopy,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.supportHelp,
             SettingsHelpCopy.reportHelp,

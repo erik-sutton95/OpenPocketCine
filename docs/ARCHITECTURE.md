@@ -52,6 +52,7 @@ SDK). Both apps must call the same state machines:
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`; Android JNI |
 | Diagnostics redaction and report shape | `PrivacyRedactor`, `DiagnosticReport` | iOS `DiagnosticCenter` (os.Logger, MetricKit, screenshot paste); Android `diagnostics/DiagnosticCenter` (logcat + share) |
+| Live-picture ND meter (stops + ND number to balance the frame) | `NDFilterRecommendation` | iOS/Android **ND** view assist (Kotlin lockstep). Suggestion only — not a SET. Shares the LIGHTS/HISTO scope tap when the chip is on. |
 | Watcher relay (Bonjour second-screen) | `WatcherRelayProtocol`, framing, join, bitrate ladder, `WatcherRelayEncodePolicy` admission/keyframe cooldown, `WatcherRelayRecovery` deadlines/backoff, frame freshness, fitted `WatcherFocusPoint`, control lease | iOS `WatcherRelayHost` (observable state), `WatcherRelayTransport` (socket queue), `WatcherRelayEncoder`, `WatcherRelayBrowser` / `WatcherRelayClient` (shared camera Wi-Fi only; `WatcherRelayNetwork` disables peer-to-peer everywhere). Android: PARITY exception — Sharing stays Coming soon. |
 
 Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering,
