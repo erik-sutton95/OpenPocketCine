@@ -163,6 +163,10 @@ _Avoid_: LUT gain, LUT mix, intensity, EV (the body SET)
 Shot color in QuickTime Keys `com.dji.camera.ColorGammaSxS` (`Rec.709` / `Rec.2100 HLG` / `D-Log` / `D-Log2`) on the original take. LRF/XRF proxies are Rec.709 even for log. Playback Auto reads the original (or its `moov` tail) and stores it with the cached clip; `colr`/`nclx` is Rec.709 even for log.
 _Avoid_: nclx (alone), color space box
 
+**Log color transform**:
+Technical D-Log ↔ D-Log2 convert on iOS Share (**Convert log**, off by default). Decode source log, D-Gamut ↔ D-Gamut2 through Rec.709 linear, encode dest log. Not a look LUT. Exclusive with Bake LUT. Camera original is untouched. Rec.709 display stays Bake LUT. D-Log M is out.
+_Avoid_: CST (alone) in operator copy, ACES, Rec.709 CST
+
 **Proxy**:
 720p LRF/XRF sidecar on the phone without the original camera file. Tagged **Proxy** in the library and playback chrome.
 _Avoid_: preview (alone), low-res
