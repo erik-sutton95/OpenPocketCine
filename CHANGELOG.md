@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format is based on
   (formerly PStops) is Video Mode IRE stripes over grayscale. Saved
   PStops still load as CineStop.
 
+- ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
+  meters the live picture against middle gray and suggests a screw-on
+  ND in stops and ND number (`ND32` / `+5.0`) to balance the frame.
+  Off unless you turn the chip on. The app cannot set a filter. iOS
+  and Android.
+
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
   stays on WAITING FOR LIVE VIEW for 8 s with a local VPN on, the same

@@ -31,6 +31,8 @@ On iOS this is `NEHotspotConfiguration` (Hotspot Configuration entitlement). See
 
 The UDP 9004 socket is connected to `192.168.2.1:9004`. iOS sets `NWParameters.requiredLocalEndpoint` to the phone's camera DHCP IPv4 (`192.168.2.2…254`) with an **ephemeral local port** because Network.framework `.wifi` is home `en0`. Android pins the **process** with `bindProcessToNetwork`, then `Network.bindSocket` on an unbound datagram and binds `0.0.0.0:0`. Camera 9004 is the remote — a local `:9004` bind accepted handshake + telemetry and dropped HEVC. Hopping onto home Wi-Fi after SoftAP `onLost` is the process unbind, not the wildcard bind. On Android, `onLost` is a Network-object replace for several seconds (Samsung often swaps the object after join). Handshake miss in that window rebinds UDP. After the camera path is gone, the session retries or returns to pairing — it must not crash.
 
+Live view on that socket is unicast to the associated phone. The camera does not multicast HEVC/AVC on the SoftAP ([live view](../live-view/)). Android process-bind also means a future watcher relay cannot inherit the process default — it would need a socket on a different `Network`.
+
 ### When the join fails
 
 `NEHotspotConfiguration.apply` returning no error means the configuration was applied, not that the phone associated. A wrong passphrase still returns success there; iOS shows **Unable to join the network** and `192.168.2.x` never appears. Both shells treat "no camera address within 15 s" as the join failure.

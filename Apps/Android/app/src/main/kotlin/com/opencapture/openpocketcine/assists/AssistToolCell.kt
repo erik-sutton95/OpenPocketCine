@@ -94,6 +94,7 @@ private val LiveAssistTool.opcIcon: OpcIcon?
             LiveAssistTool.HISTO -> OpcIcon.AUDIO_LINES
             LiveAssistTool.VECTOR -> OpcIcon.CROSSHAIR
             LiveAssistTool.LIGHTS -> OpcIcon.SUN
+            LiveAssistTool.ND -> OpcIcon.APERTURE
             LiveAssistTool.AUDIO -> OpcIcon.SLIDERS_VERTICAL
             LiveAssistTool.GUIDES -> OpcIcon.SQUARE_DASHED
             LiveAssistTool.GRID -> OpcIcon.GRID_3X3

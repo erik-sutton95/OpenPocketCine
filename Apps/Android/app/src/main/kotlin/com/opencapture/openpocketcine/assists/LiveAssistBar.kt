@@ -88,24 +88,34 @@ fun PlaybackAssistBar(
         modifier.horizontalScroll(scroll),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiveAssistTool.playbackToolbarCases.forEachIndexed { index, tool ->
-            if (index > 0 && index % 3 == 0) AssistDivider()
-            AssistToolCell(
-                tool = tool,
-                isOn = state.isPlaybackVisible(tool),
-                enabled = true,
-                onLongClick =
-                    if (tool.hasConfiguration) {
-                        {
-                            state.configureTool = tool
-                            onLongPress(tool)
-                        }
-                    } else {
-                        null
-                    },
-                onClick = { state.togglePlayback(tool) },
-            )
+        LiveAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
+            if (groupIndex > 0) AssistDivider()
+            group.forEach { tool ->
+                AssistToolCell(
+                    tool = tool,
+                    isOn = state.isPlaybackVisible(tool),
+                    enabled = true,
+                    onLongClick =
+                        if (tool.hasConfiguration) {
+                            {
+                                state.configureTool = tool
+                                onLongPress(tool)
+                            }
+                        } else {
+                            null
+                        },
+                    onClick = { state.togglePlayback(tool) },
+                )
+            }
         }
+        AssistDivider()
+        AssistToolCell(
+            tool = LiveAssistTool.AUDIO,
+            isOn = state.isPlaybackVisible(LiveAssistTool.AUDIO),
+            enabled = true,
+            onLongClick = null,
+            onClick = { state.togglePlayback(LiveAssistTool.AUDIO) },
+        )
     }
 }
 
@@ -164,8 +174,9 @@ private fun LiveAssistBarRow(
                 .horizontalScroll(scroll, enabled = !locked),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LiveAssistTool.toolbarCases.forEachIndexed { index, tool ->
-                if (index > 0 && index % 3 == 0) AssistDivider()
+            LiveAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
+                if (groupIndex > 0) AssistDivider()
+                group.forEach { tool ->
                 AssistToolCell(
                     tool = tool,
                     isOn = isOn(tool),
@@ -179,6 +190,7 @@ private fun LiveAssistBarRow(
                     onClick = { onClick(tool) },
                     modifier = Modifier.reportChromeFrame { onToolFrame(tool, it) },
                 )
+                }
             }
             AssistDivider()
             AssistToolCell(

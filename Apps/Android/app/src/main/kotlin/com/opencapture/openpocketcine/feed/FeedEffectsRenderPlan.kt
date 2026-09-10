@@ -193,6 +193,7 @@ internal object FeedEffectsRenderPlanFactory {
                     histogram = histogram,
                     vectorscope = vectorscope,
                     trafficLights = trafficLights,
+                    ndMeter = shown(LiveAssistTool.ND),
                     trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
                     colorMode = colorMode,
                     iso = if (iso in 50..102_400) iso else ScopeExposureCeiling.REFERENCE_EI,

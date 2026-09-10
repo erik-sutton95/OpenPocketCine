@@ -29,6 +29,12 @@ _Avoid_: hotspot (except when naming the iOS API)
 UDP port 9004 DUML transport between phone and camera.
 _Avoid_: media port, stream
 
+**One client**:
+Live HEVC/AVC on the camera SoftAP is unicast UDP to one phone 5-tuple.
+Camera multicast is won't-do. A second-screen watcher would be a
+phone-as-encoder relay on another interface — not in this build.
+_Avoid_: camera multicast, NDI (as this path), SRT (as this path)
+
 **Enable-once**:
 `0x09/0xa8` starts live view and is the only PLI; it is not a 1 Hz keyframe loop.
 _Avoid_: IDR loop, live-start (alone)
@@ -124,6 +130,10 @@ _Avoid_: pixel-identical, 1:1 clone
 **Assist**:
 A monitor tool on the picture (LUT, peaking, zebra, scopes, grids).
 _Avoid_: filter, effect
+
+**ND suggestion**:
+View-assist meter on the live picture (toolbar **ND**, next to LIGHTS). Reads luma vs middle gray and names a screw-on ND in stops and ND number to balance the frame. Not a camera SET. Off unless the operator turns the chip on.
+_Avoid_: auto ND, ND SET, shutter-sheet nag
 
 **LUT exposure compensation**:
 Input-referred stops applied before the Rec.709 cube (half-stop −3…+3). Pull after ETTR so the cube's mid-grey lands. Not camera EV. iOS Share **Bake exposure** writes that pull into the file.

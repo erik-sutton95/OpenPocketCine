@@ -17,6 +17,7 @@ struct LiveImageEffects: Equatable, Sendable {
     var parade = false
     var vectorscope = false
     var trafficLights = false
+    var ndMeter = false
     var lutDimension = 0
     var lutRGBA = Data()
 
@@ -73,9 +74,9 @@ struct LiveImageEffects: Equatable, Sendable {
         needsGPUFeed && !replacesIdentityFeed
     }
 
-    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS — OpenZCine `scopesActive`.
+    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND — OpenZCine `scopesActive`.
     var needsScopes: Bool {
-        histogram || waveform || parade || vectorscope || trafficLights
+        histogram || waveform || parade || vectorscope || trafficLights || ndMeter
     }
 
     var needsScopePoints: Bool {
@@ -83,7 +84,7 @@ struct LiveImageEffects: Equatable, Sendable {
     }
 
     var activeScopeCount: Int {
-        [histogram, waveform, parade, vectorscope, trafficLights].filter { $0 }.count
+        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter].filter { $0 }.count
     }
 
     /// GPU feed, CPU scopes, or AF-C face detect. Any one starts VT for a pixel buffer.
