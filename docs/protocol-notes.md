@@ -22,10 +22,11 @@ discussion [#53](https://github.com/erik-sutton95/OpenPocketCine/discussions/53)
 Do not commit captures. Watcher relay (phone-as-encoder) is iOS Sharing:
 [`2026-09-08-watcher-relay-design.md`](superpowers/specs/2026-09-08-watcher-relay-design.md).
 
-Live HEVC/AVC is **unicast UDP** on the datalink 5-tuple
+Observed live HEVC/AVC is **unicast UDP** on the datalink 5-tuple
 (`192.168.2.1:9004` → the associated phone's DHCP IPv4 and ephemeral port,
-pktType `0x02`). The camera does not multicast or broadcast that media.
-A second phone on the SoftAP does not get a copy.
+pktType `0x02`). These single-client captures contain no camera multicast or
+broadcast media. Simply joining the SoftAP does not duplicate that flow;
+the effect of a second client handshake remains untested.
 
 | Path | Call |
 | --- | --- |
@@ -57,10 +58,11 @@ These takes are one STA. A two-phone steal-vs-duplicate capture is **not** in
 `0x09/0xa8` is live-start **and** the only PLI; a second send resets the GOP
 and can black the feed that is already up.
 
-Because the camera already unicasts to one dest IP:port, a second phone does
-not receive a copy on the wire. A second handshake would have to **retarget**
-that 5-tuple (steal) for the new phone to see video. Treat steal as the working
-hypothesis; do not prove it with a 1 Hz enable loop.
+The observed flow targets one destination IP:port. These captures do not
+establish whether a second handshake would retarget it, create another
+independent unicast flow, or be refused. Multi-client behavior remains
+untested; the product keeps one camera client. Do not probe it with a 1 Hz
+enable loop.
 
 ### Phone relay and dual-interface
 
