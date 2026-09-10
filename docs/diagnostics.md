@@ -18,6 +18,12 @@ The compact paste is capped (~1400 characters) so it fits a TestFlight comment.
 It has app/os/device-model (hardware id, not “Erik’s iPhone”), camera family,
 phase, and recent journal lines.
 
+Watcher joins, passcode refusals, explicit host shutdown, and reconnect failures
+also enter the redacted `control-live.log`. Codes and Wi-Fi QR payloads never do.
+An interrupted socket is logged separately from an explicit host stop. Relay
+queue/FPS counters stay in the low-rate `relay` Console category; see
+[watcher relay verification](watcher-relay.md#verification).
+
 ## Privacy
 
 `PrivacyRedactor` runs before a line is stored or shared:

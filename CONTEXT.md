@@ -31,9 +31,22 @@ _Avoid_: media port, stream
 
 **One client**:
 Live HEVC/AVC on the camera SoftAP is unicast UDP to one phone 5-tuple.
-Camera multicast is won't-do. A second-screen watcher would be a
-phone-as-encoder relay on another interface — not in this build.
+Camera multicast is won't-do.
 _Avoid_: camera multicast, NDI (as this path), SRT (as this path)
+
+**Host**:
+The phone that holds the Pocket datalink and may advertise the watcher relay.
+_Avoid_: broadcaster (in operator copy)
+
+**Watcher**:
+Another OpenPocketCine install on the same camera Wi-Fi that joins the host’s
+shared feed. Does not open its own camera session.
+_Avoid_: client, viewer (in operator copy)
+
+**Watcher relay**:
+Phone-as-encoder second-screen. Bonjour `_opc-mon._tcp`, iOS host + iOS watcher.
+The host shares its camera picture with watchers on the same camera Wi-Fi.
+_Avoid_: camera multicast, NDI, SRT, monitor relay
 
 **Enable-once**:
 `0x09/0xa8` starts live view and is the only PLI; it is not a 1 Hz keyframe loop.

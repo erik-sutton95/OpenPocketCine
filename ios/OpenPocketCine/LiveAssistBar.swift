@@ -13,6 +13,7 @@ struct LiveAssistBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var environmentLocked
     var isLocked = false
+    var showsAudio = true
     @State private var edgeFades = ScrollEdgeFades(leading: false, trailing: true)
     @State private var iconFrames: [LiveAssistTool: CGRect] = [:]
     @State private var toolbarFrame: CGRect = .zero
@@ -78,15 +79,11 @@ struct LiveAssistBar: View {
                     )
                 }
             }
-            if !groups.isEmpty {
-                assistDivider
+            if showsAudio {
+                if !groups.isEmpty { assistDivider }
+                AssistBarButton(
+                    tool: .audioMeters, assist: assist, isLocked: locked, onPresent: presentOptions)
             }
-            AssistBarButton(
-                tool: .audioMeters,
-                assist: assist,
-                isLocked: locked,
-                onPresent: presentOptions
-            )
         }
     }
 

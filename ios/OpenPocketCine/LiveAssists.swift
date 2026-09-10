@@ -728,6 +728,31 @@ enum OperatorPrefs {
     private static let facePriorityExposureKey = "OpenPocketCine.FacePriorityExposure"
     private static let shutterUsesAngleKey = "OpenPocketCine.ShutterUsesAngle"
     private static let shutterAngleKey = "OpenPocketCine.ShutterAngleDegrees"
+    private static let shareThisFeedKey = "OpenPocketCine.ShareThisFeed"
+    private static let controlRequestsKey = "OpenPocketCine.ControlRequests"
+    private static let broadcastPriorityKey = "OpenPocketCine.BroadcastPriority"
+
+    static var shareThisFeed: Bool {
+        get { UserDefaults.standard.bool(forKey: shareThisFeedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: shareThisFeedKey) }
+    }
+
+    static var controlRequests: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: controlRequestsKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: controlRequestsKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: controlRequestsKey) }
+    }
+
+    /// Ceiling index on the watcher-relay bitrate ladder. 0 = highest quality.
+    static var broadcastPriority: Int {
+        get {
+            let v = UserDefaults.standard.integer(forKey: broadcastPriorityKey)
+            return min(max(0, v), 3)
+        }
+        set { UserDefaults.standard.set(min(max(0, newValue), 3), forKey: broadcastPriorityKey) }
+    }
 
     static var keepScreenAwake: Bool {
         get {
@@ -1186,7 +1211,7 @@ struct FeedAlignedAssists: View {
                     HStack(alignment: .bottom, spacing: 8) {
                         extraScopes(assist)
                         Spacer(minLength: 0)
-                        if assist.isVisible(.audioMeters) {
+                        if !model.isWatchingFeed, assist.isVisible(.audioMeters) {
                             AudioAssist.meter(
                                 levels: model.session.status.audioMeters,
                                 sensitivity: model.session.status.audioChannel?.label
@@ -1207,10 +1232,10 @@ struct FeedAlignedAssists: View {
             if assist.isVisible(.falseColor), assist.falseColorReference {
                 FalseColorLegend(
                     scale: assist.falseColorScale,
-                    colorMode: model.session.status.colorMode ?? .normal
+                    colorMode: model.monitorColorMode ?? .normal
                 )
             }
-            if assist.evMeter {
+            if !model.isWatchingFeed, assist.evMeter {
                 EVMeterOverlay()
             }
         }

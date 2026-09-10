@@ -19,7 +19,8 @@ Recording resolution × aspect × fps (official DJI tables + wire bytes):
 
 Spike [#86](https://github.com/erik-sutton95/OpenPocketCine/issues/86) /
 discussion [#53](https://github.com/erik-sutton95/OpenPocketCine/discussions/53).
-Do not build Sharing UI from this note. Do not commit captures.
+Do not commit captures. Watcher relay (phone-as-encoder) is iOS Sharing:
+[`2026-09-08-watcher-relay-design.md`](superpowers/specs/2026-09-08-watcher-relay-design.md).
 
 Observed live HEVC/AVC is **unicast UDP** on the datalink 5-tuple
 (`192.168.2.1:9004` → the associated phone's DHCP IPv4 and ephemeral port,
@@ -30,7 +31,7 @@ the effect of a second client handshake remains untested.
 | Path | Call |
 | --- | --- |
 | Camera SoftAP multicast / multi-client live | **won't-do** |
-| Phone-as-encoder watcher relay (operator stays on SoftAP; watchers on another interface) | Follow-on architecture, not camera multicast. Sharing tab stays parked. |
+| Phone-as-encoder watcher relay | **iOS:** host re-encodes identity HEVC, Bonjour `_opc-mon._tcp` on shared camera Wi-Fi (peer-to-peer disabled). Watchers join SoftAP but only connect to the host relay; they never open a camera datalink or send `0x09/0xa8`. Android Sharing stays parked. |
 | Keep 1:1 | **Yes** — one phone talks to one Pocket |
 
 Public summary: [live view](https://openpocketcine.app/docs/protocol/live-view/).

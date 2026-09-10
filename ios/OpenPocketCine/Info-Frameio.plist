@@ -45,6 +45,10 @@
 	<true/>
 	<key>NSMotionUsageDescription</key>
 	<string>OpenPocketCine uses headphone motion so AirPods can aim the gimbal.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_opc-mon._tcp</string>
+	</array>
 	<key>UIStatusBarHidden</key>
 	<true/>
 	<key>UIStatusBarHidden~ipad</key>

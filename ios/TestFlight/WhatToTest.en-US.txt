@@ -1,27 +1,23 @@
 New and changed
 
-- FALSE Scale: CineStop (video IRE stripes), EL Zone (15 stops; +6 white / −6 black), and IRE (six video zones over gray).
-- View Assist ND meters the live picture and suggests a screw-on ND (ND32 / +5.0). Off until you tap the chip. The app cannot set a filter.
-- A connected game controller drives the gimbal, records, recenters, tracks, zooms, and adjusts exposure. Small throws crawl; a gimbal stop taps once.
-- Experimental head tracking: Controls → Calibrate Head Lock while still and live. AirPods turns pan; nods tilt. STOP clears. Off keeps audio only.
-- Pair over Bluetooth, join camera Wi-Fi, watch live view. Record, ISO, white balance, and zoom from the phone.
-- Share Diagnostics is on first pair and in Operator Setup → System. A TestFlight screenshot copies a short paste for feedback. No name or location.
+- Share this feed in Operator Setup → Sharing sends the picture to OpenPocketCine iPhones and iPads on the same camera Wi-Fi. Show Wi-Fi code on the host, scan it with Camera on the watcher, accept Join Network, then return to Watch a feed. Only the host pairs with the camera in the app.
+- Watchers have local assists and scopes, camera readings, REC tally, and Clean view. Request control to record, focus, or change supported ISO, shutter, and zoom settings. Release gives control back.
+- Broadcast priority sets the quality ceiling. Sharing can lower its bitrate when the host picture slows.
+- FALSE Scale adds CineStop video stripes, EL Zone scene stops (+6 white / −6 black), and six-zone IRE over gray.
+- Tap ND for a suggested screw-on filter and stop count. It starts off; the app cannot set a filter.
+- Game controllers drive the gimbal, recording, zoom, tracking, and exposure. Experimental AirPods head tracking is in Controls; calibrate while still and live. STOP clears the lock.
 
 Fixes
 
-- In D-Log2, zoom waits for the hop to D-Log before the lens moves; the chip stays at 1× until color switches. Zoom keeps the live picture. On Pocket 3 and Nano, COLOR matches the camera. Live view comes up a couple of seconds after Wi-Fi joins. Pause VPNs or ad blockers, or exclude this app, if it never starts.
-- Live view stays up while you pan, tilt, or head-track. Record, FORMAT, COLOR, white balance, or a tracking box must not freeze the picture. If it dies, the last frame stays under Reconnecting and live view returns without closing the app.
-- Head tracking no longer overshoots. Turn, then nod: tilt is straight up and down.
-- Power-cycling the camera mid-session keeps the last picture under Reconnecting instead of going black. A renamed Pocket Wi-Fi joins without a re-pair.
-- With LUT, waveform, peaking, or Face AF on, zooming or the D-Log2 to D-Log hop no longer freeze the picture. LUT 50/50 must not drop live view or stick on Reconnecting.
-- Clips or Operator Setup over live view, then back, keeps the picture moving, not a black well. On Pocket 3, a take you just recorded should list and play.
-- On Pocket 3 and Pocket 4, Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
-- Zebra: Highlight paints when any color channel runs hot. Factory Highlight is now 99 IRE; saved thresholds are unchanged. Long-press ZEBRA, tap Highlight or Midtone: the number field stays above the keyboard.
+- Interrupted watcher feeds keep the last picture and retry three times. A stopped feed leaves its error and Choose a feed visible instead of opening camera pairing.
+- Passcode refusals arrive before the connection closes, so the watcher can enter the correct code.
+- A slow watcher waits for a fresh keyframe while other watchers continue. Local assists and mirror stay selected as frames arrive.
+- The camera picture stays through settings and clips, zoom, exposure changes, and recovery. A frozen picture with live timecode is a bug. Pause VPNs or ad blockers if live view never starts.
 
 What to test
 
-- Pair a Pocket, go live, pan with the stick (half throw slower than full). Stay live two minutes with LUT and waveform on. In D-Log with LUT on, long-press LUT and toggle 50/50 (Left/Right and Top/Bottom). Zoom, record, switch FORMAT or COLOR, long-press-track a moving subject. Frozen picture with live timecode is a bug. If Reconnecting appears, last picture stays and live view returns without closing the app. Pause VPNs if live view never starts. On a bright take, tap ND: the plate should show an ND number and a stop count.
-- Connect a DualSense or any extended gamepad: left stick gimbal, Cross record, Circle recenter, Square 180, Triangle track, L1/R1 jump zoom, L2/R2 hold-to-zoom, D-pad ISO and shutter. Push into a stop: one buzz, not a rumble. Unplug rests the stick and toasts.
-- On Pocket 4 Pro in D-Log2 (idle): R2 or pinch. COLOR switches to D-Log first, then the picture zooms. On Pocket 3, switch COLOR Normal/HDR/D-Log M; on a Nano, 8-bit/10-bit/D-Log M and FORMAT 2.7K/4:3. Auto ISO starts at 50 (Pocket 4 Pro: 100).
-- Tap Share Diagnostics before pairing finishes. After live: record a short take, open it in the library with LUT on. Share sends the original file. Close the library, then Operator Setup: live view keeps its picture. Power-cycle the Pocket: last picture stays under Reconnecting. On Pocket 3, the take you just recorded must appear and play. Rename the camera Wi-Fi on the body: the app joins the new name without a re-pair.
-- Long-press FALSE: try CineStop, EL Zone (mid-gray gray, hot sky white), and IRE. Long-press ZEBRA, tap Highlight, type 95, tap Done: the stripes update. Repeat in landscape. In D-Log2 at factory Highlight, a hot sky stripes.
+- Start a watcher on different Wi-Fi. Follow Show Wi-Fi code and join the camera Wi-Fi before finding the host. Try a wrong watcher passcode, then the correct one.
+- Note host FPS with sharing off. Turn sharing on, join one watcher, then two or more. Pan and record for five minutes with LUT and waveform on. Check host and watchers for stutter or growing delay.
+- Move one watcher out of range, then return it. The host and other watchers should keep moving; the returning picture should reconnect. Leave during retries to cancel them.
+- Stop and restart sharing. Leave and rejoin. Request control, grant it, test focus at the picture edges with mirror on and off, then reclaim control on the host. The watcher must stop sending camera commands after losing control.
+- Try Clean view and assists in portrait and landscape. Long-press FALSE and compare CineStop, EL Zone (mid-gray gray, hot sky white), and IRE. Tap ND on a bright take and check its filter/stop reading changes with the picture. Report device models, watcher count, and which picture slowed first. Multiple-watcher capacity still needs device testing.
