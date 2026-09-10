@@ -12,6 +12,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
 - HEVC live view on Pocket 4 / 4 Pro; AVC on Osmo Nano
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
+  False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
+  video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
+  from 18% gray (+6 white, −6 black). IRE is six video-level zones over
+  grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip).
   Long-press options lift above the keyboard so number fields (Zebra
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709
@@ -32,6 +36,9 @@ project with XcodeGen — see [Setup](../guides/setup/).
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
+  View Assist **ND** meters the live picture against middle gray and
+  suggests a screw-on ND in stops and ND number to balance the frame.
+  The app cannot set a filter.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
@@ -83,6 +90,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default)
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
+- **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
 
 Motion Control durations use half-second dials up to 120 seconds. Swipe left
 to increase duration and right to decrease it. Move the expanded

@@ -42,6 +42,14 @@ final class CameraSession {
     /// Camera-AP SSID after a successful join. Re-read over BLE on the next connect.
     private(set) var joinedSSID: String?
 
+    /// Only used by the host's explicit Show Wi-Fi code sheet. Never advertised or logged.
+    var watcherWiFiJoinCode: String? {
+        guard let camera = connectedCamera, cachedWifiCameraId == camera.id,
+            let ssid = joinedSSID, ssid == cachedSSID, let password = cachedPassword
+        else { return nil }
+        return CameraWiFiQRCode.payload(ssid: ssid, password: password)
+    }
+
     // Pipeline diagnostics — keepalive writes these at 1 Hz. Not observed by live chrome.
     @ObservationIgnored var videoPackets = 0
     @ObservationIgnored var accessUnits = 0

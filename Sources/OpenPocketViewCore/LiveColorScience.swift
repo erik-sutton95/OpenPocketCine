@@ -684,11 +684,20 @@ public struct LiveFalseColorBand: Equatable, Sendable {
     }
 }
 
-/// OpenZCine `FalseColorScale` names. IRE / Limits use WAVE IRE; Stops use scene EV.
+/// False-colour scale names. CineStop / IRE / Limits use WAVE IRE; EL Zone uses scene EV.
 public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     case stops = "Stops"
     case ire = "IRE"
     case limits = "Limits"
+    case elZone = "EL Zone"
+
+    /// EL Zone keys scene EV around 18% grey. CineStop / IRE / Limits key WAVE IRE.
+    public var usesSceneStops: Bool {
+        switch self {
+        case .elZone: true
+        case .stops, .ire, .limits: false
+        }
+    }
 }
 
 /// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
@@ -801,22 +810,24 @@ public enum LiveColorScience {
         abs(monitorPercent - centre) <= halfWidth
     }
 
-    /// IRE / Limits ride the WAVE axis. Stops are scene EV; clip-relative
-    /// bands use the live-tap EI ceiling, not D-Log2's paper peak (+11.4).
+    /// IRE / Limits / CineStop ride the WAVE axis. EL Zone is scene-referred
+    /// ±6 around 18% grey — extra D-Log2 headroom stays the +6 white, not a
+    /// camera-clip stripe.
     public static func falseColorBands(
         _ scale: LiveFalseColorScale, transfer: MonitorTransfer
     ) -> [LiveFalseColorBand] {
         switch scale {
-        case .stops: stopBands(transfer: transfer)
+        case .stops: cineStopBands
         case .ire: ireBands
         case .limits: limitBands
+        case .elZone: elZoneBands
         }
     }
 
     public static func falseColorBand(
         value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer
     ) -> LiveFalseColorBand? {
-        let candidate = scale == .stops ? value : clamp(value, 0, 100)
+        let candidate = scale.usesSceneStops ? value : clamp(value, 0, 100)
         return falseColorBands(scale, transfer: transfer).first { $0.contains(candidate) }
     }
 
@@ -1062,37 +1073,31 @@ public struct ColorMatrix3: Equatable, Sendable {
 // MARK: - False-colour tables (WAVE IRE / EI-relative stops)
 
 extension LiveColorScience {
-    /// OpenZCine ZC Stops landmarks (minimum / −3 / 18% / skin +1 / +2) with
-    /// clip-relative warnings from *this* transfer's peak, not RED 180 / N-Log 940.
-    fileprivate static func stopBands(transfer: MonitorTransfer) -> [LiveFalseColorBand] {
-        let clipLinear = linearize(
-            ScopeExposureCeiling.clipEncoded(transfer: transfer), transfer: transfer)
-        let maximum = max(3, log2(max(clipLinear, 0.18 * 8) / 0.18))
-        // OpenZCine ZCStopsPalette (original muted RGB; RED published meanings, not RGB).
-        return [
-            band(-.infinity, -35.0 / 6, 78, 11, 82, "Minimum"),
-            band(-19.0 / 6, -17.0 / 6, 17, 149, 141, "−3"),
-            band(-1.0 / 6, 1.0 / 6, 8, 203, 24, "18%"),
-            band(5.0 / 6, 7.0 / 6, 245, 143, 148, "Skin +1"),
-            band(11.0 / 6, 13.0 / 6, 212, 208, 13, "+2"),
-            band(maximum - 5.0 / 6, maximum - 0.5, 255, 244, 0, "⅔ below max"),
-            band(maximum - 0.5, maximum - 1.0 / 6, 255, 126, 18, "⅓ below max"),
-            band(maximum - 1.0 / 6, .infinity, 250, 60, 36, "Maximum"),
-        ]
-    }
-
-    /// WAVE IRE bands. 18% (D-Log2 paper 30.50) is the green band; 99–100 is
-    /// the live-tap EI ceiling, not Reinhard-mapped curve peak.
-    fileprivate static let ireBands: [LiveFalseColorBand] = [
+    /// CineStop — published Video Mode IRE on the WAVE axis. Gaps are grayscale.
+    /// Rec.709 18% (~41) hits 41–48 green; D-Log2 18% (30.50) is a gap.
+    fileprivate static let cineStopBands: [LiveFalseColorBand] = [
         ire(0, 5, 0.44, 0.22, 0.76, "0–4"),
         ire(5, 6, 0.28, 0.37, 0.85, "5"),
         ire(10, 13, 0.18, 0.58, 0.64, "10–12"),
-        ire(28, 34, 0.38, 0.63, 0.35, "18%"),
-        ire(52, 62, 0.83, 0.53, 0.71, "55–61"),
+        ire(41, 49, 0.38, 0.63, 0.35, "41–48"),
+        ire(61, 71, 0.83, 0.53, 0.71, "61–70"),
         ire(92, 94, 0.83, 0.77, 0.45, "92–93"),
         ire(94, 96, 0.89, 0.72, 0.29, "94–95"),
         ire(96, 99, 0.85, 0.55, 0.22, "96–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
+    ]
+
+    /// IRE — six video-level zones on the WAVE axis. Gaps are grayscale.
+    /// Rec.709 18% (~41) hits 18%MG green; D-Log2 18% (30.50) is a gap.
+    /// Palette sampled from the published six-chip IRE chart (BDL / NBDL /
+    /// 18%MG / MG+1 / 80%WC / 95%WC).
+    fileprivate static let ireBands: [LiveFalseColorBand] = [
+        band(0, 2.5, 115, 33, 120, "BDL"),
+        band(2.5, 10, 29, 2, 221, "NBDL"),
+        band(38, 42, 123, 207, 87, "18%MG"),
+        band(52, 56, 241, 190, 198, "MG+1"),
+        band(80, 95, 255, 255, 88, "80%WC"),
+        band(95, .infinity, 220, 51, 33, "95%WC"),
     ]
 
     fileprivate static let limitBands: [LiveFalseColorBand] = [
@@ -1100,6 +1105,27 @@ extension LiveColorScience {
         ire(5, 10, 0.28, 0.37, 0.85, "5–9"),
         ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
+    ]
+
+    /// Scene-referred EL Zone. Palette from the public EL Zone System chart
+    /// (18% grey / ±½ skin / ±1…±5). +6 and above are white; −6 and below
+    /// are black — extra D-Log2 headroom is not a separate clip stripe.
+    fileprivate static let elZoneBands: [LiveFalseColorBand] = [
+        band(-.infinity, -5.5, 0, 0, 0, "−6"),
+        band(-5.5, -4.5, 158, 127, 183, "−5"),
+        band(-4.5, -3.5, 30, 114, 163, "−4"),
+        band(-3.5, -2.5, 54, 174, 226, "−3"),
+        band(-2.5, -1.5, 36, 164, 78, "−2"),
+        band(-1.5, -0.75, 97, 185, 78, "−1"),
+        band(-0.75, -0.25, 147, 198, 72, "−½"),
+        band(-0.25, 0.25, 143, 139, 132, "18%"),
+        band(0.25, 0.75, 251, 227, 51, "+½"),
+        band(0.75, 1.5, 255, 247, 170, "+1"),
+        band(1.5, 2.5, 241, 113, 53, "+2"),
+        band(2.5, 3.5, 242, 165, 81, "+3"),
+        band(3.5, 4.5, 234, 34, 46, "+4"),
+        band(4.5, 5.5, 224, 127, 142, "+5"),
+        band(5.5, .infinity, 255, 255, 255, "+6"),
     ]
 
     private static func band(

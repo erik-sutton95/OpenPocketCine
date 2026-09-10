@@ -4,9 +4,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -59,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.NDFilterRecommendation
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 
 import com.opencapture.openpocketcine.reportChromeFrame
@@ -573,6 +579,50 @@ internal fun AudioMetersPanel(
             AudioAssist.displayedSensitivity(sensitivity),
             Offset(this.size.width / 2f - 6f, this.size.height - 12f),
             TextStyle(color = LiveDesign.text.copy(alpha = 0.72f), fontSize = 8.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+object NDAssist {
+    const val HELP =
+        "Meters the live picture against middle gray and suggests a screw-on ND — stops and ND number — to balance it. The app cannot set a filter."
+    const val METER_TITLE = "ND"
+}
+
+@Composable
+internal fun NDMeterPanel(state: LiveAssistState, modifier: Modifier = Modifier) {
+    val transfer = state.scopeBundle.transfer
+    val reading =
+        NDFilterRecommendation.reading(state.scopeBundle.samples.histogramLuma, transfer)
+    Column(
+        modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            NDAssist.METER_TITLE,
+            color = LiveDesign.text.copy(alpha = 0.58f),
+            fontSize = 8.5.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            reading?.ndLabel ?: "—",
+            color = LiveDesign.text,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            reading?.stopsLabel ?: "—",
+            color = if (reading?.needsGlass == true) LiveDesign.accent else LiveDesign.muted,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
     }
 }

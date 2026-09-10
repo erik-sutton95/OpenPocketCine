@@ -6,7 +6,7 @@ struct LivePortraitScopesStack: View {
     @Environment(AppModel.self) private var model
 
     static let canonical: [LiveAssistTool] = [
-        .waveform, .parade, .histogram, .vectorscope, .trafficLights,
+        .waveform, .parade, .histogram, .vectorscope, .trafficLights, .ndMeter,
     ]
 
     var kinds: [LiveAssistTool] {
@@ -37,6 +37,8 @@ struct LivePortraitScopesStack: View {
                 VectorscopeOverlay(canvas: cell, feed: cell)
             case .trafficLights:
                 TrafficLightsOverlay(bounds: cell, feed: cell, chromeClearance: EdgeInsets())
+            case .ndMeter:
+                NDMeterOverlay(bounds: cell, feed: cell, chromeClearance: EdgeInsets())
             default:
                 EmptyView()
             }

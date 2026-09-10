@@ -65,13 +65,14 @@ internal data class ScopeTapPolicy(
     val histogram: Boolean = false,
     val vectorscope: Boolean = false,
     val trafficLights: Boolean = false,
+    val ndMeter: Boolean = false,
     val trafficThreshold: Double = 0.0,
     val colorMode: Int = com.opencapture.openpocketcine.session.CameraCommands.COLOR_NORMAL,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
     val vectorLut: FeedEffectsCube? = null,
 ) {
     val activeScopeCount: Int
-        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights).count { it }
+        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter).count { it }
 
     val needsTap: Boolean
         get() = activeScopeCount > 0

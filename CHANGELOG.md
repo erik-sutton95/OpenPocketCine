@@ -13,6 +13,21 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
+  gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
+  stays white, not a separate clip stripe. iOS and Android.
+
+- False color **IRE** is six video-level WAVE zones over grayscale
+  (crush / near-black / 18% gray / +1 stop / 80 / 95 clip). **CineStop**
+  (formerly PStops) is Video Mode IRE stripes over grayscale. Saved
+  PStops still load as CineStop.
+
+- ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
+  meters the live picture against middle gray and suggests a screw-on
+  ND in stops and ND number (`ND32` / `+5.0`) to balance the frame.
+  Off unless you turn the chip on. The app cannot set a filter. iOS
+  and Android.
+
 - Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
   One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
   stick ramp Off / Soft / Medium, and Motion Control. The sheet parks

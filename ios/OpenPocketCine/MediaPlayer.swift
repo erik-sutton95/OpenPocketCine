@@ -909,19 +909,26 @@ struct MediaPlayerView: View {
     private var playbackAssistToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                ForEach(
-                    Array(LiveAssistTool.playbackToolbarCases.enumerated()),
-                    id: \.element.id
-                ) { index, tool in
-                    if index > 0, index.isMultiple(of: 3) {
+                ForEach(Array(LiveAssistTool.toolbarGroups.enumerated()), id: \.offset) {
+                    groupIndex, group in
+                    if groupIndex > 0 {
                         Rectangle()
                             .fill(LiveDesign.hairlineStrong)
                             .frame(width: 1, height: 22)
                             .padding(.horizontal, 3)
                     }
-                    PlaybackAssistToolButton(tool: tool) { tool in
-                        presentPlaybackAssistOptions(tool)
+                    ForEach(group) { tool in
+                        PlaybackAssistToolButton(tool: tool) { tool in
+                            presentPlaybackAssistOptions(tool)
+                        }
                     }
+                }
+                Rectangle()
+                    .fill(LiveDesign.hairlineStrong)
+                    .frame(width: 1, height: 22)
+                    .padding(.horizontal, 3)
+                PlaybackAssistToolButton(tool: .audioMeters) { tool in
+                    presentPlaybackAssistOptions(tool)
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -962,6 +969,9 @@ struct MediaPlayerView: View {
         }
         if model.assist.isPlaybackVisible(.trafficLights) {
             TrafficLightsOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
+        }
+        if model.assist.isPlaybackVisible(.ndMeter) {
+            NDMeterOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
         }
         if model.assist.isPlaybackVisible(.audioMeters) {
             AudioMetersPanelMini(levels: playbackAudioLevels, sensitivity: nil)

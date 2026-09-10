@@ -1161,6 +1161,17 @@ private struct LiveScopeOverlays: View {
             )
             .allowsHitTesting(!interfaceLocked)
         }
+        if model.assist.isVisible(.ndMeter) {
+            NDMeterOverlay(
+                bounds: canvas,
+                feed: picture,
+                chromeClearance: EdgeInsets(
+                    top: layout.topDeck.maxY,
+                    leading: 0,
+                    bottom: max(0, layout.viewport.height - layout.assist.minY),
+                    trailing: 0)
+            )
+        }
     }
 }
 
