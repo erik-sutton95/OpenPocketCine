@@ -1178,6 +1178,7 @@ private struct LiveScopeOverlays: View {
                     bottom: max(0, layout.viewport.height - layout.assist.minY),
                     trailing: 0)
             )
+            .allowsHitTesting(!interfaceLocked)
         }
     }
 }

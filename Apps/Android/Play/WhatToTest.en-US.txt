@@ -2,5 +2,5 @@ New features
 
 - Experimental Motion Control: plan timed A→B or A→B→C gimbal moves with smoothing, a start countdown, and Pause/Resume/Stop.
 - New false-color choices: CineStop, EL Zone and six-zone IRE.
-- ND assist suggests a screw-on filter strength and shows the stop count to help balance exposure.
+- ND assist suggests filter strength in a compact chip. Hold-drag to move it and choose Stops, ND32 or ND 0.3 readouts.
 - Expanded FORMAT choices show camera-reported resolutions, frame rates and aspect ratios, with normal-video options including 2.7K for Pocket 3.

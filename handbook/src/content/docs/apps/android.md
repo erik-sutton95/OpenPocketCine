@@ -43,9 +43,10 @@ when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
-on Pocket 4 Pro. View Assist **ND** meters the live picture against middle
-gray and suggests a screw-on ND in stops and ND number to balance the
-frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
+on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
+(bottom-left, above the assist bar; hold-drag to move). Long-press to
+switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
+a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
 beside zoom (Pocket only). That sheet parks like a capture picker and
 sets Follow / Tilt locked / FPV, Slow / Default / Fast, stick ramp, and

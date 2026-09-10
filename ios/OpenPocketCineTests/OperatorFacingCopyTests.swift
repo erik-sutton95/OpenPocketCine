@@ -111,6 +111,8 @@ final class OperatorFacingCopyTests: XCTestCase {
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,
             NDAssist.helpCopy,
+            NDAssist.notationTitle,
+            NDAssist.notationHelp,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.supportHelp,
             SettingsHelpCopy.reportHelp,

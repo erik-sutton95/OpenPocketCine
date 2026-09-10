@@ -74,6 +74,8 @@ enum ScopePanelSize {
     static let histogram = CGSize(width: 250, height: 77)
     static let vectorscope = CGSize(width: 190, height: 190)
     static let trafficLights = CGSize(width: 74, height: 168)
+    /// Compact HUD chip (ND number + stops), not a scope plate.
+    static let ndMeter = CGSize(width: 84, height: 30)
 }
 
 /// Display level from `ScopeDisplayScale` → y inside `rect`.

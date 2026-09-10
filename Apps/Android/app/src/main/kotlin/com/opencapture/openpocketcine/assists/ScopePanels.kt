@@ -3,12 +3,15 @@ package com.opencapture.openpocketcine.assists
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -83,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val PanelShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
+private val ChipShape = RoundedCornerShape(percent = 50)
 private val PanelFill = LiveDesign.scopePlate
 private val Boundary = Color(220 / 255f, 235 / 255f, 225 / 255f, 0.8f)
 private val ClipColor = Color(255 / 255f, 150 / 255f, 142 / 255f, 0.8f)
@@ -125,6 +129,7 @@ internal fun MovableAssistPanel(
     onOpenOptions: ((ChromeRect) -> Unit)? = null,
     onActivate: () -> Unit = {},
     fillPlate: Boolean = true,
+    chip: Boolean = false,
     content: @Composable (AssistSize) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -172,6 +177,7 @@ internal fun MovableAssistPanel(
         if (!active) publishSlot(center, sizePx)
     }
     val snapGrid = with(density) { MovablePanelMath.POSITION_GRID.dp.toPx() }
+    val plateShape = if (chip) ChipShape else PanelShape
     Box(
         Modifier
             .offset {
@@ -191,12 +197,12 @@ internal fun MovableAssistPanel(
                 // shadow(clip=true)+clip+Offscreen+border stacked a thick inner edge.
                 .shadow(
                     elevation = 16.dp,
-                    shape = PanelShape,
+                    shape = plateShape,
                     clip = false,
                     ambientColor = Color.Black.copy(alpha = 0.34f),
                     spotColor = Color.Black.copy(alpha = 0.34f),
                 )
-                .clip(PanelShape)
+                .clip(plateShape)
                 .then(if (fillPlate) Modifier.background(LiveDesign.scopePlate) else Modifier)
                 .onGloballyPositioned { panelCoords = it }
                 .pointerInput(tool, enabled) {
@@ -242,7 +248,12 @@ internal fun MovableAssistPanel(
             Canvas(Modifier.matchParentSize()) {
                 val stroke = 1.dp.toPx()
                 val inset = stroke / 2f
-                val radius = (LiveDesign.CORNER_RADIUS_DP.dp.toPx() - inset).coerceAtLeast(0f)
+                val radius =
+                    if (chip) {
+                        (this.size.minDimension / 2f - inset).coerceAtLeast(0f)
+                    } else {
+                        (LiveDesign.CORNER_RADIUS_DP.dp.toPx() - inset).coerceAtLeast(0f)
+                    }
                 drawRoundRect(
                     color = LiveDesign.hairline,
                     topLeft = Offset(inset, inset),
@@ -587,6 +598,9 @@ object NDAssist {
     const val HELP =
         "Meters the live picture against middle gray and suggests a screw-on ND — stops and ND number — to balance it. The app cannot set a filter."
     const val METER_TITLE = "ND"
+    const val NOTATION_TITLE = "Units"
+    const val NOTATION_HELP =
+        "Stops vs middle gray, filter factor (ND16 / ND32 / ND64), or optical density (ND 0.3 = 1 stop)."
 }
 
 @Composable
@@ -594,34 +608,15 @@ internal fun NDMeterPanel(state: LiveAssistState, modifier: Modifier = Modifier)
     val transfer = state.scopeBundle.transfer
     val reading =
         NDFilterRecommendation.reading(state.scopeBundle.samples.histogramLuma, transfer)
-    Column(
-        modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        modifier.fillMaxSize().padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            NDAssist.METER_TITLE,
-            color = LiveDesign.text.copy(alpha = 0.58f),
-            fontSize = 8.5.sp,
-            fontFamily = FontFamily.Monospace,
+            reading?.chipLabel(state.ndNotation) ?: "—",
+            color = if (reading?.needsGlass == true) LiveDesign.accent else LiveDesign.text,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            reading?.ndLabel ?: "—",
-            color = LiveDesign.text,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 1,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            reading?.stopsLabel ?: "—",
-            color = if (reading?.needsGlass == true) LiveDesign.accent else LiveDesign.muted,
-            fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
     }
