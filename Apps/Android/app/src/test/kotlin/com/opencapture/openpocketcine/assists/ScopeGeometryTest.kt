@@ -22,6 +22,8 @@ class ScopeGeometryTest {
         assertEquals(190f, ScopePanelSize.vectorscope.height)
         assertEquals(74f, ScopePanelSize.trafficLights.width)
         assertEquals(168f, ScopePanelSize.trafficLights.height)
+        assertEquals(88f, ScopePanelSize.ndMeter.width)
+        assertEquals(92f, ScopePanelSize.ndMeter.height)
         assertEquals(28f, ScopePanelSize.audio.width)
         assertEquals(168f, ScopePanelSize.audio.height)
     }

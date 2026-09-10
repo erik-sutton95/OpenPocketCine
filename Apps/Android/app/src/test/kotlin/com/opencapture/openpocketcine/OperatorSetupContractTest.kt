@@ -141,6 +141,7 @@ class OperatorSetupContractTest {
                 "HISTO",
                 "VECTOR",
                 "LIGHTS",
+                "ND",
                 "GUIDES",
                 "GRID",
                 "CROSS",
