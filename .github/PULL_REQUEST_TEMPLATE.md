@@ -6,7 +6,9 @@
 
 <!--
 If this PR changes Sources/, Tests/, ios/, Package.swift, scripts/, or justfile, replace
-ios/TestFlight/WhatToTest.en-US.txt:
+ios/TestFlight/WhatToTest.en-US.txt. For a feature summary, use:
+- New features (1-6 bullets; new app capabilities only)
+For detailed tester notes, use all three sections:
 - New and changed (1-6 bullets)
 - Fixes (1-8 bullets)
 - What to test (1-5 concrete actions)

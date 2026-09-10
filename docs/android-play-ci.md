@@ -121,7 +121,18 @@ operator copy for GitHub / email, same shape as TestFlight.
 
 Any pull request that can trigger a Play upload must replace
 `Apps/Android/Play/WhatToTest.en-US.txt` **and** the 500-character
-`whatsnew-en-US`. Required What to Test format:
+`whatsnew-en-US`. For a feature summary, use **New features** with 1-6 bullets.
+Include only new Android capabilities in the release window; omit fixes,
+maintenance and test instructions. Keep the Play paragraph focused on the same
+features and within its 500-character limit:
+
+```text
+New features
+
+- ND assist suggests a filter strength to help balance exposure.
+```
+
+For detailed tester notes, use all three sections in this order:
 
 ```text
 New and changed

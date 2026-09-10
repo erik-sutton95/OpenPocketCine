@@ -45,7 +45,17 @@ connects this GitHub repo, and defines the `main` Archive workflow.
 ## Tester-facing release notes
 
 TestFlight notes are reviewed product copy, not a git log. Any pull request that can trigger a
-TestFlight build must replace `ios/TestFlight/WhatToTest.en-US.txt`. Required format:
+TestFlight build must replace `ios/TestFlight/WhatToTest.en-US.txt`. For a feature
+summary, use **New features** with 1-6 bullets. Include only new capabilities in
+the release window; omit fixes, maintenance and test instructions:
+
+```text
+New features
+
+- ND assist suggests a filter strength to help balance exposure.
+```
+
+For detailed tester notes, use all three sections in this order:
 
 ```text
 New and changed
