@@ -3,6 +3,11 @@
 Deploy-ready assets only. Raw plates, phone frames, and compositor scratch
 belong under `/tmp` or a gitignored `.local/marketing/` tree — not in `site/`.
 
+The homepage versions `app.css` and `app.js` URLs with the first 12 characters of
+each file's SHA-256 hash. After editing either file, update its `?v=` value in
+`site/index.html`; `just site-check` prints the required URL. This keeps cached
+styles and animation code in sync with the page.
+
 - `icon.png` is the OpenPocketCine mark: a production monitor on DJI Black.
 - `screens/*.webp` are the landing-page mockups and Osmo product stills loaded by `site/index.html`.
 - `frameio.png` is an identification lockup for Frame.io upload copy. Frame.io is
