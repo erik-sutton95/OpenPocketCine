@@ -277,6 +277,16 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertTrue(MediaDelivery.convertLogAvailable(files: [file], shotColors: []))
         XCTAssertTrue(MediaDelivery.convertLogAvailable(files: [file], shotColors: [.dLog]))
         XCTAssertFalse(MediaDelivery.convertLogAvailable(files: [file], shotColors: [.normal]))
+        XCTAssertTrue(
+            MediaDelivery.convertLogAvailable(files: [file, file], shotColors: [.normal, nil]))
+        XCTAssertTrue(
+            MediaDelivery.convertLogAvailable(files: [file, file], shotColors: [nil, .normal]))
+        XCTAssertFalse(
+            MediaDelivery.convertLogAvailable(files: [photo, file], shotColors: [nil, .normal]))
+        XCTAssertFalse(
+            MediaDelivery.convertLogAvailable(files: [file, file], shotColors: [.normal, .hdr]))
+        XCTAssertTrue(
+            MediaDelivery.convertLogAvailable(files: [file, file], shotColors: [.dLog, .dLog2]))
     }
 
     func testPlaybackCandidatesPreferProxyThenOriginalOnBothStores() {

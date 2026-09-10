@@ -45,6 +45,37 @@ if [[ "$printed_notes" == *"check passed"* || "$printed_notes" != *"Osmo Pocket"
   exit 1
 fi
 
+cat > "${temp_dir}/features.txt" <<'EOF'
+New features
+
+- ND assist suggests a filter strength.
+EOF
+expect_pass "${temp_dir}/features.txt"
+expected_notes="$(cat "${temp_dir}/features.txt"; printf '\n\n# Play whatsnew (en-US)\n\n'; cat "$whatsnew")"
+if [[ "$("$printer" "${temp_dir}/features.txt" "$whatsnew" 2>/dev/null)" != "$expected_notes" ]]; then
+  printf 'Release-notes printer changed the feature summary.\n' >&2
+  exit 1
+fi
+
+printf 'New features\n' > "${temp_dir}/empty-features.txt"
+expect_fail "${temp_dir}/empty-features.txt"
+
+for suffix in 'New features' 'New and changed' 'Fixes' 'What to test'; do
+  cat "${temp_dir}/features.txt" > "${temp_dir}/mixed-features.txt"
+  printf '\n%s\n\n- Another visible change.\n' "$suffix" >> "${temp_dir}/mixed-features.txt"
+  expect_fail "${temp_dir}/mixed-features.txt"
+done
+
+for _ in {2..6}; do
+  printf '%s\n' '- Another visible feature.' >> "${temp_dir}/features.txt"
+done
+expect_pass "${temp_dir}/features.txt"
+printf '%s\n' '- A seventh feature exceeds the limit.' >> "${temp_dir}/features.txt"
+expect_fail "${temp_dir}/features.txt"
+
+printf 'New features\n\n- Added a GUID migration.\n' > "${temp_dir}/feature-jargon.txt"
+expect_fail "${temp_dir}/feature-jargon.txt"
+
 cat > "${temp_dir}/jargon.txt" <<'EOF'
 New and changed
 

@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.NDFilterNotation
 import com.opencapture.openpocketcine.LivePopupCloseButton
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalOperatorHaptics
@@ -187,7 +188,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.HISTO -> HistogramOptions(state)
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
-        LiveAssistTool.ND -> OptionCopy(NDAssist.HELP)
+        LiveAssistTool.ND -> NdOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
         LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
@@ -442,6 +443,27 @@ private fun LightsOptions(state: LiveAssistState) {
             state.setCompensation(it)
         }
     }
+}
+
+@Composable
+private fun NdOptions(state: LiveAssistState) {
+    val haptics = LocalOperatorHaptics.current
+    SettingsInlineRow(
+        NDAssist.NOTATION_TITLE,
+        help = NDAssist.NOTATION_HELP,
+        showTopDivider = false,
+        stacked = true,
+    ) {
+        SettingsSegmented(
+            options = NDFilterNotation.entries.map { it.editorLabel },
+            selected = state.ndNotation.editorLabel,
+        ) { label ->
+            haptics.selection()
+            state.ndNotation = NDFilterNotation.fromEditorLabel(label)
+            state.persist()
+        }
+    }
+    OptionCopy(NDAssist.HELP)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -97,4 +97,33 @@ class NDFilterRecommendationTest {
         assertEquals("+2.3", NDFilterRecommendation.stopsLabel(2.3))
         assertEquals("−1.0", NDFilterRecommendation.stopsLabel(-1.0))
     }
+
+    @Test
+    fun densityIsThreeTenthsPerStop() {
+        assertEquals(0.3, NDFilterRecommendation.DENSITY_PER_STOP, 1e-12)
+        assertEquals("ND 0.0", NDFilterRecommendation.densityLabel(0.0))
+        assertEquals("ND 0.3", NDFilterRecommendation.densityLabel(1.0))
+        assertEquals("ND 0.4", NDFilterRecommendation.densityLabel(4.0 / 3.0))
+        assertEquals("ND 1.5", NDFilterRecommendation.densityLabel(5.0))
+        assertEquals("ND −0.3", NDFilterRecommendation.densityLabel(-1.0))
+    }
+
+    @Test
+    fun chipLabelFollowsNotation() {
+        val hot = NDFilterRecommendation.suggestion(5.0)
+        assertEquals("+5.0", hot.chipLabel(NDFilterNotation.STOPS))
+        assertEquals("ND32", hot.chipLabel(NDFilterNotation.FACTOR))
+        assertEquals("ND 1.5", hot.chipLabel(NDFilterNotation.DENSITY))
+        val tiffen = NDFilterRecommendation.suggestion(4.0 / 3.0)
+        assertEquals("ND 0.4", tiffen.chipLabel(NDFilterNotation.DENSITY))
+        assertEquals("ND2", tiffen.chipLabel(NDFilterNotation.FACTOR))
+        val under = NDFilterRecommendation.suggestion(-1.5)
+        assertEquals("—", under.chipLabel(NDFilterNotation.FACTOR))
+        assertEquals("−1.5", under.chipLabel(NDFilterNotation.STOPS))
+        assertEquals("Stops", NDFilterNotation.STOPS.editorLabel)
+        assertEquals("ND32", NDFilterNotation.FACTOR.editorLabel)
+        assertEquals("ND 0.3", NDFilterNotation.DENSITY.editorLabel)
+        assertEquals(NDFilterNotation.FACTOR, NDFilterNotation.fromPersisted("factor"))
+        assertEquals(NDFilterNotation.DENSITY, NDFilterNotation.fromEditorLabel("ND 0.3"))
+    }
 }

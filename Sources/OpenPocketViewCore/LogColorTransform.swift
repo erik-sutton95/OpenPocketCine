@@ -43,6 +43,17 @@ public enum LogColorTransform: String, Equatable, Sendable, CaseIterable, Identi
         }
     }
 
+    /// One destination per batch. A clip already on that curve needs no transform.
+    public static func converting(
+        from colorMode: ColorMode, to destination: MonitorTransfer
+    ) -> LogColorTransform? {
+        guard let transform = converting(from: colorMode), transform.destination == destination
+        else {
+            return nil
+        }
+        return transform
+    }
+
     public func apply(r: Double, g: Double, b: Double) -> (r: Double, g: Double, b: Double) {
         let linear = LiveColorScience.linearizeRGB(
             red: r, green: g, blue: b, transfer: source)

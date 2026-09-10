@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.opencapture.openpocketcine.NDFilterNotation
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
@@ -126,6 +127,7 @@ class LiveAssistState(
     var lightsCenter by mutableStateOf<StoredCenter?>(null)
     var ndScale by mutableDoubleStateOf(1.0)
     var ndCenter by mutableStateOf<StoredCenter?>(null)
+    var ndNotation by mutableStateOf(NDFilterNotation.FACTOR)
 
     /** Last-moved / last-selected is last. Compose and Vulkan draw in this order. */
     var scopeStack by mutableStateOf(defaultScopeStack)
@@ -468,6 +470,7 @@ class LiveAssistState(
             .put("lightsCenter", encodeCenter(lightsCenter))
             .put("ndScale", ndScale)
             .put("ndCenter", encodeCenter(ndCenter))
+            .put("ndNotation", ndNotation.persisted)
             .put("scopeStack", JSONArray(scopeStack.map { it.name }))
             .toString()
     }
@@ -543,6 +546,7 @@ class LiveAssistState(
         lightsCenter = decodeCenter(obj.optJSONObject("lightsCenter"))
         ndScale = MovablePanelMath.clampedScale(obj.optDouble("ndScale", 1.0))
         ndCenter = decodeCenter(obj.optJSONObject("ndCenter"))
+        ndNotation = NDFilterNotation.fromPersisted(obj.optString("ndNotation", NDFilterNotation.FACTOR.persisted))
         scopeStack = decodeScopeStack(obj.optJSONArray("scopeStack"))
     }
 

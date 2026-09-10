@@ -3,6 +3,14 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct LogColorTransformTests {
+    @Test func mixedBatchesUseOneDestinationAndPassThroughMatchingClips() {
+        #expect(LogColorTransform.converting(from: .dLog, to: .dlog2) == .dLogToDLog2)
+        #expect(LogColorTransform.converting(from: .dLog2, to: .dlog2) == nil)
+        #expect(LogColorTransform.converting(from: .dLog2, to: .dlog) == .dLog2ToDLog)
+        #expect(LogColorTransform.converting(from: .dLog, to: .dlog) == nil)
+        #expect(LogColorTransform.converting(from: .normal, to: .dlog2) == nil)
+    }
+
     @Test func convertsOnlyDLogAndDLog2() {
         #expect(LogColorTransform.converting(from: .dLog) == .dLogToDLog2)
         #expect(LogColorTransform.converting(from: .dLog2) == .dLog2ToDLog)

@@ -31,9 +31,11 @@ All notable changes to this project are documented here. The format is based on
 
 - ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
   meters the live picture against middle gray and suggests a screw-on
-  ND in stops and ND number (`ND32` / `+5.0`) to balance the frame.
-  Off unless you turn the chip on. The app cannot set a filter. iOS
-  and Android.
+  ND to balance the frame. Small HUD chip, parked bottom-left above the
+  assist bar; hold-drag to move. Long-press **Units** switches Stops
+  (`+5.0`), filter factor (`ND32`), and optical density (`ND 0.3` /
+  `ND 0.4`). Off unless you turn the chip on. The app cannot set a
+  filter. iOS and Android.
 
 - Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
   One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,

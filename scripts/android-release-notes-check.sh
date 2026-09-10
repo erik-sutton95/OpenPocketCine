@@ -32,17 +32,24 @@ if grep -Eq $'[\t]|  ' "$whatsnew_path"; then
   fail "${whatsnew_path} should be a single compact paragraph for Play"
 fi
 
-# Three sections, in order — same contract as TestFlight, for Android testers.
+# Accept the same compact feature summary or detailed tester format as TestFlight.
 if ! awk '
   BEGIN {
     section = 0
     new_headings = 0
+    feature_headings = 0
     fix_headings = 0
     test_headings = 0
     new_bullets = 0
     fix_bullets = 0
     test_bullets = 0
     invalid = 0
+  }
+  $0 == "New features" {
+    feature_headings++
+    if (section != 0) invalid = 1
+    section = 1
+    next
   }
   $0 == "New and changed" {
     new_headings++
@@ -72,13 +79,18 @@ if ! awk '
   }
   { invalid = 1 }
   END {
+    if (feature_headings > 0) {
+      if (feature_headings != 1 || new_headings || fix_headings || test_headings || invalid) exit 1
+      if (new_bullets < 1 || new_bullets > 6) exit 1
+      exit 0
+    }
     if (new_headings != 1 || fix_headings != 1 || test_headings != 1 || invalid) exit 1
     if (new_bullets < 1 || new_bullets > 6) exit 1
     if (fix_bullets < 1 || fix_bullets > 8) exit 1
     if (test_bullets < 1 || test_bullets > 5) exit 1
   }
 ' "$notes_path"; then
-  fail "use 'New and changed', 'Fixes', 'What to test' in that order, with 1-6 / 1-8 / 1-5 bullets"
+  fail "use 'New features' with 1-6 bullets, or 'New and changed', 'Fixes', 'What to test' with 1-6 / 1-8 / 1-5 bullets"
 fi
 
 if grep -Eiq '^- (feat|fix|perf|refactor|chore|build|test|style)(\([^)]+\))?!?:' "$notes_path"; then

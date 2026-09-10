@@ -95,13 +95,10 @@ struct MediaDeliveryPopup: View {
     private var convertLogAvailable: Bool {
         MediaDelivery.convertLogAvailable(
             files: files,
-            shotColors: files.compactMap { session.shotColor(for: $0) })
+            shotColors: files.map { session.shotColor(for: $0) })
     }
     private var previewTransform: LogColorTransform? {
-        guard configuration.convertLog, let file = files.first,
-            let color = session.shotColor(for: file)
-        else { return nil }
-        return LogColorTransform.converting(from: color)
+        configuration.convertLog ? configuration.logTransform : nil
     }
     private var convertLogBinding: Binding<Bool> {
         Binding(
@@ -136,6 +133,12 @@ struct MediaDeliveryPopup: View {
         .frame(maxWidth: 420)
         .frame(maxHeight: maxCardHeight, alignment: .bottom)
         .onAppear {
+            if let firstLog = files.filter({ $0.kind == .video })
+                .compactMap({ session.shotColor(for: $0) })
+                .compactMap({ LogColorTransform.converting(from: $0) }).first
+            {
+                configuration.logTransform = firstLog
+            }
             if !lutAvailable { configuration.bakeLUT = false }
             if !convertLogAvailable { configuration.convertLog = false }
             if let saved = FrameioDestination.loaded {
@@ -560,6 +563,21 @@ struct MediaDeliveryPopup: View {
                     : MediaDeliveryCopy.convertLogHelpUnavailable,
                 isOn: convertLogBinding,
                 enabled: convertLogAvailable)
+            if configuration.convertLog {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(MediaDeliveryCopy.convertLogDestination)
+                        .font(LiveType.ui(size: 14, weight: .semibold))
+                    Picker(
+                        MediaDeliveryCopy.convertLogDestination,
+                        selection: $configuration.logTransform
+                    ) {
+                        ForEach(LogColorTransform.allCases) { transform in
+                            Text(transform.destination.label).tag(transform)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
             toggleRow(
                 MediaDeliveryCopy.bakeLUT,
                 help: lutAvailable

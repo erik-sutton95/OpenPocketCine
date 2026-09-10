@@ -368,14 +368,15 @@ enum MediaDeliveryRunner {
         let cube: CubeLUT?
         if request.configuration.convertLog {
             let color =
-                model.session.shotColor(for: file)
-                ?? ClipColorProfileIO.shotColor(at: source, path: file.path)
+                ClipColorProfileIO.shotColor(at: source, path: file.path)
+                ?? model.session.shotColor(for: file)
             if let color { model.session.rememberShotColor(color, for: file) }
-            guard let color, let resolved = LogColorTransform.converting(from: color) else {
+            guard let color, LogColorTransform.converting(from: color) != nil else {
                 throw MediaDeliveryError.convertLogNotLog(file.filename)
             }
-            transform = resolved
-            cube = resolved.cube()
+            transform = LogColorTransform.converting(
+                from: color, to: request.configuration.logTransform.destination)
+            cube = nil  // MediaLUT owns the encoded-value conversion path.
         } else if request.configuration.bakeLUT {
             transform = nil
             cube = model.assist.exportLUTCube(
@@ -388,9 +389,12 @@ enum MediaDeliveryRunner {
         let result = try await MediaLUT.export(
             sourceURL: source,
             outputFilename: MediaDelivery.filename(
-                for: file, configuration: request.configuration, transform: transform),
+                for: file, configuration: request.configuration,
+                transform: request.configuration.convertLog
+                    ? request.configuration.logTransform : nil),
             format: request.configuration.exportFormat,
             cube: cube,
+            logTransform: transform,
             metadata: MediaDelivery.metadata(
                 for: file, configuration: request.configuration,
                 lutName: model.assist.lutStatusLabel,

@@ -1,5 +1,24 @@
 import Foundation
 
+/// How the ND chip names the reading. Operator setting, not a camera SET.
+public enum NDFilterNotation: String, CaseIterable, Sendable, Codable, Equatable {
+    /// Signed stops vs middle gray (`+5.0`).
+    case stops
+    /// Filter factor (`ND16` / `ND32` / `ND64`).
+    case factor
+    /// Optical density (`ND 0.4`). 0.3 per stop.
+    case density
+
+    /// Long-press segmented copy.
+    public var editorLabel: String {
+        switch self {
+        case .stops: "Stops"
+        case .factor: "ND32"
+        case .density: "ND 0.3"
+        }
+    }
+}
+
 /// Live-picture ND reading. Suggestion only — not a SET.
 public struct NDFilterSuggestion: Equatable, Sendable {
     /// Stops vs 18% grey. Positive is hot.
@@ -23,6 +42,14 @@ public struct NDFilterSuggestion: Equatable, Sendable {
         self.ndLabel = ndLabel
         self.stopsLabel = stopsLabel
     }
+
+    public func chipLabel(_ notation: NDFilterNotation) -> String {
+        switch notation {
+        case .stops: stopsLabel
+        case .factor: ndLabel
+        case .density: NDFilterRecommendation.densityLabel(pictureStops)
+        }
+    }
 }
 
 /// Meters the live luma histogram against middle gray and names a screw-on ND
@@ -33,6 +60,8 @@ public enum NDFilterRecommendation: Sendable {
     /// 1…9 are powers of two; 10 stops is the conventional ND1000, not 1024.
     public static let opticalFactors = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1_000]
     public static let noneLabel = "—"
+    /// Cinema optical density: 1 stop ≈ ND 0.3 (Tiffen ND 0.4 is 1⅓ stops).
+    public static let densityPerStop = 0.3
 
     public static func opticalFactor(stops: Int) -> Int {
         guard stops >= minStops else { return 1 }
@@ -46,10 +75,19 @@ public enum NDFilterRecommendation: Sendable {
     }
 
     public static func stopsLabel(_ stops: Double) -> String {
-        guard stops.isFinite else { return "—" }
+        guard stops.isFinite else { return noneLabel }
         if abs(stops) < 0.05 { return "0.0" }
         let sign = stops > 0 ? "+" : "−"
         return sign + String(format: "%.1f", abs(stops))
+    }
+
+    /// Optical density of the picture (`ND 0.4`). Signed when under.
+    public static func densityLabel(_ stops: Double) -> String {
+        guard stops.isFinite else { return noneLabel }
+        let density = stops * densityPerStop
+        if abs(density) < 0.05 { return "ND 0.0" }
+        let sign = density > 0 ? "" : "−"
+        return "ND \(sign)\(String(format: "%.1f", abs(density)))"
     }
 
     /// Median luma vs 18% grey, in stops. Nil when the histogram is empty.

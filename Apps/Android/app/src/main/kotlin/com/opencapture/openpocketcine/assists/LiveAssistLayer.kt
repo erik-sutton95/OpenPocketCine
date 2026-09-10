@@ -278,7 +278,7 @@ private fun StackedScopePanel(
                     ScopePanelSize.ndMeter,
                     state.ndScale,
                     state.ndCenter,
-                    MovablePanelMath.defaultCenterBottomTrailing(
+                    MovablePanelMath.defaultCenterBottomLeading(
                         feed,
                         panelPx(ScopePanelSize.ndMeter, state.ndScale, density),
                         canvas,
@@ -310,6 +310,7 @@ private fun StackedScopePanel(
             onOpenOptions = onOpenOptions?.let { present -> { frame -> present(tool, frame) } },
             onActivate = { state.bringToFront(tool) },
             fillPlate = tool == LiveAssistTool.LIGHTS || tool == LiveAssistTool.ND,
+            chip = tool == LiveAssistTool.ND,
         ) {
             when (tool) {
                 LiveAssistTool.WAVE -> WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())

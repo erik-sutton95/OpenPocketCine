@@ -96,6 +96,8 @@ struct MediaDeliveryConfiguration: Sendable {
     var bakeLUTExposure = true
     /// Technical D-Log ↔ D-Log2 convert. Exclusive with ``bakeLUT``.
     var convertLog = false
+    /// The destination applies to the whole selection, including mixed log clips.
+    var logTransform: LogColorTransform = .dLogToDLog2
     var exportFormat: MediaExportFormat = .mov
     var includeMetadata = true
     var forceFrameioReupload = false
@@ -115,7 +117,8 @@ enum MediaDeliveryCopy {
         "Write the LUT exposure pull into the file so it matches the monitor. Off bakes the cube at 0.0."
     static let convertLog = "Convert log"
     static let convertLogHelp =
-        "Technical transform so D-Log and D-Log2 clips share one curve. Not a look. Camera original is untouched."
+        "Choose one output curve for every selected D-Log or D-Log2 clip. Camera originals stay untouched."
+    static let convertLogDestination = "Output curve"
     static let convertLogHelpUnavailable =
         "Needs a D-Log or D-Log2 clip — Rec.709 stays as-shot."
 
@@ -183,10 +186,14 @@ struct MediaDeliveryBatchResult: Sendable {
 enum MediaDelivery {
     /// Convert log is video-only. Unknown shot color stays available until export
     /// reads the original; Rec.709 / HLG / D-Log M disable the toggle.
-    static func convertLogAvailable(files: [MediaFile], shotColors: [ColorMode]) -> Bool {
-        guard files.contains(where: { $0.kind == .video }) else { return false }
-        if shotColors.isEmpty { return true }
-        return shotColors.contains { LogColorTransform.converting(from: $0) != nil }
+    static func convertLogAvailable(files: [MediaFile], shotColors: [ColorMode?]) -> Bool {
+        files.enumerated().contains { index, file in
+            guard file.kind == .video else { return false }
+            guard shotColors.indices.contains(index), let color = shotColors[index] else {
+                return true
+            }
+            return LogColorTransform.converting(from: color) != nil
+        }
     }
 
     static func filename(

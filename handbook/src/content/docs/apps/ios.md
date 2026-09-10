@@ -36,9 +36,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
-  View Assist **ND** meters the live picture against middle gray and
-  suggests a screw-on ND in stops and ND number to balance the frame.
-  The app cannot set a filter.
+  View Assist **ND** is a small chip on the live picture (bottom-left,
+  above the assist bar; hold-drag to move). Long-press to switch Stops,
+  ND32, or ND 0.3. It meters against middle gray and suggests a screw-on
+  ND to balance the frame. The app cannot set a filter.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
@@ -89,10 +90,11 @@ project with XcodeGen — see [Setup](../guides/setup/).
   original. Storage **Full Resolution Caching** (on by default) also caches
   the original when you open a clip. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default).
-  Convert log (off by default, exclusive with Bake LUT) rewrites D-Log as
-  D-Log2 or the reverse so mixed zoom takes share one curve — a technical
-  transform, not a look. Rec.709 stays Bake LUT. Camera original is
-  untouched. D-Log M is not converted.
+  Convert log (off by default, exclusive with Bake LUT) offers an **Output
+  curve** choice: D-Log or D-Log2 for the whole selection. Clips already on
+  that curve keep their pixels; other log clips are converted and tagged with
+  the destination curve. This is a technical transform, not a look.
+  Camera originals stay untouched. Rec.709 stays Bake LUT; D-Log M is not converted.
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 - **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
 
