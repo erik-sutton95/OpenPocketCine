@@ -32,6 +32,7 @@ import os
 final class HevcDecoder {
     let displayLayer = AVSampleBufferDisplayLayer()
     private(set) var hasFormat = false
+    private var hasSubmittedRandomAccess = false
     private(set) var nalTypesSeen: Set<Int> = []
     private(set) var decoderErrors = 0
     /// Last VT / layer decode failure. `decoderErrors` is cumulative — one bad
@@ -40,6 +41,8 @@ final class HevcDecoder {
     private(set) var lastKeyframeAt: Date?
     /// Last AU enqueued or VT frame presented. Watchdog stall signal (not keyframe age).
     private(set) var lastPresentedAt: Date?
+    /// New source pictures only; cached LUT/layout redraws never advance this.
+    private(set) var lastSourceFrameAt: Date?
     /// True after `flushAndRemoveImage` until a replacement sample is presented.
     private(set) var displayedImageRemoved = false
     /// GOP-reset recover: drop P-frames until the next IDR so the layer cannot fail to black.
@@ -81,7 +84,7 @@ final class HevcDecoder {
             guard processedFeed !== oldValue, let buffer = lastDecodedBuffer,
                 effects.needsGPUFeed
             else { return }
-            handleDecodedFrame(buffer)
+            handleDecodedFrame(buffer, isNewSourceFrame: false)
         }
     }
     weak var sampleBus: LiveFrameSampleBus? {
@@ -175,6 +178,9 @@ final class HevcDecoder {
     }
 
     private var shouldStartVT: Bool {
+        // AVC must keep the decoder that receives the first IDR. Switching from
+        // compressed-layer decode to VT after enqueue loses its reference state.
+        if liveCodec == .avc { return true }
         if prefersPixelBufferDisplay { return true }
         guard hardwareDecoderUnlocked else { return false }
         return effects.needsSample || sessionOwnsVT
@@ -207,8 +213,10 @@ final class HevcDecoder {
 
     /// UDP may still be alive. This is a present hitch, not a recover enable.
     var isPresentFrozen: Bool {
-        FeedPresentPolicy.isFrozen(
-            secondsSinceLastPresent: monitorPresentedAt.map { Date().timeIntervalSince($0) })
+        let now = Date()
+        return FeedPresentPolicy.isFrozen(
+            secondsSinceLastPresent: monitorPresentedAt.map { now.timeIntervalSince($0) },
+            secondsSinceLastDecodedFrame: lastSourceFrameAt.map { now.timeIntervalSince($0) })
     }
 
     /// Last HEVC picture is still on the layer; release it only when a VT frame is in hand.
@@ -319,6 +327,7 @@ final class HevcDecoder {
         var slices: [[UInt8]] = []
         let nals = Hevc.nalUnits(accessUnit)
         if liveCodec == nil { liveCodec = LiveVideo.detect(nals: nals) }
+        guard let liveCodec else { return false }
         let avc = liveCodec == .avc
         for nal in nals where !nal.isEmpty {
             if avc {
@@ -366,6 +375,10 @@ final class HevcDecoder {
                 onParameterSetsChanged?()
             }
         }
+        // A P-frame accepted by AVSampleBufferDisplayLayer is not a decoded
+        // first picture. Without a random-access frame it can silently render
+        // nothing, yet marking it presented would disable first-picture recovery.
+        guard hasSubmittedRandomAccess || hasIDR else { return false }
         guard
             FeedWatchdog.shouldPresentSample(
                 hasPicture: !slices.isEmpty, awaitingIDR: awaitingIDR, isIDR: hasIDR
@@ -393,7 +406,9 @@ final class HevcDecoder {
             }
             // Do not fall through to HEVC enqueue — that dual-decodes and can
             // fail the layer to black when presentProcessed misses one AU.
-            return presentProcessed(sample)
+            let submitted = presentProcessed(sample)
+            if submitted && hasIDR { hasSubmittedRandomAccess = true }
+            return submitted
         } else {
             vtOwnsHardwareDecode = false
             displayLayer.isHidden = false
@@ -416,7 +431,9 @@ final class HevcDecoder {
                 return false
             }
         }
+        if hasIDR { hasSubmittedRandomAccess = true }
         finishLayerHandoffIfNeeded()
+        lastSourceFrameAt = Date()
         notePresentedFrame(sampleRate: true)
         return true
     }
@@ -426,25 +443,33 @@ final class HevcDecoder {
     nonisolated func handleDecodedFrame(
         _ imageBuffer: CVPixelBuffer,
         effects: LiveImageEffects? = nil,
-        transfer: MonitorTransfer? = nil
+        transfer: MonitorTransfer? = nil,
+        isNewSourceFrame: Bool = true
     ) {
-        onIdentityFrame?(imageBuffer)
+        let sourceTime = Date()
+        if isNewSourceFrame { onIdentityFrame?(imageBuffer) }
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
         assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: 0) {
             [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let presented = self.applyAssistResult(result)
-                // Decoding and presentation are distinct: failed output must not keep
-                // watcher recovery or the camera's presentation health alive.
-                if result.shouldPresent { self.sampleBus?.noteDecodedFrame() }
-                if presented { self.notePresentedFrame(sampleRate: true) }
+                let presented = self.applyAssistResult(
+                    result, isNewSourceFrame: isNewSourceFrame)
+                // Cached repaints cannot refresh camera or watcher liveness.
+                if result.shouldPresent && isNewSourceFrame {
+                    self.lastSourceFrameAt = sourceTime
+                    self.sampleBus?.noteDecodedFrame()
+                }
+                if presented && isNewSourceFrame {
+                    self.notePresentedFrame(sampleRate: true)
+                }
             }
         }
     }
 
     func reset() {
+        hasSubmittedRandomAccess = false
         finishDisplayWait(false)
         stopSimulatorSample()
         format = nil
@@ -459,6 +484,7 @@ final class HevcDecoder {
         decoderErrors = 0
         lastKeyframeAt = nil
         lastPresentedAt = nil
+        lastSourceFrameAt = nil
         sawKeyframe = false
         displayedImageRemoved = false
         awaitingIDR = false
@@ -676,7 +702,8 @@ final class HevcDecoder {
             processedFeed?.setOverlayChrome(false)
             processedFeed?.isHidden = true
             if let buffer = lastDecodedBuffer, isDisplayReady {
-                _ = enqueueDecodedFrame(buffer, recoverOnFailure: false)
+                _ = enqueueDecodedFrame(
+                    buffer, recoverOnFailure: false, isNewSourceFrame: false)
             }
         } else if overlay {
             // Zebra / peaking / false colour ride on top of the identity layer.
@@ -777,7 +804,9 @@ final class HevcDecoder {
         }
     }
 
-    private func applyAssistResult(_ result: LiveAssistEngine.Result) -> Bool {
+    private func applyAssistResult(
+        _ result: LiveAssistEngine.Result, isNewSourceFrame: Bool = true
+    ) -> Bool {
         if let bundle = result.bundle {
             sampleBus?.publish(
                 source: result.source,
@@ -804,7 +833,8 @@ final class HevcDecoder {
         // went black while tracking still worked.
         if usesPixelBufferDisplay, !metalOwnsPicture {
             displayLayer.isHidden = false
-            presentedIdentity = enqueueDecodedFrame(result.source, recoverOnFailure: false)
+            presentedIdentity = enqueueDecodedFrame(
+                result.source, recoverOnFailure: false, isNewSourceFrame: isNewSourceFrame)
         } else if !replaceIdentity {
             displayLayer.isHidden = false
         }
@@ -1149,8 +1179,9 @@ final class HevcDecoder {
 
     /// Zero-copy present of a VT frame. Uncompressed — the layer must not start a second HEVC decoder.
     @discardableResult
-    func enqueueDecodedFrame(_ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true)
-        -> Bool
+    func enqueueDecodedFrame(
+        _ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true, isNewSourceFrame: Bool = true
+    ) -> Bool
     {
         guard commitPictureFlipIfNeeded() else { return false }
         guard Self.isPresentable(imageBuffer) else { return false }
@@ -1206,7 +1237,11 @@ final class HevcDecoder {
             return false
         }
         finishLayerHandoffIfNeeded()
-        notePresentedFrame()
+        if isNewSourceFrame {
+            notePresentedFrame()
+        } else {
+            displayedImageRemoved = false
+        }
         return true
     }
 

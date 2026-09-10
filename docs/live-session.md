@@ -226,3 +226,102 @@ the live well repeats it after 8 s with no picture when a tunnel is on.
 - Wire format: [protocol handbook live view](https://openpocketcine.app/docs/protocol/live-view/)
   (Markdown source: `handbook/src/content/docs/protocol/live-view.md`)
 - One client vs many (camera multicast won't-do): [`protocol-notes.md`](protocol-notes.md#one-client-vs-many)
+
+## Nano queue pressure
+
+iOS frame assembly latches AVC or HEVC from parameter sets before classifying
+queued access units for overflow protection. Nano AVC P-slice `41` must not be
+treated as HEVC VPS, and AVC SPS/PPS/IDR must survive the pending-frame cap.
+The codec latch survives draining the main-thread queue and resets with the
+assembler. This prevents incorrect Nano keyframe eviction during a backlog;
+it does not establish a cause for every short network or display gap.
+
+## Nano transport assembly
+
+A picture may cross the 63-packet transport group boundary. The shared
+`HevcDepacketizer` uses the DJI header's declared encoded length, validates
+video sequence continuity, and emits immediately on the final packet. A lost
+fragment drops the incomplete picture; a new marker starts a fresh assembly.
+Buffers are bounded to 4 MiB plus the 16-byte header. Unsized legacy input
+retains group-based assembly.
+
+`Hevc.nalUnits` skips the exact Nano private AVC SEI payload (`06 f0 19`,
+25 raw bytes, trailing `80`) by length. Those raw bytes can contain Annex-B
+start-code patterns and must not be passed to a decoder as fake slices.
+A physical iPhone replay previously returned bad-data errors for valid camera
+traffic; complete assembly plus metadata filtering decoded all 359 pictures.
+Live Nano normal-monitor validation on the same iPhone matched about 25 fps,
+with every assembled picture decoded; the operator confirmed the freezes gone.
+This changes neither the ACK cadence nor enable-once/watchdog ownership.
+
+## Pocket 3 first-picture random access
+
+A failed Pocket 3 iPhone session delivered complete AVC access units and repeated
+SPS/PPS but no IDR in the sampled interval. The monitor displayed zero frames
+while its compressed-layer enqueue path had already set `lastPresentedAt`.
+That incorrectly settled first-picture recovery before a decodable picture.
+
+The iOS decoder now accepts parameter sets but does not submit initial inter
+frames until an AVC IDR or HEVC IRAP can be submitted. The gate resets with the
+decoder lifetime and leaves established-stream recovery unchanged. A regression
+using SPS/PPS plus an inter frame failed before this change: decode returned true
+and set a presentation timestamp. Physical repeated Pocket 3 validation remains
+required; this is not yet a claim that all first-picture failures are resolved.
+
+The physical startup trace narrowed this further: the initial AVC IDR went to
+the compressed display layer, then an assist handoff started an empty VT decoder
+mid-GOP. The fix starts AVC in VideoToolbox from its first parameter sets and
+keeps that decoder through assist changes. First-picture recovery no longer
+settles from a compressed enqueue alone on AVC. A Pocket 3 iPhone showed live
+video at approximately 25 fps after this change; repeated joins remain in progress.
+The hidden warmup overlay is also removed from accessibility when picture is ready.
+
+### False-color exposure updates
+
+The iOS compositor retains an atomic paint/mask pair for each cached look while
+exposure changes warm its replacement. Async cube construction uses captured
+exposure anchors for WAVE-axis mapping; it never reads changing ISO
+inside the lattice walk. Pending exposure updates coalesce, and a return to the
+currently displayed exposure cancels adoption of an obsolete build. The initial
+map still warms asynchronously. This addresses paint disappearing while zebra and
+the underlying video remain present; it does not validate D-Log M calibration.
+
+Physical check, 2026-09-10: Pocket 3 on iPhone passed five consecutive normal
+SoftAP reconnects with decoded live frames; first and last screenshot samples
+showed the picture. A subsequent ~30-second run with auto ISO, Limits false color,
+and waveform retained false-color paint in all 60 sampled screen captures at
+approximately 25 fps. This sample does not exclude sub-sample hitches or validate
+D-Log M thresholds. Nano regression and Multiview lifecycle checks remain separate.
+
+### Rotation and fit/fill alignment
+
+`DisplayLayerView` commits the shared picture host, video layer, and assist view
+geometry with both UIKit animations and implicit Core Animation actions disabled.
+It removes interrupted child bounds/position animations and lays out the Metal
+view within that same update. The enclosing container may still rotate as one
+picture. This does not flush the feed, hide assists, or restart the decoder.
+
+Physical reproduction on 2026-09-10: eight portrait fit/fill toggles and four
+orientation changes, with a temporary probe comparing the video and overlay
+presentation rectangles 50 ms after layout. Before the fix the maximum mismatch
+was approximately 630 points; after it all 12 samples matched exactly. False
+color, peaking, and zebras were enabled. A simulator UIView resize test did not
+reproduce the implicit animation, even with an enqueued frame, so it is not a
+substitute for this physical regression sequence. The timing probe was removed.
+
+### Multiview foreground picture freshness
+
+A GPU redraw of a cached LUT frame must not count as fresh decoded video.
+`HevcDecoder.isPresentFrozen` checks both ages through `FeedPresentPolicy`.
+Multiview checks foreground recovery once after its settling grace. If a decoder
+repair still has no picture after 12 seconds with
+incoming video, it escalates to the bounded full-session rejoin. It retains
+camera assignments and keeps unrelated camera sessions running. Failed tiles
+expose Reconnect and Remove; Reconnect tries the saved identity before repeating
+network setup, retaining the tile LUT selection.
+
+Physical iPhone verification on 2026-09-10 reproduced a frozen Pocket 3 with LUT
+on while Pocket 4 Pro and Nano resumed. After the change, an extended app-switch
+observation confirmed moving pictures from all three cameras. Pocket 3 required
+automatic full-session rejoin and took roughly a minute to return. Faster recovery
+remains a follow-up; no additional periodic enable traffic was introduced.

@@ -225,11 +225,13 @@ private fun FalseColorOptions(state: LiveAssistState) {
     SettingsInlineRow(
         "Scale",
         help =
-            "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
+            "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. " +
                 "CineStop paints video-level IRE stripes over luminance grayscale. EL Zone " +
                 "paints 15 contiguous stops from 18% gray: +6 and above white, −6 and below " +
                 "black. IRE paints six video-level zones over luminance grayscale. Limits " +
-                "paints only shadow and highlight warnings.",
+                "paints only shadow and highlight warnings." +
+                " D-Log M uses a direct 0–100 signal scale. Its EL Zone and gray guide are " +
+                "Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras.",
         showTopDivider = false,
         stacked = true,
     ) {

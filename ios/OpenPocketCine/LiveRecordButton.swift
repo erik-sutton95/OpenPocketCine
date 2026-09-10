@@ -76,7 +76,7 @@ struct LiveRecordButton: View {
 }
 
 /// Osmo Pocket shutter: recessed charcoal well, thin coral ring. Recording fills the ring.
-private struct RecordLamp: View {
+struct RecordLamp: View {
     let diameter: CGFloat
     let recording: Bool
 
@@ -138,8 +138,10 @@ private struct RecordLamp: View {
 
 /// REC tally on the physical screen bezel — OpenZCine `RecordingBorderModule`.
 struct LiveRecordingTally: View {
+    var cornerRadius: CGFloat = LiveRecordingTally.displayCornerRadius
+
     var body: some View {
-        RoundedRectangle(cornerRadius: Self.displayCornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .strokeBorder(LiveDesign.rec, lineWidth: Self.lineWidth)
             .shadow(color: LiveDesign.rec.opacity(0.55), radius: 14)
             .allowsHitTesting(false)

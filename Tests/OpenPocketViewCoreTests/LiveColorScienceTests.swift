@@ -10,6 +10,31 @@ struct LiveColorScienceTests {
         ScopeExposureCeiling.reset()
     }
 
+    @Test func dLogMScopesPreserveSignalAndIgnoreDLogISOAnchors() {
+        let transfer = MonitorTransfer(.dLogM)
+        #expect(transfer != .dlog)
+        for iso in [100, 400, 1600, 6400] {
+            for byte in 0...255 {
+                let signal = Double(byte) / 255
+                #expect(abs(ScopeDisplayScale.monitorPercent(signal, transfer: transfer, iso: iso)
+                    - signal * 100) < 1e-8)
+            }
+            #expect(ScopeExposureCeiling.clipByte(transfer: transfer, iso: iso) == 255)
+        }
+    }
+
+    @Test func dLogMReferenceStopsAndSignalWarningsStaySeparate() {
+        let transfer = MonitorTransfer(.dLogM)
+        #expect(abs(LiveColorScience.encode(0.18, transfer: transfer) - 0.40000007) < 1e-7)
+        #expect(abs(LiveColorScience.encode(0.72, transfer: transfer) - 0.698565282656276) < 1e-6)
+        #expect(abs(LiveColorScience.stops(encoded: 0.698565282656276, transfer: transfer) - 2) < 1e-5)
+        #expect(!LiveColorScience.zebraHighlight(
+            ScopeDisplayScale.monitorPercent(0.9, transfer: transfer)))
+        #expect(ScopeDisplayScale.monitorPercent(0.05, transfer: transfer) > 4.99)
+        #expect(MonitorTransfer.inferred(minByte: 24, maxByte: 223, fallback: transfer) == transfer)
+        #expect(CamCapIso.baseISO(transfer: transfer) == nil)
+    }
+
     // MARK: - Protocol contract
 
     @Test func colorModeMapsToMonitorTransfer() {

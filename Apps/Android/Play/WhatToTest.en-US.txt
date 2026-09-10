@@ -1,22 +1,22 @@
 New and changed
 
-- Sharing and Watch a feed are not available on Android yet; Operator Setup → Sharing remains Coming soon.
-- FALSE Scale: CineStop (video IRE stripes), EL Zone (15 stops; +6 white / −6 black), and IRE (six video zones over gray).
-- View Assist ND meters the live picture and suggests a screw-on ND in stops and ND number (ND32 / +5.0) to balance the frame. Off until you tap the chip. The app cannot set a filter.
-- Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
-- Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
+- Pocket 3 FORMAT offers normal-video resolutions including 2.7K and square/vertical choices when the camera supplies no format list.
+- D-Log M scopes use direct preview signal. Scene-stop readings use an estimated Pocket 3 curve, not measured sensor clipping limits.
+- FALSE adds CineStop, EL Zone (+6 white / −6 black), and six-zone IRE. Tap ND for a suggested screw-on filter and stop count; it starts off and cannot set a filter.
+- Motion Control adds timed A→B→C moves, smoothing, a three-second start countdown and Pause/Resume/Stop. Duration dials span 0.5–120 seconds; swipe left to increase. Dragging the editor suppresses button taps.
+- Sharing remains Coming soon. Multiview is not available on Android in this build.
 
 Fixes
 
-- Live picture is no longer blocky with LUT on or off.
-- WAITING FOR LIVE VIEW should not sit on screen after Wi-Fi joins.
-- Opening Operator Setup or clips, then back, keeps the live picture (not a black well).
-- Face lock is closer to iOS: it tracks the face without grabbing every oval, and the box is not mirrored onto the wrong side.
+- D-Log M waveform and zebras no longer use the D-Log black point or exposure ceiling.
+- Shared frame assembly preserves complete large Nano pictures across transport groups. Android camera testing remains pending.
+- Live picture stays sharp with LUT and PEAK. Face AF-C follows front and 3/4 views; settings and clips preserve the picture.
+- Motion Control respects pan/tilt limits and stops on stale feedback or missed waypoints. Rehearse before a take.
 
 What to test
 
-- Long-press FALSE: try CineStop, EL Zone (mid-gray is gray, hot sky white), and IRE.
-- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off. On a bright take, tap ND: the plate should show an ND number and a stop count that move with the picture.
-- With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, confirm Sharing still says Coming soon, then back: the picture must still be there.
-- Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.
-- Pocket only: gimbal button beside zoom. Mode and speed should match the head. Locked toasts. Ramp eases a pan. Motion Control: set A/B and optional C. Dial left increases duration, right decreases (up to 120s). Start counts down 3s. Pause mid-move, Resume, then Stop. Smoothness rounds B. Stick or ActiveTrack cancels.
+- Pocket 3: select 2.7K at 25p in normal Video, confirm on the camera, record and reconnect. Camera-supplied format lists should take priority.
+- In D-Log M, enable waveform, histogram and zebras, then change ISO. Check the scale stays stable. Compare CineStop, EL Zone and IRE; use IRE for signal measurements. Try ND on a bright take and check its reading changes with the picture.
+- Watch Pocket/Nano live with LUT off/on and PEAK. Record, reconnect, track a face from front/3/4, then open settings or clips and return. Report freezes or corrupted pictures using Share Diagnostics. Pause VPNs if live view never starts.
+- Pocket only: test the gimbal button, mode, speed and ramp. Set A/B and optional C; compare exact/smoothed moves. Test long durations, countdown cancellation, repeated Pause/Resume/Stop, and dragging without button activation. Stick or ActiveTrack should cancel the move.
+- Confirm Operator Setup → Sharing still says Coming soon, then return to the live picture.

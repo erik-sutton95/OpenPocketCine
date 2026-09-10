@@ -19,13 +19,16 @@ enum FalseColorAssist {
 
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
-        "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. "
+        "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. "
         + "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) "
         + "over luminance grayscale. EL Zone paints 15 contiguous stops from 18% gray: "
         + "+6 and above white, −6 and below black. IRE paints six video-level zones over "
         + "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one "
         + "stop over, yellow near clip, red clip. Limits paints only shadow and "
         + "highlight warnings, leaving other colors untouched."
+        + " D-Log M uses a direct 0–100 signal scale. Its EL Zone and gray guide are "
+        + "Pocket 3 estimates, not calibrated sensor limits. Use IRE for signal "
+        + "measurements on other D-Log M cameras."
 
     /// OpenZCine `falseColorRows` Reference Display help.
     static let referenceHelp =
@@ -268,6 +271,7 @@ struct FalseColorReference: View {
         case .rec709: "709"
         case .hdr: "HLG"
         case .dlog: "D-Log"
+        case .dlogm: "DLM ≈"
         case .dlog2: "D-Log2"
         }
     }

@@ -53,6 +53,9 @@ public enum LUTExposureCompensation: Sendable {
     ) -> Double {
         let value = snap(stops)
         if value == 0 { return min(max(encoded, 0), 1) }
+        // Preserve existing export/look behavior while D-Log M exposure is uncalibrated.
+        // The empirical scope estimate must not silently change baked images.
+        let transfer = transfer == .dlogm ? MonitorTransfer.dlog : transfer
         let linear = LiveColorScience.linearize(encoded, transfer: transfer)
         return LiveColorScience.encode(linear * linearGain(value), transfer: transfer)
     }

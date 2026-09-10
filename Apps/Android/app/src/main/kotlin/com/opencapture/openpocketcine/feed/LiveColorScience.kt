@@ -16,14 +16,16 @@ import kotlin.math.sqrt
 /**
  * Pocket live-tap transfer. Matches core `MonitorTransfer` / `ColorMode`.
  *
- * D-Log M (`0x00`) rides the D-Log curve. WAVE 0 / 100 are paper black and the
- * live-tap EI ceiling; 18% grey stays at paper IRE.
+ * D-Log M (`0x3D`) uses signal-native scopes and estimated Pocket 3 stop math.
+ * For D-Log / D-Log2, WAVE 0 / 100 are paper black and the live-tap EI ceiling;
+ * 18% grey stays at paper IRE.
  */
 enum class MonitorTransfer {
     REC709,
     HDR,
     DLOG,
     DLOG2,
+    DLOGM,
     ;
 
     val colorMode: Int
@@ -33,6 +35,7 @@ enum class MonitorTransfer {
                 HDR -> CameraCommands.COLOR_HDR
                 DLOG -> CameraCommands.COLOR_DLOG
                 DLOG2 -> CameraCommands.COLOR_DLOG2
+                DLOGM -> COLOR_DLOG_M
             }
 
     val peakLinear: Double
@@ -42,6 +45,7 @@ enum class MonitorTransfer {
                 HDR -> Hlg.decode(1.0)
                 DLOG -> DLog.PEAK_LINEAR
                 DLOG2 -> DLog2.PEAK_LINEAR
+                DLOGM -> DLogM.decode(1.0)
             }
 
     val middleGrayEncoded: Double
@@ -56,7 +60,8 @@ enum class MonitorTransfer {
         fun fromColorMode(code: Int): MonitorTransfer =
             when (code) {
                 CameraCommands.COLOR_HDR -> HDR
-                CameraCommands.COLOR_DLOG, COLOR_DLOG_M -> DLOG
+                CameraCommands.COLOR_DLOG -> DLOG
+                COLOR_DLOG_M -> DLOGM
                 CameraCommands.COLOR_DLOG2 -> DLOG2
                 else -> REC709
             }
@@ -154,7 +159,7 @@ object ScopeExposureCeiling {
         refinedDlog: Int = this.refinedDlog,
     ): Int {
         return when (transfer) {
-            MonitorTransfer.REC709, MonitorTransfer.HDR -> 255
+            MonitorTransfer.REC709, MonitorTransfer.HDR, MonitorTransfer.DLOGM -> 255
             MonitorTransfer.DLOG2 -> {
                 val ei = if (iso > 0) iso else REFERENCE_EI
                 val refLinear = LiveColorScience.linearize(refined1600 / 255.0, MonitorTransfer.DLOG2)
@@ -189,7 +194,7 @@ data class ScopeAnchors(
 ) {
     companion object {
         fun make(transfer: MonitorTransfer, iso: Int? = null): ScopeAnchors {
-            val black = LiveColorScience.encode(0.0, transfer)
+            val black = if (transfer == MonitorTransfer.DLOGM) 0.0 else LiveColorScience.encode(0.0, transfer)
             val mid = LiveColorScience.encode(0.18, transfer)
             val clip = ScopeExposureCeiling.clipEncoded(transfer, iso)
             val midLevel =
@@ -512,7 +517,7 @@ object LiveColorScience {
 
     fun lumaWeights(transfer: MonitorTransfer): Triple<Double, Double, Double> =
         when (transfer) {
-            MonitorTransfer.REC709, MonitorTransfer.DLOG -> Triple(0.2126, 0.7152, 0.0722)
+            MonitorTransfer.REC709, MonitorTransfer.DLOG, MonitorTransfer.DLOGM -> Triple(0.2126, 0.7152, 0.0722)
             MonitorTransfer.HDR, MonitorTransfer.DLOG2 -> Triple(0.2627, 0.6780, 0.0593)
         }
 
@@ -528,6 +533,7 @@ object LiveColorScience {
             MonitorTransfer.HDR -> Hlg.decode(encoded)
             MonitorTransfer.DLOG -> DLog.decode(encoded)
             MonitorTransfer.DLOG2 -> DLog2.decode(encoded)
+            MonitorTransfer.DLOGM -> DLogM.decode(encoded)
         }
 
     private fun encodeRaw(linear: Double, transfer: MonitorTransfer): Double =
@@ -536,6 +542,7 @@ object LiveColorScience {
             MonitorTransfer.HDR -> Hlg.encode(linear)
             MonitorTransfer.DLOG -> DLog.encode(linear)
             MonitorTransfer.DLOG2 -> DLog2.encode(linear)
+            MonitorTransfer.DLOGM -> DLogM.encode(linear)
         }
 
     private fun clamp01(x: Double): Double = x.coerceIn(0.0, 1.0)
@@ -615,4 +622,27 @@ internal object DLog2 {
         } else {
             K2 * (linear - IN_LIMIT_2) + B2
         }
+}
+
+/** Empirical Pocket 3 neutral fit; see docs/pocket3-dlogm-curve.md. Not sensor limits. */
+private object DLogM {
+    fun decode(encoded: Double): Double {
+        val t = 2.0.pow(encoded * 5.612990379333496 + 0.9327186346054077) - 2.428226947784424
+        val value = if (t < 0.6034245491027832) {
+            t * 1.0151796340942383 + 0.5178895592689514
+        } else {
+            t * 1.8734303712844849
+        }
+        return value * (0.18 / 12.4054)
+    }
+
+    fun encode(linear: Double): Double {
+        val value = linear / (0.18 / 12.4054)
+        val t = if (value < 0.6034245491027832 * 1.8734303712844849) {
+            (value - 0.5178895592689514) / 1.0151796340942383
+        } else {
+            value / 1.8734303712844849
+        }
+        return (log2(t + 2.428226947784424) - 0.9327186346054077) / 5.612990379333496
+    }
 }

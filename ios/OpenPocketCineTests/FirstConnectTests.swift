@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import QuartzCore
 import VideoToolbox
 import XCTest
 
@@ -6,6 +7,56 @@ import XCTest
 
 @MainActor
 final class FirstConnectTests: XCTestCase {
+    func testCachedFrameRedrawDoesNotAdvanceSourceFreshness() async throws {
+        let decoder = HevcDecoder()
+        let bus = LiveFrameSampleBus()
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        decoder.sampleBus = bus
+        var completions = 0
+        var heartbeats = 0
+        let identity = expectation(description: "Only the new source reaches the relay")
+        identity.assertForOverFulfill = true
+        decoder.onIdentityFrame = { _ in identity.fulfill() }
+        decoder.onSourceFrame = { _ in completions += 1 }
+        decoder.onPresentedFrame = { heartbeats += 1 }
+        let buffer = ScopeTestBuffers.makeEdgeBuffer()
+        decoder.handleDecodedFrame(buffer)
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, decoder.lastPresentedAt == nil {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        let source = try XCTUnwrap(decoder.lastSourceFrameAt)
+        let presented = try XCTUnwrap(decoder.lastPresentedAt)
+        let decoded = bus.decodedFrames
+        let firstHeartbeats = heartbeats
+        let firstCompletions = completions
+        decoder.handleDecodedFrame(buffer, isNewSourceFrame: false)
+        let redrawDeadline = Date().addingTimeInterval(2)
+        while Date() < redrawDeadline, completions == firstCompletions {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertGreaterThan(completions, firstCompletions, "Exercise the cached repaint")
+        XCTAssertEqual(decoder.lastPresentedAt, presented)
+        XCTAssertEqual(decoder.lastSourceFrameAt, source)
+        XCTAssertEqual(bus.decodedFrames, decoded)
+        XCTAssertEqual(heartbeats, firstHeartbeats)
+        await fulfillment(of: [identity], timeout: 1)
+
+        // Dropping the final assist re-enqueues the held identity buffer directly.
+        let container = CALayer()
+        container.addSublayer(decoder.displayLayer)
+        decoder.displayLayer.bounds = CGRect(x: 0, y: 0, width: 64, height: 64)
+        XCTAssertTrue(decoder.isDisplayReady)
+        decoder.effects = LiveImageEffects()
+        XCTAssertEqual(decoder.lastPresentedAt, presented)
+        XCTAssertEqual(decoder.lastSourceFrameAt, source)
+        XCTAssertEqual(heartbeats, firstHeartbeats)
+        decoder.displayLayer.removeFromSuperlayer()
+        decoder.reset()
+        XCTAssertNil(decoder.lastSourceFrameAt)
+    }
+
     func testFirstPictureEscalatesWhenNoVideo() {
         XCTAssertEqual(
             CameraSoftAP.firstPictureStep(
@@ -287,6 +338,24 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(Duml.shouldHoldReply(set: 0x02, cmd: 0xB8))
     }
 
+    func testAvcInterFrameCannotClaimFirstPictureBeforeRandomAccess() {
+        let decoder = HevcDecoder()
+        let sps: [UInt8] = [
+            0x67, 0x64, 0x00, 0x1f, 0xac, 0xb4, 0x02, 0x80,
+            0x2d, 0xd3, 0x50, 0x10, 0x40, 0x10, 0x6d, 0x0a, 0x13, 0x50,
+        ]
+        let pps: [UInt8] = [0x68, 0xee, 0x06, 0xf2, 0xc0]
+        _ = decoder.decode(accessUnit: [0, 0, 1] + sps + [0, 0, 1] + pps)
+        XCTAssertTrue(decoder.hasFormat)
+        // A syntactically framed P-slice is not proof of a decodable first picture.
+        XCTAssertFalse(decoder.decode(accessUnit: [0, 0, 1, 0x61, 0xe0, 0x01]))
+        XCTAssertNil(decoder.lastPresentedAt)
+        XCTAssertTrue(
+            CameraSoftAP.shouldRunFirstPictureRecover(
+                secondsSinceLastPresented: nil, alreadySettled: false))
+        decoder.reset()
+    }
+
     func testNanoAvcParameterSetsBuildFormat() {
         let decoder = HevcDecoder()
         let sps: [UInt8] = [
@@ -300,6 +369,23 @@ final class FirstConnectTests: XCTestCase {
         au += pps
         XCTAssertFalse(decoder.decode(accessUnit: au), "SPS/PPS alone is not a picture")
         XCTAssertTrue(decoder.hasFormat, "Nano H.264 SPS/PPS must open a format")
+        XCTAssertTrue(
+            decoder.videoToolboxActive, "AVC must start in its final decoder before the first IDR")
+        XCTAssertNil(decoder.lastPresentedAt)
+        let rebuilds = decoder.vtRebuildCount
+        var requests = 0
+        decoder.onHandoffNeedsIDR = { requests += 1 }
+        _ = decoder.decode(accessUnit: au)
+        decoder.unlockHardwareDecoder()
+        var effects = LiveImageEffects()
+        effects.zebra = true
+        decoder.effects = effects
+        decoder.effects = LiveImageEffects()
+        decoder.effects = effects
+        XCTAssertEqual(decoder.vtRebuildCount, rebuilds)
+        XCTAssertEqual(
+            requests, 0, "Assist toggles must keep the decoder that receives the first IDR")
+        XCTAssertTrue(decoder.videoToolboxActive)
         XCTAssertTrue(decoder.nalTypesSeen.contains(Avc.sps))
         XCTAssertTrue(decoder.nalTypesSeen.contains(Avc.pps))
         decoder.reset()

@@ -14,7 +14,15 @@ struct LivePortraitSystemBar: View {
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
                     Spacer(minLength: 14)
-                    if model.chromeSectionMounts(.lockButton) || interfaceLocked {
+                    if let exit = model.multiviewExit {
+                        Button(action: exit) {
+                            OpcIcon.layoutGrid.frame(width: 22, height: 22).frame(
+                                width: 44, height: 44
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Return to Multiview")
+                    } else if model.chromeSectionMounts(.lockButton) || interfaceLocked {
                         LiveLockButton(locked: $interfaceLocked)
                             .chromeEditable(.lockButton, editing: editing)
                         Spacer(minLength: 14)
@@ -33,7 +41,7 @@ struct LivePortraitSystemBar: View {
 
                 HStack(spacing: 0) {
                     Spacer(minLength: 14)
-                    if model.chromeSectionMounts(.railMedia) {
+                    if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                         LiveMediaButton { model.liveOperatorPanel = .media }
                             .chromeEditable(.railMedia, editing: editing)
                         Spacer(minLength: 14)

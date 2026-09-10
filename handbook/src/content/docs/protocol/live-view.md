@@ -68,14 +68,18 @@ After a healthy take the feed can still **freeze or go black at ~3–5 min** —
 
 Fragment header:
 
-- byte 16 = frame number (mod 256)
-- byte 18 (+ byte 17 = `0x0e`/`0x8e` even/odd half) = fragment index within the frame
+- byte 16 = transport group number (mod 256); a picture can span groups
+- byte 18 (+ byte 17 = `0x0e`/`0x8e` even/odd half) = fragment index within the group
 
-Fragments arrive in order — capture order is correct.
+The September 9 Nano capture has ordered video sequences (bytes 4–5, little-endian), advancing by 8 modulo 65536. Missing or reordered fragments invalidate the pending picture.
 
 ## Per frame
 
-A DJI private marker `00 00 01 ff …` (~17 B, NAL type 63) precedes the standard Annex-B NALs. VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
+A 16-byte DJI header starts with `00 00 01 ff`, followed by the encoded byte count (little-endian UInt32 at offset 4), then eight metadata bytes. Assemble exactly that many encoded bytes before emitting the Annex-B access unit. Nano transport groups stop at 63 packets: a captured 98,258-byte unit spans a 91,476-byte group and a 6,798-byte continuation, including its 16-byte header. Closing at a group boundary truncates the picture.
+
+Nano also inserts AVC SEI `06 f0 19`, followed by 25 raw metadata bytes and trailing `80`. Its payload can contain unescaped `00 00 01`. Skip this exact private block by length before interpreting any embedded bytes as NAL boundaries; preserve other SEI.
+
+VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
 
 Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or Nano AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view. IDR hold and the pending-AU cap must treat IRAP 16–21 as a GOP start (Pocket live is often BLA, not type 20).
 
@@ -85,4 +89,35 @@ Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: la
 
 ## Depacketizer
 
-Collect 0x02 packets → group by byte 16 into frames → strip the DJI marker → feed access units to the platform decoder (`VTDecompressionSession` on iOS, MediaCodec on Android) → GPU present (Metal on iOS, Vulkan on Android with a GLES fallback). Android Vulkan samples the 720p 4:2:0 AHB at the feed well (one chroma upsample) then LUT, matching iOS VT-at-view-size; scopes keep the 720p tap. `tools/extract_liveview.py` is the offline equivalent (pcap → playable `.h265`).
+Collect 0x02 packets → assemble the declared length across transport groups → remove the 16-byte DJI header and parse Nano private metadata safely → feed access units to the platform decoder (`VTDecompressionSession` on iOS, MediaCodec on Android) → GPU present (Metal on iOS, Vulkan on Android with a GLES fallback). Android Vulkan samples the 720p 4:2:0 AHB at the feed well (one chroma upsample) then LUT, matching iOS VT-at-view-size; scopes keep the 720p tap. The older `tools/extract_liveview.py` offline extractor groups by byte 16; it is not suitable for validating large Nano pictures.
+
+## Codec-aware queue protection
+
+Nano sends AVC while Pocket sends HEVC. When trimming a backlog, classify
+parameter sets and keyframes using the detected codec. AVC P-slice byte `41`
+otherwise resembles an HEVC VPS header, while AVC SPS/PPS/IDR can be discarded
+incorrectly. The iOS queue now preserves these Nano frames under overload.
+This is a queue-correctness fix; physical smoothness verification is ongoing.
+
+## Reproducing protocol investigations
+
+The repository's [capture and investigation guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/capture-guide.md)
+covers phone network capture, BLE HCI and Nordic sniffing, command validation,
+and physical decoder replay. Raw traces remain local; publish verified wire facts
+and synthetic regression tests.
+
+### Pocket 3 stream without a first picture
+
+A failed iPhone session showed intact AVC P-frames and repeated parameter sets,
+but no IDR in the sampled interval. Parameter sets and compressed samples alone
+are not proof of a visible picture. The iOS development decoder now gates initial
+inter frames until an AVC IDR or HEVC IRAP is submitted, preserving first-picture
+recovery eligibility. Repeated physical connection testing is still in progress.
+
+The physical startup trace narrowed this further: the initial AVC IDR went to
+the compressed display layer, then an assist handoff started an empty VT decoder
+mid-GOP. The fix starts AVC in VideoToolbox from its first parameter sets and
+keeps that decoder through assist changes. First-picture recovery no longer
+settles from a compressed enqueue alone on AVC. A Pocket 3 iPhone showed live
+video at approximately 25 fps after this change; repeated joins remain in progress.
+The hidden warmup overlay is also removed from accessibility when picture is ready.

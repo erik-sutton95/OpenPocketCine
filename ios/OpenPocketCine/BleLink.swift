@@ -51,6 +51,7 @@ final class BleLink: NSObject {
     private let fff5UUID = CBUUID(string: BleConstants.charFFF5)
 
     private var foundStream: AsyncStream<FoundCamera>.Continuation?
+    private var notificationAssemblers: [CBUUID: DumlNotificationAssembler] = [:]
     private var frameStream: AsyncStream<Duml.Frame>.Continuation?
     private var poweredOn: CheckedContinuation<Void, Never>?
     private var readyCont: CheckedContinuation<Void, Error>?
@@ -79,10 +80,17 @@ final class BleLink: NSObject {
         }
     }
 
-    override init() {
+    private let allowsConcurrentCameras: Bool
+
+    override convenience init() { self.init(allowsConcurrentCameras: false) }
+
+    init(allowsConcurrentCameras: Bool) {
+        self.allowsConcurrentCameras = allowsConcurrentCameras
         super.init()
         central = CBCentralManager(delegate: self, queue: nil)  // delegate on the main queue
     }
+
+    var isPoweredOn: Bool { central.state == .poweredOn }
 
     func waitUntilPoweredOn() async {
         if central.state == .poweredOn { return }
@@ -119,7 +127,11 @@ final class BleLink: NSObject {
     /// Connect GATT and resume once fff4/fff5 are notifying and pairing is armed.
     /// Scan stays up until `didConnect` — iOS uses the next advertisement to finish the link.
     func connect(_ camera: FoundCamera) async throws {
-        guard let p = peripherals[camera.id] else { throw BleError.gone }
+        let cached =
+            allowsConcurrentCameras
+            ? central.retrievePeripherals(withIdentifiers: [camera.id]).first : nil
+        guard let p = peripherals[camera.id] ?? cached else { throw BleError.gone }
+        notificationAssemblers.removeAll()
         selectedId = camera.id
         disconnectForeignDJI(keeping: camera.id)
         connected = p
@@ -170,6 +182,10 @@ final class BleLink: NSObject {
     }
 
     func disconnect() {
+        poweredOn?.resume()
+        poweredOn = nil
+        writeQueue.removeAll()
+        notificationAssemblers.removeAll()
         finishConnect(BleError.gone)
         if let p = connected { central.cancelPeripheralConnection(p) }
         connected = nil
@@ -190,6 +206,7 @@ final class BleLink: NSObject {
     /// One DJI GATT at a time. A leftover Pocket link stays notifying and can
     /// answer pairing / GetSSID while we think we tapped the Nano.
     private func disconnectForeignDJI(keeping keep: UUID?) {
+        guard !allowsConcurrentCameras else { return }
         if let current = connected, current.identifier != keep {
             current.delegate = nil
             central.cancelPeripheralConnection(current)
@@ -502,10 +519,12 @@ extension BleLink: CBPeripheralDelegate {
         let isDumlPipe = characteristic.uuid == fff4UUID || characteristic.uuid == fff5UUID
         if !isDumlPipe {
             logGattValue(characteristic, value)
-        } else if DumlTransport.scanFrames([UInt8](value)).isEmpty {
-            logGattValue(characteristic, value)
         }
-        for frame in DumlTransport.scanFrames([UInt8](value)) {
+        guard isDumlPipe else { return }
+        let frames = notificationAssemblers[
+            characteristic.uuid, default: DumlNotificationAssembler()
+        ].append([UInt8](value))
+        for frame in frames {
             if !Self.isSessionPing(frame) {
                 log.debug(
                     "notify 0x\(String(format: "%02x/%02x", frame.cmdSet, frame.cmdId), privacy: .public) flags=\(frame.flags) \(frame.payload.count)B"

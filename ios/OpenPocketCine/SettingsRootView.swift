@@ -444,7 +444,17 @@ struct SettingsRootView: View {
     // MARK: - Sharing
 
     @ViewBuilder private var sharingRows: some View {
-        if model.isLive {
+        if model.session.isMultiviewBorrowed {
+            SettingsRowCard {
+                SettingsInlineRow(
+                    title: "Sharing unavailable in Multiview",
+                    help: "Connect to one camera from Your cameras to share its feed with watchers.",
+                    showTopDivider: false
+                ) {
+                    EmptyView()
+                }
+            }
+        } else if model.isLive {
             SettingsRowCard {
                 SettingsSwitchInlineRow(
                     title: "Share this feed",

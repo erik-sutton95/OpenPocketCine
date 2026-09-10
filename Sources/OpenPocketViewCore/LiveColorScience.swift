@@ -22,7 +22,9 @@ import Foundation
 ///   fired while the LUT-off log still had highlight detail. Below each
 ///   curve's native EI the DJI paper scales the code; at/above native an
 ///   S-curve holds the preview at the measured ceiling (D-Log2 native
-///   1600, D-Log native 400). Rec.709 / HLG still clip at encoded 1.0.
+///   1600, D-Log native 400). Rec.709 / HLG use encoded 1.0. D-Log M
+///   scopes use the unchanged 0…1 signal axis; its endpoints are not measured
+///   sensor limits. Scene-stop estimates use an empirical Pocket 3 fit.
 public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
     /// `ColorMode.normal` `0x3F`. ITU-R BT.709-6 inverse OETF.
     case rec709
@@ -32,6 +34,8 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
     case dlog
     /// `ColorMode.dLog2` `0x41`. DJI D-Log2 (Gamut white paper Rev 1.0, 2026-06-30).
     case dlog2
+    /// D-Log M: signal-native scopes; scene-stop math is an empirical Pocket 3 estimate.
+    case dlogm
 
     public var id: String { rawValue }
 
@@ -41,6 +45,7 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
         case .hdr: "HLG"
         case .dlog: "D-Log"
         case .dlog2: "D-Log2"
+        case .dlogm: "D-Log M"
         }
     }
 
@@ -48,18 +53,20 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
         switch colorMode {
         case .normal, .normal10: self = .rec709
         case .hdr: self = .hdr
-        case .dLog, .dLogM: self = .dlog
+        case .dLog: self = .dlog
+        case .dLogM: self = .dlogm
         case .dLog2: self = .dlog2
         }
     }
 
-    /// Scene reflectance at encoded 1.0. D-Log white paper: 4200% = 42. D-Log2 paper: 47500% = 475.
+    /// Scene reflectance at encoded 1.0 (D-Log M is an empirical estimate). D-Log white paper: 4200% = 42. D-Log2 paper: 47500% = 475.
     public var peakLinear: Double {
         switch self {
         case .rec709: 1
         case .hdr: HLG.decode(1)
         case .dlog: DLog.peakLinear
         case .dlog2: DLog2.peakLinear
+        case .dlogm: DLogM.decode(1)
         }
     }
 
@@ -224,7 +231,7 @@ public enum ScopeExposureCeiling: Sendable {
         transfer: MonitorTransfer, iso: Int, refined1600: UInt8, refinedDlog: UInt8
     ) -> Int {
         switch transfer {
-        case .rec709, .hdr:
+        case .rec709, .hdr, .dlogm:
             return 255
         case .dlog2:
             let ei = iso > 0 ? iso : referenceEI
@@ -304,16 +311,16 @@ public struct ScopeAnchors: Equatable, Sendable {
     public let crushEdgeByte: Int
 
     public static func make(
-        transfer: MonitorTransfer, iso: Int? = nil
+        transfer: MonitorTransfer, iso: Int? = nil, clipByte: Int? = nil
     ) -> ScopeAnchors {
-        let black = LiveColorScience.encode(0, transfer: transfer)
+        let black = transfer == .dlogm ? 0 : LiveColorScience.encode(0, transfer: transfer)
         let mid = LiveColorScience.encode(0.18, transfer: transfer)
-        let clip = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: iso)
+        let clipEdge = clipByte ?? ScopeExposureCeiling.clipByte(transfer: transfer, iso: iso)
+        let clip = Double(clipEdge) / 255.0
         let midLevel =
             ScopeDisplayScale.crushLevel
             + LiveColorScience.paperIRE(mid) / 100.0
             * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
-        let clipEdge = ScopeExposureCeiling.clipByte(transfer: transfer, iso: iso)
         let span = max(0, clip - black) * 255
         let crushFloor = Int((black * 255).rounded(.down))
         let crushEdge = Int((black * 255 + 0.02 * span).rounded(.up))
@@ -379,7 +386,11 @@ public enum ScopeDisplayScale {
     public static func waveformLevel(
         _ c: Double, transfer: MonitorTransfer, iso: Int? = nil
     ) -> Double {
-        let a = ScopeAnchors.make(transfer: transfer, iso: iso)
+        waveformLevel(c, anchors: ScopeAnchors.make(transfer: transfer, iso: iso))
+    }
+
+    /// Immutable exposure anchors for an asynchronous color-map build.
+    public static func waveformLevel(_ c: Double, anchors a: ScopeAnchors) -> Double {
         let v = min(1, max(0, c))
         if v < a.black {
             return a.black <= 0 ? crushLevel : v / a.black * crushLevel
@@ -762,7 +773,7 @@ public enum LiveColorScience {
         red: Double, green: Double, blue: Double
     ) {
         switch transfer {
-        case .rec709, .dlog:
+        case .rec709, .dlog, .dlogm:
             (0.2126, 0.7152, 0.0722)
         case .hdr, .dlog2:
             (0.2627, 0.6780, 0.0593)
@@ -814,7 +825,7 @@ public enum LiveColorScience {
     /// ±6 around 18% grey — extra D-Log2 headroom stays the +6 white, not a
     /// camera-clip stripe.
     public static func falseColorBands(
-        _ scale: LiveFalseColorScale, transfer: MonitorTransfer
+        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil
     ) -> [LiveFalseColorBand] {
         switch scale {
         case .stops: cineStopBands
@@ -839,6 +850,7 @@ public enum LiveColorScience {
         case .hdr: HLG.decode(encoded)
         case .dlog: DLog.decode(encoded)
         case .dlog2: DLog2.decode(encoded)
+        case .dlogm: DLogM.decode(encoded)
         }
     }
 
@@ -848,6 +860,7 @@ public enum LiveColorScience {
         case .hdr: HLG.encode(linear)
         case .dlog: DLog.encode(linear)
         case .dlog2: DLog2.encode(linear)
+        case .dlogm: DLogM.encode(linear)
         }
     }
 
@@ -929,6 +942,32 @@ private enum DLog {
             return 6.025 * linear + 0.0929
         }
         return log10(linear * 0.9892 + 0.0108) * 0.256663 + 0.584555
+    }
+}
+
+// MARK: - D-Log M (empirical Pocket 3 reference)
+
+/// Neutral-channel fit from Thatcher Freeman's Pocket 3 DCTL, revision
+/// 22f2134e5b2f62a8508ebe02f77f2691d4794d8a. See docs/pocket3-dlogm-curve.md.
+/// This is an estimate for scene-stop tools, not a DJI specification or a
+/// sensor saturation/noise model. Scopes use unmodified signal percentages.
+private enum DLogM {
+    static func decode(_ encoded: Double) -> Double {
+        let t = pow(2, encoded * 5.612990379333496 + 0.9327186346054077)
+            - 2.428226947784424
+        let value = t < 0.6034245491027832
+            ? t * 1.0151796340942383 + 0.5178895592689514
+            : t * 1.8734303712844849
+        return value * (0.18 / 12.4054)
+    }
+
+    static func encode(_ linear: Double) -> Double {
+        let value = linear / (0.18 / 12.4054)
+        let t = value < 0.6034245491027832 * 1.8734303712844849
+            ? (value - 0.5178895592689514) / 1.0151796340942383
+            : value / 1.8734303712844849
+        return (log2(t + 2.428226947784424) - 0.9327186346054077)
+            / 5.612990379333496
     }
 }
 

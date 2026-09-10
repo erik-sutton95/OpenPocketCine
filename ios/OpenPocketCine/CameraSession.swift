@@ -428,15 +428,22 @@ final class CameraSession {
     @ObservationIgnored private var moveDriving = false
     @ObservationIgnored private var lastMoveLogAt: Date?
     @ObservationIgnored private var wasRecording = false
-    @ObservationIgnored let decoder = HevcDecoder()
+    @ObservationIgnored let decoder: HevcDecoder
+    var isMultiviewBorrowed = false
 
     /// The live-view display layer, for the SwiftUI `VideoView`.
     var videoLayer: AVSampleBufferDisplayLayer { decoder.displayLayer }
 
-    init() {
+    init(borrowing sharedDecoder: HevcDecoder? = nil) {
+        self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
         syncGimbalPose()
-        decoder.onPresentedFrame = { [weak self] in
+        if sharedDecoder != nil {
+            isMultiviewBorrowed = true
+            self.decoder.onSourceFrame = { [weak self] buffer in self?.considerFaceAF(buffer) }
+            return
+        }
+        self.decoder.onPresentedFrame = { [weak self] in
             self?.noteLiveFrame()
         }
         decoder.onSourceFrame = { [weak self] buffer in
@@ -475,6 +482,43 @@ final class CameraSession {
             else { return }
             self.sendRecoverEnable(force: false, reason: "encoder format change")
         }
+    }
+
+    /// Borrow the tile's transport and decoder; Multiview remains the sole repair owner.
+    func updateMultiview(camera: FoundCamera, driver: DatalinkDriver?, status: CameraStatus) {
+        guard isMultiviewBorrowed else { return }
+        connectedCamera = camera
+        datalink = driver
+        self.status = status
+        phase = .live
+        hasVideoFormat = decoder.hasFormat
+        isFeedWarming = decoder.lastPresentedAt == nil
+    }
+    func adoptMultiviewPose(_ pose: GimbalStickMapping) {
+        guard isMultiviewBorrowed else { return }
+        gimbalStickMapping = pose
+        syncGimbalPose()
+    }
+    func noteMultiviewFrame() {
+        guard isMultiviewBorrowed else { return }
+        noteLiveFrame()
+    }
+    func receiveMultiview(_ frame: Duml.Frame) {
+        guard isMultiviewBorrowed else { return }
+        applyIncomingStatus(frame)
+        isFeedWarming = decoder.lastPresentedAt == nil
+    }
+    func releaseMultiview() {
+        guard isMultiviewBorrowed else { return }
+        endGimbalStick(cancelMove: true)
+        stopTrackingPoll()
+        tapFocusTask?.cancel()
+        faceAFArmTask?.cancel()
+        inflight.removeAll()
+        inflightPending.removeAll()
+        lateWait.removeAll()
+        failAllWaiters(CancellationError())
+        datalink = nil
     }
 
     func startScan() {
@@ -575,6 +619,10 @@ final class CameraSession {
     }
 
     func disconnect() {
+        if isMultiviewBorrowed {
+            releaseMultiview()
+            return
+        }
         connectGeneration += 1
         reconnectTarget = nil
         isReconnecting = false
@@ -3168,7 +3216,7 @@ final class CameraSession {
                 Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
         let writeSkipped = datalink?.lastWriteLanded == false
-        if CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
+        if !isMultiviewBorrowed, CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
             if videoFresh {
                 log.info("control: SET timeout with video flowing — leave UDP")
                 ControlLiveLog.line(

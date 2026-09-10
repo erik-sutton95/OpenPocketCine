@@ -722,6 +722,7 @@ object FalseColorReference {
         when (colorMode) {
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_HDR -> "HLG"
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG -> "D-Log"
+            com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG_M -> "DLM ≈"
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG2 -> "D-Log2"
             else -> "709"
         }
