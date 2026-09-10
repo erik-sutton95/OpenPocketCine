@@ -487,21 +487,95 @@ struct LiveColorScienceTests {
 
     // MARK: - False colour
 
-    @Test func falseColorIREBandsMatchOpenZCine() {
+    @Test func falseColorIREIsSixZoneVideoScale() {
         let labels = LiveColorScience.falseColorBands(.ire, transfer: .dlog2).map(\.label)
+        #expect(labels == ["BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC"])
         #expect(
-            labels == ["0–4", "5", "10–12", "18%", "55–61", "92–93", "94–95", "96–98", "99–100"])
+            LiveColorScience.falseColorBand(value: 41, scale: .ire, transfer: .rec709)?.label
+                == "18%MG")
+        #expect(
+            LiveColorScience.falseColorBand(value: 30.50, scale: .ire, transfer: .dlog2) == nil)
+        #expect(
+            LiveColorScience.falseColorBand(value: 54, scale: .ire, transfer: .rec709)?.label
+                == "MG+1")
+        #expect(
+            LiveColorScience.falseColorBand(value: 80, scale: .ire, transfer: .dlog2)?.label
+                == "80%WC")
+        #expect(
+            LiveColorScience.falseColorBand(value: 100, scale: .ire, transfer: .dlog2)?.label
+                == "95%WC")
+        #expect(
+            LiveColorScience.falseColorBand(value: 1, scale: .ire, transfer: .dlog2)?.label
+                == "BDL")
         let limits = LiveColorScience.falseColorBands(.limits, transfer: .dlog2).map(\.label)
         #expect(limits == ["0–4", "5–9", "94–98", "99–100"])
+        #expect(!LiveFalseColorScale.stops.usesSceneStops)
+        #expect(!LiveFalseColorScale.ire.usesSceneStops)
     }
 
-    @Test func dLog2StopScaleUsesDJIClipNotRED() {
+    @Test func cineStopIsVideoModeIRE() {
         let labels = LiveColorScience.falseColorBands(.stops, transfer: .dlog2).map(\.label)
-        #expect(labels.contains("18%"))
-        #expect(labels.contains("Maximum"))
+        #expect(
+            labels == [
+                "0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95", "96–98", "99–100",
+            ])
+        #expect(
+            LiveColorScience.falseColorBand(value: 41, scale: .stops, transfer: .rec709)?.label
+                == "41–48")
+        #expect(
+            LiveColorScience.falseColorBand(value: 30.50, scale: .stops, transfer: .dlog2) == nil)
+        #expect(
+            LiveColorScience.falseColorBand(value: 100, scale: .stops, transfer: .dlog2)?.label
+                == "99–100")
         #expect(abs(LiveColorScience.stops(linear: 475) - 11.366) < 0.01)
         #expect(abs(LiveColorScience.stops(linear: 42) - 7.867) < 0.01)
         #expect(LiveColorScience.stops(linear: 0) == -.infinity)
+    }
+
+    @Test func elZoneIsFifteenContiguousSceneStops() {
+        let bands = LiveColorScience.falseColorBands(.elZone, transfer: .dlog2)
+        #expect(
+            bands.map(\.label) == [
+                "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
+                "+½", "+1", "+2", "+3", "+4", "+5", "+6",
+            ])
+        for index in 0..<(bands.count - 1) {
+            #expect(abs(bands[index].upperBound - bands[index + 1].lowerBound) < 1e-12)
+        }
+        let gray = LiveColorScience.falseColorBand(value: 0, scale: .elZone, transfer: .dlog2)
+        #expect(gray?.label == "18%")
+        #expect(abs((gray?.red ?? 0) - (gray?.green ?? 1)) < 0.05)
+        #expect(abs((gray?.green ?? 0) - (gray?.blue ?? 1)) < 0.05)
+
+        let over = LiveColorScience.falseColorBand(value: 7, scale: .elZone, transfer: .dlog2)
+        #expect(over?.label == "+6")
+        #expect((over?.red ?? 0) > 0.95)
+        #expect((over?.green ?? 0) > 0.95)
+        #expect((over?.blue ?? 0) > 0.95)
+
+        let under = LiveColorScience.falseColorBand(value: -7, scale: .elZone, transfer: .dlog2)
+        #expect(under?.label == "−6")
+        #expect((under?.red ?? 1) < 0.05)
+        #expect((under?.green ?? 1) < 0.05)
+        #expect((under?.blue ?? 1) < 0.05)
+
+        let rec709Clip = LiveColorScience.stops(linear: 1)
+        #expect(rec709Clip < 3)
+        #expect(
+            LiveColorScience.falseColorBand(
+                value: rec709Clip, scale: .elZone, transfer: .rec709
+            )?.label != "+6")
+
+        let clipStops = LiveColorScience.stops(
+            encoded: ScopeExposureCeiling.clipEncoded(transfer: .dlog2),
+            transfer: .dlog2)
+        #expect(clipStops > 6)
+        #expect(
+            LiveColorScience.falseColorBand(
+                value: clipStops, scale: .elZone, transfer: .dlog2
+            )?.label == "+6")
+        #expect(LiveFalseColorScale.elZone.usesSceneStops)
+        #expect(!LiveFalseColorScale.ire.usesSceneStops)
     }
 
     @Test func monitorIREIsTheWaveAxis() {
@@ -578,10 +652,13 @@ struct LiveColorScienceTests {
             abs(ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600) - 30.50) < 0.5)
         let band = LiveColorScience.falseColorBand(
             value: 30.50, scale: .ire, transfer: .dlog2)
-        #expect(band?.label == "18%")
+        #expect(band == nil, "D-Log2 18% is an IRE gap")
+        #expect(
+            LiveColorScience.falseColorBand(value: 41, scale: .ire, transfer: .rec709)?.label
+                == "18%MG")
         let clip = LiveColorScience.falseColorBand(
             value: 100, scale: .ire, transfer: .dlog2)
-        #expect(clip?.label == "99–100")
+        #expect(clip?.label == "95%WC")
         #expect(LiveColorScience.zebraHighlight(100))
         #expect(
             !LiveColorScience.zebraHighlight(
@@ -601,7 +678,7 @@ struct LiveColorScienceTests {
                 < 0.05)
         let dlogClip = LiveColorScience.falseColorBand(
             value: 100, scale: .ire, transfer: .dlog)
-        #expect(dlogClip?.label == "99–100")
+        #expect(dlogClip?.label == "95%WC")
         #expect(
             !LiveColorScience.zebraHighlight(
                 ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400)))

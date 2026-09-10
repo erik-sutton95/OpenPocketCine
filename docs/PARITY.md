@@ -55,8 +55,18 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Histogram gutters 17.5 dp (traffic lamps + 0 / 100), not 17.5 px.
 - Zebra stored thresholds stay 0–100 IRE; 0–255 readout is encoded codes via
   `ScopeDisplayScale.signalNative`.
-- PStops reference ruler paints EV-domain bands + Min/−3/18%/Skin/+2/Max
-  markers, not IRE labels.
+- CineStop (formerly PStops) is Video Mode IRE on the WAVE axis: sparse
+  0–4 / 5 / 10–12 / 41–48 / 61–70 / 92–100 stripes over grayscale. Rec.709
+  18% hits 41–48 green; D-Log2 18% is a gap. Saved PStops / ZC Stops still
+  load as CineStop.
+- IRE is six video-level WAVE zones over grayscale: BDL (0–2.5 purple),
+  NBDL (2.5–10 blue), 18%MG (38–42 green), MG+1 (52–56 pink), 80%WC
+  (80–95 yellow), 95%WC (95–100 red). Rec.709 18% hits 18%MG; D-Log2
+  18% is a gap. 95%WC is live-tap ceiling red.
+- EL Zone is scene-EV: 15 contiguous bands around 18% gray; +6 and above
+  white, −6 and below black. The reference ruler is −6/−3/18%/+3/+6, not
+  stretched to live-tap clip.
+- FALSE Scale is CineStop / EL Zone / IRE / Limits.
 - Gimbal cluster: stick + zoom chip (+ reserved gimbal controls) as one
   trailing-bottom parking spot in every orientation. Zoom stacks above the
   stick, trailing-aligned — not glued to record. On width-constrained iPad,

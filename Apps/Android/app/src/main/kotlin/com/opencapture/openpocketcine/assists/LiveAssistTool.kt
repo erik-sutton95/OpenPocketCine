@@ -187,21 +187,24 @@ enum class PeakingSense(val label: String) {
 }
 
 enum class FalseColorScale(val persisted: String, val menuLabel: String) {
-    STOPS("ZC Stops", "PStops"),
+    STOPS("CineStop", "CineStop"),
     IRE("IRE", "IRE"),
     LIMITS("Limits", "Limits"),
+    EL_ZONE("EL Zone", "EL Zone"),
     ;
 
     companion object {
         fun fromPersisted(raw: String): FalseColorScale =
             entries.firstOrNull {
-                it.persisted == raw || it.menuLabel == raw || it.name == raw || raw == "Stops"
+                it.persisted == raw || it.menuLabel == raw || it.name == raw
+                    || raw == "Stops" || raw == "ZC Stops" || raw == "PStops"
             } ?: STOPS
 
         fun fromMenuLabel(label: String): FalseColorScale =
             when (label) {
                 "IRE" -> IRE
                 "Limits" -> LIMITS
+                "EL Zone" -> EL_ZONE
                 else -> STOPS
             }
     }

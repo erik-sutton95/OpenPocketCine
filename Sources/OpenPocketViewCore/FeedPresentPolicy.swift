@@ -84,7 +84,7 @@ public enum FeedPresentPolicy: Sendable {
     }
 
     /// GPU 50/50 is log-vs-LUT. Split without a cube is not replace-grade —
-    /// that covered the HEVC layer with an empty Metal plate. IRE / PStops
+    /// that covered the HEVC layer with an empty Metal plate. IRE / CineStop
     /// false colour remaps both halves, so the split is a no-op (Limits keeps
     /// holes). Android `FeedEffectsRenderPlan` uses the same gate.
     public static func appliesSplitComparison(

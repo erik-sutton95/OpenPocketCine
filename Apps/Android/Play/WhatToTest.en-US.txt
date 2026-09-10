@@ -1,5 +1,6 @@
 New and changed
 
+- FALSE Scale: CineStop (video IRE stripes), EL Zone (15 stops; +6 white / −6 black), and IRE (six video zones over gray).
 - View Assist ND meters the live picture and suggests a screw-on ND in stops and ND number (ND32 / +5.0) to balance the frame. Off until you tap the chip. The app cannot set a filter.
 - Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
 - Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
@@ -13,6 +14,7 @@ Fixes
 
 What to test
 
+- Long-press FALSE: try CineStop, EL Zone (mid-gray is gray, hot sky white), and IRE.
 - Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off. On a bright take, tap ND: the plate should show an ND number and a stop count that move with the picture.
 - With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, then back: the picture must still be there.
 - Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.

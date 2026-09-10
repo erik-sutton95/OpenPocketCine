@@ -151,11 +151,12 @@ object SettingsHelpCopy {
         "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented — plausible rather than real — so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
     const val FALSE_COLOR_SCALE =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-            "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
-            "highlight levels over luminance grayscale. IRE uses RED Video Mode-style monitor " +
-            "ranges on the WAVE axis: paper black at 0, D-Log2 18% grey at 30.50, live-tap EI " +
-            "ceiling at 100. Limits paints only shadow and highlight warnings, leaving other " +
-            "colors untouched."
+            "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
+            "over luminance grayscale. EL Zone paints 15 contiguous stops from 18% gray: " +
+            "+6 and above white, −6 and below black. IRE paints six video-level zones over " +
+            "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one " +
+            "stop over, yellow near clip, red clip. Limits paints only shadow and " +
+            "highlight warnings, leaving other colors untouched."
     const val FALSE_COLOR_REFERENCE =
         "Show a compact color key over live view while False Color is active."
     const val PEAKING_SENSITIVITY =
@@ -948,7 +949,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState) {
             stacked = true,
         ) {
             SettingsSegmented(
-                options = listOf("PStops", "IRE", "Limits"),
+                options = listOf("CineStop", "EL Zone", "IRE", "Limits"),
                 selected = assist.falseColorScale.menuLabel,
             ) { label ->
                 assist.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))
