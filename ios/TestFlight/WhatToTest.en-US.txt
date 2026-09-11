@@ -1,14 +1,16 @@
 New and changed
 
-- FORMAT keeps the camera's current recording size visible while its format options load.
+- Apple Watch companion: live preview, timecode, storage, camera battery, and record/shutter. Keep the iPhone app open; wrist recording skips confirmation.
+- Share's Convert log rewrites D-Log and D-Log2 clips to one output curve. Camera originals stay untouched.
+- Hold-drag the ND assist chip to move it. Long-press Units to choose Stops, filter factor, or optical density.
 
 Fixes
 
-- Vertical 3K is no longer replaced by the generic 1080p and 4K choices when format options are unavailable.
-- Changing frame rate keeps the selected portrait recording size.
+- Watch preview has lower delay and matches the phone's identity picture. Always On keeps the last frame visible with normal watchOS dimming.
+- Pocket 3 keeps vertical 3K in FORMAT while options load and when changing frame rate.
 
 What to test
 
-- Set a Pocket 3 to vertical 3K, connect, and open FORMAT. Confirm that 3K is shown.
-- Change the frame rate and confirm that the recording format stays 3K 9:16.
-- Return the camera to landscape recording and check that FORMAT shows its landscape choices.
+- Go live on iPhone and open OpenPocketCine on Apple Watch. Check preview and readings, record a short take, then lower and raise your wrist. Confirm recording on the camera.
+- On Pocket 3, select vertical 3K, connect, then change frame rate. Confirm FORMAT stays 3K 9:16.
+- Export mixed D-Log/D-Log2 takes with Convert log. In live view, move the ND chip and cycle its Units choices.

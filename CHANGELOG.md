@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Apple Watch companion (#101): live preview, timecode, storage, camera
+  battery, and record / shutter on the wrist. The iPhone stays the radio.
+  A watch rec tap starts and stops without the phone confirmation sheet.
+  Wear OS and a complication are follow-ons.
+
 - Convert log on iOS Share
   ([discussion #295](https://github.com/erik-sutton95/OpenPocketCine/discussions/295)):
   technical D-Log ↔ D-Log2 rewrite so mixed 1× / zoom takes share one

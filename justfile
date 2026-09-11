@@ -63,11 +63,11 @@ secrets:
 # ── Native production stack ─────────────────────────────────────────────────
 # Format shared Swift and iOS app sources.
 swift-format:
-    swift-format format --in-place --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests
+    swift-format format --in-place --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineWatch
 
 # Lint shared Swift and iOS app sources.
 swift-lint:
-    swift-format lint --strict --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests
+    swift-format lint --strict --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineWatch
 
 # Run shared Swift core tests.
 swift-test:
@@ -122,9 +122,13 @@ ios-test: ios-generate
       -destination "platform=iOS Simulator,id=$device_id" \
       test
 
+# Build the watchOS companion for the simulator.
+watch-build: ios-generate
+    xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
 # Run all native production checks that do not require camera hardware.
 # swift-lint is in `just check` / `just lint`; run `just format` before making it a merge gate.
-native-check: swift-test relay-test ios-test ios-build
+native-check: swift-test relay-test ios-test ios-build watch-build
 
 # Format production Swift sources.
 format: swift-format

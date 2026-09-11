@@ -10,6 +10,8 @@ import UIKit
 @Observable
 final class AppModel {
     var session = CameraSession()
+    @ObservationIgnored let watchRelay = WatchRelay()
+    @ObservationIgnored private var watchRelayActivated = false
     var multiviewExit: (() -> Void)?
     /// Live view-space X flip: TT180 extra-mirror XOR MIRROR assist.
     var livePictureViewFlip: Bool {
@@ -533,6 +535,81 @@ final class AppModel {
         guard assist.clean != clean else { return }
         assist.clean = clean
     }
+
+    func activateWatchRelay() {
+        guard !watchRelayActivated else { return }
+        watchRelayActivated = true
+        watchRelay.onToggleRecord = { [weak self] in
+            self?.watchToggleRecord()
+                ?? WatchCommandResult(
+                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+        }
+        watchRelay.onCapture = { [weak self] in
+            self?.watchCapture()
+                ?? WatchCommandResult(
+                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+        }
+        watchRelay.onReachabilityChanged = { [weak self] in
+            guard let self else { return }
+            self.session.decoder.needsWatchPreview = self.watchRelay.hasCompanion
+            self.publishWatchState()
+        }
+        session.decoder.needsWatchPreview = watchRelay.hasCompanion
+        session.decoder.onWatchPreview = { [weak self] image, source, unmanaged in
+            guard let self else { return }
+            self.watchRelay.ingestPreview(
+                image, source: source, unmanaged: unmanaged,
+                mirrored: self.session.decoder.presentedPictureFlip ?? false,
+                timecode: self.session.status.timecodeClock,
+                isRecording: self.session.status.isRecording)
+        }
+        session.onChromePublished = { [weak self] in
+            self?.publishWatchState()
+        }
+        watchRelay.activate()
+        publishWatchState()
+    }
+
+    func publishWatchState() {
+        watchRelay.ingestState(
+            WatchRelayState.snapshot(
+                status: session.status,
+                phase: session.phase,
+                cameraName: session.connectedCamera?.name ?? "",
+                feedLive: session.decoder.lastPresentedAt != nil))
+    }
+
+    func watchToggleRecord() -> WatchCommandResult {
+        watchShutter(photo: false)
+    }
+
+    func watchCapture() -> WatchCommandResult {
+        watchShutter(photo: true)
+    }
+
+    private func watchShutter(photo: Bool) -> WatchCommandResult {
+        let recording = session.status.isRecording
+        if session.controlBusy || session.isBrowsingMedia {
+            return WatchCommandResult(
+                accepted: false, isRecording: recording, error: WatchRelayCopy.busy)
+        }
+        guard case .live = session.phase else {
+            return WatchCommandResult(
+                accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+        }
+        let isPhoto = session.currentShootingMode?.isPhoto == true
+        if photo, !isPhoto {
+            return WatchCommandResult(
+                accepted: false, isRecording: recording, error: WatchRelayCopy.switchToPhoto)
+        }
+        if !photo, isPhoto {
+            return WatchCommandResult(
+                accepted: false, isRecording: recording, error: WatchRelayCopy.switchToVideo)
+        }
+        session.pressShutter()
+        publishWatchState()
+        return WatchCommandResult(accepted: true, isRecording: recording, error: nil)
+    }
 }
 
 enum LiveOperatorPanel: Equatable {
@@ -595,6 +672,7 @@ struct AppRoot: View {
                     "Diagnostics copied — paste into TestFlight feedback"
             }
             model.prepareStartup()
+            model.activateWatchRelay()
             UIApplication.shared.isIdleTimerDisabled = model.keepScreenAwake
         }
         .onChange(of: model.relayClient.status) { _, status in

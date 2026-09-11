@@ -59,7 +59,20 @@ tunnel still up, the waiting well uses `LocalVPNFilter.liveHint`. Do not
 name AdGuard / Blokada / sister camera apps in chrome — the handbook FAQ
 does.
 
-Record confirmation is a bottom action sheet, not a centred dialog.
+Record confirmation is a bottom action sheet, not a centred dialog. Apple
+Watch rec / shutter skips that sheet (the phone may be in a cage), same as
+gamepad Cross/A.
+
+Watch placeholders: **Open OpenPocketCine on iPhone** only when there is
+no snapshot yet (not on wrist-down). **No camera connected** overlays even
+a retained picture after an explicit disconnect; stale frame timecode is cleared.
+**Waiting for live view** appears before the first picture. Always On keeps
+rec / timecode / last frame on the dimmed face. Third-party apps cannot
+match Flashlight brightness or disable the idle backlight.
+`WKExtension.isFrontmostTimeoutExtended` is unsupported since watchOS 7.
+Wake duration is **Settings → Display & Brightness → Wake Duration → 70
+Seconds** on the watch (15 s default). After that the system Always On
+dim applies; the companion does not extra-fade the picture.
 
 Link health in the top bar is delivery (FPS chip), not RSSI.
 

@@ -52,6 +52,14 @@ final class HevcDecoder {
     var effects = LiveImageEffects() {
         didSet { applyEffectsChange() }
     }
+    /// Installed companion needs decoded pixels even with AF-S and all assists off.
+    /// Keep the existing decoder through wrist sleep; reachability gates JPEG work.
+    var needsWatchPreview = false {
+        didSet {
+            if needsWatchPreview != oldValue { applyEffectsChange() }
+        }
+    }
+    private var needsDecodedSample: Bool { effects.needsSample || needsWatchPreview }
     /// Last transfer from `CameraStatus.monitorTransfer`. Provider wins when set.
     var incomingTransfer: MonitorTransfer? {
         didSet { syncAssistPolicy() }
@@ -96,6 +104,9 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// Wrist preview. `source` is the VT identity buffer when a cube does not own
+    /// the picture (`nil` for LUT replace). `unmanaged` is a cube product.
+    var onWatchPreview: ((CIImage, CVPixelBuffer?, Bool) -> Void)?
     /// Decoded identity buffer before LUT/PEAK. Watcher-relay encode tap.
     nonisolated(unsafe) var onIdentityFrame: ((CVPixelBuffer) -> Void)?
     /// View-space X flip applied on the host view at present time (not SwiftUI).
@@ -183,7 +194,7 @@ final class HevcDecoder {
         if liveCodec == .avc { return true }
         if prefersPixelBufferDisplay { return true }
         guard hardwareDecoderUnlocked else { return false }
-        return effects.needsSample || sessionOwnsVT
+        return needsDecodedSample || sessionOwnsVT
     }
     /// VT owns the picture so the hardware decoder is not shared with the display layer.
     private var usesPixelBufferDisplay: Bool { prefersPixelBufferDisplay || shouldStartVT }
@@ -462,6 +473,7 @@ final class HevcDecoder {
                     self.sampleBus?.noteDecodedFrame()
                 }
                 if presented && isNewSourceFrame {
+                    self.publishWatchPreview(result)
                     self.notePresentedFrame(sampleRate: true)
                 }
             }
@@ -662,10 +674,10 @@ final class HevcDecoder {
     private func applyEffectsChange() {
         // Parameter sets + assist: start VT now. Gating on lastPresentedAt
         // delayed persisted LUT until the 5 s unlock, then sent 0x09/0xa8.
-        if hasFormat, effects.needsSample {
+        if hasFormat, needsDecodedSample {
             hardwareDecoderUnlocked = true
         }
-        if effects.needsSample { sessionOwnsVT = true }
+        if needsDecodedSample { sessionOwnsVT = true }
         processedFeed?.resetPresentDedup()
         let needVT = shouldStartVT
         let needGPU = effects.needsGPUFeed || presentsOnMetal
@@ -688,7 +700,7 @@ final class HevcDecoder {
         // A fresh VT session cannot decode mid-GOP P-frames. Once VT owns the
         // session, assist off is a present-path change — keep decoding.
         let vtStarting = needVT && !lastNeedsSample
-        let releasingAssist = !effects.needsSample && lastNeedsSample && sessionOwnsVT
+        let releasingAssist = !needsDecodedSample && lastNeedsSample && sessionOwnsVT
         if needVT {
             if vtSession == nil, format != nil { rebuildVT() }
             vtOwnsHardwareDecode = vtSession != nil
@@ -802,6 +814,24 @@ final class HevcDecoder {
                 "feed: freeze lastFrame=\(self.lastPresentedAt.map { now.timeIntervalSince($0) } ?? -1, format: .fixed(precision: 1), privacy: .public)s (keep picture)"
             )
         }
+    }
+
+    private func publishWatchPreview(_ result: LiveAssistEngine.Result) {
+        let cubeOwnsPicture =
+            result.needsGPU && effects.replacesIdentityFeed && !result.overlayOnly
+        let preview: CIImage
+        if cubeOwnsPicture {
+            preview = result.output
+        } else if !result.identity.extent.isEmpty {
+            preview = result.identity
+        } else {
+            preview = CIImage(cvPixelBuffer: result.source)
+        }
+        // Identity JPEGs encode the VT buffer. A cube product has no matching
+        // buffer — passing source there would drop the grade.
+        onWatchPreview?(
+            preview, cubeOwnsPicture ? nil : result.source,
+            cubeOwnsPicture && result.unmanagedBake)
     }
 
     private func applyAssistResult(
@@ -986,7 +1016,7 @@ final class HevcDecoder {
         }
         // Persisted LUT/scopes: start VT on this parameter-set AU. `onHandoffNeedsIDR`
         // still requires a picture, so the first GOP is not cut.
-        if effects.needsSample {
+        if needsDecodedSample {
             hardwareDecoderUnlocked = true
         }
         if shouldStartVT {
@@ -1181,8 +1211,7 @@ final class HevcDecoder {
     @discardableResult
     func enqueueDecodedFrame(
         _ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true, isNewSourceFrame: Bool = true
-    ) -> Bool
-    {
+    ) -> Bool {
         guard commitPictureFlipIfNeeded() else { return false }
         guard Self.isPresentable(imageBuffer) else { return false }
         var format: CMVideoFormatDescription?

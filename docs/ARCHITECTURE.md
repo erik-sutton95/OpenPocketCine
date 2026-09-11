@@ -6,6 +6,7 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | --- | --- | --- |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. **Portable** Foundation. |
 | **iOS app** | `ios/OpenPocketCine/` | SwiftUI **shell**, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Teardown: [live-session](live-session.md). |
+| **Watch companion** | `ios/OpenPocketCineWatch/` | watchOS SwiftUI remote. WatchConnectivity only — never SoftAP. Embedded in the iPhone app. |
 | **Android app** | `Apps/Android/app/` | Compose **shell**. Live picture and HUD I/O: [`ANDROID.md`](../ANDROID.md). Operator-visible behavior: [parity](PARITY.md). Teardown: [live-session](live-session.md). |
 | **Android facade** | `Sources/OpenPocketCineAndroidFacade/` | Swift session and JNI boundary |
 | **Tests** | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core |
@@ -15,7 +16,10 @@ Regenerate Android VectorDrawables with `python3 scripts/vendor-lucide-icons.py`
 runtime. Custom keepers: zebra stripes, the Frame.io F mark, and the battery outline pill.
 SF Symbols / Material stay only on controls this catalog has not replaced yet.
 
-The iOS Xcode project is generated: `cd ios && xcodegen generate`.
+The iOS Xcode project is generated: `cd ios && xcodegen generate`. The Watch
+target is `OpenPocketCineWatch` in `ios/project.yml` — do not hand-edit the
+xcodeproj. Wrist protocol: `WatchRelayProtocol` in the core; `WCSession` lives
+in `WatchRelay` (iPhone) and `WatchSessionController` (watch).
 
 ## Connection spine
 

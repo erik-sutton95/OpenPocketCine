@@ -175,6 +175,13 @@ final class OperatorFacingCopyTests: XCTestCase {
             LocalVPNFilter.wizardBanner,
             LocalVPNFilter.liveHint,
             LocalVPNFilter.joinWifiPhoneStep,
+            WatchRelayCopy.openOnIPhone,
+            WatchRelayCopy.noCamera,
+            WatchRelayCopy.waitingLive,
+            WatchRelayCopy.connectFirst,
+            WatchRelayCopy.switchToVideo,
+            WatchRelayCopy.switchToPhoto,
+            WatchRelayCopy.busy,
         ]
     }
 }

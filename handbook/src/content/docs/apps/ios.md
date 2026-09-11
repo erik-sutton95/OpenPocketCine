@@ -102,6 +102,15 @@ project with XcodeGen — see [Setup](../guides/setup/).
   the destination curve. This is a technical transform, not a look.
   Camera originals stay untouched. Rec.709 stays Bake LUT; D-Log M is not converted.
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
+- Apple Watch companion: live preview, timecode, storage, camera battery,
+  record / shutter. Preview works with AF-S and all image assists off, and
+  follows the phone's horizontal picture flip. Disconnect labels the retained
+  picture **No camera connected**. The iPhone stays on camera Wi-Fi; the Watch cannot join
+  it. Keep the iPhone app open. Rec on the wrist does not ask for
+  confirmation. The watch screen follows **Wake Duration** (Watch Settings →
+  Display & Brightness; 70 Seconds is the maximum). Third-party apps cannot
+  stay at Flashlight brightness. Always On keeps the last frame after the
+  backlight dims.
 - **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
 
 The final watcher QR onboarding, passcode and recovery changes still need

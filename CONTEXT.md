@@ -181,8 +181,14 @@ user OAuth (PKCE). Bring-your-own Adobe Native App keys. Not an Adobe
 integrator program.
 _Avoid_: Camera to Cloud, C2C, camera-to-cloud, Camera-to-Cloud
 
+**Watch companion**:
+Apple Watch remote over WatchConnectivity. The iPhone stays the radio.
+Preview, rec, timecode, storage. Not the link-health “Watch” band (50–79).
+_Avoid_: Watch (alone) for the wrist app; Wear (that is Android)
+
 **Physical**:
 Proof on a real phone. Simulator cannot exercise BLE or camera Wi-Fi.
+Watch companion proof is a physical Apple Watch plus iPhone on Pocket SoftAP.
 _Avoid_: on-device (prefer **physical**)
 
 **Hygiene**:

@@ -11,7 +11,13 @@ import os
 @MainActor
 @Observable
 final class CameraSession {
-    var phase: ConnectionPhase = .idle
+    var phase: ConnectionPhase = .idle {
+        didSet {
+            if oldValue != phase { onChromePublished?() }
+        }
+    }
+    /// Watch relay and other chrome observers. Fires after a status publish or phase change.
+    @ObservationIgnored var onChromePublished: (() -> Void)?
     /// Latest telemetry. Control reads this immediately; SwiftUI is notified at 5 Hz
     /// unless REC / expo mode / color / format flipped (`LiveChromeThrottle`).
     /// ISO / shutter / zoom stay on the 5 Hz cadence (camera-truth, no SET guess).
@@ -4859,6 +4865,7 @@ final class CameraSession {
         statusFlushTask?.cancel()
         statusFlushTask = nil
         withMutation(keyPath: \.status) {}
+        onChromePublished?()
     }
 
     private func scheduleStatusFlush() {
@@ -4874,6 +4881,7 @@ final class CameraSession {
             statusFlushTask = nil
             withMutation(keyPath: \.status) {}
             lastStatusMutation = CFAbsoluteTimeGetCurrent()
+            onChromePublished?()
         }
     }
 
