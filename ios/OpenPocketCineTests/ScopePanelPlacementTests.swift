@@ -61,6 +61,17 @@ final class ScopePanelPlacementTests: XCTestCase {
         XCTAssertEqual(stored.center(in: landscape), CGPoint(x: 870, y: 400))
     }
 
+    func testTinyCanvasIncludesThePartOfTheGripAboveAShrunkenChip() {
+        let safe = CGRect(x: 20, y: 30, width: 56, height: 56)
+        let size = ScopePanelPlacement.fittedSize(ScopePanelSize.ndMeter, in: safe)
+        let center = ScopePanelPlacement.clamp(.zero, size: size, in: safe)
+        XCTAssertGreaterThanOrEqual(center.x + size.width / 2 - 12, safe.minX)
+        XCTAssertGreaterThanOrEqual(center.y + size.height / 2 - 12, safe.minY)
+        XCTAssertLessThanOrEqual(center.x + size.width / 2 + 44, safe.maxX)
+        XCTAssertLessThanOrEqual(center.y + size.height / 2 + 44, safe.maxY)
+        XCTAssertFalse(ScopePanelPlacement.isUsable(CGRect(x: 0, y: 0, width: 55, height: 55)))
+    }
+
     func testNoSpaceIsUnusableAndFittingNeverEnlargesPanel() {
         let empty = ScopePanelPlacement.bounds(
             in: CGRect(x: 0, y: 0, width: 100, height: 100),

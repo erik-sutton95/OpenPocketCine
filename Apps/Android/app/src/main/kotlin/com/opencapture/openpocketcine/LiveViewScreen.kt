@@ -466,19 +466,14 @@ fun LiveViewScreen(model: AppModel) {
         val zoom = cluster.zoom
         val stick = cluster.stick
         val gimbalButton = cluster.controls
-        var scopeTop = maxOf(layout.safeTop, layout.topDeck.maxY)
-        var scopeBottom = if (layout.showsBottomBars) layout.assist.minY else layout.feed.maxY
-        var scopeLeft = maxOf(layout.safeLeading, layout.feed.minX)
-        var scopeRight = minOf(layout.viewportWidth - layout.safeTrailing, layout.feed.maxX)
+        // Readout/assist bars may overlap a scope. Only the button lanes reserve space.
+        var scopeTop = layout.safeTop
+        var scopeBottom = layout.viewportHeight - layout.safeBottom
+        var scopeLeft = layout.safeLeading
+        var scopeRight = layout.viewportWidth - layout.safeTrailing
         if (portrait && zones != null) {
-            scopeTop = maxOf(zones.topBar.maxY + LivePortraitMetrics.REC_OPTIONS_GAP +
-                LivePortraitMetrics.REC_OPTIONS, layout.feed.minY)
-            scopeBottom = when {
-                fill && zones.controls.height > 1f -> zones.controls.minY
-                zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
-                else -> zones.systemBar.minY
-            }
-            scopeBottom = minOf(scopeBottom, portraitAspectToggle(layout.onFeed, scopeBottom).minY)
+            // Protect the record/media/settings row while allowing overlap with the assist bar.
+            scopeBottom = zones.systemBar.minY
             if (fill && model.chromeSectionMounts(PocketDispSection.TOOL_BAR)) {
                 scopeLeft = maxOf(scopeLeft, layout.feed.minX + LivePortraitMetrics.ASSIST_RAIL_EDGE +
                     LivePortraitMetrics.ASSIST_RAIL_EXPANDED)

@@ -2,7 +2,7 @@ New and changed
 
 - Your cameras shows connection progress and Cancel on the selected camera. Watch a feed is the eye button beside Multiview.
 - Gimbal controls has Mode, Speed, and Ramp tabs, plus Motion Control in Gimbal tools. Direction Lock holds the pointing direction as the handle rotates.
-- Drag scopes, LIGHTS, and ND directly to move or resize them. Panels stay inside the space clear of fixed controls.
+- Drag scopes, LIGHTS, and ND directly to move or resize them. Scopes may sit partly under top/bottom bars; button lanes stay clear.
 
 Fixes
 

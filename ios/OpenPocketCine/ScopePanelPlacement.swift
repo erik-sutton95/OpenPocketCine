@@ -5,6 +5,7 @@ import SwiftUI
 enum ScopePanelPlacement {
     static let padding: CGFloat = 8
     static let gripExtent: CGFloat = 44
+    static let gripInterior: CGFloat = 12
 
     static func bounds(in canvas: CGRect, clearance: EdgeInsets = EdgeInsets()) -> CGRect {
         let left = canvas.minX + max(0, clearance.leading) + padding
@@ -15,7 +16,7 @@ enum ScopePanelPlacement {
     }
 
     static func isUsable(_ bounds: CGRect) -> Bool {
-        bounds.width > gripExtent + 1 && bounds.height > gripExtent + 1
+        bounds.width >= gripExtent + gripInterior && bounds.height >= gripExtent + gripInterior
     }
 
     static func fittedSize(_ preferred: CGSize, in bounds: CGRect) -> CGSize {
@@ -33,8 +34,8 @@ enum ScopePanelPlacement {
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
-        let minX = bounds.minX + size.width / 2
-        let minY = bounds.minY + size.height / 2
+        let minX = bounds.minX + max(size.width / 2, gripInterior - size.width / 2)
+        let minY = bounds.minY + max(size.height / 2, gripInterior - size.height / 2)
         return CGPoint(
             x: min(max(minX, point.x), max(minX, bounds.maxX - size.width / 2 - gripExtent)),
             y: min(max(minY, point.y), max(minY, bounds.maxY - size.height / 2 - gripExtent)))

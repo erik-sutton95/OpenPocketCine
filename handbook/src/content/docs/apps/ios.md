@@ -10,9 +10,9 @@ project with XcodeGen — see [Setup](../guides/setup/).
 ## Moving scopes
 
 Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
-corner grip to resize. Placement stays inside the space clear of fixed controls,
-with a small gap. Panels fit that space after rotation or resizing, including
-saved positions. Long-press a View Assist toolbar button for its settings.
+corner grip to resize. Scopes can sit partly under the top and bottom bars.
+The record, media, settings, and joystick lanes remain protected, with a small
+gap. Panels fit that space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
 
 ## What it does
 

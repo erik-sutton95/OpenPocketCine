@@ -14,7 +14,8 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
-  resize directly. Placement stays clear of fixed controls, and larger panels
+  resize directly. Scopes can sit partly under the top and bottom bars while
+  staying clear of record/media/settings and joystick lanes. Larger panels
   fit the available space after resizing or rotation.
 
 - Saved-camera rows now show their own connection progress and Cancel action,

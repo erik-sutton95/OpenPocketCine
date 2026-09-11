@@ -61,8 +61,11 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
 - Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
   immediately after 4 pt/dp of movement. Drag the corner directly to resize;
-  preferred scale 0.6…1.6. A shared placement rectangle excludes fixed control
-  lanes plus 8 pt/dp padding. The panel and exterior resize hit area fit inside
+  preferred scale 0.6…1.6. A shared placement rectangle excludes record/media/
+  settings and joystick/zoom button lanes plus 8 pt/dp padding. Scopes may sit
+  partly under the top and bottom readout/assist bars; those bars do not reserve
+  the whole edge. The portrait system button row remains protected.
+  The panel and exterior resize hit area fit inside
   it on every render, drag, resize, and restored position. Position storage
   remains relative to the full canvas. Stationary holds still open existing
   panel options; toolbar long-press options remain available. Geometry tests

@@ -81,8 +81,10 @@ dim applies; the companion does not extra-fade the picture.
 Link health in the top bar is delivery (FPS chip), not RSSI.
 
 Movable scopes and the LIGHTS / ND panels use direct touch-drag. Their corner
-grips resize directly too. Fixed chrome defines the placement rectangle with
-8 pt/dp padding; fit and clamp both the panel and exterior resize hit area when
+grips resize directly too. Scopes may sit partly under top and bottom readout /
+assist bars. Reserve the record/media/settings rail, joystick/zoom lanes, and
+portrait system button row with 8 pt/dp padding; fit and clamp both the panel
+and exterior resize hit area when
 dragging, resizing, restoring saved positions, or changing orientation. Saved
 scale remains the preferred size; a small screen can temporarily fit it smaller.
 Toolbar long presses retain options access. Motion Control's editor keeps its

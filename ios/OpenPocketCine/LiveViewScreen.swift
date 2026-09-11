@@ -380,6 +380,12 @@ struct LiveViewScreen: View {
                 enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive
             )
 
+            LiveScopeOverlays(
+                layout: layout,
+                interfaceLocked: interfaceLocked,
+                chromeClearance: scopeClearance(layout: layout)
+            )
+
             if showsStatusBar {
                 LiveTopChrome(menu: $topMenu)
                     .chromeEditable(.statusBar, editing: editingMode)
@@ -426,12 +432,6 @@ struct LiveViewScreen: View {
             }
             LiveDispToggle()
                 .liveModuleFrame(layout.disp)
-
-            LiveScopeOverlays(
-                layout: layout,
-                interfaceLocked: interfaceLocked,
-                chromeClearance: scopeClearance(layout: layout)
-            )
 
             // After the scope well — that well covers this chip and used to eat the tap.
             if model.chromeSectionMounts(.zoomChip) {
@@ -570,6 +570,10 @@ struct LiveViewScreen: View {
                 enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive
             )
 
+            LiveScopeOverlays(
+                layout: layout, interfaceLocked: interfaceLocked,
+                chromeClearance: scopeClearance(layout: layout, portrait: zones))
+
             if showsStatusBar {
                 LivePortraitTopBar()
                     .chromeEditable(.statusBar, editing: editingMode)
@@ -582,10 +586,6 @@ struct LiveViewScreen: View {
                     .opacity(interfaceLocked ? 0.4 : 1)
                     .offset(x: well.maxX - 50, y: CGFloat(zones.topBar.maxY) + 8)
             }
-
-            LiveScopeOverlays(
-                layout: layout, interfaceLocked: interfaceLocked,
-                chromeClearance: scopeClearance(layout: layout, portrait: zones))
 
             if !isFill, model.chromeSectionMounts(.toolBar), zones.assistToolbar.height > 0 {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -1185,23 +1185,14 @@ extension LiveViewScreen {
         layout: LiveMonitorLayout, portrait: MonitorPortraitZones? = nil
     ) -> EdgeInsets {
         let cluster = activeGimbalCluster(layout, portrait: portrait)
-        var top = max(layout.safeArea.top, layout.topDeck.maxY)
-        var bottomY = layout.showsBottomBars ? layout.assist.minY : layout.feed.maxY
-        var left = max(layout.safeArea.leading, layout.feed.minX)
-        var right = min(layout.viewport.width - layout.safeArea.trailing, layout.feed.maxX)
+        // Readout/assist bars may overlap a scope. Only the button lanes reserve space.
+        var top = layout.safeArea.top
+        var bottomY = layout.viewport.height - layout.safeArea.bottom
+        var left = layout.safeArea.leading
+        var right = layout.viewport.width - layout.safeArea.trailing
         if let zones = portrait {
-            top = max(CGFloat(zones.topBar.maxY) + 48, layout.feed.minY)
-            bottomY = CGFloat(
-                Self.portraitBelowFeedFloor(
-                    fill: Self.portraitChoice(model: model).fill, zones: zones))
-            if !Self.portraitChoice(model: model).vertical {
-                bottomY = min(
-                    bottomY,
-                    Self.portraitAspectToggleFrame(
-                        picture: layout.onFeed, fill: Self.portraitChoice(model: model).fill,
-                        zones: zones
-                    ).minY)
-            }
+            // The portrait record/media/settings row remains protected below the assist bar.
+            bottomY = CGFloat(zones.systemBar.minY)
             if model.headTrackingEnabled {
                 let floor = CGFloat(
                     Self.portraitBelowFeedFloor(
