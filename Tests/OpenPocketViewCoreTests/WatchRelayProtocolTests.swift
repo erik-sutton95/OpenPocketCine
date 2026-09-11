@@ -188,6 +188,17 @@ struct WatchRelayProtocolTests {
                 isReachable: true, state: noCamera, hasFeed: false) == .noCamera)
     }
 
+    @Test("Disconnect labels a retained picture, even while the wrist is down")
+    func disconnectedSnapshotOverlaysOldFrame() {
+        let noCamera = WatchRelayState.snapshot(
+            status: CameraStatus(), phase: .idle, cameraName: "", feedLive: false)
+        for reachable in [true, false] {
+            #expect(
+                WatchMonitorPlaceholder.resolve(
+                    isReachable: reachable, state: noCamera, hasFeed: true) == .noCamera)
+        }
+    }
+
     @Test("Operator copy never names a sister app")
     func operatorCopyIsPocketFacing() {
         let facing = [

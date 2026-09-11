@@ -74,6 +74,8 @@ enum ScopePanelSize {
     static let histogram = CGSize(width: 250, height: 77)
     static let vectorscope = CGSize(width: 190, height: 190)
     static let trafficLights = CGSize(width: 74, height: 168)
+    /// Compact HUD chip (ND number + stops), not a scope plate.
+    static let ndMeter = CGSize(width: 84, height: 30)
 }
 
 /// Display level from `ScopeDisplayScale` → y inside `rect`.
@@ -280,6 +282,7 @@ extension MonitorTransfer {
         case .rec709: "709"
         case .hdr: "HLG"
         case .dlog: "DLOG"
+        case .dlogm: "DLM ≈"
         case .dlog2: "DL2"
         }
     }
@@ -365,7 +368,7 @@ struct WaveformOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = WaveformAssist.store.options
         let size = WaveformAssist.panelSize(scale: options.scale)
         let intensity = WaveformAssist.intensity(options.brightness)
@@ -530,7 +533,7 @@ struct ParadeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let transfer = assist.transfer
         let options = ParadeAssist.store.options
         let size = ParadeAssist.panelSize(scale: options.scale)
@@ -637,7 +640,7 @@ struct HistogramOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = HistogramAssist.store.options
         let size = HistogramAssist.panelSize(scale: options.scale)
         let plot = ScopeMiniChrome(
@@ -762,7 +765,7 @@ struct VectorscopeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.frameSamples.displayBundle
+        let assist = model.monitorSamples.displayBundle
         let options = VectorscopeAssist.store.options
         let plot = ScopeMiniChrome(
             title: "Vector",
@@ -946,7 +949,7 @@ struct TrafficLightsOverlay: View {
         ) {
             // Metered once in the sampler with the operator threshold riding
             // `LiveImageEffects.trafficThreshold` — render the bundle directly.
-            TrafficLightsMeterMini(reading: model.frameSamples.bundle.traffic)
+            TrafficLightsMeterMini(reading: model.monitorSamples.bundle.traffic)
         }
     }
 }

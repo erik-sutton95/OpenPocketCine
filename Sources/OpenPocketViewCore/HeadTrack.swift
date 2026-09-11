@@ -198,15 +198,19 @@ public struct HeadTrack: Equatable, Sendable {
         Quat.look(from: current, origin: origin)
     }
 
-    /// Pocket 4 / 4 Pro controllable range (DJI spec) in `0x04/0x05` degrees.
+    /// Operator-confirmed tilt bounds in display `0x04/0x05` degrees.
     /// That push *is* gimbal space — do not sweep the stick to build a map.
-    /// Pan 0 is front; + is the short side; − is the long side (selfie ~−180).
-    /// The gap past +58° is not a stick wrap — 180 is `FE 09`.
+    /// Pan 0 is front; the positive arc passes selfie to raw −135° (= +225°).
+    /// The other endpoint is −48°; the intervening negative arc is unreachable.
     public enum Reach {
-        public static let panMinDeg = -235.0
-        public static let panMaxDeg = 58.0
-        public static let tiltMinDeg = -120.0
+        public static let panMinDeg = -48.0
+        public static let panMaxDeg = 225.0
+        public static let tiltMinDeg = -44.0
         public static let tiltMaxDeg = 70.0
+
+        /// Middle of the unreachable arc in raw `0x04/0x05` yaw. Raw yaw past
+        /// below it is the long side, reached by panning positive past selfie.
+        public static var gapMidDeg: Double { (panMaxDeg + panMinDeg - 360) / 2 }
 
         public static func clampPan(_ deg: Double) -> Double {
             min(max(deg, panMinDeg), panMaxDeg)
@@ -217,14 +221,14 @@ public struct HeadTrack: Equatable, Sendable {
         }
 
         /// Unbounded SET-relative look → nearest reachable yaw/pitch.
-        /// Interval expands to include SET so a lock at selfie (~−180) does not slam.
+        /// Tilt bounds never expand to include an invalid shared-forward pose.
         public static func project(
             lookRight: Double, lookUp: Double, yaw0: Double, pitch0: Double
         ) -> (yaw: Double, pitch: Double) {
-            let panLo = min(panMinDeg, yaw0)
-            let panHi = max(panMaxDeg, yaw0)
-            let tiltLo = min(tiltMinDeg, pitch0)
-            let tiltHi = max(tiltMaxDeg, pitch0)
+            let panLo = panMinDeg
+            let panHi = panMaxDeg
+            let tiltLo = tiltMinDeg
+            let tiltHi = tiltMaxDeg
             return (
                 min(max(yaw0 + lookRight, panLo), panHi),
                 min(max(pitch0 + lookUp, tiltLo), tiltHi)
@@ -257,67 +261,6 @@ public struct HeadTrack: Equatable, Sendable {
         }
     }
 
-    /// One gimbal axis of the observer: dead-reckoned pose plus telemetry
-    /// bleed, and the target-rate EMA that feeds forward.
-    private struct AxisState: Equatable, Sendable {
-        var model = 0.0
-        var lastThrow = 0.0
-        var lastSeenTenth: Int16?
-        var stableFor: TimeInterval = 0
-        var movedSinceFresh = 0.0
-        var dead = false
-        var prevTarget: Double?
-        var rate = 0.0
-        /// Feed-forward rate: min-magnitude of instant and EMA, zero on a
-        /// sign split — collapses the moment the head stops so the EMA tail
-        /// cannot push past the look.
-        var ffRate = 0.0
-
-        mutating func seed(_ deg: Double) {
-            self = AxisState()
-            model = deg
-        }
-
-        /// Dead-reckon with the throw we actually streamed last tick.
-        mutating func integrate(dt: TimeInterval) {
-            guard dt > 0 else { return }
-            let step = lastThrow * HeadTrack.stickRateDegPerSec * dt
-            model += step
-            movedSinceFresh += abs(step)
-        }
-
-        mutating func observe(tenth: Int16?, dt: TimeInterval) {
-            guard let tenth else { return }
-            let live = HeadTrack.tenthToDeg(tenth)
-            if tenth != lastSeenTenth {
-                lastSeenTenth = tenth
-                stableFor = 0
-                dead = false
-                movedSinceFresh = 0
-                // Fresh but stale by `telemetryLag` — predict it forward by
-                // our own commanded motion before bleeding it in.
-                let predicted =
-                    live + lastThrow * HeadTrack.stickRateDegPerSec * HeadTrack.telemetryLag
-                model += HeadTrack.freshBlend * HeadTrack.wrapDeg(predicted - model)
-                return
-            }
-            stableFor += dt
-            if movedSinceFresh >= HeadTrack.telemetryDeadDeg { dead = true }
-            guard !dead, stableFor >= HeadTrack.stableAfter else { return }
-            model += HeadTrack.stableBlend * HeadTrack.wrapDeg(live - model)
-        }
-
-        mutating func noteTarget(_ target: Double, dt: TimeInterval) {
-            defer { prevTarget = target }
-            guard dt > 0, let prev = prevTarget else { return }
-            let instant = HeadTrack.wrapDeg(target - prev) / dt
-            rate += HeadTrack.targetRateSmooth * (instant - rate)
-            ffRate =
-                instant.sign == rate.sign
-                ? (abs(instant) < abs(rate) ? instant : rate) : 0
-        }
-    }
-
     public private(set) var isCentered = false
 
     private var gimbalYaw0Deg = 0.0
@@ -327,8 +270,8 @@ public struct HeadTrack: Equatable, Sendable {
     private var engaged = false
     private var holding = false
     private var restingFor: TimeInterval = 0
-    private var pan = AxisState()
-    private var tilt = AxisState()
+    private var pan = GimbalAxisObserver()
+    private var tilt = GimbalAxisObserver()
 
     /// Observer pose for the HUD/log — where the model believes the gimbal
     /// is right now, ahead of stale `0x04/0x05`.
@@ -344,8 +287,8 @@ public struct HeadTrack: Equatable, Sendable {
         restingFor = 0
         lookRightDeg = 0
         lookUpDeg = 0
-        pan = AxisState()
-        tilt = AxisState()
+        pan = GimbalAxisObserver()
+        tilt = GimbalAxisObserver()
     }
 
     @discardableResult
@@ -408,8 +351,8 @@ public struct HeadTrack: Equatable, Sendable {
             if mag < Self.engageDeg, !moving { return idle(dt: dt) }
             engaged = true
         }
-        var x = throwFor(errPan) + pan.ffRate / Self.stickRateDegPerSec
-        var y = throwFor(errTilt) + tilt.ffRate / Self.stickRateDegPerSec
+        var x = throwFor(errPan) + pan.rateMap.throw(forRate: pan.ffRate)
+        var y = throwFor(errTilt) + tilt.rateMap.throw(forRate: tilt.ffRate)
         x = min(Swift.max(x, -Self.maxThrow), Self.maxThrow)
         y = min(Swift.max(y, -Self.maxThrow), Self.maxThrow)
         if abs(x) < Self.restThrow { x = 0 }

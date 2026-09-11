@@ -76,6 +76,10 @@ swift-test:
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
 
+# Print the this-build feat/fix window for TestFlight / Play notes.
+tester-notes-window:
+    ./scripts/tester-notes-window.sh
+
 # Validate TestFlight "What to Test" copy and print it.
 testflight-notes:
     ./scripts/ios-release-notes-check.sh
@@ -101,6 +105,10 @@ ios-generate:
 ios-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
+# Build a development-signed app for a connected iPhone/iPad prototype test.
+ios-device-build: ios-generate
+    xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+
 # Run the iOS shell's XCTest suite on the first available iPhone simulator.
 ios-test: ios-generate
     #!/usr/bin/env bash
@@ -120,7 +128,7 @@ watch-build: ios-generate
 
 # Run all native production checks that do not require camera hardware.
 # swift-lint is in `just check` / `just lint`; run `just format` before making it a merge gate.
-native-check: swift-test ios-test ios-build watch-build
+native-check: swift-test relay-test ios-test ios-build watch-build
 
 # Format production Swift sources.
 format: swift-format
@@ -232,3 +240,11 @@ android-play-sync-secrets:
 # Dispatch Android Play on main (signed AAB; Play API upload if PLAY_SERVICE_ACCOUNT_JSON exists).
 android-play-dispatch track="alpha" status="completed":
     gh workflow run android-play.yml --ref main --field track={{track}} --field status={{status}}
+
+# Deterministic macOS load tests against the iOS relay transport and encoder shell.
+relay-test:
+    ./scripts/test-watcher-relay.sh
+
+# Fast programmed-motion regression loop.
+gimbal-test:
+    swift test --filter 'Gimbal(Repeatability|SafeRoute)Tests'

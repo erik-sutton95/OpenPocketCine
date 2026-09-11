@@ -204,13 +204,31 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
             return VideoFormat(res, rate)
         }
 
-        /** iOS `CamCapVideoFormat.resolutions`. Empty camcap → 1080 / 4K tabs. */
+        /** Pocket 3 normal-Video fallback; reported capabilities always win. */
+        fun pickerFormats(available: List<VideoFormat>, model: CameraModel?, shootingMode: Int): List<VideoFormat> {
+            if (available.isNotEmpty() || model == null || !CameraModel.looksLikePocket3(model.name) ||
+                shootingMode != CameraCommands.SHOOT_VIDEO
+            ) return available
+            return pocket3VideoFormats
+        }
+
+        private val pocket3VideoFormats = listOf(
+            VideoResolution.P1080, VideoResolution.P2_7K, VideoResolution.P4K,
+            VideoResolution.P1080_1X1, VideoResolution.P2160_1X1, VideoResolution.P3K_1X1,
+            VideoResolution.P1080_9X16, VideoResolution.P2_7K_9X16, VideoResolution.P3K_9X16,
+        ).flatMap { res -> VideoFrameRate.labeledVideo.map { rate -> VideoFormat(res, rate) } }
+
+        /** iOS `CamCapVideoFormat.resolutions`. Preserve a reported size when camcap is empty. */
         fun resolutions(
             available: List<VideoFormat>,
             current: VideoResolution?,
             aspect: VideoAspect? = null,
         ): List<VideoResolution> {
-            if (available.isEmpty()) return VideoResolution.labeledVideo
+            if (available.isEmpty()) {
+                val fallback = VideoResolution.labeledVideo
+                val resolutions = if (current != null && current !in fallback) listOf(current) else fallback
+                return resolutions.filter { aspect == null || it.aspect == aspect }
+            }
             val out = ArrayList<VideoResolution>()
             val seen = HashSet<VideoResolution>()
             for (format in available) {

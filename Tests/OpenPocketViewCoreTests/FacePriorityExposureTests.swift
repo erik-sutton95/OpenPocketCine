@@ -4,6 +4,14 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct FacePriorityExposureTests {
+    @Test func dLogMScopeEstimateDoesNotChangeAutomaticExposure() {
+        for byte in 0...255 {
+            let signal = Double(byte) / 255
+            #expect(FacePriorityExposure.nextEV(current: .zero, encoded: signal, transfer: .dlogm)
+                == FacePriorityExposure.nextEV(current: .zero, encoded: signal, transfer: .dlog))
+        }
+    }
+
     @Test func oneDarkFaceAddsPositiveEV() {
         let transfer = MonitorTransfer.rec709
         let dark = transfer.encodeLinear(0.18 / 4)

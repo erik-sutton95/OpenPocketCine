@@ -13,7 +13,7 @@ extension LiveColorScience {
         case .rec709, .hdr:
             let gradient = 1.57
             return gradient * gradient
-        case .dlog, .dlog2:
+        case .dlog, .dlog2, .dlogm:
             return 1
         }
     }
@@ -25,7 +25,6 @@ enum PocketFalseColorMap {
     /// 64³ keyed on encoded luma (not linearized Reinhard IRE). 33³ + the old
     /// tone map quantized live D-Log2 into four posters.
     static let cubeSize = 64
-    static let zcStopsDetailBlend = 0.4
     static let minimumSceneStop = -6.0
 
     /// Value key — the old per-frame interpolated-String keys allocated on every preview tick.
@@ -41,6 +40,19 @@ enum PocketFalseColorMap {
         var clipByte: Int
     }
 
+    private struct OverlayKey: Hashable, Sendable {
+        var scale: FalseColorScaleKind
+        var transfer: MonitorTransfer
+        var managedRender: Bool
+    }
+
+    struct OverlayMaps: Sendable {
+        var dimension: Int
+        var paint: Data
+        var weight: Data
+        var clipByte: Int
+    }
+
     /// Both caches bound to 6 entries (an operator flips between a couple of scale/mode
     /// pairs; unbounded growth kept every visited 33³ lattice alive for the session).
     private struct Store {
@@ -49,6 +61,10 @@ enum PocketFalseColorMap {
         var data: [CubeKey: (Int, Data)] = [:]
         var dataOrder: [CubeKey] = []
         var warming: Set<CubeKey> = []
+        var overlays: [OverlayKey: OverlayMaps] = [:]
+        var overlayOrder: [OverlayKey] = []
+        var requestedOverlays: [OverlayKey: Int] = [:]
+        var buildingOverlays: Set<OverlayKey> = []
 
         static func touch(_ order: inout [CubeKey], _ key: CubeKey) {
             if let index = order.firstIndex(of: key) {
@@ -128,13 +144,11 @@ enum PocketFalseColorMap {
     static func overlayPaintData(
         scale: FalseColorScaleKind, mode: ColorMode, managedRender: Bool = false
     ) -> (Int, Data)? {
-        warmedData(
-            key(
-                managedRender ? .overlayPaintDisplay : .overlayPaint,
-                scale: scale, transfer: MonitorTransfer(mode)))
+        overlayPairData(scale: scale, mode: mode, managedRender: managedRender)
+            .map { ($0.dimension, $0.paint) }
     }
 
-    /// IRE / PStops full lattice: WAVE-axis grayscale with the painted zones.
+    /// IRE / CineStop / EL Zone full lattice: WAVE-axis grayscale with the painted zones.
     /// Not used on the live path — replacing the identity feed with this cube
     /// was the DeviceRGB contrast shift. Tests still sample it.
     static func fullPaintData(scale: FalseColorScaleKind, mode: ColorMode) -> (Int, Data)? {
@@ -142,7 +156,72 @@ enum PocketFalseColorMap {
     }
 
     static func overlayWeightData(scale: FalseColorScaleKind, mode: ColorMode) -> (Int, Data)? {
-        warmedData(key(.overlayWeight, scale: scale, transfer: MonitorTransfer(mode)))
+        overlayPairData(scale: scale, mode: mode).map { ($0.dimension, $0.weight) }
+    }
+
+    /// Paint and mask always come from one exposure snapshot. Keep the last
+    /// complete map for this look while a new exposure is warming.
+    static func overlayPairData(
+        scale: FalseColorScaleKind, mode: ColorMode, managedRender: Bool = false
+    ) -> OverlayMaps? {
+        let key = OverlayKey(
+            scale: scale, transfer: MonitorTransfer(mode), managedRender: managedRender)
+        let clip = ScopeExposureCeiling.clipByte(transfer: key.transfer)
+        let request = store.withLock { state -> (OverlayMaps?, Bool) in
+            let previous = state.overlays[key]
+            if previous != nil {
+                state.overlayOrder.removeAll { $0 == key }
+                state.overlayOrder.append(key)
+            }
+            if state.buildingOverlays.contains(key) {
+                state.requestedOverlays[key] = clip
+                return (previous, false)
+            }
+            guard previous?.clipByte != clip else { return (previous, false) }
+            state.requestedOverlays[key] = clip
+            return (previous, state.buildingOverlays.insert(key).inserted)
+        }
+        if request.1 { scheduleOverlay(key) }
+        return request.0
+    }
+
+    private static func scheduleOverlay(_ key: OverlayKey) {
+        warmQueue.async {
+            guard let clip = store.withLock({ $0.requestedOverlays.removeValue(forKey: key) })
+            else {
+                store.withLock { _ = $0.buildingOverlays.remove(key) }
+                return
+            }
+            let paintKey = CubeKey(
+                kind: key.managedRender ? .overlayPaintDisplay : .overlayPaint,
+                scale: key.scale, transfer: key.transfer, clipByte: clip)
+            let weightKey = CubeKey(
+                kind: .overlayWeight, scale: key.scale,
+                transfer: key.transfer, clipByte: clip)
+            let paint = build(paintKey)
+            let weight = build(weightKey)
+            let maps = OverlayMaps(
+                dimension: paint.size,
+                paint: paint.rgbaComponents.withUnsafeBytes { Data($0) },
+                weight: weight.rgbaComponents.withUnsafeBytes { Data($0) }, clipByte: clip)
+            let again = store.withLock { state in
+                let latest = state.requestedOverlays[key] ?? clip
+                if latest == clip || state.overlays[key] == nil {
+                    state.overlays[key] = maps
+                    state.overlayOrder.removeAll { $0 == key }
+                    state.overlayOrder.append(key)
+                }
+                while state.overlayOrder.count > 3 {
+                    state.overlays[state.overlayOrder.removeFirst()] = nil
+                }
+                if latest != clip, state.overlays[key]?.clipByte != latest { return true }
+                state.requestedOverlays[key] = nil
+                state.buildingOverlays.remove(key)
+                return false
+            }
+            // One queued request per look; intermediate ISO updates are replaced.
+            if again { scheduleOverlay(key) }
+        }
     }
 
     /// Kick the 64³ overlay build before the first FALSE frame. Every scale
@@ -228,20 +307,22 @@ enum PocketFalseColorMap {
     private static func build(_ key: CubeKey) -> CubeLUT {
         switch key.kind {
         case .full:
-            buildCube(scale: key.scale, transfer: key.transfer)
+            buildCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte)
         case .overlayPaint:
-            overlayCube(scale: key.scale, transfer: key.transfer) { ($0.red, $0.green, $0.blue) }
+            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
+                ($0.red, $0.green, $0.blue)
+            }
         case .overlayPaintDisplay:
             // The managed bake output-converts linear working space → DeviceRGB
             // (≈ sRGB encode; the measured "untagged cube result gets lifted"
             // from `LiveMonitorWorkingSpace`). Store decode(target) so the encode
             // lands the band on its authored color.
-            overlayCube(scale: key.scale, transfer: key.transfer) {
+            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
                 (srgbDecode($0.red), srgbDecode($0.green), srgbDecode($0.blue))
             }
         case .overlayWeight:
             // Mask values are consumed in working space, never output-converted.
-            overlayCube(scale: key.scale, transfer: key.transfer) {
+            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
                 ($0.weight, $0.weight, $0.weight)
             }
         }
@@ -253,13 +334,16 @@ enum PocketFalseColorMap {
         return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
     }
 
-    private static func buildCube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT
-    {
+    private static func buildCube(
+        scale: FalseColorScaleKind, transfer: MonitorTransfer, clipByte: Int
+    ) -> CubeLUT {
         let size = cubeSize
         let denom = Double(size - 1)
         // Hoisted: `falseColorBands` per lattice point rebuilt the band table
         // 64³ times — the seconds-long warm behind FALSE "missing" on device.
-        let bandList = bands(scale: scale, transfer: transfer)
+        let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
+        let bandList = LiveColorScience.falseColorBands(
+            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -269,9 +353,16 @@ enum PocketFalseColorMap {
                     let eg = Double(g) / denom
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
+                    let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
+                    let ire = min(
+                        100,
+                        max(
+                            0,
+                            (level - ScopeDisplayScale.crushLevel)
+                                / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
+                        ))
                     let value =
-                        scale == .stops
+                        scale.liveScale.usesSceneStops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let color = renderedColor(
                         value: value, scale: scale, bands: bandList,
@@ -289,6 +380,7 @@ enum PocketFalseColorMap {
     private static func overlayCube(
         scale: FalseColorScaleKind,
         transfer: MonitorTransfer,
+        clipByte: Int,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
         )
@@ -296,7 +388,9 @@ enum PocketFalseColorMap {
         let size = cubeSize
         let denom = Double(size - 1)
         // Hoisted out of the 64³ walk — see `buildCube`.
-        let bandList = bands(scale: scale, transfer: transfer)
+        let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
+        let bandList = LiveColorScience.falseColorBands(
+            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -306,9 +400,16 @@ enum PocketFalseColorMap {
                     let eg = Double(g) / denom
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
+                    let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
+                    let ire = min(
+                        100,
+                        max(
+                            0,
+                            (level - ScopeDisplayScale.crushLevel)
+                                / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
+                        ))
                     let value =
-                        scale == .stops
+                        scale.liveScale.usesSceneStops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
@@ -331,13 +432,13 @@ enum PocketFalseColorMap {
         return w.red * red + w.green * green + w.blue * blue
     }
 
-    /// Band colour + coverage. Limits: weight 0 leaves the picture. IRE / PStops
-    /// always paint — gaps are WAVE grayscale, not a hole onto the camera image.
+    /// Band colour + coverage. Limits: weight 0 leaves the picture. IRE / CineStop /
+    /// EL Zone always paint — gaps are WAVE grayscale, not a hole onto the camera image.
     private static func overlayPaint(
         value: Double, scale: FalseColorScaleKind, bands: [LiveFalseColorBand], monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .elZone:
             let color = renderedColor(
                 value: value, scale: scale, bands: bands,
                 source: (0, 0, 0), monitorGray: monitorGray)
@@ -369,7 +470,7 @@ enum PocketFalseColorMap {
     ) -> (red: Double, green: Double, blue: Double) {
         let base: (red: Double, green: Double, blue: Double)
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .elZone:
             let gray = min(1, max(0, monitorGray))
             base = (gray, gray, gray)
         case .limits:
@@ -409,14 +510,8 @@ enum PocketFalseColorMap {
     private static func renderedBandColor(
         _ band: LiveFalseColorBand, scale: FalseColorScaleKind, detailGray: Double
     ) -> (red: Double, green: Double, blue: Double) {
-        guard scale == .stops else { return (band.red, band.green, band.blue) }
-        let gray = min(1, max(0, detailGray))
-        let colorWeight = 1 - zcStopsDetailBlend
-        return (
-            band.red * colorWeight + gray * zcStopsDetailBlend,
-            band.green * colorWeight + gray * zcStopsDetailBlend,
-            band.blue * colorWeight + gray * zcStopsDetailBlend
-        )
+        _ = detailGray
+        return (band.red, band.green, band.blue)
     }
 
     private static func bandWeight(
@@ -450,22 +545,24 @@ extension FalseColorScaleKind {
         case .stops: .stops
         case .ire: .ire
         case .limits: .limits
+        case .elZone: .elZone
         }
     }
 
     var transitionWidth: Double {
         switch self {
-        case .stops: 0.05
-        case .ire, .limits: 0.5
+        case .elZone: 0.05
+        case .stops, .ire, .limits: 0.5
         }
     }
 
     /// OpenZCine `FalseColorReference.scaleLabel`.
     var referenceScaleLabel: String {
         switch self {
-        case .stops: "PStops"
+        case .stops: "CineStop"
         case .ire: "IRE"
         case .limits: "Limits"
+        case .elZone: "EL Zone"
         }
     }
 

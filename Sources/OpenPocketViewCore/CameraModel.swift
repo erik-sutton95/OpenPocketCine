@@ -79,6 +79,9 @@ public struct CameraModel: Equatable, Sendable {
         return 100
     }
 
+    /// Pocket 3-axis gimbal. Nano has none — hide stick, mode, and A·B·C.
+    public var hasGimbal: Bool { family == .pocket }
+
     /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF.
     public var supportsTapFocus: Bool { family != .nano }
 

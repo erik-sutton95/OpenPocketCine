@@ -29,6 +29,12 @@ final class OperatorFacingCopyTests: XCTestCase {
                 text.localizedCaseInsensitiveContains("Nikon"),
                 "operator copy names Nikon: \(text)")
             XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Blackmagic"),
+                "operator copy names Blackmagic: \(text)")
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Black Magic"),
+                "operator copy names Black Magic: \(text)")
+            XCTAssertFalse(
                 text.localizedCaseInsensitiveContains("Camera to Cloud"),
                 "operator copy uses Camera to Cloud: \(text)")
             XCTAssertFalse(
@@ -65,6 +71,11 @@ final class OperatorFacingCopyTests: XCTestCase {
             MediaDeliveryCopy.bakeLUTHelp(statusLabel: "Auto · D-Log2 → Rec.709"),
             MediaDeliveryCopy.bakeExposure,
             MediaDeliveryCopy.bakeExposureHelp,
+            MediaDeliveryCopy.convertLog,
+            MediaDeliveryCopy.convertLogHelp,
+            MediaDeliveryCopy.convertLogDestination,
+            MediaDeliveryCopy.convertLogHelpUnavailable,
+            MediaDeliveryDestination.nativeShare.subtitle,
             AudioAssist.helpCopy,
             CrosshairAssist.helpCopy,
             MirrorAssist.explanation,
@@ -90,6 +101,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             "couldn't switch from other camera — tap Connect again",
             SettingsHelpCopy.frameIO,
             SettingsHelpCopy.shareThisFeed,
+            SettingsHelpCopy.watchAFeed,
             SettingsHelpCopy.broadcastPriority,
             SettingsHelpCopy.watcherPasscode,
             SettingsHelpCopy.controlRequests,
@@ -103,6 +115,9 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.keepScreenAwake,
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,
+            NDAssist.helpCopy,
+            NDAssist.notationTitle,
+            NDAssist.notationHelp,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.supportHelp,
             SettingsHelpCopy.reportHelp,
@@ -145,6 +160,18 @@ final class OperatorFacingCopyTests: XCTestCase {
                 .pausedAfterRepeatedDrops(drops: 3), deviceName: "Pocket 4 Pro"),
             SessionRecoveryCopy.heldFrameBadge,
             ControlHud.recordingColorLockNote,
+            ControlHud.gimbalLockUnavailable,
+            ControlHud.gimbalPoseNotReady,
+            ControlHud.gimbalHoldStill,
+            ControlHud.programmedMoveNeedAB,
+            ControlHud.gimbalNeedsCalibration,
+            LiveGimbalCopy.title,
+            LiveGimbalCopy.mode,
+            LiveGimbalCopy.speed,
+            LiveGimbalCopy.ramp,
+            LiveGimbalCopy.programmedMove,
+            LiveGimbalCopy.runMove,
+            LiveGimbalCopy.stopMove,
             LocalVPNFilter.wizardBanner,
             LocalVPNFilter.liveHint,
             LocalVPNFilter.joinWifiPhoneStep,

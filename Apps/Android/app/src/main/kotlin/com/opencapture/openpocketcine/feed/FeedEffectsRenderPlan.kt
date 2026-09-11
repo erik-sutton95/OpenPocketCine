@@ -193,6 +193,7 @@ internal object FeedEffectsRenderPlanFactory {
                     histogram = histogram,
                     vectorscope = vectorscope,
                     trafficLights = trafficLights,
+                    ndMeter = shown(LiveAssistTool.ND),
                     trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
                     colorMode = colorMode,
                     iso = if (iso in 50..102_400) iso else ScopeExposureCeiling.REFERENCE_EI,
@@ -276,6 +277,7 @@ internal object FeedEffectsRenderPlanFactory {
                 FalseColorScale.STOPS -> 0
                 FalseColorScale.IRE -> 1
                 FalseColorScale.LIMITS -> 2
+                FalseColorScale.EL_ZONE -> 3
             }
         val kind = if (paint) "paint" else "weight"
         return PackedCubeCache.value("$kind:$ordinal:$colorMode:$iso") {

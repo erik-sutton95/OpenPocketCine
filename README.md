@@ -132,12 +132,12 @@ when Frame.io is configured.
   stick or a connected game controller; Android live control is a thinner set: record, ISO,
   shutter, white balance, tap-focus, gimbal stick)
 - Scopes, exposure and focus assists, framing tools, and customizable DISP chrome on iOS
-- Clip browsing, playback, LUT preview, LUT bake on export, and optional Frame.io on iOS
+- Clip browsing, playback, LUT preview, LUT bake and Convert log on export, and optional Frame.io on iOS
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
 The native Android implementation lives in this repository as a phone shell with live pairing,
 HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Play closed testing is
-the waitlist path on [openpocketcine.app](https://openpocketcine.app/). Clip export LUT bake and
+the waitlist path on [openpocketcine.app](https://openpocketcine.app/). Clip export LUT bake, Convert log, and
 GPU scopes are iOS today.
 
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may

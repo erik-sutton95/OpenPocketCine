@@ -19,6 +19,7 @@ class LiveAssistStateTest {
                 LiveAssistTool.HISTO,
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
+                LiveAssistTool.ND,
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,

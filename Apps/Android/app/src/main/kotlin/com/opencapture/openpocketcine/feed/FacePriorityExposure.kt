@@ -82,7 +82,9 @@ object FacePriorityExposure {
     }
 
     fun nextEV(current: EvComp, encoded: Double, transfer: MonitorTransfer): EvComp? {
-        val stops = LiveColorScience.stops(encoded, transfer)
+        // Preserve the existing exposure controller until D-Log M is calibrated.
+        val exposureTransfer = if (transfer == MonitorTransfer.DLOGM) MonitorTransfer.DLOG else transfer
+        val stops = LiveColorScience.stops(encoded, exposureTransfer)
         if (!stops.isFinite()) return null
         if (abs(stops) < DEADBAND_STOPS) return null
         var deltaThirds = round(-stops * 3.0).toInt()

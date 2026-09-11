@@ -68,7 +68,7 @@ public enum WatchMonitorPlaceholder: Equatable, Sendable {
         isReachable: Bool, state: WatchRelayState?, hasFeed: Bool
     ) -> WatchMonitorPlaceholder {
         if let state {
-            if state.connection == .noCamera, !hasFeed { return .noCamera }
+            if state.connection == .noCamera { return .noCamera }
             if !state.feedLive, !hasFeed { return .waitingLive }
             return .none
         }

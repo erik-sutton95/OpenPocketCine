@@ -178,19 +178,20 @@ final class LiveFeedOrientationTests: XCTestCase {
         }
     }
 
-    /// White band is the CI top quarter, so the luma/chroma step sits above mid-Y.
-    /// A vertical flip moves that step into the bottom half.
+    /// White band is the CI top quarter. A vertical flip moves that step down.
+    /// Max-channel delta, not mean RGB: IRE remaps black/white onto BDL purple
+    /// and 95%WC red, whose means can sit under a 0.04 luma gate.
     private static func bandEdgeIsOnCITop(_ image: CIImage) -> Bool {
         let context = CIContext(options: [.cacheIntermediates: false])
         let e = image.extent
         let height = Int(e.height.rounded(.down))
         guard height > 4, e.width > 2 else { return false }
-        var means: [Float] = []
-        means.reserveCapacity(height)
+        var rows: [(Float, Float, Float)] = []
+        rows.reserveCapacity(height)
         for row in 0..<height {
             let y = e.minY + CGFloat(row)
-            means.append(
-                meanRGB(
+            rows.append(
+                meanRGBChannels(
                     image,
                     rect: CGRect(x: e.minX, y: y, width: e.width, height: 1),
                     context: context))
@@ -198,7 +199,9 @@ final class LiveFeedOrientationTests: XCTestCase {
         var bestRow = 0
         var bestMag: Float = 0
         for i in 1..<height {
-            let mag = abs(means[i] - means[i - 1])
+            let a = rows[i]
+            let b = rows[i - 1]
+            let mag = max(abs(a.0 - b.0), abs(a.1 - b.1), abs(a.2 - b.2))
             if mag > bestMag {
                 bestMag = mag
                 bestRow = i
@@ -271,6 +274,13 @@ final class LiveFeedOrientationTests: XCTestCase {
     }
 
     private static func meanRGB(_ image: CIImage, rect: CGRect, context: CIContext) -> Float {
+        let rgb = meanRGBChannels(image, rect: rect, context: context)
+        return (rgb.0 + rgb.1 + rgb.2) / 3
+    }
+
+    private static func meanRGBChannels(
+        _ image: CIImage, rect: CGRect, context: CIContext
+    ) -> (Float, Float, Float) {
         let w = max(1, Int(rect.width.rounded(.down)))
         let h = max(1, Int(rect.height.rounded(.down)))
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
@@ -278,14 +288,16 @@ final class LiveFeedOrientationTests: XCTestCase {
             image, toBitmap: &bytes, rowBytes: w * 4,
             bounds: CGRect(x: rect.minX, y: rect.minY, width: CGFloat(w), height: CGFloat(h)),
             format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
-        var sum: Float = 0
+        var sumR: Float = 0
+        var sumG: Float = 0
+        var sumB: Float = 0
         let pixels = w * h
         for i in 0..<pixels {
-            let r = Float(bytes[i * 4])
-            let g = Float(bytes[i * 4 + 1])
-            let b = Float(bytes[i * 4 + 2])
-            sum += (r + g + b) / 3
+            sumR += Float(bytes[i * 4])
+            sumG += Float(bytes[i * 4 + 1])
+            sumB += Float(bytes[i * 4 + 2])
         }
-        return sum / Float(max(pixels, 1)) / 255
+        let scale = Float(max(pixels, 1)) * 255
+        return (sumR / scale, sumG / scale, sumB / scale)
     }
 }

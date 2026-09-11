@@ -46,17 +46,30 @@ public enum Hevc {
     /// start codes by trimming a trailing zero that belongs to the next start code.
     public static func nalUnits(_ annexB: [UInt8]) -> [[UInt8]] {
         var starts: [Int] = []
+        var privateMetadata: Set<Int> = []
         var i = 0
         while i + 3 <= annexB.count {
             if annexB[i] == 0, annexB[i + 1] == 0, annexB[i + 2] == 1 {
                 starts.append(i + 3)
-                i += 3
+                // Nano SEI payload 0xF0 is 25 raw DJI metadata bytes, without
+                // Annex-B emulation prevention. Skip its contents by length so
+                // embedded 00 00 01 cannot become a fake picture slice.
+                if i + 32 <= annexB.count, annexB[i + 3] == 6,
+                    annexB[i + 4] == 0xF0, annexB[i + 5] == 25,
+                    annexB[i + 31] == 0x80
+                {
+                    privateMetadata.insert(i + 3)
+                    i += 32
+                } else {
+                    i += 3
+                }
             } else {
                 i += 1
             }
         }
         var nals: [[UInt8]] = []
         for (k, s) in starts.enumerated() {
+            if privateMetadata.contains(s) { continue }
             var e = (k + 1 < starts.count) ? starts[k + 1] - 3 : annexB.count
             while e > s && annexB[e - 1] == 0 { e -= 1 }  // ponytail: drops a genuine trailing 0x00 too; harmless for decode
             if e > s { nals.append(Array(annexB[s..<e])) }

@@ -50,7 +50,9 @@ struct WatchMonitorView: View {
     }
 
     private var timecodeLabel: String {
-        let clock = controller.frameTimecode ?? state?.timecode
+        let clock =
+            state?.connection == .noCamera
+            ? state?.timecode : controller.frameTimecode ?? state?.timecode
         if let clock, !clock.isEmpty { return clock }
         return "--:--:--"
     }

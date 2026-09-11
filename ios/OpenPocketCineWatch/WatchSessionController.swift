@@ -85,6 +85,9 @@ final class WatchSessionController: NSObject {
         switch kind {
         case .state:
             if let decoded = try? WatchRelayEnvelope.decode(WatchRelayState.self, from: data) {
+                if decoded.connection == .noCamera {
+                    frameTimecode = nil
+                }
                 state = decoded
             }
         case .frame:

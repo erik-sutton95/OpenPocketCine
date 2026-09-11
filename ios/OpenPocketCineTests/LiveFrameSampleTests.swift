@@ -11,6 +11,29 @@ import XCTest
 /// tests pin the plumbing, throttle, layer handoff, and effect compositing.
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
+    func testFailedPresentationDoesNotEmitPictureHeartbeat() async throws {
+        let bus = LiveFrameSampleBus()
+        let decoder = HevcDecoder()
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        decoder.sampleBus = bus
+        var heartbeats = 0
+        decoder.onPresentedFrame = { heartbeats += 1 }
+        var buffer: CVPixelBuffer?
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault, 1, 1, kCVPixelFormatType_32BGRA, nil, &buffer),
+            kCVReturnSuccess)
+        decoder.handleDecodedFrame(try XCTUnwrap(buffer))
+        let deadline = Date().addingTimeInterval(2)
+        while bus.decodedFrames == 0, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(bus.decodedFrames, 1, "Exercise the real assist completion")
+        XCTAssertEqual(heartbeats, 0, "A rejected display buffer must not hide a picture stall")
+        XCTAssertNil(decoder.lastPresentedAt)
+    }
+
     func testHandleDecodedFramePublishesScopes() async {
         let bus = LiveFrameSampleBus()
         let decoder = HevcDecoder()
@@ -634,14 +657,18 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertGreaterThan(delta, 0.08, "D-Log2 curve top (monitor 100) must zebra")
     }
 
-    func testDLog2FalseColorIREPaintsGreyGreenNotClip() {
+    func testDLog2FalseColorIREPaintsGreyAsGapNotClip() {
         let cube = PocketFalseColorMap.cube(scale: .ire, transfer: .dlog2)
         let g = Float(MonitorTransfer.dlog2.middleGrayEncoded)
         let mapped = cube.map(red: g, green: g, blue: g)
+        XCTAssertEqual(
+            mapped.red, mapped.green, accuracy: 0.06,
+            "D-Log2 18% grey is WAVE ~30.5 — an IRE gap, not 18%MG green")
+        XCTAssertEqual(mapped.green, mapped.blue, accuracy: 0.06)
+        let clip = Float(ScopeExposureCeiling.clipEncoded(transfer: .dlog2))
+        let over = cube.map(red: clip, green: clip, blue: clip)
         XCTAssertGreaterThan(
-            mapped.green, mapped.red,
-            "D-Log2 18% grey is ~42 monitor IRE (41–48 green) on false colour, not the clip band")
-        XCTAssertGreaterThan(mapped.green, mapped.blue)
+            over.red, over.green, "live-tap ceiling is 95%WC red, not the grey gap")
     }
 
     // MARK: - Real-clip end-to-end (author's machine only)

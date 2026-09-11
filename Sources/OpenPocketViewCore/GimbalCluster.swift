@@ -1,15 +1,16 @@
 import Foundation
 
-/// Stick, zoom chip, and (later) gimbal controls as one parking spot.
-/// Follow / speed / A·B·C attach to `controls` without moving the stick.
+/// Stick, zoom chip, and gimbal-controls button as one parking spot.
+/// The button is a zoom-sized circle leading of zoom, trailing-aligned
+/// as a pair above the stick. The stick does not move.
 ///
-/// Zoom stacks above the stick, trailing-aligned. The cluster sits in the
-/// cinema well's trailing-bottom (landscape and portrait fill) or just
-/// under a 16:9 portrait strip (fit).
+/// Zoom stacks above the stick, trailing-aligned when the button is off.
+/// The cluster sits in the cinema well's trailing-bottom (landscape and
+/// portrait fill) or just under a 16:9 portrait strip (fit).
 public struct GimbalCluster: Equatable, Sendable {
     public var stick: MonitorLayoutRegion
     public var zoom: MonitorLayoutRegion
-    /// Leading of the stick, stick-tall. Width 0 until gimbal controls ship.
+    /// Zoom-sized circle leading of zoom when `showGimbalButton` is on.
     public var controls: MonitorLayoutRegion
 
     public static let stickSize = 88.0
@@ -50,7 +51,7 @@ public struct GimbalCluster: Equatable, Sendable {
         zoomSize: Double = zoomSize,
         gap: Double = gap,
         inset: Double = inset,
-        controlsWidth: Double = 0
+        showGimbalButton: Bool = false
     ) -> GimbalCluster {
         let stickSize = max(0, stickSize)
         let inset = max(0, inset)
@@ -63,7 +64,7 @@ public struct GimbalCluster: Equatable, Sendable {
         var cluster = stacked(
             stickX: stickX, stickY: stickY, well: well,
             stickSize: stickSize, zoomSize: zoomSize, gap: gap,
-            controlsWidth: controlsWidth)
+            showGimbalButton: showGimbalButton)
         cluster = dodge(cluster, avoid: avoid, well: well, gap: gap, inset: inset)
         return cluster
     }
@@ -76,7 +77,7 @@ public struct GimbalCluster: Equatable, Sendable {
         zoomSize: Double = zoomSize,
         gap: Double = gap,
         inset: Double = inset,
-        controlsWidth: Double = 0
+        showGimbalButton: Bool = false
     ) -> GimbalCluster {
         let stickSize = max(0, stickSize)
         let zoomSize = max(0, zoomSize)
@@ -88,7 +89,7 @@ public struct GimbalCluster: Equatable, Sendable {
         return stacked(
             stickX: stickX, stickY: stickY, well: well,
             stickSize: stickSize, zoomSize: zoomSize, gap: gap,
-            controlsWidth: controlsWidth, zoomFloor: ceiling)
+            showGimbalButton: showGimbalButton, zoomFloor: ceiling)
     }
 
     private static func stacked(
@@ -98,26 +99,28 @@ public struct GimbalCluster: Equatable, Sendable {
         stickSize: Double,
         zoomSize: Double,
         gap: Double,
-        controlsWidth: Double,
+        showGimbalButton: Bool,
         zoomFloor: Double? = nil
     ) -> GimbalCluster {
         let zoomSize = max(0, zoomSize)
         let gap = max(0, gap)
-        let controlsWidth = max(0, controlsWidth)
         let stick = MonitorLayoutRegion(x: stickX, y: stickY, width: stickSize, height: stickSize)
-        let zoomX = min(max(well.x, stick.maxX - zoomSize), max(well.x, well.maxX - zoomSize))
         let stackedY = stick.y - gap - zoomSize
         let zoomY = max(zoomFloor ?? well.y, stackedY)
-        let zoom = MonitorLayoutRegion(x: zoomX, y: zoomY, width: zoomSize, height: zoomSize)
-        let controls: MonitorLayoutRegion
-        if controlsWidth > 0 {
-            controls = MonitorLayoutRegion(
-                x: stick.x - gap - controlsWidth, y: stick.y,
-                width: controlsWidth, height: stickSize)
+        let button: MonitorLayoutRegion
+        let zoomX: Double
+        if showGimbalButton {
+            let trailing = min(stick.maxX, well.maxX)
+            let buttonX = trailing - zoomSize
+            button = MonitorLayoutRegion(
+                x: buttonX, y: zoomY, width: zoomSize, height: zoomSize)
+            zoomX = min(max(well.x, button.x - gap - zoomSize), max(well.x, well.maxX - zoomSize))
         } else {
-            controls = MonitorLayoutRegion(x: stick.x, y: stick.y, width: 0, height: 0)
+            button = MonitorLayoutRegion(x: stick.x, y: stick.y, width: 0, height: 0)
+            zoomX = min(max(well.x, stick.maxX - zoomSize), max(well.x, well.maxX - zoomSize))
         }
-        return GimbalCluster(stick: stick, zoom: zoom, controls: controls)
+        let zoom = MonitorLayoutRegion(x: zoomX, y: zoomY, width: zoomSize, height: zoomSize)
+        return GimbalCluster(stick: stick, zoom: zoom, controls: button)
     }
 
     private static func dodge(

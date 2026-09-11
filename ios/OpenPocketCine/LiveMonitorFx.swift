@@ -17,6 +17,7 @@ struct LiveImageEffects: Equatable, Sendable {
     var parade = false
     var vectorscope = false
     var trafficLights = false
+    var ndMeter = false
     var lutDimension = 0
     var lutRGBA = Data()
 
@@ -73,9 +74,9 @@ struct LiveImageEffects: Equatable, Sendable {
         needsGPUFeed && !replacesIdentityFeed
     }
 
-    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS — OpenZCine `scopesActive`.
+    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND — OpenZCine `scopesActive`.
     var needsScopes: Bool {
-        histogram || waveform || parade || vectorscope || trafficLights
+        histogram || waveform || parade || vectorscope || trafficLights || ndMeter
     }
 
     var needsScopePoints: Bool {
@@ -83,7 +84,7 @@ struct LiveImageEffects: Equatable, Sendable {
     }
 
     var activeScopeCount: Int {
-        [histogram, waveform, parade, vectorscope, trafficLights].filter { $0 }.count
+        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter].filter { $0 }.count
     }
 
     /// GPU feed, CPU scopes, or AF-C face detect. Any one starts VT for a pixel buffer.
@@ -106,9 +107,10 @@ typealias PeakingPaint = PeakingAssist.Color
 typealias PeakingSense = PeakingAssist.Sensitivity
 
 enum FalseColorScaleKind: String, CaseIterable, Codable, Sendable {
-    case stops = "ZC Stops"
+    case stops = "CineStop"
     case ire = "IRE"
     case limits = "Limits"
+    case elZone = "EL Zone"
 }
 
 enum ZebraPaint: String, CaseIterable, Codable, Sendable {
@@ -319,21 +321,19 @@ enum LiveMonitorCompositor {
 
     /// Paint from pre-LUT camera codes, composited over the displayed look.
     /// Limits is holes-only (shadow / highlight warnings over the picture).
-    /// IRE / PStops paint the full remap — WAVE grayscale in the gaps, not a
-    /// hole onto camera colour. Cube data is `nil` while the async lattice
-    /// warm runs — show the plain look rather than stall the frame path.
+    /// IRE / CineStop / EL Zone paint the full remap — WAVE grayscale in the gaps,
+    /// not a hole onto camera colour. The first map warms asynchronously; exposure
+    /// updates retain the last complete paint/mask pair until its replacement lands.
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects
     ) -> CIImage {
         guard
-            let paintInfo = PocketFalseColorMap.overlayPaintData(
+            let maps = PocketFalseColorMap.overlayPairData(
                 scale: effects.falseColorScale, mode: effects.colorMode),
             let paint = applyColorCube(
-                to: codes, dimension: paintInfo.0, rgba: paintInfo.1),
-            let weightInfo = PocketFalseColorMap.overlayWeightData(
-                scale: effects.falseColorScale, mode: effects.colorMode),
+                to: codes, dimension: maps.dimension, rgba: maps.paint),
             let weight = applyColorCube(
-                to: codes, dimension: weightInfo.0, rgba: weightInfo.1)
+                to: codes, dimension: maps.dimension, rgba: maps.weight)
         else { return base }
         return paint.cropped(to: extent).applyingFilter(
             "CIBlendWithMask",

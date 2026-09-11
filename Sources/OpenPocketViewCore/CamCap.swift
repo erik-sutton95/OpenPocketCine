@@ -155,7 +155,7 @@ public enum CamCapIso {
         switch transfer {
         case .dlog: 400
         case .dlog2: 1600
-        case .rec709, .hdr, nil: nil
+        case .rec709, .hdr, .dlogm, nil: nil
         }
     }
 
@@ -237,6 +237,26 @@ public enum CamCapColorMode {
 public enum CamCapVideoFormat {
     public static let subscribeKey = "camcap_video_format"
 
+    /// Pocket 3 rejects camcap subscriptions. Its documented normal-Video formats
+    /// remain available in the picker; reported capabilities always take precedence.
+    /// This fallback is not used for unknown modes, SlowMo or livestream.
+    public static func pickerFormats(
+        available: [VideoFormat], model: CameraModel?, shootingMode: Int
+    ) -> [VideoFormat] {
+        guard available.isEmpty, model?.isPocket3 == true,
+            shootingMode == Int(ShootingMode.video.rawValue)
+        else { return available }
+        return pocket3VideoFormats
+    }
+
+    private static let pocket3VideoFormats: [VideoFormat] = [
+        VideoResolution.p1080, .p2_7K, .p4K,
+        .p1080_1x1, .p2160_1x1, .p3K_1x1,
+        .p1080_9x16, .p2_7K_9x16, .p3K_9x16,
+    ].flatMap { resolution in
+        VideoFrameRate.labeledVideo.map { VideoFormat(resolution: resolution, frameRate: $0) }
+    }
+
     public static func parse(_ value: [UInt8]) -> [VideoFormat] {
         guard value.count >= 5, value[0] == 0x01 else { return [] }
         let inner = Int(value[1]) | (Int(value[2]) << 8)
@@ -269,7 +289,12 @@ public enum CamCapVideoFormat {
         available: [VideoFormat], aspect: VideoAspect?, current: VideoResolution?
     ) -> [VideoResolution] {
         if available.isEmpty {
-            return VideoResolution.labeledVideo
+            // Status can arrive before the model/mode enables its picker fallback.
+            // Keep a reported portrait, square or unknown size instead of selecting
+            // the first landscape tab and sending that size on an fps change.
+            let fallback = VideoResolution.labeledVideo
+            let resolutions = current.map { fallback.contains($0) ? fallback : [$0] } ?? fallback
+            return resolutions.filter { aspect == nil || $0.aspect == aspect }
         }
         var seen = Set<VideoResolution>()
         var out: [VideoResolution] = []

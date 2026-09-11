@@ -86,7 +86,7 @@
   // ---- Magnetic buttons: pills lean toward the cursor, spring back on leave ----
   function initMagnetic() {
     if (reduceMotion || !finePointer) return;
-    document.querySelectorAll(".btn--magnetic").forEach((btn) => {
+    document.querySelectorAll(".btn--magnetic, .coffee-cta .bmc-btn").forEach((btn) => {
       const strength = 0.22, limit = 9;
       btn.addEventListener("pointermove", (e) => {
         const r = btn.getBoundingClientRect();

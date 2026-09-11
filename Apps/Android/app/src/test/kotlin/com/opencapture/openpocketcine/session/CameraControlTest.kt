@@ -10,6 +10,49 @@ import kotlin.test.assertTrue
 
 class CameraControlTest {
     @Test
+    fun emptyCapabilityPortraitKeepsReportedResolution() {
+        val current = VideoFormat(VideoResolution.P3K_9X16, VideoFrameRate.FPS25)
+        val formats = VideoFormat.pickerFormats(emptyList(), CameraModel("Osmo Pocket 3"), -1)
+        val aspects = VideoFormat.aspects(formats, current.resolution.aspect)
+        val resolutions = VideoFormat.resolutions(
+            formats, current.resolution,
+            if (aspects.size > 1) VideoAspect.NINE_SIXTEEN else null,
+        )
+        assertEquals(listOf(VideoResolution.P3K_9X16), resolutions)
+        assertEquals(listOf("3K"), resolutions.map { it.tabTitle })
+    }
+
+    @Test
+    fun emptyCapabilityPreservesReportedSizesWithoutInventingAnAspect() {
+        for (current in listOf(
+            VideoResolution.P3K_1X1, VideoResolution.P2_7K,
+            VideoResolution.P4K_4X3, VideoResolution(0xFE),
+        )) {
+            assertEquals(listOf(current), VideoFormat.resolutions(emptyList(), current))
+        }
+        assertEquals(listOf(VideoResolution.P1080, VideoResolution.P4K), VideoFormat.resolutions(emptyList(), null))
+        assertTrue(VideoFormat.resolutions(emptyList(), VideoResolution.P3K_9X16, VideoAspect.SIXTEEN_NINE).isEmpty())
+    }
+
+    @Test
+    fun pocket3PickerFallbackIncludesNormalVideoSizesOnly() {
+        val model = CameraModel(name = "Osmo Pocket 3")
+        val formats = VideoFormat.pickerFormats(emptyList(), model, CameraCommands.SHOOT_VIDEO)
+        assertTrue(VideoFormat.resolutions(formats, VideoResolution.P4K, VideoAspect.SIXTEEN_NINE).contains(VideoResolution.P2_7K))
+        assertTrue(VideoFormat.resolutions(formats, null, VideoAspect.NINE_SIXTEEN).contains(VideoResolution.P3K_9X16))
+        assertTrue(VideoFormat.resolutions(formats, null, VideoAspect.ONE_ONE).contains(VideoResolution.P3K_1X1))
+        assertTrue(!VideoFormat.aspects(formats, null).contains(VideoAspect.FOUR_THREE))
+        val reported = listOf(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25))
+        assertEquals(reported, VideoFormat.pickerFormats(reported, model, 1))
+        for (mode in listOf(-1, 0, 2, 26)) {
+            assertTrue(VideoFormat.pickerFormats(emptyList(), model, mode).isEmpty())
+        }
+        for (name in listOf("Osmo Pocket 4 Pro", "Osmo Nano", "Unknown")) {
+            assertTrue(VideoFormat.pickerFormats(emptyList(), CameraModel(name), 1).isEmpty())
+        }
+    }
+
+    @Test
     fun shutterIsU16DenomOr8000() {
         val p = CameraCommands.shutter(1600)
         assertEquals(7, p.size)

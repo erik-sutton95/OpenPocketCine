@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.NDFilterNotation
 import com.opencapture.openpocketcine.LivePopupCloseButton
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalOperatorHaptics
@@ -187,6 +188,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.HISTO -> HistogramOptions(state)
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
+        LiveAssistTool.ND -> NdOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
         LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
@@ -224,15 +226,18 @@ private fun FalseColorOptions(state: LiveAssistState) {
     SettingsInlineRow(
         "Scale",
         help =
-            "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-                "PStops marks minimum exposure, −3, 18% gray, skin, +2, and three clip-relative " +
-                "highlight levels. IRE uses WAVE-axis monitor ranges. Limits paints only shadow " +
-                "and highlight warnings.",
+            "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. " +
+                "CineStop paints video-level IRE stripes over luminance grayscale. EL Zone " +
+                "paints 15 contiguous stops from 18% gray: +6 and above white, −6 and below " +
+                "black. IRE paints six video-level zones over luminance grayscale. Limits " +
+                "paints only shadow and highlight warnings." +
+                " D-Log M uses a direct 0–100 signal scale. Its EL Zone and gray guide are " +
+                "Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras.",
         showTopDivider = false,
         stacked = true,
     ) {
         SettingsSegmented(
-            options = listOf("PStops", "IRE", "Limits"),
+            options = listOf("CineStop", "EL Zone", "IRE", "Limits"),
             selected = state.falseColorScale.menuLabel,
         ) { label ->
             haptics.selection()
@@ -438,6 +443,27 @@ private fun LightsOptions(state: LiveAssistState) {
             state.setCompensation(it)
         }
     }
+}
+
+@Composable
+private fun NdOptions(state: LiveAssistState) {
+    val haptics = LocalOperatorHaptics.current
+    SettingsInlineRow(
+        NDAssist.NOTATION_TITLE,
+        help = NDAssist.NOTATION_HELP,
+        showTopDivider = false,
+        stacked = true,
+    ) {
+        SettingsSegmented(
+            options = NDFilterNotation.entries.map { it.editorLabel },
+            selected = state.ndNotation.editorLabel,
+        ) { label ->
+            haptics.selection()
+            state.ndNotation = NDFilterNotation.fromEditorLabel(label)
+            state.persist()
+        }
+    }
+    OptionCopy(NDAssist.HELP)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

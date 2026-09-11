@@ -70,6 +70,38 @@ final class EncoderFormatChangeTests: XCTestCase {
         XCTAssertFalse(decoder.awaitingIDR, "same-raster rebuild must not hold IDR")
     }
 
+    func testWatchDemandStartsOneDecoderWithoutAssistsAndSurvivesReset() throws {
+        let sets = Self.annexB([Self.vps, Self.sps, Self.pps])
+        let control = HevcDecoder()
+        control.effects = LiveImageEffects()
+        _ = control.decode(accessUnit: sets)
+        XCTAssertEqual(control.vtRebuildCount, 0, "Unpaired identity keeps its existing path")
+
+        let capability = HevcDecoder()
+        capability.effects.waveform = true
+        _ = capability.decode(accessUnit: sets)
+        try XCTSkipUnless(capability.vtRebuildCount == 1, "no VT HEVC decoder on this host")
+
+        let decoder = HevcDecoder()
+        decoder.effects = LiveImageEffects()
+        decoder.needsWatchPreview = true
+        var enables = 0
+        decoder.onHandoffNeedsIDR = { enables += 1 }
+        _ = decoder.decode(accessUnit: sets)
+        XCTAssertEqual(decoder.vtRebuildCount, 1, "Watch needs pixels with AF-S and assists off")
+        XCTAssertEqual(enables, 0, "Initial Watch demand must not cut the first GOP")
+
+        decoder.needsWatchPreview = false
+        XCTAssertEqual(decoder.vtRebuildCount, 1, "Keep the decoder through a companion change")
+        XCTAssertEqual(enables, 0)
+        decoder.needsWatchPreview = true
+        decoder.reset()
+        let beforeReconnect = decoder.vtRebuildCount
+        _ = decoder.decode(accessUnit: sets)
+        XCTAssertEqual(decoder.vtRebuildCount, beforeReconnect + 1)
+        XCTAssertEqual(enables, 0, "Reconnect uses the normal first GOP")
+    }
+
     func testDecoderWedgedIsFreshNotCumulative() {
         let decoder = HevcDecoder()
         XCTAssertFalse(decoder.isDecoderWedged)

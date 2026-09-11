@@ -129,6 +129,9 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   border-radius: 8px;
   border: none;
   cursor: pointer;
+}
+.btn,
+.coffee-cta .bmc-btn {
   transition: background .2s ease, color .2s ease, border-color .2s ease, transform .2s var(--ease-out);
   transform: translate(var(--tx, 0), var(--ty, 0));
 }
@@ -759,7 +762,32 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 
 .cta-final { text-align: center; display: flex; flex-direction: column; align-items: center; }
 .cta-final h2 { margin-bottom: 12px; }
-.cta-final .hero__cta { margin-top: 24px; }
+.cta-final .hero__cta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 24px;
+}
+@media (max-width: 560px) {
+  .cta-final .hero__cta { grid-template-columns: 1fr; }
+}
+
+.coffee-cta {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 32px;
+}
+.coffee-cta .bmc-btn {
+  justify-content: center;
+  min-width: 0;
+  height: 52px;
+  padding: 0 20px;
+  border-radius: 10px;
+  font-size: 24px;
+}
+.coffee-cta .bmc-btn-text { width: auto; }
+.coffee-cta .bmc-btn:hover,
+.coffee-cta .bmc-btn:focus-visible { background-color: #ebcc00 !important; }
 
 .beta-dialog {
   width: min(calc(100% - 32px), 480px);

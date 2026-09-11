@@ -509,6 +509,39 @@ public enum Commands {
         return gimbal(0x01, p, seq: seq, flags: Duml.flagNotify)
     }
 
+    /// Native angle command: yaw/roll/pitch i16-LE tenths, mode, time in
+    /// tenths. Mode 0x05 = absolute, roll ignored. Pocket look-up pitch is
+    /// distinct from native absolute pitch at attitude i16 @0. Uses notify.
+    public static func gimbalTimedTarget(
+        yawDeg: Double, nativePitchDeg: Double, duration: TimeInterval, seq: UInt16 = 0
+    ) -> Duml.Frame? {
+        guard yawDeg.isFinite, nativePitchDeg.isFinite, duration.isFinite,
+            (HeadTrack.Reach.panMinDeg...HeadTrack.Reach.panMaxDeg).contains(yawDeg),
+            (-180...180).contains(nativePitchDeg),
+            duration >= 0.1, duration <= 25.5,
+            abs(duration * 10 - (duration * 10).rounded()) < 1e-6
+        else { return nil }
+        let payload = le16(Int((yawDeg * 10).rounded())) + [0, 0]
+            + le16(Int((nativePitchDeg * 10).rounded())) + [0x05, UInt8((duration * 10).rounded())]
+        return gimbal(0x14, payload, seq: seq, flags: Duml.flagNotify)
+    }
+
+    /// Validate physical display tilt before encoding the distinct native pitch.
+    public static func gimbalTimedTarget(
+        waypoint: GimbalWaypoint, duration: TimeInterval, seq: UInt16 = 0
+    ) -> Duml.Frame? {
+        guard waypoint.pitchDeg.isFinite,
+            (HeadTrack.Reach.tiltMinDeg...HeadTrack.Reach.tiltMaxDeg).contains(waypoint.pitchDeg),
+            let nativePitch = waypoint.nativePitchDeg else { return nil }
+        return gimbalTimedTarget(yawDeg: waypoint.yawDeg, nativePitchDeg: nativePitch,
+            duration: duration, seq: seq)
+    }
+
+    /// Relative zero yaw/pitch over 100 ms replaces the current timed move.
+    public static func gimbalTimedStop(seq: UInt16 = 0) -> Duml.Frame {
+        gimbal(0x14, [0, 0, 0, 0, 0, 0, 0x04, 1], seq: seq, flags: Duml.flagNotify)
+    }
+
     /// `0x04/0x50` GET `01 04 05` (params `04` + `05`).
     public static func gimbalParamsGet(seq: UInt16 = 0) -> Duml.Frame {
         gimbal(0x50, [0x01, 0x04, 0x05], seq: seq)

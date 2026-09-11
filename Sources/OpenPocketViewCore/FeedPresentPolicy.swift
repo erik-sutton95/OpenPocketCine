@@ -52,9 +52,13 @@ public enum FeedPresentPolicy: Sendable {
         timeNs != 0 && lastPresentedNs != 0 && timeNs == lastPresentedNs
     }
 
-    public static func isFrozen(secondsSinceLastPresent: TimeInterval?) -> Bool {
-        guard let age = secondsSinceLastPresent else { return false }
-        return age >= freezeThreshold
+    public static func isFrozen(
+        secondsSinceLastPresent: TimeInterval?, secondsSinceLastDecodedFrame: TimeInterval? = nil
+    ) -> Bool {
+        // A drawable can repaint its cached image after foreground/layout.
+        // That must not hide a decoder which stopped producing new pictures.
+        (secondsSinceLastPresent ?? 0) >= freezeThreshold
+            || (secondsSinceLastDecodedFrame ?? 0) >= freezeThreshold
     }
 
     /// Overlay bakes set `hasPresentedFrame`, but LUT must not treat that as
@@ -84,7 +88,7 @@ public enum FeedPresentPolicy: Sendable {
     }
 
     /// GPU 50/50 is log-vs-LUT. Split without a cube is not replace-grade —
-    /// that covered the HEVC layer with an empty Metal plate. IRE / PStops
+    /// that covered the HEVC layer with an empty Metal plate. IRE / CineStop
     /// false colour remaps both halves, so the split is a no-op (Limits keeps
     /// holes). Android `FeedEffectsRenderPlan` uses the same gate.
     public static func appliesSplitComparison(

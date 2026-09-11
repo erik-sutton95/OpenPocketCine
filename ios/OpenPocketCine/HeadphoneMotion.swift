@@ -3,19 +3,17 @@ import OpenPocketViewCore
 import UIKit
 import os
 
-/// Shared local space: Calibrate Head Lock is identity. Look is Euler
-/// Δatt yaw/pitch from that lock. Stick throw closes live `0x04/0x05`
-/// onto that look. Roll is displayed only. Motion starts when Head
-/// Tracking is on.
+/// Calibrate Head Lock captures shared forward and camera-native pitch.
+/// Nose direction maps to absolute targets; roll remains display-only.
 @MainActor
 final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
-    /// On-screen head-track debug: axis rings + IMU/pred readout. Off for
-    /// operators; flip to true when retuning `HeadTrack.stickRateDegPerSec`
-    /// against the `pred` row. `ControlLiveLog` head-imu lines stay on
-    /// either way (they are the pullable evidence, not screen chrome).
+    /// Optional axis rings and IMU/native-target readout. Diagnostic logs
+    /// remain throttled independently of this operator display.
     static let debugHud = false
 
     private struct HeadSample: Sendable {
+        var measuredAt: TimeInterval
+        var sequence: UInt64
         var w: Double
         var x: Double
         var y: Double
@@ -38,7 +36,11 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         q.qualityOfService = .userInteractive
         return q
     }()
-    nonisolated private let latestHead = OSAllocatedUnfairLock<HeadSample?>(initialState: nil)
+    private struct HeadInbox: Sendable {
+        var sample: HeadSample?
+        var gate = HeadTrackNativeSampleGate()
+    }
+    nonisolated private let latestHead = OSAllocatedUnfairLock(initialState: HeadInbox())
     private var samplePump: Task<Void, Never>?
     private var originQuat = HeadTrack.Quat.identity
     private var originYaw = 0.0
@@ -67,7 +69,11 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private var lastHudAt: Date?
     private var lastLogAt: Date?
     private var centerHaptic = UIImpactFeedbackGenerator(style: .medium)
-    private var track = HeadTrack()
+    private var track = HeadTrackNative()
+    private var nativeToken: UInt64?
+    private var lastHeadMeasuredAt: TimeInterval?
+    private var lastHeadSequence: UInt64?
+    private var didToastStaleHead = false
     private var driving = false
     private var gimbalYaw0Deg = 0.0
     private var gimbalPitch0Deg = 0.0
@@ -154,10 +160,15 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     }
 
     private func completeCalibrate() {
-        guard let model, pendingCalibrate, haveHead else { return }
+        guard let model, pendingCalibrate, haveHead, canDrive, !model.gimbalAnalogHeld,
+            HeadTrackNative.headSampleIsFresh(measuredAt: lastHeadMeasuredAt, now: ProcessInfo.processInfo.systemUptime)
+        else { return }
+        guard let pose = model.session.freshGimbalWaypoint else {
+            model.session.controlNote = "Head tracking waiting for gimbal"
+            return
+        }
         switch track.center(
-            gimbalYawTenth: model.session.gimbalYawTenthDeg,
-            gimbalPitchTenth: model.session.gimbalPitchTenthDeg,
+            pose: pose,
             gyroLookRight: lastGx, gyroLookUp: lastGy, gyroYaw: lastGz)
         {
         case .waitingForGimbal:
@@ -176,8 +187,8 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         originPitch = lastPitch
         originRoll = lastRoll
         originQuat = lastQuat
-        gimbalYaw0Deg = model.session.gimbalYawTenthDeg.map { Double($0) / 10 } ?? 0
-        gimbalPitch0Deg = model.session.gimbalPitchTenthDeg.map { Double($0) / 10 } ?? 0
+        gimbalYaw0Deg = pose.yawDeg
+        gimbalPitch0Deg = pose.pitchDeg
         biasGx = lastGx
         biasGy = lastGy
         biasGz = lastGz
@@ -187,7 +198,6 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         pendingCalibrate = false
         calibratedByUser = true
         didToastLive = true
-        model.session.prepHeadTrackGimbal()
         model.session.controlNote = "Head lock set — gimbal follows"
         ControlLiveLog.line("head-track: calibrated")
         if model.hapticsEnabled { centerHaptic.impactOccurred() }
@@ -227,6 +237,10 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     nonisolated func headphoneMotionManagerDidDisconnect(_ manager: CMHeadphoneMotionManager) {
         Task { @MainActor in
             ControlLiveLog.line("head-track: AirPods disconnected")
+            self.invalidateHeadCallbacks()
+            if self.motion.isDeviceMotionActive { self.motion.stopDeviceMotionUpdates() }
+            self.lastHeadMeasuredAt = nil
+            self.lastHeadSequence = nil
             self.haveHead = false
             self.calibratedByUser = false
             self.pendingCalibrate = false
@@ -266,12 +280,24 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         }
         startSamplePump()
         guard !motion.isDeviceMotionActive else { return }
-        latestHead.withLock { $0 = nil }
+        let generation = latestHead.withLock {
+            $0.sample = nil
+            return $0.gate.begin()
+        }
         motion.startDeviceMotionUpdates(to: motionQueue) { [weak self] sample, error in
             if let error {
                 Task { @MainActor in
                     ControlLiveLog.line("head-track: motion error \(error.localizedDescription)")
                     guard let self else { return }
+                    let current = self.latestHead.withLock {
+                        guard $0.gate.isCurrent(generation) else { return false }
+                        $0.sample = nil
+                        return true
+                    }
+                    guard current else { return }
+                    self.lastHeadMeasuredAt = nil
+                    self.lastHeadSequence = nil
+                    self.stopDrive()
                     if !self.didToastNeedPods {
                         self.didToastNeedPods = true
                         self.model?.session.controlNote = "Head tracking needs AirPods in your ears"
@@ -283,11 +309,18 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             let q = sample.attitude.quaternion
             let r = sample.rotationRate
             let a = sample.attitude
-            let next = HeadSample(
+            var next = HeadSample(
+                measuredAt: sample.timestamp, sequence: 0,
                 w: q.w, x: q.x, y: q.y, z: q.z,
                 gx: r.x, gy: r.y, gz: r.z,
                 yaw: a.yaw, pitch: a.pitch, roll: a.roll)
-            self.latestHead.withLock { $0 = next }
+            self.latestHead.withLock {
+                guard $0.gate.accepts(generation, measuredAt: next.measuredAt,
+                    now: ProcessInfo.processInfo.systemUptime),
+                    next.measuredAt > ($0.sample?.measuredAt ?? -.infinity) else { return }
+                next.sequence = ($0.sample?.sequence ?? 0) &+ 1
+                $0.sample = next
+            }
         }
     }
 
@@ -310,7 +343,24 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     }
 
     private func pullHead() {
-        guard let sample = latestHead.withLock({ $0 }) else { return }
+        let nowUptime = ProcessInfo.processInfo.systemUptime
+        guard let sample = latestHead.withLock({ $0.sample }),
+            HeadTrackNative.headSampleIsFresh(measuredAt: sample.measuredAt, now: nowUptime)
+        else {
+            stopDrive()
+            if calibratedByUser, !didToastStaleHead {
+                didToastStaleHead = true
+                model?.session.controlNote = "Head motion lost — waiting for AirPods"
+            }
+            return
+        }
+        didToastStaleHead = false
+        if sample.sequence == lastHeadSequence {
+            if calibratedByUser { apply(dt: 0) }
+            return
+        }
+        lastHeadSequence = sample.sequence
+        lastHeadMeasuredAt = sample.measuredAt
         lastGx = sample.gx
         lastGy = sample.gy
         lastGz = sample.gz
@@ -346,7 +396,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
 
     private var canDrive: Bool {
         guard let model else { return false }
-        if model.session.isLocked { return false }
+        if !model.session.gimbalControlSceneActive || model.session.isLocked || model.session.gimbalMoveRunning { return false }
         if model.session.isBrowsingMedia { return false }
         if model.liveOperatorPanel != nil { return false }
         if model.isEditingChrome { return false }
@@ -374,60 +424,46 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             stopDrive()
             return
         }
-        // Nose azimuth/elevation, not Euler Δatt: Euler yaw wobbles during
-        // a nod at a yawed heading (18:29 take: diagonal drift).
+        guard HeadTrackNative.headSampleIsFresh(
+            measuredAt: lastHeadMeasuredAt, now: ProcessInfo.processInfo.systemUptime),
+            model.session.freshGimbalWaypoint != nil
+        else { stopDrive(); return }
         let look = HeadTrack.look(current: lastQuat, origin: originQuat)
-        let lookRight = look.right
-        let lookUp = look.up
-        guard
-            let cmd = track.tick(
-                lookRightDeg: lookRight, lookUpDeg: lookUp,
-                gimbalYawTenth: model.session.gimbalYawTenthDeg,
-                gimbalPitchTenth: model.session.gimbalPitchTenthDeg, dt: dt,
-                gyroLookRight: lastGx, gyroLookUp: lastGy, gyroYaw: lastGz)
-        else { return }
-        // Mimo: 0x04/0x01 only while thrown. Do not grab/release in the same
-        // second — that chatter paused HEVC (22:24:19 rest/throw/rest).
-        if cmd.rest {
-            if driving {
-                ControlLiveLog.line(
-                    String(
-                        format: "head-track: stick rest head Y=%.1f P=%.1f", lookRight, lookUp))
-                stopDrive()
-            }
+        guard let target = track.target(lookRightDeg: look.right, lookUpDeg: look.up) else {
+            stopDrive()
             return
         }
-        if !driving {
-            let axes = GimbalStick.encode(
-                x: cmd.x, y: cmd.y,
-                invertPan: GimbalStick.liveInvertPan(
-                    poseInvert: model.session.gimbalPoseInvertPan,
-                    assistMirror: model.assist.isVisible(.mirror)),
-                linear: true)
-            ControlLiveLog.line(
-                String(
-                    format:
-                        "head-track: stick throw x=%.2f y=%.2f axis0=%u axis1=%u head Y=%.1f P=%.1f",
-                    cmd.x, cmd.y, axes.axis0, axes.axis1, lookRight, lookUp))
+        if nativeToken == nil { nativeToken = model.session.beginNativeHeadTrack() }
+        guard let token = nativeToken else { return }
+        guard model.session.updateNativeHeadTrack(target: target, token: token) else {
+            stopDrive()
+            return
         }
         driving = true
-        model.session.updateGimbalStick(
-            x: cmd.x, y: cmd.y, assistMirror: model.assist.isVisible(.mirror), linear: true)
     }
 
     private func stopDrive() {
-        guard driving else { return }
         driving = false
-        if model?.gimbalAnalogHeld != true {
-            model?.session.endGimbalStick()
+        guard let token = nativeToken else { return }
+        nativeToken = nil
+        model?.session.endNativeHeadTrack(token: token)
+    }
+
+    private func invalidateHeadCallbacks() {
+        latestHead.withLock {
+            $0.gate.invalidate()
+            $0.sample = nil
         }
     }
 
     private func stopMotion() {
+        invalidateHeadCallbacks()
+        stopDrive()
         stopSamplePump()
+        lastHeadMeasuredAt = nil
+        lastHeadSequence = nil
         if motion.isDeviceMotionActive { motion.stopDeviceMotionUpdates() }
         if motion.isConnectionStatusActive { motion.stopConnectionStatusUpdates() }
-        latestHead.withLock { $0 = nil }
     }
 
     private func publishReadout(now: Date?) {
@@ -476,10 +512,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             HeadTrack.radToDeg(lastRoll) - HeadTrack.radToDeg(originRoll))
         let bodyY = gimbalYawDeg ?? 0
         let bodyP = gimbalPitchDeg ?? 0
-        // Observer pose, SET-relative like body. `pred` racing or trailing a
-        // settled `body` on a physical take means `stickRateDegPerSec` is off.
-        let predY = calibratedByUser ? track.modelYawDeg - gimbalYaw0Deg : 0
-        let predP = calibratedByUser ? track.modelTiltDeg - gimbalPitch0Deg : 0
+        // Native target, SET-relative like the measured body pose.
+        let predY = calibratedByUser ? (track.lastTarget?.yawDeg ?? gimbalYaw0Deg) - gimbalYaw0Deg : 0
+        let predP = calibratedByUser ? (track.lastTarget?.pitchDeg ?? gimbalPitch0Deg) - gimbalPitch0Deg : 0
         let rawY = model.session.gimbalYawTenthDeg.map { String($0) } ?? "-"
         let rawP = model.session.gimbalPitchTenthDeg.map { String($0) } ?? "-"
         let setMark = calibratedByUser ? "SET" : "no SET"
@@ -489,7 +524,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
                 Self.debugHud
                 ? String(
                     format:
-                        "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\npred   Y%+6.1f  P%+6.1f\nerr    Y%+6.1f  P%+6.1f",
+                        "%@  shared °\nhead   Y%+6.1f  P%+6.1f  R%+6.1f\nbody   Y%+6.1f  P%+6.1f  rawP %@\ntarget Y%+6.1f  P%+6.1f\nerr    Y%+6.1f  P%+6.1f",
                     setMark, dY, dP, dR, bodyY, bodyP, rawP, predY, predP, dY - predY,
                     dP - predP)
                 : ""
@@ -501,7 +536,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             ControlLiveLog.line(
                 String(
                     format:
-                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  pred Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ %@ att=%@",
+                        "head-imu: %@ head Y=%.1f P=%.1f R=%.1f  body Y=%.1f P=%.1f  target Y=%.1f P=%.1f  err Y=%.1f P=%.1f  rawY=%@ rawP=%@ %@ att=%@",
                     setMark, dY, dP, dR, bodyY, bodyP, predY, predP, dY - predY, dP - predP,
                     rawY, rawP, dump.isEmpty ? "-" : dump, att.isEmpty ? "-" : att)
             )

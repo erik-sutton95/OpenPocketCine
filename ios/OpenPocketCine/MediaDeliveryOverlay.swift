@@ -246,8 +246,17 @@ enum MediaDeliveryRunner {
                     }
                     prepared.append(url)
                 } catch {
+                    if isConvertLogSkip(error) { continue }
                     return .failed(message: error.localizedDescription)
                 }
+            }
+            guard !prepared.isEmpty else {
+                return .failed(
+                    message: request.configuration.convertLog
+                        ? MediaDeliveryError.convertLogNotLog(ready[0].filename)
+                            .errorDescription
+                            ?? "None of the clips are D-Log or D-Log2."
+                        : MediaDeliveryError.emptySelection.localizedDescription)
             }
             switch request.postExportAction {
             case .saveToPhotos:
@@ -295,6 +304,7 @@ enum MediaDeliveryRunner {
             }
             var uploaded = 0
             var failed = 0
+            var skipped = 0
             for (index, file) in ready.enumerated() {
                 overlay.clipIndex = index + 1
                 overlay.clipFraction = 0
@@ -306,14 +316,17 @@ enum MediaDeliveryRunner {
                     }
                     try await model.uploadFileToFrameio(
                         sourceURL: url,
-                        filename: MediaDelivery.filename(
-                            for: file, configuration: request.configuration)
+                        filename: url.lastPathComponent
                     ) { fraction in
                         overlay.clipFraction = 0.45 + fraction * 0.55
                         onProgress(overlay)
                     }
                     uploaded += 1
                 } catch {
+                    if isConvertLogSkip(error) {
+                        skipped += 1
+                        continue
+                    }
                     failed += 1
                     if ready.count == 1 {
                         return .failed(message: error.localizedDescription)
@@ -322,13 +335,21 @@ enum MediaDeliveryRunner {
             }
             var parts: [String] = []
             if uploaded > 0 { parts.append("\(uploaded) uploaded") }
+            if skipped > 0 { parts.append("\(skipped) skipped") }
             if uncached > 0 { parts.append("\(uncached) not cached") }
             if failed > 0 { parts.append("\(failed) failed") }
             if failed > 0 {
                 return .failed(message: parts.joined(separator: ", "))
             }
-            return .frameio(
-                summary: parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ", "))
+            if uploaded == 0 {
+                return .failed(
+                    message: skipped > 0
+                        ? MediaDeliveryError.convertLogNotLog(ready[0].filename)
+                            .errorDescription
+                            ?? "None of the clips are D-Log or D-Log2."
+                        : (parts.isEmpty ? "Nothing to upload." : parts.joined(separator: ", ")))
+            }
+            return .frameio(summary: parts.joined(separator: ", "))
         }
     }
 
@@ -343,27 +364,53 @@ enum MediaDeliveryRunner {
             throw MediaDeliveryError.clipNotCached(file.filename)
         }
         // `localURL` is the original camera file (`files/`), never the LRF proxy.
-        let cube: CubeLUT? = {
-            guard request.configuration.bakeLUT else { return nil }
-            return model.assist.exportLUTCube(
+        let transform: LogColorTransform?
+        let cube: CubeLUT?
+        if request.configuration.convertLog {
+            let color =
+                ClipColorProfileIO.shotColor(at: source, path: file.path)
+                ?? model.session.shotColor(for: file)
+            if let color { model.session.rememberShotColor(color, for: file) }
+            guard let color, LogColorTransform.converting(from: color) != nil else {
+                throw MediaDeliveryError.convertLogNotLog(file.filename)
+            }
+            transform = LogColorTransform.converting(
+                from: color, to: request.configuration.logTransform.destination)
+            cube = nil  // MediaLUT owns the encoded-value conversion path.
+        } else if request.configuration.bakeLUT {
+            transform = nil
+            cube = model.assist.exportLUTCube(
                 bakeExposure: request.configuration.bakeLUTExposure)
-        }()
-        if request.configuration.bakeLUT, cube == nil {
-            throw MediaDeliveryError.noLUTSelected
+            if cube == nil { throw MediaDeliveryError.noLUTSelected }
+        } else {
+            transform = nil
+            cube = nil
         }
         let result = try await MediaLUT.export(
             sourceURL: source,
-            outputFilename: MediaDelivery.filename(for: file, configuration: request.configuration),
+            outputFilename: MediaDelivery.filename(
+                for: file, configuration: request.configuration,
+                transform: request.configuration.convertLog
+                    ? request.configuration.logTransform : nil),
             format: request.configuration.exportFormat,
             cube: cube,
+            logTransform: transform,
             metadata: MediaDelivery.metadata(
                 for: file, configuration: request.configuration,
                 lutName: model.assist.lutStatusLabel,
                 cameraName: model.session.connectedCamera?.model.name,
-                lutExposureStops: model.assist.lutExposureStops)
+                lutExposureStops: model.assist.lutExposureStops,
+                convertLog: transform)
         ) { fraction in
             progress(fraction)
         }
         return result.videoURL
+    }
+
+    private static func isConvertLogSkip(_ error: Error) -> Bool {
+        if let delivery = error as? MediaDeliveryError, case .convertLogNotLog = delivery {
+            return true
+        }
+        return false
     }
 }

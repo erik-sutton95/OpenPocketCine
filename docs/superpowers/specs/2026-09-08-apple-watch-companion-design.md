@@ -30,7 +30,7 @@ SoftAP.
 | Layer | Path | Owns |
 | --- | --- | --- |
 | Protocol | `Sources/OpenPocketViewCore/WatchRelayProtocol.swift` | Envelope + Codable state/frame/command/result. Foundation. `watchOS(.v10)` on the package. |
-| iPhone relay | `ios/OpenPocketCine/WatchRelay.swift` | `WCSession`, HEIC encode, drop-stale pump, rec/shutter callbacks. |
+| iPhone relay | `ios/OpenPocketCine/WatchRelay.swift` | `WCSession`, JPEG encode, drop-stale pump, rec/shutter callbacks. |
 | Wrist app | `ios/OpenPocketCineWatch/` | SwiftUI monitor + `WatchSessionController`. Embedded in the iPhone app. |
 
 Spine unchanged. WatchConnectivity is BLE-to-watch, independent of camera Wi-Fi.
@@ -52,7 +52,7 @@ State (Pocket-shaped): `isRecording`, `isPhotography`, `timecode` (HUD clock),
 `feedLive`, `feedAspectRatio` (16/9). Coalesce with
 `matchesIgnoringLiveReadouts` (skip `timecode`).
 
-Frame: image bytes (HEIC, JPEG fallback) in wire field `jpeg` + timecode +
+Frame: JPEG image bytes in wire field `jpeg` + timecode +
 `isRecording`.
 
 Commands: `toggleRecord`, `capture`, `resume` (watch wake).
@@ -62,9 +62,13 @@ Result: `accepted`, `isRecording`, `error` — operator copy, no opcodes.
 ## Phone relay
 
 `AppModel` owns one `WatchRelay`, activated at launch. Frames after a successful
-live present only — `HevcDecoder.onSourceFrame` pixel buffer, downscaled off the
+live present only — `HevcDecoder.onWatchPreview` image/buffer, downscaled off the
 present thread. Never a second decoder, never another `0x09/0xa8`. Drop-stale,
-ack-paced, max 3 in flight. Adaptive width 512 / 672 / 832 from RTT.
+ack-paced, max 3 in flight. Adaptive width 320 / 416 / 512 from RTT. Old encode/ACK work retains its
+reservation across wake/resume and cannot dispatch into a new generation.
+The installed paired companion requests the existing VT decoder before the
+first format; AF-S and assists-off still supply preview pixels. Wrist sleep
+does not change decoder ownership. Thumbnails follow the committed picture flip.
 
 Watch rec/shutter calls `CameraSession.pressShutter()` and skips the confirmation
 sheet. Reject when not live, photo/video mismatch, or `controlBusy`.

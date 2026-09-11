@@ -14,6 +14,16 @@ enum MediaLUT {
         .workingColorSpace: displayColorSpace,
         .highQualityDownsample: true,
     ])
+    private static let encodedLogContext = CIContext(options: [
+        .workingFormat: CIFormat.RGBAf,
+        .workingColorSpace: NSNull(),
+        .outputColorSpace: NSNull(),
+        .highQualityDownsample: true,
+    ])
+
+    static func colorContext(preservingEncodedValues: Bool) -> CIContext {
+        preservingEncodedValues ? encodedLogContext : exportContext
+    }
 
     /// Export bake stays at the source raster. Preview LUT does not use this
     /// composition — it grades `AVPlayerItemVideoOutput` at `maxWorkingWidth`.
@@ -53,8 +63,10 @@ enum MediaLUT {
     }
 
     static func videoComposition(
-        for asset: AVAsset, cube: CubeLUT, renderSize: CGSize? = nil
+        for asset: AVAsset, cube: CubeLUT, renderSize: CGSize? = nil,
+        preservingEncodedValues: Bool = false
     ) -> AVVideoComposition {
+        let context = colorContext(preservingEncodedValues: preservingEncodedValues)
         let prepared = cube.colorCube
         let dimension = prepared.size
         let cubeData = prepared.rgbaComponents.withUnsafeBytes { Data($0) }
@@ -69,12 +81,12 @@ enum MediaLUT {
                         "inputCubeData": cubeData,
                     ])
             else {
-                request.finish(with: source, context: exportContext)
+                request.finish(with: source, context: context)
                 return
             }
             filter.setValue(source.clampedToExtent(), forKey: kCIInputImageKey)
             let output = (filter.outputImage ?? source).cropped(to: extent)
-            request.finish(with: output, context: exportContext)
+            request.finish(with: output, context: context)
         }
         guard let renderSize, renderSize.width > 1, renderSize.height > 1,
             let mutable = built.mutableCopy() as? AVMutableVideoComposition
@@ -91,14 +103,16 @@ enum MediaLUT {
         outputFilename: String,
         format: MediaExportFormat,
         cube: CubeLUT?,
+        logTransform: LogColorTransform? = nil,
         metadata: MediaClipDeliveryMetadata?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> ExportResult {
         let outputURL = try makeExportURL(filename: outputFilename, format: format)
         progress(0.02)
+        let exportCube = logTransform?.cube() ?? cube
         let sourceExt = sourceURL.pathExtension.lowercased()
         let passthrough =
-            cube == nil
+            exportCube == nil
             && (sourceExt == format.rawValue || (sourceExt == "m4v" && format == .mp4))
         if passthrough {
             if FileManager.default.fileExists(atPath: outputURL.path) {
@@ -108,7 +122,8 @@ enum MediaLUT {
             progress(0.9)
         } else {
             try await transcode(
-                sourceURL: sourceURL, outputURL: outputURL, format: format, cube: cube,
+                sourceURL: sourceURL, outputURL: outputURL, format: format, cube: exportCube,
+                logTransform: logTransform,
                 progress: progress)
         }
         try await ensureFileReady(at: outputURL)
@@ -142,6 +157,7 @@ enum MediaLUT {
         outputURL: URL,
         format: MediaExportFormat,
         cube: CubeLUT?,
+        logTransform: LogColorTransform?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
         let asset = AVURLAsset(url: sourceURL)
@@ -152,12 +168,14 @@ enum MediaLUT {
         do {
             try await runExport(
                 asset: asset, outputURL: outputURL, format: format, cube: cube,
+                logTransform: logTransform,
                 presetName: preferred, renderSize: renderSize, progress: progress)
         } catch {
             guard cube == nil, preferred == AVAssetExportPresetPassthrough else { throw error }
             let fallback = exportPreset(bakingLUT: true, compatible: compatible)
             try await runExport(
                 asset: asset, outputURL: outputURL, format: format, cube: cube,
+                logTransform: logTransform,
                 presetName: fallback, renderSize: renderSize, progress: progress)
         }
     }
@@ -179,6 +197,7 @@ enum MediaLUT {
         outputURL: URL,
         format: MediaExportFormat,
         cube: CubeLUT?,
+        logTransform: LogColorTransform?,
         presetName: String,
         renderSize: CGSize?,
         progress: @escaping @Sendable (Double) -> Void
@@ -188,7 +207,22 @@ enum MediaLUT {
         }
         if let cube {
             session.videoComposition = videoComposition(
-                for: asset, cube: cube, renderSize: renderSize)
+                for: asset, cube: cube, renderSize: renderSize,
+                preservingEncodedValues: logTransform != nil)
+        }
+        if let logTransform {
+            let sourceMetadata = try await asset.load(.metadata)
+            let gamma = AVMutableMetadataItem()
+            gamma.keySpace = .quickTimeMetadata
+            gamma.key = ClipColorProfile.gammaKey as NSString
+            gamma.value = logTransform.destination.label as NSString
+            gamma.dataType = kCMMetadataBaseDataType_UTF8 as String
+            session.metadata =
+                sourceMetadata.filter {
+                    $0.identifier?.rawValue != "mdta/\(ClipColorProfile.gammaKey)"
+                        && !($0.keySpace == .quickTimeMetadata
+                            && ($0.key as? String) == ClipColorProfile.gammaKey)
+                } + [gamma]
         }
         progress(0.05)
         if FileManager.default.fileExists(atPath: outputURL.path) {

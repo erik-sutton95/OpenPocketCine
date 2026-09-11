@@ -3,20 +3,26 @@ title: Live view
 description: Enable command, HEVC/AVC 720p, UDP pktType 0x02 fragments, and IDR behavior.
 ---
 
-Reverse-engineered 2026-08-13; Nano 2026-08-18. Confirmed on hardware we own. Offline unpacking of a gitignored capture uses `tools/extract_liveview.py`. Osmosis never did this — it is a media *offload* client.
+Reverse-engineered 2026-08-13; Nano 2026-08-18. Confirmed on physical cameras, with model-specific observations below. Offline unpacking of a gitignored capture uses `tools/extract_liveview.py`. Osmosis never did this — it is a media *offload* client.
 
 ## Codec
 
 | Camera | Codec | Size / rate |
 | --- | --- | --- |
-| Pocket | HEVC / H.265 (Main), plaintext | 1280×720, **~25 fps**, ~4 Mbps. Independent of the recording format (4K 50p still monitors at ~25). |
+| Pocket 4 / 4 Pro | HEVC / H.265 (Main), plaintext | 1280×720, **~25 fps**, ~4 Mbps. Independent of the recording format (4K 50p still monitors at ~25). |
+| Pocket 3 | AVC / H.264 observed in tested sessions, plaintext | 720p, ~25 fps. Recording resolution is separate. |
 | Nano | AVC / H.264 High `avc1.64001f`, plaintext | 1280×720, ~25 fps |
+
+Detect the codec from parameter sets. These observations do not establish a
+fixed codec for every firmware and shooting mode of a camera model.
 
 Nano uses the same DJI `00 00 01 ff` marker and fragment layout; SPS `67 64 00 1f …` / PPS `68 ee 06 f2 c0`. Confirmed against a Nano live-view take (2026-08-18).
 
 ## Transport
 
 The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 9004**, carried as datalink **pktType `0x02`** packets. It is *not* on a separate port or protocol.
+
+In the available single-client captures, that media is **unicast** to one client 5-tuple: camera `192.168.2.1:9004` → the phone's camera DHCP IPv4 and an ephemeral local port. No camera multicast or broadcast HEVC/AVC was observed. Simply joining the SoftAP does not duplicate that flow; a second client's handshake behavior remains untested. The app keeps one camera client. A second screen is a **phone-side relay**: the operator iPhone re-encodes the live picture and advertises Bonjour `_opc-mon._tcp` (Operator Setup → Sharing). Other OpenPocketCine iPhones and iPads join the same camera Wi-Fi and receive the relay from the host. Only the host opens the camera datalink. Peer-to-peer discovery and streaming are disabled to avoid radio contention.
 
 ## Enable
 
@@ -43,12 +49,21 @@ DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
 
 Sending Pocket `0x08` to Nano ACKs **`E0`** with **zero** pktType-`0x02`. Mimo first got `E0`/`D6` while still in playback, then `00` after exit. Nano also pairs enable with **`0x02/0x09`** `00…03` (stop `00…04`), ACK `00`, `rcv=0x01`. Do not send `0x02/0x0c` to start live view. (App → camera).
 
-This **is** the IDR request — there is no separate PLI opcode. Each send is followed by VPS/SPS/PPS + IDR in ~25–167 ms. There is **no periodic GOP**; a 30 s stretch of ~25 fps P-frames is normal until the next enable. Recording 4K 50p does not raise the SoftAP monitor rate — Mimo `mimo-disconnect-20260822-105228` / `mimo-settings-1` measure ~20–25 HEVC frames/s with the same `0xa8` payload `00 04 02 00…`.
+This **is** the IDR request — there is no separate PLI opcode. In the captured HEVC sessions, successful enables were followed by VPS/SPS/PPS and a random-access picture in ~25–167 ms. AVC uses SPS/PPS and IDR. There is **no periodic GOP** in the observed streams; a 30 s stretch of ~25 fps P-frames is normal until the next enable. Recording 4K 50p does not raise the SoftAP monitor rate — Mimo `mimo-disconnect-20260822-105228` / `mimo-settings-1` measure ~20–25 HEVC frames/s with the same `0xa8` payload `00 04 02 00…`.
 
-Pocket 3 can boot 4K 25/30 with chrome and gimbal live while pktType `0x02` never starts. Operators unstick that by SETting 1080 then 4K (`0x02/0x18`) or changing COLOR. OpenPocketCine waits for the body's legal FORMAT table, does that round-trip once on first picture (restore the boot format, then one `0x09/0xa8`). Pocket 4 / 4 Pro do not. The live monitor is still 720p; this is an encoder kick, not a 4K SoftAP stream.
+Pocket 3 has also shown a first-picture failure at 4K 25/30 with chrome and
+gimbal live but no pktType `0x02`. Operators recovered it by SETting 1080 then
+4K (`0x02/0x18`) or changing COLOR. The normal iOS session retains a one-shot
+format round-trip after failed first-picture recovery: wait for the reported
+recording format, prefer an alternative pair from the capability table, restore
+the original format, then send one `0x09/0xa8`. With no table, the existing
+encoder-kick policy uses the other 1080/4K size at the reported frame rate.
+Pocket 4 / 4 Pro do not use this workaround. It is separate from the Pocket 3
+AVC decoder handoff failure described below, and does not establish a cause for
+controls or video freezing after a picture has already appeared.
 
 :::caution[Do not re-enable every second]
-Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug). A decoder still waiting for IDR is not a license for another `0x09/0xa8` — the stall watchdog already ladders that. Any SET (record, FORMAT, COLOR, tracking box `0xA6`) can also pause HEVC for a moment; hold stall repair a few seconds after one. A session-preserving UDP rebind that stays silent means the camera dropped the session: the only thing that brings video back is a **new handshake** on the same SoftAP, not another bind or another enable.
+Send once to start (and at most once after a stall, with a multi-second cooldown). Re-sending every second resets the encoder GOP clock and the keyframe never lands (that was the black-screen bug). A decoder still waiting for IDR is not a license for another `0x09/0xa8` — the stall watchdog already ladders that. Any SET (record, FORMAT, COLOR, tracking box `0xA6`) can also pause HEVC for a moment; hold stall repair a few seconds after one. In the observed recovery failure, a session-preserving UDP rebind stayed silent and a **new handshake** on the same SoftAP restored video. Silence after a rebind alone does not identify the initiating cause; preserve the command and packet timeline before attributing it to a dropped camera session.
 :::
 
 Same-raster VPS/SPS (zoom `0xB8`, FORMAT SET) is not a screen-flip GOP. Do not
@@ -66,16 +81,20 @@ After a healthy take the feed can still **freeze or go black at ~3–5 min** —
 
 Fragment header:
 
-- byte 16 = frame number (mod 256)
-- byte 18 (+ byte 17 = `0x0e`/`0x8e` even/odd half) = fragment index within the frame
+- byte 16 = transport group number (mod 256); a picture can span groups
+- byte 18 (+ byte 17 = `0x0e`/`0x8e` even/odd half) = fragment index within the group
 
-Fragments arrive in order — capture order is correct.
+The September 9 Nano capture has ordered video sequences (bytes 4–5, little-endian), advancing by 8 modulo 65536. Missing or reordered fragments invalidate the pending picture.
 
 ## Per frame
 
-A DJI private marker `00 00 01 ff …` (~17 B, NAL type 63) precedes the standard Annex-B NALs. VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
+A 16-byte DJI header starts with `00 00 01 ff`, followed by the encoded byte count (little-endian UInt32 at offset 4), then eight metadata bytes. Assemble exactly that many encoded bytes before emitting the Annex-B access unit. Nano transport groups stop at 63 packets: a captured 98,258-byte unit spans a 91,476-byte group and a 6,798-byte continuation, including its 16-byte header. Closing at a group boundary truncates the picture.
 
-Pocket IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or Nano AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view. IDR hold and the pending-AU cap must treat IRAP 16–21 as a GOP start (Pocket live is often BLA, not type 20).
+Nano also inserts AVC SEI `06 f0 19`, followed by 25 raw metadata bytes and trailing `80`. Its payload can contain unescaped `00 00 01`. Skip this exact private block by length before interpreting any embedded bytes as NAL boundaries; preserve other SEI.
+
+VPS/SPS/PPS appear only on IDRs (command-driven, not every 20 s). Parameter sets and the IDR slice are often **two consecutive AUs ~1 ms apart**.
+
+Pocket HEVC IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28`). `0x28` is also AVC PPS with `nal_ref_idc=1`. Codec detect must wait for HEVC `0x40/0x42/0x44` or AVC `0x67/0x68` — leftover TRAIL/AUD/SEI (`1,35,40`) and `0x28` alone must not latch AVC, or `MediaCodec.configure` throws and the HUD stays on Waiting for live view. IDR hold and the pending-AU cap must treat HEVC IRAP 16–21 as a GOP start; the observed HEVC stream often uses BLA, not type 20.
 
 ## Window ACK
 
@@ -83,4 +102,39 @@ Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: la
 
 ## Depacketizer
 
-Collect 0x02 packets → group by byte 16 into frames → strip the DJI marker → feed access units to the platform decoder (`VTDecompressionSession` on iOS, MediaCodec on Android) → GPU present (Metal on iOS, Vulkan on Android with a GLES fallback). Android Vulkan samples the 720p 4:2:0 AHB at the feed well (one chroma upsample) then LUT, matching iOS VT-at-view-size; scopes keep the 720p tap. `tools/extract_liveview.py` is the offline equivalent (pcap → playable `.h265`).
+Collect 0x02 packets → assemble the declared length across transport groups → remove the 16-byte DJI header and parse Nano private metadata safely → feed access units to the platform decoder (`VTDecompressionSession` on iOS, MediaCodec on Android) → GPU present (Metal on iOS, Vulkan on Android with a GLES fallback). Android Vulkan samples the 720p 4:2:0 AHB at the feed well (one chroma upsample) then LUT, matching iOS VT-at-view-size; scopes keep the 720p tap. The older `tools/extract_liveview.py` offline extractor groups by byte 16; it is not suitable for validating large Nano pictures.
+
+## Codec-aware queue protection
+
+Pocket 3 and Nano have supplied AVC; Pocket 4 / 4 Pro have supplied HEVC.
+When trimming a backlog, classify parameter sets and keyframes using the
+detected codec. AVC P-slice byte `41`
+otherwise resembles an HEVC VPS header, while AVC SPS/PPS/IDR can be discarded
+incorrectly. The iOS queue now preserves these Nano frames under overload.
+This is a queue-correctness fix; sustained overload behavior still needs physical
+measurement.
+
+## Reproducing protocol investigations
+
+The repository's [capture and investigation guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/capture-guide.md)
+covers phone network capture, BLE HCI and Nordic sniffing, command validation,
+and physical decoder replay. Raw traces remain local; publish verified wire facts
+and synthetic regression tests.
+
+### Pocket 3 stream without a first picture
+
+A failed iPhone session showed intact AVC P-frames and repeated parameter sets,
+but no IDR in the sampled interval. Parameter sets and compressed samples alone
+are not proof of a visible picture. The iOS development decoder now gates initial
+inter frames until an AVC IDR or HEVC IRAP is submitted, preserving first-picture
+recovery eligibility.
+
+The physical startup trace narrowed this further: the initial AVC IDR went to
+the compressed display layer, then an assist handoff started an empty VT decoder
+mid-GOP. The fix starts AVC in VideoToolbox from its first parameter sets and
+keeps that decoder through assist changes. First-picture recovery no longer
+settles from a compressed enqueue alone on AVC. Five consecutive Pocket 3 normal
+SoftAP reconnects passed on iPhone on 2026-09-10, with live video at approximately
+25 fps. This establishes those reconnects, not all cold-boot, firmware or
+post-first-picture recovery cases.
+The hidden warmup overlay is also removed from accessibility when picture is ready.

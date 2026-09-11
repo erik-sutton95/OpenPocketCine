@@ -281,8 +281,8 @@ struct ZebraLongPressMenu: View {
     var compact: Bool = false
 
     private var transfer: MonitorTransfer {
-        return model.session.status.monitorTransfer
-            ?? model.session.status.colorMode.map(MonitorTransfer.init)
+        return model.monitorTransfer
+            ?? model.monitorColorMode.map(MonitorTransfer.init)
             ?? .rec709
     }
 

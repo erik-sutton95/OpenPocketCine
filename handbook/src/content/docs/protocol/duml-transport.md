@@ -15,8 +15,9 @@ Port **9004** for the Pocket family. First a TCP `:7001` “poke”:
    (`tcp_output`); Mimo and the iOS shell leave it up (the camera pushes
    `0x21/0x06` on it). Video never uses this socket — only UDP 9004.
 
-Then a 40-byte UDP handshake, then register + subscribe. One UDP 9004
-5-tuple stays for control and live view. Pin that socket to the camera
+Then a 40-byte UDP handshake, then register + subscribe. One **unicast**
+UDP 9004 5-tuple stays for control and live view (the camera does not
+multicast live media — [live view](../live-view/)). Pin that socket to the camera
 SoftAP (iOS `NWConnection` to `192.168.2.1:9004` with an ephemeral local
 port; Android `Network.bindSocket` on an unbound datagram, bind `0.0.0.0:0`,
 then `connect`). Camera 9004 is the remote — do not bind the client to

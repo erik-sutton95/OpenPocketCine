@@ -573,9 +573,9 @@ extension LiveMonitorLayout {
     /// vertical Pocket picture does not drag it inward with the pillarbox.
     var onFeed: CGRect { picture.width > 1 ? picture : feed }
 
-    /// Stick + zoom (+ reserved gimbal controls). Trailing-bottom of the cinema
-    /// well — not glued to record. Same cluster in every orientation.
-    var gimbalCluster: GimbalCluster {
+    /// Stick + zoom (+ gimbal-controls button beside zoom). Trailing-bottom of
+    /// the cinema well — not glued to record. Same cluster in every orientation.
+    func gimbalCluster(showGimbalButton: Bool = false) -> GimbalCluster {
         let inset = Double(LiveChromeMetrics.gimbalStickInset)
         let gap = Double(LiveChromeMetrics.gimbalStickGap)
         var barTop = Double.greatestFiniteMagnitude
@@ -604,13 +604,18 @@ extension LiveMonitorLayout {
             stickSize: Double(LiveChromeMetrics.gimbalStickSize),
             zoomSize: Double(LiveChromeMetrics.zoomButtonSize),
             gap: gap,
-            inset: inset
+            inset: inset,
+            showGimbalButton: showGimbalButton
         )
     }
 
-    var zoomButton: CGRect { Self.cgRect(gimbalCluster.zoom) }
+    var zoomButton: CGRect { Self.cgRect(gimbalCluster().zoom) }
 
-    var gimbalStick: CGRect { Self.cgRect(gimbalCluster.stick) }
+    var gimbalStick: CGRect { Self.cgRect(gimbalCluster().stick) }
+
+    func gimbalButton(showGimbalButton: Bool) -> CGRect {
+        Self.cgRect(gimbalCluster(showGimbalButton: showGimbalButton).controls)
+    }
 
     /// Centered above the bottom bars (assist + capture). Feed floor when those are off.
     var gimbalCalibrate: CGRect {

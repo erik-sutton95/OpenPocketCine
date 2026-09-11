@@ -10,25 +10,27 @@ enum SettingsHelpCopy {
     static let stream =
         "The Pocket sends HEVC over the camera access point. Stream quality presets are not on this body."
     static let shareFeed =
-        "A second-screen watcher relay is not in this build. One phone talks to one Pocket."
+        "Watching devices join this camera’s Wi-Fi, then receive the shared picture from this phone."
     static let editView =
         "Opens the monitor with an eye on each element you can show or hide."
     static let frameIO =
         "Sign in to upload clips from the share popup. Frame.io needs the internet, so the phone hops off the camera Wi‑Fi for the upload."
     static let shareThisFeed =
-        "A second-screen watcher relay is not in this build. One phone talks to one Pocket."
+        "Watching devices join this camera’s Wi-Fi, then receive the shared picture from this phone."
     static let broadcastPriority =
-        "When sharing is available, this will trade glass-to-glass delay for a steadier stream. Not in this build."
+        "Steadier picture uses more delay when the radio is busy."
     static let watcherPasscode =
-        "When sharing is available, watchers would enter this code once. Not in this build."
+        "Watchers enter this once. Leave empty for an open feed."
     static let controlRequests =
-        "When sharing is available, this would let a watcher ask to drive the camera. Not in this build."
+        "A watcher can ask to record, focus, and change exposure. You grant or deny on this phone."
+    static let watchAFeed =
+        "Watch a feed"
     static let recordConfirmation =
         "Ask before starting or stopping recording to prevent mistaps."
     static let haptics =
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     static let headTracking =
-        "Experimental. Calibrate Head Lock (centered above the bottom bars) is shared forward: that AirPods pose and that gimbal pose are zero. A 53° head turn pans the Pocket 53°. Nod is tilt. Roll is shown only — the Pocket stick has no roll axis. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. STOP clears the lock. On-screen stick and a game controller win while you hold them."
+        "Experimental. Calibrate Head Lock (centered above the bottom bars) is shared forward: that AirPods pose and that gimbal pose are zero. Head turns set matching pan and tilt angles within the gimbal’s range. Roll is shown only. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. STOP clears the lock. On-screen stick, a game controller, and Motion Control takes priority."
     static let joystickSensitivity =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
     static let gamepad =
@@ -82,6 +84,7 @@ struct SettingsRootView: View {
     @State private var keyboardInset: CGFloat = 0
     @State private var legalKind: LegalDocumentView.Kind?
     @State private var showLUTPicker = false
+    @State private var showWatcherWiFiCode = false
     @State private var expandedDisp: PocketDispMode?
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
@@ -135,6 +138,9 @@ struct SettingsRootView: View {
             if let legalKind {
                 LegalDocumentView(kind: legalKind, onClose: { self.legalKind = nil })
             }
+        }
+        .sheet(isPresented: $showWatcherWiFiCode) {
+            WatcherWiFiCodeView().environment(model)
         }
         .sheet(isPresented: $showLUTPicker) {
             LUTPicker(assist: model.assist)
@@ -317,7 +323,7 @@ struct SettingsRootView: View {
     private var subtitle: String {
         switch model.operatorSettingsTab {
         case .link: "Connection state and link behavior."
-        case .sharing: "Coming soon."
+        case .sharing: "Share this feed with OpenPocketCine devices on the same camera Wi-Fi."
         case .assist: "Behavior for live-view tools."
         case .controls: "Touch behavior and safety."
         case .display: "Live view buttons and chrome."
@@ -341,7 +347,7 @@ struct SettingsRootView: View {
     private func tabSubtitle(_ tab: OperatorSettingsTab) -> String {
         switch tab {
         case .link: "Connection"
-        case .sharing: "Coming soon"
+        case .sharing: "SHARE"
         case .assist: "Scopes & overlays"
         case .controls: "Dials and safety"
         case .display: "Live view"
@@ -438,13 +444,81 @@ struct SettingsRootView: View {
     // MARK: - Sharing
 
     @ViewBuilder private var sharingRows: some View {
-        SettingsRowCard {
-            Text("Coming soon...")
-                .font(LiveType.ui(size: 15, weight: .medium))
-                .foregroundStyle(LiveDesign.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 18)
-                .padding(.horizontal, 2)
+        if model.session.isMultiviewBorrowed {
+            SettingsRowCard {
+                SettingsInlineRow(
+                    title: "Sharing unavailable in Multiview",
+                    help: "Connect to one camera from Your cameras to share its feed with watchers.",
+                    showTopDivider: false
+                ) {
+                    EmptyView()
+                }
+            }
+        } else if model.isLive {
+            SettingsRowCard {
+                SettingsSwitchInlineRow(
+                    title: "Share this feed",
+                    help: SettingsHelpCopy.shareThisFeed,
+                    showTopDivider: false,
+                    isOn: model.shareThisFeed
+                ) {
+                    model.setShareThisFeed(!model.shareThisFeed)
+                }
+                SettingsInlineRow(
+                    title: "Join camera Wi-Fi",
+                    help:
+                        "On the watching device, scan this code with Camera, join the Wi-Fi, then open Watch a feed."
+                ) {
+                    Button("Show Wi-Fi code") { showWatcherWiFiCode = true }
+                        .font(LiveType.ui(size: 13, weight: .medium))
+                }
+                SettingsInlineRow(
+                    title: "Watcher passcode",
+                    help: SettingsHelpCopy.watcherPasscode
+                ) {
+                    SecureField("Optional", text: Bindable(model).sharePasscode)
+                        .font(LiveType.ui(size: 13, weight: .medium))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                        .onChange(of: model.sharePasscode) { _, value in
+                            WatcherRelayKeychain.hostPasscode = value
+                        }
+                }
+                SettingsSwitchInlineRow(
+                    title: "Control requests",
+                    help: SettingsHelpCopy.controlRequests,
+                    isOn: model.controlRequestsAllowed
+                ) {
+                    model.controlRequestsAllowed.toggle()
+                }
+                SettingsInlineRow(
+                    title: "Broadcast priority",
+                    help: SettingsHelpCopy.broadcastPriority,
+                    stacked: true
+                ) {
+                    SettingsSegmented(
+                        options: ["Quality", "High", "Medium", "Steady"],
+                        selected: ["Quality", "High", "Medium", "Steady"][
+                            min(model.broadcastPriority, 3)],
+                        compact: true
+                    ) { option in
+                        let order = ["Quality", "High", "Medium", "Steady"]
+                        if let i = order.firstIndex(of: option) {
+                            model.broadcastPriority = i
+                        }
+                    }
+                }
+            }
+        } else {
+            SettingsRowCard {
+                SettingsInlineRow(
+                    title: SettingsHelpCopy.watchAFeed,
+                    help: SettingsHelpCopy.shareFeed,
+                    showTopDivider: false
+                ) {
+                    SettingsActionPill(title: "Browse") { model.openWatcherBrowse() }
+                }
+            }
         }
     }
 

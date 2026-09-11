@@ -27,6 +27,7 @@ Gotchas that only agents need stay in `docs/live-session.md`.
 | Build, toolchain, how to run | [Setup](../guides/setup/) and `CONTRIBUTING.md` if GitHub workflow changed |
 | Git, tags, version trains | [`docs/RELEASE.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/RELEASE.md) (not Git Flow; no `develop`) |
 | Play closed testing | [`docs/android-play-ci.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/android-play-ci.md); this handbook only if the public Android install path changed |
+| TestFlight / Play tester notes | [`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md) (this-build window; not the handbook) |
 | Architecture seams (core vs shell) | [Architecture](../apps/architecture/) if the public map changed; `docs/ARCHITECTURE.md` is the seam table |
 | Live-path budgets (ACK Hz, HUD Hz) | `docs/PERFORMANCE.md` (not duplicated here) |
 | First-run / operator copy | `docs/UX.md`; handbook only if the public FTUE description changed |
@@ -34,6 +35,12 @@ Gotchas that only agents need stay in `docs/live-session.md`.
 
 A task is not done until those pages match the code. Preview with `just handbook`.
 Merge to `main` deploys Pages when `handbook/` or `site/` changed.
+
+## Release notes
+
+Tester notes are a this-build window for camera operators, not a product recap.
+Contract: [`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md).
+This handbook does not duplicate that copy.
 
 ## One home per fact
 

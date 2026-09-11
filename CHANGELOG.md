@@ -6,12 +6,68 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Experimental AirPods head tracking now maps shared-forward head direction to
+  native gimbal angles with a 100 ms command horizon. Stale measurements,
+  inactive scenes and old control callbacks cannot continue driving. Manual
+  and programmed movement take priority; physical response qualification is ongoing.
+
 ### Added
 
 - Apple Watch companion (#101): live preview, timecode, storage, camera
   battery, and record / shutter on the wrist. The iPhone stays the radio.
   A watch rec tap starts and stops without the phone confirmation sheet.
   Wear OS and a complication are follow-ons.
+
+- Convert log on iOS Share
+  ([discussion #295](https://github.com/erik-sutton95/OpenPocketCine/discussions/295)):
+  technical D-Log ↔ D-Log2 rewrite so mixed 1× / zoom takes share one
+  curve. Off by default. Exclusive with Bake LUT. Rec.709 display stays
+  Bake LUT. Camera original untouched. D-Log M is out. Android share
+  still the original (`docs/PARITY.md`).
+
+- False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
+  gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
+  stays white, not a separate clip stripe. iOS and Android.
+
+- False color **IRE** is six video-level WAVE zones over grayscale
+  (crush / near-black / 18% gray / +1 stop / 80 / 95 clip). **CineStop**
+  (formerly PStops) is Video Mode IRE stripes over grayscale. Saved
+  PStops still load as CineStop.
+
+- ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
+  meters the live picture against middle gray and suggests a screw-on
+  ND to balance the frame. Small HUD chip, parked bottom-left above the
+  assist bar; hold-drag to move. Long-press **Units** switches Stops
+  (`+5.0`), filter factor (`ND32`), and optical density (`ND 0.3` /
+  `ND 0.4`). Off unless you turn the chip on. The app cannot set a
+  filter. iOS and Android.
+
+- Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
+  One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
+  stick ramp Off / Soft / Medium, and Motion Control. The sheet parks
+  like a capture picker (slide-up glass above the capture bar). Locked
+  toasts — no lock-all opcode on the wire yet (#174). Ramp is local
+  ease-in/out on the stick path (#260), not camera speed. Motion Control
+  uses camera-timed A→B (optional C) trajectories with waypoint verification.
+  It preserves durations from 0.5 to 120 seconds without rate calibration or
+  an artificial speed ceiling. C enables adjustable Bézier smoothing and a
+  dashed preview; markers compensate for measured motion between reports.
+  Start counts down three seconds. Pause holds the remaining path; Resume
+  continues from the stopped pose. Stop discards the continuation. The wider
+  editor has swipeable duration dials (left increases, right decreases),
+  refresh icons and C hidden until B is set. Hold anywhere to move the editor;
+  dragging the minimized pill suppresses button taps. Debug chrome is removed.
+  Preparation selects Fast and tilt unlocked. No zoom SET during movement.
+  Manual control, disconnect and ActiveTrack cancel the path. Native targets
+  respect the reachable pan arc and tilt limits, including selfie orientation.
+  Nano hides the button. Both shells; physical precision remains experimental.
+
+- Experimental iOS Multiview for Osmo cameras on shared Wi-Fi: identity-verified
+  discovery, saved stages, adaptive grid/Center stage, per-camera LUTs and
+  timecode, individual/group recording, tally borders and borrowed Live View.
+  Pocket 4 Pro, Pocket 3 and Nano have been monitored and recorded together.
+  Android Multiview is deferred; setup cleanup and hardware validation remain
+  open before release. See the Multiview handbook and `docs/PARITY.md`.
 
 - Local VPN / ad-blocker warning (#239): Join camera Wi-Fi tells the
   operator to pause VPNs and ad blockers or exclude this app. If the well
@@ -169,6 +225,16 @@ All notable changes to this project are documented here. The format is based on
   identification mark on clip upload.
 
 ### Fixed
+
+- Pocket 3 initial AVC decode, Nano large-frame assembly and private metadata
+  handling, plus bounded iOS Multiview foreground recovery. Pocket 3 recovery
+  can still take about a minute after an app switch.
+- iOS false-color continuity during exposure updates and video/assist alignment
+  during rotation and Fit/Fill. D-Log M scopes now use direct signal levels in
+  both shells; estimated scene stops are not calibrated sensor limits.
+- Pocket 3 normal-video FORMAT choices include 2.7K and documented aspect/rate
+  combinations when the camera does not supply capabilities. Reported tables
+  retain priority; physical format/reconnect verification remains pending.
 
 - Android WAITING FOR LIVE VIEW took 5–10 s after the 720p cube-then-stretch
   present (S25 / Pocket 4 Pro). Compiling `feed.frag` before the decoder

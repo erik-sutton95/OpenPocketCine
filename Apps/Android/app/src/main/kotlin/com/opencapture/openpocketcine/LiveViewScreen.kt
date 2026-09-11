@@ -187,6 +187,7 @@ fun LiveViewScreen(model: AppModel) {
         uiLocked = value
         model.uiLocked = value
         if (value) {
+            model.session.cancelProgrammedMove()
             model.gimbalGamepad.noteBlocked(model)
             model.endGimbalStick()
             sheet = null
@@ -434,8 +435,37 @@ fun LiveViewScreen(model: AppModel) {
         val fillCrop = zones != null && fill && !verticalPicture
         val pictureContent =
             if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
-        val zoom = if (portrait) ChromeRect(0f, 0f, 0f, 0f) else layout.zoomButton
-        val stick = if (portrait) ChromeRect(0f, 0f, 0f, 0f) else layout.gimbalStick
+        val showGimbalButton =
+            model.session.hasGimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
+        val cluster =
+            if (portrait && zones != null) {
+                val showsCapture = model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES)
+                val portraitFill = model.portraitFeedAspect == PortraitFeedAspect.FILL
+                val captureH =
+                    if (portraitFill && showsCapture && zones.controls.height > 1f) {
+                        zones.controls.height
+                    } else {
+                        0f
+                    }
+                val floorY =
+                    when {
+                        portraitFill && zones.controls.height > 1f -> zones.controls.minY
+                        zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
+                        else -> zones.systemBar.minY
+                    }
+                portraitOnFeedControls(
+                    picture = layout.onFeed,
+                    fill = portraitFill,
+                    bottomClearance = captureH + 10f,
+                    floorY = floorY,
+                    showGimbalButton = showGimbalButton,
+                )
+            } else {
+                layout.gimbalCluster(showGimbalButton)
+            }
+        val zoom = cluster.zoom
+        val stick = cluster.stick
+        val gimbalButton = cluster.controls
         val focusOffCenter = model.session.isFocusResetAvailable
 
         // Kyant sibling pattern: this box records feed + chrome; popups sit
@@ -714,6 +744,7 @@ fun LiveViewScreen(model: AppModel) {
                     onToggleStorage = { showStorageDuration = !showStorageDuration },
                     zoom = zoom,
                     stick = stick,
+                    gimbalButton = gimbalButton,
                     focusOffCenter = focusOffCenter,
                     onFocusReset = { model.session.resetFocusPoint() },
                     zoomReadout = zoomReadout,
@@ -801,6 +832,22 @@ fun LiveViewScreen(model: AppModel) {
                     status = status,
                     locked = uiLocked,
                     onSelect = { sheet = it },
+                )
+            }
+
+            if (chromeInteractive &&
+                showGimbalButton &&
+                model.liveGimbalPanel == LiveGimbalPanel.SHEET &&
+                !uiLocked
+            ) {
+                LiveGimbalSheetHost(
+                    model = model,
+                    layout = layout,
+                    cluster = cluster,
+                    safeLeading = safeLeading,
+                    safeTrailing = safeTrailing,
+                    safeTop = safeTop,
+                    safeBottom = safeBottom,
                 )
             }
 
@@ -924,7 +971,7 @@ fun LiveViewScreen(model: AppModel) {
                                 if (fill && zones.controls.height > 1f) zones.controls.minY
                                 else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
                                 else zones.systemBar.minY,
-                            ).second
+                            ).zoom
                         } else zoom,
                         stick = if (portrait && zones != null) {
                             portraitOnFeedControls(
@@ -934,7 +981,7 @@ fun LiveViewScreen(model: AppModel) {
                                 if (fill && zones.controls.height > 1f) zones.controls.minY
                                 else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
                                 else zones.systemBar.minY,
-                            ).first
+                            ).stick
                         } else stick,
                         statusChips = statusChipFrames.toMap(),
                     )
@@ -1399,6 +1446,7 @@ private fun LandscapeChrome(
     onToggleStorage: () -> Unit,
     zoom: ChromeRect,
     stick: ChromeRect,
+    gimbalButton: ChromeRect,
     focusOffCenter: Boolean,
     onFocusReset: () -> Unit,
     zoomReadout: Double,
@@ -1519,6 +1567,23 @@ private fun LandscapeChrome(
                 },
             )
         }
+        if (model.session.hasGimbal &&
+            model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) &&
+            !gimbalButton.isEmpty
+        ) {
+            LiveGimbalButton(
+                locked = uiLocked,
+                onClick = {
+                    model.liveGimbalPanel =
+                        if (model.liveGimbalPanel == LiveGimbalPanel.SHEET) LiveGimbalPanel.NONE
+                        else LiveGimbalPanel.SHEET
+                },
+                modifier =
+                    Modifier
+                        .liveModuleFrame(gimbalButton)
+                        .alpha(if (uiLocked) 0.4f else 1f),
+            )
+        }
         if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) && !stick.isEmpty) {
             Box(Modifier.liveModuleFrame(stick).chromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
@@ -1529,6 +1594,19 @@ private fun LandscapeChrome(
                     onFlip = { model.session.flipGimbal() },
                 )
             }
+        }
+        if (model.session.hasGimbal &&
+            model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) &&
+            hits &&
+            !uiLocked &&
+            model.liveOperatorPanel == null
+        ) {
+            LiveGimbalOverlay(
+                model = model,
+                layout = layout,
+                feed = layout.onFeed,
+                uiLocked = uiLocked,
+            )
         }
         if (!uiLocked && focusOffCenter && hits) {
             Box(Modifier.liveModuleFrame(layout.focusReset)) {

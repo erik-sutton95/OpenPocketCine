@@ -70,7 +70,7 @@ targets:
         INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "OpenPocketCine uses Bluetooth to find and pair with your DJI Osmo Pocket and hand off Wi-Fi."
         INFOPLIST_KEY_NSMotionUsageDescription: "OpenPocketCine uses headphone motion so AirPods can aim the gimbal."
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "OpenPocketCine talks to your camera over its own Wi-Fi network to read status and video."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "OpenPocketCine connects to cameras over local Wi-Fi to receive video and control them, and can share the live picture with nearby OpenPocketCine phones."
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "OpenPocketCine saves clips you choose to Photos."
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
         INFOPLIST_FILE: OpenPocketCine/Info-Frameio.plist

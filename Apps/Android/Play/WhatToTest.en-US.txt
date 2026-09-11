@@ -1,17 +1,14 @@
 New and changed
 
-- Live PEAK paints on Android the same way as iOS: a closed outline on sharp edges, including with LUT on.
-- Face AF-C finds 3/4 views, not only eyes-front, and the green box sits on the person.
+- No new Android controls in this build. Recent updates include a movable ND chip with Stops, filter factor, and optical density units.
+- False color offers the EL Zone, IRE, and CineStop scales for checking exposure.
 
 Fixes
 
-- Live picture is no longer blocky with LUT on or off.
-- WAITING FOR LIVE VIEW should not sit on screen after Wi-Fi joins.
-- Opening Operator Setup or clips, then back, keeps the live picture (not a black well).
-- Face lock is closer to iOS: it tracks the face without grabbing every oval, and the box is not mirrored onto the wrong side.
+- Pocket 3 keeps vertical 3K in FORMAT while options load and when changing frame rate.
 
 What to test
 
-- Pair a Pocket 4 Pro, join Wi-Fi, and go live. The picture should appear within a couple of seconds. Toggle LUT on and off and look for a smooth picture, not a grid. Turn PEAK on and off.
-- With AF-C, the green face box should sit on the person (front and 3/4). Tap it to track; cancel with the X. Open Operator Setup, then back: the picture must still be there.
-- Stay live two minutes with LUT on. Record, FORMAT, COLOR, or a tracking box must not freeze the picture. Pause VPNs or ad blockers if live view never starts.
+- Set Pocket 3 to vertical 3K, connect, and change frame rate. Confirm FORMAT stays 3K 9:16.
+- Hold-drag the ND chip to move it, then long-press Units to cycle its readings.
+- Switch false-color scales and check that the picture and waveform continue updating.

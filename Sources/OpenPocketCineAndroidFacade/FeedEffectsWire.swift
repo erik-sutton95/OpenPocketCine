@@ -9,7 +9,6 @@ import OpenPocketViewCore
 public enum FeedEffectsWire {
     public static let falseColorCubeSize = 64
     public static let assistScalarCount = 4
-    public static let stopsDetailBlend = 0.4
 
     public static func monitorTransfer(colorModeCode: Int) -> MonitorTransfer {
         guard (0...255).contains(colorModeCode),
@@ -23,6 +22,7 @@ public enum FeedEffectsWire {
         case 0: .stops
         case 1: .ire
         case 2: .limits
+        case 3: .elZone
         default: nil
         }
     }
@@ -42,7 +42,7 @@ public enum FeedEffectsWire {
         }
     }
 
-    /// Packed-2D RGBA8 overlay weight. IRE / PStops are opaque; Limits is holes-only.
+    /// Packed-2D RGBA8 overlay weight. IRE / CineStop / EL Zone are opaque; Limits is holes-only.
     public static func packedFalseColorWeight(
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
@@ -83,7 +83,7 @@ public enum FeedEffectsWire {
         case .rec709, .hdr:
             let gradient = 1.57
             return gradient * gradient
-        case .dlog, .dlog2:
+        case .dlog, .dlog2, .dlogm:
             return 1
         }
     }
@@ -116,7 +116,7 @@ public enum FeedEffectsWire {
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
                     let value =
-                        scale == .stops
+                        scale.usesSceneStops
                         ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
@@ -143,7 +143,7 @@ public enum FeedEffectsWire {
         monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .elZone:
             let color = renderedColor(
                 value: value, scale: scale, bands: bands,
                 source: (0, 0, 0), monitorGray: monitorGray)
@@ -175,7 +175,7 @@ public enum FeedEffectsWire {
     ) -> (red: Double, green: Double, blue: Double) {
         let base: (red: Double, green: Double, blue: Double)
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .elZone:
             let gray = min(1, max(0, monitorGray))
             base = (gray, gray, gray)
         case .limits:
@@ -215,14 +215,8 @@ public enum FeedEffectsWire {
     private static func renderedBandColor(
         _ band: LiveFalseColorBand, scale: LiveFalseColorScale, detailGray: Double
     ) -> (red: Double, green: Double, blue: Double) {
-        guard scale == .stops else { return (band.red, band.green, band.blue) }
-        let gray = min(1, max(0, detailGray))
-        let colorWeight = 1 - stopsDetailBlend
-        return (
-            band.red * colorWeight + gray * stopsDetailBlend,
-            band.green * colorWeight + gray * stopsDetailBlend,
-            band.blue * colorWeight + gray * stopsDetailBlend
-        )
+        _ = detailGray
+        return (band.red, band.green, band.blue)
     }
 
     private static func bandWeight(
@@ -251,8 +245,8 @@ public enum FeedEffectsWire {
 
     private static func transitionWidth(_ scale: LiveFalseColorScale) -> Double {
         switch scale {
-        case .stops: 0.05
-        case .ire, .limits: 0.5
+        case .elZone: 0.05
+        case .stops, .ire, .limits: 0.5
         }
     }
 

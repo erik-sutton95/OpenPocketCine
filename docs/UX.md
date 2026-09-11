@@ -64,8 +64,9 @@ Watch rec / shutter skips that sheet (the phone may be in a cage), same as
 gamepad Cross/A.
 
 Watch placeholders: **Open OpenPocketCine on iPhone** only when there is
-no snapshot yet (not on wrist-down). **No camera connected** and
-**Waiting for live view** when those are the live facts. Always On keeps
+no snapshot yet (not on wrist-down). **No camera connected** overlays even
+a retained picture after an explicit disconnect; stale frame timecode is cleared.
+**Waiting for live view** appears before the first picture. Always On keeps
 rec / timecode / last frame on the dimmed face. Third-party apps cannot
 match Flashlight brightness or disable the idle backlight.
 `WKExtension.isFrontmostTimeoutExtended` is unsupported since watchOS 7.
@@ -79,9 +80,16 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
 
 - Long-press View Assist → options + help.
 - Operator Setup: seven tabs (Link, Sharing, View Assist, Controls, Display,
-  Storage, System).
-- TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
-- Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
+  Storage, System). iOS Sharing: Share this feed, optional passcode, control
+  requests, broadcast priority, and an explicit Show Wi-Fi code sheet. Watch a
+  feed from home prompts joining the same camera Wi-Fi first: scan the host code
+  with Camera, accept Join Network, then return and select the shared feed. Only
+  the host opens a camera session. Discovery and streaming never use peer-to-peer. Android Sharing stays
+  Coming soon. The watcher monitor keeps local assists/scopes, telemetry and REC
+  tally around the picture. Request/Release control stays on the monitor; camera
+  controls appear only with the host grant. Interrupted feeds hold the last frame,
+  show bounded reconnect progress, and retain Leave / Choose a feed after failure.
+- TestFlight / Play What to Test is this-build operator copy (`docs/tester-notes.md`).
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a
   tester who never reaches Operator Setup can still send a report.
 - Operator Setup → System → **Share Diagnostics**. iOS screenshot for

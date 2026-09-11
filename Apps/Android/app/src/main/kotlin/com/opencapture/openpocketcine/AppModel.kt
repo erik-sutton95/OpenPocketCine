@@ -7,6 +7,7 @@ import android.os.BatteryManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.pairing.SavedCamera
@@ -15,6 +16,7 @@ import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.session.GimbalRamp
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import com.opencapture.openpocketcine.session.VideoFormat
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +55,16 @@ class AppModel(context: Context) {
         private set
     var gimbalStickSensitivity by mutableStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
         private set
+    var gimbalRamp by mutableStateOf(OperatorPrefs.gimbalRamp(appContext))
+        private set
+    var liveGimbalPanel by mutableStateOf(LiveGimbalPanel.NONE)
+    /** Canvas-space centre of the programmed-move editor / Run pill. Null until first open or drag. */
+    var gimbalFloatCenter by mutableStateOf<Offset?>(null)
+    var gimbalDebugCenter by mutableStateOf<Offset?>(null)
+
+    init {
+        session.gimbalRamp = gimbalRamp
+    }
     var dispLive by mutableStateOf(OperatorPrefs.dispLive(appContext))
         private set
     var dispClean by mutableStateOf(OperatorPrefs.dispClean(appContext))
@@ -117,6 +129,7 @@ class AppModel(context: Context) {
 
     fun beginChromeEditing(mode: PocketDispMode) {
         liveOperatorPanel = null
+        liveGimbalPanel = LiveGimbalPanel.NONE
         setDisplayMode(clean = mode == PocketDispMode.CLEAN)
         chromeEditorMode = mode
     }
@@ -161,6 +174,12 @@ class AppModel(context: Context) {
     fun updateHapticsEnabled(value: Boolean) {
         hapticsEnabled = value
         OperatorPrefs.setHapticsEnabled(appContext, value)
+    }
+
+    fun updateGimbalRamp(value: GimbalRamp) {
+        gimbalRamp = value
+        OperatorPrefs.setGimbalRamp(appContext, value)
+        session.gimbalRamp = value
     }
 
     fun updateGimbalStickSensitivity(value: Int) {

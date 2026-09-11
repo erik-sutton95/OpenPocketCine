@@ -44,30 +44,17 @@ connects this GitHub repo, and defines the `main` Archive workflow.
 
 ## Tester-facing release notes
 
-TestFlight notes are reviewed product copy, not a git log. Any pull request that can trigger a
-TestFlight build must replace `ios/TestFlight/WhatToTest.en-US.txt`. Required format:
+**this-build** window, not a product recap: [`tester-notes.md`](tester-notes.md).
+Any pull request that can trigger a TestFlight build replaces
+`ios/TestFlight/WhatToTest.en-US.txt` with this PR plus up to three other
+newest operator-visible `feat:` / `fix:` items iPhone testers can see.
+**New features** (1–4) for a capability-only window; three-section form when
+testers need a named fix or a concrete action.
 
-```text
-New and changed
-
-- Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform and assists.
-
-Fixes
-
-- Nothing to call out yet — this is the first TestFlight build.
-
-What to test
-
-- Pair an Osmo Pocket 4, join its Wi-Fi, and confirm live view fills the monitor.
+```bash
+just tester-notes-window
+just testflight-notes
 ```
-
-Write for camera operators:
-
-- Include only behavior visible in the iPhone or iPad app.
-- Say what changed for the tester, not how it was implemented.
-- Use the names testers see in the app.
-- Keep **New and changed** to 1-6 bullets, **Fixes** to 1-8, **What to test** to 1-5 concrete actions.
-- Exclude Android, website, CI, architecture, identifiers, issue numbers, and source-file details.
 
 `scripts/ios-release-notes-check.sh` enforces the format. Pull-request CI also verifies that the
 notes file changed when iOS production paths changed.
@@ -78,12 +65,6 @@ when the tester screenshots; they paste it into the feedback comment.
 Crashes still go to App Store Connect automatically. Full report:
 Connection setup **Share Diagnostics**, or Operator Setup → System →
 Share Diagnostics. Contract: [`diagnostics.md`](diagnostics.md).
-
-Preview locally:
-
-```bash
-just testflight-notes
-```
 
 ## Version numbers
 

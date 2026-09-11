@@ -15,6 +15,7 @@ the same PR.
 | --- | --- | --- |
 | Live picture | Present at the camera’s live rate. Typical Pocket/Nano SoftAP is ~25 fps 720p. Do not pace decode at 30 fps. A 4K 50p body may present 50 Hz 720p. Skip duplicate timestamps; latest-wins if a LUT bake is busy. Runtime grade cap 1440 px (`FeedPresentPolicy.maxWorkingWidth`). | [`live-session.md`](live-session.md), `FeedPresentPolicy` |
 | Playback LUT | 720p proxy with the official cube stays at a usable rate on iPhone 13-class (picture first; same class as LUT-off). Native 420 IOSurface → GPU cube at `maxWorkingWidth`. Pull clock follows the display (24–120 Hz); `hasNewPixelBuffer` gates the cube — do not cap the display link at 24. No `AVVideoComposition` for preview. Scope tap stays off the present thread. Android playback is the live GLES session (OES → cube); no TextureView `getBitmap`. | `PlaybackFeedSession`, `PlaybackFeedView` |
+| Watcher relay (iOS) | Same camera Wi-Fi for host and watchers; no peer-to-peer fallback. One encode; two admitted source frames; two video sends per authorized watcher, separate from control traffic; one pending state send at 5 Hz. Encode and fan-out off MainActor. Forced relay keyframes ≤1 Hz. | [`watcher-relay.md`](watcher-relay.md) |
 | Window ACK | pktType `0x04` at **40 Hz**, three groups: video `0x02` seq, ackedData `0x03` seq, telemetry extra | [`live-session.md`](live-session.md) |
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
 | Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause (young status) never rebuilds UDP | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md) |
@@ -22,9 +23,25 @@ the same PR.
 | Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. Assists-off is one blit — no 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
 | HUD glass sample | PixelCopy ~20 Hz when Kyant cannot sample the SurfaceView | [`ANDROID.md`](../ANDROID.md) |
 | Zoom pinch | Distinct lens ticks at 20 Hz, no ACK wait | [`PARITY.md`](PARITY.md) |
-| Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; look-at applies at 25 Hz at full Mimo stick (±550). HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
+| Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; a 25 Hz pump publishes native targets to a latest-only mailbox. Native wire emission has a 40 ms minimum interval on the 25 ms ACK timer (typically 20 Hz). Duplicate targets are suppressed; a not-ready socket cannot accumulate a backlog. HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). Motion Control waypoint letters follow the 25 Hz stick budget — not 60 Hz `TimelineView.animation` / `withFrameNanos` on the live canvas (that starved ingest and flashed Reconnecting). Motion Control session progress is 5 Hz; no debug overlay is drawn. Timed-path ticks use monotonic elapsed time; a gap over 120 ms or attitude receipt age over 300 ms aborts the take. Physical precision remains unqualified ([Motion Control takes](programmed-moves.md)). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
-| Watch preview | Ack-paced JPEG, drop-stale, **3** in flight (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
+| Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
+
+Programmed takes run on the background transport scheduler, using complete-frame
+attitude receipts before the UI hop. Smoothed paths write 20 Hz native targets
+directly at monotonic deadlines under exclusive ownership; UI progress is 5 Hz. Marker/curve projection uses the existing 25 Hz overlay timeline;
+measured motion prediction is display-only. No new ACK timer or video enable
+is introduced. Native stream targets are not logged individually at 20 Hz.
+
+## Image anchoring experiment
+
+A temporary iPhone 16 Pro Max benchmark of Vision homography registration at
+320 pixels wide and 5 Hz measured 30 jobs: mean 42.6 ms, p95 68.9 ms, maximum
+800.3 ms including cold start. A concurrent movement test interrupted on timing.
+This does not establish causation, but the cost is unsuitable for enabling by
+default. The probe was removed; production waypoint projection performs no
+image registration. Background transport checks without the probe sustained
+approximately 25 fps through normal and fast smoothed takes.
 
 ## Threading
 

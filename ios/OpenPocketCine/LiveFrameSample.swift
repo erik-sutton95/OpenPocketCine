@@ -12,6 +12,7 @@ extension MonitorTransfer {
         case .rec709: .normal
         case .hdr: .hdr
         case .dlog: .dLog
+        case .dlogm: .dLogM
         case .dlog2: .dLog2
         }
     }
@@ -230,7 +231,7 @@ enum PocketScopeSampler {
         switch transfer {
         case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
         case .dlog2: return BundledOfficialDJILUT.cube(.pocketDLog2)
-        case .rec709, .hdr: return nil
+        case .rec709, .hdr, .dlogm: return nil
         }
     }
 

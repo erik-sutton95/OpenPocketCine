@@ -3,6 +3,16 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct LUTExposureCompensationTests {
+    @Test func dLogMScopeEstimateDoesNotChangeExistingBakedExposure() {
+        for byte in 0...255 {
+            for stops in [-2.0, 0, 2.0] {
+                let signal = Double(byte) / 255
+                #expect(LUTExposureCompensation.compensateEncoded(signal, stops: stops, transfer: .dlogm)
+                    == LUTExposureCompensation.compensateEncoded(signal, stops: stops, transfer: .dlog))
+            }
+        }
+    }
+
     @Test func snapsHalfStopsAndClamps() {
         #expect(LUTExposureCompensation.snap(0) == 0)
         #expect(LUTExposureCompensation.snap(0.24) == 0)
