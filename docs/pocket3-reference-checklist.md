@@ -214,6 +214,20 @@ is measured above; the log curve and 10-bit USB output remain unverified.
 The survey covers only part of this list.
 [DJI release history](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/RN/20250826/DJI_Osmo_Pocket_3_Release_Notes_en.pdf).
 
+## Work after the rental return
+
+The rental was returned on 2026-09-11. Use the preserved captures, originals,
+validation reports and public reference as the starting point for further
+Pocket 3 work. Retain the distinction between observed behavior and unqualified
+combinations; replay and synthetic tests do not create new hardware evidence.
+A further rental should address a specific blocking question that the existing
+evidence and offline tests cannot answer.
+
+The final iPhone check also confirmed the corrected vertical 3K FORMAT picker.
+The empty-list fallback now retains the reported portrait resolution on both
+platforms. Physical Android and an on-camera fps-change check remain pending;
+see [the picker correction](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-portrait-format-picker).
+
 ## Before promoting a result
 
 Preserve one-change action segments and exact firmware/Mimo context. Pair visible

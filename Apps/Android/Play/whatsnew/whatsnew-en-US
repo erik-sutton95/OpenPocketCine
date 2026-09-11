@@ -1,1 +1,1 @@
-Experimental Motion Control adds timed A→B→C gimbal moves, smoothing, countdown and Pause/Resume/Stop. New false-color choices: CineStop, EL Zone and six-zone IRE. ND assist adds a movable chip with Stops, ND32 and ND 0.3 readouts.
+FORMAT now keeps the current portrait or square recording size visible when format options are unavailable. Vertical 3K stays selected when changing frame rate.

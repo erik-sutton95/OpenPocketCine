@@ -1153,6 +1153,23 @@ cancellation, and built-in audio backup with external microphones. These are
 documented features rather than findings from this survey.
 [DJI release history](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/RN/20250826/DJI_Osmo_Pocket_3_Release_Notes_en.pdf).
 
+## OpenPocketCine portrait format picker
+
+A later operator report found that vertical 3K appeared as only 1080p/4K in
+OpenPocketCine's FORMAT picker. The reproduced empty-list fallback discarded
+the reported current resolution. Both platforms now retain a reported size
+such as **3K 9:16** when the effective format list is empty, and an fps selection
+keeps that resolution byte. Reported capabilities and the confirmed Pocket 3
+normal-Video matrix still take precedence.
+
+After the corrected app was installed on an iPhone 16 Pro Max on 2026-09-11,
+the operator confirmed that the vertical 3K picker worked. Automated tests cover
+the empty-list case and preserving portrait on an fps change. Physical Android
+and on-camera fps-change checks remain pending. The operator's earlier session
+inputs were not captured, so the reproduction does not establish that this
+fallback caused that session's behavior. See
+[format fallback behavior](commands.md#pocket-3-format-choices-without-a-capability-table).
+
 ## OpenPocketCine recording and warm reconnect
 
 A separate physical iPhone check used installed OpenPocketCine **0.1.0 (99)**

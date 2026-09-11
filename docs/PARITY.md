@@ -266,6 +266,22 @@ relaunch/reconnect. The complete camera original is HEVC Main 10, 2688×1512,
 pairs, camera power-off persistence and physical Android verification remain
 pending. See the [survey evidence](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-recording-and-warm-reconnect).
 
+### FORMAT retains the reported size while capabilities are unavailable
+
+Both shells keep a reported portrait, square, 2.7K or unknown resolution visible
+when the effective format list is empty. For example, a reported `3K 9:16`
+shows a `3K` tab, and changing fps keeps its portrait resolution byte. The
+legacy 1080/4K tabs remain when no current size has been reported or the size
+is already one of those two landscape sizes. Reported capabilities and the
+confirmed Pocket 3 normal-Video matrix still take precedence.
+
+Core and Android picker regressions cover this behavior, including retaining the
+portrait resolution when changing fps. After installing the correction on an
+iPhone 16 Pro Max on 2026-09-11, the operator confirmed that the vertical 3K
+picker worked. Physical Android verification and an on-camera fps-change check
+remain pending. The operator's earlier session inputs were not captured, so the
+reproduction does not establish that this fallback caused that session's behavior.
+
 ### Log conversion export (iOS)
 
 Share **Convert log** chooses one **Output curve** (D-Log or D-Log2) for the

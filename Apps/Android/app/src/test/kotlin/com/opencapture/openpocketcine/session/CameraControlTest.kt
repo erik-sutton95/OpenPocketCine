@@ -10,6 +10,31 @@ import kotlin.test.assertTrue
 
 class CameraControlTest {
     @Test
+    fun emptyCapabilityPortraitKeepsReportedResolution() {
+        val current = VideoFormat(VideoResolution.P3K_9X16, VideoFrameRate.FPS25)
+        val formats = VideoFormat.pickerFormats(emptyList(), CameraModel("Osmo Pocket 3"), -1)
+        val aspects = VideoFormat.aspects(formats, current.resolution.aspect)
+        val resolutions = VideoFormat.resolutions(
+            formats, current.resolution,
+            if (aspects.size > 1) VideoAspect.NINE_SIXTEEN else null,
+        )
+        assertEquals(listOf(VideoResolution.P3K_9X16), resolutions)
+        assertEquals(listOf("3K"), resolutions.map { it.tabTitle })
+    }
+
+    @Test
+    fun emptyCapabilityPreservesReportedSizesWithoutInventingAnAspect() {
+        for (current in listOf(
+            VideoResolution.P3K_1X1, VideoResolution.P2_7K,
+            VideoResolution.P4K_4X3, VideoResolution(0xFE),
+        )) {
+            assertEquals(listOf(current), VideoFormat.resolutions(emptyList(), current))
+        }
+        assertEquals(listOf(VideoResolution.P1080, VideoResolution.P4K), VideoFormat.resolutions(emptyList(), null))
+        assertTrue(VideoFormat.resolutions(emptyList(), VideoResolution.P3K_9X16, VideoAspect.SIXTEEN_NINE).isEmpty())
+    }
+
+    @Test
     fun pocket3PickerFallbackIncludesNormalVideoSizesOnly() {
         val model = CameraModel(name = "Osmo Pocket 3")
         val formats = VideoFormat.pickerFormats(emptyList(), model, CameraCommands.SHOOT_VIDEO)

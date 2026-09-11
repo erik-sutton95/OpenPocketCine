@@ -60,3 +60,12 @@ when the capability table is empty: 1080p/2.7K/4K in 16:9, 1080p/2160p/3K in 1:1
 and 1080p/2.7K/3K in 9:16, at 24/25/30/48/50/60 fps. Camera-reported tables take
 precedence. This fallback is not applied to SlowMo, livestream or an unknown
 shooting mode. Existing `02/18` SET and camera-status confirmation are used.
+
+When the effective format list is still empty, the picker retains a known current
+size such as **3K 9:16** rather than replacing it with the generic 1080p/4K
+landscape choices. Changing fps retains that resolution. This preserves the
+reported value without inventing additional portrait formats; the full Pocket 3
+list above still requires a confirmed model and normal Video mode. The change
+has automated coverage on both platforms. The operator confirmed the corrected
+vertical 3K picker on an iPhone on 2026-09-11; Android and on-camera fps-change
+verification remain pending.

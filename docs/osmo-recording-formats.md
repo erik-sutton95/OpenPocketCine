@@ -147,15 +147,26 @@ iOS `CaptureControlSheets` and Android `LiveControlSheets` use the effective
 picker formats: reported capabilities first, then the Pocket 3 normal-Video
 exception above. With multiple known aspects, the picker groups by aspect,
 resolution and the frame rates available for that resolution. Unknown bytes
-are retained. Other empty-table paths keep the existing 1080/4K and normal
-24–60 fallback; an already-reported nonstandard frame rate is preserved.
+are retained.
+
+When the effective list is empty, both shells preserve a reported size outside
+the legacy 1080/4K pair as the sole resolution tab. Thus `3K 9:16` stays `3K`,
+and an fps change retains its resolution byte. The generic 1080/4K tabs still
+apply when no size has been reported or it is already one of those two.
+This does not expand the legal format matrix. The normal 24–60 fallback remains;
+an already-reported nonstandard frame rate is preserved. Core and Android picker
+tests cover the fallback and retaining portrait on an fps change. The operator
+confirmed the corrected vertical 3K picker on a physical iPhone on 2026-09-11;
+Android and on-camera fps-change verification remain pending.
 
 A selection remains pinned until a `cam_video_param_v2` report confirms that
 resolution/frame-rate pair. An unrelated battery, exposure or gimbal update
 does not confirm the optimistic selection. PR #277 recorded a physical
 Nano/iPhone check of additional formats and the picker staying on its selection.
 PR #316 left Pocket 3 2.7K selection, recording and reconnect acceptance pending;
-the fallback and automated tests alone do not establish those results.
+the later iPhone survey closed one landscape 2.7K/25 D-Log M sequence with a
+validated original. The fallback and automated tests alone are not physical
+acceptance of every pair.
 
 ## Pocket-line aspects (why Nano and Pocket 3 look “richer”)
 
