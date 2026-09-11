@@ -82,7 +82,8 @@ for live view.
 - Companion ID `com.opencapture.openpocketcine`. Same `Version.xcconfig`.
 - Dependent watch app (`WKRunsIndependentlyOfCompanionApp` false).
 - `just watch-build`; `just native-check` includes it.
-- Xcode 26: embed Watch content in `PlugIns/` if XcodeGen still uses `Watch/`.
+- Embed the watch app in `Watch/` (XcodeGen Embed Watch Content). The iPhone
+  Watch app only lists companions from that folder, not `PlugIns/`.
 - PARITY exception: iOS-only. Wear later.
 
 ## Out of scope

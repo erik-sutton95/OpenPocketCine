@@ -29,7 +29,5 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.opencapture.openpocketcine</string>
-	<key>WKRunsIndependentlyOfCompanionApp</key>
-	<false/>
 </dict>
 </plist>
