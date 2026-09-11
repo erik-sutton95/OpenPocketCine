@@ -26,6 +26,7 @@ final class WatchSessionController: NSObject {
             session.activate()
         }
         isReachable = session.isReachable
+        ingestApplicationContext(session.receivedApplicationContext)
         #if targetEnvironment(simulator)
             if feedImage == nil { feedImage = Self.sampleFrame }
         #endif
@@ -98,6 +99,11 @@ final class WatchSessionController: NSObject {
         }
     }
 
+    private func ingestApplicationContext(_ context: [String: Any]) {
+        guard let data = context[WatchRelayContext.stateKey] as? Data else { return }
+        ingest(data)
+    }
+
     #if targetEnvironment(simulator)
         private static let sampleFrame: UIImage? = {
             let size = CGSize(width: 320, height: 180)
@@ -160,5 +166,16 @@ extension WatchSessionController: WCSessionDelegate {
     ) {
         replyHandler(Data())
         Task { @MainActor [weak self] in self?.ingest(messageData) }
+    }
+
+    nonisolated func session(
+        _ session: WCSession,
+        didReceiveApplicationContext applicationContext: [String: Any]
+    ) {
+        let data = applicationContext[WatchRelayContext.stateKey] as? Data
+        Task { @MainActor [weak self] in
+            guard let data else { return }
+            self?.ingest(data)
+        }
     }
 }

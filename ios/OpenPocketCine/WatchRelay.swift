@@ -1,9 +1,7 @@
 import CoreImage
 import Foundation
-import ImageIO
 import OpenPocketViewCore
 import UIKit
-import UniformTypeIdentifiers
 
 #if canImport(WatchConnectivity)
     import WatchConnectivity
@@ -28,8 +26,12 @@ import UniformTypeIdentifiers
         private var lastSentState: WatchRelayState?
         private var pendingPreview: (image: CIImage, timecode: String, isRecording: Bool)?
         private var framesInFlight = 0
-        private static let maxFramesInFlight = 3
-        private var rttEMA: TimeInterval = 0.15
+        /// One in flight: latest-wins, lower glass-to-glass than a 3-frame pipeline.
+        private static let maxFramesInFlight = 1
+        private var rttEMA: TimeInterval = 0.12
+        nonisolated private static let thumbnailContext = CIContext(options: [
+            .useSoftwareRenderer: false
+        ])
 
         override init() {
             session = WCSession.isSupported() ? .default : nil
@@ -51,10 +53,14 @@ import UniformTypeIdentifiers
             guard lastSentState.map({ !state.matchesIgnoringLiveReadouts($0) }) ?? true else {
                 return
             }
-            guard isReady, let session,
+            guard let session, session.activationState == .activated,
                 let data = try? WatchRelayEnvelope.encode(kind: .state, payload: state)
             else { return }
             lastSentState = state
+            // Wrist-down / Always On drops `isReachable`. Application context still
+            // delivers rec, timecode, and storage without a live message session.
+            try? session.updateApplicationContext([WatchRelayContext.stateKey: data])
+            guard session.isReachable else { return }
             session.sendMessageData(
                 data, replyHandler: nil,
                 errorHandler: { @Sendable [weak self] _ in
@@ -113,9 +119,9 @@ import UniformTypeIdentifiers
 
         private func adaptiveEncodingParams() -> (width: CGFloat, quality: CGFloat) {
             switch rttEMA {
-            case 0.35...: (width: 512, quality: 0.40)
-            case 0.20..<0.35: (width: 672, quality: 0.45)
-            default: (width: 832, quality: 0.50)
+            case 0.22...: (width: 256, quality: 0.32)
+            case 0.12..<0.22: (width: 320, quality: 0.38)
+            default: (width: 416, quality: 0.42)
             }
         }
 
@@ -164,21 +170,7 @@ import UniformTypeIdentifiers
         }
 
         nonisolated static func encodedFrameData(_ image: UIImage, quality: CGFloat) -> Data? {
-            guard let cgImage = image.cgImage else {
-                return image.jpegData(compressionQuality: quality)
-            }
-            let buffer = NSMutableData()
-            guard
-                let destination = CGImageDestinationCreateWithData(
-                    buffer, UTType.heic.identifier as CFString, 1, nil)
-            else { return image.jpegData(compressionQuality: quality) }
-            CGImageDestinationAddImage(
-                destination, cgImage,
-                [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
-            guard CGImageDestinationFinalize(destination), buffer.length > 0 else {
-                return image.jpegData(compressionQuality: quality)
-            }
-            return buffer as Data
+            image.jpegData(compressionQuality: quality)
         }
 
         nonisolated static func thumbnailData(
@@ -189,9 +181,8 @@ import UniformTypeIdentifiers
             let scale = min(1, maxWidth / extent.width)
             let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             let target = scaled.extent.integral
-            let context = CIContext(options: [.useSoftwareRenderer: false])
             guard target.width > 1, target.height > 1,
-                let cg = context.createCGImage(scaled, from: target)
+                let cg = thumbnailContext.createCGImage(scaled, from: target)
             else { return nil }
             return encodedFrameData(UIImage(cgImage: cg), quality: quality)
         }

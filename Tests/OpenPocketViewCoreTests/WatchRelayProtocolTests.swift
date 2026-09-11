@@ -169,6 +169,25 @@ struct WatchRelayProtocolTests {
         #expect(state.isPhotography)
     }
 
+    @Test("Wrist-down does not cover a live tally with open-on-iPhone")
+    func placeholderKeepsLastTallyWhenUnreachable() {
+        let live = sampleState()
+        #expect(
+            WatchMonitorPlaceholder.resolve(
+                isReachable: false, state: live, hasFeed: true) == .none)
+        #expect(
+            WatchMonitorPlaceholder.resolve(
+                isReachable: false, state: nil, hasFeed: false) == .openOnIPhone)
+        #expect(
+            WatchMonitorPlaceholder.resolve(
+                isReachable: true, state: nil, hasFeed: false) == .none)
+        let noCamera = WatchRelayState.snapshot(
+            status: CameraStatus(), phase: .idle, cameraName: "", feedLive: false)
+        #expect(
+            WatchMonitorPlaceholder.resolve(
+                isReachable: true, state: noCamera, hasFeed: false) == .noCamera)
+    }
+
     @Test("Operator copy never names a sister app")
     func operatorCopyIsPocketFacing() {
         let facing = [

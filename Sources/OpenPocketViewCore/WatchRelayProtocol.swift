@@ -41,6 +41,42 @@ public enum WatchRelayCopy: Sendable {
     public static let busy = "Camera is busy."
 }
 
+/// `WCSession.updateApplicationContext` key. Plist-safe so rec/tally still
+/// land when `sendMessageData` is not reachable (wrist down / Always On).
+public enum WatchRelayContext: Sendable {
+    public static let stateKey = "state"
+}
+
+/// Wrist placeholder. Wrist-down must not cover a live tally with "open iPhone".
+public enum WatchMonitorPlaceholder: Equatable, Sendable {
+    case none
+    case openOnIPhone
+    case noCamera
+    case waitingLive
+
+    public var copy: String? {
+        switch self {
+        case .none: nil
+        case .openOnIPhone: WatchRelayCopy.openOnIPhone
+        case .noCamera: WatchRelayCopy.noCamera
+        case .waitingLive: WatchRelayCopy.waitingLive
+        }
+    }
+
+    /// Last picture and chrome stay up when WatchConnectivity drops.
+    public static func resolve(
+        isReachable: Bool, state: WatchRelayState?, hasFeed: Bool
+    ) -> WatchMonitorPlaceholder {
+        if let state {
+            if state.connection == .noCamera, !hasFeed { return .noCamera }
+            if !state.feedLive, !hasFeed { return .waitingLive }
+            return .none
+        }
+        if !isReachable { return .openOnIPhone }
+        return .none
+    }
+}
+
 /// Storage slot on the wrist. Same formula as the phone HUD default
 /// (`N GB · P%`), with remaining minutes when the body has no totals.
 public enum WatchRelayMedia: Sendable {

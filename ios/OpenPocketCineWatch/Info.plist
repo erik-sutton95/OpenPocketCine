@@ -27,6 +27,8 @@
 	</array>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKSupportsAlwaysOnDisplay</key>
+	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.opencapture.openpocketcine</string>
 </dict>

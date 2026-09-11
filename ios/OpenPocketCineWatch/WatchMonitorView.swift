@@ -6,6 +6,7 @@ import WatchKit
 /// camera battery. All camera control stays on the iPhone.
 struct WatchMonitorView: View {
     @Environment(WatchSessionController.self) private var controller
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     private var state: WatchRelayState? { controller.state }
     private var isRecording: Bool { state?.isRecording ?? false }
@@ -30,10 +31,12 @@ struct WatchMonitorView: View {
         .background(.black)
         .ignoresSafeArea(edges: [.horizontal, .bottom])
         .onChange(of: isRecording) { _, nowRecording in
+            guard !isLuminanceReduced else { return }
             WKInterfaceDevice.current().play(nowRecording ? .success : .failure)
         }
         .onChange(of: controller.commandMessage) { _, message in
-            if message != nil { WKInterfaceDevice.current().play(.failure) }
+            guard !isLuminanceReduced, message != nil else { return }
+            WKInterfaceDevice.current().play(.failure)
         }
     }
 
@@ -62,8 +65,9 @@ struct WatchMonitorView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: proxy.size.width, height: proxy.size.height)
-                            .scaleEffect(zoom)
-                            .offset(clampedPan(in: proxy.size))
+                            .scaleEffect(isLuminanceReduced ? 1 : zoom)
+                            .offset(isLuminanceReduced ? .zero : clampedPan(in: proxy.size))
+                            .opacity(isLuminanceReduced ? 0.55 : 1)
                             .onAppear { feedSize = proxy.size }
                             .onChange(of: proxy.size) { _, size in feedSize = size }
                     }
@@ -132,12 +136,12 @@ struct WatchMonitorView: View {
     }
 
     @ViewBuilder private var overlay: some View {
-        if !controller.isReachable {
-            placeholder(WatchRelayCopy.openOnIPhone)
-        } else if state?.connection == .noCamera {
-            placeholder(WatchRelayCopy.noCamera)
-        } else if state?.feedLive == false {
-            placeholder(WatchRelayCopy.waitingLive)
+        if let copy = WatchMonitorPlaceholder.resolve(
+            isReachable: controller.isReachable,
+            state: state,
+            hasFeed: controller.feedImage != nil
+        ).copy {
+            placeholder(copy)
         }
     }
 

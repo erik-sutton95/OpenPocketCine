@@ -24,7 +24,7 @@ the same PR.
 | Zoom pinch | Distinct lens ticks at 20 Hz, no ACK wait | [`PARITY.md`](PARITY.md) |
 | Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; look-at applies at 25 Hz at full Mimo stick (±550). HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
-| Watch preview | Ack-paced HEIC (JPEG fallback), drop-stale, max 3 in flight. Encode off the present thread. No extra `0x09/0xa8`. Adaptive 512 / 672 / 832 px from RTT. | `WatchRelay` |
+| Watch preview | Ack-paced JPEG, drop-stale, **one** in flight. Encode off the present thread on a reused `CIContext`. No extra `0x09/0xa8`. Adaptive 256 / 320 / 416 px from RTT. Rec/tally uses `updateApplicationContext` when the watch is not reachable (wrist down / Always On). | `WatchRelay` |
 
 ## Threading
 
