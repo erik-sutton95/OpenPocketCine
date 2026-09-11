@@ -28,6 +28,7 @@ missing=0
 for html in "${html_files[@]}"; do
   while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
+    ref="${ref%%[?#]*}"
     resolved="$(dirname "$html")/$ref"
     if [[ ! -f "$resolved" ]]; then
       echo "Missing public-site asset referenced by $html: $ref" >&2
@@ -47,6 +48,15 @@ for html in "${html_files[@]}"; do
   fi
 done
 if (( missing != 0 )); then exit 1; fi
+
+# Changed homepage assets need new URLs so cached CSS/JS cannot lag behind HTML.
+for asset in app.css app.js; do
+  version=$(shasum -a 256 "site/assets/$asset" | cut -c1-12)
+  if ! grep -Fq "assets/$asset?v=$version\"" site/index.html; then
+    echo "Update the homepage asset URL to assets/$asset?v=$version" >&2
+    exit 1
+  fi
+done
 
 external_scripts=$(grep -c '<script src="https://' site/index.html || true)
 integrity_attributes=$(grep -c 'integrity="sha384-' site/index.html || true)

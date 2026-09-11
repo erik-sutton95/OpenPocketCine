@@ -101,7 +101,7 @@ for log). Shot color is stored with the cached clip. A **Proxy** tag means
 only the 720p sidecar is on the phone. Storage **Full Resolution Caching**
 matches iOS. Pocket 3 `/v2` is storage 0; the newest catalog page lists
 after a take even if enter-playback ACKs E0. Share/save is the original
-camera file — LUT bake (and Bake exposure) is iOS only.
+camera file — LUT bake, Bake exposure, and Convert log are iOS only.
 Multiview and Sharing are unavailable on Android. The
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes the experimental
 iPhone/iPad feature and its validation limits.
