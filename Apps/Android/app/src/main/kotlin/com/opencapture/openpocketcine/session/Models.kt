@@ -274,6 +274,8 @@ data class CameraStatus(
     val selfieFlip: Boolean? = null,
     /** `0x04/0x27` `@2` bit `0x40`. `0` front / `1` selfie / `-1` unknown. */
     val gimbalFace: Int = CameraCommands.GIMBAL_FACE_UNKNOWN,
+    /** Pocket `0x04/0x05` mode family: 0 Direction Lock, 1 FPV, 2 Follow; -1 unknown. */
+    val gimbalModeFamily: Int = -1,
     /** `0x04/0x50` param `04`. `0` Follow / `1` Tilt locked. `-1` unknown. */
     val gimbalTiltLock: Int = -1,
     /** `0x04/0x50` param `05`. `0` Fast / `1` Default / `2` Slow. `-1` unknown. */
@@ -486,6 +488,7 @@ data class CameraStatus(
             .put("glamourEnabled", glamourEnabled ?: JSONObject.NULL)
             .put("selfieFlip", selfieFlip ?: JSONObject.NULL)
             .put("gimbalFace", gimbalFace)
+            .put("gimbalModeFamily", gimbalModeFamily)
             .put("windNR", windNRJson())
             .put("directionalAudio", directionalAudioJson())
             .put("audioMetersLeft", audioMetersLeft)
@@ -580,6 +583,7 @@ data class CameraStatus(
                     glamourEnabled = optionalBoolean(obj, "glamourEnabled"),
                     selfieFlip = optionalBoolean(obj, "selfieFlip"),
                     gimbalFace = obj.optInt("gimbalFace", CameraCommands.GIMBAL_FACE_UNKNOWN),
+                    gimbalModeFamily = obj.optInt("gimbalModeFamily", -1),
                     windNr = mapWindNr(obj),
                     directionalAudio = mapDirectionalAudio(obj),
                     audioMetersLeft = obj.optDouble("audioMetersLeft", -60.0),

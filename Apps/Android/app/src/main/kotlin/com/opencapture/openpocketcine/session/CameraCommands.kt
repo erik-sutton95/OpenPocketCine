@@ -452,6 +452,8 @@ object CameraCommands {
 
     fun gimbalFpv(): ByteArray = byteArrayOf(0x01, 0x08)
 
+    fun gimbalDirectionLock(): ByteArray = byteArrayOf(0x00, 0x08)
+
     fun gimbalParamsGet(): ByteArray = byteArrayOf(0x01, 0x04, 0x05)
 
     fun setGimbalSpeed(speed: Int): ByteArray =

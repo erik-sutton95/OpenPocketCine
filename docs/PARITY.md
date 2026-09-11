@@ -109,6 +109,13 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 
 ## Native motion qualification
 
+Direction Lock (2026-09-11): both shells replace the unavailable Locked option
+with Direction Lock and send the verified camera-direction command. Camera mode
+reports distinguish it from Tilt locked, and another mode releases it. The iPhone
+protocol probe passed; integrated iPhone menu verification and physical Android
+verification are pending (no Android device attached). Joystick-hold Lock Gimbal
+is a separate, paused investigation. See [gimbal controls](gimbal-controls.md).
+
 Native Motion Control takes remain experimental on both shells. Three short iOS
 Pocket 4 Pro A→B→C runs passed; broader repeatability, Pocket 3/4 firmware and
 physical Android qualification remain outstanding. The iOS-only native AirPods

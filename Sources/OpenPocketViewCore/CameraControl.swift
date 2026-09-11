@@ -191,7 +191,6 @@ public enum ControlHud {
         "Can't change color while recording — D-Log2 can't zoom"
 
     /// #174 lock-all — no captured opcode. Do not invent a SET.
-    public static let gimbalLockUnavailable = "Can't lock all axes yet"
 
     public static let gimbalPoseNotReady = "Gimbal pose not ready"
     public static let gimbalHoldStill = "Hold the gimbal still"
@@ -1226,24 +1225,49 @@ public enum GimbalSpeed: UInt8, CaseIterable, Sendable, Hashable {
     public static let pickerOrder: [GimbalSpeed] = [.slow, .defaultSpeed, .fast]
 }
 
-/// Live gimbal mode. Follow / Tilt Locked / FPV are captured SETs. Locked
-/// (latched joystick-hold) has no opcode yet — HUD only.
+/// Live gimbal modes. Direction Lock preserves the world-facing direction;
+/// the camera's separate joystick-hold Lock Gimbal action remains unresolved.
 public enum GimbalMode: String, CaseIterable, Sendable, Hashable {
     case follow
     case tiltLocked
     case fpv
-    case locked
+    case directionLock
 
     public var label: String {
         switch self {
         case .follow: "Follow"
         case .tiltLocked: "Tilt locked"
         case .fpv: "FPV"
-        case .locked: "Locked"
+        case .directionLock: "Direction Lock"
         }
     }
 
-    public static let pickerOrder: [GimbalMode] = [.follow, .tiltLocked, .fpv, .locked]
+    public static let pickerOrder: [GimbalMode] = [.follow, .tiltLocked, .fpv, .directionLock]
+}
+
+/// Mode family in the 50-byte Pocket attitude push. Tilt lock is a separate parameter.
+public enum GimbalModeFamily: UInt8, Sendable {
+    case directionLock = 0
+    case fpv = 1
+    case follow = 2
+
+    public static func parse(_ payload: [UInt8]) -> GimbalModeFamily? {
+        guard payload.count == 50 else { return nil }
+        return GimbalModeFamily(rawValue: payload[6] >> 6)
+    }
+}
+
+/// Refresh tilt/speed from attitude receipts without adding another live-session timer.
+public struct GimbalParamPoll: Sendable {
+    private var lastRequestAt: TimeInterval?
+
+    public init() {}
+
+    public mutating func shouldRequest(at now: TimeInterval) -> Bool {
+        guard lastRequestAt.map({ now - $0 >= 1 }) ?? true else { return false }
+        lastRequestAt = now
+        return true
+    }
 }
 
 /// Local stick ease-in/out on top of analog expo. Not camera Fast/Default/Slow.
@@ -1272,7 +1296,7 @@ public enum GimbalRamp: Int, CaseIterable, Sendable, Hashable {
     public static let pickerOrder: [GimbalRamp] = [.off, .soft, .medium]
 }
 
-/// SET frames for a mode tap. Locked is empty — no opcode on the wire.
+/// SET frames and reconciliation of the camera's independent mode/tilt reports.
 public enum GimbalControl {
     public static func setModeFrames(_ mode: GimbalMode) -> [Duml.Frame] {
         switch mode {
@@ -1282,19 +1306,30 @@ public enum GimbalControl {
             [Commands.gimbalFollowFamily(), Commands.setGimbalTiltLock(.locked)]
         case .fpv:
             [Commands.gimbalFpv()]
-        case .locked:
-            []
+        case .directionLock:
+            [Commands.gimbalDirectionLock()]
         }
     }
 
-    /// GET cannot tell FPV from Tilt Locked. Keep FPV / Locked as commanded.
+    /// A tilt GET alone cannot identify FPV or Direction Lock.
     public static func modeFromGet(_ params: GimbalParamState, commanded: GimbalMode) -> GimbalMode
     {
         switch commanded {
-        case .fpv, .locked:
+        case .fpv, .directionLock:
             return commanded
         case .follow, .tiltLocked:
             return params.tiltLock == .locked ? .tiltLocked : .follow
+        }
+    }
+
+    /// A fresh attitude report identifies Direction Lock and FPV even when the
+    /// tilt parameter is stale. Follow-family reports retain the last tilt choice
+    /// until a fresh parameter reply distinguishes Follow from Tilt locked.
+    public static func modeFromFamily(_ family: GimbalModeFamily, current: GimbalMode) -> GimbalMode {
+        switch family {
+        case .directionLock: .directionLock
+        case .fpv: .fpv
+        case .follow: current == .tiltLocked ? .tiltLocked : .follow
         }
     }
 }

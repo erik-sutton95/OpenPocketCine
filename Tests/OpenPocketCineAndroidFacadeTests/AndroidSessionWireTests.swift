@@ -65,6 +65,30 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func cameraModeFamilySurvivesTheAndroidStatusBoundary() {
+        var payload = [UInt8](repeating: 0, count: 50)
+        var status = CameraStatus()
+        let reports: [(UInt8, GimbalModeFamily)] = [
+            (0x24, .directionLock), (0x84, .follow), (0x44, .fpv),
+        ]
+        for (flags, expected) in reports {
+            payload[6] = flags
+            let frame = Duml.Frame(sender: 4, receiver: 2, seq: 1, flags: Duml.flagNotify,
+                cmdSet: 4, cmdId: 5, payload: payload)
+            #expect(CameraStatusDecoder.apply(frame, to: &status))
+            #expect(status.gimbalModeFamily == expected)
+            status = AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(status))
+            #expect(status.gimbalModeFamily == expected)
+        }
+        payload[6] = 0xC4
+        let unknown = Duml.Frame(sender: 4, receiver: 2, seq: 2, flags: Duml.flagNotify,
+            cmdSet: 4, cmdId: 5, payload: payload)
+        #expect(CameraStatusDecoder.apply(unknown, to: &status))
+        #expect(status.gimbalModeFamily == nil)
+        #expect(AndroidSessionWire.status(fromJSON: "{}").gimbalModeFamily == nil)
+    }
+
+    @Test
     func statusJSONRoundTripsSelfieFlip() {
         var on = CameraStatus()
         on.selfieFlip = .on

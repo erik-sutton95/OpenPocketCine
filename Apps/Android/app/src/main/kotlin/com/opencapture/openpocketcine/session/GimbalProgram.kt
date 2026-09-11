@@ -57,11 +57,22 @@ enum class GimbalMode(val label: String) {
     FOLLOW("Follow"),
     TILT_LOCKED("Tilt locked"),
     FPV("FPV"),
-    LOCKED("Locked"),
+    DIRECTION_LOCK("Direction Lock"),
     ;
 
     companion object {
-        val pickerOrder = listOf(FOLLOW, TILT_LOCKED, FPV, LOCKED)
+        val pickerOrder = listOf(FOLLOW, TILT_LOCKED, FPV, DIRECTION_LOCK)
+    }
+}
+
+/** Refresh tilt/speed from attitude receipts, capped at one GET per second. */
+class GimbalParamPoll {
+    private var lastRequestAt: Long? = null
+
+    fun shouldRequest(nowMs: Long): Boolean {
+        if (lastRequestAt?.let { nowMs - it < 1_000L } == true) return false
+        lastRequestAt = nowMs
+        return true
     }
 }
 
@@ -174,9 +185,17 @@ data class GimbalProgram(
 object GimbalControl {
     fun modeFromGet(tiltLocked: Boolean, commanded: GimbalMode): GimbalMode =
         when (commanded) {
-            GimbalMode.FPV, GimbalMode.LOCKED -> commanded
+            GimbalMode.FPV, GimbalMode.DIRECTION_LOCK -> commanded
             GimbalMode.FOLLOW, GimbalMode.TILT_LOCKED ->
                 if (tiltLocked) GimbalMode.TILT_LOCKED else GimbalMode.FOLLOW
+        }
+
+    fun modeFromFamily(family: Int, current: GimbalMode): GimbalMode =
+        when (family) {
+            0 -> GimbalMode.DIRECTION_LOCK
+            1 -> GimbalMode.FPV
+            2 -> if (current == GimbalMode.TILT_LOCKED) current else GimbalMode.FOLLOW
+            else -> current
         }
 }
 
@@ -777,7 +796,6 @@ class GimbalOverlayMotion {
 }
 
 object GimbalHudCopy {
-    const val LOCK_UNAVAILABLE = "Can't lock all axes yet"
     const val POSE_NOT_READY = "Gimbal pose not ready"
     const val NEED_AB = "Set A and B to run"
     const val HOLD_STILL = "Hold the gimbal still"

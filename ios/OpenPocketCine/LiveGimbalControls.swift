@@ -398,7 +398,7 @@ private struct LiveGimbalSheet: View {
                     GimbalMode.pickerOrder, selected: model.session.gimbalMode,
                     title: { $0.label }
                 ) { mode in
-                    model.session.setGimbalMode(mode)
+                    model.setGimbalMode(mode)
                 }
             }
 

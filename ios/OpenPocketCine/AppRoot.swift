@@ -51,6 +51,13 @@ final class AppModel {
     var headTrackingEnabled: Bool = OperatorPrefs.headTrackingEnabled {
         didSet { OperatorPrefs.headTrackingEnabled = headTrackingEnabled }
     }
+    /// A manual mode selection takes control back from the AirPods stream.
+    func setGimbalMode(_ mode: GimbalMode) {
+        guard session.hasGimbal, !session.isLocked else { return }
+        headTrackingEnabled = false
+        session.setGimbalMode(mode)
+    }
+
     /// Live SET / STOP chip. SET starts tracking and locks forward; STOP ends it.
     var headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
     /// Raw AirPods attitude / gyro / SET-relative look. Empty when Head Tracking is off.

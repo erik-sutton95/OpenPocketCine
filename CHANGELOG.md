@@ -13,6 +13,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Direction Lock replaces the unavailable Locked gimbal option on iOS and
+  Android. It holds the camera's pointing direction while the handle rotates;
+  choose another mode to release it. Menu mode readback follows camera changes.
+  Selecting a mode switches off iOS AirPods head tracking. The separate
+  joystick-hold Lock Gimbal investigation is paused; see [gimbal controls](docs/gimbal-controls.md).
+
 - Apple Watch companion (#101): live preview, timecode, storage, camera
   battery, and record / shutter on the wrist. The iPhone stays the radio.
   A watch rec tap starts and stops without the phone confirmation sheet.
@@ -43,11 +49,10 @@ All notable changes to this project are documented here. The format is based on
   filter. iOS and Android.
 
 - Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
-  One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
+  One sheet: Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
   stick ramp Off / Soft / Medium, and Motion Control. The sheet parks
-  like a capture picker (slide-up glass above the capture bar). Locked
-  toasts — no lock-all opcode on the wire yet (#174). Ramp is local
-  ease-in/out on the stick path (#260), not camera speed. Motion Control
+  like a capture picker (slide-up glass above the capture bar). Ramp smooths
+  stick input changes (#260); releasing the stick still stops immediately. Motion Control
   uses camera-timed A→B (optional C) trajectories with waypoint verification.
   It preserves durations from 0.5 to 120 seconds without rate calibration or
   an artificial speed ceiling. C enables adjustable Bézier smoothing and a

@@ -50,7 +50,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
   gimbal-controls button sits beside zoom (Pocket only). That sheet parks
-  like a capture picker and sets Follow / Tilt locked / FPV, Slow /
+  like a capture picker and sets Follow / Tilt locked / FPV / Direction Lock, Slow /
   Default / Fast, stick ramp, and a Motion Control A→B (optional C) take
   (set A and B, choose each leg’s duration; hold and drag
   anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
@@ -60,7 +60,12 @@ project with XcodeGen — see [Setup](../guides/setup/).
   stay within −44° to +70°. A missed timed point stops the move;
   professional positional/timing accuracy has not been qualified. Stick
   throw is analog with an ease-in curve (small push crawls; full throw is
-  fastest). Off / Soft / Medium ramp eases the throw over time. Head tracking is experimental (Operator Setup → Controls,
+  fastest). Selecting a gimbal mode switches off AirPods head tracking; enable
+  and calibrate it again to resume. Direction Lock keeps the camera pointing in the same direction while
+  the handle rotates; choose another mode to release it. The separate joystick-hold
+  Lock Gimbal behavior remains under investigation and is not available in the app.
+  Ramp smooths joystick-input changes: Off is immediate, Soft eases more gradually
+  than Medium. Releasing the stick still stops immediately. Head tracking is experimental (Operator Setup → Controls,
   off by default). With AirPods that report motion, Calibrate Head Lock —
   centered above the bottom bars — is shared forward: that head pose and
   that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.

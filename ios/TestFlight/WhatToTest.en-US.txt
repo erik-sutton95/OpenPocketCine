@@ -1,16 +1,15 @@
 New and changed
 
-- Apple Watch companion: live preview, timecode, storage, camera battery, and record/shutter. Keep the iPhone app open; wrist recording skips confirmation.
+- Direction Lock replaces Locked in the gimbal menu. It holds the camera's pointing direction as you rotate the handle. Choose Follow to release it.
+- Apple Watch shows live preview, timecode, storage, and battery, with record/shutter controls. Keep the iPhone app open.
 - Share's Convert log rewrites D-Log and D-Log2 clips to one output curve. Camera originals stay untouched.
-- Hold-drag the ND assist chip to move it. Long-press Units to choose Stops, filter factor, or optical density.
 
 Fixes
 
-- Watch preview has lower delay and matches the phone's identity picture. Always On keeps the last frame visible with normal watchOS dimming.
 - Pocket 3 keeps vertical 3K in FORMAT while options load and when changing frame rate.
 
 What to test
 
-- Go live on iPhone and open OpenPocketCine on Apple Watch. Check preview and readings, record a short take, then lower and raise your wrist. Confirm recording on the camera.
-- On Pocket 3, select vertical 3K, connect, then change frame rate. Confirm FORMAT stays 3K 9:16.
-- Export mixed D-Log/D-Log2 takes with Convert log. In live view, move the ND chip and cycle its Units choices.
+- Select Direction Lock and rotate the handle, then return to Follow. Check the menu follows camera mode changes and the live picture stays smooth. Mode selection switches off AirPods head tracking.
+- Go live on iPhone and open the Watch companion. Check preview and readings, record a short take, then lower and raise your wrist.
+- On Pocket 3, change frame rate in vertical 3K and confirm FORMAT stays 3K 9:16. Export mixed D-Log/D-Log2 takes with Convert log.

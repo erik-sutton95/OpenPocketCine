@@ -160,7 +160,6 @@ final class OperatorFacingCopyTests: XCTestCase {
                 .pausedAfterRepeatedDrops(drops: 3), deviceName: "Pocket 4 Pro"),
             SessionRecoveryCopy.heldFrameBadge,
             ControlHud.recordingColorLockNote,
-            ControlHud.gimbalLockUnavailable,
             ControlHud.gimbalPoseNotReady,
             ControlHud.gimbalHoldStill,
             ControlHud.programmedMoveNeedAB,

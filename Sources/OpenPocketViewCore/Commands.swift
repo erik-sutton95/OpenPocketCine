@@ -500,6 +500,12 @@ public enum Commands {
         gimbal(0x4C, [0x01, 0x08], seq: seq)
     }
 
+    /// Keeps the lens pointing in the same direction while the handle rotates.
+    /// Physically verified separately from the camera's joystick-hold Lock Gimbal action.
+    public static func gimbalDirectionLock(seq: UInt16 = 0) -> Duml.Frame {
+        gimbal(0x4C, [0x00, 0x08], seq: seq)
+    }
+
     /// `0x04/0x01` flags `0x00`, 10 B, no ACK. Axes u16-LE @0/@4, center 1024 ±550, trailer `00 80 22 00`.
     public static func gimbalStick(axis0: UInt16, axis1: UInt16, seq: UInt16 = 0) -> Duml.Frame {
         var p = le16(Int(axis0))

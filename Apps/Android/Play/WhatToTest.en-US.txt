@@ -1,7 +1,8 @@
 New and changed
 
-- No new Android controls in this build. Recent updates include a movable ND chip with Stops, filter factor, and optical density units.
-- False color offers the EL Zone, IRE, and CineStop scales for checking exposure.
+- Direction Lock replaces Locked in the gimbal menu. It holds the camera's pointing direction as you rotate the handle. Choose Follow to release it.
+- Hold-drag the ND chip to move it. Long-press Units for Stops, filter factor, or optical density.
+- False color offers EL Zone, IRE, and CineStop scales for checking exposure.
 
 Fixes
 
@@ -9,6 +10,6 @@ Fixes
 
 What to test
 
+- Select Direction Lock and rotate the handle, then return to Follow. Check the menu follows camera mode changes and the live picture stays smooth.
 - Set Pocket 3 to vertical 3K, connect, and change frame rate. Confirm FORMAT stays 3K 9:16.
-- Hold-drag the ND chip to move it, then long-press Units to cycle its readings.
-- Switch false-color scales and check that the picture and waveform continue updating.
+- Move the ND chip and cycle Units. Switch false-color scales and check that the picture and waveform continue updating.
