@@ -63,11 +63,11 @@ for suffix in 'New features' 'New and changed' 'Fixes' 'What to test'; do
   expect_fail "${temp_dir}/mixed-features.txt"
 done
 
-for _ in {2..6}; do
+for _ in {2..4}; do
   printf '%s\n' '- Another visible feature.' >> "${temp_dir}/features.txt"
 done
 expect_pass "${temp_dir}/features.txt"
-printf '%s\n' '- A seventh feature exceeds the limit.' >> "${temp_dir}/features.txt"
+printf '%s\n' '- A fifth feature exceeds the this-build window.' >> "${temp_dir}/features.txt"
 expect_fail "${temp_dir}/features.txt"
 
 printf 'New features\n\n- Added a GUID migration.\n' > "${temp_dir}/feature-jargon.txt"
@@ -203,5 +203,88 @@ Fixes
 What to test
 EOF
 expect_fail "${temp_dir}/missing-action.txt"
+
+# this-build caps: 3 new / 4 fixes / 3 tests, 200 characters per bullet, 2000 file.
+cat > "${temp_dir}/four-new.txt" <<'EOF'
+New and changed
+
+- First visible change.
+- Second visible change.
+- Third visible change.
+- Fourth visible change.
+
+Fixes
+
+- Pairing no longer stalls when the camera drops off mid-search.
+
+What to test
+
+- Try the updated behavior.
+EOF
+expect_fail "${temp_dir}/four-new.txt"
+
+cat > "${temp_dir}/five-fixes.txt" <<'EOF'
+New and changed
+
+- A visible change.
+
+Fixes
+
+- First fix.
+- Second fix.
+- Third fix.
+- Fourth fix.
+- Fifth fix.
+
+What to test
+
+- Try the updated behavior.
+EOF
+expect_fail "${temp_dir}/five-fixes.txt"
+
+cat > "${temp_dir}/four-tests.txt" <<'EOF'
+New and changed
+
+- A visible change.
+
+Fixes
+
+- Pairing no longer stalls when the camera drops off mid-search.
+
+What to test
+
+- First action.
+- Second action.
+- Third action.
+- Fourth action.
+EOF
+expect_fail "${temp_dir}/four-tests.txt"
+
+long_idea="$(python3 -c 'print("A" * 201)')"
+cat > "${temp_dir}/long-bullet.txt" <<EOF
+New and changed
+
+- ${long_idea}
+
+Fixes
+
+- Pairing no longer stalls when the camera drops off mid-search.
+
+What to test
+
+- Try the updated behavior.
+EOF
+expect_fail "${temp_dir}/long-bullet.txt"
+
+{
+  printf '%s\n\n' "New and changed"
+  printf '%s\n' "- A visible change that testers have not already been asked to try."
+  printf '\n%s\n\n' "Fixes"
+  printf '%s\n' "- Pairing no longer stalls when the camera drops off mid-search."
+  printf '\n%s\n\n' "What to test"
+  printf '%s\n' "- Try the updated behavior."
+  python3 -c 'print("\n" + ("padding line for the this-build character cap.\n" * 80))'
+} > "${temp_dir}/too-long-file.txt"
+expect_fail "${temp_dir}/too-long-file.txt"
 
 printf 'TestFlight notes regression tests passed.\n'

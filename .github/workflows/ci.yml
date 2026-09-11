@@ -74,9 +74,12 @@ jobs:
           # write notes fails here.
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
-          if grep -Eq '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files"; then
+          # Notes-check tooling is not a TestFlight archive. Require copy only when
+          # production iOS paths change (docs/tester-notes.md).
+          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^scripts/ios-release-notes' || true)"
+          if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
-              echo "Update ios/TestFlight/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
+              echo "Update ios/TestFlight/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
               exit 1
             fi
           fi
@@ -93,9 +96,12 @@ jobs:
           # write notes fails here.
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
-          if grep -Eq '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files"; then
+          # Notes-check tooling is not a Play upload. Require copy only when
+          # production Android paths change (docs/tester-notes.md).
+          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^scripts/android-release-notes' || true)"
+          if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
-              echo "Update Apps/Android/Play/WhatToTest.en-US.txt with plain-language changes and test steps." >&2
+              echo "Update Apps/Android/Play/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
               exit 1
             fi
             if ! grep -Fxq 'Apps/Android/Play/whatsnew/whatsnew-en-US' <<< "$changed_files"; then

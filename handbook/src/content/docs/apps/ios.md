@@ -151,9 +151,9 @@ Platform notes for the wire (Hotspot Configuration, Local Network, CoreBluetooth
 ## Releases
 
 Public beta: [TestFlight](https://testflight.apple.com/join/1tmt3aEB). PRs that
-change `Sources/`, `ios/`, or `Package.swift` update
-`ios/TestFlight/WhatToTest.en-US.txt` for operators. See
-[`docs/testflight-ci.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md).
+change `Sources/`, `ios/`, or `Package.swift` replace
+`ios/TestFlight/WhatToTest.en-US.txt` with the this-build window. See
+[`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md).
 
 If pairing or live view fails: Connection setup **Share Diagnostics**, or
 Operator Setup → System → **Share Diagnostics**, or take a screenshot for
