@@ -1,8 +1,14 @@
-New features
+New and changed
 
-- Experimental Multiview: monitor multiple Osmo cameras on shared Wi-Fi, save camera stages, choose grid or Center stage layouts, and record individually or together.
-- Share this feed with other OpenPocketCine iPhones and iPads on the same camera Wi-Fi. Watchers get their own assists and scopes, with camera controls when the host grants access.
-- Experimental Motion Control: plan timed A→B or A→B→C gimbal moves with smoothing, a start countdown, and Pause/Resume/Stop.
-- New false-color choices: CineStop, EL Zone and six-zone IRE.
-- ND assist suggests filter strength in a compact chip. Hold-drag to move it and choose Stops, ND32 or ND 0.3 readouts.
-- Convert log lets you choose D-Log or D-Log2 for a selection of cached log clips, while keeping camera originals.
+- FORMAT keeps the camera's current recording size visible while its format options load.
+
+Fixes
+
+- Vertical 3K is no longer replaced by the generic 1080p and 4K choices when format options are unavailable.
+- Changing frame rate keeps the selected portrait recording size.
+
+What to test
+
+- Set a Pocket 3 to vertical 3K, connect, and open FORMAT. Confirm that 3K is shown.
+- Change the frame rate and confirm that the recording format stays 3K 9:16.
+- Return the camera to landscape recording and check that FORMAT shows its landscape choices.
