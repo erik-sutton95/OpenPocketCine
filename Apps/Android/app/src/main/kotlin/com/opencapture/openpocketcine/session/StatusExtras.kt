@@ -171,13 +171,13 @@ object StatusExtras {
         return CamFov.absorb(next)
     }
 
+    fun isGimbalParamsReply(payload: ByteArray): Boolean =
+        payload.size >= 8 && payload[0] == 0.toByte() && payload[1] == 0x01.toByte() &&
+            payload[2] == 0x04.toByte() && payload[3] == 0x01.toByte() &&
+            payload[5] == 0x05.toByte() && payload[6] == 0x01.toByte()
+
     fun applyGimbalParams(payload: ByteArray, status: CameraStatus): CameraStatus {
-        if (payload.size < 8) return status
-        if (payload[0] != 0.toByte() || payload[1] != 0x01.toByte() || payload[2] != 0x04.toByte() ||
-            payload[3] != 0x01.toByte() || payload[5] != 0x05.toByte() || payload[6] != 0x01.toByte()
-        ) {
-            return status
-        }
+        if (!isGimbalParamsReply(payload)) return status
         val tilt = payload[4].toInt() and 0xFF
         val speed = payload[7].toInt() and 0xFF
         return status.copy(

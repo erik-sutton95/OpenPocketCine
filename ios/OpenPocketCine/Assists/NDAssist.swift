@@ -185,7 +185,10 @@ struct NDLongPressMenu: View {
                     compact: true,
                     stacked: compact
                 ) { label in
-                    guard let next = NDFilterNotation.allCases.first(where: { $0.editorLabel == label })
+                    guard
+                        let next = NDFilterNotation.allCases.first(where: {
+                            $0.editorLabel == label
+                        })
                     else { return }
                     store.notation = next
                     store.persist()
@@ -207,13 +210,16 @@ struct NDMeterOverlay: View {
 
     var body: some View {
         let store = NDAssist.store
-        let size = NDAssist.panelSize(scale: store.scale)
+        let size = ScopePanelPlacement.size(
+            NDAssist.panelSize(scale: store.scale),
+            canvas: bounds, clearance: chromeClearance)
         NDMovablePanel(
             store: store,
             size: size,
             defaultCenter: NDAssist.defaultCenter(
                 feed: feed, size: size, bounds: bounds, chromeClearance: chromeClearance),
-            bounds: bounds
+            bounds: bounds,
+            placementBounds: ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
             NDMeterChip(
                 reading: NDAssist.reading(from: model.frameSamples.displayBundle),
@@ -251,12 +257,14 @@ struct NDMeterChip: View {
     }
 }
 
-/// Long-press then drag to reposition; corner grip long-press-drags to scale.
+/// Drag to reposition; drag the corner grip to scale.
 struct NDMovablePanel<Content: View>: View {
     @Bindable var store: NDAssistStore
     let size: CGSize
     let defaultCenter: CGPoint
     let bounds: CGRect
+    var placementBounds: CGRect? = nil
+    private var movementBounds: CGRect { placementBounds ?? ScopePanelPlacement.bounds(in: bounds) }
     @ViewBuilder var content: () -> Content
 
     @State private var dragOrigin: CGPoint?
@@ -280,7 +288,7 @@ struct NDMovablePanel<Content: View>: View {
             content()
                 .overlay(alignment: .bottomTrailing) {
                     resizeHandle
-                        .offset(x: gripExteriorGap, y: gripExteriorGap)
+                        .offset(x: gripPad, y: ScopePanelPlacement.gripBottomExtent)
                 }
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .padding(dragHitPadding)
@@ -290,12 +298,13 @@ struct NDMovablePanel<Content: View>: View {
         }
         .frame(
             width: size.width + gripPad,
-            height: size.height + gripPad,
+            height: size.height + ScopePanelPlacement.gripBottomExtent,
             alignment: .topLeading
         )
-        .scaleEffect((isDragging || isResizing) ? 1.03 : 1)
+        .opacity(ScopePanelPlacement.isUsable(movementBounds) ? 1 : 0)
+        .allowsHitTesting(ScopePanelPlacement.isUsable(movementBounds))
         .shadow(color: .black.opacity((isDragging || isResizing) ? 0.5 : 0), radius: 18, y: 8)
-        .position(x: center.x + gripPad / 2, y: center.y + gripPad / 2)
+        .position(x: center.x + gripPad / 2, y: center.y + ScopePanelPlacement.gripBottomExtent / 2)
         .sensoryFeedback(trigger: isDragging) { _, dragging in
             dragging ? .impact(flexibility: .rigid, intensity: 1) : nil
         }
@@ -312,21 +321,20 @@ struct NDMovablePanel<Content: View>: View {
         return NDCornerGrip()
             .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
             .frame(width: gripVisualSize, height: gripVisualSize, alignment: .bottomTrailing)
-            .frame(width: gripHitSize, height: gripHitSize, alignment: .bottomTrailing)
+            .offset(y: ScopePanelPlacement.gripTopInterior - gripCornerInset)
+            .frame(width: gripHitSize, height: gripHitSize, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(resizeGesture)
     }
 
     private func panelDragGesture(center: CGPoint) -> some Gesture {
-        LongPressGesture(minimumDuration: NDAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isDragging {
                     isDragging = true
                     dragOrigin = center
                 }
-                guard let drag, let origin = dragOrigin else { return }
+                guard let origin = dragOrigin else { return }
                 let proposed = CGPoint(
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
@@ -354,15 +362,12 @@ struct NDMovablePanel<Content: View>: View {
     }
 
     private var resizeGesture: some Gesture {
-        LongPressGesture(minimumDuration: NDAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isResizing {
                     isResizing = true
                     resizeStartScale = store.scale
                 }
-                guard let drag else { return }
                 let reach = NDAssist.baseSize.width + NDAssist.baseSize.height
                 let delta = (drag.translation.width + drag.translation.height) / reach
                 store.scale = NDAssist.clampedScale(resizeStartScale + delta)
@@ -383,7 +388,7 @@ struct NDMovablePanel<Content: View>: View {
     }
 
     private func clamp(_ point: CGPoint) -> CGPoint {
-        NDAssist.clamp(point, size: size, in: bounds)
+        ScopePanelPlacement.clamp(point, size: size, in: movementBounds)
     }
 }
 

@@ -135,7 +135,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastMoveLogAt = 0L
     private val _gimbalMoveReadout = MutableStateFlow("")
     val gimbalMoveReadout: StateFlow<String> = _gimbalMoveReadout.asStateFlow()
-    private var gimbalParamsRequested = false
+    private var gimbalParamPoll = GimbalParamPoll()
     private var wasRecording = false
     var gimbalRamp: GimbalRamp = GimbalRamp.OFF
     private val _gimbalMode = MutableStateFlow(GimbalMode.FOLLOW)
@@ -225,6 +225,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val inflightPending = ConcurrentHashMap<Int, InflightSend>()
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
+    private val _connectionTargetId = MutableStateFlow<String?>(null)
+    val connectionTargetId: StateFlow<String?> = _connectionTargetId.asStateFlow()
     private var feedRecoveryJob: Job? = null
     private var lastFirstPictureLogAt = 0L
     private var lastFirstPictureSignature = ""
@@ -331,6 +333,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun startScan(reconnect: String?) {
         reconnectTarget = reconnect
+        _connectionTargetId.value = reconnect
         _isReconnecting.value = reconnect != null
         _phase.value = ConnectionPhase.SCANNING
         _failure.value = null
@@ -377,6 +380,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
         }
         reconnectTarget = null
+        _connectionTargetId.value = camera.id
         _isReconnecting.value = false
         LocalVPNFilter.noteIfActive(appContext)
         connectJob?.cancel()
@@ -412,6 +416,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     override fun disconnect() {
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
+        _connectionTargetId.value = null
         _isReconnecting.value = false
         feedRecoveryJob?.cancel()
         feedRecoveryJob = null
@@ -1682,6 +1687,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         if (frame.cmdSet == 0x04 && frame.cmdId == 0x05) {
             requestGimbalParams()
+            if (frame.payload.size == 50 && next.gimbalModeFamily >= 0) {
+                _gimbalMode.value = GimbalControl.modeFromFamily(next.gimbalModeFamily, _gimbalMode.value)
+            }
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
             if (frame.payload.size >= 22) {
                 val now = SystemClock.elapsedRealtime()
@@ -1737,11 +1745,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             cancelProgrammedMove()
         }
         wasRecording = next.isRecording
-        if (next.gimbalTiltLock >= 0) {
-            _gimbalMode.value =
-                GimbalControl.modeFromGet(next.gimbalTiltLock == 1, _gimbalMode.value)
-        }
-        if (next.gimbalSpeed >= 0) {
+        if (frame.cmdSet == 0x04 && frame.cmdId == CameraCommands.CMD_GIMBAL_PARAMS &&
+            StatusExtras.isGimbalParamsReply(frame.payload)) {
+            if (next.gimbalTiltLock >= 0) {
+                _gimbalMode.value = GimbalControl.modeFromGet(next.gimbalTiltLock == 1, _gimbalMode.value)
+            }
             GimbalSpeed.fromWire(next.gimbalSpeed)?.let { _gimbalSpeed.value = it }
         }
         if (next != prev) {
@@ -2960,11 +2968,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setGimbalMode(mode: GimbalMode) {
         if (!hasGimbal) return
         cancelProgrammedMove()
-        if (mode == GimbalMode.LOCKED) {
-            _gimbalMode.value = GimbalMode.LOCKED
-            _controlNote.value = GimbalHudCopy.LOCK_UNAVAILABLE
-            return
-        }
         _gimbalMode.value = mode
         when (mode) {
             GimbalMode.FOLLOW, GimbalMode.TILT_LOCKED -> {
@@ -2988,7 +2991,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     payload = CameraCommands.gimbalFpv(),
                     receiver = CameraCommands.RX_GIMBAL,
                 )
-            GimbalMode.LOCKED -> Unit
+            GimbalMode.DIRECTION_LOCK ->
+                datalink?.sendDuml(
+                    cmdSet = 0x04,
+                    cmdId = CameraCommands.CMD_GIMBAL_MODE,
+                    payload = CameraCommands.gimbalDirectionLock(),
+                    receiver = CameraCommands.RX_GIMBAL,
+                )
         }
     }
 
@@ -3191,8 +3200,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun requestGimbalParams() {
-        if (!hasGimbal || gimbalParamsRequested) return
-        gimbalParamsRequested = true
+        if (!hasGimbal || datalink == null ||
+            !gimbalParamPoll.shouldRequest(SystemClock.elapsedRealtime())) return
         datalink?.sendDuml(
             cmdSet = 0x04,
             cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
@@ -3212,7 +3221,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _gimbalProgram.value = GimbalProgram()
         _gimbalMode.value = GimbalMode.FOLLOW
         _gimbalSpeed.value = GimbalSpeed.DEFAULT
-        gimbalParamsRequested = false
+        gimbalParamPoll = GimbalParamPoll()
         gimbalRampFilter.reset()
         wasRecording = false
         _gimbalMoveReadout.value = ""

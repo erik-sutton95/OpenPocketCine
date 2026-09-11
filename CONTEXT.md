@@ -100,10 +100,20 @@ A/C and total duration. The dashed curve is a preview, not a tracking box.
 A failed required checkpoint invalidates the take. Physical accuracy remains experimental.
 _Avoid_: Programmed move, camera-native path, guaranteed precision
 
-**Gimbal lock (all axes)**:
-Latched joystick-hold. No captured opcode. The Locked chip toasts and does
-not SET. Distinct from Tilt locked (param `04`).
-_Avoid_: treating Locked as Tilt locked
+**Direction Lock**:
+Keeps the camera pointing in the same direction as the handle rotates.
+The camera calls this Lock Camera Direction.
+_Avoid_: Gimbal Lock, Tilt locked
+
+**Gimbal Lock**:
+The camera's joystick-hold action that keeps the lens moving with the handle.
+The desired app interaction latches it on a joystick long press and releases it on a tap.
+_Avoid_: Direction Lock, Tilt locked
+
+**Ramp**:
+Smoothing applied to changes in the operator's joystick input.
+Releasing the stick still stops immediately.
+_Avoid_: follow speed, follow deadband
 
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head

@@ -11,8 +11,10 @@ write the exception in the table in the same PR.
 | Surface | Must match | May diverge | Verify |
 | --- | --- | --- | --- |
 | Connection FTUE and spine | BLE → SoftAP → UDP; **enable-once**; ephemeral local port; arm `0x02` on handshake ack (Mimo HEVC at join+17 ms; enable is later PLI); disconnect drops driver + decoder; session recovery holds last frame. Pocket 3 first picture: wait for the legal FORMAT table, one 1080→boot `0x02/0x18` after a black enable, then one `0x09/0xa8`. Not Pocket 4. Xtra rebrands bind UDP **10004** with no TCP-7001 poke. Join Wi-Fi names VPNs / ad blockers on both shells; WAITING FOR LIVE VIEW repeats `LocalVPNFilter.liveHint` after 8 s with no picture when a local VPN is on. | iOS `NEHotspotConfiguration` vs Android `WifiNetworkSpecifier` + `bindProcessToNetwork`; Network.framework vs Android sockets. Android identifies Xtra by BLE MAC OUI `EC:9E:EA`; iOS has no MAC and uses the advertised name (`xtra` / `edge`). Android SoftAP `onLost` starts `SessionRecovery`; iOS does not (keepalive must not `discardUDP` while the path is gone). Android VPN detect is `TRANSPORT_VPN`; iOS is CFNetwork scoped tunnel names (also fires for Private Relay `utun` — live hint still waits 8 s). | **physical** both |
+| Saved camera home | Connection progress and Cancel are on the selected saved-camera row, including discovery; names have their own line above availability/actions. Pair new camera, Media library and Settings remain on the intro card. | iOS has Watch a feed (eye) beside Multiview (grid) in the list header; both features remain unavailable on Android. | Updated on both shells; iOS renders checked at 402×874, 874×402 and 667×375. Physical checks pending. |
+| Gimbal popup | Mode / Speed / Ramp tabs reveal one set of settings. A separate Gimbal tools footer opens experimental Motion Control. | Platform glass and icon rendering. | Updated on both shells; iOS portrait/landscape renders, including a short viewport, pass. Physical tab/layout checks pending. |
 | Live chrome | DISP 1/2 maps, layout metrics (`LiveDesign` / `fillCrop` / screen-flip pillarbox), picker chrome, record as bottom sheet, zoom chip, gimbal 1–5 gain, expo stick throw (on-screen and a connected game controller), stick pan picture-relative (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs), rec lamp `pressShutter`. Game controller (discussion #159): left stick is the gimbal stick; Cross/A records (skips the rec-confirmation sheet); Circle/B recenters; Square/X is rotate-180; Triangle/Y tracks a face in frame or cancels; L1/R1 jump zoom out/in (out does not wrap to tele); L2/R2 hold-to-zoom (deeper trigger is faster); D-pad up/down ISO, left/right shutter. Toast Gamepad connected/disconnected. Unplug rests stick and zoom. Controls **Gamepad** row is Connected / Not connected. Limit haptic is a rising-edge pulse after the head moves then stalls (phone plus controller rumble). Mapping, extra deadzone slider, and Linear/Smooth/Cinematic curves are not a Controls picker (fixed map; existing 0.08 deadzone + expo + 1–5 gain). iPad hides the system time / battery bar (HUD chips stay). Control toast parks under the mounted top bar (DISP 1 / operator-shown status bar) and on the feed edge when that bar is off (DISP 2). | iOS Liquid Glass vs Kyant (API 33+ and ≥4 GB; else solid frost); SF Symbols / Material only where Lucide catalog has not replaced them. Android edge-to-edge keeps a transparent system bar. DualSense rumble uses `GCDeviceHaptics` on iOS and the pad `Vibrator` on Android (phone vibrator if the pad has none). iOS binds `GCController`; Android `KeyEvent`/`MotionEvent` plus `InputManager` for connect. Both shells GET Selfie Flip pid `0x0038` ~1 Hz on the live UDP ACK pump (untracked; not the shared `0x8E` SET/GET waiter) and echo pktType-`0x03` seq in window-ACK group 1 so those replies do not stall. A keepalive BLE Flip GET fires when UDP replies go stale (≥2 s). | **physical** both |
-| Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, MIRROR); long-press options; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that parks bottom-leading above the view-assist toolbar, hold-drag movable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup) | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; PixelCopy / Kyant sampling | **physical** both |
+| Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, MIRROR); long-press options; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that parks bottom-leading above the view-assist toolbar, directly draggable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup) | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; PixelCopy / Kyant sampling | **physical** both |
 | Camera SETs | `CameraSetMailbox` fire-and-forget + 300 ms retransmit + 2 s settle; missed ACK does not revert HUD. FORMAT pin holds the chip/sheet until `cam_video_param_v2` reports the pair — other HUD copies are not confirmation. WB `0x02/0x2C` Auto keeps tint (`00 00 00 <tint i16>`); Custom is kelvin+tint; one in flight (100 ms coalesce). COLOR drum follows the body (D-Log2 is Pocket 4 Pro only; Pocket 4 Normal/HDR/D-Log; Pocket 3 Normal/HDR/D-Log M; Nano 8-bit/10-bit/D-Log M). Auto ISO range floor is 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro (wide); SET bytes unchanged. ISO D-Log ↔ D-Log2 hop; audio blobs and tap-focus stay round-trips. Two genuine SET timeouts in 5 s may rebuild UDP only when video **and** status are stale (encoder-pause with young `0x01` must not tear the socket). | JNI vs Swift `fireCamera` | **physical** both |
 | Zoom | Chip follows the body (DJI spec): Pocket 4 Pro 1×→3×→6×→12×; Pocket 4 / 3 1×→2×→4× (Pocket 3 4K Video max 2×); Nano 1×. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset. Gamepad Triangle/Y tracks the AF-C face in frame, or cancels if already tracking. | Vision vs ML Kit Face Detection | **physical** both |
@@ -57,8 +59,29 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Share card hugs; max height 520 dp so portrait Back stays off the status bar.
 - Picker / assist cards add a 0.20 black ND on HUD glass.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
-- Movable scope panel: 0.3 s hold then drag, L-corner 2 dp outside the clip,
-  scale 0.6…1.6.
+- Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
+  immediately after 4 pt/dp of movement. Drag the corner directly to resize;
+  preferred scale 0.6…1.6. A shared placement rectangle excludes record/media/
+  settings lanes plus 8 pt/dp padding. The joystick, zoom, and gimbal-controls
+  cluster does not restrict placement in portrait or landscape; controls draw
+  above scopes. Focus reset and audio meters do not reserve a whole side lane.
+  Scopes may sit partly under the top and bottom readout/assist bars; those bars do not reserve
+  the whole edge. Bottom placement reaches the screen edge with 8 pt/dp padding
+  plus only 12 pt/dp below the body for the resize target; the rest of its touch
+  area sits above the corner. iOS keeps its 56 pt target; Android caps its 90 dp
+  target for small chips, with a 44 dp minimum. The portrait system button row
+  remains protected. Horizontal limits use the visible panel body, giving equal
+  8 pt/dp left and right margins. The visible corner fits in that padding; its
+  expanded touch area may extend beyond a side boundary or beneath fixed controls.
+  Fit and clamp the body and vertical resize extent on every render, drag, resize,
+  and restored position. Position storage
+  remains relative to the full canvas. Stationary holds still open existing
+  panel options; toolbar long-press options remain available. Geometry tests
+  cover portrait/landscape, scales, restored corners, and Android densities.
+  iPhone drag placement, including the final portrait right-edge spacing, was
+  confirmed by the operator on 2026-09-12. Android physical qualification remains
+  an exception for this change: no Android device was available; matching geometry
+  tests, the debug build, and lint pass. The operator approved merging after CI.
 - Histogram gutters 17.5 dp (traffic lamps + 0 / 100), not 17.5 px.
 - Zebra stored thresholds stay 0–100 IRE; 0–255 readout is encoded codes via
   `ScopeDisplayScale.signalNative`.
@@ -108,6 +131,13 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Run preps Fast + tilt unlocked. No zoom SET during the slew. No motion debug plate is displayed.
 
 ## Native motion qualification
+
+Direction Lock (2026-09-11): both shells replace the unavailable Locked option
+with Direction Lock and send the verified camera-direction command. Camera mode
+reports distinguish it from Tilt locked, and another mode releases it. The iPhone
+protocol probe passed; integrated iPhone menu verification and physical Android
+verification are pending (no Android device attached). Joystick-hold Lock Gimbal
+is a separate, paused investigation. See [gimbal controls](gimbal-controls.md).
 
 Native Motion Control takes remain experimental on both shells. Three short iOS
 Pocket 4 Pro A→B→C runs passed; broader repeatability, Pocket 3/4 firmware and

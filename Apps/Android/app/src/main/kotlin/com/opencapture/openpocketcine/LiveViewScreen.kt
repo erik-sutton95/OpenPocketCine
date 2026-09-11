@@ -466,6 +466,26 @@ fun LiveViewScreen(model: AppModel) {
         val zoom = cluster.zoom
         val stick = cluster.stick
         val gimbalButton = cluster.controls
+        // Scopes may sit under the joystick/zoom cluster; it draws above them.
+        // The main record/media/settings rail still reserves space.
+        var scopeTop = layout.safeTop
+        var scopeBottom = layout.viewportHeight
+        var scopeLeft = layout.safeLeading
+        var scopeRight = layout.viewportWidth - layout.safeTrailing
+        if (portrait && zones != null) {
+            // Protect the record/media/settings row while allowing overlap with the assist bar.
+            scopeBottom = zones.systemBar.minY
+            if (fill && model.chromeSectionMounts(PocketDispSection.TOOL_BAR)) {
+                scopeLeft = maxOf(scopeLeft, layout.feed.minX + LivePortraitMetrics.ASSIST_RAIL_EDGE +
+                    LivePortraitMetrics.ASSIST_RAIL_EXPANDED)
+            }
+        } else if (layout.rail.width > 1f) {
+            if (layout.rail.midX < layout.viewportWidth / 2f) scopeLeft = maxOf(scopeLeft, layout.rail.maxX)
+            else scopeRight = minOf(scopeRight, layout.rail.minX)
+        }
+        if (!portrait && model.session.isFocusResetAvailable) scopeTop = maxOf(scopeTop, layout.focusReset.maxY)
+        val scopePlacement = ChromeRect(scopeLeft, scopeTop, maxOf(0f, scopeRight - scopeLeft),
+            maxOf(0f, minOf(scopeBottom, layout.viewportHeight) - scopeTop))
         val focusOffCenter = model.session.isFocusResetAvailable
 
         // Kyant sibling pattern: this box records feed + chrome; popups sit
@@ -607,7 +627,7 @@ fun LiveViewScreen(model: AppModel) {
             }
             }
 
-            // iOS `LiveZoomPinchWell` sits under chip + scopes so hold-drag
+            // iOS `LiveZoomPinchWell` sits under chip + scopes so direct drag
             // on WAVE / PARADE / HISTO / VECTOR still reaches MovableAssistPanel.
             Box(Modifier.liveModuleFrame(layout.onFeed)) {
                 LiveFeedGestureWell(
@@ -637,6 +657,7 @@ fun LiveViewScreen(model: AppModel) {
                             model.session.supportsTapFocus,
                     locked = uiLocked,
                     feedFrame = layout.onFeed,
+                    placementFrame = scopePlacement,
                     pictureMirrored = liveViewFlip,
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame

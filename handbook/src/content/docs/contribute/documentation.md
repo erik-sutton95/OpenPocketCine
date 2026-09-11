@@ -38,9 +38,12 @@ Merge to `main` deploys Pages when `handbook/` or `site/` changed.
 
 ## Release notes
 
-Tester notes are a this-build window for camera operators, not a product recap.
+Tester notes normally cover the current build for camera operators. For an
+open-beta release with a named previous build, include all operator-visible
+changes since that baseline and publish the full platform lists in the handbook.
 Contract: [`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md).
-This handbook does not duplicate that copy.
+Release pages archive reviewed open-beta windows; routine internal-build notes
+remain in the platform files.
 
 ## One home per fact
 

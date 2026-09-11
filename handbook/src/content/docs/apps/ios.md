@@ -7,6 +7,16 @@ The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
 project with XcodeGen — see [Setup](../guides/setup/).
 
+## Moving scopes
+
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
+corner grip to resize. Scopes can sit partly under the top and bottom bars.
+Scopes can reach closer to the bottom edge and sit underneath the entire joystick,
+zoom, and gimbal-controls cluster in portrait or landscape. The cluster stays above
+scopes. Panels can reach equally close to the left and right edges. Record,
+media, and settings stay protected. Panels fit the available
+space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
+
 ## What it does
 
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
@@ -43,15 +53,16 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
   View Assist **ND** is a small chip on the live picture (bottom-left,
-  above the assist bar; hold-drag to move). Long-press to switch Stops,
+  above the assist bar; drag to move). Long-press to switch Stops,
   ND32, or ND 0.3. It meters against middle gray and suggests a screw-on
   ND to balance the frame. The app cannot set a filter.
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
   gimbal-controls button sits beside zoom (Pocket only). That sheet parks
-  like a capture picker and sets Follow / Tilt locked / FPV, Slow /
-  Default / Fast, stick ramp, and a Motion Control A→B (optional C) take
+  like a capture picker. Mode / Speed / Ramp tabs reveal their settings below:
+  Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast, and stick ramp.
+  A separate Gimbal tools footer opens experimental Motion Control for an A→B (optional C) take
   (set A and B, choose each leg’s duration; hold and drag
   anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
   Zero hits B exactly; higher values bypass B while preserving A/C and total
@@ -60,7 +71,12 @@ project with XcodeGen — see [Setup](../guides/setup/).
   stay within −44° to +70°. A missed timed point stops the move;
   professional positional/timing accuracy has not been qualified. Stick
   throw is analog with an ease-in curve (small push crawls; full throw is
-  fastest). Off / Soft / Medium ramp eases the throw over time. Head tracking is experimental (Operator Setup → Controls,
+  fastest). Selecting a gimbal mode switches off AirPods head tracking; enable
+  and calibrate it again to resume. Direction Lock keeps the camera pointing in the same direction while
+  the handle rotates; choose another mode to release it. The separate joystick-hold
+  Lock Gimbal behavior remains under investigation and is not available in the app.
+  Ramp smooths joystick-input changes: Off is immediate, Soft eases more gradually
+  than Medium. Releasing the stick still stops immediately. Head tracking is experimental (Operator Setup → Controls,
   off by default). With AirPods that report motion, Calibrate Head Lock —
   centered above the bottom bars — is shared forward: that head pose and
   that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.
@@ -117,6 +133,11 @@ The final watcher QR onboarding, passcode and recovery changes still need
 dedicated physical acceptance. The earlier one-iPad smoothness report does not
 qualify those newer flows or multiple wireless watchers. See the
 [watcher relay evidence](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/watcher-relay.md).
+
+On **Your cameras**, the selected row shows connection progress and **Cancel**,
+including while looking for an offline camera. The eye button in the camera-list
+header opens **Watch a feed**, beside the Multiview grid button. Pair new camera,
+Media library, and Settings remain on the intro card.
 
 **Multiview** is an experimental iPhone/iPad stage for several cameras on shared
 Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add

@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -358,8 +361,13 @@ private fun GimbalFloatMove(
     }
 }
 
+private enum class GimbalSettingsTab(val title: String) {
+    MODE("Mode"), SPEED("Speed"), RAMP("Ramp")
+}
+
 @Composable
 private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float) {
+    var selectedTab by remember { mutableStateOf(GimbalSettingsTab.MODE) }
     val mode by model.session.gimbalMode.collectAsState()
     val speed by model.session.gimbalSpeed.collectAsState()
     val program by model.session.gimbalProgram.collectAsState()
@@ -367,8 +375,8 @@ private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float) {
         Modifier
             .monitorGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
             .heightIn(max = maxHeightDp.dp)
-            .padding(top = 12.dp, start = 20.dp, end = 20.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(top = 10.dp, start = 20.dp, end = 20.dp, bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -382,24 +390,39 @@ private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float) {
                 onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
             )
         }
-        Column(
-            Modifier
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            section(GimbalHudCopy.MODE) {
-                chipGrid(GimbalMode.pickerOrder, mode, { it.label }) { model.session.setGimbalMode(it) }
-            }
-            section(GimbalHudCopy.SPEED) {
-                chipRow(GimbalSpeed.pickerOrder, speed, { it.label }) { model.session.setGimbalSpeed(it) }
-            }
-            section(GimbalHudCopy.RAMP) {
-                chipRow(GimbalRamp.pickerOrder, model.gimbalRamp, { it.label }) {
-                    model.updateGimbalRamp(it)
+        Row {
+            GimbalSettingsTab.entries.forEach { tab ->
+                Column(
+                    Modifier.weight(1f).heightIn(min = 44.dp)
+                        .selectable(selected = selectedTab == tab, role = Role.Tab) { selectedTab = tab }
+                        .padding(top = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(tab.title,
+                        color = if (selectedTab == tab) LiveDesign.text else LiveDesign.muted,
+                        style = LiveType.ui(13f, FontWeight.SemiBold))
+                    Box(Modifier.fillMaxWidth().height(2.dp)
+                        .background(if (selectedTab == tab) LiveDesign.accent else LiveDesign.hairline))
                 }
             }
         }
+        Column(
+            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).heightIn(min = 76.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (selectedTab) {
+                GimbalSettingsTab.MODE ->
+                    chipGrid(GimbalMode.pickerOrder, mode, { it.label }) { model.session.setGimbalMode(it) }
+                GimbalSettingsTab.SPEED ->
+                    chipRow(GimbalSpeed.pickerOrder, speed, { it.label }) { model.session.setGimbalSpeed(it) }
+                GimbalSettingsTab.RAMP ->
+                    chipRow(GimbalRamp.pickerOrder, model.gimbalRamp, { it.label }) { model.updateGimbalRamp(it) }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
+        Text("GIMBAL TOOLS", color = LiveDesign.muted,
+            style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = 0.8.sp))
         Row(
             Modifier
                 .fillMaxWidth()
@@ -408,11 +431,11 @@ private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                GimbalHudCopy.PROGRAMMED,
-                color = LiveDesign.text,
-                style = LiveType.ui(14f, FontWeight.SemiBold),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(GimbalHudCopy.PROGRAMMED, color = LiveDesign.text,
+                    style = LiveType.ui(14f, FontWeight.SemiBold))
+                Text("Experimental", color = LiveDesign.muted, style = LiveType.ui(11f, FontWeight.Medium))
+            }
             Spacer(Modifier.weight(1f))
             Text(
                 program.summary,

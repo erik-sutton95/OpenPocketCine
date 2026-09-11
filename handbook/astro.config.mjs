@@ -32,6 +32,7 @@ export default defineConfig({
           label: 'Start',
           items: [
             { label: 'Overview', slug: '' },
+            { label: 'Open beta 102 notes', slug: 'releases/beta-102' },
             { label: 'Setup and build', slug: 'guides/setup' },
             { label: 'Troubleshooting', slug: 'guides/troubleshooting' },
             { label: 'Multiview prototype', slug: 'guides/multiview-prototype' },

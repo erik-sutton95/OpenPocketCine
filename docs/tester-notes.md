@@ -1,8 +1,11 @@
-# Tester notes (this-build window)
+# Tester notes
 
 TestFlight and Play What to Test is **this-build**: the operator-visible
 work testers have not already been asked to try. It is not a product recap
 and not `CHANGELOG.md`. Testers who skip a build still have the app.
+
+When the maintainer names a previous open-beta build, use the cumulative window
+below instead. Internal uploads do not reset that public-beta baseline.
 
 `CHANGELOG.md` stays the cumulative record. GitHub Release notes come from
 that file at a `v*` tag ([`RELEASE.md`](RELEASE.md)).
@@ -76,6 +79,32 @@ just tester-notes-window
 
 The helper prints this branch, then `feat:` / `fix:` on `origin/main`. It
 does not write the files.
+
+## Cumulative open-beta window
+
+For a named baseline, include every operator-visible addition and fix since that
+build, grouped by behavior and written for each platform. Locate the baseline in
+build history or earlier release notes; do not substitute a count of commits or
+the most recent four changes. If its source commit cannot be retrieved, retain
+the named build, disclose that limit in the PR, and review the full candidate
+history rather than claiming an exact commit diff. Describe the final behavior, combining repeated fixes to
+the same feature. Keep experimental labels and platform limitations.
+
+Start both longer files with `Since open beta build N`, where `N` is the previous
+public-beta build number. It identifies the shared release window; it does not
+change Android's version code. Follow it with the usual **New and changed**,
+**Fixes**, and **What to test** sections. This explicit marker allows up to
+16 new/changed bullets, 20 fixes, and 5 test actions, with a 4,000-character file
+cap. Each bullet still stays within 200 characters. Routine notes without the
+marker retain their smaller limits.
+
+Publish the full platform lists together in the handbook's release notes and
+link them from Play's 500-character short summary. Keep the cumulative
+`CHANGELOG.md` accurate too. Record the baseline build and target beta build
+with the public release notes so the next update has a clear starting point.
+
+Return to the short format only when preparing a routine internal build or
+when the maintainer selects a new release window.
 
 ## Checks
 

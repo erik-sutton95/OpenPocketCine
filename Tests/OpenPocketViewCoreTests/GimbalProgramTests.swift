@@ -18,21 +18,76 @@ import Testing
         #expect(program.summary == "A·B")
     }
 
-    @Test func lockedModeSendsNoFrames() {
-        #expect(GimbalControl.setModeFrames(.locked).isEmpty)
+    @Test func directionLockUsesTheVerifiedModeCommand() {
+        let frames = GimbalControl.setModeFrames(.directionLock)
+        #expect(frames.count == 1)
+        #expect(frames.first?.cmdSet == 0x04)
+        #expect(frames.first?.cmdId == 0x4C)
+        #expect(frames.first?.receiver == 0x04)
+        #expect(frames.first?.flags == Duml.flagRequest)
+        #expect(frames.first?.payload == [0x00, 0x08])
         #expect(GimbalControl.setModeFrames(.follow).count == 2)
+        #expect(GimbalControl.setModeFrames(.follow).last?.payload == [0x00, 0x04, 0x01, 0x00])
         #expect(GimbalControl.setModeFrames(.fpv).count == 1)
     }
 
-    @Test func getReplyKeepsFpvAndLocked() {
+    @Test func tiltReplyDoesNotMislabelDirectionLockOrFpv() {
         let params = GimbalParamState(tiltLock: .locked, speed: .slow)
         #expect(GimbalControl.modeFromGet(params, commanded: .fpv) == .fpv)
-        #expect(GimbalControl.modeFromGet(params, commanded: .locked) == .locked)
+        #expect(GimbalControl.modeFromGet(params, commanded: .directionLock) == .directionLock)
         #expect(GimbalControl.modeFromGet(params, commanded: .follow) == .tiltLocked)
         #expect(
             GimbalControl.modeFromGet(
                 GimbalParamState(tiltLock: .unlocked, speed: .fast), commanded: .tiltLocked)
                 == .follow)
+    }
+
+    @Test func cameraModeReportRecognizesDirectionLockAndPhysicalUnlock() {
+        var payload = [UInt8](repeating: 0, count: 50)
+        payload[6] = 0x24  // Lower status flags are independent of the mode family.
+        #expect(GimbalModeFamily.parse(payload) == .directionLock)
+        var mode = GimbalControl.modeFromFamily(.directionLock, current: .follow)
+        #expect(mode == .directionLock)
+        mode = GimbalControl.modeFromGet(.init(tiltLock: .locked, speed: .fast), commanded: mode)
+        #expect(mode == .directionLock)
+        payload[6] = 0x84
+        #expect(GimbalModeFamily.parse(payload) == .follow)
+        mode = GimbalControl.modeFromFamily(.follow, current: mode)
+        #expect(mode == .follow)
+        #expect(GimbalControl.modeFromFamily(.follow, current: .tiltLocked) == .tiltLocked)
+        payload[6] = 0x44
+        #expect(GimbalModeFamily.parse(payload) == .fpv)
+        #expect(GimbalControl.modeFromFamily(.fpv, current: mode) == .fpv)
+        payload[6] = 0xC4
+        #expect(GimbalModeFamily.parse(payload) == nil)
+        #expect(GimbalModeFamily.parse(Array(payload.prefix(49))) == nil)
+        #expect(GimbalModeFamily.parse(payload + [0]) == nil)
+    }
+
+    @Test func periodicReadbackCorrectsLateModeReportsAndPhysicalTiltChanges() {
+        var poll = GimbalParamPoll()
+        let initialRequest = poll.shouldRequest(at: 0)
+        #expect(initialRequest)
+        // Selecting Tilt locked can race an already queued Direction Lock push.
+        var mode = GimbalControl.modeFromFamily(.directionLock, current: .tiltLocked)
+        mode = GimbalControl.modeFromFamily(.follow, current: mode)
+        for tick in 1...9 {
+            let tooSoon = poll.shouldRequest(at: Double(tick) / 10)
+            #expect(!tooSoon)
+        }
+        let tiltRequest = poll.shouldRequest(at: 1)
+        #expect(tiltRequest)
+        mode = GimbalControl.modeFromGet(.init(tiltLock: .locked, speed: .fast), commanded: mode)
+        #expect(mode == .tiltLocked)
+        // Physical Follow selection keeps family 2; a later GET must still run.
+        mode = GimbalControl.modeFromFamily(.follow, current: mode)
+        let followRequest = poll.shouldRequest(at: 2)
+        #expect(followRequest)
+        mode = GimbalControl.modeFromGet(.init(tiltLock: .unlocked, speed: .fast), commanded: mode)
+        #expect(mode == .follow)
+        poll = GimbalParamPoll()
+        let resetRequest = poll.shouldRequest(at: 2.1)
+        #expect(resetRequest)
     }
 
     @Test func lerpIsLinearInYawAndPitch() {

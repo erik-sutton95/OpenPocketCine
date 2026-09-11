@@ -433,22 +433,35 @@ object MovablePanelMath {
     const val GRIP_EXTERIOR_GAP_DP = 2f
     /** How much of [GRIP_HIT_DP] hangs off the panel (outside the clip). */
     const val GRIP_EXTERIOR_DP = 40f
+    const val GRIP_BOTTOM_EXTERIOR_DP = 12f
+    const val MIN_GRIP_HIT_DP = 44f
     const val DRAG_HIT_PADDING_DP = 10f
 
     val gripPadDp: Float
         get() = GRIP_EXTERIOR_DP
 
     /** Top-leading of the hit well: [GRIP_EXTERIOR_DP] past the clip, rest on the plate. */
-    fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint =
-        AssistPoint(
-            panelWidth - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
-            panelHeight - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
-        )
+    fun gripHitSize(panelWidth: Float, panelHeight: Float): Float =
+        maxOf(MIN_GRIP_HIT_DP, minOf(GRIP_HIT_DP, panelWidth + GRIP_EXTERIOR_DP,
+            panelHeight + GRIP_BOTTOM_EXTERIOR_DP))
+
+    fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint {
+        val hit = gripHitSize(panelWidth, panelHeight)
+        return AssistPoint(panelWidth - hit + GRIP_EXTERIOR_DP,
+            panelHeight - hit + GRIP_BOTTOM_EXTERIOR_DP)
+    }
+
+    /** Extra wrapper space above/left of a small body, so Compose does not shrink the target. */
+    fun gripOverhang(panelWidth: Float, panelHeight: Float): AssistPoint {
+        val origin = gripHitOrigin(panelWidth, panelHeight)
+        return AssistPoint(maxOf(0f, -origin.x), maxOf(0f, -origin.y))
+    }
 
     /** Top-leading of the 14 dp L inside the hit well, 2 dp outside the clip. */
-    fun gripVisualOrigin(): AssistPoint {
-        val x = GRIP_HIT_DP - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
-        return AssistPoint(x, x)
+    fun gripVisualOrigin(hitSize: Float = GRIP_HIT_DP): AssistPoint {
+        val x = hitSize - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
+        val y = hitSize - GRIP_BOTTOM_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
+        return AssistPoint(x, y)
     }
 
     fun clampedScale(value: Double): Double = value.coerceIn(SCALE_MIN, SCALE_MAX)
@@ -462,9 +475,30 @@ object MovablePanelMath {
         val halfW = size.width / 2f
         val halfH = size.height / 2f
         return AssistPoint(
-            point.x.coerceIn(bounds.minX + halfW, bounds.maxX - halfW),
-            point.y.coerceIn(bounds.minY + halfH, bounds.maxY - halfH),
+            point.x.coerceIn(bounds.minX + halfW, maxOf(bounds.minX + halfW, bounds.maxX - halfW)),
+            point.y.coerceIn(bounds.minY + halfH, maxOf(bounds.minY + halfH, bounds.maxY - halfH)),
         )
+    }
+
+    /** Pixel bounds fit the body horizontally and reserve the resize well vertically. */
+    fun fittedSize(preferred: AssistSize, bounds: AssistRect, grip: Float): AssistSize {
+        val bottomGrip = grip * GRIP_BOTTOM_EXTERIOR_DP / GRIP_EXTERIOR_DP
+        val factor = minOf(1f, maxOf(1f, bounds.width) / maxOf(1f, preferred.width),
+            maxOf(1f, bounds.height - bottomGrip) / maxOf(1f, preferred.height))
+        return AssistSize(maxOf(1f, kotlin.math.floor(preferred.width * factor)),
+            maxOf(1f, kotlin.math.floor(preferred.height * factor)))
+    }
+
+    fun clampWithGrip(point: AssistPoint, size: AssistSize, bounds: AssistRect, grip: Float): AssistPoint {
+        val density = grip / GRIP_EXTERIOR_DP
+        val bottomGrip = GRIP_BOTTOM_EXTERIOR_DP * density
+        val hit = gripHitSize(size.width / density, size.height / density) * density
+        // Equal body margins; the visible corner fits the padding, while its expanded
+        // touch well may extend beyond the side boundary or beneath fixed controls.
+        val minX = bounds.minX + size.width / 2
+        val minY = bounds.minY + maxOf(size.height / 2, hit - bottomGrip - size.height / 2)
+        return AssistPoint(point.x.coerceIn(minX, maxOf(minX, bounds.maxX - size.width / 2)),
+            point.y.coerceIn(minY, maxOf(minY, bounds.maxY - size.height / 2 - bottomGrip)))
     }
 
     fun snap(point: AssistPoint, grid: Float = POSITION_GRID): AssistPoint =

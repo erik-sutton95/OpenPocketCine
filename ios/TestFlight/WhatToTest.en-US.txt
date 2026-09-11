@@ -1,16 +1,40 @@
+Since open beta build 63
+
 New and changed
 
-- Apple Watch companion: live preview, timecode, storage, camera battery, and record/shutter. Keep the iPhone app open; wrist recording skips confirmation.
-- Share's Convert log rewrites D-Log and D-Log2 clips to one output curve. Camera originals stay untouched.
-- Hold-drag the ND assist chip to move it. Long-press Units to choose Stops, filter factor, or optical density.
+- Direction Lock holds the camera pointing in one direction as you rotate its body. Select another mode to release it.
+- Gimbal controls uses Mode, Speed, and Ramp tabs, with Motion Control in Gimbal tools.
+- Experimental Motion Control adds timed A-to-B or A-to-B-to-C moves, smoothing, a countdown, and Pause, Resume and Stop.
+- Experimental AirPods head tracking follows calibrated head direction more directly. Manual control wins; changing gimbal mode turns tracking off.
+- Drag scopes, LIGHTS and ND directly; drag a corner to resize. Panels fit under bars and the joystick, with equal left/right spacing.
+- ND assist suggests a filter strength to balance exposure, with Stops, ND factor and optical-density units.
+- New false-color choices include CineStop, six-zone IRE and EL Zone, with matching reference legends.
+- Experimental Multiview monitors Osmo cameras on shared Wi-Fi, with saved stages, grid or Center stage, per-camera looks and group recording.
+- Share this feed lets other iPhones and iPads on the same camera Wi-Fi watch with local assists, request camera controls and reconnect after interruptions.
+- Apple Watch adds live preview, timecode, storage, camera battery, record and shutter controls. The paired iPhone stays connected to the camera.
+- Convert log on Share matches D-Log and D-Log2 clips during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.
+- Your cameras shows joining progress and Cancel on the selected camera row. Watch a feed is the eye button beside Multiview.
+- Manual joystick and gamepad input takes over from programmed gimbal moves.
+- Share Diagnostics from pairing or Operator Setup > System to report connection and playback problems.
 
 Fixes
 
-- Watch preview has lower delay and matches the phone's identity picture. Always On keeps the last frame visible with normal watchOS dimming.
-- Pocket 3 keeps vertical 3K in FORMAT while options load and when changing frame rate.
+- Zebra Highlight detects the hottest color channel and defaults to 99 IRE. Zebra option fields stay above the keyboard, with Done to dismiss it.
+- Expanded Pocket 3 support: more reliable live view and reconnects, correct camera settings, and access to newly recorded clips.
+- Pocket 3 COLOR correctly maps Normal, HDR/HLG and D-Log M instead of switching to the wrong profile.
+- FORMAT shows camera-reported sizes, frame rates and aspect ratios. A selected pair stays visible until the camera confirms it.
+- Pocket 3 FORMAT includes normal-video 2.7K and portrait choices when its format list is empty. Vertical 3K stays selected while options load and frame rate changes.
+- Pocket 3 clips can be listed and opened after a take, including recordings stored on its memory card.
+- In Normal color, Pocket 3 and Pocket 4 Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
+- Nano COLOR now matches Normal 8-bit, Normal 10-bit and D-Log M. Live-view handling also copes better with larger Nano frames.
+- D-Log M scopes use their own signal scale. Scene-stop readings are marked as estimates; sensor clipping limits are not calibrated.
+- Renamed camera Wi-Fi networks use the current name. Failed joins clear stale connection details, and setup warns when a VPN or ad blocker may prevent live view.
+- Live-view stability improves when zooming, changing settings, toggling LUT 50/50, or returning from clips. Recovery keeps the last picture visible.
+- False color stays visible while Auto ISO changes exposure. Video and monitoring overlays stay aligned through rotation and Fit/Fill changes.
 
 What to test
 
-- Go live on iPhone and open OpenPocketCine on Apple Watch. Check preview and readings, record a short take, then lower and raise your wrist. Confirm recording on the camera.
-- On Pocket 3, select vertical 3K, connect, then change frame rate. Confirm FORMAT stays 3K 9:16.
-- Export mixed D-Log/D-Log2 takes with Convert log. In live view, move the ND chip and cycle its Units choices.
+- On Pocket 3, check live view, Normal/HDR/D-Log M, 2.7K and portrait 3K, recording, clip playback and reconnecting.
+- Try Direction Lock and a Motion Control move, then take over manually. Drag and resize scopes to each edge in portrait and landscape.
+- Compare false-color scales and ND units. Keep the picture live while changing settings, zooming and reopening clips; share diagnostics if it freezes.
+- Try Multiview, sharing to another device, Apple Watch controls and Convert log export. Motion Control, Multiview and AirPods head tracking remain experimental.

@@ -105,6 +105,8 @@ public struct CameraStatus: Equatable, Sendable {
     /// Gimbal 180 wire: `0x04/0x27` `@2` bit `0x40`. Stick triple-tap `FE 09`
     /// XORs this bit. Not Control Center Selfie Flip.
     public var gimbalFace: GimbalFace?
+    /// Mode family from the 50-byte `0x04/0x05` Pocket attitude push.
+    public var gimbalModeFamily: GimbalModeFamily?
     /// Last `0x04/0x50` GET reply. Cannot tell FPV from Tilt Locked.
     public var gimbalParams: GimbalParamState?
     /// Mechanical iris readout. Pocket has none; `cam_blur_aperture` is beauty blur, not f-stop.
@@ -194,7 +196,8 @@ public enum CameraStatusDecoder {
             return true
 
         case (0x04, 0x05):
-            return true  // gimbal position heartbeat — swallow, it is not a running-state signal
+            if p.count == 50 { status.gimbalModeFamily = GimbalModeFamily.parse(p) }
+            return true  // position/mode heartbeat, not a recording-state signal
 
         case (0x04, 0x27):
             if let face = GimbalFace.parse(p) { status.gimbalFace = face }

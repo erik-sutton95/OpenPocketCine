@@ -33,7 +33,11 @@ First pair is the wizard in `ConnectionSetupView` (Android matches):
 
 Empty store: the wizard fills the viewport. After a successful pair, the camera
 is saved; next launch is **Your cameras**. **Pair new camera** re-enters the
-wizard. Settings does not start a new pair. The wizard always offers **Share
+wizard. The saved row being connected shows discovery/joining progress and
+**Cancel**; camera names stay above availability and connection actions. Other
+connection actions wait until the attempt finishes or is cancelled. On iOS,
+**Watch a feed** is the eye button next to the Multiview grid button in the
+camera-list header. Settings does not start a new pair. The wizard always offers **Share
 Diagnostics** so a stuck first pair can still send a report.
 
 Pocket and Nano are separate bodies. If Bluetooth reached a different camera
@@ -75,6 +79,23 @@ Seconds** on the watch (15 s default). After that the system Always On
 dim applies; the companion does not extra-fade the picture.
 
 Link health in the top bar is delivery (FPS chip), not RSSI.
+
+Movable scopes and the LIGHTS / ND panels use direct touch-drag. Their corner
+grips resize directly too. Scopes may sit partly under top and bottom readout /
+assist bars and underneath the entire joystick/zoom/gimbal-controls cluster in
+portrait or landscape. The cluster remains above scopes, and its visibility does
+not change their placement boundary. Focus reset and audio meters do not fence
+off a whole side of the screen.
+Reserve the record/media/settings rail and portrait system button row with
+8 pt/dp padding. The resize target extends only 12 pt/dp below the panel so it
+can reach closer to the bottom edge. Use the visible panel body for horizontal
+limits so left and right margins are equal. The visible corner fits within the
+padding; its expanded touch area may extend beyond the side boundary. Fit and
+clamp the body and vertical resize extent when dragging, resizing, restoring saved
+positions, or changing orientation. Saved
+scale remains the preferred size; a small screen can temporarily fit it smaller.
+Toolbar long presses retain options access. Motion Control's editor keeps its
+separate hold-to-move interaction.
 
 ## Help surfaces
 

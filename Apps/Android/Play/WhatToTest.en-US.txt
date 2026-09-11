@@ -1,14 +1,37 @@
+Since open beta build 63
+
 New and changed
 
-- No new Android controls in this build. Recent updates include a movable ND chip with Stops, filter factor, and optical density units.
-- False color offers the EL Zone, IRE, and CineStop scales for checking exposure.
+- Direction Lock holds the camera pointing in one direction as you rotate its body. Select another mode to release it.
+- Gimbal controls uses Mode, Speed, and Ramp tabs, with Motion Control in Gimbal tools.
+- Experimental Motion Control adds timed A-to-B or A-to-B-to-C moves, smoothing, a countdown, and Pause, Resume and Stop.
+- Drag scopes, LIGHTS and ND directly; drag a corner to resize. Panels fit under bars and the joystick, with equal left/right spacing.
+- ND assist suggests a filter strength to balance exposure, with Stops, ND factor and optical-density units.
+- New false-color choices include CineStop, six-zone IRE and EL Zone, with matching reference legends.
+- Your cameras shows joining progress and Cancel on the selected camera row, with camera names and connection buttons arranged more clearly.
+- Manual joystick and gamepad input takes over from programmed gimbal moves.
+- Share Diagnostics from pairing or Operator Setup > System to report connection and playback problems.
 
 Fixes
 
-- Pocket 3 keeps vertical 3K in FORMAT while options load and when changing frame rate.
+- Zebra Highlight detects the hottest color channel and defaults to 99 IRE. Zebra option fields stay above the keyboard, with Done to dismiss it.
+- Expanded Pocket 3 support: more reliable live view and reconnects, correct camera settings, and access to newly recorded clips.
+- Pocket 3 COLOR correctly maps Normal, HDR/HLG and D-Log M instead of switching to the wrong profile.
+- FORMAT shows camera-reported sizes, frame rates and aspect ratios. A selected pair stays visible until the camera confirms it.
+- Pocket 3 FORMAT includes normal-video 2.7K and portrait choices when its format list is empty. Vertical 3K stays selected while options load and frame rate changes.
+- Pocket 3 clips can be listed and opened after a take, including recordings stored on its memory card.
+- In Normal color, Pocket 3 and Pocket 4 Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
+- Nano COLOR now matches Normal 8-bit, Normal 10-bit and D-Log M. Live-view handling also copes better with larger Nano frames.
+- D-Log M scopes use their own signal scale. Scene-stop readings are marked as estimates; sensor clipping limits are not calibrated.
+- Renamed camera Wi-Fi networks use the current name. Failed joins clear stale connection details, and setup warns when a VPN or ad blocker may prevent live view.
+- Live-view stability improves when zooming, changing settings, toggling LUT 50/50, or returning from clips. Recovery keeps the last picture visible.
+- Fixed black live views after leaving settings or clips, delayed first pictures, frozen pixel patches, and blotchy LUT rendering on affected devices.
+- Focus peaking now appears consistently. Face autofocus detects faces more reliably and places its bracket correctly when the picture is mirrored.
+- Playback caching uses less memory, and disconnect or display changes recover more reliably instead of crashing.
 
 What to test
 
-- Set Pocket 3 to vertical 3K, connect, and change frame rate. Confirm FORMAT stays 3K 9:16.
-- Hold-drag the ND chip to move it, then long-press Units to cycle its readings.
-- Switch false-color scales and check that the picture and waveform continue updating.
+- On Pocket 3, check live view, Normal/HDR/D-Log M, 2.7K and portrait 3K, recording, clip playback and reconnecting.
+- Try Direction Lock and a Motion Control move, then take over manually. Drag and resize scopes to each edge in portrait and landscape.
+- Compare false-color scales and ND units. Keep the picture live while changing settings, zooming and reopening clips; share diagnostics if it freezes.
+- Check peaking, face autofocus and LUT rendering on your phone. Broader Pocket 3 and Motion Control hardware testing is still needed.

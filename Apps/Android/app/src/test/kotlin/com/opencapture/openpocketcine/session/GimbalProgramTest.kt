@@ -13,6 +13,40 @@ class GimbalProgramTest {
     private val b = GimbalWaypoint(30.0, 10.0, 3.0)
 
     @Test
+    fun directionLockUsesVerifiedCommandAndSurvivesTiltReplies() {
+        assertTrue(CameraCommands.gimbalDirectionLock().contentEquals(byteArrayOf(0x00, 0x08)))
+        var mode = GimbalControl.modeFromFamily(0, GimbalMode.FOLLOW)
+        assertEquals(GimbalMode.DIRECTION_LOCK, mode)
+        mode = GimbalControl.modeFromGet(true, mode)
+        assertEquals(GimbalMode.DIRECTION_LOCK, mode)
+        mode = GimbalControl.modeFromFamily(2, mode)
+        assertEquals(GimbalMode.FOLLOW, mode)
+        assertEquals(GimbalMode.TILT_LOCKED, GimbalControl.modeFromFamily(2, GimbalMode.TILT_LOCKED))
+        assertEquals(GimbalMode.FPV, GimbalControl.modeFromFamily(1, mode))
+        assertEquals(mode, GimbalControl.modeFromFamily(3, mode))
+        assertFalse(StatusExtras.isGimbalParamsReply(byteArrayOf(0, 0)))
+        assertTrue(StatusExtras.isGimbalParamsReply(byteArrayOf(0, 1, 4, 1, 1, 5, 1, 0)))
+    }
+
+    @Test
+    fun periodicReadbackCorrectsLateModeReportsAndPhysicalTiltChanges() {
+        var poll = GimbalParamPoll()
+        assertTrue(poll.shouldRequest(0))
+        var mode = GimbalControl.modeFromFamily(0, GimbalMode.TILT_LOCKED)
+        mode = GimbalControl.modeFromFamily(2, mode)
+        for (tick in 1..9) assertFalse(poll.shouldRequest(tick * 100L))
+        assertTrue(poll.shouldRequest(1_000))
+        mode = GimbalControl.modeFromGet(true, mode)
+        assertEquals(GimbalMode.TILT_LOCKED, mode)
+        mode = GimbalControl.modeFromFamily(2, mode)
+        assertTrue(poll.shouldRequest(2_000))
+        mode = GimbalControl.modeFromGet(false, mode)
+        assertEquals(GimbalMode.FOLLOW, mode)
+        poll = GimbalParamPoll()
+        assertTrue(poll.shouldRequest(2_100))
+    }
+
+    @Test
     fun runNeedsAAndB() {
         var program = GimbalProgram()
         assertFalse(program.canRun)

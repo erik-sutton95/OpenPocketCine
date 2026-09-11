@@ -6,7 +6,6 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputScope
-import androidx.compose.ui.input.pointer.positionChange
 
 internal suspend fun PointerInputScope.detectTapAndLongPress(
     longPressMs: Long,
@@ -27,53 +26,55 @@ internal suspend fun PointerInputScope.detectTapAndLongPress(
     }
 }
 
-/**
- * iOS `LongPressGesture(0.3).sequenced(before: DragGesture(minimumDistance: 0))`.
- *
- * Hold timeout is [AwaitPointerEventScope.withTimeoutOrNull] (Compose's pointer
- * timeout), **not** kotlinx `withTimeout` — that cancels the whole pointerInput
- * and the drag never starts. Drag deltas use [positionChange] so a moving
- * `offset` does not feed back into the translation.
- */
-internal suspend fun PointerInputScope.detectHoldThenDrag(
+/** Start on movement, retaining stationary holds for options. Root coordinates avoid drag feedback. */
+internal suspend fun PointerInputScope.detectPanelDrag(
     holdMs: Long,
     enabled: Boolean,
     onDown: () -> Unit = {},
-    onHold: () -> Unit,
+    onStart: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
     onDrag: (translation: Offset) -> Unit,
     onEnd: (translation: Offset) -> Unit,
-    /** Map a local pointer into a space that does not move with the panel (root). */
     toRoot: (Offset) -> Offset = { it },
 ) {
     if (!enabled) return
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitFirstDown(requireUnconsumed = true)
         down.consume()
         onDown()
         val pointerId = down.id
         val downRoot = toRoot(down.position)
-        // null = timeout = still down = hold succeeded (Compose pointer timeout).
-        // false = lifted or lost the pointer before [holdMs].
-        val releasedEarly =
-            withTimeoutOrNull(holdMs) {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == pointerId }
-                        ?: return@withTimeoutOrNull true
-                    change.consume()
-                    if (!change.pressed) return@withTimeoutOrNull true
-                }
-                @Suppress("UNREACHABLE_CODE")
-                false
-            }
-        if (releasedEarly != null) return@awaitEachGesture
-        onHold()
         var total = Offset.Zero
-        drag(pointerId) { change ->
-            total = toRoot(change.position) - downRoot
-            change.consume()
-            onDrag(total)
+        val moved = withTimeoutOrNull(holdMs) {
+            var result = false
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId } ?: break
+                if (change.isConsumed || !change.pressed) break
+                total = toRoot(change.position) - downRoot
+                change.consume()
+                if (total.getDistance() >= 4 * density) {
+                    result = true
+                    break
+                }
+            }
+            result
         }
-        onEnd(total)
+        if (moved == false) return@awaitEachGesture
+        if (moved == null && onLongPress != null) {
+            onLongPress()
+            waitForUpOrCancellation()
+            return@awaitEachGesture
+        }
+        onStart()
+        try {
+            onDrag(total)
+            drag(pointerId) { change ->
+                total = toRoot(change.position) - downRoot
+                change.consume()
+                onDrag(total)
+            }
+        } finally {
+            onEnd(total)
+        }
     }
 }

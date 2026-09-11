@@ -15,6 +15,20 @@ location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
 exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 
+On **Your cameras**, the selected row shows connection progress and **Cancel**,
+including while looking for an offline camera. Names sit above availability and
+connection actions. Pair new camera, Media library, and Settings stay on the intro card.
+
+## Moving scopes
+
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
+corner grip to resize. Scopes can sit partly under the top and bottom bars.
+Scopes can reach closer to the bottom edge and sit underneath the entire joystick,
+zoom, and gimbal-controls cluster in portrait or landscape. The cluster stays above
+scopes. Panels can reach equally close to the left and right edges. Record,
+media, and settings stay protected. Panels fit the available
+space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine
@@ -51,21 +65,26 @@ COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
-(bottom-left, above the assist bar; hold-drag to move). Long-press to
+(bottom-left, above the assist bar; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
 beside zoom (Pocket only). That sheet parks like a capture picker and
-sets Follow / Tilt locked / FPV, Slow / Default / Fast, stick ramp, and
-a Motion Control A→B (optional C) take (set A and B, choose each
+has Mode / Speed / Ramp tabs showing Follow / Tilt locked / FPV / Direction Lock,
+Slow / Default / Fast, and stick ramp. The separate Gimbal tools footer opens
+experimental Motion Control for an A→B (optional C) take (set A and B, choose each
 leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total
 duration. There is no artificial speed cap. Moves are experimental: keep
 the camera fixed, rehearse, and check framing before a take. Tilt targets stay
 within −44° to +70°. A missed timed
 point stops the move; professional positional/timing accuracy has not been qualified. Stick throw is analog with
-an ease-in curve (small push crawls; full throw is fastest). Off / Soft /
-Medium ramp eases the throw over time. A connected
+an ease-in curve (small push crawls; full throw is fastest). Direction Lock keeps
+the camera pointing in the same direction while the handle rotates; choose
+another mode to release it. The separate joystick-hold Lock Gimbal behavior
+remains under investigation and is not available in the app. Ramp smooths
+joystick-input changes: Off is immediate, Soft eases more gradually than Medium.
+Releasing the stick still stops immediately. A connected
 game controller's left stick drives the same path. Cross/A records.
 Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
 in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom

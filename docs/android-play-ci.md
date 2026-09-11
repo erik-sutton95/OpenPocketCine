@@ -116,7 +116,8 @@ just android-play-dispatch
 
 ## Tester-facing release notes
 
-**this-build** window, same contract as TestFlight:
+**this-build** window by default, or the cumulative window since a
+maintainer-named open-beta build, using the same contract as TestFlight:
 [`tester-notes.md`](tester-notes.md). Play listing "what's new" is 500
 characters. The longer What to Test file is operator copy for GitHub / email.
 

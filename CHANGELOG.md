@@ -6,12 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+Cumulative operator-facing notes for the build 63 → 102 open-beta update are in
+the [beta 102 release notes](handbook/src/content/docs/releases/beta-102.md), with
+separate iOS and Android lists.
+
 - Experimental AirPods head tracking now maps shared-forward head direction to
   native gimbal angles with a 100 ms command horizon. Stale measurements,
   inactive scenes and old control callbacks cannot continue driving. Manual
   and programmed movement take priority; physical response qualification is ongoing.
 
 ### Added
+
+- Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
+  resize directly. Scopes can sit partly under the top and bottom bars while
+  reaching closer to the bottom and underneath the entire joystick cluster
+  in portrait and landscape, with equal left and right edge spacing. The
+  record/media/settings rail stays clear. Larger panels
+  fit the available space after resizing or rotation.
+
+- Saved-camera rows now show their own connection progress and Cancel action,
+  with names above availability/actions. On iOS, Watch a feed is an eye button
+  beside Multiview in the camera-list header.
+- Gimbal controls use Mode / Speed / Ramp tabs with settings below. A separate
+  Gimbal tools footer opens experimental Motion Control. Both shells.
+
+- Direction Lock replaces the unavailable Locked gimbal option on iOS and
+  Android. It holds the camera's pointing direction while the handle rotates;
+  choose another mode to release it. Menu mode readback follows camera changes.
+  Selecting a mode switches off iOS AirPods head tracking. The separate
+  joystick-hold Lock Gimbal investigation is paused; see [gimbal controls](docs/gimbal-controls.md).
 
 - Apple Watch companion (#101): live preview, timecode, storage, camera
   battery, and record / shutter on the wrist. The iPhone stays the radio.
@@ -37,17 +60,16 @@ All notable changes to this project are documented here. The format is based on
 - ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
   meters the live picture against middle gray and suggests a screw-on
   ND to balance the frame. Small HUD chip, parked bottom-left above the
-  assist bar; hold-drag to move. Long-press **Units** switches Stops
+  assist bar; drag directly to move. Long-press **Units** switches Stops
   (`+5.0`), filter factor (`ND32`), and optical density (`ND 0.3` /
   `ND 0.4`). Off unless you turn the chip on. The app cannot set a
   filter. iOS and Android.
 
 - Gimbal controls button beside the zoom chip (#47, #79, #48, #211).
-  One sheet: Follow / Tilt locked / FPV / Locked, Slow / Default / Fast,
+  One sheet: Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
   stick ramp Off / Soft / Medium, and Motion Control. The sheet parks
-  like a capture picker (slide-up glass above the capture bar). Locked
-  toasts — no lock-all opcode on the wire yet (#174). Ramp is local
-  ease-in/out on the stick path (#260), not camera speed. Motion Control
+  like a capture picker (slide-up glass above the capture bar). Ramp smooths
+  stick input changes (#260); releasing the stick still stops immediately. Motion Control
   uses camera-timed A→B (optional C) trajectories with waypoint verification.
   It preserves durations from 0.5 to 120 seconds without rate calibration or
   an artificial speed ceiling. C enables adjustable Bézier smoothing and a

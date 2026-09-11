@@ -87,6 +87,8 @@ fun LiveAssistLayer(
     showTapFocusBox: Boolean = true,
     /** Picture well in the same space as [modifier]; defaults to the layer box. */
     feedFrame: ChromeRect? = null,
+    /** Clear space between fixed controls, in dp. Storage still uses the full canvas. */
+    placementFrame: ChromeRect? = null,
     /** Live 180 / MIRROR compose. Defaults to the MIRROR chip. */
     pictureMirrored: Boolean = state.mirror,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
@@ -119,6 +121,15 @@ fun LiveAssistLayer(
                     )
                 }
             }
+        val placement = with(density) {
+            val frame = placementFrame ?: ChromeRect(56f, 56f,
+                maxOf(0f, canvas.width / density.density - 112f),
+                maxOf(0f, canvas.height / density.density - 166f))
+            val padding = 8.dp.toPx()
+            AssistRect(frame.x.dp.toPx() + padding, frame.y.dp.toPx() + padding,
+                maxOf(0f, frame.width.dp.toPx() - 2 * padding),
+                maxOf(0f, frame.height.dp.toPx() - 2 * padding))
+        }
         if (shown(LiveAssistTool.GUIDES)) {
             GuidesOverlay(state, feed)
         }
@@ -162,6 +173,7 @@ fun LiveAssistLayer(
                         state = state,
                         status = status,
                         canvas = canvas,
+                        placementBounds = placement,
                         feed = feed,
                         density = density,
                         locked = locked,
@@ -201,6 +213,7 @@ private fun StackedScopePanel(
     state: LiveAssistState,
     status: CameraStatus,
     canvas: AssistRect,
+    placementBounds: AssistRect,
     feed: AssistRect,
     density: androidx.compose.ui.unit.Density,
     locked: Boolean,
@@ -303,6 +316,7 @@ private fun StackedScopePanel(
             scale = scale,
             stored = stored,
             canvas = canvas,
+            placementBounds = placementBounds,
             defaultCenter = defaultCenter,
             enabled = !locked,
             onStore = { state.storeCenter(tool, it) },

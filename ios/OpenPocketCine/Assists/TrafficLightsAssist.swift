@@ -3,12 +3,12 @@ import SwiftUI
 import UIKit
 
 /// OpenZCine Traffic Lights — `AssistQuickSettingsContent.trafficLightsRows` plus
-/// `MovablePanel(id: "traffic-lights")` (long-press drag + corner resize).
+/// `MovablePanel(id: "traffic-lights")` (direct drag + corner resize).
 ///
 /// Long-press options are **only** Crush/Clip Compensation (0 / 0.25 / 0.5 / 0.75 / 1.0 stops).
 /// That value is shared with the histogram's edge lights. The floating meter is the
 /// RED-style RGB goal-post (`TrafficLightsMeterMini`): `TL` title, three centre-anchored
-/// columns, clip lamps on top, crush lamps on the floor. Draggable after a 0.3s hold
+/// columns, clip lamps on top, crush lamps on the floor. Draggable immediately
 /// and uniformly scalable 0.6…1.6 from the bottom-trailing grip.
 enum TrafficLightsAssist {
     static let panelID = "traffic-lights"
@@ -449,12 +449,14 @@ private enum TrafficLightsAssistHaptics {
 
 // MARK: - Movable panel (OpenZCine `MovablePanel`)
 
-/// Long-press then drag to reposition; corner grip long-press-drags to scale.
+/// Drag to reposition; drag the corner grip to scale.
 struct TrafficLightsMovablePanel<Content: View>: View {
     @Bindable var store: TrafficLightsAssistStore
     let size: CGSize
     let defaultCenter: CGPoint
     let bounds: CGRect
+    var placementBounds: CGRect? = nil
+    private var movementBounds: CGRect { placementBounds ?? ScopePanelPlacement.bounds(in: bounds) }
     @ViewBuilder var content: () -> Content
 
     @State private var dragOrigin: CGPoint?
@@ -478,7 +480,7 @@ struct TrafficLightsMovablePanel<Content: View>: View {
             content()
                 .overlay(alignment: .bottomTrailing) {
                     resizeHandle
-                        .offset(x: gripExteriorGap, y: gripExteriorGap)
+                        .offset(x: gripPad, y: ScopePanelPlacement.gripBottomExtent)
                 }
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .padding(dragHitPadding)
@@ -488,12 +490,13 @@ struct TrafficLightsMovablePanel<Content: View>: View {
         }
         .frame(
             width: size.width + gripPad,
-            height: size.height + gripPad,
+            height: size.height + ScopePanelPlacement.gripBottomExtent,
             alignment: .topLeading
         )
-        .scaleEffect((isDragging || isResizing) ? 1.03 : 1)
+        .opacity(ScopePanelPlacement.isUsable(movementBounds) ? 1 : 0)
+        .allowsHitTesting(ScopePanelPlacement.isUsable(movementBounds))
         .shadow(color: .black.opacity((isDragging || isResizing) ? 0.5 : 0), radius: 18, y: 8)
-        .position(x: center.x + gripPad / 2, y: center.y + gripPad / 2)
+        .position(x: center.x + gripPad / 2, y: center.y + ScopePanelPlacement.gripBottomExtent / 2)
         .sensoryFeedback(trigger: isDragging) { _, dragging in
             dragging ? .impact(flexibility: .rigid, intensity: 1) : nil
         }
@@ -510,21 +513,20 @@ struct TrafficLightsMovablePanel<Content: View>: View {
         return TrafficLightsCornerGrip()
             .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
             .frame(width: gripVisualSize, height: gripVisualSize, alignment: .bottomTrailing)
-            .frame(width: gripHitSize, height: gripHitSize, alignment: .bottomTrailing)
+            .offset(y: ScopePanelPlacement.gripTopInterior - gripCornerInset)
+            .frame(width: gripHitSize, height: gripHitSize, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(resizeGesture)
     }
 
     private func panelDragGesture(center: CGPoint) -> some Gesture {
-        LongPressGesture(minimumDuration: TrafficLightsAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isDragging {
                     isDragging = true
                     dragOrigin = center
                 }
-                guard let drag, let origin = dragOrigin else { return }
+                guard let origin = dragOrigin else { return }
                 let proposed = CGPoint(
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
@@ -552,15 +554,12 @@ struct TrafficLightsMovablePanel<Content: View>: View {
     }
 
     private var resizeGesture: some Gesture {
-        LongPressGesture(minimumDuration: TrafficLightsAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isResizing {
                     isResizing = true
                     resizeStartScale = store.scale
                 }
-                guard let drag else { return }
                 let reach = TrafficLightsAssist.baseSize.width + TrafficLightsAssist.baseSize.height
                 let delta = (drag.translation.width + drag.translation.height) / reach
                 store.scale = TrafficLightsAssist.clampedScale(resizeStartScale + delta)
@@ -581,7 +580,7 @@ struct TrafficLightsMovablePanel<Content: View>: View {
     }
 
     private func clamp(_ point: CGPoint) -> CGPoint {
-        TrafficLightsAssist.clamp(point, size: size, in: bounds)
+        ScopePanelPlacement.clamp(point, size: size, in: movementBounds)
     }
 }
 

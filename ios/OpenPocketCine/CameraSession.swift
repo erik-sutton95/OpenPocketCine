@@ -142,6 +142,8 @@ final class CameraSession {
     /// True while a saved-camera tap is waiting for that peripheral to advertise.
     /// Observable so the header pill can read **Reconnecting** (OpenZCine parity).
     private(set) var isReconnecting = false
+    /// Saved-list row that owns the current connection attempt, including discovery.
+    private(set) var connectionTargetID: UUID?
     /// Established session dropped — keep the last frame and retry automatically.
     var sessionRecovery: SessionRecoveryState = .idle
     /// Keeps `LiveViewScreen` mounted while `phase` leaves `.live` during recovery.
@@ -424,7 +426,7 @@ final class CameraSession {
     @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
     @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
     @ObservationIgnored private var gimbalRampFilter = GimbalRampFilter()
-    @ObservationIgnored private var gimbalParamsRequested = false
+    @ObservationIgnored private var gimbalParamPoll = GimbalParamPoll()
     @ObservationIgnored private var moveEngine = GimbalMoveEngine()
     @ObservationIgnored private var moveTask: Task<Void, Never>?
     @ObservationIgnored private var lastMoveAttitudeAt: TimeInterval?
@@ -538,6 +540,7 @@ final class CameraSession {
         connectGeneration += 1
         abortInFlightRun()
         reconnectTarget = id
+        connectionTargetID = id
         isReconnecting = id != nil
         phase = .scanning
         found = []
@@ -601,6 +604,7 @@ final class CameraSession {
         reconnectTarget = nil
         isReconnecting = preserveMonitor
         connectedCamera = camera
+        connectionTargetID = camera.id
         phase = .connectingGatt
         runTask = Task {
             defer {
@@ -631,6 +635,7 @@ final class CameraSession {
         }
         connectGeneration += 1
         reconnectTarget = nil
+        connectionTargetID = nil
         isReconnecting = false
         cancelSessionRecovery()
         holdsMonitor = false
@@ -2345,11 +2350,6 @@ final class CameraSession {
     func setGimbalMode(_ mode: GimbalMode) {
         guard hasGimbal, !isLocked else { return }
         cancelProgrammedMove()
-        if mode == .locked {
-            gimbalMode = .locked
-            controlNote = ControlHud.gimbalLockUnavailable
-            return
-        }
         gimbalMode = mode
         for frame in GimbalControl.setModeFrames(mode) {
             let seq = datalink?.sendUntracked(frame) ?? 0
@@ -2555,8 +2555,8 @@ final class CameraSession {
     }
 
     private func requestGimbalParams() {
-        guard hasGimbal, datalink != nil, !gimbalParamsRequested else { return }
-        gimbalParamsRequested = true
+        guard hasGimbal, datalink != nil,
+            gimbalParamPoll.shouldRequest(at: ProcessInfo.processInfo.systemUptime) else { return }
         _ = datalink?.sendUntracked(Commands.gimbalParamsGet())
     }
 
@@ -2571,7 +2571,7 @@ final class CameraSession {
         gimbalOverlayMotion.reset()
         gimbalMode = .follow
         gimbalSpeed = .defaultSpeed
-        gimbalParamsRequested = false
+        gimbalParamPoll = GimbalParamPoll()
         gimbalRampFilter.reset()
         wasRecording = false
     }
@@ -4667,6 +4667,9 @@ final class CameraSession {
         absorbStaleColor(&s)
         if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
             requestGimbalParams()
+            if frame.payload.count == 50, let family = s.gimbalModeFamily {
+                gimbalMode = GimbalControl.modeFromFamily(family, current: gimbalMode)
+            }
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
             lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
             let wasTT180 = gimbalStickMapping.commanded180
@@ -4724,7 +4727,8 @@ final class CameraSession {
             cancelProgrammedMove()
         }
         wasRecording = s.isRecording
-        if let params = s.gimbalParams {
+        if frame.cmdSet == 0x04, frame.cmdId == 0x50,
+            let params = GimbalParamState.parseGetReply(frame.payload) {
             gimbalMode = GimbalControl.modeFromGet(params, commanded: gimbalMode)
             if let speed = params.speed { gimbalSpeed = speed }
         }
@@ -4750,7 +4754,7 @@ final class CameraSession {
         movePoseStableSince = nil
         lastMoveObservedPose = nil
         gimbalOverlayMotion.reset()
-        gimbalParamsRequested = false
+        gimbalParamPoll = GimbalParamPoll()
         gimbalStickMapping = GimbalStickMapping()
         lastGimbalCommand = (0, 0)
         gimbalLimitWatch.reset()
