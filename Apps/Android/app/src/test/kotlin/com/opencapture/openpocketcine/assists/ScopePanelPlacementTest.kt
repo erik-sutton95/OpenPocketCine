@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 class ScopePanelPlacementTest {
     @Test
-    fun allPanelsAndTheirResizeWellsStayInsideControlsAcrossSizesAndDensities() {
+    fun allPanelBodiesAndVerticalResizeWellsStayInsideControlsAcrossSizesAndDensities() {
         val bases = listOf(ScopePanelSize.waveform, ScopePanelSize.parade, ScopePanelSize.histogram,
             ScopePanelSize.vectorscope, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter)
         for ((width, height) in listOf(402f to 874f, 874f to 402f, 667f to 375f)) {
@@ -25,10 +25,10 @@ class ScopePanelPlacementTest {
                         val gripLeft = center.x - size.width / 2 + origin.x * density
                         val gripTop = center.y - size.height / 2 + origin.y * density
                         assertTrue(gripLeft >= safe.minX - 0.001f && gripTop >= safe.minY - 0.001f)
-                        assertTrue(gripLeft + hit <= safe.maxX + 0.001f && gripTop + hit <= safe.maxY + 0.001f)
+                        assertTrue(gripTop + hit <= safe.maxY + 0.001f)
                         assertTrue(center.x - size.width / 2 >= safe.minX - 0.001f)
                         assertTrue(center.y - size.height / 2 >= safe.minY - 0.001f)
-                        assertTrue(center.x + size.width / 2 + grip <= safe.maxX + 0.001f)
+                        assertTrue(center.x + size.width / 2 <= safe.maxX + 0.001f)
                         assertTrue(center.y + size.height / 2 + MovablePanelMath.GRIP_BOTTOM_EXTERIOR_DP * density <= safe.maxY + 0.001f)
                     }
                 }
@@ -60,20 +60,31 @@ class ScopePanelPlacementTest {
             val center = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 9000f), size, safe,
                 MovablePanelMath.GRIP_EXTERIOR_DP * density)
             assertEquals(382f * density, center.y + size.height / 2, 0.001f)
-            assertEquals(752f * density, center.x + size.width / 2, 0.001f)
-            assertTrue(center.x + size.width / 2 + 40f * density < 800f * density)
+            assertEquals(792f * density, center.x + size.width / 2, 0.001f)
+            assertTrue(center.x + size.width / 2 + 2f * density < 800f * density)
         }
     }
 
     @Test
-    fun portraitRightPlacementReachesTheScreenEdgeWithRoomForTheGrip() {
+    fun portraitPanelHasEqualLeftAndRightEdgeSpacing() {
         for (density in listOf(1f, 2.75f, 3f)) {
             val safe = AssistRect(8f * density, 70f * density, 386f * density, 676f * density)
-            val size = AssistSize(250f * density, 153f * density)
-            val center = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 400f * density),
-                size, safe, MovablePanelMath.GRIP_EXTERIOR_DP * density)
-            assertEquals(354f * density, center.x + size.width / 2, 0.001f)
-            assertEquals(394f * density, center.x + size.width / 2 + 40f * density, 0.001f)
+            val grip = MovablePanelMath.GRIP_EXTERIOR_DP * density
+            for (base in listOf(ScopePanelSize.parade, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter)) {
+                for (scale in listOf(0.6, 1.0, 1.6)) {
+                    val preferred = MovablePanelMath.panelSize(base, scale)
+                    val size = MovablePanelMath.fittedSize(
+                        AssistSize(preferred.width * density, preferred.height * density), safe, grip)
+                    val right = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 400f * density),
+                        size, safe, grip)
+                    val left = MovablePanelMath.clampWithGrip(AssistPoint(-9000f, 400f * density),
+                        size, safe, grip)
+                    assertEquals(394f * density, right.x + size.width / 2, 0.001f)
+                    assertEquals(8f * density, left.x - size.width / 2, 0.001f)
+                    assertEquals(402f * density - right.x - size.width / 2,
+                        left.x - size.width / 2, 0.001f)
+                }
+            }
         }
     }
 

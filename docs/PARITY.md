@@ -65,14 +65,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   settings lanes plus 8 pt/dp padding. The joystick, zoom, and gimbal-controls
   cluster does not restrict placement in portrait or landscape; controls draw
   above scopes. Focus reset and audio meters do not reserve a whole side lane.
-  Scopes may sit
-  partly under the top and bottom readout/assist bars; those bars do not reserve
+  Scopes may sit partly under the top and bottom readout/assist bars; those bars do not reserve
   the whole edge. Bottom placement reaches the screen edge with 8 pt/dp padding
   plus only 12 pt/dp below the body for the resize target; the rest of its touch
   area sits above the corner. iOS keeps its 56 pt target; Android caps its 90 dp
   target for small chips, with a 44 dp minimum. The portrait system button row
-  remains protected. The panel and exterior resize hit area fit inside
-  it on every render, drag, resize, and restored position. Position storage
+  remains protected. Horizontal limits use the visible panel body, giving equal
+  8 pt/dp left and right margins. The visible corner fits in that padding; its
+  expanded touch area may extend beyond a side boundary or beneath fixed controls.
+  Fit and clamp the body and vertical resize extent on every render, drag, resize,
+  and restored position. Position storage
   remains relative to the full canvas. Stationary holds still open existing
   panel options; toolbar long-press options remain available. Geometry tests
   cover portrait/landscape, scales, restored corners, and Android densities.

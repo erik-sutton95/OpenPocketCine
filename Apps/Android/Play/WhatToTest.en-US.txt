@@ -2,7 +2,7 @@ New and changed
 
 - Your cameras shows connection progress and Cancel on the selected camera, with names above availability and connection buttons.
 - Gimbal controls has Mode, Speed, and Ramp tabs, plus Motion Control in Gimbal tools. Direction Lock holds the pointing direction as the handle rotates.
-- Drag scopes, LIGHTS, and ND directly to move or resize them. Scopes can sit partly under bars, reach lower, and sit underneath the joystick cluster in either orientation.
+- Drag scopes, LIGHTS, and ND directly to move or resize. Panels can sit under bars and the joystick cluster in either orientation, with equal left/right edge spacing.
 
 Fixes
 
@@ -12,4 +12,4 @@ What to test
 
 - Reconnect a saved camera, check progress on its row, and cancel. Check Your cameras in portrait and landscape.
 - Switch gimbal tabs, try Direction Lock then Follow, and open Motion Control. Confirm the live picture stays smooth.
-- Drag and resize scopes toward each edge, then rotate the phone. Check that fixed controls remain reachable. On Pocket 3, confirm vertical 3K stays selected when changing frame rate.
+- Drag/resize to both portrait edges; check equal gaps, rotate, and check fixed controls remain reachable. On Pocket 3, confirm vertical 3K stays selected when changing frame rate.

@@ -88,8 +88,11 @@ not change their placement boundary. Focus reset and audio meters do not fence
 off a whole side of the screen.
 Reserve the record/media/settings rail and portrait system button row with
 8 pt/dp padding. The resize target extends only 12 pt/dp below the panel so it
-can reach closer to the bottom edge. Fit and clamp the panel and its touch area when
-dragging, resizing, restoring saved positions, or changing orientation. Saved
+can reach closer to the bottom edge. Use the visible panel body for horizontal
+limits so left and right margins are equal. The visible corner fits within the
+padding; its expanded touch area may extend beyond the side boundary. Fit and
+clamp the body and vertical resize extent when dragging, resizing, restoring saved
+positions, or changing orientation. Saved
 scale remains the preferred size; a small screen can temporarily fit it smaller.
 Toolbar long presses retain options access. Motion Control's editor keeps its
 separate hold-to-move interaction.

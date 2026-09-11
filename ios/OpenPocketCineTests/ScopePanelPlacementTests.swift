@@ -4,7 +4,7 @@ import XCTest
 @testable import OpenPocketCine
 
 final class ScopePanelPlacementTests: XCTestCase {
-    func testAllPanelBodiesAndResizeHandlesStayBetweenControlsAtEveryScale() {
+    func testAllPanelBodiesAndVerticalResizeWellsStayBetweenControlsAtEveryScale() {
         let canvases = [
             CGRect(x: 0, y: 0, width: 402, height: 874),
             CGRect(x: 0, y: 0, width: 874, height: 402),
@@ -37,7 +37,7 @@ final class ScopePanelPlacementTests: XCTestCase {
                         XCTAssertGreaterThanOrEqual(center.x - size.width / 2, safe.minX)
                         XCTAssertGreaterThanOrEqual(center.y - size.height / 2, safe.minY)
                         XCTAssertLessThanOrEqual(
-                            center.x + size.width / 2 + ScopePanelPlacement.gripExtent, safe.maxX)
+                            center.x + size.width / 2, safe.maxX)
                         XCTAssertLessThanOrEqual(
                             center.y + size.height / 2 + ScopePanelPlacement.gripBottomExtent,
                             safe.maxY)
@@ -68,7 +68,7 @@ final class ScopePanelPlacementTests: XCTestCase {
         let center = ScopePanelPlacement.clamp(.zero, size: size, in: safe)
         XCTAssertGreaterThanOrEqual(center.x + size.width / 2 - 12, safe.minX)
         XCTAssertGreaterThanOrEqual(center.y + size.height / 2 - 44, safe.minY)
-        XCTAssertLessThanOrEqual(center.x + size.width / 2 + 44, safe.maxX)
+        XCTAssertLessThanOrEqual(center.x + size.width / 2, safe.maxX)
         XCTAssertLessThanOrEqual(center.y + size.height / 2 + 12, safe.maxY)
         XCTAssertFalse(ScopePanelPlacement.isUsable(CGRect(x: 0, y: 0, width: 55, height: 55)))
     }
@@ -83,20 +83,34 @@ final class ScopePanelPlacementTests: XCTestCase {
         let size = ScopePanelSize.waveform
         let center = ScopePanelPlacement.clamp(CGPoint(x: 2000, y: 2000), size: size, in: safe)
         XCTAssertEqual(center.y + size.height / 2, 382, accuracy: 0.01)
-        XCTAssertEqual(center.x + size.width / 2, 748, accuracy: 0.01)
-        XCTAssertLessThan(center.x + size.width / 2 + ScopePanelPlacement.gripExtent, mainRailLeft)
+        XCTAssertEqual(center.x + size.width / 2, 792, accuracy: 0.01)
+        // The visible L extends 2 pt into the 8 pt padding before the protected rail.
+        XCTAssertLessThan(center.x + size.width / 2 + 2, mainRailLeft)
     }
 
-    func testPortraitRightPlacementReachesTheScreenEdgeWithRoomForTheGrip() {
+    func testPortraitPanelHasEqualLeftAndRightEdgeSpacing() {
         let canvas = CGRect(x: 0, y: 0, width: 402, height: 874)
         let safe = ScopePanelPlacement.bounds(
             in: canvas,
             clearance: EdgeInsets(top: 62, leading: 0, bottom: 120, trailing: 0))
-        let size = ScopePanelSize.waveform
-        let center = ScopePanelPlacement.clamp(CGPoint(x: 2000, y: 400), size: size, in: safe)
-        XCTAssertEqual(center.x + size.width / 2, 350, accuracy: 0.01)
-        XCTAssertEqual(
-            center.x + size.width / 2 + ScopePanelPlacement.gripExtent, 394, accuracy: 0.01)
+        for preferred in [
+            ScopePanelSize.parade, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter,
+        ] {
+            for scale in [0.6, 1.0, 1.6] {
+                let size = ScopePanelPlacement.fittedSize(
+                    CGSize(width: preferred.width * scale, height: preferred.height * scale),
+                    in: safe)
+                let right = ScopePanelPlacement.clamp(
+                    CGPoint(x: 2000, y: 400), size: size, in: safe)
+                let left = ScopePanelPlacement.clamp(
+                    CGPoint(x: -2000, y: 400), size: size, in: safe)
+                XCTAssertEqual(right.x + size.width / 2, 394, accuracy: 0.01)
+                XCTAssertEqual(left.x - size.width / 2, 8, accuracy: 0.01)
+                XCTAssertEqual(
+                    canvas.maxX - right.x - size.width / 2,
+                    left.x - size.width / 2 - canvas.minX, accuracy: 0.01)
+            }
+        }
     }
 
     func testNoSpaceIsUnusableAndFittingNeverEnlargesPanel() {

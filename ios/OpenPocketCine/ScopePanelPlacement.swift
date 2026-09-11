@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Scope bodies and their resize handles stay inside the space reserved for overlays.
+/// Scope bodies have equal horizontal margins in the space reserved for overlays.
+/// The corner stays visible; its expanded touch area may extend past a side boundary.
 /// Stored centres remain relative to the full canvas, so rotation does not rewrite preferences.
 enum ScopePanelPlacement {
     static let padding: CGFloat = 8
@@ -23,7 +24,7 @@ enum ScopePanelPlacement {
 
     static func fittedSize(_ preferred: CGSize, in bounds: CGRect) -> CGSize {
         let scale = min(
-            1, max(1, bounds.width - gripExtent) / max(1, preferred.width),
+            1, max(1, bounds.width) / max(1, preferred.width),
             max(1, bounds.height - gripBottomExtent) / max(1, preferred.height))
         return CGSize(
             width: max(1, floor(preferred.width * scale)),
@@ -36,10 +37,10 @@ enum ScopePanelPlacement {
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
-        let minX = bounds.minX + max(size.width / 2, gripInterior - size.width / 2)
+        let minX = bounds.minX + size.width / 2
         let minY = bounds.minY + max(size.height / 2, gripTopInterior - size.height / 2)
         return CGPoint(
-            x: min(max(minX, point.x), max(minX, bounds.maxX - size.width / 2 - gripExtent)),
+            x: min(max(minX, point.x), max(minX, bounds.maxX - size.width / 2)),
             y: min(max(minY, point.y), max(minY, bounds.maxY - size.height / 2 - gripBottomExtent)))
     }
 }

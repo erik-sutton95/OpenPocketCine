@@ -16,7 +16,7 @@ All notable changes to this project are documented here. The format is based on
 - Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
   resize directly. Scopes can sit partly under the top and bottom bars while
   reaching closer to the bottom and underneath the entire joystick cluster
-  in portrait and landscape. The
+  in portrait and landscape, with equal left and right edge spacing. The
   record/media/settings rail stays clear. Larger panels
   fit the available space after resizing or rotation.
 

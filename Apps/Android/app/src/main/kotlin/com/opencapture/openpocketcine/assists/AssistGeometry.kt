@@ -480,10 +480,10 @@ object MovablePanelMath {
         )
     }
 
-    /** Bounds and sizes are pixels, including the exterior resize hit well. */
+    /** Pixel bounds fit the body horizontally and reserve the resize well vertically. */
     fun fittedSize(preferred: AssistSize, bounds: AssistRect, grip: Float): AssistSize {
         val bottomGrip = grip * GRIP_BOTTOM_EXTERIOR_DP / GRIP_EXTERIOR_DP
-        val factor = minOf(1f, maxOf(1f, bounds.width - grip) / maxOf(1f, preferred.width),
+        val factor = minOf(1f, maxOf(1f, bounds.width) / maxOf(1f, preferred.width),
             maxOf(1f, bounds.height - bottomGrip) / maxOf(1f, preferred.height))
         return AssistSize(maxOf(1f, kotlin.math.floor(preferred.width * factor)),
             maxOf(1f, kotlin.math.floor(preferred.height * factor)))
@@ -493,9 +493,11 @@ object MovablePanelMath {
         val density = grip / GRIP_EXTERIOR_DP
         val bottomGrip = GRIP_BOTTOM_EXTERIOR_DP * density
         val hit = gripHitSize(size.width / density, size.height / density) * density
-        val minX = bounds.minX + maxOf(size.width / 2, hit - grip - size.width / 2)
+        // Equal body margins; the visible corner fits the padding, while its expanded
+        // touch well may extend beyond the side boundary or beneath fixed controls.
+        val minX = bounds.minX + size.width / 2
         val minY = bounds.minY + maxOf(size.height / 2, hit - bottomGrip - size.height / 2)
-        return AssistPoint(point.x.coerceIn(minX, maxOf(minX, bounds.maxX - size.width / 2 - grip)),
+        return AssistPoint(point.x.coerceIn(minX, maxOf(minX, bounds.maxX - size.width / 2)),
             point.y.coerceIn(minY, maxOf(minY, bounds.maxY - size.height / 2 - bottomGrip)))
     }
 
