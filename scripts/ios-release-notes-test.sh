@@ -287,4 +287,55 @@ expect_fail "${temp_dir}/long-bullet.txt"
 } > "${temp_dir}/too-long-file.txt"
 expect_fail "${temp_dir}/too-long-file.txt"
 
+# A named open-beta baseline allows a cumulative window without relaxing routine notes.
+write_cumulative() {
+  local output="$1" new_count="$2" fix_count="$3" test_count="$4"
+  {
+    printf 'Since open beta build 63\n\nNew and changed\n\n'
+    for ((index = 1; index <= new_count; index++)); do
+      printf '%s\n' "- Feature ${index}: camera controls are easier to reach while monitoring."
+    done
+    printf '\nFixes\n\n'
+    for ((index = 1; index <= fix_count; index++)); do
+      printf '%s\n' "- Fix ${index}: camera playback stays available after recording a new take."
+    done
+    printf '\nWhat to test\n\n'
+    for ((index = 1; index <= test_count; index++)); do
+      printf '%s\n' "- Check ${index}: record a take, open playback, and return to the live monitor."
+    done
+  } > "$output"
+}
+
+write_cumulative "${temp_dir}/cumulative.txt" 16 20 5
+expect_pass "${temp_dir}/cumulative.txt"
+write_cumulative "${temp_dir}/cumulative-too-many-new.txt" 17 1 1
+expect_fail "${temp_dir}/cumulative-too-many-new.txt"
+write_cumulative "${temp_dir}/cumulative-too-many-fixes.txt" 1 21 1
+expect_fail "${temp_dir}/cumulative-too-many-fixes.txt"
+write_cumulative "${temp_dir}/cumulative-too-many-tests.txt" 1 1 6
+expect_fail "${temp_dir}/cumulative-too-many-tests.txt"
+
+# The marker is valid only once, on the first line, with a positive build number.
+sed 's/build 63/build 0/' "${temp_dir}/cumulative.txt" > "${temp_dir}/cumulative-zero.txt"
+expect_fail "${temp_dir}/cumulative-zero.txt"
+{ printf '\n'; cat "${temp_dir}/cumulative.txt"; } > "${temp_dir}/cumulative-misplaced.txt"
+expect_fail "${temp_dir}/cumulative-misplaced.txt"
+{ printf 'Since open beta build 63\n'; cat "${temp_dir}/cumulative.txt"; } > "${temp_dir}/cumulative-duplicate.txt"
+expect_fail "${temp_dir}/cumulative-duplicate.txt"
+printf 'Since open beta build 63\n\nNew features\n\n- A feature.\n' > "${temp_dir}/cumulative-compact.txt"
+expect_fail "${temp_dir}/cumulative-compact.txt"
+
+# Exceed the cumulative character cap with otherwise valid headings and short bullets.
+python3 - "${temp_dir}/cumulative-too-long.txt" <<'PYFIXTURE'
+import sys
+from pathlib import Path
+text = 'Since open beta build 63\n\nNew and changed\n\n'
+text += ('- ' + 'Feature ' * 20 + '\n') * 16
+text += '\nFixes\n\n' + ('- ' + 'Playback ' * 16 + '\n') * 20
+text += '\nWhat to test\n\n- Record a take.\n'
+assert len(text) > 4000
+Path(sys.argv[1]).write_text(text)
+PYFIXTURE
+expect_fail "${temp_dir}/cumulative-too-long.txt"
+
 printf 'TestFlight notes regression tests passed.\n'

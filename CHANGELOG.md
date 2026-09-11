@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+Cumulative operator-facing notes for the build 63 → 102 open-beta update are in
+the [beta 102 release notes](handbook/src/content/docs/releases/beta-102.md), with
+separate iOS and Android lists.
+
 - Experimental AirPods head tracking now maps shared-forward head direction to
   native gimbal angles with a 100 ms command horizon. Stale measurements,
   inactive scenes and old control callbacks cannot continue driving. Manual
@@ -56,7 +60,7 @@ All notable changes to this project are documented here. The format is based on
 - ND view assist (discussion #196): toolbar **ND** (next to LIGHTS)
   meters the live picture against middle gray and suggests a screw-on
   ND to balance the frame. Small HUD chip, parked bottom-left above the
-  assist bar; hold-drag to move. Long-press **Units** switches Stops
+  assist bar; drag directly to move. Long-press **Units** switches Stops
   (`+5.0`), filter factor (`ND32`), and optical density (`ND 0.3` /
   `ND 0.4`). Off unless you turn the chip on. The app cannot set a
   filter. iOS and Android.

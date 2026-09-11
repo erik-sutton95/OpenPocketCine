@@ -14,15 +14,17 @@ fail() {
 }
 
 [[ -f "$notes_path" ]] || fail "missing ${notes_path}"
+tester_notes_set_window "$notes_path"
 
 character_count="$(wc -m < "$notes_path" | tr -d '[:space:]')"
 if ((character_count > tester_notes_max_characters)); then
-  fail "${notes_path} is ${character_count} characters; this-build notes cap is ${tester_notes_max_characters}"
+  fail "${notes_path} is ${character_count} characters; reviewed notes cap is ${tester_notes_max_characters}"
 fi
 
 # Compact "New features" or detailed three-section form. Caps keep this-build.
 awk_status=0
-awk -v max_feat="$tester_notes_max_feature_bullets" \
+awk -v cumulative="$tester_notes_cumulative" \
+  -v max_feat="$tester_notes_max_feature_bullets" \
   -v max_new="$tester_notes_max_new_bullets" \
   -v max_fix="$tester_notes_max_fix_bullets" \
   -v max_test="$tester_notes_max_test_bullets" \
@@ -39,6 +41,7 @@ awk -v max_feat="$tester_notes_max_feature_bullets" \
     invalid = 0
     long_bullet = 0
   }
+  NR == 1 && cumulative && /^Since open beta build [1-9][0-9]*$/ { next }
   $0 == "New features" {
     feature_headings++
     if (section != 0) invalid = 1
@@ -77,6 +80,7 @@ awk -v max_feat="$tester_notes_max_feature_bullets" \
   END {
     if (long_bullet) exit 2
     if (feature_headings > 0) {
+      if (cumulative) exit 1
       if (feature_headings != 1 || new_headings || fix_headings || test_headings || invalid) exit 1
       if (new_bullets < 1 || new_bullets > max_feat) exit 1
       exit 0

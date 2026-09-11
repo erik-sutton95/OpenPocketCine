@@ -44,8 +44,9 @@ connects this GitHub repo, and defines the `main` Archive workflow.
 
 ## Tester-facing release notes
 
-**this-build** window, not a product recap: [`tester-notes.md`](tester-notes.md).
-Any pull request that can trigger a TestFlight build replaces
+**this-build** window by default. A maintainer-named open-beta baseline instead
+uses the cumulative release window: [`tester-notes.md`](tester-notes.md).
+For routine internal builds, a pull request that can trigger a TestFlight build replaces
 `ios/TestFlight/WhatToTest.en-US.txt` with this PR plus up to three other
 newest operator-visible `feat:` / `fix:` items iPhone testers can see.
 **New features** (1–4) for a capability-only window; three-section form when
