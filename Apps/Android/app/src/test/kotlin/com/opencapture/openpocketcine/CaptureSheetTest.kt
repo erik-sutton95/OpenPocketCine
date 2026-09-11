@@ -16,6 +16,20 @@ import kotlin.test.assertTrue
 
 class CaptureSheetTest {
     @Test
+    fun formatPickerKeepsPortraitWhenCapabilitiesHaveNotArrived() {
+        val status = CameraStatus(resolutionCode = 0x6C, fpsIndex = 2, fps = 25)
+        assertEquals(
+            listOf("3K"),
+            CaptureLists.modeTabs(LiveSheet.FORMAT, status, offersIsoAuto = false),
+        )
+        assertEquals(
+            VideoFormat(VideoResolution.P3K_9X16, VideoFrameRate.FPS30),
+            CaptureLists.nextVideoFormat(status, tab = 0, drum = "30p", fromDrum = true),
+            "changing fps must keep the reported portrait resolution",
+        )
+    }
+
+    @Test
     fun shutterWheelUsesCameraListNotHardcoded24pTable() {
         val status =
             CameraStatus(

@@ -218,13 +218,17 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
             VideoResolution.P1080_9X16, VideoResolution.P2_7K_9X16, VideoResolution.P3K_9X16,
         ).flatMap { res -> VideoFrameRate.labeledVideo.map { rate -> VideoFormat(res, rate) } }
 
-        /** iOS `CamCapVideoFormat.resolutions`. Empty camcap → 1080 / 4K tabs. */
+        /** iOS `CamCapVideoFormat.resolutions`. Preserve a reported size when camcap is empty. */
         fun resolutions(
             available: List<VideoFormat>,
             current: VideoResolution?,
             aspect: VideoAspect? = null,
         ): List<VideoResolution> {
-            if (available.isEmpty()) return VideoResolution.labeledVideo
+            if (available.isEmpty()) {
+                val fallback = VideoResolution.labeledVideo
+                val resolutions = if (current != null && current !in fallback) listOf(current) else fallback
+                return resolutions.filter { aspect == null || it.aspect == aspect }
+            }
             val out = ArrayList<VideoResolution>()
             val seen = HashSet<VideoResolution>()
             for (format in available) {

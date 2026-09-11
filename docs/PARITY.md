@@ -261,6 +261,22 @@ livestream retain their existing handling. This is a picker fallback; it does
 not rewrite reported camera capabilities. Synthetic picker tests cover model and
 mode isolation. Physical format SET/reconnect verification is pending.
 
+### FORMAT retains the reported size while capabilities are unavailable
+
+Both shells keep a reported portrait, square, 2.7K or unknown resolution visible
+when the effective format list is empty. For example, a reported `3K 9:16`
+shows a `3K` tab, and changing fps keeps its portrait resolution byte. The
+legacy 1080/4K tabs remain when no current size has been reported or the size
+is already one of those two landscape sizes. Reported capabilities and the
+confirmed Pocket 3 normal-Video matrix still take precedence.
+
+Core and Android picker regressions cover this behavior, including retaining the
+portrait resolution when changing fps. After installing the correction on an
+iPhone 16 Pro Max on 2026-09-11, the operator confirmed that the vertical 3K
+picker worked. Physical Android verification and an on-camera fps-change check
+remain pending. The reproduction does not establish why the operator's earlier
+session had an empty format list.
+
 ### Log conversion export (iOS)
 
 Share **Convert log** chooses one **Output curve** (D-Log or D-Log2) for the

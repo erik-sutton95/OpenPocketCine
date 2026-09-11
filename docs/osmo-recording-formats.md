@@ -126,12 +126,20 @@ Shooting mode (`0x02/0xE1`, sparse — never sweep):
 
 ## What the FORMAT sheet does today
 
-iOS `CaptureControlSheets` / Android `CaptureLists` build tabs from
-`CamCapVideoFormat.resolutions`. Empty camcap falls back to 1080 / 4K and
-24–60. Tests assert `2.7K` is **not** a tab.
+iOS `CaptureControlSheets` and Android `CaptureLists` build tabs from the
+effective format list: camera-reported pairs take precedence, followed by the
+documented Pocket 3 normal-Video fallback when the model and mode are known.
+The parser retains additional and unknown resolution bytes; known aspects group
+the size choices. An fps change selects a pair for that resolution.
 
-So even if a Nano camcap lists `0x2D` / `0x67`, the parser throws them away
-and the operator only sees 1080 and 4K.
+When the effective list is empty, both shells preserve a reported size outside
+the legacy 1080/4K pair as the sole resolution tab. Thus `3K 9:16` stays `3K`,
+and an fps change retains its resolution byte. The generic 1080/4K tabs still
+apply when no size has been reported or it is already one of those two.
+This does not expand the legal format matrix. Core and Android picker tests
+cover the fallback and retaining portrait on an fps change. The operator
+confirmed the corrected vertical 3K picker on a physical iPhone on 2026-09-11;
+Android and on-camera fps-change verification remain pending.
 
 ## Pocket-line aspects (why Nano and Pocket 3 look “richer”)
 
