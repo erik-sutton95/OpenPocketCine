@@ -762,7 +762,14 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 
 .cta-final { text-align: center; display: flex; flex-direction: column; align-items: center; }
 .cta-final h2 { margin-bottom: 12px; }
-.cta-final .hero__cta { margin-top: 24px; }
+.cta-final .hero__cta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 24px;
+}
+@media (max-width: 560px) {
+  .cta-final .hero__cta { grid-template-columns: 1fr; }
+}
 
 .coffee-cta {
   display: flex;
