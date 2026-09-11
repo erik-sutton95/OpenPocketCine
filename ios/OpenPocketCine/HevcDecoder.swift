@@ -93,8 +93,9 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
-    /// Wrist preview. Identity pixel buffer, or the LUT bake when Metal owns the picture.
-    var onWatchPreview: ((CIImage) -> Void)?
+    /// Wrist preview. `source` is the VT identity buffer when a cube does not own
+    /// the picture (`nil` for LUT replace). `unmanaged` is a cube product.
+    var onWatchPreview: ((CIImage, CVPixelBuffer?, Bool) -> Void)?
     /// View-space X flip applied on the host view at present time (not SwiftUI).
     var poseViewFlip = false
     var assistMirror = false
@@ -777,10 +778,21 @@ final class HevcDecoder {
         if result.shouldPresent {
             lastDecodedBuffer = result.source
             onSourceFrame?(result.source)
-            let preview =
-                result.needsGPU && effects.replacesIdentityFeed
-                ? result.output : CIImage(cvPixelBuffer: result.source)
-            onWatchPreview?(preview)
+            let cubeOwnsPicture =
+                result.needsGPU && effects.replacesIdentityFeed && !result.overlayOnly
+            let preview: CIImage
+            if cubeOwnsPicture {
+                preview = result.output
+            } else if !result.identity.extent.isEmpty {
+                preview = result.identity
+            } else {
+                preview = CIImage(cvPixelBuffer: result.source)
+            }
+            // Identity JPEGs encode the VT buffer. A cube product has no matching
+            // buffer — passing source there would drop the grade.
+            onWatchPreview?(
+                preview, cubeOwnsPicture ? nil : result.source,
+                cubeOwnsPicture && result.unmanagedBake)
         }
         if !result.shouldPresent { return }
 

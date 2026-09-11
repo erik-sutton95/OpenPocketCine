@@ -67,7 +67,6 @@ struct WatchMonitorView: View {
                             .frame(width: proxy.size.width, height: proxy.size.height)
                             .scaleEffect(isLuminanceReduced ? 1 : zoom)
                             .offset(isLuminanceReduced ? .zero : clampedPan(in: proxy.size))
-                            .opacity(isLuminanceReduced ? 0.55 : 1)
                             .onAppear { feedSize = proxy.size }
                             .onChange(of: proxy.size) { _, size in feedSize = size }
                     }

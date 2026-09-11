@@ -1,7 +1,9 @@
 import CoreImage
+import CoreVideo
 import Foundation
 import OpenPocketViewCore
 import UIKit
+import VideoToolbox
 
 #if canImport(WatchConnectivity)
     import WatchConnectivity
@@ -24,14 +26,23 @@ import UIKit
 
         private let session: WCSession?
         private var lastSentState: WatchRelayState?
-        private var pendingPreview: (image: CIImage, timecode: String, isRecording: Bool)?
+        private var pendingPreview:
+            (
+                image: CIImage, source: CVPixelBuffer?, unmanaged: Bool, timecode: String,
+                isRecording: Bool
+            )?
         private var framesInFlight = 0
-        /// One in flight: latest-wins, lower glass-to-glass than a 3-frame pipeline.
-        private static let maxFramesInFlight = 1
+        /// Pipeline hides WatchConnectivity RTT (fps ≈ depth/RTT). One in flight
+        /// capped the wrist at ~1/RTT (~8–12 fps). Encode is detached so three
+        /// JPEGs actually overlap instead of serializing on MainActor.
+        private static let maxFramesInFlight = 3
         private var rttEMA: TimeInterval = 0.12
-        nonisolated private static let thumbnailContext = CIContext(options: [
-            .useSoftwareRenderer: false
-        ])
+        /// Rec.709 / HLG identity CI fallback. Prefer `VTCreateCGImageFromCVPixelBuffer`.
+        nonisolated private static let displayContext = CIContext(
+            options: LiveMonitorWorkingSpace.displayContextOptions)
+        /// LUT cube product (NSNull working space). Do not sRGB-linearize it.
+        nonisolated private static let lutContext = CIContext(
+            options: LiveMonitorWorkingSpace.contextOptions)
 
         override init() {
             session = WCSession.isSupported() ? .default : nil
@@ -70,10 +81,17 @@ import UIKit
                 })
         }
 
-        /// Drop-stale preview. `image` must retain its pixel backing until encode runs.
-        func ingestPreview(_ image: CIImage, timecode: String, isRecording: Bool) {
+        /// Drop-stale preview. `source` is the VT identity buffer (nil when a LUT
+        /// cube owns the picture). Pixel backing must live until encode returns.
+        func ingestPreview(
+            _ image: CIImage, source: CVPixelBuffer? = nil, unmanaged: Bool = false,
+            timecode: String, isRecording: Bool
+        ) {
             guard isReady else { return }
-            pendingPreview = (image: image, timecode: timecode, isRecording: isRecording)
+            pendingPreview = (
+                image: image, source: source, unmanaged: unmanaged, timecode: timecode,
+                isRecording: isRecording
+            )
             pumpFrames()
         }
 
@@ -83,15 +101,19 @@ import UIKit
             pendingPreview = nil
             framesInFlight += 1
             let params = adaptiveEncodingParams()
-            Task { @MainActor [weak self] in
-                let data = await Self.encodeFrame(
-                    image: pending.image,
-                    timecode: pending.timecode,
-                    isRecording: pending.isRecording,
+            let boxed = RelaySendableBox(value: pending)
+            Task.detached(priority: .userInitiated) { [weak self] in
+                let data = Self.encodeFrame(
+                    image: boxed.value.image,
+                    source: boxed.value.source,
+                    unmanaged: boxed.value.unmanaged,
+                    timecode: boxed.value.timecode,
+                    isRecording: boxed.value.isRecording,
                     width: params.width,
                     quality: params.quality)
-                guard let self else { return }
-                self.dispatchFrame(data)
+                await MainActor.run { [weak self] in
+                    self?.dispatchFrame(data)
+                }
             }
         }
 
@@ -119,18 +141,27 @@ import UIKit
 
         private func adaptiveEncodingParams() -> (width: CGFloat, quality: CGFloat) {
             switch rttEMA {
-            case 0.22...: (width: 256, quality: 0.32)
-            case 0.12..<0.22: (width: 320, quality: 0.38)
-            default: (width: 416, quality: 0.42)
+            case 0.22...: (width: 320, quality: 0.38)
+            case 0.12..<0.22: (width: 416, quality: 0.42)
+            default: (width: 512, quality: 0.48)
             }
         }
 
-        private nonisolated static func encodeFrame(
-            image: CIImage, timecode: String, isRecording: Bool,
-            width: CGFloat, quality: CGFloat
-        ) async -> Data? {
-            guard let jpeg = thumbnailData(from: image, maxWidth: width, quality: quality)
-            else { return nil }
+        nonisolated private static func encodeFrame(
+            image: CIImage, source: CVPixelBuffer?, unmanaged: Bool, timecode: String,
+            isRecording: Bool, width: CGFloat, quality: CGFloat
+        ) -> Data? {
+            let jpeg: Data?
+            if unmanaged {
+                jpeg = thumbnailData(
+                    from: image, unmanaged: true, maxWidth: width, quality: quality)
+            } else if let source {
+                jpeg = thumbnailData(from: source, maxWidth: width, quality: quality)
+            } else {
+                jpeg = thumbnailData(
+                    from: image, unmanaged: false, maxWidth: width, quality: quality)
+            }
+            guard let jpeg else { return nil }
             let frame = WatchRelayFrame(jpeg: jpeg, timecode: timecode, isRecording: isRecording)
             return try? WatchRelayEnvelope.encode(kind: .frame, payload: frame)
         }
@@ -173,18 +204,60 @@ import UIKit
             image.jpegData(compressionQuality: quality)
         }
 
+        /// Identity path. Matches `AVSampleBufferDisplayLayer` better than a
+        /// DeviceRGB CI bake (that bake was a visible Rec.709 contrast shift).
         nonisolated static func thumbnailData(
-            from image: CIImage, maxWidth: CGFloat, quality: CGFloat
+            from buffer: CVPixelBuffer, maxWidth: CGFloat, quality: CGFloat
+        ) -> Data? {
+            var imageOut: CGImage?
+            let status = VTCreateCGImageFromCVPixelBuffer(buffer, options: nil, imageOut: &imageOut)
+            guard status == noErr, let cg = imageOut,
+                let jpeg = encodedFrameData(
+                    scaledImage(cg, maxWidth: maxWidth), quality: quality)
+            else {
+                return thumbnailData(
+                    from: CIImage(cvPixelBuffer: buffer), unmanaged: false, maxWidth: maxWidth,
+                    quality: quality)
+            }
+            return jpeg
+        }
+
+        nonisolated static func thumbnailData(
+            from image: CIImage, unmanaged: Bool = false, maxWidth: CGFloat, quality: CGFloat
         ) -> Data? {
             let extent = image.extent
             guard extent.width > 1, extent.height > 1 else { return nil }
             let scale = min(1, maxWidth / extent.width)
             let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             let target = scaled.extent.integral
-            guard target.width > 1, target.height > 1,
-                let cg = thumbnailContext.createCGImage(scaled, from: target)
-            else { return nil }
+            guard target.width > 1, target.height > 1 else { return nil }
+            let cg: CGImage?
+            if unmanaged {
+                cg = lutContext.createCGImage(scaled, from: target)
+            } else {
+                let srgb =
+                    CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+                cg = displayContext.createCGImage(
+                    scaled, from: target, format: .RGBA8, colorSpace: srgb)
+            }
+            guard let cg else { return nil }
             return encodedFrameData(UIImage(cgImage: cg), quality: quality)
+        }
+
+        nonisolated private static func scaledImage(_ cg: CGImage, maxWidth: CGFloat) -> UIImage {
+            let width = CGFloat(cg.width)
+            let height = CGFloat(cg.height)
+            let scale = min(1, maxWidth / max(width, 1))
+            let size = CGSize(
+                width: max(1, (width * scale).rounded()),
+                height: max(1, (height * scale).rounded()))
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = true
+            format.preferredRange = .standard
+            return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                UIImage(cgImage: cg).draw(in: CGRect(origin: .zero, size: size))
+            }
         }
     }
 
@@ -228,12 +301,15 @@ import UIKit
         var isReady: Bool { false }
         func activate() {}
         func ingestState(_ state: WatchRelayState) {}
-        func ingestPreview(_ image: CIImage, timecode: String, isRecording: Bool) {}
+        func ingestPreview(
+            _ image: CIImage, source: CVPixelBuffer? = nil, unmanaged: Bool = false,
+            timecode: String, isRecording: Bool
+        ) {}
         nonisolated static func encodedFrameData(_ image: UIImage, quality: CGFloat) -> Data? {
             image.jpegData(compressionQuality: quality)
         }
         nonisolated static func thumbnailData(
-            from image: CIImage, maxWidth: CGFloat, quality: CGFloat
+            from image: CIImage, unmanaged: Bool = false, maxWidth: CGFloat, quality: CGFloat
         ) -> Data? {
             let extent = image.extent
             guard extent.width > 1, extent.height > 1 else { return nil }

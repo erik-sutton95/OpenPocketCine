@@ -345,10 +345,10 @@ final class AppModel {
         watchRelay.onReachabilityChanged = { [weak self] in
             self?.publishWatchState()
         }
-        session.decoder.onWatchPreview = { [weak self] image in
+        session.decoder.onWatchPreview = { [weak self] image, source, unmanaged in
             guard let self else { return }
             self.watchRelay.ingestPreview(
-                image,
+                image, source: source, unmanaged: unmanaged,
                 timecode: self.session.status.timecodeClock,
                 isRecording: self.session.status.isRecording)
         }

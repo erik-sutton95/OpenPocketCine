@@ -76,7 +76,10 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Apple Watch companion: live preview, timecode, storage, camera battery,
   record / shutter. The iPhone stays on camera Wi-Fi; the Watch cannot join
   it. Keep the iPhone app open. Rec on the wrist does not ask for
-  confirmation.
+  confirmation. The watch screen follows **Wake Duration** (Watch Settings →
+  Display & Brightness; 70 Seconds is the maximum). Third-party apps cannot
+  stay at Flashlight brightness. Always On keeps the last frame after the
+  backlight dims.
 
 Verify record start/stop on the camera body until you trust the link.
 
