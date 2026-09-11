@@ -43,7 +43,7 @@ it as the encoded playback rate.
 | --- | --- | --- |
 | Video, landscape | 1080P, 2.7K, 4K; 24/25/30/48/50/60 | All six rates selected at 2.7K; 1080P/60 and 4K/60 also selected. **UI, accepted**; status corroborates several settled combinations. |
 | Video, square | 1080P (1:1), 2160P (1:1), 3K (1:1) | Each selected at 60. **UI, accepted**; square preview visible. 3K/60 recording start/stop accepted and recording status followed. |
-| Video, portrait | Not yet established by this landscape menu sweep | DJI lists portrait formats, but their Mimo entry path and resulting files remain **unverified** here. |
+| Video, portrait | 3K/25 exercised after body Lock Portrait | Operator/UI context identifies Lock Portrait and D-Log M; a fully validated 1728×3072 HEVC 10-bit original demonstrates native portrait composition. Other combinations and command mappings remain unverified. |
 | Low-Light | 1080P and 4K; 24/25/30 | All six combinations selected with **UI and accepted** writes; separate status confirms several settled values. No 2.7K or square choices appear in this menu. |
 | Slow Motion, 4K | 4X(100), 4X(120) | Both selected with **UI, accepted and status** evidence. The tested menu includes 100 although the general product specification lists 120. |
 | Slow Motion, 2.7K | 4X(120) | Selected in **UI**, with an accepted request; no 100 option visible in this state. |
@@ -55,8 +55,8 @@ it as the encoded playback rate.
 | Hyperlapse | 1080P, 2.7K, 4K; 25/30 | All six combinations selected in **UI**; Speed offers Auto/2X/5X/10X/15X/30X. |
 
 DJI's published portrait Video sizes are 1080×1920, 1512×2688 and 1728×3072,
-each at 24/25/30/48/50/60 fps. Published dimensions are a comparison baseline,
-not an original-file measurement from this survey.
+each at 24/25/30/48/50/60 fps. The 1728×3072/25 original is measured below;
+the other published combinations remain a comparison baseline.
 [DJI specifications](https://www.dji.com/osmo-pocket-3/specs).
 
 The existing resolution/fps request is confirmed for Pocket 3 Video and
@@ -100,6 +100,30 @@ trailer would not reproduce these Mimo requests.
 Low-Light selection sends shooting mode **`28`** through `0x02/0xE1`, with an
 accepted reply and direct status mode 40. The core currently names that value
 `superNight`; Pocket 3's Mimo interface presents it as Low-Light video.
+
+### Native portrait recording
+
+In a later physical pass, the operator selected **Lock Portrait** on the body;
+the Mimo/operator context identified **3K/25 and D-Log M**. The recorded camera
+original is **49,045,559 bytes**, with **1728×3072 HEVC Main 10, 10-bit YUV420,
+25fps, 151 video frames / 6.040s**, plus **AAC-LC, 48 kHz stereo** audio lasting
+6.016s. All 47 contiguous HTTP 206 ranges validated, the complete SHA-256
+matched the transfer manifest, and the primary audio/video streams fully
+decoded without error.
+The subsequently preserved phone import also has an identical full SHA-256
+and length. It is another copy of this recording, not an additional original.
+
+The container's primary video track has an **identity rotation transform** and
+1728×3072 dimensions, also present in its video sample description. A decoded
+first frame viewed with automatic rotation disabled is upright and fills the
+9:16 canvas without visible letterboxing. This establishes native portrait
+file composition for this take, separately from the letterboxed webcam outputs.
+
+The D-Log M label comes from the captured UI/operator context; BT.709 metadata
+does not measure a log curve. This original was recorded after the earlier
+complete card copy and is an additional asset, not part of that inventory.
+No new accepted portrait opcode is asserted, and other portrait formats,
+color/codec combinations and orientation-lock persistence remain unverified.
 
 ## Mode-specific controls
 
@@ -739,9 +763,19 @@ Here `<take>` and `<index>` replace the observed take numbers and four-digit
 source indices. Directory suffixes, capture times and controlled recordings
 associate these sets with their outputs. They do not establish a universal
 naming algorithm or pixel-by-pixel source-to-video alignment. All 13 source
-JPEGs from the two JPEG panorama takes decode cleanly. These nested RAW/source
-paths were recovered from the card filesystem; camera HTTP retrieval of them
-has not been demonstrated.
+JPEGs from the two JPEG panorama takes decode cleanly. A later Mac Wi-Fi pass
+retrieved two known nested source paths using
+`/v2?storage=0&path=<camera-relative-path>`, retaining the directory separators:
+
+| Known component | Complete bytes | Contiguous validated HTTP 206 ranges |
+| --- | --- | --- |
+| Short Timelapse, `TIMELAPSE_0001.DNG` | 17,250,304 | 17 |
+| RAW Panorama, `PANO_0001.DNG` | 19,333,016 | 19 |
+
+Both complete downloaded SHA-256 values match their preserved SD files and
+transfer manifests. This verifies retrieval of these exact known nested paths;
+automatic source discovery, a universal naming algorithm and every source
+layout remain unverified.
 
 ### Mimo album
 
@@ -769,10 +803,28 @@ describes the first choice as retaining the original format and the second as
 processing videos to add effects. Both displayed an estimate of less than one
 minute in this case; that is a UI estimate, not measured processing time.
 The original branch produced the preserved file whose full hash matches the
-camera original. This chooser's **Video with Glamour Effects** branch remains
-unverified. The chooser
-establishes two distinct download paths in Mimo; it does not establish where
-processing runs or what facial changes a processed file would contain.
+camera original. A later fresh portrait take with camera Glamour enabled
+completed the **Video with Glamour Effects** branch: Mimo showed **Adding
+effects**, then the completed-download badge. This establishes the effects
+download workflow separately from the local editor below. The scene contained
+a cat sticker and no human face, so it does not establish facial-effect efficacy
+or where processing runs.
+
+Both the fresh camera original and its effects-download derivative fully decode:
+
+| File | Complete bytes | Video encoding |
+| --- | --- | --- |
+| Camera original | 50,164,533 | HEVC Main 10, 10-bit YUV420 |
+| Mimo effects-download MOV | 13,871,016 | HEVC Main, 8-bit YUV420 |
+
+Both contain **1728×3072 video at 25fps, 155 frames / 6.200s** and AAC-LC
+48 kHz stereo. Audio durations are 6.186667s in the original and 6.200s in the
+derivative. The original's 48 contiguous HTTP 206 ranges and complete hash
+validated; the preserved derivative's hash also validated. All 155 corresponding
+video frames differ when decoded to a common 8-bit YUV420 format, but transcoding
+and bit-depth conversion can contribute to those differences. This verifies a
+processed derivative with reduced bit depth, not a measured facial effect or
+camera color mode. It is not an unchanged camera-original download.
 
 A time-aligned Local Hyperlapse item reported H.265, 3840×2160, 30FPS and 6s in
 Mimo Info. Those are **UI** properties of a local Mimo item, not an SD-file
@@ -848,8 +900,8 @@ Chin 46, Smooth 78, Brighten 43, Enlarge 35 and Lighten 57. They are neither
 factory defaults nor tested endpoints; no strength slider was changed. Only
 the master state changed between exports. Pixel differences do not isolate an
 individual control, measure quality, identify a LUT/log curve or establish the
-processing location. These local-editor results also leave the separate Device
-Download → **Video with Glamour Effects** branch untested.
+processing location. These local-editor results are separate from the Device
+Download → **Video with Glamour Effects** workflow documented above.
 
 ## Livestream
 
@@ -943,9 +995,10 @@ recovery and the full preset schema remain unverified.
 
 The operator selected **Webcam on the camera body**, then a native AVFoundation
 helper on **macOS 26.5.1** received video and a separate microphone sample.
-This establishes webcam entry on the surveyed firmware. The camera's current
-body color setting was not confirmed; it must not be labeled Normal, D-Log M
-or HLG from these results. No 10-bit webcam delivery was demonstrated.
+This establishes webcam entry on the surveyed firmware. In this initial pass,
+the camera's body color setting was not confirmed; it must not be labeled
+Normal, D-Log M or HLG from those results. The later operator-selected D-Log M
+pass is recorded separately below. Neither pass demonstrated 10-bit delivery.
 
 ### Advertised formats and received buffers
 
@@ -1000,7 +1053,9 @@ inspection of encoded USB payloads.
 The inspected **1080×1920 and 720×1280** outputs contain **letterboxed landscape
 images in the tested camera posture**, with black space above and below.
 Portrait-shaped buffers do not establish native portrait composition or SD
-recording; physical rotation/orientation-lock behavior remains untested here.
+recording. The separate [native portrait camera file](#native-portrait-recording)
+is verified above; webcam composition after physical rotation/orientation lock
+remains untested.
 
 Standard camera-terminal **absolute zoom, pan/tilt and roll** returned successful
 control-info, current, minimum, maximum, resolution and default reads. Two vendor
@@ -1028,9 +1083,31 @@ higher source precision. Host-to-device playback was not tested.
 Video and audio were captured separately, so synchronization and simultaneous
 SD recording remain unverified. Raw USB transactions and compressed bulk
 payloads were not captured; descriptor/control reads are not an all-packets
-recording. USB exit and Mimo
-reconnect, body-color confirmation, D-Log M/10-bit output and native SD portrait
-remain separate checks.
+recording.
+
+### Follow-up after selecting D-Log M
+
+The operator subsequently confirmed selecting **D-Log M in the body's Webcam
+menu**. This is operator-reported setting evidence, separate from the initial
+unknown-color pass and from measured image properties. The advertised host
+format inventory remained unchanged.
+
+A **3840×2160/25 `420v`** request delivered **75 additional 8-bit NV12 frames**.
+All 75 distinct raw-frame hashes match the fully decoded lossless FFV1 artifact
+in order. Host timestamps span **3.017700s**, with adjacent intervals from
+**19.600 to 74.767ms**; nominal 40ms buffer durations do not establish constant
+arrival cadence. This verifies preserved host pixels after the reported color
+selection, not a measured log curve, LUT identity or 10-bit USB transmission.
+No new encoded USB payload or probe/commit readback was collected in this pass.
+Another **4K25 `2vuy`** attempt timed out with **zero frames**; its failure cause
+remains unestablished.
+
+After USB exit and a Mimo app relaunch, the camera reconnected to Mimo. An
+earlier connection attempt while USB mode was still active had timed out.
+This establishes the completed exit/reconnect sequence, without isolating
+which recovery step was necessary. Webcam 10-bit delivery, measured D-Log M
+encoding, native portrait webcam composition and simultaneous SD recording remain
+separate checks.
 
 ## General menus and remaining work
 
@@ -1063,10 +1140,10 @@ of the radio channel or persistence across camera power-off.
 | Wi-Fi | 2.4 GHz and 5.8 GHz SETs accepted; independent readbacks and reconnect UI confirm restoration | Radio-channel verification, throughput and persistence across camera power-off. |
 | Gimbal and Handle | Follow/Tilt Locked/FPV and Default/Fast/Slow cycles; Easy Control toggled off/on; Calibrate visible | Axis response, numerical speeds, calibration and physical tracking behavior. |
 | Monitoring | Grid choices and several overlay toggles inspected | Signal accuracy, timecode source/sync and per-mode behavior. |
-| Media | 20 phone imports with full camera-file hash matches; copied card matches all 25 prior camera HTTP files; Photo, Timelapse and Panorama RAW sets and three Slow Motion AAC sidecars verified | Other source-set combinations and general naming/HTTP retrieval rules, Device effects-download branch and interrupted transfers. |
+| Media | Initial 20 phone imports and later native portrait import match camera originals; RAW/audio companions and two nested DNG HTTP downloads verified; Device effects-download workflow completed | Automatic source discovery, other source layouts/general HTTP rules, effects-download facial efficacy and interrupted transfers. |
 | Local editor | Six validated derivatives: 10-bit, Color Recovery and local Glamour export pairs; aspect/export menus inspected | Other editor tools and output combinations, individual Glamour controls, exact transforms and quality measurements. |
 | Livestream | RTMP setup/lifecycle; full local 1080p25 H.264/AAC connection recovered and decoded | Other preset outputs, interruption recovery, simultaneous recording and public-platform flows. |
-| USB webcam | Body entry, descriptors, 13 delivered 420v size/rate combinations, 361 losslessly preserved frames and separate 48 kHz stereo audio | Sustained timing, H.264 delivery, body color/D-Log M/10-bit, native portrait, simultaneous SD recording, A/V sync and exit/Mimo reconnect. |
+| USB webcam | Initial 13 delivered 420v combinations/361 preserved frames; operator-selected D-Log M follow-up adds 75 preserved 8-bit frames; separate stereo audio; USB exit and Mimo reconnect completed | Sustained timing, H.264 delivery, measured D-Log M/10-bit output, native webcam portrait, simultaneous SD recording and A/V sync. |
 | Connection | Existing-session and warm connection observations | A controlled camera power-off/power-on comparison; app relaunch is not camera cold boot. |
 | Accessories/body controls | USB Transfer File/OTG entry, full card copy and ejection completed; webcam entry and bounded host delivery measured | Wireless microphones, external timecode, physical orientation and body-only settings. |
 

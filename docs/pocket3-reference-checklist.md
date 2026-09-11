@@ -17,7 +17,11 @@ corrected Photo and Glamour controls, gimbal cycles, local RTMP output and
 Wi-Fi frequency selection/reconnection, one OPC iPhone build 99
 2.7K/25 record/app-relaunch/reconnect check, a later USB card copy with
 RAW-source and Slow Motion audio validation, six local-editor exports, and
-bounded USB webcam video/audio checks on macOS 26.5.1. Other body and connection
+bounded USB webcam video/audio checks on macOS 26.5.1, including a later
+operator-selected D-Log M pass and USB exit/Mimo reconnect. Two known nested
+RAW components were also retrieved over HTTP and matched to the card copy.
+A later native 3K/25 portrait original and a separate Device effects-download
+pair were independently validated. Other body and connection
 branches are not assumed complete. An intended action filename never overrides
 what its screenshot, packet or preserved file actually shows.
 
@@ -28,8 +32,9 @@ what its screenshot, packet or preserved file actually shows.
 - **Status** means a separate camera report corroborated a state.
 - **File** means a preserved asset was independently inspected.
   Mimo export and USB preservation alone do not prove camera-file identity.
-  Full SHA-256 comparisons establish that identity for the 20 matched phone
-  imports and all 25 earlier camera HTTP files against the later card copy.
+  Full SHA-256 comparisons match the initial 20 phone imports and all 25
+  earlier camera HTTP files to the card copy. The later native portrait phone
+  import matches its separately retrieved camera HTTP original.
   Companion structures and associations have separate validation below.
   Host receiver artifacts are not camera originals.
 - **Open** means the named comparison or effect has not been established.
@@ -75,14 +80,33 @@ See [camera originals and companions](../handbook/src/content/docs/protocol/pock
 A separate local-editor collection contains **six processed MOV derivatives /
 137,719,683 bytes**, all fully decoded. It qualifies 10-bit On/Off, Color Recovery
 D-LOG M/None and local Glamour On/Off export pairs. These are not camera originals;
-the Device Download → Video with Glamour Effects branch remains untested.
+the later Device Download → Video with Glamour Effects workflow is separate.
 See [local editor and exports](../handbook/src/content/docs/protocol/pocket3.md#mimo-local-editor-and-exports).
 
-The webcam collection separately preserves **four lossless host video artifacts /
-361 frames** and a **5.013333-second, 48 kHz stereo microphone sample**. Decoded
-pixels and PCM match the retained host buffers/samples. These receiver artifacts
-do not establish the compressed USB codec, camera color mode or SD recording.
+A later **13,871,016-byte Device effects-download derivative** and its
+**50,164,533-byte camera original** fully decode: both are 1728×3072, 25fps,
+155 frames / 6.200s, while HEVC 10-bit in the original becomes HEVC 8-bit in the
+derivative. The original's 48 HTTP ranges and both preserved hashes validate.
+This closes that download workflow for one take; the sticker-only scene does
+not establish facial-effect efficacy. See [Mimo album](../handbook/src/content/docs/protocol/pocket3.md#mimo-album).
+
+The initial webcam collection separately preserves **four lossless host video
+artifacts / 361 frames** and a **5.013333-second, 48 kHz stereo microphone sample**.
+A later operator-selected D-Log M pass adds **75 losslessly preserved 8-bit NV12
+frames**. Decoded pixels and PCM match the retained host buffers/samples.
+The operator's color selection is separate from measured encoding; the initial
+pass's color remains unknown, and neither pass proves a log curve or 10-bit USB
+delivery. These receiver artifacts are not SD recordings.
 See [USB webcam](../handbook/src/content/docs/protocol/pocket3.md#usb-webcam).
+
+A later **49,045,559-byte native portrait camera original** validates
+1728×3072 HEVC Main 10 at 25fps, 151 frames / 6.040s and stereo AAC. All 47 HTTP
+ranges and the complete hash validated, with clean primary audio/video decode.
+Its subsequently preserved phone import matches by complete SHA-256 and length;
+this is another copy of the same recording.
+The identity rotation transform and an upright, filled 9:16 decoded frame
+establish native portrait composition. This additional recording is outside the
+earlier card-copy inventory. See [native portrait recording](../handbook/src/content/docs/protocol/pocket3.md#native-portrait-recording).
 
 ## Shooting-mode result map
 
@@ -90,12 +114,12 @@ See [USB webcam](../handbook/src/content/docs/protocol/pocket3.md#usb-webcam).
 | --- | --- | --- |
 | Video landscape | 1080P/2.7K/4K and 24/25/30/48/50/60 menus; all six rates selected at 2.7K, plus 1080P/60 and 4K/60. UI and accepted writes; several status confirmations and inspected short video outputs. OPC iPhone build 99 passed one 2.7K/25 D-Log M record/app-relaunch/reconnect sequence with original-file validation. | Full resolution/rate/color/codec cross-product, broader OPC pairs, Android and camera power-off persistence. |
 | Video square | 1080P (1:1), 2160P (1:1), 3K (1:1), each selected at 60. UI and accepted requests; square 3K/60 recording/status and a downloaded output inspected. | Other square rates, persistence and complete codec/color combinations. |
-| Video portrait | Official baseline below retained. Webcam portrait-sized buffers were letterboxed landscape in the tested posture. | Native portrait composition, camera orientation/format selection and resulting SD files remain unverified. Phone/editor aspect changes and portrait-sized webcam buffers do not establish this. |
+| Video portrait | Body Lock Portrait and 3K/25 D-Log M UI/operator context; a native 1728×3072 HEVC 10-bit original fully downloaded and decoded, with identity rotation and no visible letterboxing. | Other portrait formats/rates/colors, accepted command mapping and orientation-lock persistence. Earlier webcam portrait buffers remain a separate letterboxed result in that posture. |
 | Low-Light | All 1080P/4K × 24/25/30 choices selected; UI, accepted and selected status evidence. Manual ISO includes 9600 and 16000; 1/8000 selected. A downloaded video was inspected. | Every format's encoded properties; controlled low-light/noise/exposure comparison. |
 | Slow Motion | 4K 100/120, 2.7K 120, 1080P 120/240 selected; mode-specific request trailers captured. D-Log M/HLG available at tested 4K/120; Color absent in inspected 1080P/240 list. Three inspected MP4s contain no audio; their separate AAC-LC 48 kHz stereo sidecars fully decode. | No 100 option established at 2.7K or 1080P, no 200 option established. Full rate/color/audio-sidecar matrix, capture cadence and precise audio/video synchronization remain open. |
 | Photo | 16:9/1:1, Off/3/5/7s timers and JPEG/JPEG+RAW menus; square timed capture. Corrected ISO 50–6400, EV −3/+3 and shutter 1/8000–1s selections have UI, accepted and status corroboration. JPEG originals matched to phone imports, and the square DNG independently validated. | Other RAW capture combinations; measured shutter/exposure behavior, demosaiced quality and settings persistence. |
-| Panorama | 180°/3×3, countdown and JPEG/RAW format controls; capture sequences and a later RAW-selected panorama exercised. Stitched JPEGs inspected; card copy preserves four 180° JPEG components, nine grid JPEG components, and nine validated DNGs for the RAW-selected grid take. | Other component/source cases, general naming and remote-retrieval rules, stitch quality and moving-subject behavior. |
-| Timelapse | All six resolution/rate choices selected; interval/duration and Video/JPEG+Video/Raw+Video controls inspected. The short and full five-minute Raw+Video takes have nine and 151 independently validated 3840×2160 DNGs, matching output frame counts. Full-run EXIF spans 300s; status confirms auto-end. | Other RAW/JPEG combinations, every interval/duration and subsecond capture timing. Whole-second EXIF does not establish precise cadence. |
+| Panorama | 180°/3×3, countdown and JPEG/RAW format controls; capture sequences and a later RAW-selected panorama exercised. Card preserves four 180° JPEG components, nine grid JPEG components, and nine validated DNGs for the RAW-selected grid take. One known nested DNG was downloaded over HTTP with a complete SD hash match. | Other component/source cases, automatic discovery and general naming/retrieval rules, stitch quality and moving-subject behavior. |
+| Timelapse | All six resolution/rate choices selected; interval/duration and Video/JPEG+Video/Raw+Video controls inspected. Short/full five-minute Raw+Video takes have nine/151 validated 3840×2160 DNGs, matching output frame counts. Full-run EXIF spans 300s; status confirms auto-end. One known nested short-take DNG was downloaded over HTTP and matched to SD. | Other RAW/JPEG combinations, automatic source discovery, every interval/duration and subsecond capture timing. Whole-second EXIF does not establish precise cadence. |
 | Motionlapse | Within Timelapse Mode: Fixed, L to R, R to L, Custom Motion; preview and waypoint add/delete flows, plus a short custom recording. UI and selected accepted/status evidence; downloaded video inspected. | Full 2–4 waypoint geometry, repeatable angle/speed/path, interrupted runs and position persistence. |
 | Hyperlapse | All six resolution/rate choices selected; Auto/2X/5X/10X/15X/30X menu. Auto and 2X recording flows and downloaded outputs inspected. | Actual acceleration ratio, Auto decisions and each speed's output. A recording HUD's 1X indicator was not a newly selected menu speed. |
 
@@ -113,14 +137,14 @@ and [preserved-media section](../handbook/src/content/docs/protocol/pocket3.md#c
 | Zoom and Med-Tele | Held zoom reaches 2.0× at 4K, 3.0× at 2.7K and 4.0× at 1080P. Med-Tele visibly changes framing and resets its displayed relative zoom; ISO MAX ceiling 1600. Candidate request mapping recorded. | Calibrated focal length/optical behavior, all mode constraints and reconnect persistence. OPC's 2.7K clamp discrepancy remains an implementation follow-up. |
 | Built-in audio | Mono/Stereo, Wind Noise Reduction and All/Front/Front and Back menus; selected changes and 27-byte DSP blob preserved. MP4 streams inspected; three Slow Motion AAC sidecars validated independently. | Acoustic direction/noise/zoom effect, precise sidecar synchronization and external-microphone branches. Audio UI alone does not establish an embedded MP4 track. |
 | Monitor assists | Grid variations, Histogram, Overexposure Alert, Timecode Display and mirror inspected; selected overlays visibly change. | Threshold accuracy, saved-image mirroring and exhaustive traffic exclusion. No classified write during a toggle is not proof it can never affect traffic. |
-| Camera Glamour | None/OFF plus eleven controls inspected; selected strength requests accepted and corroborated by tagged GETs. All 15 tagged values returned to the initial state. One enabled-master recording is preserved and hash-identical to its camera original; Smooth was zero. | Camera-side face effect and processing location; Device effects-download branch; unknown tags and general rounding rules. No face was present in this camera test. Five sliders reached 99 without an established upper endpoint. |
+| Camera Glamour | None/OFF plus eleven controls inspected; selected strength requests accepted and corroborated by tagged GETs. All 15 tagged values returned to the initial state. Initial enabled-master recording is hash-identical to its camera original, with Smooth zero; a later fresh portrait take completed Device Download → Video with Glamour Effects. | Camera-side face effect, effects-download facial efficacy and processing location; unknown tags and general rounding rules. Neither camera test contained a human face. Five sliders reached 99 without an established upper endpoint. |
 | Local editor/exports | Aspect/export menus, OsmoPocket Series D-Cinelike/D-LOG M presets and a separate six-control Portrait Glamour panel inspected. Six exports fully decode. 10-bit On/Off changes encoded bit depth; Color Recovery and local Glamour pairs change all corresponding decoded video frames while each pair's decoded audio stays identical. | Other output combinations/tools, individual Glamour effects and ranges, exact transforms and quality. Stored strengths are not factory defaults. Editor aspect and family presets do not prove portrait or D-Cinelike camera capture. |
 | Gimbal | Follow/Tilt Locked/FPV and Default/Fast/Slow cycles selected; Help inspected. Rotate/return/recenter visibly change and restore framing. Speed/tilt requests and independent GET echoes corroborate selections; Easy Control toggled, Calibrate not performed. | Handle-motion response, exact angles/speeds, repeatability, tracking, FPV-⊥, SpinShot and body-side controls. |
 | General/system | General, About, Wi-Fi, compression, format-confirmation and Gimbal/Handle menus inspected. | Full body-side settings listed below; reset/calibration/format effects were not executed. Protect recorded media. |
 | Wi-Fi frequency | Selecting 2.4 GHz showed the disconnect warning; reconnect restored Video and the setting read back 2.4 GHz. Restoring 5.8 GHz and reconnecting restored preview; settings read back 5.8 GHz. Accepted `07/10` writes (`00`/`01`) and independent `07/44` readbacks establish the configured-band mapping. | Independent radio-band/channel measurement, throughput and power-off persistence. |
-| Album/downloads | Device/Local filters, player Info, favorite/unfavorite with settled empty Favorites, selection and batch downloads inspected. All 20 phone imports match complete camera originals. USB card copying separately preserves the inspected RAW and Slow Motion audio source sets. | Other companion cases and remote retrieval, interrupted transfer, Device effects-download branch and favorite persistence across restart. Local Live Photo filter is not a Pocket 3 capture mode. |
+| Album/downloads | Device/Local filters, player Info, favorite/unfavorite with settled empty Favorites, selection and batch downloads inspected. Initial 20 phone imports and later native portrait import match camera originals. Device effects-download showed Adding effects and completed; RAW/audio source sets preserved separately. | Other companion cases, interrupted transfer, effects-download facial efficacy and favorite persistence across restart. Local Live Photo filter is not a Pocket 3 capture mode. |
 | USB file transfer | Body Transfer File/OTG entry, mounted-card copying and ejection completed; source/copy hashes checked. | Interrupted-transfer recovery and general remote companion discovery. Webcam is a separate branch. |
-| USB webcam | Body entry; MJPEG/H.264 descriptor matrix; all 13 420v size/rate combinations delivered host buffers. Four lossless artifacts preserve 361 frames; separate 48 kHz stereo USB audio validated. Three 2vuy requests returned no frames within 20s each on this Mac. | Sustained delivery/timing, successful H.264 path, unknown body color and D-Log M/10-bit output, physical portrait, simultaneous SD recording, A/V sync, USB exit and Mimo reconnect. Raw USB packets were not captured. |
+| USB webcam | Body entry; descriptor matrix; 13 420v combinations/361 preserved frames; separate stereo audio. Operator-selected D-Log M follow-up delivered 75 additional 8-bit frames. Initial three 2vuy attempts and the later D-Log M 4K25 attempt yielded no frames. USB exit/app relaunch/Mimo reconnect completed. | Sustained timing, successful H.264 delivery, measured D-Log M/10-bit output, native webcam portrait, simultaneous SD recording and A/V sync. Initial body color remains unknown. Raw USB packets were not captured. |
 | Livestream | Facebook/YouTube/RTMP chooser; 480p/720p/1080p, 25/30fps and Auto/Smooth/HD setup choices. Local RTMP start/stop completed; the full 74.560s connection was recovered with 1,863 decoded H.264 1080p/25 video frames and stereo AAC. Receiver TCP coverage and full A/V decode checks passed. | Every output combination, public-account flows, interruption recovery, simultaneous SD recording and complete configuration schema. Receiver container is not a camera SD format. |
 | Connection/startup | Warm reconnect and app relaunch captured successfully. The operator subsequently reported on 2026-09-11 that the cold-boot stall could no longer be reproduced. Saved earlier iOS journal shows control timeouts before picture loss and recovery after full handshake. | Currently not reproducible; cause unconfirmed. If it returns, capture a failed physical power cycle and compare it with a successful start. See [startup investigation](pocket3-startup-investigation.md); app relaunch is not camera cold boot. |
 | Multiview/OPC regression | Earlier PR evidence remains separately qualified in the app/Multiview docs. | This Mimo survey does not complete OPC AP restoration, saved stages, borrowed controls, Motion Control, Android or cold-start acceptance. |
@@ -175,7 +199,7 @@ needed. These are explicit remaining checks, not proven absences from Mimo.
 | B | Five custom presets; Screen Rotate & Capture/shutdown; startup direction; slider assignment; Selfie Flip; joystick speeds; Wearable mode; brightness, sound, anti-flicker; naming, screen timeout, idle shutdown, LEDs, language, compliance and log export. | [Manual, pp. 16–19](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/UM/20250826/DJI_Osmo_Pocket_3_User_Manual_v1.0_en.pdf#page=16) |
 | B | Calibration, format/reset and wireless-reset effects remain unperformed. Preserve current firmware and captured media; confirmation-screen inspection is not execution. | [Manual, pp. 16–19](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/UM/20250826/DJI_Osmo_Pocket_3_User_Manual_v1.0_en.pdf#page=16) |
 | B/A | Timecode reset/system-time sync/external sync and frame-rate coupling. DJI excludes recording above 60fps; external sync needs compatible hardware. | [DJI timecode guide](https://repair.dji.com/help/content?customId=01700007306&lang=en&paperDocType=ARTICLE&re=US&spaceId=17) |
-| A | Public-platform livestream/account flows and manual association beyond the tested local RTMP path; remaining webcam exit, color, timing and simultaneous-recording checks listed above. USB transfer and webcam entry are recorded. DJI lists no HDMI output. | [DJI FAQ](https://www.dji.com/osmo-pocket-3/faq) |
+| A | Public-platform livestream/account flows and manual association beyond the tested local RTMP path; remaining webcam encoding, timing and simultaneous-recording checks listed above. USB transfer and webcam exit/Mimo reconnect are recorded. DJI lists no HDMI output. | [DJI FAQ](https://www.dji.com/osmo-pocket-3/faq) |
 | A | Mic 2/Mini/3: one/two transmitters, mixed models, reconnect, gain/audio zoom, monitoring, per-transmitter settings and backups. Direct camera pairing does not imply every receiver feature. | [DJI Mic 3 compatibility](https://www.dji.com/support/product/mic-3), [Manual, p. 31](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/UM/20250826/DJI_Osmo_Pocket_3_User_Manual_v1.0_en.pdf#page=31) |
 | A | Battery handle, charging, wide-angle lens and tripod/mount interactions if available. | [DJI accessory guide](https://repair.dji.com/help/content?customId=01700009024&lang=en&paperDocType=ARTICLE&re=US&spaceId=17) |
 
@@ -185,8 +209,9 @@ download/frame export, cancel-recording hold behavior, FPV-⊥, Wearable timeout
 auto power-off Never, Selfie Flip during timelapse and 2.35:1 guides. Accessory
 branches include webcam 4K25/30 and 10-bit D-Log M, single-transmitter stereo
 duplication, and built-in WAV backup with the documented mode exclusions.
-Brief 4K webcam host delivery is now measured above; its 10-bit/D-Log M branch
-remains unverified. The survey covers only part of this list.
+Brief 4K webcam delivery, including 8-bit buffers after operator-selected D-Log M,
+is measured above; the log curve and 10-bit USB output remain unverified.
+The survey covers only part of this list.
 [DJI release history](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/RN/20250826/DJI_Osmo_Pocket_3_Release_Notes_en.pdf).
 
 ## Before promoting a result
