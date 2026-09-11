@@ -1,8 +1,8 @@
 New and changed
 
-- Direction Lock replaces Locked in the gimbal menu. It holds the camera's pointing direction as you rotate the handle. Choose Follow to release it.
+- Your cameras shows connection progress and Cancel on the selected camera. Watch a feed is the eye button beside Multiview.
+- Gimbal controls has Mode, Speed, and Ramp tabs, plus Motion Control in Gimbal tools. Direction Lock holds the pointing direction as the handle rotates.
 - Apple Watch shows live preview, timecode, storage, and battery, with record/shutter controls. Keep the iPhone app open.
-- Share's Convert log rewrites D-Log and D-Log2 clips to one output curve. Camera originals stay untouched.
 
 Fixes
 
@@ -10,6 +10,6 @@ Fixes
 
 What to test
 
-- Select Direction Lock and rotate the handle, then return to Follow. Check the menu follows camera mode changes and the live picture stays smooth. Mode selection switches off AirPods head tracking.
-- Go live on iPhone and open the Watch companion. Check preview and readings, record a short take, then lower and raise your wrist.
-- On Pocket 3, change frame rate in vertical 3K and confirm FORMAT stays 3K 9:16. Export mixed D-Log/D-Log2 takes with Convert log.
+- Reconnect a saved camera, check progress on its row, and cancel. Check Your cameras in portrait and landscape, including the eye and grid buttons.
+- Switch gimbal tabs, try Direction Lock then Follow, and open Motion Control. Mode selection switches off AirPods head tracking.
+- Check live preview and recording on Apple Watch. On Pocket 3, change frame rate in vertical 3K and confirm FORMAT stays 3K 9:16.

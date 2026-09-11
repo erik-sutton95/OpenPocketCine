@@ -1,8 +1,8 @@
 New and changed
 
-- Direction Lock replaces Locked in the gimbal menu. It holds the camera's pointing direction as you rotate the handle. Choose Follow to release it.
+- Your cameras shows connection progress and Cancel on the selected camera, with names above availability and connection buttons.
+- Gimbal controls has Mode, Speed, and Ramp tabs, plus Motion Control in Gimbal tools. Direction Lock holds the pointing direction as the handle rotates.
 - Hold-drag the ND chip to move it. Long-press Units for Stops, filter factor, or optical density.
-- False color offers EL Zone, IRE, and CineStop scales for checking exposure.
 
 Fixes
 
@@ -10,6 +10,6 @@ Fixes
 
 What to test
 
-- Select Direction Lock and rotate the handle, then return to Follow. Check the menu follows camera mode changes and the live picture stays smooth.
-- Set Pocket 3 to vertical 3K, connect, and change frame rate. Confirm FORMAT stays 3K 9:16.
-- Move the ND chip and cycle Units. Switch false-color scales and check that the picture and waveform continue updating.
+- Reconnect a saved camera, check progress on its row, and cancel. Check Your cameras in portrait and landscape.
+- Switch gimbal tabs, try Direction Lock then Follow, and open Motion Control. Confirm the live picture stays smooth.
+- On Pocket 3, change frame rate in vertical 3K and confirm FORMAT stays 3K 9:16. Move the ND chip and cycle Units.

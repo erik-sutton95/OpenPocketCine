@@ -33,7 +33,11 @@ First pair is the wizard in `ConnectionSetupView` (Android matches):
 
 Empty store: the wizard fills the viewport. After a successful pair, the camera
 is saved; next launch is **Your cameras**. **Pair new camera** re-enters the
-wizard. Settings does not start a new pair. The wizard always offers **Share
+wizard. The saved row being connected shows discovery/joining progress and
+**Cancel**; camera names stay above availability and connection actions. Other
+connection actions wait until the attempt finishes or is cancelled. On iOS,
+**Watch a feed** is the eye button next to the Multiview grid button in the
+camera-list header. Settings does not start a new pair. The wizard always offers **Share
 Diagnostics** so a stuck first pair can still send a report.
 
 Pocket and Nano are separate bodies. If Bluetooth reached a different camera

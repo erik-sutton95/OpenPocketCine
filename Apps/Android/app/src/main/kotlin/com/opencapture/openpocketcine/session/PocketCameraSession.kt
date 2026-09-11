@@ -225,6 +225,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val inflightPending = ConcurrentHashMap<Int, InflightSend>()
     private var reconnectJob: Job? = null
     private var reconnectTarget: String? = null
+    private val _connectionTargetId = MutableStateFlow<String?>(null)
+    val connectionTargetId: StateFlow<String?> = _connectionTargetId.asStateFlow()
     private var feedRecoveryJob: Job? = null
     private var lastFirstPictureLogAt = 0L
     private var lastFirstPictureSignature = ""
@@ -331,6 +333,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun startScan(reconnect: String?) {
         reconnectTarget = reconnect
+        _connectionTargetId.value = reconnect
         _isReconnecting.value = reconnect != null
         _phase.value = ConnectionPhase.SCANNING
         _failure.value = null
@@ -377,6 +380,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
         }
         reconnectTarget = null
+        _connectionTargetId.value = camera.id
         _isReconnecting.value = false
         LocalVPNFilter.noteIfActive(appContext)
         connectJob?.cancel()
@@ -412,6 +416,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     override fun disconnect() {
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
+        _connectionTargetId.value = null
         _isReconnecting.value = false
         feedRecoveryJob?.cancel()
         feedRecoveryJob = null

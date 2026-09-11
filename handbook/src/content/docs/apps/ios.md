@@ -50,8 +50,9 @@ project with XcodeGen — see [Setup](../guides/setup/).
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
   gimbal-controls button sits beside zoom (Pocket only). That sheet parks
-  like a capture picker and sets Follow / Tilt locked / FPV / Direction Lock, Slow /
-  Default / Fast, stick ramp, and a Motion Control A→B (optional C) take
+  like a capture picker. Mode / Speed / Ramp tabs reveal their settings below:
+  Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast, and stick ramp.
+  A separate Gimbal tools footer opens experimental Motion Control for an A→B (optional C) take
   (set A and B, choose each leg’s duration; hold and drag
   anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
   Zero hits B exactly; higher values bypass B while preserving A/C and total
@@ -122,6 +123,11 @@ The final watcher QR onboarding, passcode and recovery changes still need
 dedicated physical acceptance. The earlier one-iPad smoothness report does not
 qualify those newer flows or multiple wireless watchers. See the
 [watcher relay evidence](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/watcher-relay.md).
+
+On **Your cameras**, the selected row shows connection progress and **Cancel**,
+including while looking for an offline camera. The eye button in the camera-list
+header opens **Watch a feed**, beside the Multiview grid button. Pair new camera,
+Media library, and Settings remain on the intro card.
 
 **Multiview** is an experimental iPhone/iPad stage for several cameras on shared
 Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add

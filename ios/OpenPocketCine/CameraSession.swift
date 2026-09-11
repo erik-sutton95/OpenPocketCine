@@ -142,6 +142,8 @@ final class CameraSession {
     /// True while a saved-camera tap is waiting for that peripheral to advertise.
     /// Observable so the header pill can read **Reconnecting** (OpenZCine parity).
     private(set) var isReconnecting = false
+    /// Saved-list row that owns the current connection attempt, including discovery.
+    private(set) var connectionTargetID: UUID?
     /// Established session dropped — keep the last frame and retry automatically.
     var sessionRecovery: SessionRecoveryState = .idle
     /// Keeps `LiveViewScreen` mounted while `phase` leaves `.live` during recovery.
@@ -538,6 +540,7 @@ final class CameraSession {
         connectGeneration += 1
         abortInFlightRun()
         reconnectTarget = id
+        connectionTargetID = id
         isReconnecting = id != nil
         phase = .scanning
         found = []
@@ -601,6 +604,7 @@ final class CameraSession {
         reconnectTarget = nil
         isReconnecting = preserveMonitor
         connectedCamera = camera
+        connectionTargetID = camera.id
         phase = .connectingGatt
         runTask = Task {
             defer {
@@ -631,6 +635,7 @@ final class CameraSession {
         }
         connectGeneration += 1
         reconnectTarget = nil
+        connectionTargetID = nil
         isReconnecting = false
         cancelSessionRecovery()
         holdsMonitor = false

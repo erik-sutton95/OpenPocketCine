@@ -326,9 +326,16 @@ private struct LiveGimbalFloatMove: ViewModifier {
     }
 }
 
+private enum GimbalSettingsTab: String, CaseIterable {
+    case mode = "Mode"
+    case speed = "Speed"
+    case ramp = "Ramp"
+}
+
 private struct LiveGimbalSheet: View {
     @Environment(AppModel.self) private var model
     var maxHeight: CGFloat
+    @State private var selectedTab: GimbalSettingsTab = .mode
 
     var body: some View {
         ViewThatFits(in: .vertical) {
@@ -345,7 +352,7 @@ private struct LiveGimbalSheet: View {
 
     @ViewBuilder
     private func sheetStack(scrolling: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
                 Text(LiveGimbalCopy.title)
                     .font(LiveType.ui(size: 18, weight: .heavy, design: .default))
@@ -358,15 +365,18 @@ private struct LiveGimbalSheet: View {
                 CloseButton(action: { model.liveGimbalPanel = .none })
             }
 
+            tabBar
+
             if scrolling {
-                ScrollView(showsIndicators: false) { sections }
+                ScrollView(showsIndicators: false) { tabSettings }
             } else {
-                sections
+                tabSettings
             }
 
-            programmedMoveRow
+            Rectangle().fill(LiveDesign.hairline).frame(height: 1)
+            section("Gimbal tools") { programmedMoveRow }
         }
-        .padding(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
+        .padding(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
     }
 
     private var programmedMoveRow: some View {
@@ -374,8 +384,12 @@ private struct LiveGimbalSheet: View {
             model.liveGimbalPanel = .editor
         } label: {
             HStack {
-                Text(LiveGimbalCopy.programmedMove)
-                    .foregroundStyle(LiveDesign.text)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(LiveGimbalCopy.programmedMove).foregroundStyle(LiveDesign.text)
+                    Text("Experimental")
+                        .font(LiveType.ui(size: 11, weight: .medium))
+                        .foregroundStyle(LiveDesign.muted)
+                }
                 Spacer()
                 Text(model.session.gimbalProgram.summary)
                     .foregroundStyle(LiveDesign.muted)
@@ -391,36 +405,46 @@ private struct LiveGimbalSheet: View {
         .accessibilityLabel(LiveGimbalCopy.programmedMove)
     }
 
-    private var sections: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            section(LiveGimbalCopy.mode) {
-                chipGrid(
-                    GimbalMode.pickerOrder, selected: model.session.gimbalMode,
-                    title: { $0.label }
-                ) { mode in
-                    model.setGimbalMode(mode)
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(GimbalSettingsTab.allCases, id: \.self) { tab in
+                Button { selectedTab = tab } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(LiveType.ui(size: 13, weight: .semibold))
+                            .foregroundStyle(selectedTab == tab ? LiveDesign.text : LiveDesign.muted)
+                        Rectangle()
+                            .fill(selectedTab == tab ? LiveDesign.accent : LiveDesign.hairline)
+                            .frame(height: 2)
+                    }
+                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
             }
+        }
+    }
 
-            section(LiveGimbalCopy.speed) {
-                LiveGimbalChips(
-                    GimbalSpeed.pickerOrder, selected: model.session.gimbalSpeed,
-                    title: { $0.label }
-                ) {
+    private var tabSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            switch selectedTab {
+            case .mode:
+                chipGrid(GimbalMode.pickerOrder, selected: model.session.gimbalMode, title: { $0.label }) {
+                    model.setGimbalMode($0)
+                }
+            case .speed:
+                LiveGimbalChips(GimbalSpeed.pickerOrder, selected: model.session.gimbalSpeed, title: { $0.label }) {
                     model.session.setGimbalSpeed($0)
                 }
-            }
-
-            section(LiveGimbalCopy.ramp) {
-                LiveGimbalChips(
-                    GimbalRamp.pickerOrder, selected: model.gimbalRamp,
-                    title: { $0.label }
-                ) {
+            case .ramp:
+                LiveGimbalChips(GimbalRamp.pickerOrder, selected: model.gimbalRamp, title: { $0.label }) {
                     model.gimbalRamp = $0
-                    model.session.gimbalRamp = $0
                 }
             }
         }
+        .frame(minHeight: 76, alignment: .top)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content)

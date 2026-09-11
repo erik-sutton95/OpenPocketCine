@@ -13,6 +13,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Saved-camera rows now show their own connection progress and Cancel action,
+  with names above availability/actions. On iOS, Watch a feed is an eye button
+  beside Multiview in the camera-list header.
+- Gimbal controls use Mode / Speed / Ramp tabs with settings below. A separate
+  Gimbal tools footer opens experimental Motion Control. Both shells.
+
 - Direction Lock replaces the unavailable Locked gimbal option on iOS and
   Android. It holds the camera's pointing direction while the handle rotates;
   choose another mode to release it. Menu mode readback follows camera changes.

@@ -15,6 +15,10 @@ location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
 exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 
+On **Your cameras**, the selected row shows connection progress and **Cancel**,
+including while looking for an offline camera. Names sit above availability and
+connection actions. Pair new camera, Media library, and Settings stay on the intro card.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine
@@ -56,8 +60,9 @@ switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
 beside zoom (Pocket only). That sheet parks like a capture picker and
-sets Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast, stick ramp, and
-a Motion Control A→B (optional C) take (set A and B, choose each
+has Mode / Speed / Ramp tabs showing Follow / Tilt locked / FPV / Direction Lock,
+Slow / Default / Fast, and stick ramp. The separate Gimbal tools footer opens
+experimental Motion Control for an A→B (optional C) take (set A and B, choose each
 leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total
 duration. There is no artificial speed cap. Moves are experimental: keep
