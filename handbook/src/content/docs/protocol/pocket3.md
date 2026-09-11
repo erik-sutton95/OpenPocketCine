@@ -939,6 +939,99 @@ Camera status later returned to Video mode 1, and normal UDP control traffic
 resumed after reconnecting. Simultaneous SD recording, interrupted-network
 recovery and the full preset schema remain unverified.
 
+## USB webcam
+
+The operator selected **Webcam on the camera body**, then a native AVFoundation
+helper on **macOS 26.5.1** received video and a separate microphone sample.
+This establishes webcam entry on the surveyed firmware. The camera's current
+body color setting was not confirmed; it must not be labeled Normal, D-Log M
+or HLG from these results. No 10-bit webcam delivery was demonstrated.
+
+### Advertised formats and received buffers
+
+The saved USB descriptors advertise **MJPEG** and **frame-based H.264**, each
+with five frame sizes, on a bulk video endpoint:
+
+| Dimensions | MJPEG nominal fps | H.264 nominal fps |
+| --- | --- | --- |
+| 1280×720 | 25, 30 | 25, 30 |
+| 1920×1080 | 24, 25, 30 | 24, 25, 30 |
+| 720×1280 | 25, 30 | 25, 30 |
+| 1080×1920 | 24, 25, 30 | 24, 25, 30 |
+| 3840×2160 | 24, 25, 30 | 24, 25, 30, 48, 50, 60 |
+
+These labels round discrete frame intervals in 100ns units. For example,
+`333333` means approximately 30.00003fps, not 30000/1001. The VideoControl header
+reports UVC 1.00 even though the frame-based descriptor form appears in UVC 1.1;
+retain that discrepancy when implementing descriptor parsing. H.264 descriptor
+fields do not establish its encoded profile or bit depth.
+[USB-IF UVC 1.1 specifications](https://www.usb.org/document-library/video-class-v11-document-set).
+
+AVFoundation advertised **`420v`** and **`2vuy`** at the same sizes. These are
+uncompressed host formats: 8-bit video-range NV12 and 8-bit packed UYVY,
+respectively. They are distinct from the compressed USB transport formats.
+[Apple 420v format](https://developer.apple.com/documentation/accelerate/kvimage420yp8_cbcr8),
+[Apple packed 4:2:2 format](https://developer.apple.com/documentation/CoreVideo/kCVPixelFormatType_422YpCbCr8).
+
+All **13 `420v` size/rate combinations** corresponding to the first rate column
+delivered buffers with the selected dimensions. The matrix windows were only
+about three seconds long; successful delivery is not sustained-performance
+qualification. In particular:
+
+| Selected host format | Measured received fps | Largest buffer interval |
+| --- | --- | --- |
+| 3840×2160, nominal 24 | 21.41 | 392ms |
+| 3840×2160, nominal 25 | 22.26 | 369ms |
+| 3840×2160, nominal 30 | 30.29 | 44ms |
+
+Separate **`2vuy`** requests for **1920×1080/30, 3840×2160/25 and
+3840×2160/60** produced **no frames within 20 seconds** each on this Mac,
+despite active-format readback. After the failed 4K25 run, stream probe/commit
+readback selected descriptor format 2, frame 5, interval `400000`, corroborating
+the advertised H.264 path for that attempt. This is a bounded host result,
+not proof that H.264 or 4K60 can never work with another host or configuration.
+
+After the final successful **`420v` 4K25** run, both probe and commit read back
+**format 1, frame 5, interval `400000`**, selecting **MJPEG, 3840×2160/25**.
+These two readback states corroborate the selected descriptor paths for those
+attempts; they do not establish a universal host-format mapping or replace
+inspection of encoded USB payloads.
+
+The inspected **1080×1920 and 720×1280** outputs contain **letterboxed landscape
+images in the tested camera posture**, with black space above and below.
+Portrait-shaped buffers do not establish native portrait composition or SD
+recording; physical rotation/orientation-lock behavior remains untested here.
+
+Standard camera-terminal **absolute zoom, pan/tilt and roll** returned successful
+control-info, current, minimum, maximum, resolution and default reads. Two vendor
+extension controls returned 16-byte values and advertised GET/SET support, but
+their meanings remain unknown. No camera-terminal or vendor-control writes
+were tested, so readbacks do not prove physical control behavior.
+
+### Preserved receiver artifacts and audio
+
+Four video runs—three 4K and one 1080×1920—were preserved as raw host buffers
+and lossless FFV1 Matroska files, totaling **361 frames**. Every decoded pixel
+matches the retained NV12 pixels after chroma-layout rearrangement. Container
+timestamps round the original host timestamps by at most 0.5ms; the original
+timestamps are retained separately. The runs include startup/renegotiation
+gaps. These are host receiver artifacts, not camera codecs or SD originals.
+
+A separate **5.013333-second USB microphone sample** contains **240,640 stereo
+sample frames at 48 kHz**, with nonzero audio and nonidentical channels. The
+preserved PCM-float WAV fully decodes to the same host samples. USB audio
+descriptors advertise **16-bit PCM, 48 kHz stereo** for both microphone input
+and host-to-device audio; AVFoundation's 32-bit float storage does not establish
+higher source precision. Host-to-device playback was not tested.
+[USB-IF audio format definitions](https://www.usb.org/sites/default/files/frmts10.pdf).
+
+Video and audio were captured separately, so synchronization and simultaneous
+SD recording remain unverified. Raw USB transactions and compressed bulk
+payloads were not captured; descriptor/control reads are not an all-packets
+recording. USB exit and Mimo
+reconnect, body-color confirmation, D-Log M/10-bit output and native SD portrait
+remain separate checks.
+
 ## General menus and remaining work
 
 Wi-Fi Settings offers **2.4 GHz and 5.8 GHz**. Selecting 2.4 GHz opened a warning
@@ -973,11 +1066,12 @@ of the radio channel or persistence across camera power-off.
 | Media | 20 phone imports with full camera-file hash matches; copied card matches all 25 prior camera HTTP files; Photo, Timelapse and Panorama RAW sets and three Slow Motion AAC sidecars verified | Other source-set combinations and general naming/HTTP retrieval rules, Device effects-download branch and interrupted transfers. |
 | Local editor | Six validated derivatives: 10-bit, Color Recovery and local Glamour export pairs; aspect/export menus inspected | Other editor tools and output combinations, individual Glamour controls, exact transforms and quality measurements. |
 | Livestream | RTMP setup/lifecycle; full local 1080p25 H.264/AAC connection recovered and decoded | Other preset outputs, interruption recovery, simultaneous recording and public-platform flows. |
+| USB webcam | Body entry, descriptors, 13 delivered 420v size/rate combinations, 361 losslessly preserved frames and separate 48 kHz stereo audio | Sustained timing, H.264 delivery, body color/D-Log M/10-bit, native portrait, simultaneous SD recording, A/V sync and exit/Mimo reconnect. |
 | Connection | Existing-session and warm connection observations | A controlled camera power-off/power-on comparison; app relaunch is not camera cold boot. |
-| Accessories/body controls | USB Transfer File/OTG entry, full card copy and ejection completed | Wireless microphones, USB webcam, external timecode, physical orientation and body-only settings. |
+| Accessories/body controls | USB Transfer File/OTG entry, full card copy and ejection completed; webcam entry and bounded host delivery measured | Wireless microphones, external timecode, physical orientation and body-only settings. |
 
 Firmware features still deserving their own evidence include focus breathing
-compensation, FPV-⊥, background downloads, webcam D-Log M and 4K output, recording
+compensation, FPV-⊥, background downloads, webcam D-Log M/10-bit output, recording
 cancellation, and built-in audio backup with external microphones. These are
 documented features rather than findings from this survey.
 [DJI release history](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/RN/20250826/DJI_Osmo_Pocket_3_Release_Notes_en.pdf).
