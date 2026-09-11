@@ -82,7 +82,10 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
 
 Movable scopes and the LIGHTS / ND panels use direct touch-drag. Their corner
 grips resize directly too. Scopes may sit partly under top and bottom readout /
-assist bars and overlap the joystick/zoom area's leading edge by up to 24 pt/dp.
+assist bars and underneath the entire joystick/zoom/gimbal-controls cluster in
+portrait or landscape. The cluster remains above scopes, and its visibility does
+not change their placement boundary. Focus reset and audio meters do not fence
+off a whole side of the screen.
 Reserve the record/media/settings rail and portrait system button row with
 8 pt/dp padding. The resize target extends only 12 pt/dp below the panel so it
 can reach closer to the bottom edge. Fit and clamp the panel and its touch area when

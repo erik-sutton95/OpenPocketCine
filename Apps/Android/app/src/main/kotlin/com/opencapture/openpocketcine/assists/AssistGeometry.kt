@@ -435,9 +435,6 @@ object MovablePanelMath {
     const val GRIP_EXTERIOR_DP = 40f
     const val GRIP_BOTTOM_EXTERIOR_DP = 12f
     const val MIN_GRIP_HIT_DP = 44f
-    const val JOYSTICK_OVERLAP_DP = 24f
-    const val PLACEMENT_PADDING_DP = 8f
-    const val JOYSTICK_CLEARANCE_DP = JOYSTICK_OVERLAP_DP + PLACEMENT_PADDING_DP + GRIP_EXTERIOR_DP
     const val DRAG_HIT_PADDING_DP = 10f
 
     val gripPadDp: Float

@@ -73,19 +73,30 @@ final class ScopePanelPlacementTests: XCTestCase {
         XCTAssertFalse(ScopePanelPlacement.isUsable(CGRect(x: 0, y: 0, width: 55, height: 55)))
     }
 
-    func testBottomEdgeOpensAndJoystickAllowsPartialOverlapWithoutReachingMainRail() {
+    func testBottomEdgeOpensAndOnlyMainRailLimitsRightPlacement() {
         let canvas = CGRect(x: 0, y: 0, width: 874, height: 402)
-        let joystickLeft: CGFloat = 700
         let mainRailLeft: CGFloat = 800
-        let right = min(mainRailLeft, joystickLeft + ScopePanelPlacement.joystickClearance)
+        let right = mainRailLeft
         let safe = ScopePanelPlacement.bounds(
             in: canvas,
             clearance: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: canvas.maxX - right))
         let size = ScopePanelSize.waveform
         let center = ScopePanelPlacement.clamp(CGPoint(x: 2000, y: 2000), size: size, in: safe)
         XCTAssertEqual(center.y + size.height / 2, 382, accuracy: 0.01)
-        XCTAssertEqual(center.x + size.width / 2, joystickLeft + 24, accuracy: 0.01)
+        XCTAssertEqual(center.x + size.width / 2, 748, accuracy: 0.01)
         XCTAssertLessThan(center.x + size.width / 2 + ScopePanelPlacement.gripExtent, mainRailLeft)
+    }
+
+    func testPortraitRightPlacementReachesTheScreenEdgeWithRoomForTheGrip() {
+        let canvas = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let safe = ScopePanelPlacement.bounds(
+            in: canvas,
+            clearance: EdgeInsets(top: 62, leading: 0, bottom: 120, trailing: 0))
+        let size = ScopePanelSize.waveform
+        let center = ScopePanelPlacement.clamp(CGPoint(x: 2000, y: 400), size: size, in: safe)
+        XCTAssertEqual(center.x + size.width / 2, 350, accuracy: 0.01)
+        XCTAssertEqual(
+            center.x + size.width / 2 + ScopePanelPlacement.gripExtent, 394, accuracy: 0.01)
     }
 
     func testNoSpaceIsUnusableAndFittingNeverEnlargesPanel() {

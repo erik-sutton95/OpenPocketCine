@@ -51,17 +51,29 @@ class ScopePanelPlacementTest {
     }
 
     @Test
-    fun bottomEdgeOpensAndJoystickAllowsPartialOverlapWithoutReachingMainRail() {
+    fun bottomEdgeOpensAndOnlyMainRailLimitsRightPlacement() {
         for (density in listOf(1f, 2.75f, 3f)) {
-            val right = minOf(800f, 700f + MovablePanelMath.JOYSTICK_CLEARANCE_DP)
+            val right = 800f
             val safe = AssistRect(8f * density, 8f * density,
                 (right - 16f) * density, 386f * density)
             val size = AssistSize(250f * density, 153f * density)
             val center = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 9000f), size, safe,
                 MovablePanelMath.GRIP_EXTERIOR_DP * density)
             assertEquals(382f * density, center.y + size.height / 2, 0.001f)
-            assertEquals(724f * density, center.x + size.width / 2, 0.001f)
+            assertEquals(752f * density, center.x + size.width / 2, 0.001f)
             assertTrue(center.x + size.width / 2 + 40f * density < 800f * density)
+        }
+    }
+
+    @Test
+    fun portraitRightPlacementReachesTheScreenEdgeWithRoomForTheGrip() {
+        for (density in listOf(1f, 2.75f, 3f)) {
+            val safe = AssistRect(8f * density, 70f * density, 386f * density, 676f * density)
+            val size = AssistSize(250f * density, 153f * density)
+            val center = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 400f * density),
+                size, safe, MovablePanelMath.GRIP_EXTERIOR_DP * density)
+            assertEquals(354f * density, center.x + size.width / 2, 0.001f)
+            assertEquals(394f * density, center.x + size.width / 2 + 40f * density, 0.001f)
         }
     }
 

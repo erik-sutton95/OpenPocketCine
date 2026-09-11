@@ -23,8 +23,9 @@ connection actions. Pair new camera, Media library, and Settings stay on the int
 
 Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
 corner grip to resize. Scopes can sit partly under the top and bottom bars.
-Scopes can reach closer to the bottom edge and overlap the edge of the joystick
-area slightly. Record, media, and settings stay protected. Panels fit the available
+Scopes can reach closer to the bottom edge and sit underneath the entire joystick,
+zoom, and gimbal-controls cluster in portrait or landscape. The cluster stays above
+scopes. Record, media, and settings stay protected. Panels fit the available
 space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
 
 ## How Swift reaches Android

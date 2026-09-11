@@ -1184,8 +1184,8 @@ extension LiveViewScreen {
     private func scopeClearance(
         layout: LiveMonitorLayout, portrait: MonitorPortraitZones? = nil
     ) -> EdgeInsets {
-        let cluster = activeGimbalCluster(layout, portrait: portrait)
-        // Readout/assist bars may overlap a scope. Only the button lanes reserve space.
+        // Scopes may sit under the joystick/zoom cluster; it draws above them.
+        // The main record/media/settings rail still reserves space.
         var top = layout.safeArea.top
         var bottomY = layout.viewport.height
         var left = layout.safeArea.leading
@@ -1219,27 +1219,11 @@ extension LiveViewScreen {
                 right = min(right, layout.rail.minX)
             }
         }
-        if model.chromeSectionMounts(.zoomChip) {
-            right = min(right, CGFloat(cluster.zoom.x) + ScopePanelPlacement.joystickClearance)
-        }
-        if model.chromeSectionMounts(.gimbalStick) {
-            right = min(right, CGFloat(cluster.stick.x) + ScopePanelPlacement.joystickClearance)
-        }
-        if showsGimbalButton {
-            right = min(right, CGFloat(cluster.controls.x) + ScopePanelPlacement.joystickClearance)
-        }
         if portrait == nil, model.headTrackingEnabled {
             bottomY = min(bottomY, layout.gimbalCalibrate.minY)
         }
-        if model.session.isFocusResetAvailable {
-            if portrait != nil {
-                right = min(right, layout.onFeed.maxX - 50)
-            } else {
-                top = max(top, layout.focusReset.maxY)
-            }
-        }
-        if model.assist.isVisible(.audioMeters) {
-            right = min(right, layout.onFeed.maxX - 14 - AudioAssist.panelSize.width)
+        if portrait == nil, model.session.isFocusResetAvailable {
+            top = max(top, layout.focusReset.maxY)
         }
         return EdgeInsets(
             top: top, leading: left,

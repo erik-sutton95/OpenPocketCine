@@ -8,8 +8,6 @@ enum ScopePanelPlacement {
     static let gripInterior: CGFloat = 12
     static let gripBottomExtent: CGFloat = 12
     static let gripTopInterior: CGFloat = 44
-    static let joystickOverlap: CGFloat = 24
-    static var joystickClearance: CGFloat { joystickOverlap + padding + gripExtent }
 
     static func bounds(in canvas: CGRect, clearance: EdgeInsets = EdgeInsets()) -> CGRect {
         let left = canvas.minX + max(0, clearance.leading) + padding
