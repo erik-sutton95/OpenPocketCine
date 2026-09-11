@@ -137,7 +137,8 @@ internal fun MovableAssistPanel(
     val haptics = LocalOperatorHaptics.current
     val preferred = MovablePanelMath.panelSize(base, scale)
     val gripPx = with(density) { MovablePanelMath.gripPadDp.dp.toPx() }
-    val usable = placementBounds.width > gripPx + 1 && placementBounds.height > gripPx + 1
+    val minimumHit = with(density) { MovablePanelMath.MIN_GRIP_HIT_DP.dp.toPx() }
+    val usable = placementBounds.width >= minimumHit && placementBounds.height >= minimumHit
     val sizePx = MovablePanelMath.fittedSize(
         with(density) { AssistSize(preferred.width.dp.toPx(), preferred.height.dp.toPx()) },
         placementBounds, gripPx)
@@ -145,6 +146,7 @@ internal fun MovableAssistPanel(
     val gripPadDp = MovablePanelMath.gripPadDp
     val gripHit = MovablePanelMath.gripHitSize(sizeDp.width, sizeDp.height)
     val gripOrigin = MovablePanelMath.gripHitOrigin(sizeDp.width, sizeDp.height)
+    val gripOverhang = MovablePanelMath.gripOverhang(sizeDp.width, sizeDp.height)
     var session by remember(tool) { mutableStateOf<AssistPoint?>(null) }
     var origin by remember { mutableStateOf<AssistPoint?>(null) }
     var resizeOrigin by remember { mutableStateOf<Double?>(null) }
@@ -193,14 +195,16 @@ internal fun MovableAssistPanel(
         Modifier
             .offset {
                 IntOffset(
-                    (center.x - sizePx.width / 2f).roundToInt(),
-                    (center.y - sizePx.height / 2f).roundToInt(),
+                    (center.x - sizePx.width / 2f - gripOverhang.x * density.density).roundToInt(),
+                    (center.y - sizePx.height / 2f - gripOverhang.y * density.density).roundToInt(),
                 )
             }
-            .size((sizeDp.width + gripPadDp).dp, (sizeDp.height + gripPadDp).dp),
+            .size((sizeDp.width + gripPadDp + gripOverhang.x).dp,
+                (sizeDp.height + MovablePanelMath.GRIP_BOTTOM_EXTERIOR_DP + gripOverhang.y).dp),
     ) {
         Box(
             Modifier
+                .offset(gripOverhang.x.dp, gripOverhang.y.dp)
                 .size(sizeDp.width.dp, sizeDp.height.dp)
                 .align(Alignment.TopStart)
                 .then(if (onOpenOptions != null) Modifier.reportChromeFrame { panelFrame = it } else Modifier)
@@ -278,7 +282,7 @@ internal fun MovableAssistPanel(
             Box(
                 Modifier
                     .align(Alignment.TopStart)
-                    .offset(gripOrigin.x.dp, gripOrigin.y.dp)
+                    .offset((gripOrigin.x + gripOverhang.x).dp, (gripOrigin.y + gripOverhang.y).dp)
                     .size(gripHit.dp)
                     .background(Color.Transparent)
                     .onGloballyPositioned { gripCoords = it }

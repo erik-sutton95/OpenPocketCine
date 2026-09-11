@@ -62,10 +62,14 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
   immediately after 4 pt/dp of movement. Drag the corner directly to resize;
   preferred scale 0.6…1.6. A shared placement rectangle excludes record/media/
-  settings and joystick/zoom button lanes plus 8 pt/dp padding. Scopes may sit
+  settings lanes plus 8 pt/dp padding. Scope bodies can overlap the joystick/zoom
+  area's leading edge by up to 24 pt/dp; controls draw above them. Scopes may sit
   partly under the top and bottom readout/assist bars; those bars do not reserve
-  the whole edge. The portrait system button row remains protected.
-  The panel and exterior resize hit area fit inside
+  the whole edge. Bottom placement reaches the screen edge with 8 pt/dp padding
+  plus only 12 pt/dp below the body for the resize target; the rest of its touch
+  area sits above the corner. iOS keeps its 56 pt target; Android caps its 90 dp
+  target for small chips, with a 44 dp minimum. The portrait system button row
+  remains protected. The panel and exterior resize hit area fit inside
   it on every render, drag, resize, and restored position. Position storage
   remains relative to the full canvas. Stationary holds still open existing
   panel options; toolbar long-press options remain available. Geometry tests

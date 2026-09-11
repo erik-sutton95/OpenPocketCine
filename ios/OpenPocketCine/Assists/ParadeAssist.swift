@@ -472,7 +472,7 @@ struct ParadeMovablePanel<Content: View>: View {
             content()
                 .overlay(alignment: .bottomTrailing) {
                     resizeHandle
-                        .offset(x: gripPad, y: gripPad)
+                        .offset(x: gripPad, y: ScopePanelPlacement.gripBottomExtent)
                 }
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .padding(ParadeAssist.dragHitPadding)
@@ -482,12 +482,12 @@ struct ParadeMovablePanel<Content: View>: View {
         }
         .frame(
             width: size.width + gripPad,
-            height: size.height + gripPad,
+            height: size.height + ScopePanelPlacement.gripBottomExtent,
             alignment: .topLeading
         )
         .opacity(ScopePanelPlacement.isUsable(movementBounds) ? 1 : 0)
         .shadow(color: .black.opacity((isDragging || isResizing) ? 0.5 : 0), radius: 18, y: 8)
-        .position(x: center.x + gripPad / 2, y: center.y + gripPad / 2)
+        .position(x: center.x + gripPad / 2, y: center.y + ScopePanelPlacement.gripBottomExtent / 2)
         .sensoryFeedback(trigger: isDragging) { _, dragging in
             dragging ? .impact(flexibility: .rigid, intensity: 1) : nil
         }
@@ -535,6 +535,7 @@ struct ParadeMovablePanel<Content: View>: View {
                 width: ParadeAssist.gripVisualSize, height: ParadeAssist.gripVisualSize,
                 alignment: .bottomTrailing
             )
+            .offset(y: ScopePanelPlacement.gripTopInterior - gripCornerInset)
             .frame(
                 width: ParadeAssist.gripHitSize, height: ParadeAssist.gripHitSize,
                 alignment: .topLeading

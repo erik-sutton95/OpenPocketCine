@@ -433,6 +433,11 @@ object MovablePanelMath {
     const val GRIP_EXTERIOR_GAP_DP = 2f
     /** How much of [GRIP_HIT_DP] hangs off the panel (outside the clip). */
     const val GRIP_EXTERIOR_DP = 40f
+    const val GRIP_BOTTOM_EXTERIOR_DP = 12f
+    const val MIN_GRIP_HIT_DP = 44f
+    const val JOYSTICK_OVERLAP_DP = 24f
+    const val PLACEMENT_PADDING_DP = 8f
+    const val JOYSTICK_CLEARANCE_DP = JOYSTICK_OVERLAP_DP + PLACEMENT_PADDING_DP + GRIP_EXTERIOR_DP
     const val DRAG_HIT_PADDING_DP = 10f
 
     val gripPadDp: Float
@@ -440,18 +445,26 @@ object MovablePanelMath {
 
     /** Top-leading of the hit well: [GRIP_EXTERIOR_DP] past the clip, rest on the plate. */
     fun gripHitSize(panelWidth: Float, panelHeight: Float): Float =
-        minOf(GRIP_HIT_DP, panelWidth + GRIP_EXTERIOR_DP, panelHeight + GRIP_EXTERIOR_DP)
+        maxOf(MIN_GRIP_HIT_DP, minOf(GRIP_HIT_DP, panelWidth + GRIP_EXTERIOR_DP,
+            panelHeight + GRIP_BOTTOM_EXTERIOR_DP))
 
     fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint {
         val hit = gripHitSize(panelWidth, panelHeight)
         return AssistPoint(panelWidth - hit + GRIP_EXTERIOR_DP,
-            panelHeight - hit + GRIP_EXTERIOR_DP)
+            panelHeight - hit + GRIP_BOTTOM_EXTERIOR_DP)
+    }
+
+    /** Extra wrapper space above/left of a small body, so Compose does not shrink the target. */
+    fun gripOverhang(panelWidth: Float, panelHeight: Float): AssistPoint {
+        val origin = gripHitOrigin(panelWidth, panelHeight)
+        return AssistPoint(maxOf(0f, -origin.x), maxOf(0f, -origin.y))
     }
 
     /** Top-leading of the 14 dp L inside the hit well, 2 dp outside the clip. */
     fun gripVisualOrigin(hitSize: Float = GRIP_HIT_DP): AssistPoint {
         val x = hitSize - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
-        return AssistPoint(x, x)
+        val y = hitSize - GRIP_BOTTOM_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
+        return AssistPoint(x, y)
     }
 
     fun clampedScale(value: Double): Double = value.coerceIn(SCALE_MIN, SCALE_MAX)
@@ -472,15 +485,22 @@ object MovablePanelMath {
 
     /** Bounds and sizes are pixels, including the exterior resize hit well. */
     fun fittedSize(preferred: AssistSize, bounds: AssistRect, grip: Float): AssistSize {
+        val bottomGrip = grip * GRIP_BOTTOM_EXTERIOR_DP / GRIP_EXTERIOR_DP
         val factor = minOf(1f, maxOf(1f, bounds.width - grip) / maxOf(1f, preferred.width),
-            maxOf(1f, bounds.height - grip) / maxOf(1f, preferred.height))
+            maxOf(1f, bounds.height - bottomGrip) / maxOf(1f, preferred.height))
         return AssistSize(maxOf(1f, kotlin.math.floor(preferred.width * factor)),
             maxOf(1f, kotlin.math.floor(preferred.height * factor)))
     }
 
-    fun clampWithGrip(point: AssistPoint, size: AssistSize, bounds: AssistRect, grip: Float): AssistPoint =
-        clamp(point, size, bounds.copy(width = maxOf(0f, bounds.width - grip),
-            height = maxOf(0f, bounds.height - grip)))
+    fun clampWithGrip(point: AssistPoint, size: AssistSize, bounds: AssistRect, grip: Float): AssistPoint {
+        val density = grip / GRIP_EXTERIOR_DP
+        val bottomGrip = GRIP_BOTTOM_EXTERIOR_DP * density
+        val hit = gripHitSize(size.width / density, size.height / density) * density
+        val minX = bounds.minX + maxOf(size.width / 2, hit - grip - size.width / 2)
+        val minY = bounds.minY + maxOf(size.height / 2, hit - bottomGrip - size.height / 2)
+        return AssistPoint(point.x.coerceIn(minX, maxOf(minX, bounds.maxX - size.width / 2 - grip)),
+            point.y.coerceIn(minY, maxOf(minY, bounds.maxY - size.height / 2 - bottomGrip)))
+    }
 
     fun snap(point: AssistPoint, grid: Float = POSITION_GRID): AssistPoint =
         AssistPoint(round(point.x / grid) * grid, round(point.y / grid) * grid)

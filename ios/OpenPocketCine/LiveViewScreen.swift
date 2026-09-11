@@ -1187,7 +1187,7 @@ extension LiveViewScreen {
         let cluster = activeGimbalCluster(layout, portrait: portrait)
         // Readout/assist bars may overlap a scope. Only the button lanes reserve space.
         var top = layout.safeArea.top
-        var bottomY = layout.viewport.height - layout.safeArea.bottom
+        var bottomY = layout.viewport.height
         var left = layout.safeArea.leading
         var right = layout.viewport.width - layout.safeArea.trailing
         if let zones = portrait {
@@ -1219,9 +1219,15 @@ extension LiveViewScreen {
                 right = min(right, layout.rail.minX)
             }
         }
-        if model.chromeSectionMounts(.zoomChip) { right = min(right, CGFloat(cluster.zoom.x)) }
-        if model.chromeSectionMounts(.gimbalStick) { right = min(right, CGFloat(cluster.stick.x)) }
-        if showsGimbalButton { right = min(right, CGFloat(cluster.controls.x)) }
+        if model.chromeSectionMounts(.zoomChip) {
+            right = min(right, CGFloat(cluster.zoom.x) + ScopePanelPlacement.joystickClearance)
+        }
+        if model.chromeSectionMounts(.gimbalStick) {
+            right = min(right, CGFloat(cluster.stick.x) + ScopePanelPlacement.joystickClearance)
+        }
+        if showsGimbalButton {
+            right = min(right, CGFloat(cluster.controls.x) + ScopePanelPlacement.joystickClearance)
+        }
         if portrait == nil, model.headTrackingEnabled {
             bottomY = min(bottomY, layout.gimbalCalibrate.minY)
         }
@@ -1237,7 +1243,7 @@ extension LiveViewScreen {
         }
         return EdgeInsets(
             top: top, leading: left,
-            bottom: max(layout.safeArea.bottom, layout.viewport.height - bottomY),
+            bottom: max(0, layout.viewport.height - bottomY),
             trailing: max(0, layout.viewport.width - right))
     }
 

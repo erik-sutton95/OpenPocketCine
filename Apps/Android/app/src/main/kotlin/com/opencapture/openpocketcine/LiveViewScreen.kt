@@ -468,7 +468,7 @@ fun LiveViewScreen(model: AppModel) {
         val gimbalButton = cluster.controls
         // Readout/assist bars may overlap a scope. Only the button lanes reserve space.
         var scopeTop = layout.safeTop
-        var scopeBottom = layout.viewportHeight - layout.safeBottom
+        var scopeBottom = layout.viewportHeight
         var scopeLeft = layout.safeLeading
         var scopeRight = layout.viewportWidth - layout.safeTrailing
         if (portrait && zones != null) {
@@ -482,9 +482,10 @@ fun LiveViewScreen(model: AppModel) {
             if (layout.rail.midX < layout.viewportWidth / 2f) scopeLeft = maxOf(scopeLeft, layout.rail.maxX)
             else scopeRight = minOf(scopeRight, layout.rail.minX)
         }
-        if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) scopeRight = minOf(scopeRight, zoom.minX)
-        if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)) scopeRight = minOf(scopeRight, stick.minX)
-        if (showGimbalButton) scopeRight = minOf(scopeRight, gimbalButton.minX)
+        val joystickClearance = com.opencapture.openpocketcine.assists.MovablePanelMath.JOYSTICK_CLEARANCE_DP
+        if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) scopeRight = minOf(scopeRight, zoom.minX + joystickClearance)
+        if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)) scopeRight = minOf(scopeRight, stick.minX + joystickClearance)
+        if (showGimbalButton) scopeRight = minOf(scopeRight, gimbalButton.minX + joystickClearance)
         if (model.session.isFocusResetAvailable) {
             if (portrait) scopeRight = minOf(scopeRight, layout.onFeed.maxX - 50f)
             else scopeTop = maxOf(scopeTop, layout.focusReset.maxY)
@@ -492,7 +493,7 @@ fun LiveViewScreen(model: AppModel) {
         if (assist.isVisible(LiveAssistTool.AUDIO)) scopeLeft = maxOf(scopeLeft,
             14f + com.opencapture.openpocketcine.assists.AudioAssist.PANEL_WIDTH_DP)
         val scopePlacement = ChromeRect(scopeLeft, scopeTop, maxOf(0f, scopeRight - scopeLeft),
-            maxOf(0f, minOf(scopeBottom, layout.viewportHeight - layout.safeBottom) - scopeTop))
+            maxOf(0f, minOf(scopeBottom, layout.viewportHeight) - scopeTop))
         val focusOffCenter = model.session.isFocusResetAvailable
 
         // Kyant sibling pattern: this box records feed + chrome; popups sit

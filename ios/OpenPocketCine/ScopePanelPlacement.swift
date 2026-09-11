@@ -6,6 +6,10 @@ enum ScopePanelPlacement {
     static let padding: CGFloat = 8
     static let gripExtent: CGFloat = 44
     static let gripInterior: CGFloat = 12
+    static let gripBottomExtent: CGFloat = 12
+    static let gripTopInterior: CGFloat = 44
+    static let joystickOverlap: CGFloat = 24
+    static var joystickClearance: CGFloat { joystickOverlap + padding + gripExtent }
 
     static func bounds(in canvas: CGRect, clearance: EdgeInsets = EdgeInsets()) -> CGRect {
         let left = canvas.minX + max(0, clearance.leading) + padding
@@ -22,7 +26,7 @@ enum ScopePanelPlacement {
     static func fittedSize(_ preferred: CGSize, in bounds: CGRect) -> CGSize {
         let scale = min(
             1, max(1, bounds.width - gripExtent) / max(1, preferred.width),
-            max(1, bounds.height - gripExtent) / max(1, preferred.height))
+            max(1, bounds.height - gripBottomExtent) / max(1, preferred.height))
         return CGSize(
             width: max(1, floor(preferred.width * scale)),
             height: max(1, floor(preferred.height * scale)))
@@ -35,9 +39,9 @@ enum ScopePanelPlacement {
 
     static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
         let minX = bounds.minX + max(size.width / 2, gripInterior - size.width / 2)
-        let minY = bounds.minY + max(size.height / 2, gripInterior - size.height / 2)
+        let minY = bounds.minY + max(size.height / 2, gripTopInterior - size.height / 2)
         return CGPoint(
             x: min(max(minX, point.x), max(minX, bounds.maxX - size.width / 2 - gripExtent)),
-            y: min(max(minY, point.y), max(minY, bounds.maxY - size.height / 2 - gripExtent)))
+            y: min(max(minY, point.y), max(minY, bounds.maxY - size.height / 2 - gripBottomExtent)))
     }
 }

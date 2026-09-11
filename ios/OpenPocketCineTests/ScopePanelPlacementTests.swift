@@ -31,7 +31,7 @@ final class ScopePanelPlacementTests: XCTestCase {
                         let center = ScopePanelPlacement.clamp(proposal, size: size, in: safe)
                         let gripOrigin = CGPoint(
                             x: center.x + size.width / 2 - 12,
-                            y: center.y + size.height / 2 - 12)
+                            y: center.y + size.height / 2 - 44)
                         XCTAssertGreaterThanOrEqual(gripOrigin.x, safe.minX)
                         XCTAssertGreaterThanOrEqual(gripOrigin.y, safe.minY)
                         XCTAssertGreaterThanOrEqual(center.x - size.width / 2, safe.minX)
@@ -39,7 +39,8 @@ final class ScopePanelPlacementTests: XCTestCase {
                         XCTAssertLessThanOrEqual(
                             center.x + size.width / 2 + ScopePanelPlacement.gripExtent, safe.maxX)
                         XCTAssertLessThanOrEqual(
-                            center.y + size.height / 2 + ScopePanelPlacement.gripExtent, safe.maxY)
+                            center.y + size.height / 2 + ScopePanelPlacement.gripBottomExtent,
+                            safe.maxY)
                     }
                 }
             }
@@ -66,10 +67,25 @@ final class ScopePanelPlacementTests: XCTestCase {
         let size = ScopePanelPlacement.fittedSize(ScopePanelSize.ndMeter, in: safe)
         let center = ScopePanelPlacement.clamp(.zero, size: size, in: safe)
         XCTAssertGreaterThanOrEqual(center.x + size.width / 2 - 12, safe.minX)
-        XCTAssertGreaterThanOrEqual(center.y + size.height / 2 - 12, safe.minY)
+        XCTAssertGreaterThanOrEqual(center.y + size.height / 2 - 44, safe.minY)
         XCTAssertLessThanOrEqual(center.x + size.width / 2 + 44, safe.maxX)
-        XCTAssertLessThanOrEqual(center.y + size.height / 2 + 44, safe.maxY)
+        XCTAssertLessThanOrEqual(center.y + size.height / 2 + 12, safe.maxY)
         XCTAssertFalse(ScopePanelPlacement.isUsable(CGRect(x: 0, y: 0, width: 55, height: 55)))
+    }
+
+    func testBottomEdgeOpensAndJoystickAllowsPartialOverlapWithoutReachingMainRail() {
+        let canvas = CGRect(x: 0, y: 0, width: 874, height: 402)
+        let joystickLeft: CGFloat = 700
+        let mainRailLeft: CGFloat = 800
+        let right = min(mainRailLeft, joystickLeft + ScopePanelPlacement.joystickClearance)
+        let safe = ScopePanelPlacement.bounds(
+            in: canvas,
+            clearance: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: canvas.maxX - right))
+        let size = ScopePanelSize.waveform
+        let center = ScopePanelPlacement.clamp(CGPoint(x: 2000, y: 2000), size: size, in: safe)
+        XCTAssertEqual(center.y + size.height / 2, 382, accuracy: 0.01)
+        XCTAssertEqual(center.x + size.width / 2, joystickLeft + 24, accuracy: 0.01)
+        XCTAssertLessThan(center.x + size.width / 2 + ScopePanelPlacement.gripExtent, mainRailLeft)
     }
 
     func testNoSpaceIsUnusableAndFittingNeverEnlargesPanel() {

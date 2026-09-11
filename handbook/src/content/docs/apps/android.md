@@ -23,8 +23,9 @@ connection actions. Pair new camera, Media library, and Settings stay on the int
 
 Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
 corner grip to resize. Scopes can sit partly under the top and bottom bars.
-The record, media, settings, and joystick lanes remain protected, with a small
-gap. Panels fit that space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
+Scopes can reach closer to the bottom edge and overlap the edge of the joystick
+area slightly. Record, media, and settings stay protected. Panels fit the available
+space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
 
 ## How Swift reaches Android
 

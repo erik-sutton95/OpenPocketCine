@@ -29,7 +29,7 @@ class ScopePanelPlacementTest {
                         assertTrue(center.x - size.width / 2 >= safe.minX - 0.001f)
                         assertTrue(center.y - size.height / 2 >= safe.minY - 0.001f)
                         assertTrue(center.x + size.width / 2 + grip <= safe.maxX + 0.001f)
-                        assertTrue(center.y + size.height / 2 + grip <= safe.maxY + 0.001f)
+                        assertTrue(center.y + size.height / 2 + MovablePanelMath.GRIP_BOTTOM_EXTERIOR_DP * density <= safe.maxY + 0.001f)
                     }
                 }
             }
@@ -48,6 +48,38 @@ class ScopePanelPlacementTest {
         assertTrue(fitted.x < restored.x && fitted.y < restored.y)
         assertEquals(870f, stored.center(canvas).x, 0.001f)
         assertEquals(400f, stored.center(canvas).y, 0.001f)
+    }
+
+    @Test
+    fun bottomEdgeOpensAndJoystickAllowsPartialOverlapWithoutReachingMainRail() {
+        for (density in listOf(1f, 2.75f, 3f)) {
+            val right = minOf(800f, 700f + MovablePanelMath.JOYSTICK_CLEARANCE_DP)
+            val safe = AssistRect(8f * density, 8f * density,
+                (right - 16f) * density, 386f * density)
+            val size = AssistSize(250f * density, 153f * density)
+            val center = MovablePanelMath.clampWithGrip(AssistPoint(9000f, 9000f), size, safe,
+                MovablePanelMath.GRIP_EXTERIOR_DP * density)
+            assertEquals(382f * density, center.y + size.height / 2, 0.001f)
+            assertEquals(724f * density, center.x + size.width / 2, 0.001f)
+            assertTrue(center.x + size.width / 2 + 40f * density < 800f * density)
+        }
+    }
+
+    @Test
+    fun smallestNdWrapperKeepsTheWholeResizeTargetWithoutMovingTheBody() {
+        val size = MovablePanelMath.panelSize(ScopePanelSize.ndMeter, 0.6)
+        val hit = MovablePanelMath.gripHitSize(size.width, size.height)
+        val overhang = MovablePanelMath.gripOverhang(size.width, size.height)
+        val origin = MovablePanelMath.gripHitOrigin(size.width, size.height)
+        assertEquals(44f, hit)
+        assertEquals(14f, overhang.y)
+        val wrapperHeight = size.height + MovablePanelMath.GRIP_BOTTOM_EXTERIOR_DP + overhang.y
+        assertEquals(44f, wrapperHeight)
+        assertEquals(0f, origin.y + overhang.y)
+        assertTrue(origin.y + overhang.y + hit <= wrapperHeight)
+        val bodyTop = 100f
+        val wrapperTop = bodyTop - overhang.y
+        assertEquals(bodyTop, wrapperTop + overhang.y)
     }
 
     @Test
