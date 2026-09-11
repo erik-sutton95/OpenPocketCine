@@ -27,15 +27,18 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Last live D-Log / D-Log2 is the fallback when that atom is missing —
   `colr`/`nclx` is Rec.709 even for log. Opening LUT on a disconnected clip
   keeps that Auto cube (it does not restamp from a missing live SET).
-- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Zoom chips follow
-  the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
-  with 4K max 2×; Nano 1×). Zoom must not drop the live picture. FORMAT lists
+- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+  with 4K max 2×; Nano 1×). Pocket 3's confirmed **2.7K limit is 3×**; its
+  generic 4× choice still needs correction ([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)).
+  Zoom must not drop the live picture. FORMAT lists
   `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16 when the body
   advertises them; aspect is the res byte). A tap stays on that pair until
   the body reports it. Pocket 3 normal Video also has a
   [documented fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
   when the camera supplies no capability table; reported choices take priority.
-  This does not establish support for those pairs in SlowMo or other modes.
+  Physical iPhone build 99 passed one 2.7K/25 D-Log M record and warm reconnect
+  ([survey evidence](https://openpocketcine.app/docs/protocol/pocket3/#openpocketcine-recording-and-warm-reconnect)).
+  The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.

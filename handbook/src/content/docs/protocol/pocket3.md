@@ -860,6 +860,28 @@ cancellation, and built-in audio backup with external microphones. These are
 documented features rather than findings from this survey.
 [DJI release history](https://dl.djicdn.com/downloads/DJI_Osmo_Pocket_3/RN/20250826/DJI_Osmo_Pocket_3_Release_Notes_en.pdf).
 
+## OpenPocketCine recording and warm reconnect
+
+A separate physical iPhone check used installed OpenPocketCine **0.1.0 (99)**
+on the same camera, already set to D-Log M. Selecting landscape **2.7K/25**
+and starting/stopping recording produced accepted writes and independent
+status confirmation. App relaunch/reconnect retained 2.7K/25 and D-Log M.
+The saved live journal covers 166 seconds after its first-picture flag, with
+82 positive frame-rate samples at 25–27fps and no control timeout, video stall,
+frozen state or recovery overlay in that window.
+
+The separately downloaded camera original is **42,894,910 bytes**, **HEVC
+Main 10**, **2688×1512**, **25fps**, **157 frames / 6.28 seconds**. All 41 HTTP
+ranges were validated, the complete SHA-256 matched the transfer manifest, and
+all 157 primary-video frames decoded without error. This is an additional
+camera file beyond the 24-file Mimo preservation set above. Preview playback
+alone would not establish these original-file properties.
+
+The monitor was restored to 4K/25 D-Log M and disconnected with recording
+stopped. This qualifies one iOS landscape format/record/reconnect sequence.
+It does not qualify the complete picker matrix, Android, or camera power-off
+persistence. Both joins were warm; the camera was not power-cycled.
+
 ## Implementation follow-up
 
 The reported OpenPocketCine first-connection stall remains unresolved. Its saved

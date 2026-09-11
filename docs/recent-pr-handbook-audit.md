@@ -15,8 +15,8 @@ body/accessory and physical-qualification gaps.
 The numbered findings below retain the **pre-correction audit baseline**.
 These documentation corrections did not add app behavior. The 2.7K zoom
 implementation discrepancy, failed cold-boot capture and broader app acceptance
-remain open. Later survey branches must be
-reconciled before final publication.
+remain open. The survey branch was integrated with fetched main before review;
+publication still depends on merging the documentation PR.
 
 ## Answer
 
@@ -46,10 +46,10 @@ Git history, current source, handbook Markdown and engineering contracts.
 The working checkout was `ab8be20`, which predates merged #321, #323 and #324.
 The main-branch iOS handbook was initially read through the GitHub contents API
 to verify #321. A later fetch advanced `origin/main` to `2bf5611` (#327), and its
-handbook delta was read locally. **That fetched main has not yet been merged
-into this worktree.** Convert log's absence from the older local app pages is
-not a missing-upstream-docs finding; retain its upstream documentation during
-integration alongside these corrections.
+handbook delta was read locally. **That fetched main was integrated in merge
+commit `859f4d0`.** Both app pages retain the upstream Convert log documentation
+alongside these corrections. Its absence from the older checkout was not a
+missing-upstream-docs finding.
 PR test claims below are attributed to the PR, not independently rerun here.
 No device operation was part of this PR audit. The later survey summary links
 separately produced evidence; the PR table does not claim to reverify it.
@@ -63,8 +63,8 @@ window. Each newly included PR was checked through Git history and the GitHub
 changed-file API.
 
 The fetched handbook delta from `ab8be20` contains #321's iOS Convert log
-description and Android's iOS-only exception. These must survive main
-integration. No new app/protocol handbook change appears in #325–#327.
+description and Android's iOS-only exception. Both survived main integration.
+No new app/protocol handbook change appears in #325–#327.
 
 Evidence labels:
 

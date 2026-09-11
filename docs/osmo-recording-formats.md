@@ -26,7 +26,11 @@ status still worked. With an empty table and a confirmed normal Video mode,
 both shells use the documented Pocket 3 Video matrix as a picker fallback.
 This exception does not apply to SlowMo, livestream or an unknown shooting mode.
 It is a source-backed choice list, not proof that every pair has passed physical
-recording/reconnect checks. See [the public fallback notes](../handbook/src/content/docs/protocol/commands.md#pocket-3-format-choices-without-a-capability-table).
+recording/reconnect checks. Physical iPhone build 0.1.0 (99) subsequently passed
+one landscape 2.7K/25 D-Log M record and app-relaunch/reconnect sequence, with
+an independently decoded 2688×1512/25fps original. Other pairs, Android and
+camera power-cycle persistence remain pending. See [the survey](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-recording-and-warm-reconnect)
+and [the public fallback notes](../handbook/src/content/docs/protocol/commands.md#pocket-3-format-choices-without-a-capability-table).
 
 What still has to live in the app:
 

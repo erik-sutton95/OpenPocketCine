@@ -14,7 +14,8 @@ ledger described by the [capture guide](capture-guide.md).
 
 This dated evidence cut includes the mode sweep, camera-file preservation,
 corrected Photo and Glamour controls, gimbal cycles, local RTMP output and
-Wi-Fi frequency selection/reconnection.
+Wi-Fi frequency selection/reconnection, and one OPC iPhone build 99
+2.7K/25 record/app-relaunch/reconnect check.
 Later body, connection and companion-preservation branches are not assumed
 complete. An intended action filename never overrides what its screenshot,
 packet or preserved file actually shows.
@@ -44,7 +45,10 @@ Photo DNG and three LRF previews. Camera transfers have contiguous validated
 byte ranges and matching complete-file lengths/hashes. An independent repeat
 read of all 24 camera files and their 20 phone copies found no hash mismatch.
 The count excludes packet captures, transfer metadata, RTMP receiver artifacts
-and partial files.
+and partial files. A later OPC iPhone recording adds one separately validated
+42,894,910-byte HEVC Main 10 original (2688×1512, 25fps, 157 frames / 6.28s),
+bringing the complete camera-file collection to **25 files / 927,102,530 bytes**.
+The 20 Mimo import matches remain a separate subset.
 
 The **19,314,420-byte Photo DNG** contains a full-resolution **3072×3072 CFA**
 array, RGGB 2×2 pattern and **16-bit uncompressed sample storage**, separately
@@ -57,7 +61,7 @@ unpreserved. See [camera originals and companions](../handbook/src/content/docs/
 
 | Area | Observed result | Evidence still needed |
 | --- | --- | --- |
-| Video landscape | 1080P/2.7K/4K and 24/25/30/48/50/60 menus; all six rates selected at 2.7K, plus 1080P/60 and 4K/60. UI and accepted writes; several status confirmations and inspected short video outputs. | Full resolution/rate/color/codec cross-product; OPC format selection, recording and reconnect on the changed build. |
+| Video landscape | 1080P/2.7K/4K and 24/25/30/48/50/60 menus; all six rates selected at 2.7K, plus 1080P/60 and 4K/60. UI and accepted writes; several status confirmations and inspected short video outputs. OPC iPhone build 99 passed one 2.7K/25 D-Log M record/app-relaunch/reconnect sequence with original-file validation. | Full resolution/rate/color/codec cross-product, broader OPC pairs, Android and camera power-off persistence. |
 | Video square | 1080P (1:1), 2160P (1:1), 3K (1:1), each selected at 60. UI and accepted requests; square 3K/60 recording/status and a downloaded output inspected. | Other square rates, persistence and complete codec/color combinations. |
 | Video portrait | Official baseline below retained. | Mimo entry path, camera format selection and resulting portrait files not established by this sweep. Rotating the phone UI alone is not this proof. |
 | Low-Light | All 1080P/4K × 24/25/30 choices selected; UI, accepted and selected status evidence. Manual ISO includes 9600 and 16000; 1/8000 selected. A downloaded video was inspected. | Every format's encoded properties; controlled low-light/noise/exposure comparison. |
@@ -85,7 +89,7 @@ and [preserved-media section](../handbook/src/content/docs/protocol/pocket3.md#c
 | Glamour | None/OFF plus eleven controls inspected; selected strength requests accepted and corroborated by tagged GETs. All 15 tagged values returned to the initial state. One enabled-master recording is preserved and hash-identical to its camera original; Smooth was zero. | Face-subject effect, processing location and processed export; unknown tags and general rounding rules. No face was present. Five sliders reached 99 without an established upper endpoint. |
 | Gimbal | Follow/Tilt Locked/FPV and Default/Fast/Slow cycles selected; Help inspected. Rotate/return/recenter visibly change and restore framing. Speed/tilt requests and independent GET echoes corroborate selections; Easy Control toggled, Calibrate not performed. | Handle-motion response, exact angles/speeds, repeatability, tracking, FPV-⊥, SpinShot and body-side controls. |
 | General/system | General, About, Wi-Fi, compression, format-confirmation and Gimbal/Handle menus inspected. | Full body-side settings listed below; reset/calibration/format effects were not executed. Protect recorded media. |
-| Wi-Fi frequency | Selecting 2.4 GHz showed the disconnect warning; reconnect restored Video and the setting read back 2.4 GHz. Restoring 5.8 GHz and reconnecting restored preview; settings read back 5.8 GHz. | Frequency-command encoding, independent radio-band/channel measurement, throughput and persistence across camera power-off. These are UI/reconnection observations. |
+| Wi-Fi frequency | Selecting 2.4 GHz showed the disconnect warning; reconnect restored Video and the setting read back 2.4 GHz. Restoring 5.8 GHz and reconnecting restored preview; settings read back 5.8 GHz. Accepted `07/10` writes (`00`/`01`) and independent `07/44` readbacks establish the configured-band mapping. | Independent radio-band/channel measurement, throughput and power-off persistence. |
 | Album/downloads | Device/Local filters, player Info, favorite/unfavorite with settled empty Favorites, selection and batch downloads inspected. All 20 phone imports now match complete camera originals; one Photo DNG and three LRFs are separately preserved. | Timelapse/Panorama RAW sets, uncollected companions, interrupted transfer, processed Glamour/other editor exports and favorite persistence across restart. Local Live Photo filter is not a Pocket 3 capture mode. |
 | Livestream | Facebook/YouTube/RTMP chooser; 480p/720p/1080p, 25/30fps and Auto/Smooth/HD setup choices. Local RTMP start/stop completed; the full 74.560s connection was recovered with 1,863 decoded H.264 1080p/25 video frames and stereo AAC. Receiver TCP coverage and full A/V decode checks passed. | Every output combination, public-account flows, interruption recovery, simultaneous SD recording and complete configuration schema. Receiver container is not a camera SD format. |
 | Connection/startup | Warm reconnect and app relaunch captured successfully. Saved earlier iOS journal shows control timeouts before picture loss and recovery after full handshake. | Failed physical power-cycle packet capture and a confirmed cause/fix. See [startup investigation](pocket3-startup-investigation.md); app relaunch is not camera cold boot. |

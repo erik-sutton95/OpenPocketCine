@@ -38,6 +38,13 @@ replies flowed. The reconnect sustained about 25fps for at least a minute. The
 relaunch reached picture after the existing 1080p/25 → 4K/25 recovery poke and
 then sustained about 25fps. Neither reproduced the reported control stall.
 
+A final check used installed iOS **0.1.0 (99)** on the same powered camera.
+The initial 4K/25 join sustained about 25fps with no control timeout or video
+stall in the saved journal. A later 2.7K/25 app relaunch also returned to healthy
+picture and control replies. The app selected 2.7K/25, started and stopped a short recording,
+and retained 2.7K/25 plus D-Log M after relaunch/reconnection. The monitor then
+returned to 4K/25. These are warm-session observations, not a cold-boot fix.
+
 An app relaunch is **not a camera cold boot**. The initial file named
 `cold-start.pcapng` begins in an already healthy session; its filename is an
 experiment intent, not evidence that the failed boot was captured. Private

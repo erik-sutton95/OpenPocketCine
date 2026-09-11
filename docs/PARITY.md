@@ -259,7 +259,12 @@ therefore use the documented Pocket 3 list when the reported table is empty:
 at 24/25/30/48/50/60 fps. A reported table always wins. Unknown modes, SlowMo and
 livestream retain their existing handling. This is a picker fallback; it does
 not rewrite reported camera capabilities. Synthetic picker tests cover model and
-mode isolation. Physical format SET/reconnect verification is pending.
+mode isolation. On 2026-09-11, physical iPhone build 0.1.0 (99) selected and
+recorded landscape 2.7K/25 D-Log M, then retained that format/color after app
+relaunch/reconnect. The complete camera original is HEVC Main 10, 2688×1512,
+25fps, 157 frames; full decode passed. This qualifies one pair only. Other
+pairs, camera power-off persistence and physical Android verification remain
+pending. See the [survey evidence](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-recording-and-warm-reconnect).
 
 ### Log conversion export (iOS)
 
