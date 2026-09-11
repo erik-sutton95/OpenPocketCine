@@ -66,8 +66,10 @@ enable loop.
 
 ### Phone relay and dual-interface
 
-If a watcher exists later, the operator phone re-encapsulates the HEVC/AVC it
-already received — it does not ask the camera for a second stream.
+The implemented iOS watcher relay re-encodes the received picture once as HEVC
+and serves watchers on the same camera Wi-Fi. Only the host opens the camera
+datalink; watchers never request a second camera stream. Alternate-interface
+paths below remain networking context, not supported Sharing configurations.
 
 **iOS.** The SoftAP is internetless. iOS keeps **cellular as the default
 route**; camera sockets must pin Wi-Fi (`NWParameters.requiredLocalEndpoint` =
@@ -89,6 +91,7 @@ make that work.
 It is not camera multicast. The body never sourced mDNS in these takes. Mimo
 advertises `_djimimo._tcp.local` from the phone.
 
-Do not promise NDI/SRT in the same breath. One-phone-many-Pockets is
-discussion [#238](https://github.com/erik-sutton95/OpenPocketCine/discussions/238),
-not this note.
+NDI/SRT is not implemented. One-phone-many-cameras is the separate experimental
+[Multiview stage](../handbook/src/content/docs/guides/multiview-prototype.md),
+where cameras join a shared network and keep independent datalinks. It is not
+the one-camera/many-watchers relay described here.

@@ -259,7 +259,28 @@ therefore use the documented Pocket 3 list when the reported table is empty:
 at 24/25/30/48/50/60 fps. A reported table always wins. Unknown modes, SlowMo and
 livestream retain their existing handling. This is a picker fallback; it does
 not rewrite reported camera capabilities. Synthetic picker tests cover model and
-mode isolation. Physical format SET/reconnect verification is pending.
+mode isolation. On 2026-09-11, physical iPhone build 0.1.0 (99) selected and
+recorded landscape 2.7K/25 D-Log M, then retained that format/color after app
+relaunch/reconnect. The complete camera original is HEVC Main 10, 2688×1512,
+25fps, 157 frames; full decode passed. This qualifies one pair only. Other
+pairs, camera power-off persistence and physical Android verification remain
+pending. See the [survey evidence](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-recording-and-warm-reconnect).
+
+### FORMAT retains the reported size while capabilities are unavailable
+
+Both shells keep a reported portrait, square, 2.7K or unknown resolution visible
+when the effective format list is empty. For example, a reported `3K 9:16`
+shows a `3K` tab, and changing fps keeps its portrait resolution byte. The
+legacy 1080/4K tabs remain when no current size has been reported or the size
+is already one of those two landscape sizes. Reported capabilities and the
+confirmed Pocket 3 normal-Video matrix still take precedence.
+
+Core and Android picker regressions cover this behavior, including retaining the
+portrait resolution when changing fps. After installing the correction on an
+iPhone 16 Pro Max on 2026-09-11, the operator confirmed that the vertical 3K
+picker worked. Physical Android verification and an on-camera fps-change check
+remain pending. The operator's earlier session inputs were not captured, so the
+reproduction does not establish that this fallback caused that session's behavior.
 
 ### Log conversion export (iOS)
 

@@ -3,6 +3,32 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct CamCapTests {
+    @Test func emptyCapabilityPortraitKeepsReportedResolution() {
+        let statusFormat = VideoFormat(resolution: .p3K_9x16, frameRate: .fps25)
+        let formats = CamCapVideoFormat.pickerFormats(
+            available: [], model: CameraModel.resolve(modelId: 0x20, name: nil),
+            shootingMode: -1)
+        let aspects = CamCapVideoFormat.aspects(
+            available: formats, current: statusFormat.resolution.aspect)
+        let resolutions = CamCapVideoFormat.resolutions(
+            available: formats, aspect: aspects.count > 1 ? .nineSixteen : nil,
+            current: statusFormat.resolution)
+        #expect(resolutions == [.p3K_9x16])
+        #expect(resolutions.map(\.tabTitle) == ["3K"])
+    }
+
+    @Test func emptyCapabilityPreservesReportedSizesWithoutInventingAnAspect() {
+        for current in [VideoResolution.p3K_1x1, .p2_7K, .p4K_4x3, .init(rawValue: 0xFE)] {
+            #expect(CamCapVideoFormat.resolutions(available: [], current: current) == [current])
+        }
+        #expect(CamCapVideoFormat.resolutions(available: [], current: nil) == [.p1080, .p4K])
+        #expect(CamCapVideoFormat.resolutions(available: [], current: .p4K) == [.p1080, .p4K])
+        #expect(
+            CamCapVideoFormat.resolutions(
+                available: [], aspect: .sixteenNine, current: .p3K_9x16
+            ).isEmpty)
+    }
+
     @Test func pocket3PickerIncludesDocumentedFormatsWithoutCapabilities() {
         let model = CameraModel.resolve(modelId: 0x20, name: "OsmoPocket3-Test")
         let formats = CamCapVideoFormat.pickerFormats(available: [], model: model, shootingMode: 1)

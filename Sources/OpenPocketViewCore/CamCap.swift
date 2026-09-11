@@ -289,7 +289,12 @@ public enum CamCapVideoFormat {
         available: [VideoFormat], aspect: VideoAspect?, current: VideoResolution?
     ) -> [VideoResolution] {
         if available.isEmpty {
-            return VideoResolution.labeledVideo
+            // Status can arrive before the model/mode enables its picker fallback.
+            // Keep a reported portrait, square or unknown size instead of selecting
+            // the first landscape tab and sending that size on an fps change.
+            let fallback = VideoResolution.labeledVideo
+            let resolutions = current.map { fallback.contains($0) ? fallback : [$0] } ?? fallback
+            return resolutions.filter { aspect == nil || $0.aspect == aspect }
         }
         var seen = Set<VideoResolution>()
         var out: [VideoResolution] = []

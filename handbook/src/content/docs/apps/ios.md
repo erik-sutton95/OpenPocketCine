@@ -10,7 +10,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
 ## What it does
 
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
-- HEVC live view on Pocket 4 / 4 Pro; AVC on Osmo Nano
+- HEVC live view on Pocket 4 / 4 Pro; AVC observed on Pocket 3 and Osmo Nano
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
   False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
   video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
@@ -27,12 +27,18 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Last live D-Log / D-Log2 is the fallback when that atom is missing —
   `colr`/`nclx` is Rec.709 even for log. Opening LUT on a disconnected clip
   keeps that Auto cube (it does not restamp from a missing live SET).
-- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Zoom chips follow
-  the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
-  with 4K max 2×; Nano 1×). Zoom must not drop the live picture. FORMAT lists
+- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+  with 4K max 2×; Nano 1×). Pocket 3's confirmed **2.7K limit is 3×**; its
+  generic 4× choice still needs correction ([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)).
+  Zoom must not drop the live picture. FORMAT lists
   `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16 when the body
   advertises them; aspect is the res byte). A tap stays on that pair until
-  the body reports it.
+  the body reports it. Pocket 3 normal Video also has a
+  [documented fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
+  when the camera supplies no capability table; reported choices take priority.
+  Physical iPhone build 99 passed one 2.7K/25 D-Log M record and warm reconnect
+  ([survey evidence](https://openpocketcine.app/docs/protocol/pocket3/#openpocketcine-recording-and-warm-reconnect)).
+  The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
@@ -98,6 +104,21 @@ project with XcodeGen — see [Setup](../guides/setup/).
 - Optional Frame.io upload when you add your own Adobe keys (Platform API v4)
 - **Share this feed** (Operator Setup → Sharing): this iPhone re-serves live view to other OpenPocketCine iPhones and iPads on the **same camera Wi-Fi**. On the host, tap **Show Wi-Fi code**. Scan it with Camera on the watching device and accept **Join Network**, then return to OpenPocketCine → **Watch a feed** and select the host. You can also join that Wi-Fi in Settings. Only the host connects to the camera inside the app. The watcher has local view assists and scopes, camera readings, REC tally, and **Clean view**. **Request control** asks the host for permission to record, focus, and change supported ISO/shutter/zoom settings; **Release** gives it back. Brief interruptions hold the last picture and automatically retry three times. If sharing ends or reconnection fails, the watcher keeps the error visible; tap **Choose a feed** to rejoin. The QR code contains the Wi-Fi password; show it only to people you want on that network. An optional watcher passcode controls access to the feed separately. The host shares one encode, and a slow watcher waits for a fresh keyframe while others continue. Peer-to-peer discovery and streaming are disabled because they caused severe stuttering during physical testing. One iPad watcher was reported smooth after joining the same Wi-Fi; multiple watchers still need physical verification. Android Sharing is not in this build.
 
+The final watcher QR onboarding, passcode and recovery changes still need
+dedicated physical acceptance. The earlier one-iPad smoothness report does not
+qualify those newer flows or multiple wireless watchers. See the
+[watcher relay evidence](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/watcher-relay.md).
+
+**Multiview** is an experimental iPhone/iPad stage for several cameras on shared
+Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add
+cameras. Each camera has its own preview and recording controls; Record all
+requests recording together without frame-accurate synchronization. See the
+[Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) for supported observations,
+setup, saved stages and remaining physical checks. Pocket 3, Pocket 4 Pro and
+Nano preview and recording have been checked together on iPhone. Pocket 3
+recovery after an app switch required a full rejoin and roughly a minute in the
+recorded test. Android Multiview remains unavailable.
+
 Motion Control durations use half-second dials up to 120 seconds. Swipe left
 to increase duration and right to decrease it. Move the expanded
 window by holding anywhere, or drag the minimized pill directly. Dragging
@@ -107,6 +128,9 @@ continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
 does not reverse stored mechanical angles; MIRROR changes the preview only.
+The recorded physical motion checks are on Pocket 4 Pro; Pocket 3 and broader
+firmware qualification remain pending. See
+[Motion Control qualification](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/programmed-moves.md#evidence-and-qualification).
 
 Verify record start/stop on the camera body until you trust the link.
 
@@ -156,3 +180,11 @@ and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnin
 do not establish where the camera sensor loses detail. EL Zone (`DLM ≈`) and the
 gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.
+
+ND recommendations also derive stops from that estimated curve. Treat D-Log M
+ND readings as estimates, not calibrated filter or sensor-limit measurements.
+LUT exposure compensation, including **Bake exposure** on export, and Face
+Priority EV still use the previous D-Log approximation for D-Log M. The scope
+fix did not calibrate those controls. This limitation concerns exposure math,
+not the choice of the official D-Log M conversion cube. See the
+[D-Log M investigation](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/pocket3-dlogm-curve.md).

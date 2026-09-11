@@ -3,7 +3,7 @@ title: BLE pairing
 description: Scan, GATT, and app-level pairing for Osmo Pocket cameras.
 ---
 
-BLE is control only. In the standard app connection, Wi-Fi credentials are read over GATT and bulk data moves to the camera SoftAP. See the [connection spine](../connection/). A separate experimental Pocket 4 Pro station path is documented below.
+BLE is control only. In the standard app connection, Wi-Fi credentials are read over GATT and bulk data moves to the camera SoftAP. See the [connection spine](../connection/). Experimental station Wi-Fi for Multiview is documented below, with separate model observations.
 
 ## Scan
 
@@ -91,8 +91,10 @@ pump. These observations are specific to the tested Pocket 4 Pro firmware.
 
 A Pocket 4 Pro hardware probe on 2026-09-09 joined a shared Wi-Fi network in
 normal Video mode, without livestream preparation, RTMP configuration, or RTMP
-start. The experimental iOS Multiview screen now implements this station path;
-a Pocket 4 Pro phone session has now confirmed preview and recording start/stop.
+start. The experimental iOS Multiview screen implements this station path.
+Subsequent iPhone checks confirmed simultaneous Pocket 4 Pro, Pocket 3 and Nano
+preview and recording start/stop. See the
+[Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) for the current limits.
 
 After selecting normal Video mode and completing BLE pairing:
 
@@ -126,11 +128,11 @@ from the camera's recording resolution. This did not use RTMP.
 
 Earlier transitions from livestream shooting mode to Video mode dropped station
 control. Select the desired shooting mode before switching Wi-Fi to STA; do not
-assume later shooting-mode transitions preserve the connection. Cold-boot
-persistence, address discovery, multiple cameras, long-duration reliability,
-other Osmo models, and thermal or battery savings remain unverified. An iPhone
-Multiview session confirmed Pocket 4 Pro preview plus fresh recording-start and
-recording-stop status. This is single-camera evidence, not a multicamera soak.
+assume later shooting-mode transitions preserve the connection. The observed
+three-camera iPhone session establishes discovery, preview and recording for
+that setup. Cold-boot persistence, saved-stage restoration, AP return,
+long-duration reliability, other Osmo models, and thermal or battery savings
+remain unverified. It is not a multicamera soak or four-camera performance test.
 
 ### Nano station-mode experiment
 
@@ -144,7 +146,9 @@ reply `01 00 00 00`). After the operator changed that same network to WPA2,
 the same wake/switch/join probe returned `00 00` for the join. The iOS Nano
 path now includes this wake before provisioning. This is evidence of a
 security-mode compatibility issue in the tested setup, not a general firmware
-capability claim. Nano LAN preview still requires physical verification.
+capability claim. Subsequent three-camera iPhone Multiview checks confirmed
+Nano LAN preview and recording start/stop; broader network qualification remains
+pending.
 
 ### Pocket 3 station-mode experiment
 
@@ -155,7 +159,10 @@ After BLE disconnected, TCP 7001 and UDP 9004 connected and the LAN
 `07/07` reply exactly matched the BLE identity. The iOS prototype therefore
 permits the same narrowly scoped missing-getter path as Nano. An acknowledgement
 alone is insufficient: the join and identity checks remain required.
-Pocket 3 iPhone Multiview preview and recording are still awaiting validation.
+Subsequent three-camera iPhone Multiview checks confirmed Pocket 3 preview and
+recording start/stop. AP restoration and saved-stage checks remain pending.
+An app-switch recovery test required a Pocket 3 full rejoin and roughly a minute
+before moving pictures returned.
 
 ## Network scanning
 

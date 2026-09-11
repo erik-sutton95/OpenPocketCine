@@ -111,11 +111,14 @@ watchdog only.
 and the well stays black until the operator SETs 1080 then 4K
 (`0x02/0x18`) or changes COLOR. Same-tab FORMAT is a no-op, so that
 round-trip is the encoder kick. After one failed enable with no picture,
-first-picture recovery waits for `cam_video_param_v2` /
-`camcap_video_format`, SETs a **legal** other pair (not a guessed 4K 30),
-restores the boot format, then one `0x09/0xa8`. One shot; do not mark it
-done before the SET leaves. Pocket 4 / 4 Pro stay on the enable / UDP
-ladder — do not GOP-cut them. (#147, #221)
+first-picture recovery waits for a known recording format from
+`cam_video_param_v2` or the available capabilities. The normal iOS session
+prefers an alternative advertised pair, restores the original, then sends one
+`0x09/0xa8`. With no table, `VideoFormat.firstPictureEncoderKick` uses the other
+1080/4K size at the reported frame rate; it does not invent 4K 30. This existing
+one-shot workaround is separate from the AVC decoder handoff fix below.
+Pocket 4 / 4 Pro stay on the enable / UDP ladder — do not GOP-cut them.
+(#147, #221)
 
 Media is pktType `0x02`. Disconnect has no live-stop — leftover GOP P-frames
 during handshake are expected until this pair starts a clean VPS.
@@ -153,11 +156,12 @@ Compose thread while a present is in flight.
 
 ## Decoder latch
 
-Pocket 4 / 4 Pro: HEVC 720p. Nano: AVC/H.264 High 720p. Configure the
-decoder from VPS/SPS/PPS (`0x40/0x42/0x44`) or Nano AVC SPS/PPS (`0x67/0x68`).
+Pocket 4 / 4 Pro have supplied HEVC 720p; Pocket 3 has supplied AVC 720p;
+Nano has supplied AVC/H.264 High 720p. Configure the decoder from observed
+VPS/SPS/PPS (`0x40/0x42/0x44`) or AVC SPS/PPS (`0x67/0x68`), not the model name.
 Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 `nal_ref_idc=1`) must not latch AVC — that threw `MediaCodec.configure` and
-left Waiting for live view up. Pocket IRAP is often **BLA_W_LP (16)**
+left Waiting for live view up. Pocket HEVC IRAP is often **BLA_W_LP (16)**
 (`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
 IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 
@@ -265,15 +269,17 @@ The iOS decoder now accepts parameter sets but does not submit initial inter
 frames until an AVC IDR or HEVC IRAP can be submitted. The gate resets with the
 decoder lifetime and leaves established-stream recovery unchanged. A regression
 using SPS/PPS plus an inter frame failed before this change: decode returned true
-and set a presentation timestamp. Physical repeated Pocket 3 validation remains
-required; this is not yet a claim that all first-picture failures are resolved.
+and set a presentation timestamp. This regression does not establish that all
+first-picture failures are resolved.
 
 The physical startup trace narrowed this further: the initial AVC IDR went to
 the compressed display layer, then an assist handoff started an empty VT decoder
 mid-GOP. The fix starts AVC in VideoToolbox from its first parameter sets and
 keeps that decoder through assist changes. First-picture recovery no longer
-settles from a compressed enqueue alone on AVC. A Pocket 3 iPhone showed live
-video at approximately 25 fps after this change; repeated joins remain in progress.
+settles from a compressed enqueue alone on AVC. On 2026-09-10, Pocket 3/iPhone
+passed five consecutive normal SoftAP reconnects with decoded live frames at
+approximately 25 fps; first and last screenshot samples showed the picture.
+Those joins do not qualify every cold-boot, firmware or post-first-picture stall.
 The hidden warmup overlay is also removed from accessibility when picture is ready.
 
 ### False-color exposure updates
@@ -286,9 +292,7 @@ currently displayed exposure cancels adoption of an obsolete build. The initial
 map still warms asynchronously. This addresses paint disappearing while zebra and
 the underlying video remain present; it does not validate D-Log M calibration.
 
-Physical check, 2026-09-10: Pocket 3 on iPhone passed five consecutive normal
-SoftAP reconnects with decoded live frames; first and last screenshot samples
-showed the picture. A subsequent ~30-second run with auto ISO, Limits false color,
+Physical check, 2026-09-10: a Pocket 3/iPhone ~30-second run with auto ISO, Limits false color,
 and waveform retained false-color paint in all 60 sampled screen captures at
 approximately 25 fps. This sample does not exclude sub-sample hitches or validate
 D-Log M thresholds. Nano regression and Multiview lifecycle checks remain separate.
