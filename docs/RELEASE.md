@@ -62,7 +62,8 @@ git push origin v0.2.0
 ```
 
 Then a GitHub Release from that tag. Changelog: move `[Unreleased]` entries under
-`## [0.2.0] - YYYY-MM-DD` in the same version-bump PR.
+`## [0.2.0] - YYYY-MM-DD` in the same version-bump PR. TestFlight and Play tester
+notes are a this-build window, not that changelog — [`tester-notes.md`](tester-notes.md).
 
 One tag for both platforms (`v0.2.0`). Do not cut `ios/0.2.0` and `android/0.2.0`
 unless the apps actually ship different product versions — they share the Swift

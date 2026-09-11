@@ -76,6 +76,10 @@ swift-test:
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
 
+# Print the this-build feat/fix window for TestFlight / Play notes.
+tester-notes-window:
+    ./scripts/tester-notes-window.sh
+
 # Validate TestFlight "What to Test" copy and print it.
 testflight-notes:
     ./scripts/ios-release-notes-check.sh

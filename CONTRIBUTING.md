@@ -53,13 +53,14 @@ GitHub-specific:
   Swift/iOS, Android, and the protocol handbook feed that gate and skip when
   their paths did not change). The PR template must be filled in. Maintainer
   GitHub settings: [`docs/repository-settings.md`](docs/repository-settings.md).
-- Changes that can trigger a TestFlight build must update
-  [`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt). See
-  [`docs/testflight-ci.md`](docs/testflight-ci.md).
-- Changes that can trigger a Play closed-testing upload must update
+- Changes that can trigger a TestFlight build must **replace**
+  [`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt)
+  with the this-build window (`just tester-notes-window`). See
+  [`docs/tester-notes.md`](docs/tester-notes.md).
+- Changes that can trigger a Play closed-testing upload must **replace**
   [`Apps/Android/Play/WhatToTest.en-US.txt`](Apps/Android/Play/WhatToTest.en-US.txt)
-  and the 500-character [`whatsnew-en-US`](Apps/Android/Play/whatsnew/whatsnew-en-US).
-  See [`docs/android-play-ci.md`](docs/android-play-ci.md).
+  and the 500-character [`whatsnew-en-US`](Apps/Android/Play/whatsnew/whatsnew-en-US)
+  the same way. See [`docs/tester-notes.md`](docs/tester-notes.md).
 
 ## Code standards
 

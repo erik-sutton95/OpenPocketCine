@@ -116,55 +116,23 @@ just android-play-dispatch
 
 ## Tester-facing release notes
 
-Play listing "what's new" is 500 characters. The longer What to Test file is
-operator copy for GitHub / email, same shape as TestFlight.
+**this-build** window, same contract as TestFlight:
+[`tester-notes.md`](tester-notes.md). Play listing "what's new" is 500
+characters. The longer What to Test file is operator copy for GitHub / email.
 
-Any pull request that can trigger a Play upload must replace
-`Apps/Android/Play/WhatToTest.en-US.txt` **and** the 500-character
-`whatsnew-en-US`. For a feature summary, use **New features** with 1-6 bullets.
-Include only new Android capabilities in the release window; omit fixes,
-maintenance and test instructions. Keep the Play paragraph focused on the same
-features and within its 500-character limit:
+Any pull request that can trigger a Play upload replaces
+`Apps/Android/Play/WhatToTest.en-US.txt` **and** `whatsnew-en-US` with this
+PR plus up to three other newest operator-visible `feat:` / `fix:` items
+Android testers can see.
 
-```text
-New features
-
-- ND assist suggests a filter strength to help balance exposure.
+```bash
+just tester-notes-window
+just android-play-notes
 ```
-
-For detailed tester notes, use all three sections in this order:
-
-```text
-New and changed
-
-- Pair over Bluetooth, join the camera's Wi-Fi, and watch a live view with waveform and assists.
-
-Fixes
-
-- Nothing to call out yet — this is the first closed-beta build.
-
-What to test
-
-- Pair an Osmo Pocket 4 Pro, join its Wi-Fi, and confirm live view fills the monitor.
-```
-
-Write for camera operators:
-
-- Include only behavior visible in the Android app.
-- Say what changed for the tester, not how it was implemented.
-- Use the names testers see in the app.
-- Keep **New and changed** to 1-6 bullets, **Fixes** to 1-8, **What to test** to 1-5 concrete actions.
-- Exclude iPhone, TestFlight, website, CI, architecture, identifiers, issue numbers, and source-file details.
 
 `scripts/android-release-notes-check.sh` enforces the format. Pull-request CI
 also verifies that the notes files changed when Android production paths
 changed.
-
-Preview locally:
-
-```bash
-just android-play-notes
-```
 
 ## Version numbers
 

@@ -76,8 +76,7 @@ Link health in the top bar is delivery (FPS chip), not RSSI.
   tally around the picture. Request/Release control stays on the monitor; camera
   controls appear only with the host grant. Interrupted feeds hold the last frame,
   show bounded reconnect progress, and retain Leave / Choose a feed after failure.
-- TestFlight “What to Test” is operator copy (`docs/testflight-ci.md`).
-- Play closed-testing notes are the same voice (`docs/android-play-ci.md`).
+- TestFlight / Play What to Test is this-build operator copy (`docs/tester-notes.md`).
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a
   tester who never reaches Operator Setup can still send a report.
 - Operator Setup → System → **Share Diagnostics**. iOS screenshot for
