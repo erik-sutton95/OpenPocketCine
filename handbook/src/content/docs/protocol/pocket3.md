@@ -49,8 +49,8 @@ it as the encoded playback rate.
 | Slow Motion, 2.7K | 4X(120) | Selected in **UI**, with an accepted request; no 100 option visible in this state. |
 | Slow Motion, 1080P | 4X(120), 8X(240) | Both selected with **UI, accepted and status** evidence. |
 | Photo | Frame 16:9 or 1:1; Countdown Off/3s/5s/7s | Both frames and all timer choices selected in **UI**. The timed square JPEG+RAW shot has a preserved JPEG and independently validated full-resolution DNG. |
-| Panorama | 180° and 3×3 grid; Countdown Off/3s/5s/7s | Both capture sequences exercised in **UI**; grid capture shows a nine-step counter. Downloaded JPEG dimensions verified; component files unverified. |
-| Timelapse | 1080P, 2.7K, 4K; 25/30 | All six combinations selected in **UI**. Interval, Duration and Timelapse Mode have separate controls. |
+| Panorama | 180° and 3×3 grid; Countdown Off/3s/5s/7s | Both capture sequences exercised in **UI**. Stitched JPEGs, 13 JPEG components and the RAW-selected grid's nine DNG components have **File** evidence. |
+| Timelapse | 1080P, 2.7K, 4K; 25/30 | All six combinations selected in **UI**. Interval, Duration and Timelapse Mode have separate controls. Short and full Raw+Video takes have matching nine/151 video frames and validated DNG counts. |
 | Motionlapse | L to R, R to L, Custom Motion within Timelapse Mode | Settled menus confirm the choices; preview and a custom recording flow exercised in **UI**. |
 | Hyperlapse | 1080P, 2.7K, 4K; 25/30 | All six combinations selected in **UI**; Speed offers Auto/2X/5X/10X/15X/30X. |
 
@@ -226,10 +226,12 @@ neither a general rounding rule nor a legal range for unknown tags follows from
 this sample. Restoring the controls and selecting None returned all 15 tagged
 values to their initial camera-reported state.
 
-The test scene did not contain a face, so facial processing, its effect on saved
-pixels, and its processing location remain unverified. The recorded Glamour-on
+This live-camera Glamour test scene did not contain a face, so its facial
+processing and effect on saved pixels remain unverified. The recorded Glamour-on
 take had Smooth at zero. Its immediate ancillary glamour SET returned `DF`,
-while recording itself succeeded; see the recording observations below.
+while recording itself succeeded. The separate
+[local editor tests](#mimo-local-editor-and-exports) below do not establish an
+equivalent camera effect or command.
 
 ### Photo
 
@@ -299,15 +301,19 @@ Its file-format options are **JPEG** and **RAW**, unlike Photo's JPEG+RAW label.
 The 180° capture sequence displayed progress then restored the idle monitor.
 The grid sequence displayed **5/9** during capture. Preserved downloaded JPEGs
 measure **4096×1536** for the 180° take and **4000×3840** for the grid take.
-These establish the downloaded output dimensions; the component-file count,
-stitch quality and complete component sets remain unverified. The three stitched
-JPEG downloads, including the later RAW-selected take, have full SHA-256 matches
-to their camera HTTP files.
+The later card copy contains **four 3072×3072 JPEG components** for this 180°
+take and **nine 3072×3072 JPEG components** for this grid take. These are observed
+counts for the preserved takes, not a general component-count rule. Stitch
+quality remains unmeasured. The three stitched JPEG downloads, including the
+later RAW-selected take, have full SHA-256 matches to their camera HTTP files
+and copied card files.
 
 A later **RAW-selected 3×3** capture also showed progress **8/9** and returned
 to idle. Its album result displayed a rendered still and **Downloaded** status.
 The preserved Mimo download is independently identified as **JPEG, 4000×3840**.
-This verifies the stitched download, not preservation of RAW/DNG components.
+The later card copy also preserves **nine 3072×3072 DNG components** associated
+with this take. Every full-resolution CFA array was independently validated;
+this establishes the RAW source set separately from the stitched JPEG.
 
 The captured mode entry uses `0x02/0xE1` value **`0C`**. Type selection uses
 `0x02/0x6E`, with **`05` for 180°** and **`07` for the 3×3 grid**. Pano shutter
@@ -350,15 +356,20 @@ too short to save timelapse photos, with **CANCEL** and **Save Video Only**
 actions. Cancel retained 2s and Raw+Video. Red values are therefore an entry to
 a downgrade decision, not simply untappable options. The equivalent JPEG+Video
 warning flow has not been established. A short Raw+Video take entered recording
-and later returned to idle; its downloaded video was preserved and inspected,
-while RAW companions remain unverified.
+and later returned to idle. Its preserved output has nine video frames, and the
+card copy supplies **nine 3840×2160 DNGs**. Their whole-second EXIF timestamps
+span 16 seconds with eight 2-second steps.
 A subsequent **five-minute Raw+Video take at 2s, 4K/30** ran through the configured
 duration and returned to idle automatically. Camera counters reached elapsed
 300 seconds and 151 frames before resetting, with no stop request at completion.
 The preserved downloaded video independently contains **151 frames**, lasts
 **5.038367 seconds**, and is **3840×2160 HEVC, 8-bit**, at **30000/1001 fps**.
-This is **File** evidence for the video output; RAW still count and integrity
-remain separate. Mimo's displayed 30 is not an exact 30/1 in this file.
+The card copy independently supplies **151 3840×2160 DNGs**, with validated
+full-resolution CFA arrays. Their EXIF timestamps span **300 seconds**: 148
+successive differences are 2s, one is 3s and one is 1s. These timestamps have
+whole-second resolution, so they do not measure subsecond exposure cadence.
+The RAW count agrees with both the status counter and video frame count.
+Mimo's displayed 30 is not an exact 30/1 in this file.
 
 Timelapse enters mode **`02`** through `0x02/0xE1`. Its start/stop uses
 **`0x02/0x01` with `01`/`00`**, rather than the Video record opcode `0x02/0x02`.
@@ -620,7 +631,7 @@ explicitly identified.
 | Photo, 1:1 | JPEG, 3072×3072 |
 | Panorama, 180° | JPEG, 4096×1536 |
 | Panorama, 3×3 grid | JPEG, 4000×3840 |
-| Panorama, 3×3 grid with RAW selected | JPEG, 4000×3840; RAW components not preserved |
+| Panorama, 3×3 grid with RAW selected | JPEG, 4000×3840; nine full-resolution DNG components subsequently preserved from the card |
 
 The square 3K/60 take is a useful dependency to investigate: the preceding camera
 color status was Normal and the last explicit compression SET was H.264, but
@@ -628,8 +639,9 @@ the preserved output is HEVC 10-bit. An automatic format-dependent codec change
 is a candidate explanation, not a rule established by this sample. The later
 Glamour-on take also reported Normal before recording and has the same square
 HEVC 10-bit encoding. Its 480 video frames decode successfully, but Smooth was
-zero and the scene contained no face: neither a nonzero Smooth effect nor a
-processed facial-effect export is established.
+zero and the scene contained no face: this camera recording does not establish
+a nonzero Smooth effect. Processed local-editor exports are documented
+separately below.
 
 Audio-stream inspection also distinguishes menu visibility from saved output:
 
@@ -641,23 +653,34 @@ Audio-stream inspection also distinguishes menu visibility from saved output:
 
 The mono/stereo results reflect the selected settings in those takes, not a
 color-mode channel restriction. Audio rows and meters remained visible in some
-modes whose preserved outputs contain no audio stream. The Photo DNG is
-preserved separately from the phone imports; separate WAV backups and
-Timelapse/Panorama RAW source sets remain unverified.
+modes whose MP4 outputs contain no audio stream. The card copy supplies separate
+**AAC-LC, 48 kHz stereo ADTS files** for all three inspected Slow Motion takes:
+
+| Slow Motion take | Separate AAC duration |
+| --- | --- |
+| 1080P/240 | 4.906667s |
+| 4K/120 D-Log M | 3.989333s |
+| 4K/120 HLG | 3.989333s |
+
+All three audio files fully decode. Their durations are consistent with
+real-time capture alongside the longer slow-motion playback; sample-accurate
+audio/video alignment remains unverified. These AAC companions are separate
+from the external-microphone WAV backup feature, which remains untested.
 
 The D-Log M recording-mode identity comes from the accepted color setting and camera state;
 **BT.709 tags alone do not identify D-Log M or prove a Rec.709 recording**.
 The Slow Motion files also show why the shooting-rate setting must be kept
 separate from container playback rate. Metadata alone does not calibrate the
-transfer curve or verify audio content; the full hashes establish unchanged
-downloads only for the 20 matched files. Other files and companions remain
-unverified until individually matched and inspected. Recording settings and
+transfer curve or verify audio/video synchronization. Full hashes establish
+unchanged downloads for the 20 matched phone files; the later card copy also
+matches all 25 previously preserved camera HTTP files. File integrity does not
+establish every mode's output behavior. Recording settings and
 the live-preview signal are separate; see [live view](../live-view/) and
 [HTTP media](../media/).
 
 ### Camera HTTP originals and companions
 
-The independently verified camera-download set contains **24 complete files**:
+The initial independently verified camera-download set contains **24 complete files**:
 the 20 matched originals, the square Photo DNG and three LRF previews. Each saved
 transfer has contiguous HTTP `206` ranges, a consistent total length and ETag,
 matching local length, and a recomputed SHA-256 matching its transfer manifest.
@@ -674,6 +697,51 @@ On this firmware, requests using the camera's exact slash-separated file path
 worked, while percent-encoding the path separators returned `404`. The camera
 served byte ranges. Preserve separators when encoding individual path segments;
 verify response ranges and total length before treating a download as complete.
+
+### USB card copy and source sets
+
+Selecting **Transfer File/OTG Connection** on the camera mounted its card over
+USB. The complete copy contains **361 files totaling 5,073,372,646 bytes**;
+all source/copy SHA-256 comparisons matched, with zero copy-validation errors.
+The card was then ejected. This inventory includes older takes and auxiliary
+card files, including MISC contents. It is not 361 new survey recordings.
+All **25 previously verified camera HTTP files, totaling 927,102,530 bytes**,
+independently match files in this card copy; the 20 matched phone imports are a
+subset. These overlapping collections must not be added together.
+
+The preserved RAW inventory is:
+
+| Capture | DNG count | Full CFA dimensions | Total DNG file bytes |
+| --- | --- | --- | --- |
+| Square Photo | 1 | 3072×3072 | 19,314,420 |
+| RAW-selected 3×3 Panorama | 9 | 3072×3072 | 173,940,344 |
+| Short Raw+Video Timelapse | 9 | 3840×2160 | 155,263,488 |
+| Full five-minute Raw+Video Timelapse | 151 | 3840×2160 | 2,605,540,864 |
+
+All **170 DNGs** contain five TIFF directories (IFDs) and one full-resolution
+**RGGB 2×2 CFA array**, stored as one uncompressed 16-bit sample per pixel.
+The square arrays each occupy **18,874,368 bytes** and the landscape arrays
+**16,588,800 bytes**; the complete files also contain previews and metadata.
+Standard referenced data ranges and image bounds pass validation, and all 170
+RAW arrays have distinct hashes. Sample statistics on ten representative files
+confirm nonconstant image data. This does not establish effective sensor
+precision, demosaiced image quality or the meaning of opaque MakerNote fields.
+
+The observed card layout separates rendered outputs from sequence components:
+
+| Observed location | Contents in the inspected takes |
+| --- | --- |
+| `DCIM/DJI_001` | MP4/JPEG outputs, the same-stem square Photo DNG, and same-stem Slow Motion AAC sidecars |
+| `DCIM/PANORAMA/001_<take>` | `PANO_<index>.JPG` for the JPEG takes; `PANO_<index>.DNG` for the RAW-selected take |
+| `DCIM/TIMELAPSE/001_<take>` | `TIMELAPSE_<index>.DNG` for both Raw+Video takes |
+
+Here `<take>` and `<index>` replace the observed take numbers and four-digit
+source indices. Directory suffixes, capture times and controlled recordings
+associate these sets with their outputs. They do not establish a universal
+naming algorithm or pixel-by-pixel source-to-video alignment. All 13 source
+JPEGs from the two JPEG panorama takes decode cleanly. These nested RAW/source
+paths were recovered from the card filesystem; camera HTTP retrieval of them
+has not been demonstrated.
 
 ### Mimo album
 
@@ -701,7 +769,8 @@ describes the first choice as retaining the original format and the second as
 processing videos to add effects. Both displayed an estimate of less than one
 minute in this case; that is a UI estimate, not measured processing time.
 The original branch produced the preserved file whose full hash matches the
-camera original. A processed Glamour export was not verified. The chooser
+camera original. This chooser's **Video with Glamour Effects** branch remains
+unverified. The chooser
 establishes two distinct download paths in Mimo; it does not establish where
 processing runs or what facial changes a processed file would contain.
 
@@ -727,8 +796,60 @@ not an independent diagnosis of radio interference. The first 12-item batch
 subsequently lost its progress banner and showed completed-download checkmarks
 on all selected items. This is **UI completion**; original metadata and companion
 files are separate checks. The metadata and full-file comparisons above validate
-the 20 preserved imports; uncollected companion sets remain pending. A second
+the 20 preserved imports. The later card inventory establishes component counts
+and RAW/audio companions independently of these album checkmarks. A second
 five-item batch also reached this UI completion state.
+
+### Mimo local editor and exports
+
+A separate pass used Mimo's local editor on preserved survey imports. **Six MOV
+derivatives totaling 137,719,683 bytes** were exported to the phone and preserved;
+all primary video and audio streams fully decode without error. Their sources
+match known camera originals by SHA-256. The derivatives are a separate
+collection from camera originals and the complete card copy.
+
+The inspected editor exposes these **UI** choices:
+
+| Control | Observed choices |
+| --- | --- |
+| Aspect | Default, 16:9, 4:3, 1:1, 3:4, 9:16, 21:9 |
+| Export resolution | 720p, 1080p, 2.7K, 4K |
+| Export frame rate | 30, 60 fps |
+| Bitrate | Lower, Recommended, Higher |
+| Noise Reduction | On/Off; Faster–Better control |
+| 10-bit | On/Off |
+| Color Recovery → OsmoPocket Series | D-Cinelike, D-LOG M; None also selectable |
+| Portrait → Glamour Effects | Off/On; Slim, Chin, Smooth, Brighten, Enlarge, Lighten |
+
+These are editor controls, not additional Pocket 3 shooting formats. In
+particular, the family's D-Cinelike preset does not establish Pocket 3
+D-Cinelike capture, and a 9:16 aspect choice or the Portrait tool does not
+verify native portrait recording. The local six-control Glamour panel is
+distinct from the eleven controls in the live-camera panel.
+
+Three controlled export pairs all used **Default aspect, 4K/30 and Recommended
+bitrate**:
+
+| Controlled difference | Independently inspected result |
+| --- | --- |
+| Square project, 10-bit On versus Off; Noise Reduction On/Faster | Both 2160×2160, 30fps, 241 frames / 8.033333s. On produces HEVC Main 10 / 10-bit YUV420; Off produces HEVC Main / 8-bit YUV420. |
+| D-Log M source, Color Recovery D-LOG M versus None; Noise Reduction Off, 10-bit On | Both 3840×2160 HEVC Main 10, 30fps, 218 frames / 7.266667s. All 218 corresponding decoded video frames differ. |
+| Square source, local Glamour master On versus Off; Noise Reduction Off, 10-bit On | Both 2160×2160 HEVC Main 10, 30fps, 153 frames / 5.100000s. All 153 corresponding decoded video frames differ; first-frame review shows changes in the face region. |
+
+All six contain **AAC-LC, 48 kHz stereo**; within each pair the decoded audio is
+identical. The D-Log M source was 4K/25 with mono audio, so its 30fps/stereo
+exports also demonstrate that editor output timing and channel count can
+differ from the source. No new stereo spatial information or particular frame
+interpolation algorithm is established. Likewise, the square project's 4K
+export label produced **2160×2160**, not the source's 3072×3072 dimensions.
+
+The local Glamour pair retained the installation's stored strengths: Slim 41,
+Chin 46, Smooth 78, Brighten 43, Enlarge 35 and Lighten 57. They are neither
+factory defaults nor tested endpoints; no strength slider was changed. Only
+the master state changed between exports. Pixel differences do not isolate an
+individual control, measure quality, identify a LUT/log curve or establish the
+processing location. These local-editor results also leave the separate Device
+Download → **Video with Glamour Effects** branch untested.
 
 ## Livestream
 
@@ -849,10 +970,11 @@ of the radio channel or persistence across camera power-off.
 | Wi-Fi | 2.4 GHz and 5.8 GHz SETs accepted; independent readbacks and reconnect UI confirm restoration | Radio-channel verification, throughput and persistence across camera power-off. |
 | Gimbal and Handle | Follow/Tilt Locked/FPV and Default/Fast/Slow cycles; Easy Control toggled off/on; Calibrate visible | Axis response, numerical speeds, calibration and physical tracking behavior. |
 | Monitoring | Grid choices and several overlay toggles inspected | Signal accuracy, timecode source/sync and per-mode behavior. |
-| Media | 20 phone imports with full camera-file hash matches; square Photo DNG and three LRF previews verified separately | Timelapse/Panorama RAW source sets, processed Glamour export, other editor/export tools and interrupted transfers. |
+| Media | 20 phone imports with full camera-file hash matches; copied card matches all 25 prior camera HTTP files; Photo, Timelapse and Panorama RAW sets and three Slow Motion AAC sidecars verified | Other source-set combinations and general naming/HTTP retrieval rules, Device effects-download branch and interrupted transfers. |
+| Local editor | Six validated derivatives: 10-bit, Color Recovery and local Glamour export pairs; aspect/export menus inspected | Other editor tools and output combinations, individual Glamour controls, exact transforms and quality measurements. |
 | Livestream | RTMP setup/lifecycle; full local 1080p25 H.264/AAC connection recovered and decoded | Other preset outputs, interruption recovery, simultaneous recording and public-platform flows. |
 | Connection | Existing-session and warm connection observations | A controlled camera power-off/power-on comparison; app relaunch is not camera cold boot. |
-| Accessories/body controls | Outside this remote Mimo pass | Wireless microphones, USB webcam/transfer, external timecode, physical orientation and body-only settings. |
+| Accessories/body controls | USB Transfer File/OTG entry, full card copy and ejection completed | Wireless microphones, USB webcam, external timecode, physical orientation and body-only settings. |
 
 Firmware features still deserving their own evidence include focus breathing
 compensation, FPV-⊥, background downloads, webcam D-Log M and 4K output, recording
