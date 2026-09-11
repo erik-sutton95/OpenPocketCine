@@ -4,25 +4,36 @@ Reference for FORMAT: which **resolution × aspect × frame-rate** combinations 
 Osmo body can record, how that is encoded on the wire, and what OpenPocketCine
 should treat as source of truth.
 
-Live view stays ~720p HEVC (Pocket) / AVC (Nano) regardless of the recording
-pair. FORMAT is the **file** the body writes, not the live raster.
+Observed live view is ~720p HEVC on Pocket 4 / 4 Pro and AVC on Pocket 3 / Nano,
+separate from the recording pair. Detect the actual codec from parameter sets;
+these observations do not qualify every firmware/mode. FORMAT is the **file**
+the body writes, not the live raster.
 
-Accessed 2026-09-05. Official tables are DJI spec pages. Wire facts are this
-repo. Do not invent a pair that is missing from both.
+Official spec tables accessed 2026-09-05; implementation notes reconciled with
+PRs #277 and #316 on 2026-09-11. Wire facts are this repo. Do not invent a pair
+that is missing from both the specification and camera evidence.
 
 ## Source of truth
 
-**Legal combinations come from the camera.** On connect (and after a shooting-mode
-change) the body publishes `camcap_video_format` over `0x00/0x99`. FORMAT already
-lists those pairs. Do **not** replace that table with a hard-coded per-model
-matrix — Nano `4K 4:3` has no 60 fps, Pocket 3 `4K` Video max zoom is 2×, Pocket
-4 Pro SlowMo 200/240 is lens-dependent, and firmware can reshape the list.
+**Reported capabilities take priority.** Subscribe to `camcap_video_format`
+over `0x00/0x99` for the current shooting mode; FORMAT preserves the reported
+pairs. Do not replace a reported table with a per-model matrix. Nano `4K 4:3`
+has no 60 fps, Pocket 4 Pro SlowMo 200/240 is lens-dependent, and firmware can
+reshape the list.
+
+The tested Pocket 3 rejected the capability subscription while current-format
+status still worked. With an empty table and a confirmed normal Video mode,
+both shells use the documented Pocket 3 Video matrix as a picker fallback.
+This exception does not apply to SlowMo, livestream or an unknown shooting mode.
+It is a source-backed choice list, not proof that every pair has passed physical
+recording/reconnect checks. See [the public fallback notes](../handbook/src/content/docs/protocol/commands.md#pocket-3-format-choices-without-a-capability-table).
 
 What still has to live in the app:
 
 | Layer | Who owns it | Why |
 | --- | --- | --- |
-| Legal `[res][fps]` pairs for the current mode | Camera (`camcap_video_format`) | Combinations are not a cartesian product |
+| Reported `[res][fps]` pairs for the current mode | Camera (`camcap_video_format`) | Combinations are not a cartesian product |
+| Empty-table Pocket 3 normal-Video fallback | `CamCapVideoFormat.pickerFormats`, Kotlin `VideoFormat.pickerFormats` | DJI's documented Video matrix; reported capabilities always override it |
 | Resolution **byte → label / pixels / aspect** | App dictionary | The wire is one byte, not `"2.7K 4:3"` |
 | Frame-rate **index → fps** | App dictionary | Same: `@1` is an index |
 | Expected matrices (this doc) | DJI specs + physical dumps | Labels, UI grouping, capture checklist |
@@ -60,10 +71,12 @@ Pocket 4 Pro Video (`mimo-live-start-20260828`): 12 pairs, 4K 24–60 then 1080p
 republishes when the mode changes. `camcap_mode_profile` is subscribed and
 **not parsed**.
 
-`CamCapVideoFormat.parse` and `VideoFormat.parseVideoParamV2` only keep bytes
-that exist on `VideoResolution` / `VideoFrameRate`. Unknown codes are
-**dropped**. Today that enum is only `0x0A` 1080p and `0x10` 4K, fps 24–60.
-A Nano that advertises 2.7K / 4:3 therefore never reaches the FORMAT sheet.
+`CamCapVideoFormat.parse` and `VideoFormat.parseVideoParamV2` preserve raw
+resolution and frame-rate bytes. `VideoResolution` / `VideoFrameRate` are value
+types, not closed two-resolution enums. Known catalog codes receive labels;
+unknown codes stay visible as hexadecimal choices. A Nano's advertised 2.7K
+and 4:3 pairs therefore reach the FORMAT sheet. Labeling a catalog code does not
+make it a legal pair on every model or mode.
 
 ### Frame-rate index
 
@@ -77,9 +90,9 @@ A Nano that advertises 2.7K / 4:3 therefore never reaches the FORMAT sheet.
 | `04` | 48 | yes |
 | `05` | 50 | yes |
 | `06` | 60 | yes |
-| `07` | 120 | display-only until a SlowMo camcap take |
-| `08` | 240 | display-only |
-| `0A` | 100 | display-only |
+| `07` | 120 | only from the current SlowMo capability table |
+| `08` | 240 | only from the current SlowMo capability table |
+| `0A` | 100 | only from the current SlowMo capability table |
 | `0B` | 96 | Osmosis; not on current Pocket/Nano spec sheets |
 | `1D` | 15 | Osmosis; not on current Pocket/Nano spec sheets |
 
@@ -93,9 +106,9 @@ Pixel sizes match current DJI spec tables.
 
 | code | pixels | Label | Aspect | Seen on (spec / catalog) |
 | --- | --- | --- | --- | --- |
-| `0x0A` | 1920×1080 | 1080p | 16:9 | Pocket 3/4/4P, Nano. **FORMAT SET today** |
+| `0x0A` | 1920×1080 | 1080p | 16:9 | Pocket 3/4/4P, Nano |
 | `0x0C` | 1920×1440 | 1080p | 4:3 | Nano |
-| `0x10` | 3840×2160 | 4K | 16:9 | Pocket 3/4/4P, Nano. **FORMAT SET today** |
+| `0x10` | 3840×2160 | 4K | 16:9 | Pocket 3/4/4P, Nano |
 | `0x2D` | 2688×1512 | 2.7K | 16:9 | Pocket 3, Nano |
 | `0x42` | 1080×1920 | 1080p | 9:16 | Pocket 3/4/4P |
 | `0x43` | 1512×2688 | 2.7K | 9:16 | Pocket 3 |
@@ -126,12 +139,19 @@ Shooting mode (`0x02/0xE1`, sparse — never sweep):
 
 ## What the FORMAT sheet does today
 
-iOS `CaptureControlSheets` / Android `CaptureLists` build tabs from
-`CamCapVideoFormat.resolutions`. Empty camcap falls back to 1080 / 4K and
-24–60. Tests assert `2.7K` is **not** a tab.
+iOS `CaptureControlSheets` and Android `LiveControlSheets` use the effective
+picker formats: reported capabilities first, then the Pocket 3 normal-Video
+exception above. With multiple known aspects, the picker groups by aspect,
+resolution and the frame rates available for that resolution. Unknown bytes
+are retained. Other empty-table paths keep the existing 1080/4K and normal
+24–60 fallback; an already-reported nonstandard frame rate is preserved.
 
-So even if a Nano camcap lists `0x2D` / `0x67`, the parser throws them away
-and the operator only sees 1080 and 4K.
+A selection remains pinned until a `cam_video_param_v2` report confirms that
+resolution/frame-rate pair. An unrelated battery, exposure or gimbal update
+does not confirm the optimistic selection. PR #277 recorded a physical
+Nano/iPhone check of additional formats and the picker staying on its selection.
+PR #316 left Pocket 3 2.7K selection, recording and reconnect acceptance pending;
+the fallback and automated tests alone do not establish those results.
 
 ## Pocket-line aspects (why Nano and Pocket 3 look “richer”)
 
@@ -192,8 +212,11 @@ unspecified in those rows).
 
 **Low-Light:** 4K 16:9 and 1080p @ 24/25/30. No 2.7K, no 48/50/60, no 1:1/9:16.
 
-**Zoom (DJI spec, already in `CameraModel`):** Video 1080p 4×, 2.7K 3×,
-4K 2×. SlowMo / Timelapse: off.
+**Zoom (DJI spec):** Video 1080p 4×, 2.7K 3×, 4K 2×.
+SlowMo / Timelapse: off. The current `CameraModel.activeZoomStops` clamps
+4K to 2× but still offers 4× for 2.7K. The [physical Mimo survey](../handbook/src/content/docs/protocol/pocket3.md#zoom-and-med-tele)
+confirmed the 3× endpoint at 2.7K. The app clamp still needs an implementation
+correction; the existing code is not proof of 4× support.
 
 **Stills:** 16:9 3840×2160, 1:1 3072×3072. No 4:3 video on this body.
 
@@ -372,19 +395,21 @@ Original **Osmo Action**: 4K 16:9 24–60, 4K 4:3 24–30, 2.7K, 1080p to 240,
 
 ---
 
-## App work (when implementing, not this note)
+## Implementation and remaining capture work
 
 1. **Keep camcap as the FORMAT wheel.** `VideoResolution` / `VideoFrameRate`
    now include catalog 2.7K / 4:3 / 1:1 / 9:16 and SlowMo 100/120/240.
-   Empty camcap still falls back to 1080 / 4K 16:9. Unknown bytes stay on
-   the wheel as a hex tab instead of being dropped.
+   Unknown bytes stay on the wheel as a hex tab instead of being dropped.
+   Empty-table behavior is described above, including the Pocket 3 normal-Video
+   fallback; do not extend that exception to other modes.
 2. **Do not hard-code “Nano = these 36 pairs.”** Use this doc + DJI specs
    to name bytes and to check a dump. The body can subset the list (color,
    electronic stabilization, SlowMo).
-3. **UI grouping.** Pocket 3 body: aspect chip, then size, then fps. OPC
-   can group `VideoResolution` by `aspect` the same way. Changing aspect is
-   a `0x02/0x18` SET to another res byte at the current fps, then wait for
-   camcap to republish.
+3. **UI grouping.** Both shells group `VideoResolution` by `aspect` when
+   multiple aspects are available, then offer size and fps. Changing aspect
+   selects another resolution byte through `0x02/0x18`; choose a listed pair
+   and wait for `cam_video_param_v2` confirmation. A status echo is distinct
+   from a capability-table update.
 4. **Illegal examples to keep in tests** (from specs, not guesses):
    Nano 4K 4:3 × 60; Pocket 4 Video 2.7K; Pocket 3 Video 4:3; Pocket 4 Pro
    med-tele SlowMo 4K 240.
@@ -397,10 +422,12 @@ Original **Osmo Action**: 4K 16:9 24–60, 4K 4:3 24–30, 2.7K, 1080p to 240,
    [`capture-guide.md`](capture-guide.md)):
    - Nano Video camcap at 16:9 and at 4:3 (confirm `0x2D`/`0x0C`/`0x5F`/`0x67`).
    - Nano SlowMo camcap.
-   - Pocket 3 Video camcap at 16:9, 1:1, 9:16 when the body arrives.
+   - Pocket 3 Video selections at 16:9, 1:1 and 9:16: preserve capability
+     rejections as well as successful status replies, and inspect originals.
    - Pocket 4 / 4 Pro 9:16 SET + resulting camcap.
    - Pocket 4 Pro SlowMo 4K 200 (wide and tele) for the missing fps index.
 
-Until those dumps land, FORMAT can offer any **labeled** pair the live
-camcap actually contains. Spec tables above are the expected set, not a
-SET allow-list.
+FORMAT preserves pairs reported by the live capability table, including
+unlabeled bytes. The specification tables above are expected matrices, not a
+general SET allow-list. The explicit Pocket 3 normal-Video fallback is the
+implemented exception and remains subject to camera confirmation.

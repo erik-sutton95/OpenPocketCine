@@ -10,7 +10,7 @@ project. Markdown in `handbook/src/content/docs/` is the source. Preview with
 `docs/live-session.md`, …) stay in the git repo and are not uploaded here.
 
 OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
-this repository. Protocol facts come from public behavior and hardware we own.
+this repository. Protocol facts come from public behavior and hardware we test.
 
 :::caution[Do not publish captures]
 Packet captures stay in gitignored `captures/` and are never committed. Do not
@@ -21,9 +21,10 @@ open issues with pcaps or SoftAP passwords.
 
 - [Setup and build](./guides/setup/) — `just`, Xcode, Android, quality gate
 - [Troubleshooting](./guides/troubleshooting/) — pairing, Wi-Fi, live view, VPNs / ad blockers
+- [Multiview prototype](./guides/multiview-prototype/) — experimental multicamera monitoring on iPhone and iPad
 - [Architecture](./apps/architecture/) — portable Swift core, SwiftUI, Compose
 - [iOS app](./apps/ios/) — physical device, XcodeGen, TestFlight
-- [Android app](./apps/android/) — JNI, Gradle, not on Play yet
+- [Android app](./apps/android/) — JNI, Gradle, Google Play closed testing
 - [Keeping docs current](./contribute/documentation/) — what to update in the same PR
 
 ## Protocol
@@ -39,6 +40,7 @@ BLE scan → GATT connect → app-pairing → read Wi-Fi creds → join AP → U
 - [Camera Wi-Fi](./protocol/wifi/)
 - [DUML frame](./protocol/duml-frame/) · [transport](./protocol/duml-transport/)
 - [Command catalog](./protocol/commands/)
+- [Pocket 3 findings](./protocol/pocket3/) — physical Mimo survey, protocol evidence, and implementation gaps
 - [Live view](./protocol/live-view/)
 - [HTTP media](./protocol/media/)
 - [iOS protocol notes](./protocol/ios/)

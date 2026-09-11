@@ -4,6 +4,7 @@ description: Experimental local multicamera monitoring on iPhone and iPad.
 ---
 
 **Experimental development build. Multicamera validation is still in progress.**
+Multiview is available on iPhone and iPad; Android support remains deferred.
 
 From **Your cameras**, tap the grid icon at the top-right of the camera list.
 A centered two-step popup sets up the shared network, then Center stage opens
@@ -135,6 +136,11 @@ The last picture remains visible. Thirty seconds of healthy video resets the
 reconnect budget. If recovery fails, the affected tile offers Reconnect and
 Remove; smaller thumbnails can be tapped to expose those controls. Removing a
 preview does not stop recording on the camera.
+
+In the recorded three-camera iPhone app-switch check, all feeds resumed, but
+Pocket 3 required a full session rejoin and took roughly a minute. This proves
+recovery in that test, not seamless foreground return. Keep Multiview in the
+foreground for continuous monitoring.
 
 Brief app switches retain camera assignments and sockets, with limited background
 execution time requested from iOS. The app does not disconnect merely because it

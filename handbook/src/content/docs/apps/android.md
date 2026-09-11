@@ -4,7 +4,7 @@ description: Jetpack Compose phone shell on a cross-compiled Swift core. Play cl
 ---
 
 The Android app lives in `Apps/Android/`. It is an early phone shell: pairing,
-HEVC live view, GPU looks, scopes, camera writes, and media. Closed testing on
+HEVC/AVC live view, GPU looks, scopes, camera writes, and media. Closed testing on
 Google Play is the TestFlight analog — join from
 [openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. arm64
 phones, Android 10 or newer.
@@ -40,7 +40,12 @@ Zoom chips follow the body (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
 Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Zoom must not drop the live
 picture. FORMAT lists `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16
 when the body advertises them; aspect is the res byte). A tap stays on that
-pair until the body reports it. COLOR follows the body: D-Log2 is Pocket 4 Pro
+pair until the body reports it. Pocket 3 normal Video also has a
+[FORMAT fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
+when the camera supplies no capability table. Reported choices take priority;
+this fallback does not apply to SlowMo or unknown shooting modes. The full
+Pocket 3 format/record/reconnect matrix still needs physical Android checks.
+COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
@@ -97,6 +102,9 @@ only the 720p sidecar is on the phone. Storage **Full Resolution Caching**
 matches iOS. Pocket 3 `/v2` is storage 0; the newest catalog page lists
 after a take even if enter-playback ACKs E0. Share/save is the original
 camera file — LUT bake (and Bake exposure) is iOS only.
+Multiview and Sharing are unavailable on Android. The
+[Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes the experimental
+iPhone/iPad feature and its validation limits.
 Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
@@ -109,15 +117,18 @@ continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
 does not reverse stored mechanical angles; MIRROR changes the preview only.
+Physical Android Motion Control and Pocket 3 qualification remain pending; the
+recorded motion checks are on Pocket 4 Pro/iPhone. See
+[Motion Control qualification](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/programmed-moves.md#evidence-and-qualification).
 
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
-PEAK / FALSE / ZEBRA grade the 720p HEVC raster with a 3D cube (same lattice
+PEAK / FALSE / ZEBRA grade the decoded 720p raster with a 3D cube (same lattice
 as iOS), then bilinear-fit the panel (peaking is the same 3-pass as GLES). HUD liquid
 glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
 the last frame on freeze, one live-enable write at a time, latest-wins
 present). Opening clips or
-Operator Setup over live view keeps the HEVC GOP and the live SurfaceView;
+Operator Setup over live view keeps the video GOP and the live SurfaceView;
 returning to the monitor must not leave a black well. Leaving live view,
 opening clips, or rotating must drop the Vulkan swapchain with the window —
 present after that is a skip, not a crash.
@@ -136,3 +147,11 @@ and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnin
 do not establish where the camera sensor loses detail. EL Zone (`DLM ≈`) and the
 gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.
+
+ND recommendations also derive stops from that estimated curve. Treat D-Log M
+ND readings as estimates, not calibrated filter or sensor-limit measurements.
+LUT exposure compensation and Face Priority EV still use the previous D-Log
+approximation for D-Log M; the scope fix did not calibrate those controls. This
+limitation concerns exposure math, not the choice of the official D-Log M
+conversion cube. See the
+[D-Log M investigation](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/pocket3-dlogm-curve.md).
