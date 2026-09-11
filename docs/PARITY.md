@@ -78,7 +78,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   remains relative to the full canvas. Stationary holds still open existing
   panel options; toolbar long-press options remain available. Geometry tests
   cover portrait/landscape, scales, restored corners, and Android densities.
-  Physical gesture/rotation qualification is pending on both shells.
+  iPhone drag placement, including the final portrait right-edge spacing, was
+  confirmed by the operator on 2026-09-12. Android physical qualification remains
+  an exception for this change: no Android device was available; matching geometry
+  tests, the debug build, and lint pass. The operator approved merging after CI.
 - Histogram gutters 17.5 dp (traffic lamps + 0 / 100), not 17.5 px.
 - Zebra stored thresholds stay 0–100 IRE; 0–255 readout is encoded codes via
   `ScopeDisplayScale.signalNative`.
