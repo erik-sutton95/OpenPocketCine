@@ -18,6 +18,10 @@ implementation discrepancy, failed cold-boot capture and broader app acceptance
 remain open. The survey branch was integrated with fetched main before review;
 publication still depends on merging the documentation PR.
 
+Subsequent operator update, 2026-09-11: the cold-boot stall appears gone and
+cannot currently be reproduced. Its cause remains unconfirmed; the historical
+failure and conditional follow-up remain in the [startup investigation](pocket3-startup-investigation.md).
+
 ## Answer
 
 The handbook has been updated: **all seven product changes in the latest twenty

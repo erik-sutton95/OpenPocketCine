@@ -4,6 +4,15 @@ Surface: **docs**. Investigation dated **2026-09-11**; this is evidence and a
 follow-up plan, not a replacement for the
 [connection reliability contract](connection-reliability.md).
 
+## Current status
+
+**Currently not reproducible; cause unconfirmed.** On 2026-09-11, the operator
+reported that the cold-boot stall appeared gone and could no longer be
+reproduced. This adds an operator retest report to the captured warm-session
+evidence below; it does not identify which change or condition resolved the
+symptom. No cold-boot-specific production fix was made by this investigation.
+Retain the historical evidence and resume fault isolation if the stall returns.
+
 ## What the failing session establishes
 
 The reported symptom is a first connection that shows picture, fails to respond
@@ -63,7 +72,7 @@ These are concrete ordering risks in the inspected implementation, but the
 failed connection lacks the packet evidence needed to attribute this incident
 to either one. The successful warm takes do not discriminate between them.
 
-## Next proof and fix criteria
+## Proof and fix criteria if the stall returns
 
 1. Start capture before a physical camera power-off/power-on and app connection.
    Preserve the first handshake reply, initial 34-byte window, first command,

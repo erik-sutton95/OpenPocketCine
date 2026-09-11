@@ -884,14 +884,18 @@ persistence. Both joins were warm; the camera was not power-cycled.
 
 ## Implementation follow-up
 
-The reported OpenPocketCine first-connection stall remains unresolved. Its saved
-journal shows controls timing out before picture freezes, then recovery after
+The operator reported on **11 September 2026** that the OpenPocketCine cold-boot
+stall appeared gone and could no longer be reproduced. Its current status is
+**not reproducible; cause unconfirmed**. This is an operator retest report,
+separate from the captured warm-session checks above.
+
+The earlier saved journal shows controls timing out before picture freezes, then recovery after
 a full new handshake. The recovery stages account for the visible delay, but
 the initiating fault was not captured on the wire. Successful warm reconnect
 and app-relaunch tests do not substitute for a camera cold boot. See the
 [startup investigation](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/pocket3-startup-investigation.md)
 for the evidence, candidate ordering risks and required physical comparison.
-No startup fix is claimed by this survey.
+No startup fix is claimed by this survey. Resume fault isolation if the stall returns.
 
 The survey has identified concrete gaps to resolve before exposing more Pocket 3
 controls in OpenPocketCine:
