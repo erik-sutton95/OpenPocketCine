@@ -439,15 +439,18 @@ object MovablePanelMath {
         get() = GRIP_EXTERIOR_DP
 
     /** Top-leading of the hit well: [GRIP_EXTERIOR_DP] past the clip, rest on the plate. */
-    fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint =
-        AssistPoint(
-            panelWidth - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
-            panelHeight - GRIP_HIT_DP + GRIP_EXTERIOR_DP,
-        )
+    fun gripHitSize(panelWidth: Float, panelHeight: Float): Float =
+        minOf(GRIP_HIT_DP, panelWidth + GRIP_EXTERIOR_DP, panelHeight + GRIP_EXTERIOR_DP)
+
+    fun gripHitOrigin(panelWidth: Float, panelHeight: Float): AssistPoint {
+        val hit = gripHitSize(panelWidth, panelHeight)
+        return AssistPoint(panelWidth - hit + GRIP_EXTERIOR_DP,
+            panelHeight - hit + GRIP_EXTERIOR_DP)
+    }
 
     /** Top-leading of the 14 dp L inside the hit well, 2 dp outside the clip. */
-    fun gripVisualOrigin(): AssistPoint {
-        val x = GRIP_HIT_DP - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
+    fun gripVisualOrigin(hitSize: Float = GRIP_HIT_DP): AssistPoint {
+        val x = hitSize - GRIP_EXTERIOR_DP + GRIP_EXTERIOR_GAP_DP - GRIP_VISUAL_DP
         return AssistPoint(x, x)
     }
 
@@ -462,10 +465,22 @@ object MovablePanelMath {
         val halfW = size.width / 2f
         val halfH = size.height / 2f
         return AssistPoint(
-            point.x.coerceIn(bounds.minX + halfW, bounds.maxX - halfW),
-            point.y.coerceIn(bounds.minY + halfH, bounds.maxY - halfH),
+            point.x.coerceIn(bounds.minX + halfW, maxOf(bounds.minX + halfW, bounds.maxX - halfW)),
+            point.y.coerceIn(bounds.minY + halfH, maxOf(bounds.minY + halfH, bounds.maxY - halfH)),
         )
     }
+
+    /** Bounds and sizes are pixels, including the exterior resize hit well. */
+    fun fittedSize(preferred: AssistSize, bounds: AssistRect, grip: Float): AssistSize {
+        val factor = minOf(1f, maxOf(1f, bounds.width - grip) / maxOf(1f, preferred.width),
+            maxOf(1f, bounds.height - grip) / maxOf(1f, preferred.height))
+        return AssistSize(maxOf(1f, kotlin.math.floor(preferred.width * factor)),
+            maxOf(1f, kotlin.math.floor(preferred.height * factor)))
+    }
+
+    fun clampWithGrip(point: AssistPoint, size: AssistSize, bounds: AssistRect, grip: Float): AssistPoint =
+        clamp(point, size, bounds.copy(width = maxOf(0f, bounds.width - grip),
+            height = maxOf(0f, bounds.height - grip)))
 
     fun snap(point: AssistPoint, grid: Float = POSITION_GRID): AssistPoint =
         AssistPoint(round(point.x / grid) * grid, round(point.y / grid) * grid)

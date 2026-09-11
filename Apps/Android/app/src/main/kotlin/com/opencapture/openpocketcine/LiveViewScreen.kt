@@ -466,6 +466,38 @@ fun LiveViewScreen(model: AppModel) {
         val zoom = cluster.zoom
         val stick = cluster.stick
         val gimbalButton = cluster.controls
+        var scopeTop = maxOf(layout.safeTop, layout.topDeck.maxY)
+        var scopeBottom = if (layout.showsBottomBars) layout.assist.minY else layout.feed.maxY
+        var scopeLeft = maxOf(layout.safeLeading, layout.feed.minX)
+        var scopeRight = minOf(layout.viewportWidth - layout.safeTrailing, layout.feed.maxX)
+        if (portrait && zones != null) {
+            scopeTop = maxOf(zones.topBar.maxY + LivePortraitMetrics.REC_OPTIONS_GAP +
+                LivePortraitMetrics.REC_OPTIONS, layout.feed.minY)
+            scopeBottom = when {
+                fill && zones.controls.height > 1f -> zones.controls.minY
+                zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
+                else -> zones.systemBar.minY
+            }
+            scopeBottom = minOf(scopeBottom, portraitAspectToggle(layout.onFeed, scopeBottom).minY)
+            if (fill && model.chromeSectionMounts(PocketDispSection.TOOL_BAR)) {
+                scopeLeft = maxOf(scopeLeft, layout.feed.minX + LivePortraitMetrics.ASSIST_RAIL_EDGE +
+                    LivePortraitMetrics.ASSIST_RAIL_EXPANDED)
+            }
+        } else if (layout.rail.width > 1f) {
+            if (layout.rail.midX < layout.viewportWidth / 2f) scopeLeft = maxOf(scopeLeft, layout.rail.maxX)
+            else scopeRight = minOf(scopeRight, layout.rail.minX)
+        }
+        if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) scopeRight = minOf(scopeRight, zoom.minX)
+        if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)) scopeRight = minOf(scopeRight, stick.minX)
+        if (showGimbalButton) scopeRight = minOf(scopeRight, gimbalButton.minX)
+        if (model.session.isFocusResetAvailable) {
+            if (portrait) scopeRight = minOf(scopeRight, layout.onFeed.maxX - 50f)
+            else scopeTop = maxOf(scopeTop, layout.focusReset.maxY)
+        }
+        if (assist.isVisible(LiveAssistTool.AUDIO)) scopeLeft = maxOf(scopeLeft,
+            14f + com.opencapture.openpocketcine.assists.AudioAssist.PANEL_WIDTH_DP)
+        val scopePlacement = ChromeRect(scopeLeft, scopeTop, maxOf(0f, scopeRight - scopeLeft),
+            maxOf(0f, minOf(scopeBottom, layout.viewportHeight - layout.safeBottom) - scopeTop))
         val focusOffCenter = model.session.isFocusResetAvailable
 
         // Kyant sibling pattern: this box records feed + chrome; popups sit
@@ -607,7 +639,7 @@ fun LiveViewScreen(model: AppModel) {
             }
             }
 
-            // iOS `LiveZoomPinchWell` sits under chip + scopes so hold-drag
+            // iOS `LiveZoomPinchWell` sits under chip + scopes so direct drag
             // on WAVE / PARADE / HISTO / VECTOR still reaches MovableAssistPanel.
             Box(Modifier.liveModuleFrame(layout.onFeed)) {
                 LiveFeedGestureWell(
@@ -637,6 +669,7 @@ fun LiveViewScreen(model: AppModel) {
                             model.session.supportsTapFocus,
                     locked = uiLocked,
                     feedFrame = layout.onFeed,
+                    placementFrame = scopePlacement,
                     pictureMirrored = liveViewFlip,
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame

@@ -7,6 +7,13 @@ The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
 project with XcodeGen — see [Setup](../guides/setup/).
 
+## Moving scopes
+
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
+corner grip to resize. Placement stays inside the space clear of fixed controls,
+with a small gap. Panels fit that space after rotation or resizing, including
+saved positions. Long-press a View Assist toolbar button for its settings.
+
 ## What it does
 
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
@@ -43,7 +50,7 @@ project with XcodeGen — see [Setup](../guides/setup/).
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
   View Assist **ND** is a small chip on the live picture (bottom-left,
-  above the assist bar; hold-drag to move). Long-press to switch Stops,
+  above the assist bar; drag to move). Long-press to switch Stops,
   ND32, or ND 0.3. It meters against middle gray and suggests a screw-on
   ND to balance the frame. The app cannot set a filter.
   The gimbal stick

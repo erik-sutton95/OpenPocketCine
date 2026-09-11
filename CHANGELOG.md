@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
+  resize directly. Placement stays clear of fixed controls, and larger panels
+  fit the available space after resizing or rotation.
+
 - Saved-camera rows now show their own connection progress and Cancel action,
   with names above availability/actions. On iOS, Watch a feed is an eye button
   beside Multiview in the camera-list header.

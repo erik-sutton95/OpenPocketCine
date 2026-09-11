@@ -370,7 +370,9 @@ struct WaveformOverlay: View {
     var body: some View {
         let assist = model.monitorSamples.displayBundle
         let options = WaveformAssist.store.options
-        let size = WaveformAssist.panelSize(scale: options.scale)
+        let size = ScopePanelPlacement.size(
+            WaveformAssist.panelSize(scale: options.scale),
+            canvas: canvas, clearance: chromeClearance)
         let intensity = WaveformAssist.intensity(options.brightness)
         // Transfer rides the bundle — reading session.status here re-rendered
         // every scope on 5 Hz telemetry pushes (DESIGN §2.3).
@@ -536,7 +538,9 @@ struct ParadeOverlay: View {
         let assist = model.monitorSamples.displayBundle
         let transfer = assist.transfer
         let options = ParadeAssist.store.options
-        let size = ParadeAssist.panelSize(scale: options.scale)
+        let size = ScopePanelPlacement.size(
+            ParadeAssist.panelSize(scale: options.scale),
+            canvas: canvas, clearance: chromeClearance)
         let intensity = ParadeAssist.intensity(options.brightness)
         let plot = ScopeMiniChrome(
             title: "Parade",
@@ -642,7 +646,9 @@ struct HistogramOverlay: View {
     var body: some View {
         let assist = model.monitorSamples.displayBundle
         let options = HistogramAssist.store.options
-        let size = HistogramAssist.panelSize(scale: options.scale)
+        let size = ScopePanelPlacement.size(
+            HistogramAssist.panelSize(scale: options.scale),
+            canvas: canvas, clearance: chromeClearance)
         let plot = ScopeMiniChrome(
             title: HistogramAssist.panelTitle, chip: HistogramAssist.chip,
             size: size
@@ -770,7 +776,9 @@ struct VectorscopeOverlay: View {
         let plot = ScopeMiniChrome(
             title: "Vector",
             chip: VectorscopeAssist.chip(zoom: options.zoom),
-            size: VectorscopeAssist.panelSize(scale: options.scale)
+            size: ScopePanelPlacement.size(
+                VectorscopeAssist.panelSize(scale: options.scale),
+                canvas: canvas, clearance: chromeClearance)
         ) {
             ZStack {
                 if ScopeTraceMetal.isAvailable {
@@ -939,13 +947,16 @@ struct TrafficLightsOverlay: View {
 
     var body: some View {
         let store = TrafficLightsAssist.store
-        let size = TrafficLightsAssist.panelSize(scale: store.scale)
+        let size = ScopePanelPlacement.size(
+            TrafficLightsAssist.panelSize(scale: store.scale),
+            canvas: bounds, clearance: chromeClearance)
         TrafficLightsMovablePanel(
             store: store,
             size: size,
             defaultCenter: TrafficLightsAssist.defaultCenter(
                 feed: feed, size: size, bounds: bounds, chromeClearance: chromeClearance),
-            bounds: bounds
+            bounds: bounds,
+            placementBounds: ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
             // Metered once in the sampler with the operator threshold riding
             // `LiveImageEffects.trafficThreshold` — render the bundle directly.

@@ -429,7 +429,8 @@ struct LiveViewScreen: View {
 
             LiveScopeOverlays(
                 layout: layout,
-                interfaceLocked: interfaceLocked
+                interfaceLocked: interfaceLocked,
+                chromeClearance: scopeClearance(layout: layout)
             )
 
             // After the scope well — that well covers this chip and used to eat the tap.
@@ -582,7 +583,9 @@ struct LiveViewScreen: View {
                     .offset(x: well.maxX - 50, y: CGFloat(zones.topBar.maxY) + 8)
             }
 
-            LiveScopeOverlays(layout: layout, interfaceLocked: interfaceLocked)
+            LiveScopeOverlays(
+                layout: layout, interfaceLocked: interfaceLocked,
+                chromeClearance: scopeClearance(layout: layout, portrait: zones))
 
             if !isFill, model.chromeSectionMounts(.toolBar), zones.assistToolbar.height > 0 {
                 LiveAssistBar(isLocked: interfaceLocked)
@@ -1131,15 +1134,12 @@ private struct LiveScopeOverlays: View {
     @Environment(AppModel.self) private var model
     var layout: LiveMonitorLayout
     var interfaceLocked: Bool
+    var chromeClearance: EdgeInsets
 
     var body: some View {
         let canvas = CGRect(origin: .zero, size: layout.viewport)
         let picture = layout.onFeed
-        let clearance = EdgeInsets(
-            top: layout.topDeck.maxY,
-            leading: 0,
-            bottom: max(0, layout.viewport.height - layout.assist.minY),
-            trailing: 0)
+        let clearance = chromeClearance
         if model.assist.isVisible(.waveform) {
             WaveformOverlay(canvas: canvas, feed: picture, chromeClearance: clearance)
                 .allowsHitTesting(!interfaceLocked)
@@ -1160,11 +1160,7 @@ private struct LiveScopeOverlays: View {
             TrafficLightsOverlay(
                 bounds: canvas,
                 feed: picture,
-                chromeClearance: EdgeInsets(
-                    top: layout.topDeck.maxY,
-                    leading: 0,
-                    bottom: max(0, layout.viewport.height - layout.assist.minY),
-                    trailing: max(0, layout.viewport.width - picture.maxX))
+                chromeClearance: clearance
             )
             .allowsHitTesting(!interfaceLocked)
         }
@@ -1172,11 +1168,7 @@ private struct LiveScopeOverlays: View {
             NDMeterOverlay(
                 bounds: canvas,
                 feed: picture,
-                chromeClearance: EdgeInsets(
-                    top: layout.topDeck.maxY,
-                    leading: 0,
-                    bottom: max(0, layout.viewport.height - layout.assist.minY),
-                    trailing: 0)
+                chromeClearance: clearance
             )
             .allowsHitTesting(!interfaceLocked)
         }
@@ -1188,6 +1180,76 @@ enum LiveCanvasSpace {
 }
 
 extension LiveViewScreen {
+    /// One rectangle shared by all movable tools; full-canvas coordinates remain persisted.
+    private func scopeClearance(
+        layout: LiveMonitorLayout, portrait: MonitorPortraitZones? = nil
+    ) -> EdgeInsets {
+        let cluster = activeGimbalCluster(layout, portrait: portrait)
+        var top = max(layout.safeArea.top, layout.topDeck.maxY)
+        var bottomY = layout.showsBottomBars ? layout.assist.minY : layout.feed.maxY
+        var left = max(layout.safeArea.leading, layout.feed.minX)
+        var right = min(layout.viewport.width - layout.safeArea.trailing, layout.feed.maxX)
+        if let zones = portrait {
+            top = max(CGFloat(zones.topBar.maxY) + 48, layout.feed.minY)
+            bottomY = CGFloat(
+                Self.portraitBelowFeedFloor(
+                    fill: Self.portraitChoice(model: model).fill, zones: zones))
+            if !Self.portraitChoice(model: model).vertical {
+                bottomY = min(
+                    bottomY,
+                    Self.portraitAspectToggleFrame(
+                        picture: layout.onFeed, fill: Self.portraitChoice(model: model).fill,
+                        zones: zones
+                    ).minY)
+            }
+            if model.headTrackingEnabled {
+                let floor = CGFloat(
+                    Self.portraitBelowFeedFloor(
+                        fill: Self.portraitChoice(model: model).fill, zones: zones))
+                bottomY = min(
+                    bottomY,
+                    LiveMonitorLayout.headTrackCalibrateFrame(
+                        canvasWidth: layout.viewport.width, barTopY: floor
+                    ).minY)
+            }
+            if Self.portraitChoice(model: model).fill, model.chromeSectionMounts(.toolBar) {
+                // Reserve the expanded rail so opening it never covers a scope.
+                left = max(
+                    left,
+                    layout.feed.minX
+                        + CGFloat(
+                            MonitorPortraitLayout.assistRailEdgeInset
+                                + MonitorPortraitLayout.assistRailExpandedWidth))
+            }
+        } else if layout.rail.width > 1 {
+            if layout.rail.midX < layout.viewport.width / 2 {
+                left = max(left, layout.rail.maxX)
+            } else {
+                right = min(right, layout.rail.minX)
+            }
+        }
+        if model.chromeSectionMounts(.zoomChip) { right = min(right, CGFloat(cluster.zoom.x)) }
+        if model.chromeSectionMounts(.gimbalStick) { right = min(right, CGFloat(cluster.stick.x)) }
+        if showsGimbalButton { right = min(right, CGFloat(cluster.controls.x)) }
+        if portrait == nil, model.headTrackingEnabled {
+            bottomY = min(bottomY, layout.gimbalCalibrate.minY)
+        }
+        if model.session.isFocusResetAvailable {
+            if portrait != nil {
+                right = min(right, layout.onFeed.maxX - 50)
+            } else {
+                top = max(top, layout.focusReset.maxY)
+            }
+        }
+        if model.assist.isVisible(.audioMeters) {
+            right = min(right, layout.onFeed.maxX - 14 - AudioAssist.panelSize.width)
+        }
+        return EdgeInsets(
+            top: top, leading: left,
+            bottom: max(layout.safeArea.bottom, layout.viewport.height - bottomY),
+            trailing: max(0, layout.viewport.width - right))
+    }
+
     fileprivate func trackingCancelRect(in layout: LiveMonitorLayout) -> CGRect {
         guard case .subject(let box) = model.session.focusOverlay else { return .zero }
         return LiveTrackingChrome.cancelRect(

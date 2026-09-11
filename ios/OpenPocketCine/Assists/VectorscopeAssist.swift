@@ -222,7 +222,7 @@ enum VectorscopeAssist {
     /// OpenZCine `AssistQuickSettingsContent.vectorscopeRows` titles, in order.
     static let popupRows = ["Trace Zoom", "Brightness"]
 
-    /// Long-press-drag + L-corner resize wrapper (OpenZCine `MovablePanel`).
+    /// Direct drag + L-corner resize wrapper (OpenZCine `MovablePanel`).
     static func overlay<Content: View>(
         canvas: CGRect,
         feed: CGRect,
@@ -374,7 +374,7 @@ private struct VectorscopePercentSlider: View {
     }
 }
 
-/// OpenZCine `MovablePanel` specialised for vectorscope — long-press-drag + L-corner resize.
+/// OpenZCine `MovablePanel` specialised for vectorscope — direct drag + L-corner resize.
 struct VectorscopeMovablePanel<Content: View>: View {
     let canvas: CGRect
     let feed: CGRect
@@ -382,6 +382,9 @@ struct VectorscopeMovablePanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @Environment(\.interfaceLocked) private var interfaceLocked
+    private var movementBounds: CGRect {
+        ScopePanelPlacement.bounds(in: canvas, clearance: chromeClearance)
+    }
     private var store: VectorscopeAssistStore { VectorscopeAssist.store }
 
     @State private var dragOrigin: CGPoint?
@@ -396,23 +399,23 @@ struct VectorscopeMovablePanel<Content: View>: View {
 
     var body: some View {
         let options = store.options
-        let size = VectorscopeAssist.panelSize(scale: options.scale)
+        let size = ScopePanelPlacement.fittedSize(
+            VectorscopeAssist.panelSize(scale: options.scale), in: movementBounds)
         let fallback = VectorscopeAssist.defaultCenter(
             feed: feed, size: size, bounds: canvas, chromeClearance: chromeClearance)
-        let center = VectorscopeAssist.resolvedCenter(
+        let rawCenter = VectorscopeAssist.resolvedCenter(
             session: store.sessionCenter(in: canvas),
             stored: store.storedCenter(in: canvas),
             defaultCenter: fallback,
             size: size,
             bounds: canvas)
+        let center = ScopePanelPlacement.clamp(rawCenter, size: size, in: movementBounds)
         let gripPad = VectorscopeAssist.gripHitSize - gripCornerInset
         ZStack(alignment: .topLeading) {
             content()
                 .overlay(alignment: .bottomTrailing) {
                     resizeHandle
-                        .offset(
-                            x: VectorscopeAssist.gripExteriorGap,
-                            y: VectorscopeAssist.gripExteriorGap)
+                        .offset(x: gripPad, y: gripPad)
                 }
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .padding(VectorscopeAssist.dragHitPadding)
@@ -425,7 +428,7 @@ struct VectorscopeMovablePanel<Content: View>: View {
             height: size.height + gripPad,
             alignment: .topLeading
         )
-        .scaleEffect((isDragging || isResizing) ? 1.03 : 1)
+        .opacity(ScopePanelPlacement.isUsable(movementBounds) ? 1 : 0)
         .shadow(color: .black.opacity((isDragging || isResizing) ? 0.5 : 0), radius: 18, y: 8)
         .position(x: center.x + gripPad / 2, y: center.y + gripPad / 2)
         .sensoryFeedback(trigger: isDragging) { _, dragging in
@@ -437,26 +440,25 @@ struct VectorscopeMovablePanel<Content: View>: View {
         }
         .animation(.easeOut(duration: 0.14), value: isDragging)
         .animation(.easeOut(duration: 0.14), value: isResizing)
-        .allowsHitTesting(!interfaceLocked)
+        .allowsHitTesting(!interfaceLocked && ScopePanelPlacement.isUsable(movementBounds))
     }
 
     private func panelDragGesture(center: CGPoint) -> some Gesture {
-        LongPressGesture(minimumDuration: VectorscopeAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isDragging {
                     isDragging = true
                     dragOrigin = center
                     store.beginDrag(center: center, in: canvas)
                 }
-                guard let drag, let origin = dragOrigin else { return }
+                guard let origin = dragOrigin else { return }
                 let proposed = CGPoint(
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
-                let size = VectorscopeAssist.panelSize(scale: store.options.scale)
-                let snapped = VectorscopeAssist.clamp(
-                    VectorscopeAssist.snap(proposed), size: size, bounds: canvas)
+                let size = ScopePanelPlacement.fittedSize(
+                    VectorscopeAssist.panelSize(scale: store.options.scale), in: movementBounds)
+                let snapped = ScopePanelPlacement.clamp(
+                    VectorscopeAssist.snap(proposed), size: size, in: movementBounds)
                 let cell = VectorscopeAssist.hapticCell(snapped)
                 if cell != snapCell { snapCell = cell }
                 store.drag(to: snapped, in: canvas)
@@ -488,15 +490,12 @@ struct VectorscopeMovablePanel<Content: View>: View {
     }
 
     private var resizeGesture: some Gesture {
-        LongPressGesture(minimumDuration: VectorscopeAssist.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag in
                 if !isResizing {
                     isResizing = true
                     resizeStartScale = store.options.scale
                 }
-                guard let drag else { return }
                 let reach = VectorscopeAssist.baseSize.width + VectorscopeAssist.baseSize.height
                 let delta = (drag.translation.width + drag.translation.height) / reach
                 store.setScale(resizeStartScale + delta)

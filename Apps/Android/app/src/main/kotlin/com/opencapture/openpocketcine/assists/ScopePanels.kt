@@ -122,6 +122,7 @@ internal fun MovableAssistPanel(
     scale: Double,
     stored: StoredCenter?,
     canvas: AssistRect,
+    placementBounds: AssistRect,
     defaultCenter: AssistPoint,
     enabled: Boolean,
     onStore: (StoredCenter) -> Unit,
@@ -134,9 +135,15 @@ internal fun MovableAssistPanel(
 ) {
     val density = LocalDensity.current
     val haptics = LocalOperatorHaptics.current
-    val sizeDp = MovablePanelMath.panelSize(base, scale)
-    val sizePx = with(density) { AssistSize(sizeDp.width.dp.toPx(), sizeDp.height.dp.toPx()) }
+    val preferred = MovablePanelMath.panelSize(base, scale)
+    val gripPx = with(density) { MovablePanelMath.gripPadDp.dp.toPx() }
+    val usable = placementBounds.width > gripPx + 1 && placementBounds.height > gripPx + 1
+    val sizePx = MovablePanelMath.fittedSize(
+        with(density) { AssistSize(preferred.width.dp.toPx(), preferred.height.dp.toPx()) },
+        placementBounds, gripPx)
+    val sizeDp = AssistSize(sizePx.width / density.density, sizePx.height / density.density)
     val gripPadDp = MovablePanelMath.gripPadDp
+    val gripHit = MovablePanelMath.gripHitSize(sizeDp.width, sizeDp.height)
     val gripOrigin = MovablePanelMath.gripHitOrigin(sizeDp.width, sizeDp.height)
     var session by remember(tool) { mutableStateOf<AssistPoint?>(null) }
     var origin by remember { mutableStateOf<AssistPoint?>(null) }
@@ -148,7 +155,7 @@ internal fun MovableAssistPanel(
         if (!active) session = null
     }
     var panelFrame by remember { mutableStateOf(ChromeRect(0f, 0f, 0f, 0f)) }
-    val center =
+    val rawCenter =
         MovablePanelMath.resolvedCenter(
             session = session,
             stored = stored,
@@ -156,6 +163,8 @@ internal fun MovableAssistPanel(
             size = sizePx,
             bounds = canvas,
         )
+    val center = MovablePanelMath.clampWithGrip(rawCenter, sizePx, placementBounds, gripPx)
+    val placementState = rememberUpdatedState(placementBounds)
     val gpuSlot = GpuOverlayBus.usesGpuSlot(tool)
     val centerState = rememberUpdatedState(center)
     val sizeState = rememberUpdatedState(sizePx)
@@ -163,6 +172,7 @@ internal fun MovableAssistPanel(
     val canvasState = rememberUpdatedState(canvas)
     fun publishSlot(at: AssistPoint, size: AssistSize) {
         if (!gpuSlot) return
+        if (!usable) { GpuOverlayBus.reportSlot(tool, null); return }
         val root = GpuOverlayBus.layerRoot
         val left = (at.x - size.width / 2f).roundToInt().toFloat()
         val top = (at.y - size.height / 2f).roundToInt().toFloat()
@@ -174,8 +184,9 @@ internal fun MovableAssistPanel(
     }
     DisposableEffect(tool) { onDispose { GpuOverlayBus.reportSlot(tool, null) } }
     SideEffect {
-        if (!active) publishSlot(center, sizePx)
+        publishSlot(center, sizePx)
     }
+    if (!usable) return
     val snapGrid = with(density) { MovablePanelMath.POSITION_GRID.dp.toPx() }
     val plateShape = if (chip) ChipShape else PanelShape
     Box(
@@ -206,11 +217,15 @@ internal fun MovableAssistPanel(
                 .then(if (fillPlate) Modifier.background(LiveDesign.scopePlate) else Modifier)
                 .onGloballyPositioned { panelCoords = it }
                 .pointerInput(tool, enabled) {
-                    detectHoldThenDrag(
+                    detectPanelDrag(
                         holdMs = AssistLongPress.PANEL_MS,
                         enabled = enabled,
                         onDown = onActivate,
-                        onHold = {
+                        onLongPress = onOpenOptions?.let { present -> {
+                            haptics.confirm()
+                            present(panelFrame)
+                        } },
+                        onStart = {
                             origin = centerState.value
                             active = true
                             haptics.confirm()
@@ -220,25 +235,20 @@ internal fun MovableAssistPanel(
                             val size = sizeState.value
                             val proposed = AssistPoint(start.x + translation.x, start.y + translation.y)
                             val snapped =
-                                MovablePanelMath.clamp(
+                                MovablePanelMath.clampWithGrip(
                                     MovablePanelMath.snap(proposed, snapGrid),
                                     size,
-                                    canvasState.value,
+                                    placementState.value,
+                                    gripPx,
                                 )
                             session = snapped
                             publishSlot(snapped, size)
                         },
-                        onEnd = { translation ->
+                        onEnd = { _ ->
                             val final = session ?: centerState.value
                             onStore(StoredCenter(final, canvasState.value))
                             origin = null
                             active = false
-                            if (onOpenOptions != null &&
-                                WaveformAxis.shouldPresentOptions(translation.x, translation.y)
-                            ) {
-                                haptics.confirm()
-                                onOpenOptions(panelFrame)
-                            }
                         },
                         toRoot = { local -> panelCoords?.localToRoot(local) ?: local },
                     )
@@ -269,15 +279,15 @@ internal fun MovableAssistPanel(
                 Modifier
                     .align(Alignment.TopStart)
                     .offset(gripOrigin.x.dp, gripOrigin.y.dp)
-                    .size(MovablePanelMath.GRIP_HIT_DP.dp)
+                    .size(gripHit.dp)
                     .background(Color.Transparent)
                     .onGloballyPositioned { gripCoords = it }
                     .pointerInput(tool, enabled, reachPx) {
-                        detectHoldThenDrag(
+                        detectPanelDrag(
                             holdMs = AssistLongPress.PANEL_MS,
                             enabled = enabled,
                             onDown = onActivate,
-                            onHold = {
+                            onStart = {
                                 resizeOrigin = scaleState.value
                                 active = true
                                 haptics.confirm()
@@ -296,7 +306,7 @@ internal fun MovableAssistPanel(
                         )
                     },
             ) {
-                val visual = MovablePanelMath.gripVisualOrigin()
+                val visual = MovablePanelMath.gripVisualOrigin(gripHit)
                 Canvas(
                     Modifier
                         .offset(visual.x.dp, visual.y.dp)

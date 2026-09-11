@@ -19,6 +19,13 @@ On **Your cameras**, the selected row shows connection progress and **Cancel**,
 including while looking for an offline camera. Names sit above availability and
 connection actions. Pair new camera, Media library, and Settings stay on the intro card.
 
+## Moving scopes
+
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
+corner grip to resize. Placement stays inside the space clear of fixed controls,
+with a small gap. Panels fit that space after rotation or resizing, including
+saved positions. Long-press a View Assist toolbar button for its settings.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine
@@ -55,7 +62,7 @@ COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
-(bottom-left, above the assist bar; hold-drag to move). Long-press to
+(bottom-left, above the assist bar; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits

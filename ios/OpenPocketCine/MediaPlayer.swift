@@ -954,7 +954,7 @@ struct MediaPlayerView: View {
     @ViewBuilder
     private func playbackScopeOverlays(in size: CGSize, videoRect: CGRect) -> some View {
         let canvas = CGRect(origin: .zero, size: size)
-        let clearance = EdgeInsets(top: 56, leading: 0, bottom: 110, trailing: 0)
+        let clearance = EdgeInsets(top: 56, leading: 56, bottom: 110, trailing: 56)
         if model.assist.isPlaybackVisible(.waveform) {
             WaveformOverlay(canvas: canvas, feed: videoRect, chromeClearance: clearance)
         }
