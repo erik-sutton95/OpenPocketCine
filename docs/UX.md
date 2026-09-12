@@ -52,6 +52,21 @@ Session recovery holds the last frame. A black well is a teardown or present-pat
 bug, not “Waiting for live view” copy over a live socket. Teardown rules:
 [`live-session.md`](live-session.md). Stall policy: [`feed-watchdog.md`](feed-watchdog.md).
 
+Recovery remains visible until a new source picture reaches the presentation
+path. A handshake or repaint of the held image cannot dismiss it. The card names
+the current step: looking for the saved camera, reconnecting, rejoining Wi-Fi,
+restoring the connection, or waiting for a new picture. Retry connection and
+Operator menu stay available. Automatic full-session recovery stops after at
+most eight attempts or three minutes total, including radio waits and backoff.
+The earlier feed-watchdog ladder has its own finite stages. A terminal state
+does not keep showing an activity spinner.
+
+Returning to the app validates the retained camera network. If the route changed
+or the picture does not return, recovery runs the saved-camera connection spine
+again. Brief scene changes with a healthy picture preserve the session. Movement
+controls wait for the first picture and stop when the scene becomes inactive or
+recovery takes ownership.
+
 Renaming camera Wi-Fi updates the BLE name. Reconnect must join that live
 name, not the previous SoftAP SSID still sitting in Keychain / Keystore
 (#257). Deleting the saved row is not required.
@@ -84,7 +99,8 @@ Movable scopes and the LIGHTS / ND panels use direct touch-drag. Their corner
 grips resize directly too. Scopes may sit partly under top and bottom readout /
 assist bars and underneath the entire joystick/zoom/gimbal-controls cluster in
 portrait or landscape. The cluster remains above scopes, and its visibility does
-not change their placement boundary. Focus reset and audio meters do not fence
+not change their placement boundary. The iOS Calibrate Head Lock / STOP button
+also draws above scopes without restricting where they can move. Focus reset and audio meters do not fence
 off a whole side of the screen.
 Reserve the record/media/settings rail and portrait system button row with
 8 pt/dp padding. The resize target extends only 12 pt/dp below the panel so it

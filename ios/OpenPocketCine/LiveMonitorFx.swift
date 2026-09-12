@@ -807,6 +807,17 @@ enum LiveMonitorCompositor {
 /// OpenZCine `MetalFeedFrameBaker`: evaluate the look graph at feed/panel size off-main.
 /// `CIFeedView` only scales the published texture into the drawable — no `createCGImage`.
 final class FeedFrameBaker: @unchecked Sendable {
+    /// Texture and source metadata are acquired together under the pool lock.
+    struct Frame: @unchecked Sendable {
+        let texture: MTLTexture
+        let drawableSize: CGSize
+        let pixelFormat: MTLPixelFormat
+        let id: UInt64
+        let generation: Int
+        let timeNs: Int64
+        let unmanaged: Bool
+        let overlay: Bool
+    }
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let lutContext: CIContext
@@ -816,7 +827,7 @@ final class FeedFrameBaker: @unchecked Sendable {
     private var pending:
         (
             image: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat, unmanaged: Bool,
-            overlay: Bool
+            overlay: Bool, id: UInt64, generation: Int, timeNs: Int64
         )?
     private var pendingDone: (@Sendable () -> Void)?
     private var busy = false
@@ -824,9 +835,8 @@ final class FeedFrameBaker: @unchecked Sendable {
     private var nextTexture = 0
     private var retained: [ObjectIdentifier: Int] = [:]
     private var baking: Set<ObjectIdentifier> = []
-    private var published: (texture: MTLTexture, drawableSize: CGSize, pixelFormat: MTLPixelFormat)?
-    private(set) var lastBakeUnmanaged = true
-    private(set) var lastBakeOverlay = false
+    private var published: Frame?
+    private var nextFrameID: UInt64 = 0
     private static let depth = 3
 
     init(device: MTLDevice) {
@@ -843,11 +853,15 @@ final class FeedFrameBaker: @unchecked Sendable {
     func scheduleBake(
         image: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat,
         unmanaged: Bool = true, overlay: Bool = false,
+        generation: Int = 0, timeNs: Int64 = 0,
         onComplete: @escaping @Sendable () -> Void
     ) {
         guard drawableSize.width > 0, drawableSize.height > 0 else { return }
         lock.lock()
-        pending = (image, drawableSize, pixelFormat, unmanaged, overlay)
+        nextFrameID &+= 1
+        pending = (
+            image, drawableSize, pixelFormat, unmanaged, overlay, nextFrameID, generation, timeNs
+        )
         pendingDone = onComplete
         let start = !busy
         if start { busy = true }
@@ -856,6 +870,10 @@ final class FeedFrameBaker: @unchecked Sendable {
     }
 
     func bakedTexture(for drawableSize: CGSize, pixelFormat: MTLPixelFormat) -> MTLTexture? {
+        acquireFrame(for: drawableSize, pixelFormat: pixelFormat)?.texture
+    }
+
+    func acquireFrame(for drawableSize: CGSize, pixelFormat: MTLPixelFormat) -> Frame? {
         lock.lock()
         defer { lock.unlock() }
         guard let published,
@@ -863,7 +881,7 @@ final class FeedFrameBaker: @unchecked Sendable {
             published.pixelFormat == pixelFormat
         else { return nil }
         retained[ObjectIdentifier(published.texture), default: 0] += 1
-        return published.texture
+        return published
     }
 
     func releaseBakedTexture(_ texture: MTLTexture) {
@@ -919,7 +937,8 @@ final class FeedFrameBaker: @unchecked Sendable {
 
         let started = bake(
             request.image, drawableSize: request.drawableSize, pixelFormat: request.pixelFormat,
-            unmanaged: request.unmanaged, overlay: request.overlay
+            unmanaged: request.unmanaged, overlay: request.overlay,
+            id: request.id, generation: request.generation, timeNs: request.timeNs
         ) {
             done?()
         }
@@ -941,7 +960,8 @@ final class FeedFrameBaker: @unchecked Sendable {
     @discardableResult
     private func bake(
         _ source: CIImage, drawableSize: CGSize, pixelFormat: MTLPixelFormat,
-        unmanaged: Bool, overlay: Bool, finished: @escaping () -> Void
+        unmanaged: Bool, overlay: Bool, id: UInt64, generation: Int, timeNs: Int64,
+        finished: @escaping () -> Void
     ) -> Bool {
         let extent = source.extent
         let size = Self.bakeSize(source: extent.size, drawable: drawableSize)
@@ -978,12 +998,15 @@ final class FeedFrameBaker: @unchecked Sendable {
             prepared, to: target, commandBuffer: commandBuffer,
             bounds: CGRect(x: 0, y: 0, width: width, height: height),
             colorSpace: LiveMonitorWorkingSpace.metalDestination)
-        commandBuffer.addCompletedHandler { [self] _ in
+        commandBuffer.addCompletedHandler { [self] command in
             lock.lock()
             baking.remove(token)
-            published = (target, drawableSize, pixelFormat)
-            lastBakeUnmanaged = unmanaged
-            lastBakeOverlay = overlay
+            if command.status == .completed, id > (published?.id ?? 0) {
+                published = Frame(
+                    texture: target, drawableSize: drawableSize, pixelFormat: pixelFormat,
+                    id: id, generation: generation, timeNs: timeNs,
+                    unmanaged: unmanaged, overlay: overlay)
+            }
             lock.unlock()
             finished()
             workQueue.async { [self] in run() }
@@ -1020,12 +1043,67 @@ final class FeedFrameBaker: @unchecked Sendable {
             let index = (nextTexture + offset) % textures.count
             let texture = textures[index]
             let id = ObjectIdentifier(texture)
-            if retained[id] == nil, !baking.contains(id) {
+            if retained[id] == nil, !baking.contains(id), published?.texture !== texture {
                 nextTexture = index + 1
                 return texture
             }
         }
         return nil
+    }
+}
+
+private struct FeedPresentBox<Value>: @unchecked Sendable {
+    let value: Value
+}
+
+/// Injectable Metal boundary: acquisition may block, submission completes asynchronously.
+struct FeedPresentOperations: @unchecked Sendable {
+    var acquire: @Sendable (CAMetalLayer) -> CAMetalDrawable? = { $0.nextDrawable() }
+    var submit:
+        @Sendable (
+            MTLCommandBuffer, CAMetalDrawable, @escaping @Sendable (Bool) -> Void
+        ) -> Void = { command, drawable, completed in
+            command.addCompletedHandler { completed($0.status == .completed) }
+            command.present(drawable)
+            command.commit()
+        }
+}
+
+/// Measurement boundary for journal windows; renderer scheduling is independent.
+struct FeedPresentationMetrics {
+    struct Window {
+        let gpuFramesPerSecond: Double
+        let maximumGapMilliseconds: Double
+        let maximumAcquireMilliseconds: Double
+        let maximumGPUCompletionMilliseconds: Double
+    }
+
+    private var cadence: DeliveryCadence
+    private var maximumAcquireMilliseconds = 0.0
+    private var maximumGPUCompletionMilliseconds = 0.0
+
+    init(startedAt: TimeInterval) { cadence = DeliveryCadence(startedAt: startedAt) }
+
+    mutating func notePresented(at now: TimeInterval) { cadence.note(at: now) }
+
+    mutating func noteAcquire(milliseconds: Double) {
+        maximumAcquireMilliseconds = max(maximumAcquireMilliseconds, milliseconds)
+    }
+
+    mutating func noteGPUCompletion(milliseconds: Double) {
+        maximumGPUCompletionMilliseconds = max(maximumGPUCompletionMilliseconds, milliseconds)
+    }
+
+    mutating func drain(at now: TimeInterval) -> Window? {
+        guard let timing = cadence.takeWindow(at: now) else { return nil }
+        let window = Window(
+            gpuFramesPerSecond: timing.hertz,
+            maximumGapMilliseconds: timing.maximumGapMilliseconds,
+            maximumAcquireMilliseconds: maximumAcquireMilliseconds,
+            maximumGPUCompletionMilliseconds: maximumGPUCompletionMilliseconds)
+        maximumAcquireMilliseconds = 0
+        maximumGPUCompletionMilliseconds = 0
+        return window
     }
 }
 
@@ -1050,19 +1128,21 @@ final class CIFeedView: UIView {
     var isEnabled = true
     /// Playback (and live LUT replace) adopt the metal picture after this fires.
     var onPresented: (() -> Void)?
-    private var lastPresentedTimeNs: Int64 = 0
-    private var pendingTimeNs: Int64 = 0
+    private(set) var lastPresentedTimeNs: Int64 = 0
+    private var lastPresentedBakeID: UInt64 = 0
+    private let drawableQueue = DispatchQueue(label: "opv.feed-drawable", qos: .userInitiated)
     private var presentGeneration = 0
     private var inFlightPresents = 0
     private var pendingPresent = false
+    var presentOperations = FeedPresentOperations()
     private(set) var lastPresentedAt: Date?
     private(set) var presentedFrames = 0
     private(set) var skippedDuplicates = 0
     private(set) var skippedDisabled = 0
     private(set) var skippedDrawableBusy = 0
-    private var fpsWindowStart = Date()
-    private var fpsWindowCount = 0
-    private(set) var presentFPS = 0
+    private(set) var failedPresents = 0
+    private var presentationMetrics = FeedPresentationMetrics(
+        startedAt: ProcessInfo.processInfo.systemUptime)
 
     var isRendering: Bool {
         !FeedPresentPolicy.isFrozen(
@@ -1071,7 +1151,13 @@ final class CIFeedView: UIView {
     }
 
     var debugLine: String {
-        "feed present fps=\(presentFPS) first=\(hasPresentedFrame ? 1 : 0) frozen=\(isRendering ? 0 : 1) overlay=\(lastPresentWasOverlay ? 1 : 0) skipDup=\(skippedDuplicates) skipOff=\(skippedDisabled) skipBusy=\(skippedDrawableBusy)"
+        let timing = presentationMetrics.drain(at: ProcessInfo.processInfo.systemUptime)
+        let rate = String(format: "%.1f", timing?.gpuFramesPerSecond ?? 0)
+        return "feed present gpuFPS=\(rate) gpuGapMs=\(Int(timing?.maximumGapMilliseconds ?? 0)) "
+            + "first=\(hasPresentedFrame ? 1 : 0) frozen=\(isRendering ? 0 : 1) overlay=\(lastPresentWasOverlay ? 1 : 0) "
+            + "skipDup=\(skippedDuplicates) skipOff=\(skippedDisabled) skipBusy=\(skippedDrawableBusy) failed=\(failedPresents) "
+            + "acquireMaxMs=\(Int(timing?.maximumAcquireMilliseconds ?? 0)) "
+            + "gpuMaxMs=\(Int(timing?.maximumGPUCompletionMilliseconds ?? 0))"
     }
 
     override init(frame: CGRect) {
@@ -1096,9 +1182,8 @@ final class CIFeedView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = false
         metalLayer.contentsScale = UIScreen.main.scale
-        // Blocking nextDrawable on MainActor is the LUT 50/50 live drop:
-        // baker overlap + a heavier graph exhausts the swapchain and HEVC
-        // ingest never runs. Timeout skips; latest-wins presents the next bake.
+        // Timeout can still wait one second. Acquisition runs on drawableQueue,
+        // with one reservation covering both acquisition and GPU completion.
         metalLayer.allowsNextDrawableTimeout = true
     }
 
@@ -1111,6 +1196,8 @@ final class CIFeedView: UIView {
         if size.width > 1, size.height > 1 {
             let next = CGSize(width: size.width * scale, height: size.height * scale)
             if metalLayer.drawableSize != next {
+                invalidatePendingPresents()
+                resetPresentDedup()
                 metalLayer.drawableSize = next
             }
         }
@@ -1124,7 +1211,6 @@ final class CIFeedView: UIView {
 
     func resetPresentDedup() {
         lastPresentedTimeNs = 0
-        pendingTimeNs = 0
     }
 
     /// Next clip / new look. Stale `hasPresentedFrame` would hide the new
@@ -1152,7 +1238,6 @@ final class CIFeedView: UIView {
     /// must not unhide an opaque plate over identity.
     func invalidatePendingPresents() {
         presentGeneration += 1
-        pendingTimeNs = 0
         pendingPresent = false
     }
 
@@ -1164,7 +1249,6 @@ final class CIFeedView: UIView {
             skippedDuplicates += 1
             return hasPresentedFrame
         }
-        setOverlayChrome(overlay)
         let size = metalLayer.drawableSize
         let hasDrawable = size.width > 1 && size.height > 1
         guard
@@ -1174,97 +1258,124 @@ final class CIFeedView: UIView {
             return false
         }
         guard image.extent.width > 1, image.extent.height > 1 else { return false }
-        pendingTimeNs = timeNs
         let generation = presentGeneration
         if let baker {
             baker.scheduleBake(
                 image: image, drawableSize: size, pixelFormat: metalLayer.pixelFormat,
-                unmanaged: unmanaged, overlay: overlay
+                unmanaged: unmanaged, overlay: overlay, generation: generation, timeNs: timeNs
             ) { [weak self] in
                 DispatchQueue.main.async { self?.presentLatestBake(generation: generation) }
             }
             return true
         }
-        return presentSynchronously(image, unmanaged: unmanaged, overlay: overlay)
+        return false
     }
 
-    /// One command buffer per present, committed without waiting on main. OpenZCine flips
-    /// Y when *baking* a texture it then **blits**; this baker renders in drawable
-    /// orientation already, so a texel-for-texel copy stays upright — the old path
-    /// re-wrapped the bake as `CIImage(mtlTexture:)` and rendered it a second time
-    /// (two cancelling origin flips) with `commandBuffer: nil`, a synchronous GPU
-    /// submit on main plus a freshly allocated full-extent black composite every frame.
+    /// Acquisition may wait for Core Animation; MainActor remains free to ingest
+    /// video and handle lifecycle changes. Only one acquisition/GPU flight exists.
     private func presentLatestBake(generation: Int) {
-        let size = metalLayer.drawableSize
-        guard generation == presentGeneration else { return }
-        guard let baker,
-            let baked = baker.bakedTexture(for: size, pixelFormat: metalLayer.pixelFormat)
-        else { return }
-        let overlay = baker.lastBakeOverlay
-        if !FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: inFlightPresents) {
+        guard generation == presentGeneration, isEnabled, let baker else { return }
+        guard inFlightPresents == 0 else {
             skippedDrawableBusy += 1
             pendingPresent = true
-            baker.releaseBakedTexture(baked)
             return
         }
-        // Unhide only when we already hold a bake. Unhiding then failing
-        // `nextDrawable` is an opaque black plate over the player.
-        if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
+        let size = metalLayer.drawableSize
+        guard let frame = baker.acquireFrame(for: size, pixelFormat: metalLayer.pixelFormat)
+        else { return }
+        guard frame.generation == generation, frame.id > lastPresentedBakeID,
+            !FeedPresentPolicy.isDuplicateFrameTime(
+                frame.timeNs, lastPresentedNs: lastPresentedTimeNs)
+        else {
+            skippedDuplicates += 1
+            baker.releaseBakedTexture(frame.texture)
+            return
+        }
+        if FeedPresentPolicy.unhideMetalBeforeBake(overlay: frame.overlay) {
+            // Keep identity visible while the first drawable is being acquired.
+            if !hasPresentedFrame { alpha = 0 }
             isHidden = false
         }
-        guard isEnabled, let queue = presentQueue,
-            let commandBuffer = queue.makeCommandBuffer()
-        else {
-            baker.releaseBakedTexture(baked)
-            return
-        }
-        guard let drawable = metalLayer.nextDrawable() else {
-            skippedDrawableBusy += 1
-            pendingPresent = true
-            baker.releaseBakedTexture(baked)
-            // First replace bake: keep HEVC visible. Later: keep the last Metal frame.
-            if !hasPresentedFrame, FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
-                isHidden = true
-            }
-            return
-        }
-        guard encodePresent(baked, to: drawable.texture, commandBuffer: commandBuffer) else {
-            baker.releaseBakedTexture(baked)
-            drawable.present()
-            return
-        }
-        inFlightPresents += 1
-        let gen = generation
-        commandBuffer.addCompletedHandler { [weak self] _ in
-            // The pool slot stays reserved until the GPU has read it.
-            baker.releaseBakedTexture(baked)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.inFlightPresents = max(0, self.inFlightPresents - 1)
-                guard self.pendingPresent, self.presentGeneration == gen else { return }
-                self.pendingPresent = false
-                self.presentLatestBake(generation: gen)
+        inFlightPresents = 1
+        let operations = presentOperations
+        let layer = FeedPresentBox(value: metalLayer)
+        drawableQueue.async { [weak self] in
+            let started = ProcessInfo.processInfo.systemUptime
+            let drawable = FeedPresentBox(value: operations.acquire(layer.value))
+            let acquireMs = (ProcessInfo.processInfo.systemUptime - started) * 1_000
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    baker.releaseBakedTexture(frame.texture)
+                    return
+                }
+                self.presentationMetrics.noteAcquire(milliseconds: acquireMs)
+                self.submitAcquiredFrame(
+                    frame, drawable: drawable.value, operations: operations, baker: baker)
             }
         }
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
-        notePresented(overlay: overlay)
-        onPresented?()
     }
 
-    private func notePresented(overlay: Bool) {
+    private func submitAcquiredFrame(
+        _ frame: FeedFrameBaker.Frame, drawable: CAMetalDrawable?,
+        operations: FeedPresentOperations, baker: FeedFrameBaker
+    ) {
+        guard frame.generation == presentGeneration, isEnabled,
+            frame.drawableSize == metalLayer.drawableSize, let drawable,
+            let commandBuffer = presentQueue?.makeCommandBuffer(),
+            encodePresent(frame, to: drawable.texture, commandBuffer: commandBuffer)
+        else {
+            baker.releaseBakedTexture(frame.texture)
+            failedPresents += 1
+            if frame.generation == presentGeneration, !hasPresentedFrame {
+                isHidden = true
+                alpha = 1
+            }
+            finishPresentFlight()
+            return
+        }
+        let submittedAt = ProcessInfo.processInfo.systemUptime
+        operations.submit(commandBuffer, drawable) { [weak self] success in
+            // GPU has finished reading the pool slot, on success or failure.
+            baker.releaseBakedTexture(frame.texture)
+            let completedAt = Date()
+            let gpuMs = (ProcessInfo.processInfo.systemUptime - submittedAt) * 1_000
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.presentationMetrics.noteGPUCompletion(milliseconds: gpuMs)
+                if frame.generation == self.presentGeneration, self.isEnabled,
+                    frame.drawableSize == self.metalLayer.drawableSize
+                {
+                    if success {
+                        self.notePresented(frame, at: completedAt)
+                        self.onPresented?()
+                    } else {
+                        self.failedPresents += 1
+                        if !self.hasPresentedFrame { self.isHidden = true }
+                    }
+                }
+                self.finishPresentFlight()
+            }
+        }
+    }
+
+    private func finishPresentFlight() {
+        inFlightPresents = 0
+        guard pendingPresent else { return }
+        pendingPresent = false
+        presentLatestBake(generation: presentGeneration)
+    }
+
+    private func notePresented(_ frame: FeedFrameBaker.Frame, at completedAt: Date) {
+        let overlay = frame.overlay
+        setOverlayChrome(overlay)
+        lastPresentedBakeID = frame.id
+        alpha = 1
         hasPresentedFrame = true
         lastPresentWasOverlay = overlay
-        lastPresentedTimeNs = pendingTimeNs
-        lastPresentedAt = Date()
+        lastPresentedTimeNs = frame.timeNs
+        lastPresentedAt = completedAt
         presentedFrames += 1
-        fpsWindowCount += 1
-        let elapsed = Date().timeIntervalSince(fpsWindowStart)
-        if elapsed >= 1 {
-            presentFPS = fpsWindowCount
-            fpsWindowCount = 0
-            fpsWindowStart = Date()
-        }
+        presentationMetrics.notePresented(at: ProcessInfo.processInfo.systemUptime)
         // Overlay only: identity stays on the HEVC / VT layer. Unhiding an
         // opaque identity bake here is a black plate over a working picture.
         if overlay {
@@ -1275,9 +1386,10 @@ final class CIFeedView: UIView {
     /// Bake is source-sized (`bakeSize` never enlarges). Off / Fast / Quality / AI enlarge
     /// it to the drawable the same way OpenZCine `MetalLiveView` does.
     private func encodePresent(
-        _ baked: MTLTexture, to target: MTLTexture, commandBuffer: MTLCommandBuffer
+        _ frame: FeedFrameBaker.Frame, to target: MTLTexture, commandBuffer: MTLCommandBuffer
     ) -> Bool {
-        let overlay = baker?.lastBakeOverlay ?? false
+        let baked = frame.texture
+        let overlay = frame.overlay
         if let presentScaler,
             presentScaler.encode(
                 from: baked, to: target, commandBuffer: commandBuffer, overlay: overlay)
@@ -1310,7 +1422,7 @@ final class CIFeedView: UIView {
             blit.endEncoding()
             return true
         }
-        let unmanaged = baker?.lastBakeUnmanaged ?? true
+        let unmanaged = frame.unmanaged
         let options =
             unmanaged
             ? LiveMonitorWorkingSpace.imageOptions
@@ -1325,28 +1437,6 @@ final class CIFeedView: UIView {
         context.render(
             fitted.composited(over: backdrop), to: target, commandBuffer: commandBuffer,
             bounds: dest, colorSpace: LiveMonitorWorkingSpace.metalDestination)
-        return true
-    }
-
-    @discardableResult
-    private func presentSynchronously(_ image: CIImage, unmanaged: Bool, overlay: Bool) -> Bool {
-        if FeedPresentPolicy.unhideMetalBeforeBake(overlay: overlay) {
-            isHidden = false
-        }
-        guard isEnabled, let drawable = metalLayer.nextDrawable() else { return false }
-        let dest = CGRect(
-            origin: .zero,
-            size: CGSize(width: drawable.texture.width, height: drawable.texture.height))
-        let fitted = Self.aspectFit(image, in: dest)
-        let backdrop = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: overlay ? 0 : 1))
-            .cropped(to: dest)
-        let context = unmanaged ? lutContext : displayContext
-        context.render(
-            fitted.composited(over: backdrop), to: drawable.texture, commandBuffer: nil,
-            bounds: dest, colorSpace: LiveMonitorWorkingSpace.metalDestination)
-        drawable.present()
-        notePresented(overlay: overlay)
-        onPresented?()
         return true
     }
 

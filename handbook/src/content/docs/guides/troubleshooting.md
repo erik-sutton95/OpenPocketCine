@@ -36,4 +36,28 @@ Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the ca
 
 Stay on the camera Wi-Fi. Session recovery holds the last frame under **Reconnecting**. If chrome still moves (timecode, storage) while the well is black, send **Share Diagnostics**.
 
+Recovery shows its current step and keeps **Retry connection** and **Operator
+menu** available. It waits for a new picture before clearing the recovery card.
+Automatic full reconnect stops after eight attempts or three minutes total;
+you can retry sooner. The held picture is not live video.
+
+After returning from another app, OpenPocketCine checks the camera network. A
+lost route or a picture that does not return starts the saved-camera connection
+sequence again, including Wi-Fi. Joystick and head tracking wait until the live
+picture is ready.
+
+## Picture stutters during movement
+
+Capture **Share Diagnostics** soon after the hitch. State the phone, app build,
+camera, enabled assists, and which action triggered it. A useful comparison is
+30 seconds static followed by a slow pan, then joystick and LUT/scopes separately.
+For AirPods head tracking, test it separately from manual joystick movement.
+
+If recovery becomes stuck, keep the app open for about 15 seconds before tapping
+Retry so the report includes the failed stage. Recent builds record separate
+packet, frame-assembly and presentation measurements; a good average FPS can
+still contain visible gaps. Pocket 4 Pro motion stutter remains under physical
+investigation on both iPhone and Android, including the
+[Redmi report](https://github.com/erik-sutton95/OpenPocketCine/issues/334).
+
 More: [Camera Wi-Fi](../protocol/wifi/), [iOS app](../apps/ios/), [Android app](../apps/android/).

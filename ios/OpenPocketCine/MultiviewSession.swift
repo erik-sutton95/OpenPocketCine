@@ -287,8 +287,7 @@ final class MultiviewSession {
         scanTask?.cancel()
         scanTask = Task { [weak self] in
             guard let self else { return }
-            await ble.waitUntilPoweredOn()
-            guard !Task.isCancelled else { return }
+            guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return }
             found.removeAll()
             for await camera in ble.scan() {
                 guard !Task.isCancelled else { return }

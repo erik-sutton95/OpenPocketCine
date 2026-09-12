@@ -42,7 +42,7 @@ object DiagnosticCenter {
         log("notice", "diagnostics", "boot", "diagnostics installed")
     }
 
-    fun log(level: String, category: String, code: String, message: String) {
+    @Synchronized fun log(level: String, category: String, code: String, message: String) {
         val line = PrivacyRedactor.redact("$level $category $code $message")
         when (level) {
             "error", "fault" -> Log.e(TAG, line)
@@ -182,9 +182,9 @@ object DiagnosticCenter {
         trimFile(file, EXCEPTION_CAP)
     }
 
-    private fun journalLines(): List<String> = readLines(journalFile())
+    @Synchronized private fun journalLines(): List<String> = readLines(journalFile())
 
-    private fun exceptionLines(): List<String> = readLines(exceptionFile())
+    @Synchronized private fun exceptionLines(): List<String> = readLines(exceptionFile())
 
     private fun readLines(file: File?): List<String> {
         if (file == null || !file.exists()) return emptyList()

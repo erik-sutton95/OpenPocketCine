@@ -3,6 +3,25 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct CameraSoftAPTests {
+    @Test func lostPathDoesNotKeepHandshakeAliveFromOldInbound() {
+        #expect(
+            CameraSoftAP.handshakeTimeoutStep(
+                pathReady: false, rebindsUsed: 0, inboundDatagrams: 10) == .fail)
+    }
+
+    @Test func unsolicitedPacketsCannotKeepHandshakeOpenForever() {
+        for round in 1...CameraSoftAP.handshakeRebindLimit {
+            #expect(
+                CameraSoftAP.handshakeTimeoutStep(
+                    pathReady: true, rebindsUsed: 0, inboundDatagrams: 10,
+                    sendRoundsUsed: round) == .keepSocket)
+        }
+        #expect(
+            CameraSoftAP.handshakeTimeoutStep(
+                pathReady: true, rebindsUsed: 0, inboundDatagrams: 10,
+                sendRoundsUsed: CameraSoftAP.handshakeRebindLimit + 1) == .fail)
+    }
+
     @Test func phoneAddressOnCameraAP() {
         #expect(CameraSoftAP.isAssociatedIPv4("192.168.2.15"))
         #expect(CameraSoftAP.isAssociatedIPv4("192.168.2.2"))

@@ -82,7 +82,12 @@ space after rotation or resizing, including saved positions. Long-press a View A
   that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.
   The gimbal follows that direction using direct angle targets. Roll is shown,
   not driven. STOP clears the lock. Manual controls and Motion Control takes take
-  priority; lost head motion pauses tracking. Responsiveness remains experimental. A connected game controller's left stick drives the same path.
+  priority; lost head motion pauses tracking. Allow Motion & Fitness when
+  prompted. If motion never arrives, Calibrate offers an explicit retry;
+  a Bluetooth connection alone does not confirm motion delivery.
+  Scopes can be moved beneath the
+  Calibrate Head Lock / STOP button in either orientation. Responsiveness remains
+  experimental. A connected game controller's left stick drives the same path.
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
   hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter.

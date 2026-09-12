@@ -50,6 +50,12 @@ struct MonitorRecoveryOverlay: View {
                     .font(LiveType.ui(size: 12, weight: .medium))
                     .foregroundStyle(LiveDesign.muted)
                     .fixedSize(horizontal: false, vertical: true)
+                    if case .retrying = state {
+                        Text(Self.progressDetail(model.session.phase))
+                            .font(LiveType.ui(size: 12, weight: .medium))
+                            .foregroundStyle(LiveDesign.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -77,6 +83,18 @@ struct MonitorRecoveryOverlay: View {
             in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
         )
         .shadow(color: .black.opacity(0.35), radius: 22, y: 10)
+    }
+
+    static func progressDetail(_ phase: ConnectionPhase) -> String {
+        switch phase {
+        case .idle, .scanning: "Looking for your camera…"
+        case .connectingGatt, .pairing: "Connecting to your camera…"
+        case .awaitingApproval: "Approve on the camera screen if asked."
+        case .readingWifiCreds, .joiningWifi: "Rejoining camera Wi-Fi…"
+        case .openingDatalink: "Restoring the camera connection…"
+        case .live: "Waiting for a new live picture…"
+        case .failed: "Connection attempt failed. Trying again…"
+        }
     }
 
     @ViewBuilder private func statusIcon(state: SessionRecoveryState) -> some View {

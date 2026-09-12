@@ -18,7 +18,7 @@ the same PR.
 | Watcher relay (iOS) | Same camera Wi-Fi for host and watchers; no peer-to-peer fallback. One encode; two admitted source frames; two video sends per authorized watcher, separate from control traffic; one pending state send at 5 Hz. Encode and fan-out off MainActor. Forced relay keyframes ≤1 Hz. | [`watcher-relay.md`](watcher-relay.md) |
 | Window ACK | pktType `0x04` at **40 Hz**, three groups: video `0x02` seq, ackedData `0x03` seq, telemetry extra | [`live-session.md`](live-session.md) |
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
-| Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause (young status) never rebuilds UDP | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md) |
+| Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits two enables, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
 | Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. Assists-off is one blit — no 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
 | HUD glass sample | PixelCopy ~20 Hz when Kyant cannot sample the SurfaceView | [`ANDROID.md`](../ANDROID.md) |
@@ -62,8 +62,12 @@ on the GPU path; if a LUT bake is still in flight, drop to the latest sample.
 Metal present is latest-wins with **one drawable in flight**
 (`FeedPresentPolicy.maxInFlightMetalPresents`). Do not block MainActor on
 `nextDrawable` — LUT 50/50 plus PEAK / FALSE / ZEBRA pipelined baker
-completions and froze ingest until force-quit (#218). Skip the acquire
-and present the newest bake when a drawable returns.
+completions and froze ingest until force-quit (#218). Acquire on a dedicated
+serial worker; keep one reservation through GPU completion. Skip new acquisitions
+while busy and adopt the newest coherent bake when the slot becomes available.
+Only successful GPU completion advances the Metal presentation clock; it does
+not measure physical display scanout. Keep source time, bake identity and layer
+style together through completion, including resize and LUT replacement.
 Runtime grade stays at `FeedPresentPolicy.maxWorkingWidth` (1440 px) on the
 720p proxy — do not memcpy a 4K original to apply a cube. Live LUT replace
 hides the HEVC layer once Metal owns the picture. Playback does the same:

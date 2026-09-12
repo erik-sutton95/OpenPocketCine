@@ -73,6 +73,24 @@ public struct SessionRecoveryPolicy: Sendable, Equatable {
     /// Long enough to ride out a camera power cycle; short enough that a
     /// camera that is gone stops burning the radio.
     public static let monitor = SessionRecoveryPolicy()
+    /// Total elapsed budget including discovery, joins and retry backoff.
+    /// Per-stage deadlines must not multiply into an indefinite recovery screen.
+    public static let automaticRecoveryBudgetSeconds: Double = 180
+
+    /// A handshake, old held image, or GPU redraw alone cannot finish recovery.
+    /// Shell timestamps share one clock and describe source and display progress.
+    public static func hasFreshPicture(
+        attemptStartedAt: Double, now: Double,
+        lastSourceFrameAt: Double?, lastPresentedAt: Double?, maxAge: Double = 2
+    ) -> Bool {
+        guard attemptStartedAt.isFinite, now.isFinite, maxAge.isFinite, maxAge >= 0,
+            now >= attemptStartedAt,
+            let source = lastSourceFrameAt, let presented = lastPresentedAt
+        else { return false }
+        return [source, presented].allSatisfy {
+            $0.isFinite && $0 > attemptStartedAt && $0 <= now && now - $0 <= maxAge
+        }
+    }
 
     public static func shouldBegin(_ trigger: SessionRecoveryTrigger) -> Bool {
         switch trigger {

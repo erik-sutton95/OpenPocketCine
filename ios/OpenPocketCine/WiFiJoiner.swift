@@ -15,11 +15,14 @@ enum WiFiJoiner {
     enum JoinError: LocalizedError {
         case failed(String)
         case pathNotReady
+        case timedOut
         case stillOnOtherBody(String)
         var errorDescription: String? {
             switch self {
             case .failed(let s):
                 "couldn't join camera Wi-Fi (\(s)). \(CameraSoftAPSwitch.frequencyHint)"
+            case .timedOut:
+                "Camera Wi-Fi did not finish joining. Try connecting again."
             case .pathNotReady:
                 "camera Wi-Fi joined but 192.168.2.x never appeared. \(CameraSoftAPSwitch.frequencyHint)"
             case .stillOnOtherBody(let ssid):
@@ -42,6 +45,7 @@ enum WiFiJoiner {
         knownOtherSSIDs: [String],
         persist: Bool = false
     ) async throws {
+        try Task.checkCancellation()
         var kick = Set(knownOtherSSIDs.filter { !$0.isEmpty && $0 != ssid })
         leave(ssids: Array(kick))
         await leaveOtherOsmoSoftAPs(except: ssid)
@@ -52,8 +56,10 @@ enum WiFiJoiner {
         while true {
             attempt += 1
             try Task.checkCancellation()
+            let current = await currentSSID()
+            try Task.checkCancellation()
             if let foreign = CameraSoftAPSwitch.ssidToKick(
-                currentSSID: await currentSSID(), target: ssid)
+                currentSSID: current, target: ssid)
             {
                 journal("wifi: kick \(foreign) then join \(ssid) #\(attempt)")
                 leave(ssid: foreign)
@@ -61,11 +67,16 @@ enum WiFiJoiner {
             }
             leave(ssids: Array(kick))
             await leaveOtherOsmoSoftAPs(except: ssid)
-            try? await Task.sleep(for: .milliseconds(250))
+            try await Task.sleep(for: .milliseconds(250))
             do {
-                try await join(ssid: ssid, passphrase: passphrase, wpa3: wpa3, persist: persist)
-                try await waitUntilCameraPathReady()
+                try await join(
+                    ssid: ssid, passphrase: passphrase, wpa3: wpa3, persist: persist,
+                    timeout: .seconds(min(20, max(0, deadline.timeIntervalSinceNow))))
+                try Task.checkCancellation()
+                try await waitUntilCameraPathReady(
+                    timeout: min(15, max(0, deadline.timeIntervalSinceNow)))
                 let now = await currentSSID()
+                try Task.checkCancellation()
                 if CameraSoftAPSwitch.isOnTarget(currentSSID: now, target: ssid) {
                     journal("wifi: on \(ssid) (current=\(now ?? "nil")) #\(attempt)")
                     return
@@ -94,9 +105,9 @@ enum WiFiJoiner {
         #if targetEnvironment(simulator)
             return nil
         #else
-            await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+            return try? await awaitCallback(timeout: .seconds(3)) { completion in
                 NEHotspotNetwork.fetchCurrent { network in
-                    cont.resume(returning: network?.ssid)
+                    completion(.success(network?.ssid))
                 }
             }
         #endif
@@ -106,13 +117,15 @@ enum WiFiJoiner {
         ssid: String,
         passphrase: String,
         wpa3: Bool,
-        persist: Bool = false
+        persist: Bool = false,
+        timeout: Duration = .seconds(20)
     ) async throws {
         let config = NEHotspotConfiguration(ssid: ssid, passphrase: passphrase, isWEP: false)
         // Join-once drops the hotspot when the app leaves the foreground; saved
         // cameras need the config to survive Control Center / background.
         config.joinOnce = !persist
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+        try await awaitCallback(timeout: timeout) {
+            (completion: @escaping (Result<Void, Error>) -> Void) in
             NEHotspotConfigurationManager.shared.apply(config) { error in
                 if let error = error as NSError? {
                     // "already associated" is success, not a failure.
@@ -120,18 +133,18 @@ enum WiFiJoiner {
                         error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue
                     {
                         journal("wifi: apply \(ssid) already associated")
-                        c.resume()
+                        completion(.success(()))
                         return
                     }
                     journal(
                         "wifi: apply \(ssid) failed \(error.domain) \(error.code) \(error.localizedDescription)"
                     )
-                    c.resume(throwing: JoinError.failed(error.localizedDescription))
+                    completion(.failure(JoinError.failed(error.localizedDescription)))
                 } else {
                     // nil error is "config applied", not "associated" — a wrong
                     // passphrase still returns here and iOS shows Unable to join.
                     journal("wifi: apply \(ssid) ok persist=\(persist)")
-                    c.resume()
+                    completion(.success(()))
                 }
             }
         }
@@ -149,6 +162,7 @@ enum WiFiJoiner {
 
     /// Block until `192.168.2.2…254` exists. Second connect returns immediately.
     static func waitUntilCameraPathReady(timeout: TimeInterval = 15) async throws {
+        try Task.checkCancellation()
         if isCameraPathReady() { return }
         journal("wifi: waiting for 192.168.2.x (first join / DHCP)")
         let deadline = Date().addingTimeInterval(timeout)
@@ -187,6 +201,7 @@ enum WiFiJoiner {
     /// on the other body. The other camera can stay powered on.
     static func leaveOtherOsmoSoftAPs(except keep: String) async {
         let configured = await configuredSSIDs()
+        guard !Task.isCancelled else { return }
         let extras = configured.filter { $0 != keep && CameraSoftAP.isOsmoSoftAPSSID($0) }
         if !extras.isEmpty {
             journal(
@@ -197,10 +212,67 @@ enum WiFiJoiner {
     }
 
     static func configuredSSIDs() async -> [String] {
-        await withCheckedContinuation { (cont: CheckedContinuation<[String], Never>) in
+        (try? await awaitCallback(timeout: .seconds(3)) { completion in
             NEHotspotConfigurationManager.shared.getConfiguredSSIDs { ssids in
-                cont.resume(returning: ssids)
+                completion(.success(ssids))
             }
+        }) ?? []
+    }
+
+    /// NEHotspot callbacks have no Swift task cancellation contract. Resolve
+    /// once, bound the OS wait, and ignore late completions from an abandoned join.
+    static func awaitCallback<Value>(
+        timeout: Duration,
+        register: (@escaping (Result<Value, Error>) -> Void) -> Void
+    ) async throws -> Value {
+        let waiter = CallbackWaiter<Value>()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            let deadlineTask = Task {
+                do { try await Task.sleep(for: timeout) } catch { return }
+                waiter.resolve(.failure(JoinError.timedOut))
+            }
+            defer { deadlineTask.cancel() }
+            return try await withCheckedThrowingContinuation { continuation in
+                waiter.install(continuation)
+                guard !Task.isCancelled else {
+                    waiter.resolve(.failure(CancellationError()))
+                    return
+                }
+                register { waiter.resolve($0) }
+            }
+        } onCancel: {
+            waiter.resolve(.failure(CancellationError()))
+        }
+    }
+
+    private final class CallbackWaiter<Value>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var result: Result<Value, Error>?
+        private var continuation: CheckedContinuation<Value, Error>?
+
+        func install(_ continuation: CheckedContinuation<Value, Error>) {
+            lock.lock()
+            if let result {
+                lock.unlock()
+                continuation.resume(with: result)
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+
+        func resolve(_ result: Result<Value, Error>) {
+            lock.lock()
+            guard self.result == nil else {
+                lock.unlock()
+                return
+            }
+            self.result = result
+            let continuation = continuation
+            self.continuation = nil
+            lock.unlock()
+            continuation?.resume(with: result)
         }
     }
 

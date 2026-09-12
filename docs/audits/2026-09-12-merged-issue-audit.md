@@ -1,0 +1,114 @@
+# Merged PR and open-issue audit — 2026-09-12
+
+Surface: **docs**. This is a dated issue-triage record, not an architecture contract.
+
+## Scope and evidence
+
+Compared all **50 open issues** with the **20 most recently merged PRs**, ending at main commit `0890ee60222b055aa8ab29e7ee3362584fe124ac` (#335). The window runs from 2026-09-10 21:20:00 UTC (#318) through 2026-09-12 07:43:48 UTC (#335). GitHub list order is not merge-time order: 100 merged PRs were fetched, explicitly sorted by `mergedAt`, then reduced to 20. This includes #308/#306/#305/#304, which a simple latest-number list misses.
+
+Read PR bodies and plausible-match changed-file lists/diffs; read relevant issue/discussion comments and current implementation/contracts. None of the 20 PRs declares an automatic closing-issue reference. Physical and test results below are attributed to the merged PR or maintained evidence document; this audit did not rerun hardware checks. Issue titles and acceptance were inspected without copying private tester media or raw journals.
+
+## Closure recommendations
+
+1. **#101 — close as completed under its approved revised design.** [PR #331](https://github.com/erik-sutton95/OpenPocketCine/pull/331) delivers the embedded watchOS app, WatchConnectivity state/preview, recording and camera battery/storage. Its recorded physical evidence says the operator used the companion. [The approved design](../superpowers/specs/2026-09-08-apple-watch-companion-design.md) explicitly removes complication/phone-battery scope and makes wrist recording immediate rather than following the phone confirmation preference. These are accepted scope decisions, not hidden missing work. [PR #335](https://github.com/erik-sutton95/OpenPocketCine/pull/335) records successful signed archive/export and Xcode Cloud distribution repair. Closing does not assert a new physical run of every later review fix.
+
+2. **#80 — close the research spike as completed, with qualification caveats.** [PR #308](https://github.com/erik-sutton95/OpenPocketCine/pull/308) and [the command catalog](../../handbook/src/content/docs/protocol/commands.md) answer the original “no opcode / camera path versus phone playback” question: `0x04/0x14` supplies one timed native movement; the phone schedules the path. [Motion Control](../programmed-moves.md) records Pocket 4 Pro/iPhone functional A→B→C, pause/resume, native pitch and route tests; cancellation covers recording stop, manual stick, disconnect and inactive session. This does **not** qualify repeatability, wide/fast exact-B moves, other firmware, Android hardware or AirPods wear. Discussion #48 still has its old spike text; the closure explanation should link the implemented outcome and outstanding experimental qualifications.
+
+Keep the other 48 issues open on this evidence. In particular, do not close #148/#93/#219 or their trigger-specific siblings while the maintainer reports the same current Pocket 4 Pro failure family.
+
+## Twenty-PR mapping
+
+| PR | Open-issue match | Decision/evidence |
+| --- | --- | --- |
+| [#335](https://github.com/erik-sutton95/OpenPocketCine/pull/335) — docs: explain Watch companion signing in Xcode Cloud | No additional issue; supports #101 delivery | Watch signing/account repair with successful archive/export; no app connection fix. |
+| [#332](https://github.com/erik-sutton95/OpenPocketCine/pull/332) — feat: improve gimbal controls, monitor layout and beta notes | #79 partial; #94 partial; #98 partial | Mode/Speed/Ramp and saved-camera progress improved. Setup speed placement, broader physical acceptance and recovery qualifications remain. |
+| [#331](https://github.com/erik-sutton95/OpenPocketCine/pull/331) — feat: add Apple Watch camera companion | #101 completed under approved design | Watch app implemented; operator used companion. Complication and phone confirmation parity explicitly superseded by approved design. |
+| [#330](https://github.com/erik-sutton95/OpenPocketCine/pull/330) — docs: keep tester notes to a this-build window | No matching open issue | Tester-note process only. |
+| [#328](https://github.com/erik-sutton95/OpenPocketCine/pull/328) — fix: retain Pocket 3 portrait formats and preserve rental findings | #281 partial relationship | Preserves Pocket 3 portrait FORMAT. Does not establish Moto landscape/full-screen or return-to-video recovery; Android physical still pending. |
+| [#327](https://github.com/erik-sutton95/OpenPocketCine/pull/327) — fix: align the final buttons on one center line | No matching open issue | Landing-button alignment only. |
+| [#326](https://github.com/erik-sutton95/OpenPocketCine/pull/326) — fix: refresh cached homepage styles and animations | No matching open issue | Homepage asset cache and animation only. |
+| [#325](https://github.com/erik-sutton95/OpenPocketCine/pull/325) — fix: center and animate the coffee button | No matching open issue | Coffee-button centering/animation only. |
+| [#324](https://github.com/erik-sutton95/OpenPocketCine/pull/324) — fix: allow the coffee button embed to load | No matching open issue | Coffee embed content policy only. |
+| [#321](https://github.com/erik-sutton95/OpenPocketCine/pull/321) — feat: add Convert log export for D-Log ↔ D-Log2 | #89/#92 not satisfied | Log curve conversion is not a grade panel, still export sidecar or Lightroom workflow. New destination picker/NLE physical check remains pending. |
+| [#323](https://github.com/erik-sutton95/OpenPocketCine/pull/323) — docs: use the supplied Buy Me a Coffee embed | No matching open issue | Coffee embed replacement only. |
+| [#322](https://github.com/erik-sutton95/OpenPocketCine/pull/322) — docs: add Buy Me a Coffee button | No matching open issue | Coffee support button only. |
+| [#319](https://github.com/erik-sutton95/OpenPocketCine/pull/319) — feat: park ND as a movable chip with Stops / ND32 / ND 0.3 | No matching open issue | ND display/placement feature; does not provide Sweet Spot LUT (#96). |
+| [#320](https://github.com/erik-sutton95/OpenPocketCine/pull/320) — docs: summarize recent features in iOS and Android release notes | No matching open issue | Release-note recap is not proof each mentioned old issue is fixed. |
+| [#316](https://github.com/erik-sutton95/OpenPocketCine/pull/316) — feat: add experimental Osmo Multiview and improve live monitoring | #84, #83, #93, #94, #98, #281 partial | D-Log M signal routing, Nano frame assembly, Pocket 3 FORMAT and iOS recovery improved. Calibration, full Nano operator matrix, Android acceptance and current Pocket 4 Pro reliability remain open. |
+| [#308](https://github.com/erik-sutton95/OpenPocketCine/pull/308) — feat: add native Motion Control and AirPods gimbal tracking | #80 completed research spike; #79 and #124–127 partial | Native timed commands, functional physical motion evidence and safety controls answer the spike. Gimbal UI/capability work does not complete every Setup/facade requirement. AirPods wearer qualification remained pending. |
+| [#306](https://github.com/erik-sutton95/OpenPocketCine/pull/306) — fix: stabilize shared-Wi-Fi relay and add watcher monitor controls | #303 partial | Phone encoder/shared-camera-Wi-Fi relay implemented with revised topology. Final QR/join/recovery and wireless load acceptance explicitly pending; Android Sharing excepted. |
+| [#305](https://github.com/erik-sutton95/OpenPocketCine/pull/305) — feat: CineStop, six-zone IRE, and EL Zone false color | #96 not satisfied; #84 partial context | False-color scales are not the requested original Sweet Spot built-in LUT; no Nano D-Log M calibration proof. |
+| [#304](https://github.com/erik-sutton95/OpenPocketCine/pull/304) — feat: ND assist to balance the picture and keep 180° | No matching open issue | ND suggestion feature; not a Sweet Spot LUT or camera-link repair. |
+| [#318](https://github.com/erik-sutton95/OpenPocketCine/pull/318) — build: bump js-yaml from 4.3.1 to 4.3.2 in /handbook | No matching open issue | Handbook js-yaml dependency bump only. |
+
+## Concrete partial-work checks
+
+- **Settings rail (#134):** `SettingsRootView.settingsRail` is still a plain `VStack`; Android `SettingsTabRail` is still a `Column` without `verticalScroll`. #332 improves the saved-camera list and gimbal popup, not this rail.
+- **Capabilities (#124–127):** `CameraModel.hasGimbal` exists, but `supportsTapFocus` still uses `family != .nano`; unknown bodies therefore remain enabled. `AndroidSessionWire.cameraModelJSON` omits `hasGimbal`, and Kotlin computes it from `family`. Operator Setup joystick sensitivity is unconditional in both shells; the iOS chrome editor still offers Gimbal Stick without capability gating.
+- **Gimbal speed (#79):** the live popup supplies speed/mode, and readback handles mode-family ambiguity. The original requested Fast/Default/Slow entry in Operator Setup is absent. The recorded iPhone Direction Lock check is not a complete speed/model hardware matrix.
+- **D-Log M (#84):** [the curve investigation](../pocket3-dlogm-curve.md) explicitly says live/Nano calibration and sensor limits remain unvalidated. Face Priority and LUT exposure compensation retain the pre-existing D-Log approximation. A successful signal-routing smoke test cannot close the calibration issue.
+- **Relay (#303):** [relay evidence](../watcher-relay.md) records a smooth earlier one-iPad shared-Wi-Fi test, while final-build QR onboarding/recovery and multi-watcher radio acceptance remain pending. The implementation also adopts shared camera Wi-Fi rather than the issue’s original separate-interface design; this needs an explicit product update before claiming the original scope is complete.
+
+## All open issues at audit start
+
+“No matching fix” means no supporting closure evidence in this twenty-PR window; it does not assert that older work never addressed any part of the issue. Unrelated older tasks are retained rather than closed from a release-note recap.
+
+| Issue | Status in this window | Reason |
+| --- | --- | --- |
+| [#334](https://github.com/erik-sutton95/OpenPocketCine/issues/334) — Live view lag / frame skipping on Redmi Note 14 Pro+ 5G | Current report; retain | Android Pocket 4 Pro cadence report arrived after these implementation merges; journal does not isolate loss versus decode/presentation. |
+| [#311](https://github.com/erik-sutton95/OpenPocketCine/issues/311) — No live view | No matching fix | Custom-ROM Android no-picture report needs device diagnostics; no successful reproduction/fix evidence in this window. |
+| [#307](https://github.com/erik-sutton95/OpenPocketCine/issues/307) — Zoom button values are not displaying properly | No matching fix | Android zoom readback issue is not fixed by iOS zoom/gimbal layout changes. |
+| [#303](https://github.com/erik-sutton95/OpenPocketCine/issues/303) — Follow-on: phone-as-encoder second-screen relay | Partial: #306 | Relay exists; current changed-build wireless join/recovery/load acceptance is explicitly pending. |
+| [#281](https://github.com/erik-sutton95/OpenPocketCine/issues/281) — Pocket 3--Moto G Stylus 5G- no full screen video and video picture doesn't go into landscape mode | Partial relationship: #316/#328 | Pocket 3 FORMAT/portrait fixes do not prove Moto full-screen, landscape or return-to-video recovery. |
+| [#275](https://github.com/erik-sutton95/OpenPocketCine/issues/275) — Android: Pocket 4P is discovered over BLE but connection times out | No matching fix | Android BLE connect timeout is not covered by saved-row progress or video decoder work. |
+| [#273](https://github.com/erik-sutton95/OpenPocketCine/issues/273) — Camera body playback kicked out while OpenPocketCine session is live | No matching fix | Camera-body gallery interruption needs body-playback state evidence; normal live recovery work is not a fix. |
+| [#256](https://github.com/erik-sutton95/OpenPocketCine/issues/256) — Additional 4P battery not registering correct amount of battery life | No matching fix | Accessory-battery amount is not resolved by adding Watch battery display. |
+| [#236](https://github.com/erik-sutton95/OpenPocketCine/issues/236) — TestFlight: 4K 24p to 60p freezes live view | No qualifying fix | Pocket 4/4 Pro 4K 24↔30↔60 recovery acceptance remains unproven; Pocket 3 FORMAT retention is different. |
+| [#235](https://github.com/erik-sutton95/OpenPocketCine/issues/235) — TestFlight 0.1.0 (61): first-run cannot join Pocket 4 Pro SoftAP / datalink | No qualifying fix | First-pair SoftAP/DHCP/handshake failure still needs its physical acceptance; row-level progress is not a join repair. |
+| [#223](https://github.com/erik-sutton95/OpenPocketCine/issues/223) — D-Log and D-log 2 LUT has stuttering images once camera is panned or Samsung A16 Android | No qualifying fix | Samsung A16 landscape/LUT/zebra stutter needs that device/trigger verification; recent color/ND work does not prove it fixed. |
+| [#219](https://github.com/erik-sutton95/OpenPocketCine/issues/219) — TestFlight: connection drops when tracking an object | Current related reproduction; retain | ActiveTrack drop differs from AirPods targeting, but the currently reported control-triggered stuck recovery prevents closure by analogy. |
+| [#218](https://github.com/erik-sutton95/OpenPocketCine/issues/218) — TestFlight: LUT 50/50 split drops live view (must restart) | No qualifying fix | No physical split-comparison/no-stuck-recovery result in this window. |
+| [#217](https://github.com/erik-sutton95/OpenPocketCine/issues/217) — standard photo - no capture | No matching fix | Standard JPEG+RAW shutter rejection is not answered by Pocket 3 portrait FORMAT or Watch shutter support. |
+| [#216](https://github.com/erik-sutton95/OpenPocketCine/issues/216) — Connecting Frequency issue and probably bitrate issue? | No qualifying fix | Pocket 4 Pro join/no-first-picture report remains distinct from Pocket 3/Nano decoder improvements. |
+| [#184](https://github.com/erik-sutton95/OpenPocketCine/issues/184) — Tracking box stream does not mirror with video | No matching fix in window | Recent assist geometry/Watch mirroring work is not evidence that the camera tracking-box mirror bug is resolved. |
+| [#175](https://github.com/erik-sutton95/OpenPocketCine/issues/175) — Suddenly desconnection from my Osmo Action 6 | No qualifying fix | Action 6 freeze/assists requires Action-specific evidence; no such hardware acceptance in the window. |
+| [#148](https://github.com/erik-sutton95/OpenPocketCine/issues/148) — TestFlight 0.1.0: live view freezes / Reconnecting within seconds | Current reproduction; retain | Maintainer currently reports Pocket 4 Pro stutter/drop and RECOV that never recovers. |
+| [#143](https://github.com/erik-sutton95/OpenPocketCine/issues/143) — CI: play-internal.yml uploads signed AAB on main | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#142](https://github.com/erik-sutton95/OpenPocketCine/issues/142) — Play Console: create app, internal testers, first manual AAB | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#141](https://github.com/erik-sutton95/OpenPocketCine/issues/141) — Gradle: signed bundleRelease + local upload keystore | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#140](https://github.com/erik-sutton95/OpenPocketCine/issues/140) — Android Play internal pipeline (signed AAB from main) | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#134](https://github.com/erik-sutton95/OpenPocketCine/issues/134) — Operator Setup tab rail is not scrollable — System clipped on small phones | Unresolved in source | Both landscape settings rails still lack vertical scrolling; camera-row changes in #332 are a different surface. |
+| [#127](https://github.com/erik-sutton95/OpenPocketCine/issues/127) — Android: consume camera capabilities for live chrome | Partial: #308 | Android recomputes hasGimbal from family; Setup joystick sensitivity remains unconditional; physical Android acceptance pending. |
+| [#126](https://github.com/erik-sutton95/OpenPocketCine/issues/126) — iOS: consume camera capabilities for live chrome | Partial: #308 | Live gimbal gating exists; iOS Setup joystick sensitivity and chrome-editor Gimbal Stick remain unconditional. |
+| [#125](https://github.com/erik-sutton95/OpenPocketCine/issues/125) — Core: camera chrome capability table | Partial: #308 | hasGimbal added; AndroidSessionWire JSON lacks it and uncaptured-body focus still fails open. |
+| [#124](https://github.com/erik-sutton95/OpenPocketCine/issues/124) — Gate operator chrome by camera body capabilities | Partial: #308 | Core hasGimbal and live gating landed, but facade/Setup/editor acceptance below remains open. |
+| [#116](https://github.com/erik-sutton95/OpenPocketCine/issues/116) — TestFlight issue | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#114](https://github.com/erik-sutton95/OpenPocketCine/issues/114) — Android live connection drops — copy iOS datalink 1:1 into shared Swift | No qualifying fix | Shared-core datalink migration/equivalent long Android/iOS live reliability is not completed by these PRs. |
+| [#101](https://github.com/erik-sutton95/OpenPocketCine/issues/101) — Add Apple Watch companion | Complete (approved scope) | Close with #331 and #335; explain approved exclusions below. |
+| [#100](https://github.com/erik-sutton95/OpenPocketCine/issues/100) — Add white-balance presets as Custom Kelvin shortcuts | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#99](https://github.com/erik-sutton95/OpenPocketCine/issues/99) — Decide macOS product (test host vs viewer vs operator) | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#98](https://github.com/erik-sutton95/OpenPocketCine/issues/98) — Finalize iPad live layout and pointer | Partial: #308/#316/#332 | Canvas/controls and geometry improvements exist; no complete physical iPad pointer/gimbal qualification. |
+| [#96](https://github.com/erik-sutton95/OpenPocketCine/issues/96) — Author and ship Sweet Spot built-in LUT | No matching fix | ND and CineStop/IRE/EL Zone do not implement a Sweet Spot built-in look; no Sweet Spot implementation found. |
+| [#95](https://github.com/erik-sutton95/OpenPocketCine/issues/95) — Add live-view first-time experience | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#94](https://github.com/erik-sutton95/OpenPocketCine/issues/94) — Revisit operator setup wizard copy and recovery | Partial: #306/#316/#332 | Camera/watcher UI and saved-row progress improved, but first-pair/failed-Wi-Fi/saved-reconnect acceptance is not proven. |
+| [#93](https://github.com/erik-sutton95/OpenPocketCine/issues/93) — Audit connection reliability and remaining repairs | Partial: #316; current reproduction | Recent reconnect improvements do not satisfy the required long Pocket 4 Pro/Nano reliability take. |
+| [#92](https://github.com/erik-sutton95/OpenPocketCine/issues/92) — Add Lightroom-friendly photo export | No matching fix | No Lightroom still-export/sidecar acceptance; #321 handles log video curve conversion. |
+| [#91](https://github.com/erik-sutton95/OpenPocketCine/issues/91) — Hardware-test Face Priority EV compensation | No qualifying fix | Nano/Pocket Face Priority hardware matrix remains outstanding; scope transfer routing is insufficient. |
+| [#90](https://github.com/erik-sutton95/OpenPocketCine/issues/90) — Spike: capture Osmo Action 6 live enable | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#89](https://github.com/erik-sutton95/OpenPocketCine/issues/89) — Add basic Pocket grading on export | No matching fix | Convert log (#321) changes a transfer curve, not the requested exposure/color export panel and preview. |
+| [#88](https://github.com/erik-sutton95/OpenPocketCine/issues/88) — Spike: camera data over USB | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#87](https://github.com/erik-sutton95/OpenPocketCine/issues/87) — Spike: YouTube and Twitch livestream backhaul | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#85](https://github.com/erik-sutton95/OpenPocketCine/issues/85) — Prototype VideoToolbox live-feed noise reduction | No matching fix in window | No applicable implementation/acceptance in the twenty PRs; retain for separate triage. |
+| [#84](https://github.com/erik-sutton95/OpenPocketCine/issues/84) — Add D-Log M monitor transfer and scope mapping | Partial: #316 | Distinct D-Log M signal transfer exists, but Nano gray/white/sensor calibration and calibrated Face Priority/LUT compensation remain absent. |
+| [#83](https://github.com/erik-sutton95/OpenPocketCine/issues/83) — Finish Osmo Nano operator chrome and stills | Partial: #308/#316 | Nano live assembly and live gimbal gating improved. Still/color/media/full reconnect matrix is not established by these PRs. |
+| [#82](https://github.com/erik-sutton95/OpenPocketCine/issues/82) — Capture remaining shooting modes (slow-mo, timelapse, hyperlapse, panorama) | Partial documentation context: #328 | Pocket 3 rental survey covers modes, but it does not complete each supported body/mode command/UI qualification. |
+| [#81](https://github.com/erik-sutton95/OpenPocketCine/issues/81) — Surface Video and Photo shooting modes | No qualifying fix in window | No physical Pocket 4/4 Pro Video↔Photo/still-versus-record acceptance found in these PRs. |
+| [#80](https://github.com/erik-sutton95/OpenPocketCine/issues/80) — Spike: capture timed gimbal waypoints | Complete as research spike | Close with #308 and the native-command/functional evidence; preserve experimental qualification in discussion #48 and feature docs. |
+| [#79](https://github.com/erik-sutton95/OpenPocketCine/issues/79) — Wire gimbal rotational speed and mode UI | Partial: #308/#332 | Live mode/speed/readback exists, with Direction Lock physical evidence. Fast/Default/Slow is not in Operator Setup; full speed/body acceptance is not recorded. |
+
+## Execution record
+
+The coordinating task closed **#101** and **#80** as completed on 2026-09-12 and
+verified both states through GitHub. The other 48 issues remain open. The scope
+and qualification caveats above remain applicable; closing the waypoint research
+spike does not qualify continuous AirPods control or close the reliability work.

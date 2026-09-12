@@ -65,6 +65,60 @@ Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
 Android has no TestFlight screenshot hook — PARITY exception.
 
+## Motion stutter and recovery capture
+
+The connection audit adds one delivery summary per second. These rows contain
+timing and counters only; no picture, audio, camera credentials or device identity.
+
+- iOS `feed: delivery`: `ackHz` / `ackGapMs`, `videoHz` / `videoGapMs`,
+  `auHz` / `auGapMs`, `mainWaitMs`, `pendingPeak`, `queueDrop`,
+  `incompleteDrop`, `stickWrites` and `nativeWrites`.
+- iOS `feed present`: `gpuFPS` measures successful GPU completions per elapsed
+  second and `gpuGapMs` includes silence. `acquireMaxMs` records the largest
+  drawable wait and `gpuMaxMs` the largest submit-to-completion delay in the window.
+  `failed` is the cumulative failed-presentation count for that view. These measure
+  renderer progress, not physical display scanout.
+- iOS `feed: decode`: VT submission/output, assist input/output and assist-to-main
+  adoption rates and maximum gaps. `vtMaxMs` measures submit to successful VT
+  callback; `assistMaxMs` includes assist queue wait and processing;
+  `assistMainMaxMs` measures its completion-to-main hop. These fixed-size
+  counters log once per second, including silence. Cached repaints do not count
+  as source progress. `vtActive=0` means the VT stages cannot describe the
+  compressed display-layer path; the summary excludes those windows.
+- Android `feed: cadence`: separate ACK, video, assembled-frame, decoder-submit,
+  decoder-output and presentation rates, maximum gaps and ages; compressed queue
+  depth, peak and wait; input-buffer misses, incomplete frames and decoder errors.
+- `session: foreground` / foreground recovery rows record network readiness and
+  picture freshness. Recovery stage, failure, completion and exhausted-budget
+  rows remain in the journal shared by the operator.
+
+ACK rate measures local submissions, not confirmed camera receipt. Decoder output
+is separate from presentation. A repeated redraw of the same source must not
+count as new video. Averages alone cannot establish smooth motion: compare the
+maximum gaps and queue waits in the same time window.
+
+Keep a baseline, then change one trigger at a time: 30 seconds static, slow pan,
+joystick, LUT/scopes, head tracking, and app return. Note the trigger time; keep
+at least 30 seconds after a failure before manually reconnecting, so the
+watchdog's escalation can be observed. Save the journal before restarting or
+deleting the app. For a longer session, pull periodic snapshots before its
+bounded journal trims the first connection; deduplicate overlapping snapshots.
+USB keeps the development link available while the phone joins camera Wi-Fi.
+Raw logs and footage stay outside Git. Summarize a pulled or shared journal locally:
+
+```sh
+just live-log-summary /tmp/camera-control.log
+```
+
+The summary prints numeric measurements and event counts without echoing log
+contents. Smooth packet/AU arrival with delayed decoder/presentation narrows the
+investigation to the phone. Packet/AU gaps preceding the display hitch warrant
+a matched RF/transport capture, including comparison with Mimo when needed.
+When diagnosing a rebind, compare the camera's destination port with the phone's
+new source port. A continuing local ACK counter cannot prove that the peer has
+accepted the replacement endpoint. See the [capture guide](capture-guide.md)
+for RVI setup and timestamp limitations.
+
 ## MetricKit
 
 Crashes, hangs, CPU/disk exceptions are written under

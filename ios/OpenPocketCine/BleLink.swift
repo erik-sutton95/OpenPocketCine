@@ -53,7 +53,6 @@ final class BleLink: NSObject {
     private var foundStream: AsyncStream<FoundCamera>.Continuation?
     private var notificationAssemblers: [CBUUID: DumlNotificationAssembler] = [:]
     private var frameStream: AsyncStream<Duml.Frame>.Continuation?
-    private var poweredOn: CheckedContinuation<Void, Never>?
     private var readyCont: CheckedContinuation<Void, Error>?
     private var connectTimeout: DispatchWorkItem?
     private var pairingArmed = false
@@ -92,16 +91,24 @@ final class BleLink: NSObject {
 
     var isPoweredOn: Bool { central.state == .poweredOn }
 
-    func waitUntilPoweredOn() async {
-        if central.state == .poweredOn { return }
-        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-            if central.state == .poweredOn {
-                c.resume()
-            } else {
-                poweredOn?.resume()
-                poweredOn = c
-            }
+    /// CoreBluetooth may stay off/unauthorized indefinitely. Recovery must
+    /// exhaust its radio wait and cancellation must not depend on a delegate callback.
+    @discardableResult
+    func waitUntilPoweredOn(timeout: Duration = .seconds(10)) async -> Bool {
+        await Self.waitForPower(timeout: timeout) { self.isPoweredOn }
+    }
+
+    @MainActor static func waitForPower(
+        timeout: Duration, isPoweredOn: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !Task.isCancelled {
+            if isPoweredOn() { return true }
+            guard clock.now < deadline else { return false }
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
         }
+        return false
     }
 
     /// Scan until cancelled; yields each distinct DJI camera as it's discovered.
@@ -182,8 +189,6 @@ final class BleLink: NSObject {
     }
 
     func disconnect() {
-        poweredOn?.resume()
-        poweredOn = nil
         writeQueue.removeAll()
         notificationAssemblers.removeAll()
         finishConnect(BleError.gone)
@@ -334,10 +339,7 @@ final class BleLink: NSObject {
 
 extension BleLink: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn {
-            poweredOn?.resume()
-            poweredOn = nil
-        }
+        // Power waiters poll with a deadline and observe this manager state.
     }
 
     func centralManager(
