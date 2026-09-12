@@ -54,12 +54,19 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | Can rejoin (new handshake) after a few failed enables. |
 | Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. Watchdog UDP rebuild still force-enables; keepalive does not if HEVC had already existed. `still holding for IDR` is not a repair owner. |
-| `SessionRecovery` | **Yes**, separate | BLE drop (both). Android also SoftAP `onLost`. iOS SoftAP loss does not start this. Both shells also start it (`.datalinkLost`) when the watchdog's rejoin misses its handshake — a nil datalink under a live phase had no repair owner. |
+| `SessionRecovery` | **Yes**, separate | BLE loss, confirmed camera-network loss, foreground picture failure, or a failed watchdog rejoin starts the full saved-camera spine. Handshake success alone cannot finish it. Eight attempts / 180 s total, then the operator. |
 
 `rebuildVTSession` is **never emitted** by `tick`; both shells map it to UDP
 rebuild. `fullSessionRejoin` is the last rung after a UDP rebuild proved
 nothing in `escalateAfter`; both shells map it to `rejoinDatalinkKeepingLive`.
 `decoderFailed` is on the snapshot and unused.
+
+The [2026-09-12 audit](audits/2026-09-12-connection-audit.md) distinguishes corrected
+ownership/cancellation defects from outstanding physical cadence qualification.
+Foreground no longer starts a competing UDP rebuild/enable. A full reconnect
+restores BLE as well as Wi-Fi and UDP; reopening UDP after disconnecting BLE was
+an incomplete recovery. Old socket/decoder callbacks cannot supply fresh-picture
+proof for a new lifetime.
 
 Chrome is three flags:
 

@@ -109,6 +109,8 @@ class SessionRecoveryPolicy(
     }
 
     companion object {
+        const val AUTOMATIC_RECOVERY_BUDGET_MS = 180_000L
+        const val ADVERTISEMENT_SCAN_BUDGET_MS = 30_000L
         val monitor = SessionRecoveryPolicy()
 
         fun shouldBegin(trigger: SessionRecoveryTrigger): Boolean =
@@ -155,4 +157,30 @@ object SessionRecoveryCopy {
                 "$camera reconnected but dropped ${state.drops} times in quick succession. Automatic retries are paused to protect the camera. The frame below is held, not live."
         }
     }
+}
+
+/** A handshake/status packet cannot dismiss the held-frame warning. */
+internal object RecoveryPictureProof {
+    fun isFresh(startedAt: Long, now: Long, presentedAt: Long?, accessUnitAt: Long?): Boolean =
+        presentedAt != null && accessUnitAt != null &&
+            presentedAt >= startedAt && accessUnitAt >= startedAt &&
+            now - presentedAt in 0 until 2_000 && now - accessUnitAt in 0 until 2_000
+}
+
+/** Total episode cap covers scan, BLE, Wi-Fi, handshake, picture and backoff. */
+internal suspend fun withinAutomaticRecoveryBudget(work: suspend () -> Unit): Boolean =
+    kotlinx.coroutines.withTimeoutOrNull(SessionRecoveryPolicy.AUTOMATIC_RECOVERY_BUDGET_MS) {
+        work()
+        true
+    } ?: false
+
+/** Scan has its own bound; later stages retain their camera-specific deadlines. */
+internal suspend fun <Camera : Any> recoverAfterAdvertisement(
+    scan: suspend () -> Camera?,
+    reconnect: suspend (Camera) -> Boolean,
+): Boolean {
+    val camera = kotlinx.coroutines.withTimeoutOrNull(SessionRecoveryPolicy.ADVERTISEMENT_SCAN_BUDGET_MS) {
+        scan()
+    } ?: return false
+    return reconnect(camera)
 }

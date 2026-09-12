@@ -92,7 +92,8 @@ final class HevcDecoder {
             guard processedFeed !== oldValue, let buffer = lastDecodedBuffer,
                 effects.needsGPUFeed
             else { return }
-            handleDecodedFrame(buffer, isNewSourceFrame: false)
+            handleDecodedFrame(
+                buffer, isNewSourceFrame: false, timeNs: lastDecodedTimeNs)
         }
     }
     weak var sampleBus: LiveFrameSampleBus? {
@@ -150,7 +151,12 @@ final class HevcDecoder {
     private var sps: [UInt8]?
     private var pps: [UInt8]?
     private var vtSession: VTDecompressionSession?
-    private var vtGeneration = 0
+    private let decodedFrameGeneration = OSAllocatedUnfairLock(initialState: 0)
+    /// Capture before asynchronous decode; returned pixels must retain this token
+    /// through assist work and its eventual MainActor completion.
+    nonisolated var sourceFrameGeneration: Int {
+        decodedFrameGeneration.withLock { $0 }
+    }
     private var displayReadyCont: CheckedContinuation<Bool, Never>?
     private var frameIndex: Int64 = 0
     private let assistEngine = LiveAssistEngine()
@@ -240,6 +246,7 @@ final class HevcDecoder {
     private var lastReplacesIdentity = false
     /// Last VT / assist source. LUT-off enqueues this on the layer so the canvas never goes black.
     private var lastDecodedBuffer: CVPixelBuffer?
+    private var lastDecodedTimeNs: Int64 = 0
     private var lastPresentHealthLogAt: Date?
     private var builtVPS: [UInt8]?
     private var builtSPS: [UInt8]?
@@ -455,16 +462,25 @@ final class HevcDecoder {
         _ imageBuffer: CVPixelBuffer,
         effects: LiveImageEffects? = nil,
         transfer: MonitorTransfer? = nil,
-        isNewSourceFrame: Bool = true
+        isNewSourceFrame: Bool = true,
+        generation: Int? = nil,
+        timeNs: Int64 = 0
     ) {
+        let generation = generation ?? sourceFrameGeneration
+        guard sourceFrameGeneration == generation else { return }
         let sourceTime = Date()
+        let sourceTimeNs =
+            timeNs != 0
+            ? timeNs
+            : (isNewSourceFrame ? Int64(clamping: DispatchTime.now().uptimeNanoseconds) : 0)
         if isNewSourceFrame { onIdentityFrame?(imageBuffer) }
         // One MainActor hop per engine callback — a second per-frame Task for the frame
         // counters doubled main-queue pressure at 25 fps for two one-line writes.
-        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: 0) {
+        assistEngine.submit(imageBuffer, effects: effects, transfer: transfer, timeNs: sourceTimeNs)
+        {
             [weak self] result in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.sourceFrameGeneration == generation else { return }
                 let presented = self.applyAssistResult(
                     result, isNewSourceFrame: isNewSourceFrame)
                 // Cached repaints cannot refresh camera or watcher liveness.
@@ -481,6 +497,7 @@ final class HevcDecoder {
     }
 
     func reset() {
+        invalidateVT()
         hasSubmittedRandomAccess = false
         finishDisplayWait(false)
         stopSimulatorSample()
@@ -510,6 +527,7 @@ final class HevcDecoder {
         sessionOwnsVT = false
         hardwareDecoderUnlocked = false
         lastDecodedBuffer = nil
+        lastDecodedTimeNs = 0
         lastPresentHealthLogAt = nil
         presentedPictureFlip = nil
         extraMirrorHold.reset()
@@ -522,10 +540,8 @@ final class HevcDecoder {
         loggedLiveVT.withLock { $0 = false }
         assistEngine.reset()
         sampleBus?.reset()
-        // Invalidate VT and flush the layer. That is the Android analog of
-        // joining the MediaCodec output thread and unbinding a dead Surface —
-        // in-app disconnect must not leave a live decoder bound to leftover GOP.
-        invalidateVT()
+        // VT was invalidated before clearing state. Release its old layer image
+        // too: an in-app disconnect must not leave a picture from the prior GOP.
         vtOwnsHardwareDecode = false
         displayLayer.isHidden = false
         processedFeed?.invalidatePendingPresents()
@@ -846,6 +862,7 @@ final class HevcDecoder {
         }
         if result.shouldPresent {
             lastDecodedBuffer = result.source
+            lastDecodedTimeNs = result.timeNs
             onSourceFrame?(result.source)
         }
         if !result.shouldPresent { return false }
@@ -1098,9 +1115,10 @@ final class HevcDecoder {
     }
 
     private func invalidateVT() {
+        // Fence successful callbacks before teardown can deliver its final output.
+        decodedFrameGeneration.withLock { $0 &+= 1 }
         if let vtSession { VTDecompressionSessionInvalidate(vtSession) }
         vtSession = nil
-        vtGeneration += 1
         vtAttemptedStamp = nil
     }
 
@@ -1285,7 +1303,7 @@ final class HevcDecoder {
             colorMode: incomingColorMode,
             previous: incomingTransfer)
         let flags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression]
-        let gen = vtGeneration
+        let gen = sourceFrameGeneration
         let err = decodeFrame(
             vtSession, sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
         if err == noErr { return true }
@@ -1293,7 +1311,7 @@ final class HevcDecoder {
             rebuildVT(force: true)
             if let rebuilt = self.vtSession,
                 decodeFrame(
-                    rebuilt, sample, flags: flags, generation: vtGeneration, effects: fx,
+                    rebuilt, sample, flags: flags, generation: sourceFrameGeneration, effects: fx,
                     transfer: transfer) == noErr
             {
                 return true
@@ -1322,7 +1340,7 @@ final class HevcDecoder {
             guard let self else { return }
             if status != noErr {
                 Task { @MainActor [weak self] in
-                    guard let self, self.vtGeneration == generation else { return }
+                    guard let self, self.sourceFrameGeneration == generation else { return }
                     self.noteDecodeError()
                     if Self.shouldRebuildSession(status: status), self.shouldStartVT {
                         self.rebuildVT(force: true)
@@ -1330,9 +1348,12 @@ final class HevcDecoder {
                 }
                 return
             }
-            guard let imageBuffer, Self.isPresentable(imageBuffer) else { return }
+            guard self.sourceFrameGeneration == generation,
+                let imageBuffer, Self.isPresentable(imageBuffer)
+            else { return }
             self.logFirstLiveVT(imageBuffer)
-            self.handleDecodedFrame(imageBuffer, effects: effects, transfer: transfer)
+            self.handleDecodedFrame(
+                imageBuffer, effects: effects, transfer: transfer, generation: generation)
         }
     }
 

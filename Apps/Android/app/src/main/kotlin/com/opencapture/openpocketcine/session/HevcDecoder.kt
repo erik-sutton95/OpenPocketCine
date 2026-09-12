@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * depacketizer (Annex-B, DJI marker already stripped). Pocket is HEVC; Nano is AVC.
  * SwiftCore.hevcCsd / hevcNalTypes already classify both.
  */
-class HevcDecoder {
+class HevcDecoder internal constructor(private val cadence: LivePipelineCadence = LivePipelineCadence()) {
     internal enum class LiveCodec { HEVC, AVC }
     private val lock = Any()
     private var codec: MediaCodec? = null
@@ -41,8 +41,8 @@ class HevcDecoder {
     var lastKeyframeAt: Long? = null
         private set
     /** ElapsedRealtime of the last presented picture. Watchdog stall signal. */
-    @Volatile var lastPresentedAt: Long? = null
-        private set
+    private val presentedClock = PresentedFrameClock()
+    val lastPresentedAt: Long? get() = presentedClock.lastPresentedAt
     val isPresentationReady: Boolean
         get() = surface?.isValid == true
     private val _hasPicture = MutableStateFlow(false)
@@ -74,8 +74,13 @@ class HevcDecoder {
 
     /** TextureView / GLES presented a frame. C2 surface output may never
      *  surface through [dequeueOutputBuffer], which left WAITING FOR LIVE VIEW up. */
-    fun notePresented() {
-        lastPresentedAt = SystemClock.elapsedRealtime()
+    /** Keep codec/Surface alive, but require an image produced after foreground. */
+    fun beginPresentationProbe(): Long =
+        presentedClock.beginProbe(System.nanoTime(), SystemClock.elapsedRealtime())
+
+    fun notePresented(sourceTimestampNs: Long) {
+        if (!presentedClock.note(sourceTimestampNs, SystemClock.elapsedRealtime())) return
+        cadence.note(LivePipelineCadence.Stage.PRESENT)
         framesPresented.incrementAndGet()
         if (!_hasPicture.value) {
             _hasPicture.value = true
@@ -288,7 +293,15 @@ class HevcDecoder {
      * Control Center when `0x09/0xa8` was then skipped.
      */
     fun prepareAfterForeground() {
-        // MediaCodec stays configured; TextureView reattach is attachSurface.
+        // Preserve the window and its last image. A dead codec must be rebuilt;
+        // replaying a cached IDR from before suspension is not recovery proof.
+        synchronized(lock) {
+            releaseCodecLocked()
+            presentedClock.beginEpoch(System.nanoTime())
+            configured = false
+            pendingIdr = null
+            awaitingIdr = false
+        }
     }
 
     /** Drop P-frames until IDR. Do not release the codec — the last frame stays on the surface. */
@@ -317,7 +330,7 @@ class HevcDecoder {
         awaitingIdr = false
         nalTypesSeen = ""
         lastKeyframeAt = null
-        lastPresentedAt = null
+        presentedClock.reset(System.nanoTime())
         _hasPicture.value = false
         pendingCsd = null
         pendingTypes = ""
@@ -389,19 +402,24 @@ class HevcDecoder {
                             val index =
                                 try {
                                     started.dequeueOutputBuffer(info, 10_000)
-                                } catch (_: Exception) {
+                                } catch (error: Exception) {
+                                    if (running) {
+                                        decoderErrors.incrementAndGet()
+                                        Log.w(TAG, "output failed", error)
+                                    }
                                     break
                                 }
                             when {
                                 index >= 0 -> {
+                                    cadence.note(LivePipelineCadence.Stage.OUTPUT)
                                     runCatching {
                                         started.releaseOutputBuffer(index, System.nanoTime())
+                                    }.onFailure { error ->
+                                        decoderErrors.incrementAndGet()
+                                        Log.w(TAG, "output release failed", error)
                                     }
-                                    lastPresentedAt = SystemClock.elapsedRealtime()
-                                    if (!_hasPicture.value) {
-                                        _hasPicture.value = true
-                                        Log.i(TAG, "presented first picture")
-                                    }
+                                    // Output to an ImageReader is not a displayed image.
+                                    // Vulkan/GLES/TextureView reports the actual present.
                                     hasFormat = true
                                 }
                                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
@@ -433,6 +451,7 @@ class HevcDecoder {
         return try {
             val index = decoder.dequeueInputBuffer(LiveViewPresentTiming.inputWaitUs(keyframe))
             if (index < 0) {
+                cadence.inputMiss()
                 Log.w(TAG, "no input buffer (nals=$nalTypesSeen)")
                 return false
             }
@@ -443,6 +462,7 @@ class HevcDecoder {
             val pts = LiveViewPresentTiming.ptsUs(SystemClock.elapsedRealtimeNanos(), ptsUs)
             ptsUs = pts
             decoder.queueInputBuffer(index, 0, accessUnit.size, pts, flags)
+            cadence.note(LivePipelineCadence.Stage.SUBMIT)
             framesEnqueued.incrementAndGet()
             true
         } catch (e: Exception) {

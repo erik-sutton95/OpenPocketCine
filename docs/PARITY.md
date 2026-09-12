@@ -10,7 +10,7 @@ write the exception in the table in the same PR.
 
 | Surface | Must match | May diverge | Verify |
 | --- | --- | --- | --- |
-| Connection FTUE and spine | BLE → SoftAP → UDP; **enable-once**; ephemeral local port; arm `0x02` on handshake ack (Mimo HEVC at join+17 ms; enable is later PLI); disconnect drops driver + decoder; session recovery holds last frame. Pocket 3 first picture: wait for the legal FORMAT table, one 1080→boot `0x02/0x18` after a black enable, then one `0x09/0xa8`. Not Pocket 4. Xtra rebrands bind UDP **10004** with no TCP-7001 poke. Join Wi-Fi names VPNs / ad blockers on both shells; WAITING FOR LIVE VIEW repeats `LocalVPNFilter.liveHint` after 8 s with no picture when a local VPN is on. | iOS `NEHotspotConfiguration` vs Android `WifiNetworkSpecifier` + `bindProcessToNetwork`; Network.framework vs Android sockets. Android identifies Xtra by BLE MAC OUI `EC:9E:EA`; iOS has no MAC and uses the advertised name (`xtra` / `edge`). Android SoftAP `onLost` starts `SessionRecovery`; iOS does not (keepalive must not `discardUDP` while the path is gone). Android VPN detect is `TRANSPORT_VPN`; iOS is CFNetwork scoped tunnel names (also fires for Private Relay `utun` — live hint still waits 8 s). | **physical** both |
+| Connection FTUE and spine | BLE → SoftAP → UDP; **enable-once**; ephemeral local port; arm `0x02` on handshake ack (Mimo HEVC at join+17 ms; enable is later PLI); disconnect drops driver + decoder; session recovery holds last frame. Pocket 3 first picture: wait for the legal FORMAT table, one 1080→boot `0x02/0x18` after a black enable, then one `0x09/0xa8`. Not Pocket 4. Xtra rebrands bind UDP **10004** with no TCP-7001 poke. Join Wi-Fi names VPNs / ad blockers on both shells; WAITING FOR LIVE VIEW repeats `LocalVPNFilter.liveHint` after 8 s with no picture when a local VPN is on. | iOS `NEHotspotConfiguration` vs Android `WifiNetworkSpecifier` + `bindProcessToNetwork`; Network.framework vs Android sockets. Android identifies Xtra by BLE MAC OUI `EC:9E:EA`; iOS has no MAC and uses the advertised name (`xtra` / `edge`). Android SoftAP `onLost` starts `SessionRecovery`; iOS samples absent camera path plus stale video at 1 Hz, with an eight-second reassociation grace before full recovery. Android VPN detect is `TRANSPORT_VPN`; iOS is CFNetwork scoped tunnel names (also fires for Private Relay `utun` — live hint still waits 8 s). | **physical** both |
 | Saved camera home | Connection progress and Cancel are on the selected saved-camera row, including discovery; names have their own line above availability/actions. Pair new camera, Media library and Settings remain on the intro card. | iOS has Watch a feed (eye) beside Multiview (grid) in the list header; both features remain unavailable on Android. | Updated on both shells; iOS renders checked at 402×874, 874×402 and 667×375. Physical checks pending. |
 | Gimbal popup | Mode / Speed / Ramp tabs reveal one set of settings. A separate Gimbal tools footer opens experimental Motion Control. | Platform glass and icon rendering. | Updated on both shells; iOS portrait/landscape renders, including a short viewport, pass. Physical tab/layout checks pending. |
 | Live chrome | DISP 1/2 maps, layout metrics (`LiveDesign` / `fillCrop` / screen-flip pillarbox), picker chrome, record as bottom sheet, zoom chip, gimbal 1–5 gain, expo stick throw (on-screen and a connected game controller), stick pan picture-relative (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs), rec lamp `pressShutter`. Game controller (discussion #159): left stick is the gimbal stick; Cross/A records (skips the rec-confirmation sheet); Circle/B recenters; Square/X is rotate-180; Triangle/Y tracks a face in frame or cancels; L1/R1 jump zoom out/in (out does not wrap to tele); L2/R2 hold-to-zoom (deeper trigger is faster); D-pad up/down ISO, left/right shutter. Toast Gamepad connected/disconnected. Unplug rests stick and zoom. Controls **Gamepad** row is Connected / Not connected. Limit haptic is a rising-edge pulse after the head moves then stalls (phone plus controller rumble). Mapping, extra deadzone slider, and Linear/Smooth/Cinematic curves are not a Controls picker (fixed map; existing 0.08 deadzone + expo + 1–5 gain). iPad hides the system time / battery bar (HUD chips stay). Control toast parks under the mounted top bar (DISP 1 / operator-shown status bar) and on the feed edge when that bar is off (DISP 2). | iOS Liquid Glass vs Kyant (API 33+ and ≥4 GB; else solid frost); SF Symbols / Material only where Lucide catalog has not replaced them. Android edge-to-edge keeps a transparent system bar. DualSense rumble uses `GCDeviceHaptics` on iOS and the pad `Vibrator` on Android (phone vibrator if the pad has none). iOS binds `GCController`; Android `KeyEvent`/`MotionEvent` plus `InputManager` for connect. Both shells GET Selfie Flip pid `0x0038` ~1 Hz on the live UDP ACK pump (untracked; not the shared `0x8E` SET/GET waiter) and echo pktType-`0x03` seq in window-ACK group 1 so those replies do not stall. A keepalive BLE Flip GET fires when UDP replies go stale (≥2 s). | **physical** both |
@@ -129,6 +129,28 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   endpoints; capture and native dispatch reject out-of-range targets. Full contract and pending
   physical qualification: [Motion Control takes](programmed-moves.md).
   Run preps Fast + tilt unlocked. No zoom SET during the slew. No motion debug plate is displayed.
+
+## Connection reliability audit (2026-09-12)
+
+Both shells keep recovery active until a new source frame reaches presentation,
+revalidate the camera network after foreground return, and use the saved-camera
+connection spine when the route or picture cannot recover. Full-session automatic
+retries share a three-minute total budget and eight-attempt limit; Retry and
+Operator menu stay available with stage-specific progress. The prior watchdog
+ladder remains separate and finite. Gimbal driving stops during inactive scenes,
+warmup and recovery. ACK cadence, enable-once and the last held picture remain
+the transport/presentation contracts.
+
+Both shells journal low-rate delivery measurements. iOS reports ACK/video/AU
+cadence and main-queue pressure; Android additionally reports decoder submission,
+output and source presentation. Platform decoder and GPU repairs differ because
+VideoToolbox/Metal and MediaCodec/Vulkan own different lifetimes. Automated
+regressions cover the corrected cancellation and freshness defects. Physical
+Pocket 4 Pro cadence, long app suspension, network-change and wearer AirPods
+qualification remain outstanding; Android has no attached physical test device.
+
+The iOS-only AirPods IMU exception remains. The audit is not evidence that the
+reported Redmi stutter or all iPhone freezes are resolved.
 
 ## Native motion qualification
 

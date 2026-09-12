@@ -12,10 +12,12 @@ import android.os.Looper
 import android.util.Log
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.LocalVPNFilter
+import com.opencapture.openpocketcine.session.CallbackOperationOwner
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.Socket
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -34,6 +36,7 @@ class CameraApJoiner(context: Context) {
     private val wifi = appContext.getSystemService(WifiManager::class.java)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val lock = Any()
+    private val operations = CallbackOperationOwner<ConnectivityManager.NetworkCallback>()
     private val availability = CameraApAvailabilityTracker<Network>()
     private var callback: ConnectivityManager.NetworkCallback? = null
     private var joinContinuation: CancellableContinuation<Boolean>? = null
@@ -53,10 +56,19 @@ class CameraApJoiner(context: Context) {
     ): Boolean {
         val trimmed = ssid.trim()
         if (trimmed.isEmpty()) return false
-        release()
-        if (wifi != null && !wifi.isWifiEnabled) return false
-        awaitCameraApVisibleInScan(trimmed, PRE_JOIN_SCAN_WAIT_MILLIS, requireVisible = false)
-        return requestSpecifierNetwork(trimmed, passphrase, wpa3, timeoutMillis)
+        val attempt = operations.begin()
+        operations.runIfCurrent(attempt) { releaseResources() }
+        try {
+            if (wifi != null && !wifi.isWifiEnabled) {
+                release(attempt)
+                return false
+            }
+            awaitCameraApVisibleInScan(trimmed, PRE_JOIN_SCAN_WAIT_MILLIS, requireVisible = false)
+            return requestSpecifierNetwork(attempt, trimmed, passphrase, wpa3, timeoutMillis)
+        } catch (cancelled: CancellationException) {
+            release(attempt)
+            throw cancelled
+        }
     }
 
     fun bindSocket(socket: DatagramSocket) {
@@ -79,6 +91,14 @@ class CameraApJoiner(context: Context) {
             )
         }
 
+    /** Revalidate the retained, camera-specific Network after suspension. */
+    fun hasUsableCameraNetwork(): Boolean {
+        val network = synchronized(lock) { boundNetwork } ?: return false
+        if (connectivity.boundNetworkForProcess != network) return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && cameraLocalIPv4() != null
+    }
+
     /**
      * Phone IPv4 on the camera AP (`192.168.2.2…254`). iOS
      * `WiFiJoiner.cameraLocalIPv4` / `CameraSoftAP.isAssociatedIPv4`.
@@ -94,6 +114,18 @@ class CameraApJoiner(context: Context) {
     }
 
     fun release() {
+        release(operations.begin())
+    }
+
+    private fun release(attempt: CallbackOperationOwner.Token<ConnectivityManager.NetworkCallback>) {
+        operations.runIfCurrent(attempt) {
+            releaseResources()
+            operations.finish(attempt)
+        }
+    }
+
+    /** Caller holds the operation fence through process unbind and unregister. */
+    private fun releaseResources() {
         val toUnregister: ConnectivityManager.NetworkCallback?
         val pending: CancellableContinuation<Boolean>?
         synchronized(lock) {
@@ -111,6 +143,7 @@ class CameraApJoiner(context: Context) {
     }
 
     private suspend fun requestSpecifierNetwork(
+        attempt: CallbackOperationOwner.Token<ConnectivityManager.NetworkCallback>,
         ssid: String,
         passphrase: String,
         wpa3: Boolean,
@@ -135,67 +168,57 @@ class CameraApJoiner(context: Context) {
             val networkCallback =
                 object : ConnectivityManager.NetworkCallback() {
                     override fun onAvailable(network: Network) {
-                        handleAvailable(this, network)
+                        handleAvailable(attempt, this, network)
                     }
 
                     override fun onUnavailable() {
-                        val pending =
-                            synchronized(lock) {
-                                if (callback !== this) return
-                                availability.onUnavailable()
-                                cancelReassociationGraceLocked()
-                                val wait = joinContinuation
-                                joinContinuation = null
-                                wait
-                            }
-                        DiagnosticCenter.log(
-                            "info",
-                            "session",
-                            "wifi",
-                            "wifi: join $ssid unavailable after ${timeoutMillis}ms",
-                        )
-                        if (pending?.isActive == true) pending.resume(false)
+                        operations.runIfCurrent(attempt, this) {
+                            DiagnosticCenter.log(
+                                "info", "session", "wifi",
+                                "wifi: join unavailable after ${timeoutMillis}ms",
+                            )
+                            release(attempt)
+                        }
                     }
 
                     override fun onLost(network: Network) {
-                        handleLost(this, network)
+                        handleLost(attempt, this, network)
                     }
                 }
-            synchronized(lock) {
-                availability.requestStarted()
-                callback = networkCallback
-                joinContinuation = continuation
+            val installed = operations.runIfCurrent(attempt) {
+                operations.attach(attempt, networkCallback)
+                synchronized(lock) {
+                    availability.requestStarted()
+                    callback = networkCallback
+                    joinContinuation = continuation
+                }
+            }
+            if (!installed) {
+                continuation.resume(false)
+                return@suspendCancellableCoroutine
             }
             mainHandler.post {
-                if (!continuation.isActive) {
-                    release()
-                    return@post
-                }
-                try {
-                    DiagnosticCenter.log(
-                        "info",
-                        "session",
-                        "wifi",
-                        "wifi: request $ssid timeout=${timeoutMillis}ms wpa3=$wpa3",
-                    )
-                    connectivity.requestNetwork(request, networkCallback, mainHandler, timeoutMillis)
-                } catch (error: RuntimeException) {
-                    DiagnosticCenter.log(
-                        "info",
-                        "session",
-                        "wifi",
-                        "wifi: request $ssid failed ${error.javaClass.simpleName} ${error.message}",
-                    )
-                    val pending =
-                        synchronized(lock) {
-                            val wait = joinContinuation
-                            joinContinuation = null
-                            wait
-                        }
-                    if (pending?.isActive == true) pending.resume(false)
+                operations.runIfCurrent(attempt, networkCallback) {
+                    if (!continuation.isActive) {
+                        release(attempt)
+                        return@runIfCurrent
+                    }
+                    try {
+                        DiagnosticCenter.log(
+                            "info", "session", "wifi",
+                            "wifi: request $ssid timeout=${timeoutMillis}ms wpa3=$wpa3",
+                        )
+                        connectivity.requestNetwork(request, networkCallback, mainHandler, timeoutMillis)
+                    } catch (error: RuntimeException) {
+                        DiagnosticCenter.log(
+                            "info", "session", "wifi",
+                            "wifi: request failed ${error.javaClass.simpleName}",
+                        )
+                        release(attempt)
+                    }
                 }
             }
-            continuation.invokeOnCancellation { release() }
+            continuation.invokeOnCancellation { release(attempt) }
         }
     }
 
@@ -246,66 +269,76 @@ class CameraApJoiner(context: Context) {
     }
 
     private fun handleAvailable(
+        attempt: CallbackOperationOwner.Token<ConnectivityManager.NetworkCallback>,
         expectedCallback: ConnectivityManager.NetworkCallback,
         network: Network,
     ) {
-        val resumeNow: CancellableContinuation<Boolean>?
-        val reassociated: Boolean
-        synchronized(lock) {
-            if (callback !== expectedCallback) return
-            val result = availability.onAvailable(network)
-            if (!result.shouldBind) return
-            boundNetwork = network
-            connectivity.bindProcessToNetwork(network)
-            cancelReassociationGraceLocked()
-            reassociated = result.reassociationGeneration != null
-            val pending = joinContinuation.takeIf { availability.hasEstablishedNetwork() }
-            joinContinuation = null
-            resumeNow = pending
+        operations.runIfCurrent(attempt, expectedCallback) {
+            val resumeNow: CancellableContinuation<Boolean>?
+            val reassociated: Boolean
+            synchronized(lock) {
+                if (callback !== expectedCallback) return@runIfCurrent
+                val result = availability.onAvailable(network)
+                if (!result.shouldBind) return@runIfCurrent
+                if (!connectivity.bindProcessToNetwork(network)) {
+                    val wasEstablished = result.reassociationGeneration != null
+                    DiagnosticCenter.log("error", "session", "wifi", "wifi: process bind rejected")
+                    release(attempt)
+                    if (wasEstablished) onPathLost?.invoke()
+                    return@runIfCurrent
+                }
+                boundNetwork = network
+                cancelReassociationGraceLocked()
+                reassociated = result.reassociationGeneration != null
+                resumeNow = joinContinuation.takeIf { availability.hasEstablishedNetwork() }
+                joinContinuation = null
+            }
+            DiagnosticCenter.log(
+                "info", "session", "wifi", "wifi: available $network reassoc=$reassociated",
+            )
+            LocalVPNFilter.noteIfActive(appContext)
+            if (resumeNow?.isActive == true) resumeNow.resume(true)
+            if (reassociated) onReassociated?.invoke()
         }
-        DiagnosticCenter.log(
-            "info",
-            "session",
-            "wifi",
-            "wifi: available $network reassoc=$reassociated",
-        )
-        LocalVPNFilter.noteIfActive(appContext)
-        if (resumeNow?.isActive == true) resumeNow.resume(true)
-        if (reassociated) onReassociated?.invoke()
     }
 
     private fun handleLost(
+        attempt: CallbackOperationOwner.Token<ConnectivityManager.NetworkCallback>,
         expectedCallback: ConnectivityManager.NetworkCallback,
         network: Network,
     ) {
-        val scheduleGrace: Boolean
-        synchronized(lock) {
-            if (callback !== expectedCallback) return
-            if (!availability.onLost(network)) return
-            if (boundNetwork == network) boundNetwork = null
-            // Keep process bound to the SoftAP until grace expires so UDP
-            // rebuild cannot leak onto home Wi-Fi (iOS pathLost ≠ default route).
-            scheduleReassociationGraceLocked()
-            scheduleGrace = true
+        operations.runIfCurrent(attempt, expectedCallback) {
+            synchronized(lock) {
+                if (callback !== expectedCallback || !availability.onLost(network)) return@runIfCurrent
+                if (boundNetwork == network) boundNetwork = null
+                // Retain the process route during reassociation so UDP cannot leak
+                // onto home Wi-Fi while Android replaces the camera Network.
+                scheduleReassociationGraceLocked(attempt, expectedCallback)
+            }
+            Log.i(TAG, "wifi: lost $network — waiting for reassociation")
         }
-        if (scheduleGrace) Log.i(TAG, "wifi: lost $network — waiting for reassociation")
     }
 
-    private fun scheduleReassociationGraceLocked() {
+    private fun scheduleReassociationGraceLocked(
+        attempt: CallbackOperationOwner.Token<ConnectivityManager.NetworkCallback>,
+        expectedCallback: ConnectivityManager.NetworkCallback,
+    ) {
         cancelReassociationGraceLocked()
-        val grace =
-            Runnable {
-                val expired =
-                    synchronized(lock) {
-                        reassociationGrace = null
-                        boundNetwork == null && availability.hasEstablishedNetwork()
-                    }
+        lateinit var grace: Runnable
+        grace = Runnable {
+            operations.runIfCurrent(attempt, expectedCallback) {
+                val expired = synchronized(lock) {
+                    if (reassociationGrace !== grace) return@synchronized false
+                    reassociationGrace = null
+                    boundNetwork == null && availability.hasEstablishedNetwork()
+                }
                 if (expired) {
                     Log.i(TAG, "wifi: reassociation grace expired")
                     connectivity.bindProcessToNetwork(null)
                     onPathLost?.invoke()
                 }
             }
+        }
         reassociationGrace = grace
         mainHandler.postDelayed(grace, REASSOCIATION_GRACE_MS)
     }

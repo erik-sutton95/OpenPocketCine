@@ -248,6 +248,17 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Connection reliability audit on iOS and Android: finite handshakes and recovery
+  episodes, canceled-work ownership, camera-network checks on app return, and
+  fresh-picture proof before recovery clears. Gimbal input is gated during
+  warmup/recovery; Retry and Operator menu remain available.
+- iOS drawable acquisition moves off the main thread and stale decoder/bake
+  results cannot refresh a replacement session. Android Vulkan rendering now
+  signals presentation explicitly and live frame waits are bounded. New local
+  cadence diagnostics support Pocket 4 Pro motion-stutter investigation; physical
+  qualification and issue #334 remain open. See the
+  [audit](docs/audits/2026-09-12-connection-audit.md).
+
 - Pocket 3 initial AVC decode, Nano large-frame assembly and private metadata
   handling, plus bounded iOS Multiview foreground recovery. Pocket 3 recovery
   can still take about a minute after an app switch.

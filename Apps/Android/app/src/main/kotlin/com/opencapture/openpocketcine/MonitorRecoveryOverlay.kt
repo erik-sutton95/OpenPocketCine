@@ -48,11 +48,13 @@ fun MonitorRecoveryOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    color = LiveDesign.accent,
-                    strokeWidth = 2.dp,
-                )
+                if (state is SessionRecoveryUi.Retrying) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = LiveDesign.accent,
+                        strokeWidth = 2.dp,
+                    )
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
                         SessionRecoveryCopy.title(state),

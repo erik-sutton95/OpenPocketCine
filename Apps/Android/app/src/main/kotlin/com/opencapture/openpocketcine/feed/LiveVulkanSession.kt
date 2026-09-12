@@ -30,6 +30,7 @@ internal class LiveVulkanSession(
     private val onDecoderSurface: (Surface) -> Unit,
     private val onFirstFrame: () -> Unit,
     private val onFailed: () -> Unit,
+    private val onFramePresented: (Long) -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -465,6 +466,7 @@ internal class LiveVulkanSession(
             return
         }
         framesPresented.incrementAndGet()
+        onFramePresented(image.timestamp)
         if (started.compareAndSet(false, true)) main.post(onFirstFrame)
         if (takeFace) {
             synchronized(faceLock) {

@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "VulkanPresentBatch.h"
 #include "fullscreen_vert_spv.h"
 #include "feed_frag_spv.h"
 #include "peaking_blur_frag_spv.h"
@@ -164,6 +165,11 @@ struct OpcVk {
     std::vector<VkImage> swapImages;
     std::vector<VkImageView> swapViews;
     std::vector<VkFramebuffer> swapFbs;
+    std::vector<VkSemaphore> renderFinished;
+    bool swapchainHealthy = false;
+    bool hasAcquiredImage = false;
+    VulkanAcquireLifetime acquisition;
+    uint32_t acquiredImage = 0;
     VkRenderPass swapPass = VK_NULL_HANDLE;
     VkRenderPass swapPassBgra = VK_NULL_HANDLE;
     VkRenderPass swapPassRgba = VK_NULL_HANDLE;
@@ -841,7 +847,7 @@ static bool createDevice(OpcVk* r) {
 static constexpr uint64_t kFenceTimeoutNs = 1000000000ull;
 
 static void recaptureSignaledFence(OpcVk* r) {
-    if (!r->device) return;
+    if (!r->device || r->acquisition.pending) return;
     if (r->fence) vkDestroyFence(r->device, r->fence, nullptr);
     r->fence = VK_NULL_HANDLE;
     VkFenceCreateInfo fi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
@@ -851,7 +857,10 @@ static void recaptureSignaledFence(OpcVk* r) {
 
 static bool waitFence(OpcVk* r, const char* where) {
     VkResult w = vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, kFenceTimeoutNs);
-    if (w == VK_SUCCESS) return true;
+    if (w == VK_SUCCESS) {
+        r->acquisition.signaled();
+        return true;
+    }
     LOGE("fence %s result=%d", where, (int)w);
     return false;
 }
@@ -1081,6 +1090,14 @@ static bool ensureGradePipes(OpcVk* r) {
 }
 
 static void destroySwapchain(OpcVk* r) {
+    // Callers retain the existing device-idle shutdown contract. Do not free
+    // GPU/present resources merely because a frame wait timed out.
+    for (auto semaphore : r->renderFinished) {
+        if (semaphore) vkDestroySemaphore(r->device, semaphore, nullptr);
+    }
+    r->renderFinished.clear();
+    r->swapchainHealthy = false;
+    r->hasAcquiredImage = false;
     for (auto fb : r->swapFbs) vkDestroyFramebuffer(r->device, fb, nullptr);
     for (auto v : r->swapViews) vkDestroyImageView(r->device, v, nullptr);
     r->swapFbs.clear();
@@ -1123,6 +1140,11 @@ static void bindSwapPass(OpcVk* r) {
 }
 
 static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
+    if (!r->acquisition.prepareToRetire([&] { return waitFence(r, "retire acquisition"); })) return false;
+    if (vkDeviceWaitIdle(r->device) != VK_SUCCESS) return false;
+    // A failed submit/acquire may have left our reusable fence unsignaled,
+    // but only successful idle lets us replace it without freeing in-flight work.
+    recaptureSignaledFence(r);
     dropWindow(r);
     r->window = window;
     ANativeWindow_acquire(window);
@@ -1183,7 +1205,13 @@ static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
     vkGetSwapchainImagesKHR(r->device, r->swapchain, &n, r->swapImages.data());
     r->swapViews.resize(n);
     r->swapFbs.resize(n);
+    r->renderFinished.resize(n, VK_NULL_HANDLE);
     for (uint32_t i = 0; i < n; ++i) {
+        VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        if (vkCreateSemaphore(r->device, &semaphoreInfo, nullptr, &r->renderFinished[i]) != VK_SUCCESS) {
+            destroySwapchain(r);
+            return false;
+        }
         VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         vi.image = r->swapImages[i];
         vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -1202,7 +1230,8 @@ static bool createSwapchain(OpcVk* r, ANativeWindow* window, int w, int h) {
     r->blitAlphaPipe = makeGfx(r, r->blitLayout, r->swapPass, vs, fsBlit, false, false, 16, true);
     vkDestroyShaderModule(r->device, vs, nullptr);
     vkDestroyShaderModule(r->device, fsBlit, nullptr);
-    return r->blitPipe != VK_NULL_HANDLE;
+    r->swapchainHealthy = r->blitPipe != VK_NULL_HANDLE;
+    return r->swapchainHealthy;
 }
 
 static void destroyImportedImage(OpcVk* r) {
@@ -1668,8 +1697,40 @@ static void recordCpuTaps(OpcVk* r) {
     if (r->needFace) downsample(&r->face, &r->faceStaging, kFaceW, kFaceH);
 }
 
+static bool submitAndPresentFrame(OpcVk* r, uint32_t idx, bool cpuReadback) {
+    if (vkEndCommandBuffer(r->cmd) != VK_SUCCESS) {
+        r->swapchainHealthy = false;
+        return false;
+    }
+    VulkanPresentBatch batch(r->cmd, r->swapchain, idx, r->renderFinished[idx]);
+    const VkResult submitted = vkQueueSubmit(r->queue, 1, &batch.submit, r->fence);
+    if (submitted != VK_SUCCESS) {
+        LOGE("submit result=%d", (int)submitted);
+        // Do not reset/destroy a fence after a failed driver submission. A
+        // device-idle window rebuild or full renderer teardown owns cleanup.
+        r->swapchainHealthy = false;
+        return false;
+    }
+    noteAhbReleased(r);
+    // Presentation must wait for rendering even on the same VkQueue. Submit
+    // this before host readback waits so timeout cannot strand an acquired image.
+    const VkResult presented = vkQueuePresentKHR(r->queue, &batch.present);
+    r->hasAcquiredImage = false;
+    if (presented != VK_SUCCESS && presented != VK_SUBOPTIMAL_KHR) {
+        LOGE("present result=%d", (int)presented);
+        // Some errors do not consume the binary semaphore. Never signal it
+        // again until the old swapchain has been safely retired.
+        r->swapchainHealthy = false;
+        return false;
+    }
+    if (cpuReadback && !waitFence(r, "CPU readback")) return false;
+    r->gpuBusy = false;
+    r->hasPresented = true;
+    return true;
+}
+
 static bool renderFrame(OpcVk* r) {
-    if (!r->swapchain || !r->window || !r->imported.view) return false;
+    if (!r->swapchain || !r->window || !r->imported.view || !r->swapchainHealthy) return false;
     if (!waitFence(r, "begin")) return false;
     // First picture is the 720p RGB blit. Cube / 3D LUT upload / Fast of the
     // bake on that submit missed the enable IDR and left WAITING FOR LIVE VIEW.
@@ -1677,13 +1738,23 @@ static bool renderFrame(OpcVk* r) {
     const bool grade = !firstPicture && feedNeedsGrade(r);
     const bool tap = !firstPicture && r->needTap != 0;
     if ((grade || tap) && (!ensureGradePipes(r) || !ensureWell(r) || !ensureCubeImages(r))) return false;
-    vkResetFences(r->device, 1, &r->fence);
-    uint32_t idx = 0;
-    VkResult acq = vkAcquireNextImageKHR(r->device, r->swapchain, UINT64_MAX, VK_NULL_HANDLE, r->fence, &idx);
-    if (acq == VK_ERROR_OUT_OF_DATE_KHR || acq == VK_ERROR_SURFACE_LOST_KHR) {
-        recaptureSignaledFence(r);
-        return false;
+    uint32_t idx = r->acquiredImage;
+    if (!r->hasAcquiredImage) {
+        vkResetFences(r->device, 1, &r->fence);
+        VkResult acq = vkAcquireNextImageKHR(r->device, r->swapchain, kFenceTimeoutNs,
+                                            VK_NULL_HANDLE, r->fence, &idx);
+        if (acq != VK_SUCCESS && acq != VK_SUBOPTIMAL_KHR) {
+            LOGE("acquire result=%d", (int)acq);
+            // An unsuccessful acquire has no pending fence signal operation.
+            recaptureSignaledFence(r);
+            return false;
+        }
+        r->acquisition.acquired();
+        r->hasAcquiredImage = true;
+        r->acquiredImage = idx;
     }
+    // The acquire fence also proves the previous present of this image has
+    // consumed its render-finished semaphore. Retain idx if this wait times out.
     if (!waitFence(r, "acquire")) return false;
     vkResetFences(r->device, 1, &r->fence);
     float destX, destY, destW, destH;
@@ -1736,27 +1807,9 @@ static bool renderFrame(OpcVk* r) {
     if (!grade && !tap) {
         blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
         recordCpuTaps(r);
-        vkEndCommandBuffer(r->cmd);
-        VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &r->cmd;
-        if (vkQueueSubmit(r->queue, 1, &si, r->fence)) {
-            LOGE("identity submit failed first=%d", firstPicture ? 1 : 0);
-            recaptureSignaledFence(r);
-            return false;
-        }
-        noteAhbReleased(r);
-        VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-        pi.swapchainCount = 1;
-        pi.pSwapchains = &r->swapchain;
-        pi.pImageIndices = &idx;
-        vkQueuePresentKHR(r->queue, &pi);
-        r->gpuBusy = false;
-        if (firstPicture) {
-            r->hasPresented = true;
-            LOGI("first picture identity blit (LUT bake follows)");
-        }
-        return true;
+        const bool ok = submitAndPresentFrame(r, idx, r->needFace != 0);
+        if (ok && firstPicture) LOGI("first picture identity blit (LUT bake follows)");
+        return ok;
     }
 
     if (tap) {
@@ -2116,26 +2169,16 @@ static bool renderFrame(OpcVk* r) {
 
     recordCpuTaps(r);
 
-    vkEndCommandBuffer(r->cmd);
+    return submitAndPresentFrame(r, idx, tap || r->needFace != 0);
+}
 
-    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    si.commandBufferCount = 1;
-    si.pCommandBuffers = &r->cmd;
-    if (vkQueueSubmit(r->queue, 1, &si, r->fence)) {
-        LOGE("grade submit failed");
-        recaptureSignaledFence(r);
-        return false;
-    }
-    noteAhbReleased(r);
-    if (tap) vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
-    VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-    pi.swapchainCount = 1;
-    pi.pSwapchains = &r->swapchain;
-    pi.pImageIndices = &idx;
-    vkQueuePresentKHR(r->queue, &pi);
-    r->gpuBusy = false;
-    r->hasPresented = true;
-    return true;
+// Teardown retains the existing blocking idle contract. A WSI acquisition is
+// not queue work: wait for its signal too before destroying the shared fence.
+static void finishAcquisitionForShutdown(OpcVk* r) {
+    if (!r->acquisition.pending) return;
+    const VkResult result = vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
+    if (result != VK_SUCCESS) LOGE("shutdown acquisition result=%d", (int)result);
+    r->acquisition.signaled();
 }
 
 static void destroyAll(OpcVk* r) {
@@ -2143,6 +2186,7 @@ static void destroyAll(OpcVk* r) {
         if (r->instance) vkDestroyInstance(r->instance, nullptr);
         return;
     }
+    finishAcquisitionForShutdown(r);
     vkDeviceWaitIdle(r->device);
     destroyAhbCache(r);
     destroyImportedConversion(r);
@@ -2259,7 +2303,6 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeAttachWindow(JNIEnv* en
     if (!r || !surface) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
     if (!r->ready) return JNI_FALSE;
-    if (r->device) vkDeviceWaitIdle(r->device);
     ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
     if (!win) return JNI_FALSE;
     bool ok = createSwapchain(r, win, w, height);
@@ -2272,6 +2315,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeDetachWindow(JNIEnv*, j
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
+    finishAcquisitionForShutdown(r);
     if (r->device) vkDeviceWaitIdle(r->device);
     dropWindow(r);
 }
@@ -2282,9 +2326,10 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeResize(JNIEnv*, jclass,
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
     if (!r->ready || !r->window) return;
-    vkDeviceWaitIdle(r->device);
-    ANativeWindow_acquire(r->window);
-    createSwapchain(r, r->window, w, height);
+    ANativeWindow* window = r->window;
+    ANativeWindow_acquire(window);
+    createSwapchain(r, window, w, height);
+    ANativeWindow_release(window);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -2294,7 +2339,9 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSubmit(JNIEnv* env, jcl
     if (!r || !buffer) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
     if (!r->ready || !r->swapchain || !r->window) return JNI_FALSE;
-    vkWaitForFences(r->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
+    // Do not release/import another camera buffer while the previous submit is
+    // in flight. A timeout preserves its resources and reports no new picture.
+    if (!waitFence(r, "camera buffer")) return JNI_FALSE;
     AHardwareBuffer* hb = AHardwareBuffer_fromHardwareBuffer(env, buffer);
     if (!hb) return JNI_FALSE;
     if (!importAhb(r, hb)) return JNI_FALSE;
@@ -2509,7 +2556,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCopyTap(JNIEnv* env, jc
     const jint need = (jint)(kTapW * kTapH * 4);
     if (!r || !out || !r->staging.mapped) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
-    if (env->GetArrayLength(out) < need) return JNI_FALSE;
+    if (env->GetArrayLength(out) < need || !waitFence(r, "tap copy")) return JNI_FALSE;
     env->SetByteArrayRegion(out, 0, need, reinterpret_cast<jbyte*>(r->staging.mapped));
     return JNI_TRUE;
 }
@@ -2521,7 +2568,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCopyFace(JNIEnv* env, j
     const jint need = (jint)(kFaceW * kFaceH * 4);
     if (!r || !out || !r->faceStaging.mapped) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
-    if (env->GetArrayLength(out) < need) return JNI_FALSE;
+    if (env->GetArrayLength(out) < need || !waitFence(r, "face copy")) return JNI_FALSE;
     env->SetByteArrayRegion(out, 0, need, reinterpret_cast<jbyte*>(r->faceStaging.mapped));
     return JNI_TRUE;
 }

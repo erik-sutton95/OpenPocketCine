@@ -146,16 +146,21 @@ class DatalinkHandshakeException(message: String) : IOException(message)
  * DUML-over-UDP datalink. Byte builders live in Swift; this owns the socket,
  * session/seq counters, 40 Hz ACK pump, and HEVC depacketizer handle.
  */
-class DatalinkDriver(
+class DatalinkDriver internal constructor(
     private val joiner: CameraApJoiner,
     private val port: Int,
     private val tcpPoke: Boolean,
     private val pairingToken: String,
+    private val cadence: LivePipelineCadence = LivePipelineCadence(),
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
     private val sendLock = Any()
-    private val sendExecutor = Executors.newSingleThreadScheduledExecutor { Thread(it, "opc.datalink.tx") }
+    private val txThread = AtomicReference<Thread?>()
+    private val sendExecutor = Executors.newSingleThreadScheduledExecutor {
+        Thread(it, "opc.datalink.tx").also(txThread::set)
+    }
+    private val ackDispatch = CoalescedGimbalTick(::enqueueTx, ::sendWindowAckOnTx)
     private val nativeCurveDispatch = NativeCurveDispatch(
         nowMs = SystemClock::elapsedRealtime,
         schedule = { delay, action ->
@@ -197,6 +202,7 @@ class DatalinkDriver(
     )
     private val decodeExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.hevc") }
     private var socket: DatagramSocket? = null
+    private val pokeLock = Any()
     private var pokeSocket: Socket? = null
     private var receiver: Thread? = null
     private var ackThread: Thread? = null
@@ -232,7 +238,7 @@ class DatalinkDriver(
     private val lastLiveViewReplyElapsed = AtomicLong(0)
     @Volatile private var rebuilding = false
     private val sendFailLogs = AtomicInteger(0)
-    private val writeRejected = AtomicBoolean(false)
+    private val socketHealth = DatalinkSocketHealth()
     private val gimbalLock = Any()
     private val gimbalTickDispatch = CoalescedGimbalTick(::enqueueTx, ::tickGimbalStickOnTx)
     @Volatile private var gimbalAxis0 = CameraCommands.GIMBAL_STICK_CENTER
@@ -251,9 +257,11 @@ class DatalinkDriver(
     val lastStatusAt: Long? get() = lastStatusElapsed.get().takeIf { it > 0 }
     val lastAccessUnitAt: Long? get() = lastAccessUnitElapsed.get().takeIf { it > 0 }
     val lastRebuildAt: Long? get() = lastRebuildElapsed.get().takeIf { it > 0 }
-    val isTcpPokeReady: Boolean get() = pokeSocket?.isConnected == true
+    val isTcpPokeReady: Boolean get() = synchronized(pokeLock) {
+        pokeSocket?.let { it.isConnected && !it.isClosed } == true
+    }
     val isRebuilding: Boolean get() = rebuilding
-    val needsRebuild: Boolean get() = writeRejected.get()
+    val needsRebuild: Boolean get() = socketHealth.needsRebuild
     val isClosed: Boolean get() = closed.get()
 
     /**
@@ -264,8 +272,12 @@ class DatalinkDriver(
     fun open(afterHandshake: (() -> Unit)? = null) {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }
         check(!closed.get()) { "datalink closed" }
-        discardUdp(keepPoke = true)
-        if (tcpPoke) ensurePoke()
+        val lifetime = DatalinkOpenLoop(SystemClock::elapsedRealtime,
+            LiveViewEnablePolicy.handshakeOpenTimeoutMs(), closed::get)
+        onTxBlocking { discardUdp(keepPoke = true) }
+        lifetime.ensureActive()
+        if (tcpPoke) ensurePoke(lifetime)
+        lifetime.ensureActive()
         liveViewEnabled = false
         loggedLeftoverGop.set(false)
         inboundLogs.set(0)
@@ -282,15 +294,19 @@ class DatalinkDriver(
 
         var rebinds = 0
         var keepBind = false
-        while (true) {
-            if (closed.get() || Thread.currentThread().isInterrupted) return
+        lifetime.run {
+            lifetime.ensureActive()
             if (!keepBind) {
-                resetHandshakeSession()
-                startUdpReceiver()
+                onTxBlocking {
+                    lifetime.ensureActive()
+                    resetHandshakeSession()
+                    startUdpReceiver()
+                }
             }
             keepBind = false
             val handshake = SwiftCore.handshakePayload(baseSeq) ?: error("handshake payload")
             for (send in 1..HANDSHAKE_SENDS_PER_BIND) {
+                lifetime.ensureActive()
                 if (handshakeAcked) break
                 val receiveArmed = running.get() && receiver?.isAlive == true
                 val connectionReady = socket != null && !closed.get()
@@ -304,6 +320,7 @@ class DatalinkDriver(
                 sendRaw(0x00, handshake)
                 val deadline = SystemClock.elapsedRealtime() + HANDSHAKE_SEND_INTERVAL_MS
                 while (SystemClock.elapsedRealtime() < deadline) {
+                    lifetime.ensureActive()
                     if (handshakeAcked) break
                     Thread.sleep(HANDSHAKE_POLL_MS)
                 }
@@ -327,10 +344,10 @@ class DatalinkDriver(
                 // Stay on this IO thread. Posting 0x09/0xa8 to Main trips
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
-                if (closed.get() || Thread.currentThread().isInterrupted) return
+                lifetime.ensureActive()
                 afterHandshake?.invoke()
                 armLiveVideo()
-                return
+                return@run true
             }
             val inbound = inboundLogs.get()
             when (
@@ -344,7 +361,7 @@ class DatalinkDriver(
                 LiveViewEnablePolicy.HandshakeTimeoutStep.KEEP_SOCKET -> {
                     Log.i(TAG, "datalink: handshake miss inbound=$inbound — keep UDP, retry sends")
                     keepBind = true
-                    continue
+                    return@run false
                 }
                 LiveViewEnablePolicy.HandshakeTimeoutStep.FAIL -> {
                     Log.i(TAG, "datalink: handshake never acked inbound=$inbound")
@@ -357,10 +374,11 @@ class DatalinkDriver(
                         "datalink: handshake miss inbound=$inbound — SoftAP up, rebind UDP " +
                             "($rebinds/$HANDSHAKE_REBIND_LIMIT)",
                     )
-                    discardUdp(keepPoke = true)
+                    onTxBlocking { discardUdp(keepPoke = true) }
                     Thread.sleep(HANDSHAKE_RETRY_PAUSE_MS)
                 }
             }
+            false
         }
     }
 
@@ -436,16 +454,14 @@ class DatalinkDriver(
      * depacketizer, and TCP 7001. Live-view enable is the caller's job.
      */
     fun rebuildUdpKeepingSession() {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            if (sendExecutor.isShutdown) return
-            // Wait so the following 0x09/0xa8 lands on the new 5-tuple, not the
-            // socket we are about to close (WAITING FOR LIVE VIEW, videoPkts=0).
-            runCatching {
-                sendExecutor.submit { rebuildUdpOnNetwork() }.get(3, TimeUnit.SECONDS)
-            }.onFailure { Log.w(TAG, "datalink: UDP rebuild wait failed", it) }
-            return
-        }
-        rebuildUdpOnNetwork()
+        onTxBlocking { rebuildUdpOnNetwork() }
+    }
+
+    private fun onTxBlocking(body: () -> Unit) {
+        if (Thread.currentThread() === txThread.get()) { body(); return }
+        if (closed.get() || sendExecutor.isShutdown) return
+        val epoch = nativeFeedbackEpoch.get()
+        awaitDatalinkTx(sendExecutor, { !closed.get() && epoch == nativeFeedbackEpoch.get() }, work = body)
     }
 
     @Synchronized
@@ -453,7 +469,7 @@ class DatalinkDriver(
         if (closed.get() || rebuilding) return
         if (!joiner.isProcessBound()) return
         rebuilding = true
-        writeRejected.set(false)
+        socketHealth.noteWriteSucceeded()
         lastRebuildElapsed.set(SystemClock.elapsedRealtime())
         try {
             Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
@@ -530,7 +546,12 @@ class DatalinkDriver(
 
     private fun enqueueTx(body: () -> Unit) {
         if (closed.get() || sendExecutor.isShutdown) return
-        runCatching { sendExecutor.execute { if (!closed.get()) body() } }
+        val epoch = nativeFeedbackEpoch.get()
+        runCatching {
+            sendExecutor.execute {
+                if (!closed.get() && epoch == nativeFeedbackEpoch.get()) body()
+            }
+        }
     }
 
     private fun sendDumlLocked(
@@ -594,7 +615,8 @@ class DatalinkDriver(
         teardown = {
             discardUdp(keepPoke = false)
             sendExecutor.shutdownNow()
-            decodeExecutor.shutdownNow()
+            // Drain queued epoch-fenced callbacks so cadence queue accounting settles.
+            decodeExecutor.shutdown()
             if (depacketizer != 0L && SwiftCore.isAvailable) {
                 SwiftCore.depacketizerDestroy(depacketizer)
                 depacketizer = 0L
@@ -645,6 +667,7 @@ class DatalinkDriver(
                 "local=${sock.localSocketAddress} rcvbuf=${sock.receiveBufferSize}",
         )
         socket = sock
+        socketHealth.noteReceiverStarted()
         running.set(true)
         receiver =
             Thread({ receiveLoop() }, "opc.datalink.rx").also { it.isDaemon = true; it.start() }
@@ -680,6 +703,7 @@ class DatalinkDriver(
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
         nativeFeedbackEpoch.incrementAndGet()
+        ackDispatch.invalidate()
         nativeProgramFeedback.set(null)
         nativeCurveDispatch.clear()
         synchronized(gimbalLock) {
@@ -701,20 +725,41 @@ class DatalinkDriver(
         ack?.interrupt()
         runCatching { rx?.join(200) }
         runCatching { ack?.join(200) }
-        if (!keepPoke) {
+        if (!keepPoke) synchronized(pokeLock) {
             runCatching { pokeSocket?.close() }
             pokeSocket = null
         }
     }
 
-    private fun ensurePoke() {
-        if (pokeSocket?.isConnected == true) {
+    private fun ensurePoke(lifetime: DatalinkOpenLoop) {
+        if (isTcpPokeReady) {
             Log.i(TAG, "datalink: TCP 7001 poke already ready")
             return
         }
-        runCatching { poke7001() }
-            .onSuccess { Log.i(TAG, "datalink: TCP 7001 poke ready") }
-            .onFailure { Log.w(TAG, "datalink: TCP 7001 poke failed — trying UDP", it) }
+        val ready = openDatalinkPoke(
+            resource = Socket(),
+            ensureActive = lifetime::ensureActive,
+            connect = { sock ->
+                joiner.bindSocket(sock)
+                sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
+            },
+            initialize = { sock ->
+                val frame = SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, extra = pairingToken)
+                sock.getOutputStream().write(frame)
+                sock.getOutputStream().flush()
+            },
+            settle = { Thread.sleep(400) },
+            publish = { sock ->
+                synchronized(pokeLock) {
+                    // close() invalidates lifetime before its queued teardown.
+                    // The same lock prevents publication after teardown missed it.
+                    lifetime.ensureActive()
+                    pokeSocket = sock
+                }
+            },
+            onFailure = { Log.w(TAG, "datalink: TCP 7001 poke failed — trying UDP", it) },
+        )
+        if (ready) Log.i(TAG, "datalink: TCP 7001 poke ready")
     }
 
     private fun register() {
@@ -886,28 +931,23 @@ class DatalinkDriver(
     }
 
     /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing video + 0x03 cursors. */
-    private fun sendWindowAck() {
+    private fun sendWindowAck() = ackDispatch.request()
+
+    /** Read all cursors at emission time; delayed ACKs cannot queue stale windows. */
+    private fun sendWindowAckOnTx() {
         val cursor = peerCursor.get()
         val acked = if (hasAckedData.get()) ackedDataCursor.get() else baseSeq
         val extra = if (hasExtra.get()) extraCursor.get() else baseSeq
         val payload = SwiftCore.ackPayload(cursor, acked, extra) ?: return
         val header = SwiftCore.transportHeader(0x04, payload.size, sessionId, 0) ?: return
-        write(header + payload)
+        if (writeOnNetwork(header + payload)) cadence.note(LivePipelineCadence.Stage.ACK)
     }
 
-    private fun write(bytes: ByteArray) {
-        if (closed.get()) return
-        onSendThread { writeOnNetwork(bytes) }
-    }
-
-    /** Seq stamp + send must not run on Main (NetworkOnMainThread + seq/ACK races). */
+    /** Every caller shares TX, including the ACK pump and background open/keepalive. */
     private fun onSendThread(body: () -> Unit) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            if (sendExecutor.isShutdown) return
-            sendExecutor.execute(body)
-            return
-        }
-        body()
+        if (Thread.currentThread() === txThread.get()) {
+            if (!closed.get()) body()
+        } else enqueueTx(body)
     }
 
     private fun writeOnNetwork(bytes: ByteArray): Boolean {
@@ -920,9 +960,9 @@ class DatalinkDriver(
             }
         synchronized(sendLock) {
             val attempt = runCatching { sock.send(packet) }
-                .onSuccess { writeRejected.set(false) }
+                .onSuccess { socketHealth.noteWriteSucceeded() }
                 .onFailure { err ->
-                    writeRejected.set(true)
+                    socketHealth.noteWriteRejected()
                     if (sendFailLogs.incrementAndGet() <= 3) {
                         Log.w(TAG, "datalink: UDP send failed", err)
                     }
@@ -939,11 +979,19 @@ class DatalinkDriver(
             val packet = DatagramPacket(buf, buf.size)
             try {
                 sock.receive(packet)
-                if (packet.length > 0) ingest(packet.data.copyOf(packet.length), receiveEpoch)
+                if (packet.length > 0 && !closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                    socketHealth.noteWriteSucceeded()
+                    ingest(packet.data.copyOf(packet.length), receiveEpoch)
+                }
             } catch (_: java.net.SocketTimeoutException) {
             } catch (e: Exception) {
-                if (!running.get()) break
-                Log.w(TAG, "datalink: UDP receive failed", e)
+                if (!running.get() || closed.get() || receiveEpoch != nativeFeedbackEpoch.get()) break
+                socketHealth.noteReceiverFailed()
+                running.set(false)
+                Log.w(TAG, "datalink: UDP receive stopped — current bind failed", e)
+                // Permanent socket errors must not spin/log at receive-loop speed.
+                // Stale receive ages and write health hand repair to the watchdog.
+                break
             }
         }
     }
@@ -973,7 +1021,7 @@ class DatalinkDriver(
                     (datagram[10].toInt() and 0xFF) or ((datagram[11].toInt() and 0xFF) shl 8),
                 )
             }
-        } else if (datagram.size >= 6 && datagram[6] == 0x02.toByte()) {
+        } else if (datagram.size >= 7 && datagram[6] == 0x02.toByte()) {
             val seq = SwiftCore.transportSeq(datagram)
             if (seq >= 0) {
                 peerCursor.set(seq)
@@ -991,6 +1039,7 @@ class DatalinkDriver(
                 }
                 return
             }
+            cadence.note(LivePipelineCadence.Stage.VIDEO)
             lastVideoElapsed.set(SystemClock.elapsedRealtime())
             val n = rawVideoPackets.incrementAndGet()
             if (n <= 8) {
@@ -1000,9 +1049,17 @@ class DatalinkDriver(
                 val au = SwiftCore.depacketizerFeed(depacketizer, datagram)
                 if (au != null) {
                     lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
-                    val callback = onAccessUnit
+                    cadence.note(LivePipelineCadence.Stage.AU)
                     if (!closed.get() && !decodeExecutor.isShutdown) {
-                        decodeExecutor.execute { callback?.invoke(au) }
+                        val enqueuedAt = cadence.queued()
+                        runCatching {
+                            decodeExecutor.execute {
+                                cadence.dequeued(enqueuedAt)
+                                if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                                    onAccessUnit?.invoke(au)
+                                }
+                            }
+                        }.onFailure { cadence.dequeued(enqueuedAt) }
                     }
                 }
             }
@@ -1028,20 +1085,13 @@ class DatalinkDriver(
                 )
             }
         }
-        val callback = onStatusFrame
-        main.post { frames.forEach { callback?.invoke(it) } }
+        main.post {
+            if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                frames.forEach { onStatusFrame?.invoke(it) }
+            }
+        }
     }
 
-    private fun poke7001() {
-        val sock = Socket()
-        joiner.bindSocket(sock)
-        sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
-        val frame = SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, extra = pairingToken)
-        sock.getOutputStream().write(frame)
-        sock.getOutputStream().flush()
-        pokeSocket = sock
-        Thread.sleep(400)
-    }
 
     /**
      * Recoverable datalink failures. iOS `DatalinkDriver.DatalinkError`.

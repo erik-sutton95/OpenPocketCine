@@ -73,6 +73,10 @@ swift-lint:
 swift-test:
     swift test
 
+# Summarize a locally captured iOS/Android live journal without printing identities.
+live-log-summary journal:
+    python3 tools/analyze-live-log.py "{{journal}}"
+
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
 
@@ -190,8 +194,12 @@ android-build:
 android-test:
     cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew test
 
-# Run Android build + unit tests + lint.
-android-check:
+# Test production Vulkan submit/present synchronization without a GPU.
+android-vulkan-test:
+    ./scripts/android-vulkan-sync-test.sh
+
+# Run Android build + native/unit tests + lint.
+android-check: android-vulkan-test
     cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew assembleDebug test lint
 
 # Build and install the debug APK on a connected device/emulator, then launch it.

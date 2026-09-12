@@ -52,6 +52,21 @@ Session recovery holds the last frame. A black well is a teardown or present-pat
 bug, not “Waiting for live view” copy over a live socket. Teardown rules:
 [`live-session.md`](live-session.md). Stall policy: [`feed-watchdog.md`](feed-watchdog.md).
 
+Recovery remains visible until a new source picture reaches the presentation
+path. A handshake or repaint of the held image cannot dismiss it. The card names
+the current step: looking for the saved camera, reconnecting, rejoining Wi-Fi,
+restoring the connection, or waiting for a new picture. Retry connection and
+Operator menu stay available. Automatic full-session recovery stops after at
+most eight attempts or three minutes total, including radio waits and backoff.
+The earlier feed-watchdog ladder has its own finite stages. A terminal state
+does not keep showing an activity spinner.
+
+Returning to the app validates the retained camera network. If the route changed
+or the picture does not return, recovery runs the saved-camera connection spine
+again. Brief scene changes with a healthy picture preserve the session. Movement
+controls wait for the first picture and stop when the scene becomes inactive or
+recovery takes ownership.
+
 Renaming camera Wi-Fi updates the BLE name. Reconnect must join that live
 name, not the previous SoftAP SSID still sitting in Keychain / Keystore
 (#257). Deleting the saved row is not required.

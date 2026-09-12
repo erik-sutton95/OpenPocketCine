@@ -4,6 +4,17 @@ import XCTest
 @testable import OpenPocketCine
 
 final class NanoFrameQueueTests: XCTestCase {
+    func testNewSocketSchedulesFrameDeliveryAfterDiscardedOldHop() {
+        let assembler = SoftAPVideoAssembler()
+        _ = assembler.ingest(packet(0, start + [0x02, 1]))
+        XCTAssertTrue(assembler.ingest(packet(1, start + [0x02, 2])).shouldHop)
+        // The old main-actor hop is now rejected by the socket generation gate.
+        assembler.noteRebuild()
+        _ = assembler.ingest(packet(2, start + [0x02, 3]))
+        XCTAssertTrue(assembler.ingest(packet(3, start + [0x02, 4])).shouldHop)
+        XCTAssertEqual(assembler.takePending().count, 1)
+    }
+
     private let start: [UInt8] = [0, 0, 0, 1]
 
     private func packet(_ frame: UInt8, _ nal: [UInt8]) -> [UInt8] {

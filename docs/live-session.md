@@ -201,11 +201,20 @@ decides pairing kick vs retry; feed recovery logs and keeps the last frame.
 through the 8 s reassociation grace (`bindProcessToNetwork` still pinned).
 One `open()` may take four UDP binds; do not wrap it in a 30 s timeout.
 
-Foreground recover is VT-only while HEVC or DUML status is still on 9004.
-A Control Center peek must not rebuild UDP. After a parked-app rebuild,
-wait the 8 s GOP-reset grace before a full handshake rejoin — 2 s was
-still inside the IDR gap. Handshake inbound `0x02`/`0x01` without a
-`0x00` ACK keeps that bind (`keepSocket`); rebind dumps the first IDR.
+Foreground verifies the retained camera network and source/presentation freshness.
+A healthy Control Center return keeps its connection. Stale picture with a lost
+route, or failed bounded presentation resume, starts the full saved-camera spine.
+It does not add a separate UDP rebuild or enable alongside the watchdog. Old
+decoder or socket callbacks and cached redraws do not settle recovery. Full-session
+recovery remains visible until a new source picture reaches presentation, with
+eight attempts and a 180 s total episode limit including radio waits and backoff.
+
+Handshake inbound `0x02`/`0x01` without a `0x00` ACK keeps that bind
+(`keepSocket`) within a finite open budget; it cannot renew the attempt forever.
+A lost path wins over previously observed inbound traffic. iOS allows four send
+rounds including retained binds. Android has an elapsed open deadline and
+interruptible blocking waits. Replacing the socket clears pending frame-delivery
+scheduling, and queued callbacks check the socket generation again when executed.
 
 ## Local VPN / ad blocker
 

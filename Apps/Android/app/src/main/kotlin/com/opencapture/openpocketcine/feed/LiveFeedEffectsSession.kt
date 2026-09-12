@@ -47,6 +47,7 @@ internal class LiveFeedEffectsSession(
     private val onFirstFrame: () -> Unit = {},
     private val letterboxSource: Boolean = true,
     private val notifySurfaceOnMain: Boolean = false,
+    private val onFramePresented: (Long) -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -389,7 +390,8 @@ internal class LiveFeedEffectsSession(
                         look = false,
                     )
                 }
-                EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                check(EGL14.eglSwapBuffers(eglDisplay, eglSurface)) { "live present failed" }
+                onFramePresented(lastOesTimestampNs)
                 if (!signaledFirstFrame) {
                     signaledFirstFrame = true
                     mainHandler.post(onFirstFrame)

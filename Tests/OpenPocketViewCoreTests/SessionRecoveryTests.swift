@@ -4,6 +4,22 @@ import Testing
 
 @Suite("Session recovery policy")
 struct SessionRecoveryPolicyTests {
+    @Test func successRequiresNewSourceAndNewPresentation() {
+        for (source, present, expected) in [
+            (nil, nil, false), (9.0, 12.0, false), (12.0, 9.0, false),
+            (10.0, 12.0, false), (11.0, 11.5, true), (12.0, 12.0, true),
+            (13.0, 12.0, false), (Double.nan, 12.0, false), (Double.infinity, 12.0, false),
+        ] as [(Double?, Double?, Bool)] {
+            #expect(
+                SessionRecoveryPolicy.hasFreshPicture(
+                    attemptStartedAt: 10, now: 12, lastSourceFrameAt: source,
+                    lastPresentedAt: present) == expected)
+        }
+        #expect(
+            !SessionRecoveryPolicy.hasFreshPicture(
+                attemptStartedAt: 10, now: 15, lastSourceFrameAt: 11, lastPresentedAt: 15))
+    }
+
     @Test func firstAttemptIsImmediate() {
         let policy = SessionRecoveryPolicy.monitor
         #expect(policy.decision(afterFailedAttempts: 0, jitter: 0.5) == .retry(afterSeconds: 0))

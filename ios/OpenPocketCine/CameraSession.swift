@@ -84,6 +84,7 @@ final class CameraSession {
     /// Pocket 3: one 1080→boot-4K SET after a black first picture. Not P4.
     @ObservationIgnored private var firstPictureFormatPoked = false
     @ObservationIgnored private var firstPictureFormatPokeTask: Task<Void, Never>?
+    @ObservationIgnored private var firstPictureFormatPokeGeneration = 0
     /// One `0x09/0xa8` write in flight. Overlapping enables are a black well.
     @ObservationIgnored private var liveEnableGate = SerialSessionGate()
     /// `0x09/0xa8` sends while `awaitingIDR` is still true. Caps the mid-session
@@ -111,8 +112,12 @@ final class CameraSession {
         lastGimbalThrowAt.map { Date().timeIntervalSince($0) }
     }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
+    @ObservationIgnored private var cameraPathRecovery = CameraPathRecovery()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var feedRecoveryGeneration = 0
+    @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
+    @ObservationIgnored private var foregroundGeneration = 0
     @ObservationIgnored private var statusStorage = CameraStatus()
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
@@ -138,7 +143,8 @@ final class CameraSession {
     @ObservationIgnored private var sessionDropStormGuard = SessionDropStormGuard()
     @ObservationIgnored private var recoveryCameraID: UUID?
     private static let recoveryCardGrace: Duration = .seconds(2.5)
-    private static let recoveryAttemptDeadline: Duration = .seconds(30)
+    private static let recoveryScanDeadline: Duration = .seconds(30)
+    private static let recoveryAttemptDeadline: Duration = .seconds(180)
     /// True while a saved-camera tap is waiting for that peripheral to advertise.
     /// Observable so the header pill can read **Reconnecting** (OpenZCine parity).
     private(set) var isReconnecting = false
@@ -186,7 +192,8 @@ final class CameraSession {
         guard let received = lastMoveAttitudeAt,
             ProcessInfo.processInfo.systemUptime - received <= 0.3,
             let pose = liveGimbalWaypoint, let native = pose.nativePitchDeg,
-            native.isFinite, (-180...180).contains(native) else { return nil }
+            native.isFinite, (-180...180).contains(native)
+        else { return nil }
         return pose
     }
 
@@ -196,9 +203,11 @@ final class CameraSession {
     @ObservationIgnored private var nativeMoveToken: UInt64?
 
     func beginNativeHeadTrack() -> UInt64? {
-        guard gimbalControlSceneActive, !isFeedWarming, hasGimbal, !isLocked, !gimbalMoveRunning, !gimbalStickHeld,
+        guard phase == .live, !sessionRecovery.isRecovering, gimbalControlSceneActive,
+            !isFeedWarming, hasGimbal, !isLocked, !gimbalMoveRunning, !gimbalStickHeld,
             !isBrowsingMedia, !isLiveVideoStale, freshGimbalWaypoint != nil,
-            let datalink else { return nil }
+            let datalink
+        else { return nil }
         cancelNativeHeadTrack()
         restGimbalStickWire()
         prepHeadTrackGimbal()
@@ -209,11 +218,14 @@ final class CameraSession {
     }
 
     func updateNativeHeadTrack(target: GimbalWaypoint, token: UInt64) -> Bool {
-        guard gimbalControlSceneActive, nativeHeadToken == token, !gimbalMoveRunning, !gimbalStickHeld,
+        guard phase == .live, !sessionRecovery.isRecovering, gimbalControlSceneActive,
+            nativeHeadToken == token, !gimbalMoveRunning, !gimbalStickHeld,
             !isLocked, !isBrowsingMedia, !isLiveVideoStale, let live = freshGimbalWaypoint,
             GimbalMoveEngine.canSendNativeTarget(from: live, to: target),
-            let frame = Commands.gimbalTimedTarget(waypoint: target,
-                duration: HeadTrackNative.commandDuration), let datalink else {
+            let frame = Commands.gimbalTimedTarget(
+                waypoint: target,
+                duration: HeadTrackNative.commandDuration), let datalink
+        else {
             endNativeHeadTrack(token: token)
             return false
         }
@@ -231,7 +243,9 @@ final class CameraSession {
     }
 
     var overlayGimbalWaypoint: GimbalWaypoint? {
-        guard !isLiveVideoStale, var pose = gimbalOverlayMotion.pose(at: ProcessInfo.processInfo.systemUptime) else { return nil }
+        guard !isLiveVideoStale,
+            var pose = gimbalOverlayMotion.pose(at: ProcessInfo.processInfo.systemUptime)
+        else { return nil }
         pose.zoom = zoomReadout
         return pose
     }
@@ -546,7 +560,13 @@ final class CameraSession {
         found = []
         scanTask?.cancel()
         scanTask = Task {
-            await ble.waitUntilPoweredOn()
+            guard await ble.waitUntilPoweredOn(), !Task.isCancelled else {
+                if !Task.isCancelled {
+                    phase = .failed(
+                        "Turn on Bluetooth and allow camera access, then try connecting again.")
+                }
+                return
+            }
             for await camera in ble.scan() {
                 if Task.isCancelled { break }
                 let saved = SavedCameraStore.load().first { $0.id == camera.id }
@@ -752,6 +772,11 @@ final class CameraSession {
     /// Tear down an in-flight `run` without resetting UI phase. BLE disconnect
     /// resumes a pending `ble.connect` so the old Task cannot keep writing 0x07/45.
     private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false) {
+        cameraPathRecovery.reset()
+        foregroundGeneration += 1
+        foregroundCheckTask?.cancel()
+        foregroundCheckTask = nil
+        cancelProgrammedMove()
         runTask?.cancel()
         runTask = nil
         keepaliveLoop?.cancel()
@@ -910,6 +935,7 @@ final class CameraSession {
             }
             throw error
         }
+        try Task.checkCancellation()
         // Known good only once the join worked.
         persistWifiCreds(camera: camera, ssid: ssid, password: pass)
         joinedSSID = ssid
@@ -936,6 +962,7 @@ final class CameraSession {
             timeline.mark("enable", now: ProcessInfo.processInfo.systemUptime)
         }
         log.info("\(timeline.line(), privacy: .public)")
+        try Task.checkCancellation()
         startKeepalive(ssid: ssid)
     }
 
@@ -2227,6 +2254,12 @@ final class CameraSession {
     ) {
         guard !isLocked else { return }
         guard datalink != nil else { return }
+        guard case .live = phase, gimbalControlSceneActive, !isFeedWarming,
+            !sessionRecovery.isRecovering
+        else {
+            endGimbalStick(cancelMove: true)
+            return
+        }
         if !linear, hypot(x, y) > GimbalStick.deadzone { cancelNativeHeadTrack() }
         if isLiveVideoStale, !moveDriving {
             endGimbalStick(cancelMove: true)
@@ -2372,7 +2405,8 @@ final class CameraSession {
 
     func setGimbalWaypoint(_ slot: GimbalWaypointSlot) {
         guard hasGimbal, !isLocked else { return }
-        guard let point = liveGimbalWaypoint, point.nativePitchDeg != nil, point == point.clamped() else {
+        guard let point = liveGimbalWaypoint, point.nativePitchDeg != nil, point == point.clamped()
+        else {
             controlNote = ControlHud.gimbalPoseNotReady
             return
         }
@@ -2420,8 +2454,9 @@ final class CameraSession {
     }
 
     var canRunProgrammedMove: Bool {
-        !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
-            .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
+        !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
+            && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
+                .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
     }
 
     func runProgrammedMove() {
@@ -2465,7 +2500,8 @@ final class CameraSession {
             self.prepHeadTrackGimbal()
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             guard self.gimbalMoveRunning, self.gimbalControlSceneActive,
-                !Task.isCancelled else { return }
+                !Task.isCancelled
+            else { return }
             guard let datalink = self.datalink else {
                 self.cancelProgrammedMove()
                 return
@@ -2473,8 +2509,11 @@ final class CameraSession {
             self.nativeTargetGeneration &+= 1
             let token = self.nativeTargetGeneration
             self.nativeMoveToken = token
-            let started = datalink.startNativeProgram(program: take, token: token) { [weak self] token, engine, pose in
-                guard let self, self.nativeMoveToken == token, self.gimbalMoveRunning else { return }
+            let started = datalink.startNativeProgram(program: take, token: token) {
+                [weak self] token, engine, pose in
+                guard let self, self.nativeMoveToken == token, self.gimbalMoveRunning else {
+                    return
+                }
                 self.moveEngine = engine
                 self.gimbalMovePaused = engine.isPaused
                 self.gimbalMoveCanPause = engine.running
@@ -2500,7 +2539,8 @@ final class CameraSession {
 
     func pauseOrResumeProgrammedMove() {
         guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning,
-            let token = nativeMoveToken, let datalink else { return }
+            let token = nativeMoveToken, let datalink
+        else { return }
         if gimbalMovePaused {
             guard datalink.resumeNativeProgram(token: token) else {
                 controlNote = "Wait for the camera to settle, then resume"
@@ -2556,7 +2596,8 @@ final class CameraSession {
 
     private func requestGimbalParams() {
         guard hasGimbal, datalink != nil,
-            gimbalParamPoll.shouldRequest(at: ProcessInfo.processInfo.systemUptime) else { return }
+            gimbalParamPoll.shouldRequest(at: ProcessInfo.processInfo.systemUptime)
+        else { return }
         _ = datalink?.sendUntracked(Commands.gimbalParamsGet())
     }
 
@@ -3376,11 +3417,21 @@ final class CameraSession {
     // ---- keepalive -------------------------------------------------------------------------------
 
     private func startKeepalive(ssid: String?) {
+        cameraPathRecovery.reset()
         keepaliveLoop?.cancel()
         keepaliveLoop = Task {
             while !Task.isCancelled {
+                if recoverLostCameraPathIfNeeded() { return }
                 ble.send(Commands.sessionKeepalive())
-                if ssid != nil, !holdsMonitor {
+                if ssid != nil, holdsMonitor {
+                    datalink?.keepalive()
+                    publishPipelineStats()
+                    if phase == .live, gimbalControlSceneActive, !isBrowsingMedia {
+                        recoverFirstPictureIfNeeded(allowTransportRecovery: false)
+                    }
+                }
+                if ssid != nil, !holdsMonitor, gimbalControlSceneActive, foregroundCheckTask == nil
+                {
                     if !isBrowsingMedia, shouldStartUDPRebuild {
                         endGimbalStick(cancelMove: true)
                         startFeedRecovery { [weak self] in
@@ -3430,6 +3481,29 @@ final class CameraSession {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    /// Interface loss while BLE remains up needs its own session handoff.
+    /// Sample at 1 Hz and allow the same reassociation grace as Android; an
+    /// address-list flicker with fresh video must not tear down a live socket.
+    private func recoverLostCameraPathIfNeeded() -> Bool {
+        let now = Date()
+        let videoFresh =
+            datalink?.lastVideoPacketAt.map {
+                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+        let shouldRecover = cameraPathRecovery.tick(
+            now: ProcessInfo.processInfo.systemUptime,
+            pathReady: WiFiJoiner.isCameraPathReady(), videoFresh: videoFresh,
+            sessionActive: phase == .live && gimbalControlSceneActive
+                && !holdsMonitor && !sessionRecovery.isRecovering && !isMultiviewBorrowed
+                && connectedCamera != nil,
+            repairInFlight: feedRecoveryTask != nil || datalink?.isRebuilding == true
+                || foregroundCheckTask != nil || firstPictureFormatPokeTask != nil)
+        guard shouldRecover else { return false }
+        ControlLiveLog.line("session: camera network absent after reassociation grace; video stale")
+        beginSessionRecovery(reason: "camera Wi-Fi lost", trigger: .softAPLost)
+        return true
     }
 
     private func publishPipelineStats() {
@@ -3731,6 +3805,7 @@ final class CameraSession {
     }
 
     private func resetFirstPictureFormatPoke() {
+        firstPictureFormatPokeGeneration += 1
         firstPictureFormatPokeTask?.cancel()
         firstPictureFormatPokeTask = nil
         firstPictureFormatPoked = false
@@ -3740,8 +3815,14 @@ final class CameraSession {
     /// Same-tab FORMAT never sends `0x02/0x18`. One shot per connect / rejoin.
     private func startFirstPictureFormatPoke() {
         if firstPictureFormatPokeTask != nil { return }
+        firstPictureFormatPokeGeneration += 1
+        let generation = firstPictureFormatPokeGeneration
         firstPictureFormatPokeTask = Task { @MainActor [weak self] in
-            defer { self?.firstPictureFormatPokeTask = nil }
+            defer {
+                if self?.firstPictureFormatPokeGeneration == generation {
+                    self?.firstPictureFormatPokeTask = nil
+                }
+            }
             await self?.runFirstPictureFormatPoke()
         }
     }
@@ -3836,7 +3917,7 @@ final class CameraSession {
         ControlLiveLog.line(line)
     }
 
-    private func recoverFirstPictureIfNeeded() {
+    private func recoverFirstPictureIfNeeded(allowTransportRecovery: Bool = true) {
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         let packets = datalink?.videoPackets ?? 0
         let since = Date().timeIntervalSince(lastIdrRequest)
@@ -3892,6 +3973,7 @@ final class CameraSession {
             idrHoldEnableCount += 1
             return
         case .rebuildUDP:
+            guard allowTransportRecovery else { return }
             log.info(
                 "live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)"
             )
@@ -3905,6 +3987,7 @@ final class CameraSession {
             }
             return
         case .rejoin:
+            guard allowTransportRecovery else { return }
             log.info("live: first-picture full rejoin (SoftAP bind kept)")
             startFeedRecovery { [weak self] in
                 await self?.rejoinDatalinkKeepingLive()
@@ -4096,7 +4179,8 @@ final class CameraSession {
             "feed: recover 0x09/0xa8 reason=\(reason) #\(liveViewEnableSends)")
     }
 
-    private func resetFeedWatchdog() {
+    func resetFeedWatchdog() {
+        feedRecoveryGeneration += 1
         feedRecovering = false
         feedWatchdog = FeedWatchdog()
         feedRecoveryTask?.cancel()
@@ -4257,92 +4341,81 @@ final class CameraSession {
     }
 
     func noteSceneBecameInactive() {
+        cameraPathRecovery.reset()
         gimbalControlSceneActive = false
         cancelProgrammedMove()
+        foregroundGeneration += 1
+        foregroundCheckTask?.cancel()
+        foregroundCheckTask = nil
         if case .live = phase { needsForegroundRecover = true }
-        log.info("live: scene inactive — will recover feed on active")
     }
 
     func noteSceneBecameActive() {
         gimbalControlSceneActive = true
-        if isBrowsingMedia {
-            needsForegroundRecover = false
-            return
-        }
         guard needsForegroundRecover else { return }
-        if CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: holdsMonitor) {
-            needsForegroundRecover = false
-            return
-        }
         needsForegroundRecover = false
-        if case .live = phase {
-            recoverAfterForeground()
+        // The session owner is already reconnecting. It must not compete with a
+        // second foreground repair when the hotspot approval returns to the app.
+        guard !sessionRecovery.isRecovering, !isMultiviewBorrowed else { return }
+        guard !isBrowsingMedia else { return }
+        guard phase == .live else {
+            if let id = connectedCamera?.id ?? reconnectTarget {
+                reconnect(to: id)
+            }
             return
         }
-        // BLE / run() often dies in the background. Reconnect the same camera.
-        if let id = connectedCamera?.id ?? reconnectTarget {
-            log.info("live: scene active — session not live, reconnect")
-            reconnect(to: id)
+        foregroundGeneration += 1
+        let generation = foregroundGeneration
+        foregroundCheckTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.foregroundGeneration == generation { self.foregroundCheckTask = nil }
+            }
+            let currentSSID = await WiFiJoiner.currentSSID()
+            guard !Task.isCancelled, self.foregroundGeneration == generation else { return }
+            await self.recoverAfterForeground(currentSSID: currentSSID)
         }
     }
 
-    /// UDP and VT die while suspended. Watchdog will not fire if packets still
-    /// arrive but the present path is dead — that is the frozen resume canvas.
-    private func recoverAfterForeground() {
+    /// Fresh traffic on the expected SoftAP survives a short scene bounce. A
+    /// missing/changed network needs the same BLE → Wi-Fi → UDP spine as Connect.
+    /// Repainting a held LUT image is not evidence that the source recovered.
+    private func recoverAfterForeground(currentSSID: String?) async {
         let now = Date()
-        let presentedAge = decoder.lastPresentedAt.map { now.timeIntervalSince($0) }
+        let pathReady = WiFiJoiner.isCameraPathReady()
+        let wrongNetwork = currentSSID.map { !$0.isEmpty && $0 != joinedSSID } ?? false
         let videoFresh =
             datalink?.lastVideoPacketAt.map {
                 now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
-        let statusFresh =
-            datalink?.lastStatusAt.map {
-                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-            } == true
-        if !CameraSoftAP.shouldRecoverAfterForeground(
-            secondsSinceLastPresented: presentedAge, videoFresh: videoFresh,
-            statusFresh: statusFresh)
-        {
-            log.info("live: foreground — picture or 9004 still fresh, skip rebuild")
+        ControlLiveLog.line(
+            "session: foreground path=\(pathReady ? 1 : 0) identity=\(wrongNetwork ? "changed" : currentSSID == nil ? "unknown" : "same") videoFresh=\(videoFresh ? 1 : 0) pictureFresh=\(hasFreshRecoveryPicture(since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now) ? 1 : 0)"
+        )
+        guard pathReady, !wrongNetwork else {
+            beginSessionRecovery(reason: "foreground camera network changed", trigger: .softAPLost)
             return
         }
-        log.info("live: recover after foreground")
-        firstPictureSettled = false
+        if hasFreshRecoveryPicture(
+            since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now)
+        {
+            return
+        }
+        // A watchdog repair that started before the scene event retains ownership.
+        // The next keepalive tick can escalate it after this check releases the slot.
+        guard feedRecoveryTask == nil, datalink?.isRebuilding != true else { return }
+        guard videoFresh else {
+            beginSessionRecovery(reason: "foreground live link expired", trigger: .datalinkLost)
+            return
+        }
+        ControlLiveLog.line("session: foreground fresh video, repairing presentation")
         decoder.prepareAfterForeground()
         endGimbalStick(cancelMove: true)
-        startFeedRecovery { [weak self] in
-            guard let self else { return }
-            try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
-            guard !Task.isCancelled else { return }
-            try? await self.datalink?.rebuildUDP(reason: "foreground")
-            guard !Task.isCancelled else { return }
-            _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            if self.liveViewEnableSent {
-                self.sendRecoverEnable(force: true, reason: "foreground")
-            } else {
-                self.sendInitialLiveViewEnable(
-                    displayAttached: self.decoder.isDisplayReady, pathProven: true)
-            }
-            try? await Task.sleep(for: .seconds(CameraSoftAP.foregroundPictureGrace))
-            guard !Task.isCancelled else { return }
-            let now = Date()
-            let videoFresh =
-                self.datalink?.lastVideoPacketAt.map {
-                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-                } == true
-            let statusFresh =
-                self.datalink?.lastStatusAt.map {
-                    now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-                } == true
-            let stillFrozen = CameraSoftAP.shouldEscalateForegroundRecover(
-                secondsSinceLastPresented: self.decoder.lastPresentedAt.map {
-                    now.timeIntervalSince($0)
-                }, videoFresh: videoFresh, statusFresh: statusFresh)
-            if stillFrozen {
-                self.log.info("live: foreground still frozen — full datalink rejoin")
-                await self.rejoinDatalinkKeepingLive()
-            }
+        let repaired = await waitForRecoveryPicture(
+            since: now, timeout: .seconds(CameraSoftAP.foregroundPictureGrace))
+        guard !Task.isCancelled else { return }
+        if !repaired {
+            beginSessionRecovery(
+                reason: "foreground presentation did not resume", trigger: .datalinkLost)
         }
     }
 
@@ -4360,12 +4433,15 @@ final class CameraSession {
         }
     }
 
-    private func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
+    func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
         let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
         guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
+        feedRecoveryGeneration += 1
+        let generation = feedRecoveryGeneration
         feedRecovering = true
         feedRecoveryTask = Task { @MainActor in
             await work()
+            guard self.feedRecoveryGeneration == generation else { return }
             self.feedRecoveryTask = nil
             if !self.feedWatchdog.isRecovering { self.feedRecovering = false }
             self.refreshFeedWarmup()
@@ -4453,7 +4529,45 @@ final class CameraSession {
         }
     }
 
-    private func runSessionRecovery() async {
+    func runSessionRecovery(
+        budget: Duration = .seconds(SessionRecoveryPolicy.automaticRecoveryBudgetSeconds)
+    ) async {
+        let generation = sessionRecoveryGeneration
+        let timedOut = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { @MainActor [weak self] in
+                await self?.runSessionRecoveryAttempts()
+                return false
+            }
+            group.addTask {
+                do {
+                    try await Task.sleep(for: budget)
+                } catch { return false }
+                return true
+            }
+            let timedOut = await group.next() ?? false
+            group.cancelAll()
+            return timedOut
+        }
+        guard timedOut, !Task.isCancelled, sessionRecoveryGeneration == generation else { return }
+        let attempts: Int
+        if case .retrying(let attempt, _) = sessionRecovery {
+            attempts = attempt
+        } else {
+            attempts = 0
+        }
+        abortInFlightRun(preserveDecoder: true)
+        ble.stopScan()
+        sessionRecovery = .waitingForOperator(attemptsMade: attempts)
+        sessionRecoveryCardGraceElapsed = true
+        ControlLiveLog.line(
+            "session: recovery episode exhausted after \(SessionRecoveryPolicy.automaticRecoveryBudgetSeconds)s attempts=\(attempts)"
+        )
+        applyLinkPresentation()
+    }
+
+    func runSessionRecoveryAttempts(
+        connectAttempt: (@MainActor () async -> Bool)? = nil
+    ) async {
         let policy = SessionRecoveryPolicy.monitor
         var failures = 0
         while !Task.isCancelled {
@@ -4461,7 +4575,12 @@ final class CameraSession {
             sessionRecovery = state
             applyLinkPresentation()
             guard case .retrying = state else { return }
-            let recovered = await attemptRecoveryConnect()
+            let recovered: Bool
+            if let connectAttempt {
+                recovered = await connectAttempt()
+            } else {
+                recovered = await attemptRecoveryConnect()
+            }
             if Task.isCancelled { return }
             if recovered {
                 sessionRecovery = .idle
@@ -4473,6 +4592,13 @@ final class CameraSession {
                 return
             }
             failures += 1
+            ControlLiveLog.line(
+                "session: recovery attempt failed attempt=\(failures) phase=\(phase)")
+            // A failed run may still own GATT after Wi-Fi/handshake failed.
+            // Release it before scanning again so the body can advertise; keep
+            // the last image and saved recovery identity for the next attempt.
+            abortInFlightRun(preserveDecoder: true)
+            ble.stopScan()
             guard
                 case .retry(let wait) = policy.decision(
                     afterFailedAttempts: failures, jitter: .random(in: 0...1))
@@ -4486,54 +4612,78 @@ final class CameraSession {
         }
     }
 
+    /// Recovery starts only after the watchdog's warm rung failed, BLE dropped,
+    /// the camera network changed, or the operator requested it. Reopen the full
+    /// spine: the previous warm path had disconnected BLE and never restored it.
     private func attemptRecoveryConnect() async -> Bool {
         guard let id = recoveryCameraID else { return false }
-        if WiFiJoiner.isCameraPathReady(), connectedCamera != nil {
-            await rejoinDatalinkKeepingLive()
-            if Task.isCancelled { return false }
-            if case .live = phase, datalink != nil {
-                log.info("session: warm rehandshake (SoftAP up)")
-                keepBleScanInterest(for: id)
-                return true
-            }
-        }
         isReconnecting = true
         phase = .scanning
+        ControlLiveLog.line("session: recovery scanning for saved camera")
         let foundCamera = await waitForRecoveryAdvertisement(
-            id: id, timeout: Self.recoveryAttemptDeadline)
-        guard let foundCamera, !Task.isCancelled else { return false }
-        connect(foundCamera, preserveMonitor: true)
-        var elapsed: Duration = .zero
-        while !Task.isCancelled, elapsed < Self.recoveryAttemptDeadline {
-            if case .live = phase { return true }
-            if runTask == nil, phase != .live { return false }
-            try? await Task.sleep(for: .milliseconds(250))
-            elapsed += .milliseconds(250)
+            id: id, timeout: Self.recoveryScanDeadline)
+        guard let foundCamera, !Task.isCancelled else {
+            if !Task.isCancelled {
+                ControlLiveLog.line("session: recovery scan timed out or Bluetooth unavailable")
+            }
+            return false
         }
-        if case .live = phase { return true }
-        ControlLiveLog.line(
-            "session: recovery attempt stalled past \(Self.recoveryAttemptDeadline) phase=\(phase)")
-        abortInFlightRun(preserveDecoder: true)
+        let started = Date()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: Self.recoveryAttemptDeadline)
+        connect(foundCamera, preserveMonitor: true)
+        var previousPhase = phase
+        var stageDeadline = clock.now.advanced(by: Self.recoveryDeadline(for: phase))
+        while !Task.isCancelled {
+            if phase != previousPhase {
+                previousPhase = phase
+                stageDeadline = clock.now.advanced(by: Self.recoveryDeadline(for: phase))
+                ControlLiveLog.line("session: recovery stage=\(phase)")
+            }
+            guard clock.now < deadline, clock.now < stageDeadline else { break }
+            if hasFreshRecoveryPicture(since: started), phase == .live { return true }
+            if runTask == nil, phase != .live { return false }
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+        }
+        guard !Task.isCancelled else { return false }
+        ControlLiveLog.line("session: recovery deadline phase=\(phase) freshPicture=0")
         return false
     }
 
-    /// Keep CoreBluetooth scanning for the live body after GATT drops.
-    /// Does not abort SoftAP or UDP — `startScan(reconnect:)` would.
-    private func keepBleScanInterest(for id: UUID) {
-        scanTask?.cancel()
-        scanTask = Task { [weak self] in
-            guard let self else { return }
-            await self.ble.waitUntilPoweredOn()
-            for await camera in self.ble.scan() {
-                if Task.isCancelled { return }
-                if camera.id != id { continue }
-            }
+    /// Leave enough time for the underlying finite join/handshake ladders.
+    /// Overall attempt time is capped independently so changing phases cannot
+    /// keep a broken attempt alive forever.
+    static func recoveryDeadline(for phase: ConnectionPhase) -> Duration {
+        switch phase {
+        case .joiningWifi: .seconds(CameraSoftAPSwitch.joinDeadlineSeconds + 15)
+        case .openingDatalink: .seconds(50)
+        case .live: .seconds(2 * CameraSoftAP.foregroundPictureGrace)
+        default: .seconds(30)
         }
     }
 
+    func hasFreshRecoveryPicture(since started: Date, now: Date = Date()) -> Bool {
+        SessionRecoveryPolicy.hasFreshPicture(
+            attemptStartedAt: started.timeIntervalSinceReferenceDate,
+            now: now.timeIntervalSinceReferenceDate,
+            lastSourceFrameAt: decoder.lastSourceFrameAt?.timeIntervalSinceReferenceDate,
+            lastPresentedAt: decoder.monitorPresentedAt?.timeIntervalSinceReferenceDate)
+    }
+
+    private func waitForRecoveryPicture(since started: Date, timeout: Duration) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !Task.isCancelled, clock.now < deadline {
+            if hasFreshRecoveryPicture(since: started) { return true }
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+        }
+        return false
+    }
+
     private func waitForRecoveryAdvertisement(id: UUID, timeout: Duration) async -> FoundCamera? {
-        await ble.waitUntilPoweredOn()
-        return await withTaskGroup(of: FoundCamera?.self) { group in
+        guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return nil }
+        let generation = sessionRecoveryGeneration
+        let foundCamera = await withTaskGroup(of: FoundCamera?.self) { group in
             group.addTask { @MainActor [weak self] in
                 guard let self else { return nil }
                 for await camera in self.ble.scan() {
@@ -4552,6 +4702,9 @@ final class CameraSession {
             group.cancelAll()
             return first
         }
+        // GATT connect needs the next advertisement: keep scanning when found.
+        if foundCamera == nil, generation == sessionRecoveryGeneration { ble.stopScan() }
+        return foundCamera
     }
 
     /// Stage 4: new UDP handshake + register + subscribe on SoftAP. BLE and
@@ -4569,9 +4722,11 @@ final class CameraSession {
         audioRefreshPending = true
         glamourClearPending = true
         focusTrackPending = true
+        var attemptedDatalink: DatalinkDriver?
         do {
             try Task.checkCancellation()
             try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+            try Task.checkCancellation()
             let dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
@@ -4579,6 +4734,7 @@ final class CameraSession {
             )
             wireDatalink(dl)
             datalink = dl
+            attemptedDatalink = dl
             decoder.beginIDRHold()
             try await dl.open { [self] in
                 guard shouldCommitLiveHandshake(dl) else { return }
@@ -4586,6 +4742,7 @@ final class CameraSession {
                 sendInitialLiveViewEnable(
                     displayAttached: decoder.isDisplayReady, pathProven: true)
             }
+            guard shouldCommitLiveHandshake(dl) else { return }
             // New session: the old stall ladder is over. First picture owns
             // the new driver until a rolling picture; then a fresh watchdog.
             feedWatchdog = FeedWatchdog()
@@ -4593,6 +4750,8 @@ final class CameraSession {
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled, attemptedDatalink == nil || datalink === attemptedDatalink
+            else { return }
             log.info("feed: full rejoin failed (\(error.localizedDescription, privacy: .public))")
             ControlLiveLog.line("feed: full rejoin failed (\(error.localizedDescription))")
             disposeDatalink()
@@ -4626,11 +4785,13 @@ final class CameraSession {
     }
 
     private func wireDatalink(_ dl: DatalinkDriver) {
-        dl.onStatusFrame = { [weak self] frame in
-            self?.applyIncomingStatus(frame)
+        dl.onStatusFrame = { [weak self, weak dl] frame in
+            guard let self, let dl, self.datalink === dl else { return }
+            self.applyIncomingStatus(frame)
         }
-        dl.onAccessUnit = { [weak self] accessUnit in
-            self?.ingestAccessUnit(accessUnit)
+        dl.onAccessUnit = { [weak self, weak dl] accessUnit in
+            guard let self, let dl, self.datalink === dl else { return }
+            self.ingestAccessUnit(accessUnit)
         }
     }
 
@@ -4686,7 +4847,8 @@ final class CameraSession {
                 gimbalOverlayMotion.observe(pose, at: now)
                 if let previous = lastMoveObservedPose, let receivedAt = lastMoveAttitudeAt,
                     now - receivedAt <= 0.3,
-                    GimbalMoveEngine.angularDistance(previous, pose) <= 0.100001 {
+                    GimbalMoveEngine.angularDistance(previous, pose) <= 0.100001
+                {
                     if movePoseStableSince == nil { movePoseStableSince = now }
                 } else {
                     movePoseStableSince = now
@@ -4728,7 +4890,8 @@ final class CameraSession {
         }
         wasRecording = s.isRecording
         if frame.cmdSet == 0x04, frame.cmdId == 0x50,
-            let params = GimbalParamState.parseGetReply(frame.payload) {
+            let params = GimbalParamState.parseGetReply(frame.payload)
+        {
             gimbalMode = GimbalControl.modeFromGet(params, commanded: gimbalMode)
             if let speed = params.speed { gimbalSpeed = speed }
         }

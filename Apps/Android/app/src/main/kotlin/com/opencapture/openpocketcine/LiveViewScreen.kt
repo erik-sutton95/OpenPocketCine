@@ -251,6 +251,7 @@ fun LiveViewScreen(model: AppModel) {
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onFirstFrame = { model.session.noteLiveFrame() },
                     onFailed = { vulkanFailed = true },
+                    onFramePresented = { model.session.decoder.notePresented(it) },
                 )
             } else {
                 null
@@ -615,6 +616,7 @@ fun LiveViewScreen(model: AppModel) {
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
+                    onSourcePresented = { model.session.decoder.notePresented(it) },
                     onTextureView = { glesTextureView = it },
                     modifier =
                         Modifier
@@ -1283,6 +1285,7 @@ private fun LiveFeedPresenter(
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
     onPresented: () -> Unit = {},
+    onSourcePresented: (Long) -> Unit = {},
     onTextureView: (TextureView?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -1291,6 +1294,7 @@ private fun LiveFeedPresenter(
     val capture = rememberUpdatedState(captureFrames)
     val attach = rememberUpdatedState(onDecoderSurface)
     val presented = rememberUpdatedState(onPresented)
+    val sourcePresented = rememberUpdatedState(onSourcePresented)
     val textureViewOut = rememberUpdatedState(onTextureView)
     val context = LocalContext.current
     var gpuFailed by remember { mutableStateOf(false) }
@@ -1301,6 +1305,7 @@ private fun LiveFeedPresenter(
                 onDecoderSurface = { attach.value(it) },
                 onGpuFailed = { gpuFailed = true },
                 onFirstFrame = { presented.value() },
+                onFramePresented = { sourcePresented.value(it) },
             )
         }
     DisposableEffect(session) {
@@ -1319,6 +1324,7 @@ private fun LiveFeedPresenter(
                         isOpaque = true
                         textureViewOut.value(this)
                         val onUpdated: (TextureView) -> Unit = { tv ->
+                            if (gpuFailed) tv.surfaceTexture?.let { sourcePresented.value(it.timestamp) }
                             presented.value()
                             if (capture.value) {
                                 val w = tv.width
