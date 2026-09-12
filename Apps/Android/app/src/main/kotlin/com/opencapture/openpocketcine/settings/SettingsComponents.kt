@@ -29,12 +29,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +40,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -51,7 +47,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -61,14 +56,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.roundToInt
 
@@ -105,26 +96,12 @@ fun SettingsRowCard(
     onReset: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxWidth()
-            .panelGlass(ChromeShape)
-            .padding(horizontal = 13.dp)
-            .padding(bottom = 4.dp),
-    ) {
+    com.opencapture.monitorui.MonitorSettingsCard {
         if (title != null) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 2.dp).defaultMinSize(minHeight = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    title,
-                    style = chromeStyle(13f, FontWeight.SemiBold),
-                    color = LiveDesign.text,
-                )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = chromeStyle(11.5f, FontWeight.SemiBold), color = LiveDesign.text)
                 Spacer(Modifier.weight(1f))
-                if (onReset != null) {
-                    SettingsResetButton(onClick = onReset)
-                }
+                if (onReset != null) SettingsResetButton(onClick = onReset)
             }
         }
         content()
@@ -143,33 +120,7 @@ fun SettingsResetButton(onClick: () -> Unit) {
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        // Simple two-arc “↺” mark without pulling in an icon dependency.
-        Canvas(Modifier.size(12.dp)) {
-            val stroke = 1.6.dp.toPx()
-            drawArc(
-                color = LiveDesign.muted,
-                startAngle = -40f,
-                sweepAngle = 260f,
-                useCenter = false,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
-            val tipX = size.width * 0.78f
-            val tipY = size.height * 0.18f
-            drawLine(
-                LiveDesign.muted,
-                Offset(tipX - 3.dp.toPx(), tipY),
-                Offset(tipX, tipY),
-                stroke,
-                StrokeCap.Round,
-            )
-            drawLine(
-                LiveDesign.muted,
-                Offset(tipX, tipY),
-                Offset(tipX, tipY + 3.dp.toPx()),
-                stroke,
-                StrokeCap.Round,
-            )
-        }
+        OpcIcon(OpcIcon.ROTATE_CW, null, Modifier.size(12.dp), LiveDesign.muted)
     }
 }
 
@@ -357,7 +308,7 @@ fun SettingsInlineRow(
                 ) {
                     Text(
                         title,
-                        style = chromeStyle(12.5f, FontWeight.SemiBold),
+                        style = chromeStyle(11.5f, FontWeight.SemiBold),
                         color = LiveDesign.text,
                         maxLines = 2,
                     )
@@ -373,12 +324,12 @@ fun SettingsInlineRow(
             ) {
                 Text(
                     title,
-                    style = chromeStyle(12.5f, FontWeight.SemiBold),
+                    modifier = Modifier.weight(1f),
+                    style = chromeStyle(11.5f, FontWeight.SemiBold),
                     color = LiveDesign.text,
-                    maxLines = 1,
+                    maxLines = 2,
                 )
                 help?.let { SettingsHelpBadge(it) }
-                Spacer(Modifier.weight(1f))
                 trailing()
             }
         }
@@ -449,12 +400,7 @@ fun SettingsHelpBadge(text: String) {
                 .semantics { contentDescription = description },
             contentAlignment = Alignment.Center,
         ) {
-            Box(
-                Modifier.size(16.dp).border(1.dp, LiveDesign.hairlineStrong, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("?", style = chromeStyle(10f, FontWeight.Bold), color = LiveDesign.muted)
-            }
+            OpcIcon(OpcIcon.CIRCLE_QUESTION_MARK, null, Modifier.size(16.dp), LiveDesign.muted)
         }
         if (open) {
             Popup(onDismissRequest = { open = false }) {
@@ -668,10 +614,7 @@ fun SettingsNumberField(
     }
 }
 
-/**
- * iOS / Kyant liquid-glass percent slider: [LiquidSlider] thumb over a thin
- * track, with a trailing mono percent readout.
- */
+/** Compact native slider with the existing trailing numeric readout. */
 @Composable
 fun SettingsPercentSlider(
     value: Int,
@@ -699,93 +642,12 @@ fun SettingsPercentSlider(
     }
 }
 
-/**
- * Operator-facing brightness slider backed by Kyant's catalog [LiquidSlider]
- * (https://github.com/Kyant0/AndroidLiquidGlass). Samples the monitor feed
- * backdrop when present; otherwise records a local layer so the glass thumb
- * still has something to refract in standalone Operator Setup.
- */
+/** Existing assist values adapt to the shared, frame-independent native slider. */
 @Composable
-fun GlassPillSlider(
-    value: Int,
-    range: IntRange,
-    onChange: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val monitorGlass = LocalMonitorGlass.current
-    // Settings never samples the live-feed Kyant backdrop. Solid capsule only.
-    val useLiquidGlass = false
-    val localBackdrop = rememberLayerBackdrop()
-    val sceneBackdrop = monitorGlass?.layerBackdrop
-    val latestOnChange by rememberUpdatedState(onChange)
-    val latestValue by rememberUpdatedState(value)
-    val floatRange = range.first.toFloat()..range.last.toFloat()
-    // Continuous thumb position while dragging. Discrete onChange (Int steps) alone cannot
-    // drive a smooth pill drag — intermediate floats would be rounded away and the thumb
-    // would stick (especially on short ranges like desqueeze 0…10).
-    var displayValue by remember { mutableFloatStateOf(value.toFloat()) }
-    // Accept external commits without yanking the pill back to the last Int mid-drag.
-    SideEffect {
-        if (displayValue.roundToInt().coerceIn(range) != value) {
-            displayValue = value.toFloat()
-        }
-    }
-
-    Box(
-        modifier
-            .height(40.dp)
-            .then(
-                if (useLiquidGlass && sceneBackdrop == null) {
-                    Modifier.layerBackdrop(localBackdrop)
-                } else {
-                    Modifier
-                },
-            )
-            .semantics(mergeDescendants = true) {
-                stateDescription = "$value%"
-                setProgress { target ->
-                    val next =
-                        (range.first + target * (range.last - range.first))
-                            .roundToInt()
-                            .coerceIn(range)
-                    displayValue = next.toFloat()
-                    latestOnChange(next)
-                    true
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (useLiquidGlass && sceneBackdrop == null) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .background(
-                        brush =
-                            Brush.horizontalGradient(
-                                colors =
-                                    listOf(
-                                        LiveDesign.surface,
-                                        LiveDesign.background,
-                                        LiveDesign.surface,
-                                    ),
-                            ),
-                    ),
-            )
-        }
-        LiquidSlider(
-            value = { displayValue },
-            onValueChange = { next ->
-                displayValue = next
-                val rounded = next.roundToInt().coerceIn(range)
-                if (rounded != latestValue) latestOnChange(rounded)
-            },
-            valueRange = floatRange,
-            visibilityThreshold = 0.5f,
-            backdrop = sceneBackdrop ?: localBackdrop,
-            modifier = Modifier.fillMaxWidth(),
-            accentColor = LiveDesign.accent,
-            useLiquidGlass = useLiquidGlass,
-        )
+fun GlassPillSlider(value: Int, range: IntRange, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+    com.opencapture.monitorui.MonitorSlider(value.toFloat(), range.first.toFloat()..range.last.toFloat(), modifier) {
+        val next = it.roundToInt().coerceIn(range)
+        if (next != value) onChange(next)
     }
 }
 
@@ -839,22 +701,9 @@ fun SettingsCrushClipSegmented(
     }
 }
 
-/** The accent capsule switch graphic (iOS `SettingsSwitchGraphic`, 39×22). */
+/** Shared 38×22 switch; the owning settings row supplies action and semantics. */
 @Composable
-fun SettingsSwitchGraphic(isOn: Boolean) {
-    Box(
-        Modifier.size(width = 39.dp, height = 22.dp)
-            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface, CircleShape)
-            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, CircleShape)
-            .padding(3.5.dp),
-        contentAlignment = if (isOn) Alignment.CenterEnd else Alignment.CenterStart,
-    ) {
-        Box(
-            Modifier.size(15.dp)
-                .background(if (isOn) LiveDesign.accent else LiveDesign.muted, CircleShape)
-        )
-    }
-}
+fun SettingsSwitchGraphic(isOn: Boolean) = com.opencapture.monitorui.MonitorSwitchGraphic(isOn)
 
 /** Plain monospace value text (iOS `SettingsValueText`). */
 @Composable

@@ -40,27 +40,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun rememberPlaybackMonitorGlass(): MonitorGlass {
-    val context = LocalContext.current
-    val backdrop = rememberLayerBackdrop()
-    val activityManager =
-        remember(context) {
-            checkNotNull(context.getSystemService(ActivityManager::class.java))
-        }
-    val totalRamBytes =
-        remember(activityManager) {
-            ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo).totalMem
-        }
-    return remember(backdrop, totalRamBytes, activityManager.isLowRamDevice) {
-        MonitorGlass(
-            resolveTier(
-                sdkInt = Build.VERSION.SDK_INT,
-                isLowRamDevice = activityManager.isLowRamDevice,
-                totalRamBytes = totalRamBytes,
-            ),
-            layerBackdrop = backdrop,
-            overlayBackdrop = backdrop,
-        )
-    }
+    return remember { MonitorGlass(com.opencapture.openpocketcine.GlassTier.FLAT) }
 }
 
 /** iOS-style darkened bars when Kyant is off so filename + transport stay readable. */

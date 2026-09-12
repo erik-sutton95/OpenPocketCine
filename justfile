@@ -63,11 +63,15 @@ secrets:
 # ── Native production stack ─────────────────────────────────────────────────
 # Format shared Swift and iOS app sources.
 swift-format:
-    swift-format format --in-place --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineWatch
+    swift-format format --in-place --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineUITests ios/OpenPocketCineWatch
 
 # Lint shared Swift and iOS app sources.
 swift-lint:
-    swift-format lint --strict --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineWatch
+    swift-format lint --strict --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineUITests ios/OpenPocketCineWatch
+
+# Refresh the pinned Lucide catalogs in both shared native UI modules.
+icons-vendor:
+    python3 scripts/vendor-lucide-icons.py
 
 # Run shared Swift core tests.
 swift-test:
@@ -126,12 +130,20 @@ ios-test: ios-generate
       -destination "platform=iOS Simulator,id=$device_id" \
       test
 
+# UI 2.0 interaction and screenshot checks, isolated from camera hardware.
+ios-ui-test device *args: ios-generate
+    xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS Simulator,id={{device}}' {{args}} test
+
+# Opt-in navigation on an attached physical iPhone/iPad; never records or moves a camera.
+ios-physical-ui-test device: ios-generate
+    TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:OpenPocketCineUITests/PhysicalNavigationTests test
+
 # Build the watchOS companion for the simulator.
 watch-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
 # Run all native production checks that do not require camera hardware.
-# swift-lint is in `just check` / `just lint`; run `just format` before making it a merge gate.
+# Swift format lint remains optional until the existing tree is fully formatted.
 native-check: swift-test relay-test ios-test ios-build watch-build
 
 # Format production Swift sources.

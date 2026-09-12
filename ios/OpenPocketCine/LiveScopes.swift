@@ -371,7 +371,7 @@ struct WaveformOverlay: View {
         let assist = model.monitorSamples.displayBundle
         let options = WaveformAssist.store.options
         let size = ScopePanelPlacement.size(
-            WaveformAssist.panelSize(scale: options.scale),
+            WaveformAssist.panelSize(scale: WaveformAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = WaveformAssist.intensity(options.brightness)
         // Transfer rides the bundle — reading session.status here re-rendered
@@ -413,10 +413,7 @@ struct WaveformOverlay: View {
                 canvas: canvas, feed: feed, chromeClearance: chromeClearance,
                 onOpenOptions: { frame in
                     WaveformAssist.presentOptions(anchor: frame, assist: model.assist)
-                }
-            ) {
-                plot
-            }
+                }, content: { plot })
         } else {
             plot
         }
@@ -539,7 +536,7 @@ struct ParadeOverlay: View {
         let transfer = assist.transfer
         let options = ParadeAssist.store.options
         let size = ScopePanelPlacement.size(
-            ParadeAssist.panelSize(scale: options.scale),
+            ParadeAssist.panelSize(scale: ParadeAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = ParadeAssist.intensity(options.brightness)
         let plot = ScopeMiniChrome(
@@ -647,7 +644,7 @@ struct HistogramOverlay: View {
         let assist = model.monitorSamples.displayBundle
         let options = HistogramAssist.store.options
         let size = ScopePanelPlacement.size(
-            HistogramAssist.panelSize(scale: options.scale),
+            HistogramAssist.panelSize(scale: HistogramAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let plot = ScopeMiniChrome(
             title: HistogramAssist.panelTitle, chip: HistogramAssist.chip,
@@ -777,7 +774,8 @@ struct VectorscopeOverlay: View {
             title: "Vector",
             chip: VectorscopeAssist.chip(zoom: options.zoom),
             size: ScopePanelPlacement.size(
-                VectorscopeAssist.panelSize(scale: options.scale),
+                VectorscopeAssist.panelSize(
+                    scale: VectorscopeAssist.store.presentationScale(in: canvas)),
                 canvas: canvas, clearance: chromeClearance)
         ) {
             ZStack {
@@ -968,7 +966,7 @@ struct TrafficLightsOverlay: View {
 /// OpenZCine `TrafficLightsMeterMini` — RED-style RGB goal posts, clip lamps on
 /// top, crush lamps on the floor, `TL` title. `fillsWidth` is the portrait
 /// full-bleed stack; the landscape floating panel stays the 74-box.
-private struct TrafficLightsMeterMini: View {
+struct TrafficLightsMeterMini: View {
     let reading: ScopeTrafficLightsReading
     var fillsWidth: Bool = false
 

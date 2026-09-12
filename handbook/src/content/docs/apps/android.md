@@ -15,9 +15,31 @@ location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
 exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 
-On **Your cameras**, the selected row shows connection progress and **Cancel**,
-including while looking for an offline camera. Names sit above availability and
-connection actions. Pair new camera, Media library, and Settings stay on the intro card.
+On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
+new discoveries. Select a camera to see its connection progress and **Cancel**.
+**Pair new camera** opens the guided flow; select a discovered camera, then
+**Continue**. Media and Settings remain available without connecting.
+
+## Field Monitor interface
+
+The native UI uses Sora typography, cyan controls and dark panels. Portrait
+phones place exposure values in two rows above the system buttons; landscape
+puts those values along the bottom of the picture. **REC SETUP** opens capture
+format, color and shooting options. Drag a value drum to select a supported
+camera value; lift to apply it. Hold Record to open shooting mode.
+
+The View Assist palette collapses into the picture corner. Expand it for the
+full catalog; tap a tool to toggle it or hold to open its options inspector.
+Hold the zoom value for a continuous dial. Its limits and recording restrictions
+remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
+experimental Motion Control editor in a trailing drawer. All three waypoint rows show the
+reported pan, tilt and zoom, or **Not set**. Tap outside to minimize the editor
+without activating the controls behind it. Until dragged, the editor stays centered
+when the screen rotates; a manually placed editor keeps its chosen position.
+
+Operator Setup and Media use a navigation rail in landscape and scrolling tabs
+in portrait. Media retains grid/list views, selection, favorites, cache state,
+playback assists and the existing delivery actions.
 
 ## Moving scopes
 
@@ -69,10 +91,9 @@ on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
-beside zoom (Pocket only). That sheet parks like a capture picker and
-has Mode / Speed / Ramp tabs showing Follow / Tilt locked / FPV / Direction Lock,
-Slow / Default / Fast, and stick ramp. The separate Gimbal tools footer opens
-experimental Motion Control for an A→B (optional C) take (set A and B, choose each
+beside zoom (Pocket only). Its trailing drawer has inline Mode, Speed and Ramp
+drums showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
+and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take (set A and B, choose each
 leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total
 duration. There is no artificial speed cap. Moves are experimental: keep
@@ -145,7 +166,10 @@ recorded motion checks are on Pocket 4 Pro/iPhone. See
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
 PEAK / FALSE / ZEBRA grade the decoded 720p raster with a 3D cube (same lattice
 as iOS), then bilinear-fit the panel (peaking is the same 3-pass as GLES). HUD liquid
-glass is Kyant on API 33+ / ≥4 GB; older or low-RAM devices stay on solid frost.
+floating chrome uses composited translucent tint without a live-frame backdrop copy.
+Page cards are solid. Assist inspectors show the selected scope or image effect
+without requiring that tool on the main picture. Image previews reuse the existing
+small source sample and effect shaders, with at most one job at 5 Hz while visible.
 Present path matches iOS `FeedPresentPolicy` (skip duplicate timestamps, keep
 the last frame on freeze, one live-enable write at a time, latest-wins
 present). Opening clips or

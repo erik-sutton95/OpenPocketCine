@@ -126,7 +126,42 @@ fun LiveControlSheet(
     val formats = VideoFormat.pickerFormats(
         status.availableVideoFormats, model.session.connectedCamera?.model, status.shootingMode,
     )
-    LiveControlSheetContent(sheet, model, status.copy(availableVideoFormats = formats), locked, onDismiss, maxHeightDp)
+    val availableStatus = status.copy(availableVideoFormats = formats)
+    if (sheet.isTopPicker) {
+        RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+    } else {
+        LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+    }
+}
+
+/** Format, color and shooting mode share one native recording-options panel. */
+@Composable
+private fun RecordingSetupPanel(
+    initial: LiveSheet, model: AppModel, status: CameraStatus, locked: Boolean,
+    onDismiss: () -> Unit, maxHeightDp: Float?,
+) {
+    var tab by remember(initial) { mutableStateOf(if (initial == LiveSheet.COLOR) "Color" else "Format") }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        com.opencapture.openpocketcine.settings.SettingsSegmented(
+            options = listOf("Format", "Color", "Mode"), selected = tab,
+            compact = true,
+        ) { tab = it }
+        if (tab == "Mode") {
+            val modes = CameraCommands.shootingModeCarousel(model.session.connectedCamera?.model?.name)
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SheetHeader("SHOOTING MODE", "Choose the camera's capture mode", onDismiss)
+                val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
+                CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode).orEmpty(),
+                    interactive = !locked && !status.isRecording) { label ->
+                    modes.getOrNull(labels.indexOf(label))?.let(model::setShootingMode)
+                }
+                if (status.isRecording) Text("Stop recording to change mode.", color = LiveDesign.muted, style = LiveType.text(11f))
+            }
+        } else {
+            LiveControlSheetContent(if (tab == "Color") LiveSheet.COLOR else LiveSheet.FORMAT,
+                model, status, locked, onDismiss, maxHeightDp?.minus(44f)?.coerceAtLeast(160f))
+        }
+    }
 }
 
 @Composable
@@ -409,12 +444,8 @@ private fun LiveControlSheetContent(
     DisposableEffect(sheet) { onDispose { drumJob?.cancel() } }
 
     val cap = maxHeightDp?.dp
-    // Bottom drums fill the well. FORMAT / COLOR hang under the top chip and hug,
-    // matching iOS `LiveTopPickerHost` (not a floor-to-chip sheet).
-    val fillsWell =
-        sheet == LiveSheet.ISO ||
-            sheet == LiveSheet.SHUTTER ||
-            sheet == LiveSheet.WB
+    // Every drum has the same 86dp viewport; the card hugs its own controls.
+    val fillsWell = false
     Column(
         Modifier
             .fillMaxWidth()
@@ -445,16 +476,16 @@ private fun LiveControlSheetContent(
             when (sheet) {
                 LiveSheet.ISO -> {
                     Column(
-                        Modifier.weight(1f, fill = fillsWell),
+                        Modifier.wrapContentHeight(),
                         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
                     ) {
-                        Box(Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                        Box(Modifier.fillMaxWidth()) {
                             if (isIsoAutoTab) {
                                 CaptureDrumWheel(
                                     options = CaptureLists.isoAutoLabels(status, bodyName),
                                     selection = drumSelection,
                                     interactive = enabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -466,7 +497,7 @@ private fun LiveControlSheetContent(
                                     selection = drumSelection,
                                     markedValues = CaptureLists.isoMarkedLabels(status),
                                     interactive = enabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -485,16 +516,16 @@ private fun LiveControlSheetContent(
                 }
                 LiveSheet.SHUTTER -> {
                     Column(
-                        Modifier.weight(1f, fill = fillsWell),
+                        Modifier.wrapContentHeight(),
                         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
                     ) {
-                        Box(Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                        Box(Modifier.fillMaxWidth()) {
                             if (isEvSheet) {
                                 CaptureDrumWheel(
                                     options = CaptureLists.evLabels,
                                     selection = drumSelection,
                                     interactive = enabled && !model.facePriorityExposureEnabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -505,7 +536,7 @@ private fun LiveControlSheetContent(
                                     options = ShutterAngle.labels,
                                     selection = drumSelection,
                                     interactive = enabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -516,7 +547,7 @@ private fun LiveControlSheetContent(
                                     options = CaptureLists.shutterLabels(status),
                                     selection = drumSelection,
                                     interactive = enabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -551,12 +582,12 @@ private fun LiveControlSheetContent(
                                 }
                             }
                         1 ->
-                            Box(Modifier.weight(1f, fill = fillsWell).fillMaxWidth()) {
+                            Box(Modifier.wrapContentHeight().fillMaxWidth()) {
                                 CaptureDrumWheel(
                                     options = CaptureLists.kelvinLabels,
                                     selection = drumSelection,
                                     interactive = enabled,
-                                    fillHeight = true,
+
                                     onSelect = {
                                         drumSelection = it
                                         applyDrum(it)
@@ -610,7 +641,7 @@ private fun LiveControlSheetContent(
                         options = CaptureLists.colorWheelLabels(status, bodyFamily, bodyName),
                         selection = drumSelection,
                         interactive = enabled,
-                        maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = false),
+
                         onSelect = {
                             drumSelection = it
                             applyDrum(it)
@@ -622,7 +653,7 @@ private fun LiveControlSheetContent(
                             options = CaptureLists.fpsDrumLabels(status, selectedMode, selectedAspect),
                             selection = drumSelection,
                             interactive = enabled,
-                            maxHeightDp = CaptureLists.topPickerDrumHeight(maxHeightDp, hasTabs = true),
+
                             onSelect = {
                                 drumSelection = it
                                 applyDrum(it)
@@ -655,8 +686,7 @@ private fun LiveControlSheetContent(
 }
 
 /**
- * OpenZCine `PanelHost.topPickerBody` / `bottomPickerBody`: backdrop tap, 340dp
- * card under a top chip or 420-capped card parked 10dp above the capture bar.
+ * Capture cards anchor to their readout or recording setup chip, with outside dismissal.
  */
 @Composable
 fun LivePickerHost(
@@ -780,12 +810,12 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
         ) {
             Text(
                 title,
-                style = LiveType.ui(18f, FontWeight.ExtraBold).copy(letterSpacing = 2.sp),
+                style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.6.sp),
                 maxLines = 1,
             )
             Text(
                 subtitle.uppercase(),
-                style = LiveType.mono(11f, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp),
+                style = LiveType.ui(8.5f).copy(letterSpacing = 0.sp),
                 color = LiveDesign.faint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -809,7 +839,7 @@ private fun ModeBar(
             val active = index == selected
             Text(
                 if (uppercase) title.uppercase() else title,
-                style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.5.sp),
+                style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = 0.44.sp),
                 color = if (active) LiveDesign.accent else LiveDesign.muted,
                 textAlign = TextAlign.Center,
                 modifier =
@@ -818,7 +848,7 @@ private fun ModeBar(
                         .background(if (active) LiveDesign.accentDim else LiveDesign.background.copy(alpha = 0.28f))
                         .border(1.5.dp, if (active) LiveDesign.accent else LiveDesign.hairline, ChromeShape)
                         .chromeClickable(enabled = enabled, onClick = { onSelect(index) })
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = 8.dp)
                         .fillMaxWidth(),
             )
         }
@@ -848,7 +878,7 @@ private fun CheckedRows(
                     modifier = Modifier.weight(1f),
                 )
                 if (on) {
-                    Text("✓", color = LiveDesign.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    OpcIcon(OpcIcon.CHECK, null, Modifier.size(14.dp), LiveDesign.accent)
                 }
             }
             if (index != options.lastIndex) {
@@ -918,7 +948,7 @@ private fun FocusBody(
 private fun RowScope.FocusTab(title: String, active: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Text(
         title.uppercase(),
-        style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.5.sp),
+        style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = 0.44.sp),
         color = if (active) LiveDesign.accent else LiveDesign.muted,
         textAlign = TextAlign.Center,
         modifier =
@@ -927,7 +957,7 @@ private fun RowScope.FocusTab(title: String, active: Boolean, enabled: Boolean, 
                 .background(if (active) LiveDesign.accentDim else LiveDesign.background.copy(alpha = 0.28f))
                 .border(1.5.dp, if (active) LiveDesign.accent else LiveDesign.hairline, ChromeShape)
                 .chromeClickable(enabled = enabled, onClick = onClick)
-                .padding(vertical = 12.dp)
+                .padding(vertical = 8.dp)
                 .fillMaxWidth(),
     )
 }
@@ -1085,24 +1115,14 @@ private fun PrefToggle(
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            title.uppercase(),
-            style = LiveType.ui(13f, FontWeight.Bold).copy(letterSpacing = 0.4.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        SettingsHelpBadge(help)
-        Spacer(Modifier.weight(1f))
-        Box(
-            Modifier
-                .chromeClickable(enabled = enabled, onClick = { onCheckedChange(!checked) })
-                .semantics { role = Role.Switch }
-                .alpha(if (enabled) 1f else 0.45f),
-        ) {
-            CaptureSwitchGraphic(checked)
+    Row(Modifier.fillMaxWidth().chromeClickable(enabled = enabled) { onCheckedChange(!checked) }
+        .semantics { role = Role.Switch }.alpha(if (enabled) 1f else .45f),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = LiveType.ui(11.5f, FontWeight.SemiBold))
+            Text(help, style = LiveType.ui(9.5f).copy(lineHeight = 13.3.sp), color = LiveDesign.faint)
         }
+        CaptureSwitchGraphic(checked)
     }
 }
 
@@ -1110,7 +1130,7 @@ private fun PrefToggle(
 private fun CaptureSwitchGraphic(isOn: Boolean) {
     Box(
         Modifier
-            .width(39.dp)
+            .width(38.dp)
             .height(22.dp)
             .clip(RoundedCornerShape(50))
             .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface)
@@ -1119,146 +1139,24 @@ private fun CaptureSwitchGraphic(isOn: Boolean) {
         Box(
             Modifier
                 .align(if (isOn) Alignment.CenterEnd else Alignment.CenterStart)
-                .padding(3.5.dp)
-                .size(15.dp)
+                .padding(2.dp)
+                .size(18.dp)
                 .clip(CircleShape)
-                .background(if (isOn) LiveDesign.accent else LiveDesign.muted),
+                .background(LiveDesign.text),
         )
     }
 }
 
-/** Sentinel until the lazy list measures — never treat row 0 as settled pre-layout. */
-private const val DRUM_NOT_LAID_OUT = -1
-
-@OptIn(ExperimentalFoundationApi::class)
+/** Camera mapping stays above this shared, presentation-only horizontal drum. */
 @Composable
 private fun CaptureDrumWheel(
-    options: List<String>,
-    selection: String,
-    markedValues: Set<String> = emptySet(),
+    options: List<String>, selection: String, markedValues: Set<String> = emptySet(),
     interactive: Boolean = true,
-    fillHeight: Boolean = false,
-    maxHeightDp: Float? = null,
     onSelect: (String) -> Unit,
 ) {
-    if (options.isEmpty()) return
-    val rowHeight = AssistLongPress.DRUM_ROW_DP.dp
-    val wheelHeight =
-        maxHeightDp?.dp?.coerceIn(rowHeight * 2, 176.dp) ?: 176.dp
-    val optionKey = options.joinToString()
-    val selectedIndex = options.indexOf(selection).coerceAtLeast(0)
-    val listState = remember(optionKey) { LazyListState(firstVisibleItemIndex = selectedIndex) }
-    var seated by remember(optionKey) { mutableStateOf(false) }
-    val snap =
-        rememberSnapFlingBehavior(
-            lazyListState = listState,
-            snapPosition = SnapPosition.Center,
-        )
     val haptics = LocalOperatorHaptics.current
-    val centeredIndex by remember(listState) {
-        derivedStateOf {
-            val layout = listState.layoutInfo
-            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
-            layout.visibleItemsInfo
-                .minByOrNull { abs(it.offset + it.size / 2 - center) }
-                ?.index ?: DRUM_NOT_LAID_OUT
-        }
-    }
-    LaunchedEffect(options, selection, optionKey) {
-        seated = false
-        val index = options.indexOf(selection)
-        if (index >= 0) {
-            listState.scrollToItem(index)
-        }
-    }
-    LaunchedEffect(listState, options, interactive, selection) {
-        snapshotFlow { listState.isScrollInProgress to centeredIndex }
-            .collect { (scrolling, index) ->
-                if (scrolling || !interactive || index == DRUM_NOT_LAID_OUT) return@collect
-                val value = options.getOrNull(index) ?: return@collect
-                if (value == selection) {
-                    seated = true
-                    return@collect
-                }
-                if (!seated) return@collect
-                haptics.selection()
-                onSelect(value)
-            }
-    }
-    BoxWithConstraints(
-        Modifier
-            .fillMaxWidth()
-            .then(
-                if (fillHeight) Modifier.fillMaxHeight()
-                else Modifier.heightIn(min = rowHeight * 3, max = wheelHeight).height(wheelHeight),
-            )
-            .alpha(if (interactive) 1f else 0.55f),
-        contentAlignment = Alignment.Center,
-    ) {
-        val actualHeight = maxHeight
-        val edgePadding = ((actualHeight - rowHeight) / 2).coerceAtLeast(0.dp)
-        LazyColumn(
-            state = listState,
-            userScrollEnabled = interactive,
-            flingBehavior = snap,
-            contentPadding = PaddingValues(vertical = edgePadding),
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(actualHeight)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                AssistLongPress.DRUM_FADE_IN to Color.Black,
-                                AssistLongPress.DRUM_FADE_OUT to Color.Black,
-                                1f to Color.Transparent,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
-        ) {
-            items(options.size, key = { options[it] }) { index ->
-                val option = options[index]
-                val centered = index == centeredIndex
-                Row(
-                    Modifier.fillMaxWidth()
-                        .height(rowHeight)
-                        .chromeClickable(enabled = interactive, onClick = { onSelect(option) }),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        option,
-                        style =
-                            LiveType.mono(
-                                if (centered) AssistLongPress.DRUM_CENTER_PT
-                                else AssistLongPress.DRUM_NEIGHBOR_PT,
-                                if (centered) FontWeight.SemiBold else FontWeight.Normal,
-                            ),
-                        color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
-                        maxLines = 1,
-                    )
-                    if (option in markedValues) {
-                        Text(
-                            " ★",
-                            style = LiveType.mono(if (centered) 13f else 10f, FontWeight.SemiBold),
-                            color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
-                        )
-                    }
-                }
-            }
-        }
-        Box(
-            Modifier.fillMaxWidth().height(1.dp).offset(y = -rowHeight / 2)
-                .background(LiveDesign.hairlineStrong),
-        )
-        Box(
-            Modifier.fillMaxWidth().height(1.dp).offset(y = rowHeight / 2)
-                .background(LiveDesign.hairlineStrong),
-        )
-    }
+    com.opencapture.monitorui.MonitorValueDrum(options, selection, markedValues = markedValues,
+        interactive = interactive, onSelect = { value -> haptics.selection(); onSelect(value) })
 }
 
 private fun initialSelectedMode(
@@ -2100,21 +1998,6 @@ object CaptureLists {
      */
     fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? =
         CameraCommands.nativeIsoHop(from, to, currentIndex, hopEnabled)
-
-    /**
-     * FORMAT / COLOR drums shrink into the well under the chip so the card
-     * stays 8 dp below STBY instead of covering it on short landscape.
-     * Chrome: 12+12 pad, 27 header, 8 gap(s), optional 51 mode bar.
-     */
-    fun topPickerDrumHeight(maxSheetDp: Float?, hasTabs: Boolean): Float {
-        val chrome =
-            AssistLongPress.PANEL_PAD_DP * 2 +
-                AssistLongPress.CLOSE_DP +
-                AssistLongPress.PANEL_GAP_DP * (if (hasTabs) 2 else 1) +
-                if (hasTabs) LiveChromeMetrics.PICKER_MODE_BAR_HEIGHT else 0f
-        val available = (maxSheetDp ?: 400f) - chrome
-        return available.coerceIn(AssistLongPress.DRUM_ROW_DP * 2, 176f)
-    }
 
     /** Top-deck chip, OpenZCine `4K · 25p`. */
     fun recFormatChipLabel(status: CameraStatus): String = VideoFormat.chipLabel(status)

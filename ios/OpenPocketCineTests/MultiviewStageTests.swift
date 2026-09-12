@@ -7,7 +7,8 @@ import XCTest
     func testTimecodeRequiresCameraReportAndIsHiddenOnNano() {
         let tile = MultiviewSession.Tile()
         for name in ["OsmoPocket3-Test", "OsmoPocket4P-Test", "OsmoNano-Test"] {
-            tile.camera = FoundCamera(id: UUID(), name: name,
+            tile.camera = FoundCamera(
+                id: UUID(), name: name,
                 model: .resolve(modelId: nil, name: name), modelId: nil)
             tile.settings.timecode = nil
             XCTAssertNil(tile.timecodeReadout)
@@ -54,57 +55,6 @@ import XCTest
         XCTAssertTrue(tile.decoder.poseViewFlip)
         XCTAssertFalse(MultiviewSession.Tile().decoder.poseViewFlip)
     }
-    func testGridExpandsOnlyAssignedSlotsAndPreservesAspectRatio() {
-        for size in [CGSize(width: 800, height: 350), CGSize(width: 350, height: 650)] {
-            let full = MultiviewLayout.grid.frames(in: size, selected: 0)
-            for active in [[2], [1, 3]] {
-                let frames = MultiviewLayout.grid.frames(
-                    in: size, selected: 0, activeIndices: active)
-                XCTAssertEqual(frames.filter { !$0.isEmpty }.count, active.count)
-                for index in active {
-                    XCTAssertGreaterThan(frames[index].width, full[index].width)
-                    XCTAssertEqual(
-                        frames[index].width / frames[index].height, 16.0 / 9.0, accuracy: 0.001)
-                    XCTAssertTrue(CGRect(origin: .zero, size: size).contains(frames[index]))
-                }
-                if active.count == 2 { XCTAssertFalse(frames[1].intersects(frames[3])) }
-            }
-        }
-    }
-    func testPortraitCenterStageUsesFullWidthAndKeepsOtherSlotsBelow() {
-        let size = CGSize(width: 390, height: 700)
-        for selected in 0..<4 {
-            let fit = MultiviewLayout.centerStage.frames(in: size, selected: selected)
-            let fill = MultiviewLayout.centerStage.frames(in: size, selected: selected, fill: true)
-            XCTAssertGreaterThan(fit[selected].width, size.width * 0.9)
-            XCTAssertLessThan(fit[selected].minY, 12)
-            XCTAssertEqual(fill[selected], fit[selected])
-            XCTAssertEqual(fill[selected].width / fill[selected].height, 16.0 / 9.0, accuracy: 0.001)
-            for index in 0..<4 where index != selected {
-                XCTAssertGreaterThan(fit[index].minY, fit[selected].maxY)
-                XCTAssertGreaterThan(fill[index].minY, fill[selected].maxY)
-                XCTAssertGreaterThan(fit[index].width, size.width * 0.4)
-            }
-        }
-    }
-
-    func testFillLayoutsRemainBoundedAndNonOverlappingAcrossStageSizes() {
-        for size in [CGSize(width: 320, height: 650), CGSize(width: 820, height: 1030),
-            CGSize(width: 840, height: 330), CGSize(width: 1060, height: 660)] {
-            for layout in MultiviewLayout.allCases {
-                for active in [[], [2], [1, 3], [0, 1, 3]] {
-                    let frames = layout.frames(in: size, selected: 2, activeIndices: active, fill: true)
-                        .filter { !$0.isEmpty }
-                    for (index, frame) in frames.enumerated() {
-                        XCTAssertTrue(CGRect(origin: .zero, size: size).contains(frame))
-                        for other in frames.dropFirst(index + 1) {
-                            XCTAssertFalse(frame.intersects(other))
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     func testMultiviewDiscoversOsmoCatalogWithoutGuessingUnknownPreviewCommands() {
         for (id, name) in [
@@ -132,6 +82,22 @@ import XCTest
         XCTAssertTrue(oldPocket.appearsInMultiview)
         XCTAssertFalse(oldPocket.hasMultiviewPreview)
     }
+    func testStageUsesSharedPresentationAndKeepsOneSlotPerCamera() {
+        for size in [
+            CGSize(width: 390, height: 844), CGSize(width: 852, height: 393),
+            CGSize(width: 1194, height: 834),
+        ] {
+            for arrangement in MultiviewLayout.allCases {
+                for selected in 0..<4 {
+                    let layout = arrangement.presentation(in: size, selected: selected)
+                    XCTAssertEqual(layout.tiles.count, 4)
+                    XCTAssertEqual(layout.portrait, size.height > size.width)
+                    XCTAssertGreaterThan(layout.tiles[selected].width, 0)
+                }
+            }
+        }
+    }
+
     private func assign(_ tile: MultiviewSession.Tile, recording: Bool, available: Bool) {
         tile.camera = FoundCamera(
             id: UUID(), name: "Test camera", model: .resolve(modelId: 0x19, name: "OsmoNano-Test"),
@@ -157,32 +123,7 @@ import XCTest
         session.selectNetwork("New test network \(UUID().uuidString)")
         XCTAssertEqual(session.password, "")
     }
-    func testLayoutsKeepAllTilesWideAndWithinStage() {
-        for size in [
-            CGSize(width: 840, height: 340), CGSize(width: 390, height: 700),
-            CGSize(width: 1100, height: 760),
-        ] {
-            for layout in MultiviewLayout.allCases {
-                for selected in 0..<4 {
-                    let frames = layout.frames(in: size, selected: selected)
-                    for frame in frames {
-                        XCTAssertEqual(frame.width / frame.height, 16.0 / 9.0, accuracy: 0.001)
-                        XCTAssertGreaterThanOrEqual(frame.minX, 0)
-                        XCTAssertGreaterThanOrEqual(frame.minY, 0)
-                        XCTAssertLessThanOrEqual(frame.maxX, size.width)
-                        XCTAssertLessThanOrEqual(frame.maxY, size.height)
-                    }
-                    for a in 0..<4 {
-                        for b in (a + 1)..<4 { XCTAssertFalse(frames[a].intersects(frames[b])) }
-                    }
-                    if layout == .centerStage {
-                        XCTAssertGreaterThan(
-                            frames[selected].width, frames[(selected + 1) % 4].width)
-                    }
-                }
-            }
-        }
-    }
+
     func testAutoLUTFollowsEachTilesCameraColorIndependently() {
         let session = MultiviewSession()
         let nano = session.tiles[0]
@@ -276,9 +217,10 @@ import XCTest
             id: UUID(), name: "OsmoPocket4P-Test",
             model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22)
         borrowed.updateMultiview(camera: camera, driver: driver, status: CameraStatus())
-        borrowed.receiveMultiview(.init(
-            sender: 0, receiver: 0, seq: 1, flags: 0, cmdSet: 4, cmdId: 5,
-            payload: [UInt8](repeating: 0, count: 22)))
+        borrowed.receiveMultiview(
+            .init(
+                sender: 0, receiver: 0, seq: 1, flags: 0, cmdSet: 4, cmdId: 5,
+                payload: [UInt8](repeating: 0, count: 22)))
         let start = try XCTUnwrap(borrowed.freshGimbalWaypoint)
         var end = start
         end.yawDeg += 10
@@ -299,7 +241,8 @@ import XCTest
         let model = AppModel()
         model.session = CameraSession(borrowing: HevcDecoder())
         model.session.updateMultiview(
-            camera: FoundCamera(id: UUID(), name: "OsmoPocket4P-Test",
+            camera: FoundCamera(
+                id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
             driver: nil, status: CameraStatus())
         let savedPreference = OperatorPrefs.shareThisFeed

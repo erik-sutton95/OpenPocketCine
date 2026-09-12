@@ -345,6 +345,7 @@ internal class LiveVulkanSession(
 
     /** Must run from `surfaceDestroyed` before that callback returns. */
     fun detachWindow() {
+        InspectorPreviewPipeline.sourceChanged(playback = false)
         pendingAttach = null
         presentGate.detach()
         attachedSurface = null
@@ -354,6 +355,7 @@ internal class LiveVulkanSession(
     }
 
     fun release() {
+        InspectorPreviewPipeline.sourceChanged(playback = false)
         presentGate.release()
         reader?.setOnImageAvailableListener(null, null)
         gpuHandler.removeCallbacksAndMessages(null)
@@ -433,6 +435,7 @@ internal class LiveVulkanSession(
         val wantSample = policy.needsTap
         val now = System.nanoTime()
         var intervalNs = PocketScopeSampler.BASE_MIN_INTERVAL_NS
+        var previewTicket: InspectorPreviewAdmission.Ticket? = null
         val takeTap =
             if (wantSample && now - lastSampleNs >= PocketScopeSampler.BASE_MIN_INTERVAL_NS) {
                 val thermal =
@@ -442,11 +445,12 @@ internal class LiveVulkanSession(
                         PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
                     }.getOrDefault(1.0)
                 intervalNs =
-                    PocketScopeSampler.minIntervalNs(
-                        policy.activeScopeCount.coerceAtLeast(1),
-                        thermal,
-                    )
-                now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)
+                    policy.minIntervalNs(thermal)
+                if (now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)) {
+                    previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback = false, now)
+                    if (policy.activeScopeCount > 0 || previewTicket != null) true
+                    else { sampleBusy.set(false); false }
+                } else false
             } else {
                 false
             }
@@ -460,7 +464,7 @@ internal class LiveVulkanSession(
         held?.close()
         held = image
         if (!ok) {
-            if (takeTap) sampleBusy.set(false)
+            if (takeTap) { sampleBusy.set(false); InspectorPreviewPipeline.cancel(previewTicket) }
             if (takeFace) faceWanted.set(true)
             if (presentGate.shouldFallbackOnSubmitFailure()) main.post(onFailed)
             return
@@ -482,7 +486,7 @@ internal class LiveVulkanSession(
         val iso = policy.iso
         val previous = previousBundle
         val packed =
-            if ((includePoints || includeVectorPoints) &&
+            if ((includePoints || includeVectorPoints || previewTicket != null) &&
                 OpcVulkan.nativeCopyTap(native, tapBytes)
             ) {
                 tapBytes.copyOf()
@@ -499,7 +503,17 @@ internal class LiveVulkanSession(
         val scopes = policy.activeScopeCount
         val loggedIntervalNs = intervalNs
         sampleExecutor.execute {
+            var previewSubmitted = false
             try {
+                val ticket = previewTicket
+                if (ticket != null) {
+                    if (packed != null) {
+                        InspectorPreviewPipeline.submit(ticket,
+                            InspectorPreviewFrame.fromTap(packed, TAP_W, TAP_H, bottomUp = false))
+                        previewSubmitted = true
+                    } else InspectorPreviewPipeline.cancel(ticket)
+                }
+                if (policy.activeScopeCount == 0) return@execute
                 val bundle =
                     if (packed != null) {
                         PocketScopeSampler.sample(
@@ -546,6 +560,9 @@ internal class LiveVulkanSession(
                 previousBundle = bundle
                 main.post { LiveScopeSampleBus.publish(bundle) }
                 ScopeTapHzLog.note(TAG, scopes = scopes, intervalNs = loggedIntervalNs)
+            } catch (error: Exception) {
+                if (!previewSubmitted) InspectorPreviewPipeline.cancel(previewTicket)
+                Log.w(TAG, "scope tap failed", error)
             } finally {
                 sampleBusy.set(false)
             }

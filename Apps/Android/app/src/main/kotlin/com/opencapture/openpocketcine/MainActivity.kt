@@ -262,7 +262,7 @@ private fun LinkExperience(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
     ) {
-        Box(Modifier.padding(horizontal = 20.dp)) {
+        if (model.shouldShowWizard) Box(Modifier.padding(horizontal = 20.dp)) {
             StartupHeader(
                 title = headerTitle,
                 statusTitle = statusTitle,
@@ -271,7 +271,7 @@ private fun LinkExperience(
                 onTerms = { openUrl(context, OpenPocketCineLinks.TERMS) },
             )
         }
-        Box(Modifier.weight(1f).padding(start = 20.dp, end = 24.dp, top = 8.dp)) {
+        Box(Modifier.weight(1f).padding(start = 18.dp, end = 18.dp, top = 8.dp)) {
             if (model.shouldShowWizard) {
                 PairingExperience(model, permissionsGranted, onRequestPermissions, onEnableBluetooth)
             } else {

@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -140,8 +141,7 @@ struct MediaDeliveryOverlay: View {
             if state.isPreparingClip || state.isSwitchingNetworks {
                 ProgressView().controlSize(.small).tint(LiveDesign.accent)
             } else {
-                Image(systemName: state.destination.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
+                state.destination.icon.frame(width: 13, height: 13)
                     .foregroundStyle(LiveDesign.accent)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -151,7 +151,7 @@ struct MediaDeliveryOverlay: View {
                     .lineLimit(1)
                 if state.totalClips > 1 {
                     Text("Clip \(min(state.clipIndex, state.totalClips)) of \(state.totalClips)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(MonitorTheme.font(10, weight: .medium)).monospacedDigit()
                         .foregroundStyle(LiveDesign.muted)
                 }
             }
@@ -173,9 +173,7 @@ struct MediaDeliveryOverlay: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .liquidGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
-            interactive: false)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 12), density: .delivery)
     }
 }
 
@@ -186,6 +184,12 @@ enum MediaDeliveryRunner {
         model: AppModel,
         onProgress: @escaping (MediaDeliveryOverlayState) -> Void
     ) async -> MediaDeliveryRunOutcome {
+        // A popup may already have left camera Wi-Fi to choose an upload
+        // project. Adopt that hop before caching so every exit restores it.
+        var ownsInternetHop = request.destination == .frameio && model.internetHopActive
+        defer {
+            if ownsInternetHop { model.endInternetHop() }
+        }
         let session = model.session
         let toCache = request.files.filter { !session.isDownloaded($0) }
         var uncached = 0
@@ -282,25 +286,20 @@ enum MediaDeliveryRunner {
             }
 
         case .frameio:
-            var hopped = false
             if model.isOnCameraAccessPoint {
                 model.beginInternetHop()
-                hopped = true
+                ownsInternetHop = true
                 overlay.isSwitchingNetworks = true
                 onProgress(overlay)
                 let online = await model.waitForInternetPath(timeoutSeconds: 30)
                 overlay.isSwitchingNetworks = false
                 onProgress(overlay)
                 if !online {
-                    model.endInternetHop()
                     return .failed(
                         message:
                             "Couldn't reach the internet after leaving the camera's Wi‑Fi. Check cellular or home Wi‑Fi and try again."
                     )
                 }
-            }
-            defer {
-                if hopped || model.internetHopActive { model.endInternetHop() }
             }
             var uploaded = 0
             var failed = 0

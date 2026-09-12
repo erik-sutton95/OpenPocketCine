@@ -18,3 +18,5 @@ rootProject.name = "OpenPocketCine"
 
 include(":app")
 include(":core-api")
+
+include(":monitor-ui")

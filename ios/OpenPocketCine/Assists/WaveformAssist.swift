@@ -1,3 +1,4 @@
+import MonitorPresentation
 import SwiftUI
 import UIKit
 
@@ -83,6 +84,8 @@ enum WaveformAssist {
         var brightness: Int
         var guides: GuideLines
         var scale: Double
+        /// False only for a fresh automatic size; legacy saved scales stay explicit.
+        var hasCustomScale: Bool
         var storedCenter: StoredCenter?
         var storedCenterPortrait: StoredCenter?
 
@@ -99,6 +102,7 @@ enum WaveformAssist {
             brightness: Int = defaultBrightness,
             guides: GuideLines = .default,
             scale: Double = defaultScale,
+            hasCustomScale: Bool = false,
             storedCenter: StoredCenter? = nil,
             storedCenterPortrait: StoredCenter? = nil
         ) {
@@ -106,12 +110,13 @@ enum WaveformAssist {
             self.brightness = Self.clampedBrightness(brightness)
             self.guides = guides
             self.scale = Self.clampedScale(scale)
+            self.hasCustomScale = hasCustomScale || scale != defaultScale
             self.storedCenter = storedCenter
             self.storedCenterPortrait = storedCenterPortrait
         }
 
         enum CodingKeys: String, CodingKey {
-            case mode, brightness, guides, scale, storedCenter, storedCenterPortrait
+            case mode, brightness, guides, scale, hasCustomScale, storedCenter, storedCenterPortrait
         }
 
         init(from decoder: any Decoder) throws {
@@ -122,6 +127,11 @@ enum WaveformAssist {
             guides = try c.decodeIfPresent(GuideLines.self, forKey: .guides) ?? .default
             scale = Self.clampedScale(
                 try c.decodeIfPresent(Double.self, forKey: .scale) ?? defaultScale)
+            // Old JSON cannot distinguish an untouched 1.0 from a manual 1.0.
+            // Preserve it rather than rewriting an operator's layout on upgrade.
+            hasCustomScale =
+                try c.decodeIfPresent(Bool.self, forKey: .hasCustomScale)
+                ?? true
             storedCenter = try c.decodeIfPresent(StoredCenter.self, forKey: .storedCenter)
             storedCenterPortrait = try c.decodeIfPresent(
                 StoredCenter.self, forKey: .storedCenterPortrait)
@@ -294,7 +304,21 @@ final class WaveformAssistStore {
     }
 
     func setScale(_ scale: Double) {
-        options.scale = WaveformAssist.Options.clampedScale(scale)
+        var next = options
+        next.scale = WaveformAssist.Options.clampedScale(scale)
+        next.hasCustomScale = true
+        options = next
+    }
+
+    /// Plot, hit frame and resize origin all consume the same effective size.
+    func presentationScale(
+        in bounds: CGRect, tablet: Bool? = nil
+    ) -> Double {
+        guard bounds.width > 1, bounds.height > 1 else { return options.scale }
+        return MonitorScopeSizing.scale(
+            portrait: bounds.height > bounds.width,
+            tablet: tablet ?? (UIDevice.current.userInterfaceIdiom == .pad),
+            preferred: options.hasCustomScale ? options.scale : nil)
     }
 
     func sessionCenter(in bounds: CGRect) -> CGPoint? {
@@ -441,9 +465,9 @@ struct WaveformMovablePanel<Content: View>: View {
     }
 
     var body: some View {
-        let options = store.options
         let size = ScopePanelPlacement.fittedSize(
-            WaveformAssist.panelSize(scale: options.scale), in: movementBounds)
+            WaveformAssist.panelSize(scale: store.presentationScale(in: canvas)), in: movementBounds
+        )
         let fallback = WaveformAssist.defaultCenter(
             feed: feed, size: size, bounds: canvas, chromeClearance: chromeClearance)
         let rawCenter = WaveformAssist.resolvedCenter(
@@ -513,7 +537,8 @@ struct WaveformMovablePanel<Content: View>: View {
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
                 let size = ScopePanelPlacement.fittedSize(
-                    WaveformAssist.panelSize(scale: store.options.scale), in: movementBounds)
+                    WaveformAssist.panelSize(scale: store.presentationScale(in: canvas)),
+                    in: movementBounds)
                 let snapped = ScopePanelPlacement.clamp(
                     WaveformAssist.snap(proposed), size: size, in: movementBounds)
                 let cell = WaveformAssist.hapticCell(snapped)
@@ -550,7 +575,7 @@ struct WaveformMovablePanel<Content: View>: View {
             .onChanged { drag in
                 if !isResizing {
                     isResizing = true
-                    resizeStartScale = store.options.scale
+                    resizeStartScale = store.presentationScale(in: canvas)
                 }
                 let reach = WaveformAssist.baseSize.width + WaveformAssist.baseSize.height
                 let delta = (drag.translation.width + drag.translation.height) / reach

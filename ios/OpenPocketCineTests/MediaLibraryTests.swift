@@ -1,4 +1,5 @@
 import AVFoundation
+import MonitorPresentation
 import OpenPocketViewCore
 import XCTest
 
@@ -322,11 +323,15 @@ final class MediaLibraryTests: XCTestCase {
     }
 
     func testPlaybackTransportFitsNarrowestPhone() {
-        let needed = MediaPlayerView.PlaybackChrome.transportRowWidth()
-        let usable =
-            MediaPlayerView.PlaybackChrome.narrowestScreenWidth
-            - MediaPlayerView.PlaybackChrome.chromeHorizontalPadding * 2
-        XCTAssertLessThanOrEqual(needed, usable)
+        let portrait = MonitorPlaybackLayout(width: 375, height: 667, tablet: false)
+        XCTAssertTrue(portrait.portrait)
+        XCTAssertLessThanOrEqual(MonitorPlaybackLayout.transportWidth, portrait.contentWidth)
+        XCTAssertLessThanOrEqual(MonitorPlaybackLayout.actionsWidth, portrait.contentWidth)
+        let landscape = MonitorPlaybackLayout(width: 667, height: 375, tablet: false)
+        XCTAssertFalse(landscape.portrait)
+        let balancedRow =
+            MonitorPlaybackLayout.actionsWidth * 2 + MonitorPlaybackLayout.transportWidth + 20
+        XCTAssertLessThanOrEqual(balancedRow, landscape.contentWidth)
     }
 
     @MainActor

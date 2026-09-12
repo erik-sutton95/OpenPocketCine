@@ -15,22 +15,28 @@ class LiveTypeTest {
     }
 
     @Test
-    fun roundedBodyStaysPlex() {
-        assertEquals(OpcFonts.plex, LiveType.ui(13f, FontWeight.Normal, LiveTypeDesign.Rounded).fontFamily)
-        assertEquals(OpcFonts.plex, LiveType.ui(12f, FontWeight.Medium, LiveTypeDesign.Rounded).fontFamily)
+    fun roundedBodyUsesSora() {
+        assertEquals(OpcFonts.sora, LiveType.ui(13f, FontWeight.Normal, LiveTypeDesign.Rounded).fontFamily)
+        assertEquals(OpcFonts.sora, LiveType.ui(12f, FontWeight.Medium, LiveTypeDesign.Rounded).fontFamily)
     }
 
     @Test
-    fun defaultDesignUsesSoraOnlyForLargeTitles() {
+    fun allChromeUsesTheSameSoraFamily() {
         assertEquals(OpcFonts.sora, LiveType.ui(17f, FontWeight.SemiBold).fontFamily)
-        assertEquals(OpcFonts.plex, LiveType.ui(16f, FontWeight.SemiBold).fontFamily)
-        assertEquals(OpcFonts.plex, LiveType.ui(12f, FontWeight.Bold).fontFamily)
+        assertEquals(OpcFonts.sora, LiveType.ui(16f, FontWeight.SemiBold).fontFamily)
+        assertEquals(OpcFonts.sora, LiveType.ui(12f, FontWeight.Bold).fontFamily)
+    }
+
+    @Test
+    fun numericReadoutsUseTabularSoraFigures() {
+        assertEquals(OpcFonts.sora, LiveType.mono(13f).fontFamily)
+        assertEquals("tnum", LiveType.mono(13f).fontFeatureSettings)
     }
 
     @Test
     fun displayIsSora() {
         assertEquals(OpcFonts.sora, LiveType.display(24f).fontFamily)
         assertEquals(OpcFonts.sora, LiveType.title(24f).fontFamily)
-        assertEquals(OpcFonts.plex, LiveType.text(16f).fontFamily)
+        assertEquals(OpcFonts.sora, LiveType.text(16f).fontFamily)
     }
 }

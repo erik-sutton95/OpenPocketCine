@@ -33,6 +33,8 @@ internal fun PlaybackFeedView(
     zoom: AnchoredPinchZoom,
     sourceWidth: Int,
     sourceHeight: Int,
+    sourceIdentity: String,
+    sourceReady: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -47,6 +49,7 @@ internal fun PlaybackFeedView(
                 onGpuFailed = { },
                 letterboxSource = false,
                 notifySurfaceOnMain = true,
+                playback = true,
             )
         }
     DisposableEffect(session, player) {
@@ -54,6 +57,9 @@ internal fun PlaybackFeedView(
             session.detachDisplay()
             main.post { player.clearVideoSurface() }
         }
+    }
+    LaunchedEffect(sourceIdentity, sourceReady) {
+        session.configurePreviewSource(sourceIdentity, sourceReady)
     }
     LaunchedEffect(plan) { session.updatePlan(plan) }
     LaunchedEffect(sourceWidth, sourceHeight) {

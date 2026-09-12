@@ -100,6 +100,9 @@ final class CameraMedia {
     }
 
     func cacheRoot(cameraID: String) -> URL {
+        #if DEBUG && targetEnvironment(simulator)
+            if MonitorMediaReview.isActive { return MonitorMediaReview.cacheRoot }
+        #endif
         let app = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
             0]
         return app.appendingPathComponent("OpenPocketCine/media/\(cameraID)", isDirectory: true)

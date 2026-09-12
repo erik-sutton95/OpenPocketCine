@@ -555,7 +555,7 @@ internal fun LUTExposureCompensationBar(
             color = if (stops == 0.0) LiveDesign.text else LiveDesign.accent,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             modifier = Modifier.widthIn(min = 44.dp),
             textAlign = TextAlign.Center,
         )

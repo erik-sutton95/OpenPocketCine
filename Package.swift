@@ -11,6 +11,8 @@ let package = Package(
     name: "OpenPocketViewCore",
     platforms: [.iOS(.v17), .macOS(.v12), .watchOS(.v10)],
     products: [
+        .library(name: "MonitorPresentation", targets: ["MonitorPresentation"]),
+        .library(name: "MonitorUI", targets: ["MonitorUI"]),
         .library(name: "OpenPocketViewCore", targets: ["OpenPocketViewCore"]),
         // JNI facade consumed by the Android app (`just android-core`). The JNI
         // shims are `#if os(Android)`-gated; on Darwin only the wire helpers
@@ -19,6 +21,14 @@ let package = Package(
             name: "OpenPocketCineAndroid", type: .dynamic, targets: ["OpenPocketCineAndroidFacade"]),
     ],
     targets: [
+        // Brand-neutral presentation policy and native screens. Neither target
+        // depends on the Osmo protocol core or a camera session implementation.
+        .target(name: "MonitorPresentation"),
+        .target(
+            name: "MonitorUI", dependencies: ["MonitorPresentation"],
+            resources: [.process("Resources/Fonts"), .copy("Resources/Icons")]
+        ),
+        .testTarget(name: "MonitorPresentationTests", dependencies: ["MonitorPresentation"]),
         .target(name: "OpenPocketViewCore"),
         .testTarget(
             name: "OpenPocketViewCoreTests",

@@ -1,10 +1,13 @@
 import AVFoundation
+import MonitorPresentation
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
 struct MultiviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
     @State private var session = MultiviewSession()
     @State private var adding: MultiviewSession.Tile?
     @State private var showNetwork = false
@@ -14,6 +17,8 @@ struct MultiviewView: View {
     @State private var closing = false
     @State private var showLeave = false
     @State private var liveTile: MultiviewSession.Tile?
+    @State private var clean = false
+    @State private var orientation = InterfaceOrientationObserver()
 
     var body: some View {
         NavigationStack {
@@ -78,9 +83,11 @@ struct MultiviewView: View {
                     .onChange(of: session.layout) { _, _ in session.persistStage() }
                     .onChange(of: session.focusedIndex) { _, _ in session.persistStage() }
                     .onAppear {
+                        orientation.start()
                         session.start()
                         showNetwork = !session.networkConfigured
                     }
+                    .onDisappear { orientation.stop() }
             }
             .ignoresSafeArea(.container)
         }
@@ -88,42 +95,146 @@ struct MultiviewView: View {
     }
 
     private func stageContent(viewport: GeometryProxy) -> some View {
-        let landscape = viewport.size.width > viewport.size.height
-        return VStack(spacing: 0) {
-            GeometryReader { geometry in
-                let frames = session.layout.frames(
-                    in: geometry.size, selected: session.focusedIndex,
-                    activeIndices: session.tiles.indices.filter {
-                        session.tiles[$0].camera != nil
-                    }, fill: session.feedAspect == .fill)
-                ZStack {
-                    ForEach(Array(session.tiles.enumerated()), id: \.element.id) {
-                        index, tile in
-                        let frame = frames[index]
-                        if !frame.isEmpty {
-                            tileView(
-                                tile, index: index,
-                                compact: frame.width < 200 || frame.height < 136
-                            )
-                            .frame(width: frame.width, height: frame.height)
-                            .clipped()
-                            .contentShape(Rectangle())
-                            .position(x: frame.midX, y: frame.midY)
-                        }
-                    }
-                }
+        let safe = OsmoCameraPageAdapter.safeArea(
+            viewport.safeAreaInsets, window: windowGeometry.safeArea,
+            portrait: viewport.size.height > viewport.size.width,
+            orientation: orientation.orientation)
+        let layout = session.layout.presentation(
+            in: viewport.size,
+            safeArea: .init(
+                top: safe.top, leading: safe.leading, bottom: safe.bottom, trailing: safe.trailing),
+            selected: session.focusedIndex)
+        return ZStack(alignment: .topLeading) {
+            MonitorTheme.canvas
+            ForEach(Array(session.tiles.enumerated()), id: \.element.id) { index, tile in
+                let frame = layout.tiles[index]
+                tileView(tile, index: index, compact: frame.width < 200 || frame.height < 136)
+                    .frame(width: frame.width, height: frame.height)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .position(x: frame.midX, y: frame.midY)
             }
-            .padding(.top, landscape ? 0 : 48)
-            .padding(.leading, landscape ? 48 : 0)
-            .padding(.trailing, landscape ? LiveChromeMetrics.recordButtonSize + 16 : 0)
-            bottomBar(landscape: landscape, showCount: viewport.size.width >= 360)
+            if !clean {
+                sessionControls(
+                    horizontal: layout.sessionControlsHorizontal, cellSize: layout.controlCellSize
+                )
+                .frame(width: layout.sessionControls.width, height: layout.sessionControls.height)
+                .position(
+                    x: layout.sessionControls.midX,
+                    y: layout.sessionControls.midY + windowGeometry.topControlInset)
+                stageAssistPalette(
+                    horizontal: layout.assistsHorizontal, cellSize: layout.controlCellSize
+                )
+                .frame(width: layout.assists.width, height: layout.assists.height)
+                .position(x: layout.assists.midX, y: layout.assists.midY)
+            }
+            displayButton
+                .frame(width: layout.display.width, height: layout.display.height)
+                .position(x: layout.display.midX, y: layout.display.midY)
+            recordAll(diameter: layout.record.width)
+                .position(x: layout.record.midX, y: layout.record.midY)
         }
-        .overlay(alignment: .topLeading) { exitButton.padding(4) }
-        .overlay(alignment: .bottomTrailing) {
-            recordAll.padding(.trailing, 8).padding(.bottom, 4)
+        .frame(width: viewport.size.width, height: viewport.size.height)
+        .background(MonitorTheme.canvas)
+    }
+
+    private func sessionControls(horizontal: Bool, cellSize: CGFloat) -> some View {
+        let content = Group {
+            exitButton(size: cellSize)
+            Button {
+                session.layout = session.layout == .grid ? .centerStage : .grid
+            } label: {
+                (session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid)
+                    .frame(width: cellSize * 0.46, height: cellSize * 0.46)
+                    .frame(width: cellSize, height: cellSize)
+                    .contentShape(Rectangle())
+            }
+            .contextMenu {
+                Button("Shared Wi-Fi") { showNetwork = true }
+                    .disabled(session.busy || session.connectingCameras)
+            }
+            .accessibilityLabel(session.layout == .grid ? "Show Center stage" : "Show 2 by 2 grid")
+            .accessibilityValue(session.layout.rawValue)
+            .accessibilityHint("Touch and hold for Shared Wi-Fi")
+            .accessibilityIdentifier("multiview.layout")
         }
-        .padding(min(viewport.size.width, viewport.size.height) * 0.05)
-        .background(Color.black.ignoresSafeArea())
+        return Group {
+            if horizontal { HStack(spacing: 3) { content } } else { VStack(spacing: 3) { content } }
+        }
+        .padding(4)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
+        .foregroundStyle(MonitorTheme.secondary)
+        .buttonStyle(.plain)
+    }
+
+    private func stageAssistPalette(horizontal: Bool, cellSize: CGFloat) -> some View {
+        let content = Group {
+            Button {
+                let enabled = !session.tiles.filter { $0.camera != nil }.allSatisfy(\.lutEnabled)
+                for tile in session.tiles where tile.camera != nil && tile.lutEnabled != enabled {
+                    tile.toggleLUT()
+                }
+                session.persistStage()
+            } label: {
+                VStack(spacing: 2) {
+                    MonitorAssistIcon.lut.frame(width: 20, height: 20)
+                    Text("LUT").font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
+                }
+                .frame(width: cellSize, height: cellSize)
+                .contentShape(Rectangle())
+            }
+            .foregroundStyle(
+                session.tiles.contains { $0.camera != nil && $0.lutEnabled }
+                    ? MonitorTheme.accent : MonitorTheme.secondary
+            )
+            .disabled(!session.tiles.contains { $0.camera != nil })
+            .accessibilityLabel("Toggle Auto LUT for all cameras")
+            Button {
+                session.feedAspect = session.feedAspect == .fill ? .fit16x9 : .fill
+                session.persistStage()
+            } label: {
+                VStack(spacing: 2) {
+                    (session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
+                        .frame(width: 20, height: 20)
+                    Text(session.feedAspect == .fill ? "FILL" : "FIT")
+                        .font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
+                }
+                .frame(width: cellSize, height: cellSize)
+                .contentShape(Rectangle())
+            }
+            .foregroundStyle(MonitorTheme.secondary)
+            .accessibilityLabel(
+                session.feedAspect == .fill ? "Fit feed in frame" : "Fill frame with feed"
+            )
+            .accessibilityValue(session.feedAspect == .fill ? "Fill" : "Fit")
+            .accessibilityIdentifier("multiview.fitFill")
+        }
+        return Group {
+            if horizontal { HStack(spacing: 3) { content } } else { VStack(spacing: 3) { content } }
+        }
+        .padding(4)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
+        .buttonStyle(.plain)
+    }
+
+    private var displayButton: some View {
+        Button {
+            clean.toggle()
+        } label: {
+            VStack(spacing: 4) {
+                Text("DISP").font(MonitorTheme.font(12, weight: .bold)).tracking(0.4)
+                HStack(spacing: 3) {
+                    Capsule().fill(clean ? Color.white.opacity(0.28) : MonitorTheme.accent)
+                    Capsule().fill(clean ? MonitorTheme.accent : Color.white.opacity(0.28))
+                }.frame(width: 31, height: 3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
+            .contentShape(Rectangle())
+        }
+        .foregroundStyle(clean ? .white : MonitorTheme.muted).buttonStyle(.plain)
+        .accessibilityLabel("Change display mode").accessibilityValue(clean ? "Clean" : "Live")
+        .accessibilityIdentifier("multiview.display")
     }
 
     private func tileView(_ tile: MultiviewSession.Tile, index: Int, compact: Bool) -> some View {
@@ -151,12 +262,17 @@ struct MultiviewView: View {
                         let ratio = tile.decoder.pictureAspect
                         MultiviewVideoLayer(tile: tile)
                             .frame(
-                                width: fill ? max(picture.size.width, picture.size.height * ratio) : picture.size.width,
-                                height: fill ? max(picture.size.height, picture.size.width / ratio) : picture.size.height)
+                                width: fill
+                                    ? max(picture.size.width, picture.size.height * ratio)
+                                    : picture.size.width,
+                                height: fill
+                                    ? max(picture.size.height, picture.size.width / ratio)
+                                    : picture.size.height
+                            )
                             .position(x: picture.size.width / 2, y: picture.size.height / 2)
                     }
-                        .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius))
-                        .allowsHitTesting(false)
+                    .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius))
+                    .allowsHitTesting(false)
                 }
                 if (!tile.hasPicture || tile.failureMessage != nil || tile.recovering) && !compact {
                     VStack(spacing: 10) {
@@ -194,7 +310,11 @@ struct MultiviewView: View {
                             ).lineLimit(1)
                             if let timecode = tile.timecodeReadout {
                                 Text("TC " + timecode)
-                                    .font(.system(size: compact ? 9 : 11, weight: .medium, design: .monospaced))
+                                    .font(
+                                        .system(
+                                            size: compact ? 9 : 11, weight: .medium,
+                                            design: .monospaced)
+                                    )
                                     .monospacedDigit().lineLimit(1)
                                     .accessibilityLabel("Timecode " + timecode)
                             }
@@ -205,7 +325,9 @@ struct MultiviewView: View {
                             index == session.tiles.lastIndex(where: { $0.camera != nil }),
                             let empty = session.tiles.first(where: { $0.camera == nil })
                         {
-                            Button { adding = empty } label: {
+                            Button {
+                                adding = empty
+                            } label: {
                                 OpcIcon.circlePlus.frame(width: 22, height: 22)
                                     .frame(width: 44, height: 44).contentShape(Rectangle())
                             }
@@ -302,6 +424,9 @@ struct MultiviewView: View {
                     }
 
                 }
+                .opacity(clean ? 0 : 1)
+                .allowsHitTesting(!clean)
+                .accessibilityHidden(clean)
             } else {
                 Button {
                     selectedCamera = nil
@@ -323,6 +448,17 @@ struct MultiviewView: View {
         }
         .foregroundStyle(.white)
         .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    tile.camera == nil
+                        ? Color.white.opacity(0.1)
+                        : index == session.focusedIndex
+                            ? MonitorTheme.accent : Color.white.opacity(0.08),
+                    lineWidth: index == session.focusedIndex && tile.camera != nil ? 2 : 1
+                )
+                .allowsHitTesting(false)
+        }
+        .overlay {
             if tile.camera != nil, tile.recordingObservation?.active == true {
                 LiveRecordingTally(cornerRadius: LiveDesign.cornerRadius)
                     .accessibilityHidden(true)
@@ -340,7 +476,7 @@ struct MultiviewView: View {
         let wb = settings.whiteBalance.map { $0.mode == .auto ? "Auto" : "\($0.kelvin)K" } ?? "—"
         return "ISO \(iso) · \(shutter) · WB \(wb)"
     }
-    private var exitButton: some View {
+    private func exitButton(size: CGFloat) -> some View {
         Button {
             if session.tiles.contains(where: { $0.camera != nil }) {
                 showLeave = true
@@ -348,18 +484,20 @@ struct MultiviewView: View {
                 Task { if await session.closeStage() { dismiss() } }
             }
         } label: {
-            OpcIcon.x.frame(width: 22, height: 22).frame(width: 44, height: 44)
-                .contentShape(Rectangle()).liveChromeCircle(interactive: true)
+            OpcIcon.x.frame(width: size * 0.46, height: size * 0.46).frame(
+                width: size, height: size
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.zcTapTarget)
         .accessibilityLabel("Close Multiview").disabled(session.busy || session.groupRecordingBusy)
     }
-    private var recordAll: some View {
+    private func recordAll(diameter: CGFloat) -> some View {
         Button {
             Task { await session.toggleAllRecording() }
         } label: {
             RecordLamp(
-                diameter: LiveChromeMetrics.recordButtonSize, recording: session.anyRecording
+                diameter: diameter, recording: session.anyRecording
             )
             .overlay { if session.groupRecordingBusy { ProgressView().tint(.white) } }
         }.buttonStyle(.zcTapTarget).disabled(!session.canRecordTogether)
@@ -367,59 +505,6 @@ struct MultiviewView: View {
             .accessibilityLabel(session.anyRecording ? "Stop all recording" : "Record all")
             .accessibilityIdentifier("multiview.recordAll")
     }
-    private func bottomBar(landscape: Bool, showCount: Bool) -> some View {
-        HStack(spacing: 0) {
-            Menu {
-                Picker("Layout", selection: $session.layout) {
-                    ForEach(MultiviewLayout.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-            } label: {
-                stageBarLabel("LAYOUT", icon: "rectangle.split.2x2")
-            }
-            .buttonStyle(.zcTapTarget)
-            .accessibilityLabel("Multiview layout")
-            Button {
-                showNetwork = true
-            } label: {
-                stageBarLabel("WI-FI", icon: "wifi")
-            }
-            .buttonStyle(.zcTapTarget)
-            .accessibilityLabel("Shared Wi-Fi").disabled(session.busy || session.connectingCameras)
-            LivePortraitAspectToggle(aspect: $session.feedAspect, showsLabel: true)
-                .frame(width: 54, height: 50)
-                .accessibilityIdentifier("multiview.fitFill")
-                .onChange(of: session.feedAspect) { _, _ in session.persistStage() }
-            Spacer(minLength: 0)
-            if showCount {
-                Text("\(session.tiles.filter { $0.hasPicture }.count)/4").font(
-                    LiveType.text(13, weight: .medium)
-                )
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 4)
-        .frame(height: LiveDesign.controlHeight)
-        .liveChromeGlass(in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius))
-        .padding(.leading, 8)
-        .padding(.trailing, LiveChromeMetrics.recordButtonSize + 24)
-        .padding(.bottom, 4)
-        .frame(
-            height: landscape
-                ? LiveDesign.controlHeight + 8 : LiveChromeMetrics.recordButtonSize + 8,
-            alignment: .bottom
-        )
-        .foregroundStyle(LiveDesign.text)
-    }
-
-    private func stageBarLabel(_ title: String, icon: String) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 20, weight: .medium))
-            Text(title).font(LiveType.text(11, weight: .semibold))
-        }
-        .frame(minWidth: 54, minHeight: 50)
-        .contentShape(Rectangle())
-    }
-
     private var availableCameras: [FoundCamera] {
         session.found.filter { camera in
             camera.appearsInMultiview
@@ -466,9 +551,8 @@ struct MultiviewView: View {
                                             }
                                         }
                                         Spacer()
-                                        Image(
-                                            systemName: camera.hasMultiviewPreview
-                                                ? "plus" : "info.circle")
+                                        (camera.hasMultiviewPreview ? OpcIcon.plus : OpcIcon.info)
+                                            .frame(width: 20, height: 20)
                                     }
                                     .padding(.horizontal, 16).frame(minHeight: 52)
                                     .background(

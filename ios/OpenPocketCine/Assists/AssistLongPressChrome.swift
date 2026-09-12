@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 import UIKit
 
@@ -86,15 +87,6 @@ enum AssistLongPressChrome {
     }
 }
 
-/// Icon frames in `LiveCanvasSpace`, used to park the popup above/below the chip.
-private struct AssistPanelSizeKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        let next = nextValue()
-        if next.height > value.height { value = next }
-    }
-}
-
 struct AssistIconFrameKey: PreferenceKey {
     static var defaultValue: [LiveAssistTool: CGRect] = [:]
 
@@ -106,91 +98,8 @@ struct AssistIconFrameKey: PreferenceKey {
     }
 }
 
-/// OpenZCine `AssistPanel` shell: 16pt pad, 15pt bold uppercase header, liquid glass.
-/// Header and `footer` stay pinned; only `content` scrolls when the well is short.
-struct AssistLongPressPanel<Content: View, Footer: View>: View {
-    let tool: LiveAssistTool
-    var onClose: () -> Void
-    /// Well width from `AssistOptionsPopupAnchor`. Applied before hug/glass so a
-    /// wide menu (LUT) cannot push the card past the rounded trailing edge.
-    var width: CGFloat? = nil
-    /// Remaining height under the top deck. Header stays pinned; the body
-    /// scrolls only when `shouldScroll` is set by the overlay after measuring.
-    var maxHeight: CGFloat? = nil
-    var shouldScroll: Bool = false
-    /// When false, `footer` is not laid out so EmptyView cannot add VStack spacing.
-    var showsFooter: Bool = false
-    @ViewBuilder var content: Content
-    @ViewBuilder var footer: Footer
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label {
-                    Text(tool.title)
-                } icon: {
-                    AssistToolIcon(tool: tool, size: 15)
-                }
-                .font(LiveType.ui(size: 15, weight: .bold, design: .default))
-                .kerning(1.2)
-                .textCase(.uppercase)
-                .foregroundStyle(LiveDesign.text)
-                Spacer(minLength: 8)
-                CloseButton(action: onClose)
-            }
-            // Stack first — ViewThatFits unpacks a Group as alternatives.
-            // Only scroll when the measured body is taller than the well.
-            // Proposing a short guess (old 160 pt default) made peaking
-            // scroll even with a half-screen of free space above the bar.
-            if shouldScroll {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) { content }
-                }
-                .scrollBounceBehavior(.basedOnSize)
-            } else {
-                VStack(alignment: .leading, spacing: 0) { content }
-            }
-            if showsFooter {
-                footer
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(width: width, alignment: .leading)
-        .frame(maxHeight: maxHeight, alignment: .top)
-        .fixedSize(horizontal: false, vertical: maxHeight == nil || !shouldScroll)
-        .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
-        )
-        .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture().onEnded {})
-    }
-}
-
-extension AssistLongPressPanel where Footer == EmptyView {
-    init(
-        tool: LiveAssistTool,
-        onClose: @escaping () -> Void,
-        width: CGFloat? = nil,
-        maxHeight: CGFloat? = nil,
-        shouldScroll: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.init(
-            tool: tool,
-            onClose: onClose,
-            width: width,
-            maxHeight: maxHeight,
-            shouldScroll: shouldScroll,
-            showsFooter: false,
-            content: content,
-            footer: { EmptyView() }
-        )
-    }
-}
-
-/// Backdrop + slide-up reveal. OpenZCine `PlaybackAssistOptionsOverlay` /
-/// `PanelHost.bottomAssistBody`, parked with `AssistLongPressChrome.panelBox`.
+/// Shared leading inspector; native option views continue to own their existing
+/// bindings and persistence. Selecting a tab never enables that assist.
 struct AssistLongPressOverlay: View {
     let tool: LiveAssistTool
     var assist: LiveAssistState
@@ -200,130 +109,61 @@ struct AssistLongPressOverlay: View {
     var safeArea: EdgeInsets = EdgeInsets()
     var ceilingY: CGFloat = 0
     var onDismiss: () -> Void
+    @State private var helpVisible = false
 
-    @State private var revealed = false
-    @State private var panelSize = CGSize.zero
-    @State private var keyboardHeight: CGFloat = 0
+    private var portrait: Bool { viewport.height > viewport.width }
+    private var tools: [LiveAssistTool] {
+        LiveAssistTool.settingsCases.filter(\.hasConfiguration)
+    }
 
     var body: some View {
-        let place = AssistLongPressChrome.panelBox(
-            viewport: viewport,
-            anchor: anchor,
-            panel: CGSize(
-                width: AssistLongPressChrome.preferredWidth(for: tool),
-                height: max(panelSize.height, 1)
-            ),
-            toolbar: toolbar,
-            safeArea: safeArea,
-            ceilingY: ceilingY,
-            keyboardHeight: keyboardHeight
-        )
-        // Unmeasured: offer the full well so a short menu (peaking) can hug
-        // instead of ViewThatFits picking a scroll view from a 160 pt guess.
-        let displayHeight =
-            panelSize.height > 1 ? min(panelSize.height, place.maxHeight) : place.maxHeight
-        let shouldScroll = panelSize.height > place.maxHeight + 0.5
-        let slide = revealed ? 0 : displayHeight + AssistLongPressChrome.slideSlack
-
-        ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture(perform: dismissKeyboardAndPopup)
-
-            AssistLongPressPanel(
-                tool: tool, onClose: dismissKeyboardAndPopup, width: place.width,
-                maxHeight: place.maxHeight,
-                shouldScroll: shouldScroll,
-                showsFooter: tool == .lut
-            ) {
-                AssistLongPressChrome.menu(for: tool, assist: assist)
-            } footer: {
-                AssistLongPressChrome.footer(for: tool, assist: assist)
-            }
-            .id(tool)
-            .frame(width: place.width, alignment: .leading)
-            .background { unconstrainedSizeReader }
-            .frame(height: max(displayHeight, 1), alignment: .top)
-            .clipped()
-            .offset(x: place.x, y: place.y + slide)
-            .opacity(revealed ? 1 : 0)
-        }
-        .frame(width: viewport.width, height: viewport.height)
-        .animation(.easeInOut(duration: 0.22), value: place.x)
-        .animation(.easeInOut(duration: 0.22), value: place.y)
-        .background { keyboardOverlapReader }
-        .onAppear(perform: scheduleReveal)
-        .onChange(of: tool) { _, _ in
-            panelSize = .zero
-            revealed = false
-            scheduleReveal()
-        }
-    }
-
-    private var keyboardOverlapReader: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .onReceive(
-                    NotificationCenter.default.publisher(
-                        for: UIResponder.keyboardWillChangeFrameNotification)
-                ) { note in
-                    guard
-                        let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
-                            as? CGRect
-                    else { return }
-                    let overlap = LivePopupPlacement.keyboardOverlap(
-                        keyboardFrameInScreen: frame,
-                        viewportInScreen: proxy.frame(in: .global)
-                    )
-                    withAnimation(.easeOut(duration: 0.2)) { keyboardHeight = overlap }
-                }
-                .onReceive(
-                    NotificationCenter.default.publisher(
-                        for: UIResponder.keyboardWillHideNotification)
-                ) { _ in
-                    withAnimation(.easeOut(duration: 0.2)) { keyboardHeight = 0 }
-                }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    /// Hug the full menu off-screen so a later scroll frame cannot shrink the
-    /// measured height and flip `shouldScroll` back off.
-    private var unconstrainedSizeReader: some View {
-        AssistLongPressPanel(
-            tool: tool, onClose: {}, width: AssistLongPressChrome.preferredWidth(for: tool),
-            maxHeight: nil, shouldScroll: false, showsFooter: tool == .lut
+        MonitorInspector(
+            title: tool.title, viewport: viewport, safeArea: safeArea,
+            helpVisible: $helpVisible,
+            onClose: dismiss
         ) {
-            AssistLongPressChrome.menu(for: tool, assist: assist)
+            ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
+                let axis =
+                    portrait
+                    ? AnyLayout(HStackLayout(spacing: 3)) : AnyLayout(VStackLayout(spacing: 3))
+                axis {
+                    ForEach(tools) { item in
+                        Button {
+                            assist.configureTool = item
+                        } label: {
+                            HStack(spacing: 7) {
+                                AssistToolIcon(tool: item, size: 17)
+                                Text(item.rawValue).font(MonitorTheme.font(9, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                item == tool ? MonitorTheme.accent : MonitorTheme.muted
+                            )
+                            .frame(width: portrait ? 88 : 96, height: 44)
+                            .background(
+                                item == tool ? MonitorTheme.accent.opacity(0.12) : .clear,
+                                in: RoundedRectangle(cornerRadius: 9)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(MonitorButtonStyle()).accessibilityLabel(item.title)
+                        .accessibilityAddTraits(item == tool ? .isSelected : [])
+                    }
+                }.padding(.horizontal, 6)
+            }
+        } content: {
+            VStack(alignment: .leading, spacing: 14) {
+                AssistInspectorPreview(tool: tool)
+                AssistLongPressChrome.menu(for: tool, assist: assist)
+                    .environment(\.monitorInspectorHelp, helpVisible)
+            }
         } footer: {
             AssistLongPressChrome.footer(for: tool, assist: assist)
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: AssistPanelSizeKey.self, value: proxy.size)
-            }
-        )
-        .onPreferenceChange(AssistPanelSizeKey.self) { size in
-            if size.height > 1 { panelSize = size }
-        }
-        .hidden()
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
     }
 
-    private func dismissKeyboardAndPopup() {
+    private func dismiss() {
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         onDismiss()
-    }
-
-    private func scheduleReveal() {
-        DispatchQueue.main.async {
-            withAnimation(AssistLongPressChrome.revealCurve) {
-                revealed = true
-            }
-        }
     }
 }

@@ -1,40 +1,33 @@
+import MonitorUI
 import SwiftUI
 
-/// Shared visual constants used by the startup and live-monitor design systems.
-/// Copied from OpenZCine `DesignShared.swift` — do not invent a parallel look.
+/// Compatibility adapter to the shared native Field Monitor design language.
 enum DesignTokens {
     /// Primary corner radius for panels, cards, buttons, popups, and media cells.
     ///
     /// Exception: `LiveRecordingTally.displayCornerRadius` — physical display bezel (~52 pt).
-    static let cornerRadius: CGFloat = 16
+    static let cornerRadius: CGFloat = 12
 }
 
 struct ZCBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.065, green: 0.06, blue: 0.055),
-                Color(red: 0.13, green: 0.12, blue: 0.105),
-                Color(red: 0.035, green: 0.04, blue: 0.05),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        MonitorTheme.background.ignoresSafeArea()
     }
 }
 
 /// Plain button style that pads the label's hit-test region to Apple's 44×44pt HIG minimum without
 /// growing controls that are already larger.
 struct ZCTapTargetButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var minSize: CGFloat = 44
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .minTapTarget(minSize)
             .opacity(configuration.isPressed ? 0.6 : 1)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -55,31 +48,14 @@ extension View {
         modifier(MinTapTargetModifier(minSize: minSize))
     }
 
-    /// Applies SwiftUI's native Liquid Glass (iOS 26+) in `shape`.
-    ///
-    /// On older systems there is **no** blur / material stand-in — chrome falls
-    /// back to a flat, more opaque fill so panels stay readable without faking frost.
+    /// Historical page-card call sites now use the shared solid surface. Floating
+    /// monitor controls use `monitorGlass` instead.
     @ViewBuilder
     func liquidGlass(
         in shape: some Shape, tint: Color? = nil, interactive: Bool = false, clear: Bool = false
     ) -> some View {
-        if #available(iOS 26.0, *) {
-            glassEffect(
-                ZCGlass.make(tint: tint, interactive: interactive, clear: clear), in: shape)
-        } else {
-            background(tint ?? LiveDesign.glassOpaque, in: shape)
-                .overlay(shape.stroke(LiveDesign.hairlineStrong, lineWidth: 1))
-        }
-    }
-}
-
-@available(iOS 26.0, *)
-enum ZCGlass {
-    static func make(tint: Color?, interactive: Bool, clear: Bool = false) -> Glass {
-        var glass = clear ? Glass.clear : Glass.regular
-        if let tint { glass = glass.tint(tint) }
-        if interactive { glass = glass.interactive() }
-        return glass
+        background(tint ?? MonitorTheme.surface, in: shape)
+            .overlay(shape.stroke(MonitorTheme.border, lineWidth: 1))
     }
 }
 

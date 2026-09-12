@@ -1,5 +1,8 @@
+import MonitorPresentation
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
+import UIKit
 
 enum CaptureSheet: String, Identifiable {
     case iso, shutter, wb, focus, exposure, audio
@@ -36,26 +39,33 @@ struct LiveCapturePickerHost: View {
 
     var body: some View {
         let current = sheet ?? .iso
-        let place = LivePopupPlacement.capturePicker(
-            tile: frames[current] ?? .zero,
-            bar: bar,
-            panelHeight: panelHeight,
-            viewport: viewport,
-            safeArea: safeArea,
-            ceilingY: ceilingY
-        )
+        let fromTop = [.resolution, .color, .mode].contains(current)
+        let place =
+            fromTop
+            ? LivePopupPlacement.topPicker(
+                cell: frames[current] ?? .zero, panelHeight: panelHeight, viewport: viewport,
+                safeArea: safeArea,
+                floorY: bar.width > 1 ? bar.minY - 8 : nil
+            )
+            : LivePopupPlacement.capturePicker(
+                tile: frames[current] ?? .zero, bar: bar, panelHeight: panelHeight,
+                viewport: viewport, safeArea: safeArea, ceilingY: ceilingY
+            )
         let slide = place.maxHeight + 20
 
         ZStack(alignment: .topLeading) {
             Color.clear
-                .contentShape(Rectangle())
+                .contentShape(CapturePickerBackdrop(frames: frames), eoFill: true)
                 .onTapGesture(coordinateSpace: .named(LiveCanvasSpace.name)) { location in
                     handleBackdrop(at: location)
                 }
 
             CapturePickerPanel(
                 sheet: current,
-                showsGrabber: false
+                showsGrabber: false,
+                isPresented: { sheet == current },
+                onSelectRecordingCategory: fromTop && viewport.height > viewport.width
+                    ? { sheet = $0 } : nil
             ) {
                 sheet = nil
             }
@@ -70,7 +80,7 @@ struct LiveCapturePickerHost: View {
             )
             .clipped()
             .opacity(revealed ? 1 : 0)
-            .offset(x: place.x, y: place.y + (revealed ? 0 : slide))
+            .offset(x: place.x, y: place.y + (revealed ? 0 : (fromTop ? -slide : slide)))
         }
         .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
         .onAppear { scheduleReveal() }
@@ -131,17 +141,64 @@ struct CaptureControlSheet: View {
 struct CapturePickerPanel: View {
     let sheet: CaptureSheet
     var showsGrabber: Bool = true
+    var isPresented: () -> Bool = { true }
+    var onSelectRecordingCategory: ((CaptureSheet) -> Void)? = nil
     var onClose: () -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.interfaceLocked) private var interfaceLocked
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
     @State private var selectedMode = 0
     @State private var selectedAspect: VideoAspect = .sixteenNine
     @State private var drumSelection = ""
     @State private var lastApplied = ""
     @State private var tintDraft: Double = 0
     @State private var drumSendTask: Task<Void, Never>?
+    @State private var deferredDrum = MonitorDeferredSelection<DrumContext>()
+    @State private var appeared = false
+    @State private var drumInteractionRevision: UInt64 = 0
+
+    private struct DrumContext: Hashable {
+        let cameraID: UUID?
+        let phase: String
+        let sheet: CaptureSheet
+        let mode: Int
+        let color: ColorMode?
+        let fps: Int
+        let shutterDenoms: [Int]
+        let snapshot: CaptureQuickSnapshot?
+        let options: [String]
+    }
+
+    private struct DrumIdentity: Hashable {
+        let context: DrumContext
+        let revision: UInt64
+        let presented: Bool
+    }
+
+    private var drumOptions: [String] {
+        switch sheet {
+        case .iso: isIsoAutoTab ? isoAutoDrumLabels : isoDrumLabels
+        case .shutter: isEvSheet ? evLabels : (isAngleSheet ? shutterAngleLabels : shutterLabels)
+        default: []
+        }
+    }
+
+    private var drumContext: DrumContext {
+        DrumContext(
+            cameraID: model.session.connectedCamera?.id, phase: model.session.phase.label,
+            sheet: sheet, mode: selectedMode, color: model.session.status.colorMode,
+            fps: model.session.status.fps, shutterDenoms: shutterDenoms,
+            snapshot: CaptureQuickSnapshot.primary(sheet, model: model), options: drumOptions)
+    }
+
+    private var canApplyDrum: Bool {
+        appeared && isPresented() && scenePhase == .active
+            && !interfaceLocked && !model.session.isLocked
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             if showsGrabber { grabber }
             header
             content
@@ -151,22 +208,72 @@ struct CapturePickerPanel: View {
             if !modeTabs.isEmpty {
                 modeBar
             }
+            if let onSelectRecordingCategory {
+                HStack(spacing: 6) {
+                    ForEach([CaptureSheet.resolution, .color, .mode]) { category in
+                        Button {
+                            cancelDrumSend()
+                            onSelectRecordingCategory(category)
+                        } label: {
+                            Text(
+                                category == .resolution
+                                    ? "FORMAT" : category == .color ? "COLOR" : "MODE"
+                            )
+                            .font(MonitorTheme.font(11, weight: .semibold))
+                            .foregroundStyle(
+                                sheet == category ? MonitorTheme.accent : MonitorTheme.muted
+                            )
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(
+                                sheet == category
+                                    ? MonitorTheme.accent.opacity(0.18) : Color.white.opacity(0.05),
+                                in: RoundedRectangle(cornerRadius: 9))
+                        }
+                        .buttonStyle(MonitorButtonStyle())
+                    }
+                }
+            }
         }
-        .padding(EdgeInsets(top: showsGrabber ? 10 : 16, leading: 20, bottom: 16, trailing: 20))
+        .padding(EdgeInsets(top: showsGrabber ? 10 : 12, leading: 14, bottom: 14, trailing: 14))
         // OpenZCine `GlassPanel`: hug header + drum + optional mode bar. Do not
         // stretch to the host well — that made every capture sheet the same height.
         .fixedSize(horizontal: false, vertical: true)
         // Picker cards float over the picture — pinned dark like the rest of the
         // HUD (`liveChromeGlass`), never adaptive `liquidGlass` that flips light
         // over a bright feed.
-        .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .expanded)
+        .environment(
+            \.captureDrumInteractionIdentity,
+            {
+                AnyHashable(
+                    DrumIdentity(
+                        context: drumContext, revision: drumInteractionRevision,
+                        presented: canApplyDrum))
+            }
         )
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {})
-        .onAppear { seed() }
+        .onAppear {
+            appeared = true
+            seed()
+        }
+        .onDisappear {
+            appeared = false
+            cancelDrumSend()
+        }
+        .onChange(of: canApplyDrum) { _, active in
+            if !active { cancelDrumSend(reseat: true) }
+        }
+        .onChange(of: drumContext) { _, _ in cancelDrumSend(reseat: true) }
+        .onChange(of: windowGeometry) { _, _ in cancelDrumSend(reseat: true) }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)
+        ) { _ in cancelDrumSend(reseat: true) }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+        ) { _ in cancelDrumSend(reseat: true) }
         .onChange(of: sheet) { _, _ in
-            drumSendTask?.cancel()
+            cancelDrumSend()
             seed()
         }
         .onChange(of: model.session.status.availableShutterDenoms) { _, _ in
@@ -183,7 +290,7 @@ struct CapturePickerPanel: View {
         }
         .onChange(of: model.session.status.expoMode) { _, _ in
             guard sheet == .shutter else { return }
-            drumSendTask?.cancel()
+            cancelDrumSend()
             if model.session.status.expoMode != .auto {
                 selectedMode = OperatorPrefs.shutterUsesAngle ? 1 : 0
             }
@@ -227,19 +334,24 @@ struct CapturePickerPanel: View {
         HStack(alignment: .center, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(headerTitle)
-                    .font(LiveType.ui(size: 18, weight: .heavy, design: .default))
-                    .kerning(2)
+                    .font(MonitorTheme.font(9, weight: .semibold))
+                    .kerning(1.8)
                     .foregroundStyle(LiveDesign.text)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 Text(headerSubtitle)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .kerning(1.5)
+                    .font(MonitorTheme.font(8.5, weight: .medium))
+                    .kerning(1.1)
                     .textCase(.uppercase)
                     .foregroundStyle(LiveDesign.faint)
             }
             Spacer(minLength: 8)
-            CloseButton(action: onClose)
+            CloseButton(
+                action: {
+                    appeared = false
+                    cancelDrumSend()
+                    onClose()
+                }, size: 26)
         }
     }
 
@@ -276,9 +388,9 @@ struct CapturePickerPanel: View {
             }
         case .wb:
             if selectedMode == 0 {
-                checkedRows(
+                choiceDrum(
                     WhiteBalanceMode.allCases.map(\.label),
-                    selected: model.session.status.whiteBalance?.mode.label ?? "Auto"
+                    selected: model.session.status.whiteBalance?.mode.label
                 ) { label in
                     if label == WhiteBalanceMode.auto.label {
                         model.session.setWhiteBalanceAuto()
@@ -297,7 +409,7 @@ struct CapturePickerPanel: View {
                 focusRows
             }
         case .exposure:
-            checkedRows(
+            choiceDrum(
                 ExpoMode.allCases.map(\.label), selected: model.session.status.expoMode?.label
             ) { label in
                 if let mode = ExpoMode.allCases.first(where: { $0.label == label }) {
@@ -307,7 +419,7 @@ struct CapturePickerPanel: View {
         case .audio:
             audioBody
         case .mode:
-            checkedRows(
+            choiceDrum(
                 ShootingMode.allCases.map(\.label),
                 selected: model.session.currentShootingMode?.label
             ) { label in
@@ -328,13 +440,11 @@ struct CapturePickerPanel: View {
     private var focusRows: some View {
         let continuous = model.session.status.focusMode == .continuous
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                focusTab("AF-S", active: !continuous) {
-                    model.session.setFocusMode(.single)
-                }
-                focusTab("AF-C", active: continuous) {
-                    model.session.setFocusMode(.continuous)
-                }
+            choiceDrum(
+                ["AF-S", "AF-C"],
+                selected: model.session.status.focusMode.map { $0 == .continuous ? "AF-C" : "AF-S" }
+            ) { value in
+                model.session.setFocusMode(value == "AF-C" ? .continuous : .single)
             }
             if continuous {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -375,32 +485,10 @@ struct CapturePickerPanel: View {
         .animation(.easeInOut(duration: 0.16), value: continuous)
     }
 
-    private func focusTab(_ title: String, active: Bool, action: @escaping () -> Void) -> some View
-    {
-        Button(action: action) {
-            Text(title)
-                .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                .kerning(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(active ? LiveDesign.accent : LiveDesign.muted)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    active ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
-                    in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                        .stroke(active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
-                }
-        }
-        .buttonStyle(.zcTapTarget)
-    }
-
     @ViewBuilder private var audioBody: some View {
         switch selectedMode {
         case 0:
-            checkedRows(
+            choiceDrum(
                 AudioChannel.allCases.map(\.label),
                 selected: model.session.status.audioChannel?.label
             ) { label in
@@ -409,7 +497,7 @@ struct CapturePickerPanel: View {
                 }
             }
         case 1:
-            checkedRows(
+            choiceDrum(
                 WindNoiseReduction.allCases.map(\.label),
                 selected: model.session.status.windNR?.label
             ) { label in
@@ -418,7 +506,7 @@ struct CapturePickerPanel: View {
                 }
             }
         case 2:
-            checkedRows(
+            choiceDrum(
                 DirectionalAudio.allCases.map(\.label),
                 selected: model.session.status.directionalAudio?.label
             ) { label in
@@ -427,7 +515,7 @@ struct CapturePickerPanel: View {
                 }
             }
         default:
-            checkedRows(
+            choiceDrum(
                 VocalBoost.allCases.map(\.label), selected: model.session.status.vocalBoost?.label
             ) { label in
                 if let value = VocalBoost.allCases.first(where: { $0.label == label }) {
@@ -438,50 +526,20 @@ struct CapturePickerPanel: View {
     }
 
     private var tintPad: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(tintLabel)
-                .font(LiveType.ui(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    Int(tintDraft.rounded()) == 0 ? LiveDesign.muted : LiveDesign.accent)
-            HStack(spacing: 12) {
-                Button {
-                    nudgeTint(-10)
-                } label: {
-                    Text("−10")
-                        .font(LiveType.ui(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(LiveDesign.accent)
-                        .frame(width: 56, height: 40)
-                        .background(
-                            LiveDesign.accentDim,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.zcTapTarget)
-                Slider(value: $tintDraft, in: -100...100, step: 1) { editing in
-                    if !editing {
-                        applyTint(Int(tintDraft.rounded()))
-                    }
-                }
-                .tint(LiveDesign.accent)
-                Button {
-                    nudgeTint(10)
-                } label: {
-                    Text("+10")
-                        .font(LiveType.ui(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(LiveDesign.accent)
-                        .frame(width: 56, height: 40)
-                        .background(
-                            LiveDesign.accentDim,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.zcTapTarget)
-            }
-            Button("Apply tint \(Int(tintDraft.rounded()))") {
-                applyTint(Int(tintDraft.rounded()))
-            }
-            .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(LiveDesign.accent)
-        }
+        CaptureDrumWheel(
+            options: (-100...100).map(String.init),
+            selection: Binding(
+                get: { String(Int(tintDraft.rounded())) },
+                set: { value in
+                    guard let tint = Int(value), (-100...100).contains(tint) else { return }
+                    tintDraft = Double(tint)
+                    applyTint(tint)
+                })
+        )
         .onAppear { tintDraft = Double(currentTint) }
+        .onChange(of: model.session.status.whiteBalanceTint) { _, _ in
+            tintDraft = Double(currentTint)
+        }
     }
 
     private var facePriorityToggle: some View {
@@ -599,35 +657,13 @@ struct CapturePickerPanel: View {
         }
     }
 
-    private func checkedRows(
+    private func choiceDrum(
         _ options: [String], selected: String?, action: @escaping (String) -> Void
     ) -> some View {
-        VStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                let isOn = option == selected
-                Button {
-                    action(option)
-                } label: {
-                    HStack {
-                        Text(option)
-                            .font(LiveType.ui(size: 17, weight: .medium, design: .rounded))
-                            .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.text)
-                        Spacer()
-                        if isOn {
-                            OpcIcon.check
-                                .foregroundStyle(LiveDesign.accent)
-                                .frame(width: 14, height: 14)
-                        }
-                    }
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                if option != options.last {
-                    Rectangle().fill(LiveDesign.hairline).frame(height: 1)
-                }
-            }
-        }
+        CaptureDrumWheel(
+            options: options,
+            selection: Binding(
+                get: { selected ?? "" }, set: action))
     }
 
     private var headerTitle: String {
@@ -719,12 +755,6 @@ struct CapturePickerPanel: View {
         min(max(model.session.status.whiteBalanceTint ?? 0, -100), 100)
     }
 
-    private var tintLabel: String {
-        let t = Int(tintDraft.rounded())
-        if t == 0 { return "Neutral" }
-        return t > 0 ? "+\(t)" : "\(t)"
-    }
-
     private func seed() {
         switch sheet {
         case .iso:
@@ -770,6 +800,7 @@ struct CapturePickerPanel: View {
     }
 
     private func handleModeChange(_ index: Int) {
+        cancelDrumSend()
         switch sheet {
         case .iso where offersIsoAuto:
             if index == 0 {
@@ -777,6 +808,12 @@ struct CapturePickerPanel: View {
                 reseatIsoAutoDrum()
             } else {
                 reseatIsoDiscrete()
+                // Choosing Manual is an explicit mode action. Preserve its
+                // existing first-legal-ISO fallback when camera ISO is unknown.
+                if drumSelection.isEmpty, let first = isoDrumLabels.first {
+                    lastApplied = first
+                    drumSelection = first
+                }
                 if let idx = IsoIndex.allCases.first(where: { $0.label == drumSelection }),
                     isoIndices.contains(idx)
                 {
@@ -824,34 +861,36 @@ struct CapturePickerPanel: View {
                     let limit = CaptureLists.isoLimit(
                         from: value, status: model.session.status, model: connectedBody)
                 else { return }
-                enqueueDrumSend { model.session.setIsoLimit(limit) }
+                enqueueDrumSend(value) { model.session.setIsoLimit(limit) }
                 return
             }
             guard let idx = IsoIndex.allCases.first(where: { $0.label == value }),
                 isoIndices.contains(idx)
             else { return }
-            enqueueDrumSend { model.session.setISO(idx) }
+            enqueueDrumSend(value) { model.session.setISO(idx) }
         case .shutter:
             if isEvSheet {
                 guard !model.facePriorityExposureEnabled else { return }
                 guard let ev = EvComp(label: value) else { return }
-                enqueueDrumSend { model.session.setEv(ev) }
+                enqueueDrumSend(value) { model.session.setEv(ev) }
                 return
             }
             if isAngleSheet {
                 guard let degrees = ShutterAngle.parse(value) else { return }
-                OperatorPrefs.shutterAngleDegrees = degrees
                 let denom = ShutterAngle.denom(
                     degrees: degrees,
                     fps: model.session.status.fps,
                     available: shutterDenoms)
-                enqueueDrumSend { model.session.setShutterDenom(denom) }
+                enqueueDrumSend(value) {
+                    OperatorPrefs.shutterAngleDegrees = degrees
+                    model.session.setShutterDenom(denom)
+                }
                 return
             }
             guard let denom = CamCapShutter.denom(from: value),
                 shutterDenoms.contains(denom)
             else { return }
-            enqueueDrumSend { model.session.setShutterDenom(denom) }
+            enqueueDrumSend(value) { model.session.setShutterDenom(denom) }
         case .wb:
             guard selectedMode == 1, let kelvin = CaptureLists.kelvin(from: value) else { return }
             model.session.setWhiteBalanceCustom(kelvin: kelvin, tint: currentTint)
@@ -869,12 +908,41 @@ struct CapturePickerPanel: View {
     }
 
     /// Latest-wins: scrubbing must not enqueue a SET per detent.
-    private func enqueueDrumSend(_ send: @escaping () -> Void) {
+    private func enqueueDrumSend(_ value: String, _ send: @escaping () -> Void) {
         drumSendTask?.cancel()
+        guard canApplyDrum else {
+            cancelDrumSend(reseat: true)
+            return
+        }
+        let request = deferredDrum.schedule(value, context: drumContext)
         drumSendTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, deferredDrum.pending == request else { return }
+            let accepted = deferredDrum.consume(
+                request, context: drumContext, options: drumOptions, isActive: canApplyDrum)
+            drumSendTask = nil
+            guard accepted != nil else {
+                reseatDrum()
+                return
+            }
             send()
+        }
+    }
+
+    private func cancelDrumSend(reseat: Bool = false) {
+        drumInteractionRevision &+= 1
+        let hadPending = deferredDrum.pending != nil
+        drumSendTask?.cancel()
+        drumSendTask = nil
+        deferredDrum.cancel()
+        if reseat, hadPending { reseatDrum() }
+    }
+
+    private func reseatDrum() {
+        switch sheet {
+        case .iso: reseatIso()
+        case .shutter: reseatShutterOrEv()
+        default: break
         }
     }
 
@@ -943,11 +1011,6 @@ struct CapturePickerPanel: View {
         applyVideoFormat(resolution: match, frameRate: rate)
     }
 
-    private func nudgeTint(_ delta: Int) {
-        tintDraft = min(max(tintDraft + Double(delta), -100), 100)
-        applyTint(Int(tintDraft.rounded()))
-    }
-
     /// Auto SET keeps tint (Mimo). Tint pad must not kick Auto into Custom.
     private func applyTint(_ tint: Int) {
         if model.session.status.whiteBalance?.mode == .custom {
@@ -973,7 +1036,7 @@ struct CapturePickerPanel: View {
     private func reseatIsoAutoDrum() {
         let labels = isoAutoDrumLabels
         let live = CaptureLists.isoAutoLabel(from: model.session.status, model: connectedBody)
-        let next = labels.contains(live) ? live : (labels.first ?? "")
+        let next = labels.contains(live) ? live : ""
         lastApplied = next
         drumSelection = next
     }
@@ -985,9 +1048,9 @@ struct CapturePickerPanel: View {
         } else if model.session.status.iso > 0 {
             live = "\(model.session.status.iso)"
         } else {
-            live = isoDrumLabels.first ?? ""
+            live = ""
         }
-        let next = isoDrumLabels.contains(live) ? live : (isoDrumLabels.first ?? "")
+        let next = isoDrumLabels.contains(live) ? live : ""
         lastApplied = next
         drumSelection = next
     }
@@ -1002,8 +1065,8 @@ struct CapturePickerPanel: View {
 
     private func reseatEv() {
         let labels = evLabels
-        let live = model.session.status.evComp?.label ?? "0.0"
-        let next = labels.contains(live) ? live : "0.0"
+        let live = model.session.status.evComp?.label ?? ""
+        let next = labels.contains(live) ? live : ""
         lastApplied = next
         drumSelection = next
     }
@@ -1014,6 +1077,11 @@ struct CapturePickerPanel: View {
             return
         }
         let labels = shutterLabels
+        guard model.session.status.shutterDenom > 0 else {
+            lastApplied = ""
+            drumSelection = ""
+            return
+        }
         let live =
             model.session.status.shutterDenom > 0
             ? CamCapShutter.label(model.session.status.shutterDenom) : labels.first ?? ""
@@ -1041,8 +1109,8 @@ struct CapturePickerPanel: View {
             drumSelection = next
             return
         }
-        lastApplied = preferred
-        drumSelection = preferred
+        lastApplied = ""
+        drumSelection = ""
     }
 
     private func nearestShutter(_ label: String) -> String {
@@ -1058,84 +1126,28 @@ struct CapturePickerPanel: View {
 struct CaptureDrumWheel: View {
     let options: [String]
     @Binding var selection: String
-    /// OpenZCine `AccentDrumWheel.markedValues` — native base ISO after the number.
     var markedValues: Set<String> = []
     var isInteractive: Bool = true
-
-    private let rowHeight: CGFloat = 52
-    private let wheelHeight: CGFloat = 176
+    @Environment(AppModel.self) private var model
+    @Environment(\.captureDrumInteractionIdentity) private var interactionIdentity
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 0) {
-                    ForEach(options, id: \.self) { option in
-                        let centered = option == selection
-                        HStack(spacing: 6) {
-                            Text(option)
-                                .font(
-                                    .system(
-                                        size: centered ? 30 : 23,
-                                        weight: centered ? .semibold : .regular, design: .monospaced
-                                    )
-                                )
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
-                            if markedValues.contains(option) {
-                                LucideIconView(name: OpcIcon.star.lucideName, filled: true)
-                                    .frame(width: centered ? 13 : 10, height: centered ? 13 : 10)
-                                    .opacity(0.85)
-                            }
-                        }
-                        .foregroundStyle(
-                            centered ? LiveDesign.accent : LiveDesign.muted.opacity(0.7)
-                        )
-                        .frame(maxWidth: .infinity)
-                        .frame(height: rowHeight)
-                        .contentShape(Rectangle())
-                        .id(option)
-                        .onTapGesture {
-                            guard isInteractive else { return }
-                            selection = option
-                        }
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(
-                id: Binding(
-                    get: { selection },
-                    set: { if let value = $0 { selection = value } }
-                )
-            )
-            .scrollDisabled(!isInteractive)
-            .opacity(isInteractive ? 1 : 0.55)
-            .contentMargins(.vertical, (wheelHeight - rowHeight) / 2, for: .scrollContent)
-            .frame(height: wheelHeight)
-            .sensoryFeedback(.selection, trigger: selection)
-            .mask {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.22),
-                        .init(color: .black, location: 0.78),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay {
-                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(
-                    y: -rowHeight / 2)
-                Rectangle().fill(LiveDesign.hairlineStrong).frame(height: 1).offset(
-                    y: rowHeight / 2)
-            }
-            .onAppear {
-                DispatchQueue.main.async { proxy.scrollTo(selection, anchor: .center) }
-            }
-        }
+        MonitorValueDrum(
+            options: options, selection: $selection, markedValues: markedValues,
+            isInteractive: isInteractive, haptics: model.hapticsEnabled,
+            interactionIdentity: interactionIdentity
+        )
+    }
+}
+
+private struct CaptureDrumInteractionIdentityKey: EnvironmentKey {
+    static let defaultValue: () -> AnyHashable = { AnyHashable(0) }
+}
+
+extension EnvironmentValues {
+    fileprivate var captureDrumInteractionIdentity: () -> AnyHashable {
+        get { self[CaptureDrumInteractionIdentityKey.self] }
+        set { self[CaptureDrumInteractionIdentityKey.self] = newValue }
     }
 }
 
@@ -1234,5 +1246,53 @@ extension CaptureSheet {
         case .resolution: "Frame rate"
         case .color: "Color mode"
         }
+    }
+}
+
+/// A noninteractive preview follows the readout's original touch. Closing this
+/// view cannot end or replace the recognizer that owns the eventual commit.
+struct LiveCaptureDrumHost: View {
+    var frames: [CaptureSheet: CGRect]
+    var bar: CGRect
+    var viewport: CGSize
+    var safeArea: EdgeInsets = EdgeInsets()
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let drum = model.captureDrum {
+            let height: CGFloat = 127
+            let place = LivePopupPlacement.capturePicker(
+                tile: frames[drum.sheet] ?? .zero, bar: bar, panelHeight: height,
+                viewport: viewport, safeArea: safeArea, ceilingY: safeArea.top + 10)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(drum.snapshot.title).font(MonitorTheme.font(9, weight: .semibold))
+                    .tracking(1.8).foregroundStyle(MonitorTheme.muted)
+                MonitorValueDrum(
+                    options: drum.snapshot.options,
+                    selection: .constant(drum.snapshot.selection),
+                    markedValues: drum.snapshot.marked,
+                    haptics: model.hapticsEnabled, previewPosition: drum.position)
+            }
+            .padding(14)
+            .frame(width: place.width, height: min(height, place.maxHeight))
+            .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .expanded)
+            .position(x: place.x + place.width / 2, y: place.y + min(height, place.maxHeight) / 2)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: viewport) { _, _ in model.captureDrum = nil }
+        }
+    }
+}
+
+/// Let the underlying readouts retain their recognizers while a persistent
+/// picker is open. The rest of the picture remains a dismiss target.
+private struct CapturePickerBackdrop: Shape {
+    let frames: [CaptureSheet: CGRect]
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        for frame in frames.values where frame.width > 0 && frame.height > 0 {
+            path.addRect(frame)
+        }
+        return path
     }
 }

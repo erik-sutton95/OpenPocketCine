@@ -17,6 +17,15 @@ separate iOS and Android lists.
 
 ### Added
 
+- UI 2.0 for the native iOS and Android shells: shared camera, pairing, settings,
+  media and playback presentation; Sora typography, Lucide icons and the custom
+  View Assist glyphs from the design. Phones and tablets adapt across rotation.
+  Camera-value drums, a compact assist palette, leading/trailing inspectors and
+  the half-disc zoom control retain the existing camera actions and live pipeline.
+  Fresh scope sizes adapt to device geometry without replacing saved manual sizes.
+  Physical camera-session qualification and the Android rendering exceptions are
+  tracked in [parity](docs/PARITY.md#ui-20-qualification).
+
 - Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
   resize directly. Scopes can sit partly under the top and bottom bars while
   reaching closer to the bottom and underneath the entire joystick cluster
@@ -27,8 +36,8 @@ separate iOS and Android lists.
 - Saved-camera rows now show their own connection progress and Cancel action,
   with names above availability/actions. On iOS, Watch a feed is an eye button
   beside Multiview in the camera-list header.
-- Gimbal controls use Mode / Speed / Ramp tabs with settings below. A separate
-  Gimbal tools footer opens experimental Motion Control. Both shells.
+- Gimbal controls use inline Mode, Speed and Ramp drums in a trailing drawer.
+  Its Motion Control footer opens the experimental editor. Both shells.
 
 - Direction Lock replaces the unavailable Locked gimbal option on iOS and
   Android. It holds the camera's pointing direction while the handle rotates;

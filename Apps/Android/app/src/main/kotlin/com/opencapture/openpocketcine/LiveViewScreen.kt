@@ -215,32 +215,8 @@ fun LiveViewScreen(model: AppModel) {
     val signalBars = remember { LinkSignalBars() }
     tick
 
-    val feedBackdrop = rememberLayerBackdrop()
-    val sceneBackdrop =
-        rememberLayerBackdrop {
-            drawRect(LiveDesign.background)
-            drawContent()
-        }
-    val activityManager =
-        remember(context) {
-            context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        }
-    val totalRamBytes =
-        remember(activityManager) {
-            ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo).totalMem
-        }
-    val glass =
-        remember(feedBackdrop, sceneBackdrop, totalRamBytes, activityManager.isLowRamDevice) {
-            MonitorGlass(
-                resolveTier(
-                    sdkInt = Build.VERSION.SDK_INT,
-                    isLowRamDevice = activityManager.isLowRamDevice,
-                    totalRamBytes = totalRamBytes,
-                ),
-                layerBackdrop = feedBackdrop,
-                overlayBackdrop = sceneBackdrop,
-            )
-        }
+    // Flat UI 2.0 chrome has no backdrop render pass. Keep decoder ownership intact.
+    val glass = remember { MonitorGlass(GlassTier.FLAT) }
 
     var vulkanFailed by remember { mutableStateOf(false) }
     val vulkanSession =
@@ -450,7 +426,7 @@ fun LiveViewScreen(model: AppModel) {
                     }
                 val floorY =
                     when {
-                        portraitFill && zones.controls.height > 1f -> zones.controls.minY
+                        zones.controls.height > 1f -> zones.controls.minY - 8f
                         zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
                         else -> zones.systemBar.minY
                     }
@@ -744,6 +720,9 @@ fun LiveViewScreen(model: AppModel) {
                     onAssistLongPress = { assist.configureTool = it },
                     chromeInteractive = chromeInteractive,
                     controlBusy = controlBusy,
+                    fpsLabel = fpsLabel,
+                    bars = bars,
+                    sourceIsVertical = verticalPicture,
                     onTileFrame = { key, rect -> pickerFrames[key] = rect },
                 )
                 }
@@ -875,70 +854,19 @@ fun LiveViewScreen(model: AppModel) {
             }
 
             val configure = assist.configureTool
-            if (chromeInteractive && configure != null && !uiLocked) {
-                val preferred = AssistLongPress.preferredWidthDp(configure)
-                var panelH by remember(configure) { mutableStateOf(240f) }
-                var assistShown by remember(configure) { mutableStateOf(false) }
-                LaunchedEffect(configure) { assistShown = true }
-                val assistRevealed by
-                    animateFloatAsState(
-                        if (assistShown) 1f else 0f,
-                        tween(200, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-                        label = "assist-popup-reveal",
-                    )
-                val toolbar =
-                    if (portrait && zones != null && zones.assistToolbar.height > 1f) {
-                        zones.assistToolbar
-                    } else {
-                        layout.assist
-                    }
-                // Same well as LUT: nearly to the top edge (ASSIST_MARGIN), so
-                // ZEBRA / GUIDES can grow instead of sitting under STBY / TC.
-                val keyboardHeight =
-                    with(density) { WindowInsets.ime.getBottom(this).toDp().value }
-                val place =
-                    LivePopupPlacement.assistOptions(
-                        icon = assist.longPressAnchor,
-                        toolbar = toolbar,
-                        preferredWidth = preferred,
-                        panelHeight = panelH,
-                        viewportWidth = vw,
-                        viewportHeight = vh,
-                        safeLeading = safeLeading,
-                        safeTrailing = safeTrailing,
-                        safeTop = safeTop,
-                        safeBottom = safeBottom,
-                        ceilingY = 0f,
-                        keyboardHeight = keyboardHeight,
-                    )
-                val assistSlide = place.maxHeight + 20f
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .zIndex(8f)
-                        .chromeClickable(onClick = { assist.configureTool = null }),
-                ) {
-                    AssistOptionsPopup(
-                        tool = configure,
-                        state = assist,
+            if (chromeInteractive && configure != null && !uiLocked && model.liveOperatorPanel == null) {
+                Box(Modifier.fillMaxSize().zIndex(8f)) {
+                    com.opencapture.openpocketcine.assists.MonitorAssistInspector(
+                        configure, assist, model, status.colorMode, vw, vh,
+                        safeLeading, safeTop, safeBottom, zones?.controls?.minY ?: vh,
                         onDismiss = { assist.configureTool = null },
-                        maxHeightDp = place.maxHeight,
-                        modifier =
-                            Modifier
-                                .offset(
-                                    place.x.dp,
-                                    (place.y + (1f - assistRevealed) * assistSlide).dp,
-                                )
-                                .graphicsLayer { alpha = assistRevealed }
-                                .onSizeChanged { panelH = it.height / density.density },
-                        model = model,
-                        colorMode = status.colorMode,
                     )
                 }
             }
 
             val panel = model.liveOperatorPanel
             LaunchedEffect(panel) {
+                assist.configureTool = null
                 model.session.setOperatorOverlayHeld(panel != null)
                 if (panel == null) {
                     val ready = vulkanSession?.windowReady == true
@@ -991,7 +919,7 @@ fun LiveViewScreen(model: AppModel) {
                                 layout.onFeed,
                                 fill,
                                 if (fill) zones.controls.height + 10f else 0f,
-                                if (fill && zones.controls.height > 1f) zones.controls.minY
+                                if (zones.controls.height > 1f) zones.controls.minY - 8f
                                 else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
                                 else zones.systemBar.minY,
                             ).zoom
@@ -1001,7 +929,7 @@ fun LiveViewScreen(model: AppModel) {
                                 layout.onFeed,
                                 fill,
                                 if (fill) zones.controls.height + 10f else 0f,
-                                if (fill && zones.controls.height > 1f) zones.controls.minY
+                                if (zones.controls.height > 1f) zones.controls.minY - 8f
                                 else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
                                 else zones.systemBar.minY,
                             ).stick
@@ -1455,7 +1383,7 @@ private class TextureFeedListener(
 }
 
 @Composable
-private fun LandscapeChrome(
+internal fun LandscapeChrome(
     model: AppModel,
     layout: LiveMonitorLayout,
     status: CameraStatus,
@@ -1480,6 +1408,7 @@ private fun LandscapeChrome(
     zoomPinching: Boolean,
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
+    capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
 ) {
     val editing = model.chromeEditorMode
     val showsStatus = model.chromeSectionMounts(PocketDispSection.STATUS_BAR)
@@ -1514,6 +1443,7 @@ private fun LandscapeChrome(
                     onToggleStorage = onToggleStorage,
                     onOpen = { if (!uiLocked && hits) onSheet(if (sheet == it) null else it) },
                     maxWidth = layout.topDeck.width,
+                    showsTimecode = capabilities.timecode,
                     editing = editing,
                     onChipFrame = onStatusChipFrame,
                     onPickerFrame = onTileFrame,
@@ -1527,31 +1457,28 @@ private fun LandscapeChrome(
         }
         if (showsBatteries) {
             Box(Modifier.liveModuleFrame(layout.battery).chromeEditStroke(editing != null, true)) {
-                BatteryPair(
-                    phonePercent = model.phoneBatteryPercent,
-                    phoneCharging = model.phoneCharging,
-                    cameraPercent = status.batteryPercent,
-                    cameraCharging = status.charging,
-                )
+                com.opencapture.openpocketcine.monitor.MonitorTelemetry(bars, fpsLabel,
+                    model.phoneBatteryPercent, status.batteryPercent, horizontal = false)
             }
         }
         if (showsSettings) {
             Box(Modifier.liveModuleFrame(layout.settings).chromeEditStroke(editing != null, true)) {
                 AuxCircleButton(onClick = { if (hits) model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
-                    OpcIcon(OpcIcon.SETTINGS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
+                    OpcIcon(OpcIcon.SETTINGS, contentDescription = "Settings", tint = it, modifier = Modifier.fillMaxSize())
                 }
             }
         }
         if (showsMedia) {
             Box(Modifier.liveModuleFrame(layout.media).chromeEditStroke(editing != null, true)) {
                 AuxCircleButton(onClick = { if (hits) model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) {
-                    OpcIcon(OpcIcon.LAYERS, contentDescription = null, tint = it, modifier = Modifier.fillMaxSize())
+                    OpcIcon(OpcIcon.FILM, contentDescription = "Media", tint = it, modifier = Modifier.fillMaxSize())
                 }
             }
         }
         if (showsRecord) {
             Box(Modifier.liveModuleFrame(layout.record).chromeEditStroke(editing != null, true)) {
                 RecordButton(
+                    modifier = Modifier.fillMaxSize(),
                     recording = status.isRecording,
                     enabled = !controlBusy,
                     confirm = model.recordConfirmationEnabled,
@@ -1572,7 +1499,7 @@ private fun LandscapeChrome(
                 },
             )
         }
-        if (model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP) && !zoom.isEmpty) {
+        if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP) && !zoom.isEmpty) {
             val zoomBlocked =
                 CamFov.zoomNeedsColorHopWhileRecording(
                     model.session.zoomNextJump(),
@@ -1592,9 +1519,20 @@ private fun LandscapeChrome(
                 onCycle = {
                     model.session.setZoom(model.session.zoomNextJump())
                 },
+                maximum = model.session.zoomMax(),
+                opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
+                onDial = model.session::updateZoomPinch,
+                onDialEnd = model.session::endZoomPinch,
+                dialForeground = {
+                    if (showsRecord) Box(Modifier.liveModuleFrame(layout.record)) {
+                        RecordButton(status.isRecording, !controlBusy, Modifier.size(layout.record.width.dp),
+                            confirm = model.recordConfirmationEnabled,
+                            photo = CameraCommands.isPhotoMode(status.shootingMode), onClick = model::pressShutter)
+                    }
+                },
             )
         }
-        if (model.session.hasGimbal &&
+        if (capabilities.gimbal &&
             model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) &&
             !gimbalButton.isEmpty
         ) {
@@ -1611,7 +1549,7 @@ private fun LandscapeChrome(
                         .alpha(if (uiLocked) 0.4f else 1f),
             )
         }
-        if (model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) && !stick.isEmpty) {
+        if (capabilities.gimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) && !stick.isEmpty) {
             Box(Modifier.liveModuleFrame(stick).chromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
                     enabled = !uiLocked && model.liveOperatorPanel == null && hits,
@@ -1622,7 +1560,7 @@ private fun LandscapeChrome(
                 )
             }
         }
-        if (model.session.hasGimbal &&
+        if (capabilities.gimbal &&
             model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) &&
             hits &&
             !uiLocked &&
@@ -1640,53 +1578,21 @@ private fun LandscapeChrome(
                 LiveFocusResetButton(onClick = onFocusReset)
             }
         }
-        if (showsAssist || showsCapture) {
-            val bandMinX = minOf(layout.assist.minX, layout.capture.minX)
-            val band =
-                ChromeRect(
-                    bandMinX,
-                    minOf(layout.assist.minY, layout.capture.minY),
-                    maxOf(layout.assist.maxX, layout.capture.maxX) - bandMinX,
-                    maxOf(layout.assist.height, layout.capture.height),
+        if (showsAssist) {
+            Box(Modifier.liveModuleFrame(layout.assist).alpha(if (uiLocked) .4f else 1f)) {
+                com.opencapture.openpocketcine.assists.MonitorAssistCluster(
+                    portrait = false, locked = uiLocked || !hits,
+                    isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                 )
-            LiveBottomChromeBand(
-                band = band,
-                showAssist = showsAssist,
-                showCapture = showsCapture,
-                assist = {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .alpha(if (uiLocked) 0.4f else 1f)
-                            .chromeEditStroke(editing != null, true),
-                    ) {
-                        LiveAssistBar(
-                            state = assist,
-                            locked = uiLocked || !hits,
-                            onLongPress = onAssistLongPress,
-                        )
-                    }
-                },
-                capture = {
-                    Box(
-                        Modifier
-                            .alpha(if (uiLocked) 0.4f else 1f)
-                            .chromeEditStroke(editing != null, true),
-                    ) {
-                        LiveCaptureStrip(
-                            status = status,
-                            active = sheet,
-                            enabled = !uiLocked && !controlBusy && hits,
-                            showFocus =
-                                CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
-                            facePriority = model.facePriorityExposureEnabled,
-                            shutterUsesAngle = model.shutterUsesAngle,
-                            onOpen = { onSheet(if (sheet == it) null else it) },
-                            onTileFrame = onTileFrame,
-                        )
-                    }
-                },
-            )
+            }
+        }
+        if (showsCapture) {
+            Box(Modifier.liveModuleFrame(layout.capture).alpha(if (uiLocked) .4f else 1f)) {
+                LiveCaptureStrip(status, sheet, !uiLocked && !controlBusy && hits, model = model,
+                    showFocus = capabilities.focus,
+                    facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
+                    onOpen = { onSheet(if (sheet == it) null else it) }, onTileFrame = onTileFrame)
+            }
         }
     }
 }
@@ -1703,6 +1609,7 @@ private fun LiveTopDeck(
     onToggleStorage: () -> Unit,
     onOpen: (LiveSheet) -> Unit,
     maxWidth: Float,
+    showsTimecode: Boolean = true,
     editing: PocketDispMode? = null,
     onChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     onPickerFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
@@ -1718,47 +1625,39 @@ private fun LiveTopDeck(
                 if (picker != null) onPickerFrame(picker, rect)
             }
     }
-    FitScale(maxWidth.dp) {
-    InfoPill {
-        if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
-            Box(chipMod(PocketDispSection.REC_READOUT)) { RecChip(status.isRecording) }
-        }
-        if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
-            Box(chipMod(PocketDispSection.TIMECODE)) { TimecodeReadout(status.timecode) }
+    androidx.compose.foundation.layout.Row(
+        Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
+            androidx.compose.foundation.layout.Row(
+                chipMod(PocketDispSection.STORAGE).chromeClickable(onClick = onToggleStorage),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                SdCardGlyph(LiveDesign.text)
+                Text(CaptureLists.storageLabel(status, showStorageDuration).substringBefore(" ·"), style = LiveType.mono(15f, FontWeight.SemiBold), maxLines = 1)
+            }
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
-            ReadoutPill(
-                CaptureLists.recFormatChipLabel(status),
-                active = active == LiveSheet.FORMAT,
-                enabled = enabled,
-                onClick = { onOpen(LiveSheet.FORMAT) },
-                accessibilityLabel = "Recording format",
-                modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT),
-            ) { VideoGlyph(it) }
+            Text(CaptureLists.recFormatChipLabel(status), style = LiveType.mono(15f, FontWeight.Medium), maxLines = 1,
+                modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT)
+                    .chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
         }
         if (model.chromeSectionMounts(PocketDispSection.COLOR)) {
-            ReadoutPill(
-                CameraCommands.colorLabel(status.colorMode, family),
-                active = active == LiveSheet.COLOR,
-                enabled = enabled,
-                onClick = { onOpen(LiveSheet.COLOR) },
-                accessibilityLabel = "Color mode",
-                modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR),
-            ) { ColorGlyph(it) }
+            Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(15f, FontWeight.Medium), maxLines = 1,
+                modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR)
+                    .chromeClickable(enabled = enabled) { onOpen(LiveSheet.COLOR) })
         }
-        if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
-            ReadoutPill(
-                CaptureLists.storageLabel(status, showStorageDuration),
-                onClick = onToggleStorage,
-                accessibilityLabel = "Storage remaining",
-                modifier = chipMod(PocketDispSection.STORAGE),
-            ) { SdCardGlyph(it) }
+        if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
+            Text(CameraCommands.shootingModeLabel(status.shootingMode) ?: "—",
+                color = LiveDesign.accent, style = LiveType.ui(15f, FontWeight.Medium), maxLines = 1,
+                modifier = Modifier.chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
         }
-        if (model.chromeSectionMounts(PocketDispSection.FPS)) {
-            Box(chipMod(PocketDispSection.FPS)) { FpsChip(fps, bars) }
+        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+        if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
+            Box(chipMod(PocketDispSection.REC_READOUT)) { RecChip(status.isRecording, status.recordElapsedSec) }
         }
-    }
+        if (showsTimecode && model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
+            Box(chipMod(PocketDispSection.TIMECODE)) { TimecodeReadout(status.timecode) }
+        }
     }
 }
-
-

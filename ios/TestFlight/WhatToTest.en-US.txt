@@ -2,39 +2,35 @@ Since open beta build 63
 
 New and changed
 
-- Direction Lock holds the camera pointing in one direction as you rotate its body. Select another mode to release it.
-- Gimbal controls uses Mode, Speed, and Ramp tabs, with Motion Control in Gimbal tools.
-- Experimental Motion Control adds timed A-to-B or A-to-B-to-C moves, smoothing, a countdown, and Pause, Resume and Stop.
-- Experimental AirPods head tracking follows calibrated head direction more directly. Manual control wins; changing gimbal mode turns tracking off.
-- Drag scopes, LIGHTS and ND directly; drag a corner to resize. Panels fit under bars and the joystick, with equal left/right spacing.
-- ND assist suggests a filter strength to balance exposure, with Stops, ND factor and optical-density units.
-- New false-color choices include CineStop, six-zone IRE and EL Zone, with matching reference legends.
-- Experimental Multiview monitors Osmo cameras on shared Wi-Fi, with saved stages, grid or Center stage, per-camera looks and group recording.
-- Share this feed lets other iPhones and iPads on the same camera Wi-Fi watch with local assists, request camera controls and reconnect after interruptions.
-- Apple Watch adds live preview, timecode, storage, camera battery, record and shutter controls. The paired iPhone stays connected to the camera.
-- Convert log on Share matches D-Log and D-Log2 clips during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.
-- Your cameras shows joining progress and Cancel on the selected camera row. Watch a feed is the eye button beside Multiview.
-- Manual joystick and gamepad input takes over from programmed gimbal moves.
-- Share Diagnostics from pairing or Operator Setup > System to report connection and playback problems.
+- UI 2.0 brings Sora type, Lucide icons, adaptive camera/settings/media pages, and new monitor controls for iPhone and iPad.
+- Tap a camera value for its picker; hold or drag for a temporary drum. Hold Zoom for the lens dial. View Assist expands from a compact tool palette.
+- Gimbal Mode, Speed and Ramp use inline drums. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
+- Direction Lock holds the camera's pointing direction as its body rotates. Select another mode to release it.
+- Experimental AirPods head tracking follows calibrated head direction. Manual input wins; changing gimbal mode turns tracking off.
+- Drag scopes, LIGHTS and ND; use a corner to resize. Fresh scope sizes adapt to the screen, while saved manual sizes remain yours.
+- ND suggests a filter strength in Stops, ND factor or optical density. False color adds CineStop, six-zone IRE and EL Zone reference scales.
+- Experimental Multiview adds saved stages, grid/Center stage, per-camera looks and group recording on shared Wi-Fi.
+- Share this feed lets iPhones and iPads on the camera Wi-Fi watch with local assists, request controls and reconnect. Hold Multiview on Your cameras to browse feeds.
+- Apple Watch shows live preview, timecode, storage, battery and shutter controls. The paired iPhone stays connected to the camera.
+- Convert log on Share matches D-Log and D-Log2 during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.
+- Your cameras shows connection progress and Cancel per row. Share Diagnostics from pairing or Operator Setup > System to report problems.
 
 Fixes
 
-- Zebra Highlight detects the hottest color channel and defaults to 99 IRE. Zebra option fields stay above the keyboard, with Done to dismiss it.
-- Expanded Pocket 3 support: more reliable live view and reconnects, correct camera settings, and access to newly recorded clips.
-- Pocket 3 COLOR correctly maps Normal, HDR/HLG and D-Log M instead of switching to the wrong profile.
-- FORMAT shows camera-reported sizes, frame rates and aspect ratios. A selected pair stays visible until the camera confirms it.
-- Pocket 3 FORMAT includes normal-video 2.7K and portrait choices when its format list is empty. Vertical 3K stays selected while options load and frame rate changes.
-- Pocket 3 clips can be listed and opened after a take, including recordings stored on its memory card.
-- In Normal color, Pocket 3 and Pocket 4 Auto ISO ranges start at 50, matching the camera; Pocket 4 Pro starts at 100.
-- Nano COLOR now matches Normal 8-bit, Normal 10-bit and D-Log M. Live-view handling also copes better with larger Nano frames.
-- D-Log M scopes use their own signal scale. Scene-stop readings are marked as estimates; sensor clipping limits are not calibrated.
-- Renamed camera Wi-Fi networks use the current name. Failed joins clear stale connection details, and setup warns when a VPN or ad blocker may prevent live view.
-- Live-view stability improves when zooming, changing settings, toggling LUT 50/50, or returning from clips. Recovery keeps the last picture visible.
-- False color stays visible while Auto ISO changes exposure. Video and monitoring overlays stay aligned through rotation and Fit/Fill changes.
+- Pages adapt after a portrait launch and rotation on iOS 26. Record and DISP remain reachable above the zoom dial.
+- Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
+- Pocket 3 improvements cover live view, reconnects, camera settings and access to newly recorded clips, including files on its memory card.
+- Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.
+- Normal-color Auto ISO starts at 50 on Pocket 3 and Pocket 4, and 100 on Pocket 4 Pro.
+- Nano COLOR matches Normal 8-bit, Normal 10-bit and D-Log M. Live view handles larger Nano frames more reliably.
+- D-Log M scopes use their own scale. Scene-stop values remain estimates; sensor clipping limits are not calibrated.
+- Renamed camera Wi-Fi uses its current name. Failed joins clear stale details; setup warns when a VPN or ad blocker may block live view.
+- Live-view stability improves around zoom, settings, LUT 50/50 and clip playback. Recovery retains the last picture. False color stays visible through Auto ISO changes.
 
 What to test
 
-- On Pocket 3, check live view, Normal/HDR/D-Log M, 2.7K and portrait 3K, recording, clip playback and reconnecting.
-- Try Direction Lock and a Motion Control move, then take over manually. Drag and resize scopes to each edge in portrait and landscape.
-- Compare false-color scales and ND units. Keep the picture live while changing settings, zooming and reopening clips; share diagnostics if it freezes.
-- Try Multiview, sharing to another device, Apple Watch controls and Convert log export. Motion Control, Multiview and AirPods head tracking remain experimental.
+- Rotate every UI 2.0 page and drawer on iPhone/iPad. Try camera-value drums, View Assist options, zoom, lock/unlock, media selection and playback.
+- On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
+- Try Direction Lock and Motion Control, then take over manually. Move scopes to every edge; compare false-color scales and ND units.
+- Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.
+- Check Multiview, feed sharing, Apple Watch and Convert log. Motion Control, Multiview and AirPods head tracking remain experimental.

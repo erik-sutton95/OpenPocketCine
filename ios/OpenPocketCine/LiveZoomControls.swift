@@ -287,6 +287,7 @@ enum LiveZoomLabelHold {
 
 /// One round cycle hit inside the feed: 1× → 3× → 6× → 12× → 1×.
 struct LiveZoomChip: View {
+    var onOpenDial: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
     @State private var heldFactor: Double?
@@ -310,43 +311,52 @@ struct LiveZoomChip: View {
             isRecording: model.session.status.isRecording)
     }
 
+    private func cycle() {
+        guard !interfaceLocked else { return }
+        let next = CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops)
+        snapTick += 1
+        model.session.setZoom(next)
+    }
+
     var body: some View {
-        Button {
-            let next = CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops)
-            ControlLiveLog.line(
-                "zoom: chip tap \(title) → \(CamFov.displayLabel(factor: next)) locked=\(interfaceLocked)"
+        Text(title)
+            .font(LiveType.ui(size: 18, weight: .bold))
+            .foregroundStyle(LiveDesign.text)
+            .minimumScaleFactor(0.75)
+            .frame(
+                width: LiveChromeMetrics.zoomButtonSize, height: LiveChromeMetrics.zoomButtonSize
             )
-            guard !interfaceLocked else { return }
-            snapTick += 1
-            model.session.setZoom(next)
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(LiveDesign.text)
-                .minimumScaleFactor(0.75)
-                .frame(
-                    width: LiveChromeMetrics.zoomButtonSize,
-                    height: LiveChromeMetrics.zoomButtonSize
-                )
-                .liveChromeCircle()
-        }
-        .buttonStyle(.zcTapTarget)
-        .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
-        .allowsHitTesting(!interfaceLocked)
-        .disabled(interfaceLocked)
-        .accessibilityLabel("Zoom \(title)")
-        .accessibilityHint("Cycles 1×, 3×, 6×, and 12×")
-        .accessibilityIdentifier("monitor.system.zoom")
-        .sensoryFeedback(.impact(weight: .medium), trigger: snapTick)
-        .onAppear { heldFactor = factor }
-        .onChange(of: factor) { _, next in
-            let pinching = model.session.zoomPinchPreview != nil
-            if let held = heldFactor,
-                !LiveZoomLabelHold.shouldReplace(held: held, next: next, pinching: pinching)
-            {
-                return
+            .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
+            .contentShape(Rectangle())
+            .gesture(
+                LongPressGesture(minimumDuration: 0.38).exclusively(before: TapGesture())
+                    .onEnded { gesture in
+                        guard !interfaceLocked else { return }
+                        switch gesture {
+                        case .first: onOpenDial?()
+                        case .second: cycle()
+                        }
+                    }
+            )
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { cycle() }
+            .accessibilityAction(named: "Continuous zoom") { if !interfaceLocked { onOpenDial?() } }
+            .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
+            .allowsHitTesting(!interfaceLocked)
+            .disabled(interfaceLocked)
+            .accessibilityLabel("Zoom \(title)")
+            .accessibilityHint("Tap cycles camera zoom stops. Hold opens the continuous zoom dial.")
+            .accessibilityIdentifier("monitor.system.zoom")
+            .sensoryFeedback(.impact(weight: .medium), trigger: snapTick)
+            .onAppear { heldFactor = factor }
+            .onChange(of: factor) { _, next in
+                let pinching = model.session.zoomPinchPreview != nil
+                if let held = heldFactor,
+                    !LiveZoomLabelHold.shouldReplace(held: held, next: next, pinching: pinching)
+                {
+                    return
+                }
+                heldFactor = next
             }
-            heldFactor = next
-        }
     }
 }

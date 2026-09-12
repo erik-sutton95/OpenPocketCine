@@ -50,292 +50,42 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
-fun MediaClipCell(
-    file: MediaFile,
-    controller: MediaLibraryController,
-    onOpen: () -> Unit,
-    isSelecting: Boolean = false,
-    isSelected: Boolean = false,
-    onBeginSelection: (() -> Unit)? = null,
-    onToggleSelection: (() -> Unit)? = null,
-) {
-    val grade = controller.cacheGrade(file)
-    val downloaded = grade == MediaCacheGrade.ORIGINAL
-    val progress = controller.downloadProgress[file.path]
-    val favorite = controller.isFavorite(file)
-    val isPhoto = file.kind == MediaKind.PHOTO
-    var thumb by remember(file.id) { mutableStateOf<Bitmap?>(null) }
-    var duration by remember(file.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(file.id, controller.thumbnailFile(file)?.path) {
-        thumb = MediaThumbs.load(file, controller, maxPx = 640)
-        duration = MediaThumbs.durationLabel(file, controller)
-    }
-    val interaction =
-        if (isSelecting) {
-            Modifier.chromeClickable(onClick = { onToggleSelection?.invoke() ?: onOpen() })
-        } else {
-            Modifier.chromeClickable(
-                onClick = onOpen,
-                onLongClick = { onBeginSelection?.invoke() },
-            )
-        }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .semantics {
-                contentDescription = file.filename
-                role = Role.Button
-            }
-            .then(interaction),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(MediaCornerShape)
-                .background(LiveDesign.surface)
-                .border(
-                    if (isSelected) 2.dp else 1.dp,
-                    if (isSelected) LiveDesign.accent else LiveDesign.hairline,
-                    MediaCornerShape,
-                ),
-        ) {
-            val bitmap = thumb
-            if (bitmap != null) {
-                Image(
-                    bitmap.asImageBitmap(),
-                    contentDescription = file.filename,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                OpcIcon(
-                    icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.FILM,
-                    contentDescription = null,
-                    tint = LiveDesign.faint,
-                    modifier = Modifier.size(28.dp).align(Alignment.Center),
-                )
-            }
-            when {
-                progress != null -> {
-                    Box(
-                        Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "${(progress * 100).toInt()}%",
-                                color = LiveDesign.text,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            MediaGlassTrack(
-                                fraction = progress.toFloat(),
-                                modifier = Modifier.padding(top = 6.dp),
-                                trackWidth = 120.dp,
-                            )
-                        }
-                    }
-                }
-                grade == MediaCacheGrade.NONE -> {
-                    Box(
-                        Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.35f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            OpcIcon(
-                                icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.CIRCLE_PLAY,
-                                contentDescription = null,
-                                tint = LiveDesign.text,
-                                modifier = Modifier.size(26.dp),
-                            )
-                            Text(
-                                "On camera",
-                                color = LiveDesign.text,
-                                style = LiveType.ui(10f, FontWeight.SemiBold),
-                            )
-                        }
-                    }
-                }
-                !isPhoto -> {
-                    OpcIcon(
-                        icon = OpcIcon.CIRCLE_PLAY,
-                        contentDescription = null,
-                        tint = LiveDesign.text.copy(alpha = 0.9f),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).size(22.dp),
-                    )
-                }
-            }
-            if (grade.isProxyOnly && progress == null && !isSelecting) {
-                MediaBadge(
-                    MediaLibraryCopy.PROXY_TAG,
-                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-                )
-            }
-            if (!isPhoto && duration != null && progress == null && !isSelecting) {
-                MediaBadge(
-                    duration!!,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                )
-            }
-            if (isSelecting) {
-                SelectionMarker(selected = isSelected, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                file.filename,
-                color = LiveDesign.text,
-                style = LiveType.ui(12f, FontWeight.Medium),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            FavoriteStar(favorite) { controller.toggleFavorite(file) }
-        }
-    }
-}
+fun MediaClipCell(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
+    isSelecting: Boolean = false, isSelected: Boolean = false,
+    onBeginSelection: (() -> Unit)? = null, onToggleSelection: (() -> Unit)? = null) =
+    MediaCatalogClip(file, controller, onOpen, false, isSelecting, isSelected, onBeginSelection, onToggleSelection)
 
 @Composable
-fun MediaClipListRow(
-    file: MediaFile,
-    controller: MediaLibraryController,
-    onOpen: () -> Unit,
-    isSelecting: Boolean = false,
-    isSelected: Boolean = false,
-    onBeginSelection: (() -> Unit)? = null,
-    onToggleSelection: (() -> Unit)? = null,
-) {
-    val grade = controller.cacheGrade(file)
-    val downloaded = grade == MediaCacheGrade.ORIGINAL
-    val progress = controller.downloadProgress[file.path]
-    val favorite = controller.isFavorite(file)
-    val isPhoto = file.kind == MediaKind.PHOTO
-    var thumb by remember(file.id) { mutableStateOf<Bitmap?>(null) }
+fun MediaClipListRow(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
+    isSelecting: Boolean = false, isSelected: Boolean = false,
+    onBeginSelection: (() -> Unit)? = null, onToggleSelection: (() -> Unit)? = null) =
+    MediaCatalogClip(file, controller, onOpen, true, isSelecting, isSelected, onBeginSelection, onToggleSelection)
+
+/** The adapter owns cache lookup and bounded thumbnail IO; shared UI owns both renderers. */
+@Composable
+private fun MediaCatalogClip(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
+    list: Boolean, isSelecting: Boolean, isSelected: Boolean,
+    onBeginSelection: (() -> Unit)?, onToggleSelection: (() -> Unit)?) {
+    var thumbnail by remember(file.id) { mutableStateOf<Bitmap?>(null) }
     var duration by remember(file.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(file.id, controller.thumbnailFile(file)?.path) {
-        thumb = MediaThumbs.load(file, controller, maxPx = 480)
+    LaunchedEffect(file.id, controller.thumbnailFile(file)?.path, list) {
+        thumbnail = MediaThumbs.load(file, controller, maxPx = if (list) 480 else 640)
         duration = MediaThumbs.durationLabel(file, controller)
     }
-    val meta = MediaClipPresentation.metadataLine(file, duration)
-    val line =
-        when {
-            grade.isProxyOnly && meta.isEmpty() -> MediaLibraryCopy.PROXY_TAG
-            grade.isProxyOnly -> "$meta · ${MediaLibraryCopy.PROXY_TAG}"
-            meta.isEmpty() -> if (downloaded) "Cached" else "On camera"
-            else -> meta
-        }
-    val interaction =
-        if (isSelecting) {
-            Modifier.chromeClickable(onClick = { onToggleSelection?.invoke() ?: onOpen() })
-        } else {
-            Modifier.chromeClickable(
-                onClick = onOpen,
-                onLongClick = { onBeginSelection?.invoke() },
-            )
-        }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(MediaCornerShape)
-            .background(
-                if (isSelected) LiveDesign.accentDim.copy(alpha = 0.55f) else LiveDesign.surface.copy(alpha = 0.45f),
-                MediaCornerShape,
-            )
-            .border(
-                1.dp,
-                if (isSelected) LiveDesign.accent.copy(alpha = 0.45f) else LiveDesign.hairline,
-                MediaCornerShape,
-            )
-            .semantics {
-                contentDescription = file.filename
-                role = Role.Button
-            }
-            .then(interaction)
-            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .width(96.dp)
-                .height(54.dp)
-                .clip(MediaCornerShape)
-                .background(LiveDesign.surface)
-                .border(1.dp, LiveDesign.hairline, MediaCornerShape),
-        ) {
-            val bitmap = thumb
-            if (bitmap != null) {
-                Image(
-                    bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                OpcIcon(
-                    icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.FILM,
-                    contentDescription = null,
-                    tint = LiveDesign.faint,
-                    modifier = Modifier.size(20.dp).align(Alignment.Center),
-                )
-            }
-            when {
-                progress != null -> {
-                    Box(
-                        Modifier.fillMaxSize().background(LiveDesign.feedWell.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            "${(progress * 100).toInt()}%",
-                            color = LiveDesign.text,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-                grade == MediaCacheGrade.NONE -> {
-                    OpcIcon(
-                        icon = if (isPhoto) OpcIcon.IMAGE else OpcIcon.CIRCLE_PLAY,
-                        contentDescription = null,
-                        tint = LiveDesign.text.copy(alpha = 0.9f),
-                        modifier = Modifier.size(18.dp).align(Alignment.Center),
-                    )
-                }
-                grade.isProxyOnly -> {
-                    MediaBadge(MediaLibraryCopy.PROXY_TAG, modifier = Modifier.align(Alignment.Center))
-                }
-            }
-            if (isSelecting) {
-                SelectionMarker(selected = isSelected, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                file.filename,
-                color = LiveDesign.text,
-                style = LiveType.ui(13f, FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                line,
-                color = LiveDesign.muted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
-        }
-        if (!isSelecting) {
-            FavoriteStar(favorite, iconSize = 14.dp) { controller.toggleFavorite(file) }
-        }
+    val grade = controller.cacheGrade(file)
+    val source = if (grade == MediaCacheGrade.ORIGINAL) "CACHED" else if (grade.isProxyOnly) "PROXY" else "ON CAMERA"
+    val clip = com.opencapture.monitorui.MonitorClipValue(file.id, file.filename,
+        listOfNotNull(file.resolution, file.fileExtension.uppercase()).joinToString(" · "),
+        duration, source, controller.isFavorite(file), controller.downloadProgress[file.path]?.toFloat())
+    com.opencapture.monitorui.MonitorClipCard(clip, list, isSelecting, isSelected,
+        onOpen = onOpen,
+        onSelect = { if (isSelecting) onToggleSelection?.invoke() else onBeginSelection?.invoke() },
+        onFavorite = { controller.toggleFavorite(file) }) {
+        val bitmap = thumbnail
+        if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = null,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else OpcIcon(if (file.kind == MediaKind.PHOTO) OpcIcon.IMAGE else OpcIcon.FILM, null,
+            Modifier.size(if (list) 20.dp else 28.dp).align(Alignment.Center), LiveDesign.faint)
     }
 }
 
@@ -354,7 +104,7 @@ fun FavoriteStar(
         OpcIcon(
             icon = OpcIcon.STAR,
             contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-            tint = if (favorite) LiveDesign.accent else LiveDesign.faint,
+            tint = if (favorite) Color(0xFFE9C35A) else LiveDesign.faint,
             modifier = Modifier.size(iconSize),
             filled = favorite,
         )
@@ -365,19 +115,15 @@ fun FavoriteStar(
 fun SelectionMarker(selected: Boolean, modifier: Modifier = Modifier) {
     Box(
         modifier
-            .size(30.dp)
+            .size(22.dp)
             .background(
                 if (selected) LiveDesign.accent else Color.Black.copy(alpha = 0.56f),
                 CircleShape,
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            if (selected) "✓" else "○",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) LiveDesign.background else LiveDesign.text,
-        )
+        OpcIcon(if (selected) OpcIcon.CHECK else OpcIcon.CIRCLE, null, Modifier.size(12.dp),
+            if (selected) LiveDesign.background else LiveDesign.text)
     }
 }
 

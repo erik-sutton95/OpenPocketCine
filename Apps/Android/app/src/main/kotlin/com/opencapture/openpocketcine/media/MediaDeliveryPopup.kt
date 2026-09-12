@@ -30,6 +30,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -179,27 +182,39 @@ fun MediaDeliveryPopup(
                 decorFitsSystemWindows = false,
             ),
     ) {
+    val dialogView = LocalView.current
+    DisposableEffect(dialogView) {
+        val window = (dialogView.parent as? DialogWindowProvider)?.window
+        window?.setDimAmount(0f)
+        window?.let {
+            androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).apply {
+                hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        onDispose { }
+    }
     Box(
         Modifier
             .fillMaxSize()
-            .background(LiveDesign.sheetScrim)
+            .background(Color.Black.copy(alpha = .42f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) {
                 if (!busy) onDismiss()
             },
-        contentAlignment = Alignment.TopCenter,
+        contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
             Modifier
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .widthIn(max = 620.dp)
                 .fillMaxWidth()
-                .widthIn(max = 420.dp)
                 .heightIn(max = 520.dp)
-                .clip(MediaCornerShape)
-                .mediaSheetPlate(MediaCornerShape)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .background(Color(0xFF141618).copy(alpha = .86f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -221,7 +236,7 @@ fun MediaDeliveryPopup(
             ) {
                 Text(
                     "${files.size} clip${if (files.size == 1) "" else "s"}",
-                    style = LiveType.ui(15f, FontWeight.SemiBold),
+                    style = LiveType.ui(12.5f, FontWeight.SemiBold),
                     color = LiveDesign.text,
                 )
                 if (cachedCount < files.size) {
@@ -256,7 +271,7 @@ fun MediaDeliveryPopup(
                                 Modifier
                                     .fillMaxWidth()
                                     .clip(MediaCornerShape)
-                                    .background(LiveDesign.hairline.copy(alpha = 0.35f), MediaCornerShape)
+                                    .background(Color.White.copy(alpha = .04f), MediaCornerShape)
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
@@ -374,7 +389,7 @@ private fun DestinationHeader(onClose: () -> Unit) {
         OpcIcon(OpcIcon.SHARE, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(13.dp))
         Text(
             "SHARE",
-            style = LiveType.mono(14f, FontWeight.Bold),
+            style = LiveType.ui(9f, FontWeight.SemiBold),
             color = LiveDesign.text,
         )
         Spacer(Modifier.weight(1f))
@@ -389,14 +404,13 @@ private fun OptionsHeader(title: String, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            "‹ Back",
-            style = LiveType.ui(13f, FontWeight.SemiBold),
-            color = LiveDesign.accent,
-            modifier = Modifier.chromeClickable(onClick = onBack),
-        )
+        Row(Modifier.chromeClickable(onClick = onBack), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OpcIcon(OpcIcon.CHEVRON_LEFT, null, Modifier.size(12.dp), LiveDesign.accent)
+            Text("Back", style = LiveType.ui(12.5f, FontWeight.SemiBold), color = LiveDesign.accent)
+        }
         Column(Modifier.weight(1f)) {
-            Text(title, style = LiveType.ui(15f, FontWeight.SemiBold), color = LiveDesign.text)
+            Text(title, style = LiveType.ui(12.5f, FontWeight.SemiBold), color = LiveDesign.text)
             Text("Options", style = LiveType.ui(11f, FontWeight.Medium), color = LiveDesign.muted)
         }
     }
@@ -408,7 +422,7 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(MediaCornerShape)
-            .background(LiveDesign.hairline.copy(alpha = 0.35f), MediaCornerShape)
+            .background(Color.White.copy(alpha = .04f), MediaCornerShape)
             .chromeClickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -423,7 +437,7 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(
                 MediaDeliveryDestination.NATIVE_SHARE.title,
-                style = LiveType.ui(14f, FontWeight.SemiBold),
+                style = LiveType.ui(11.5f, FontWeight.SemiBold),
                 color = if (enabled) LiveDesign.text else LiveDesign.faint,
             )
             Text(
@@ -450,7 +464,7 @@ private fun SegmentedShareAction(
         Modifier
             .fillMaxWidth()
             .clip(MediaCornerShape)
-            .background(LiveDesign.hairline.copy(alpha = 0.35f), MediaCornerShape)
+            .background(Color.White.copy(alpha = .04f), MediaCornerShape)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -490,7 +504,7 @@ private fun FooterActionButton(title: String, enabled: Boolean, onClick: () -> U
             )
             .border(
                 1.dp,
-                if (enabled) LiveDesign.accent.copy(alpha = 0.55f) else LiveDesign.hairline.copy(alpha = 0.35f),
+                if (enabled) LiveDesign.accent.copy(alpha = 0.55f) else Color.White.copy(alpha = .04f),
                 MediaCornerShape,
             )
             .chromeClickable(enabled = enabled, onClick = onClick)
@@ -499,7 +513,7 @@ private fun FooterActionButton(title: String, enabled: Boolean, onClick: () -> U
     ) {
         Text(
             title,
-            style = LiveType.ui(15f, FontWeight.SemiBold),
+            style = LiveType.ui(12.5f, FontWeight.SemiBold),
             color = if (enabled) LiveDesign.text else LiveDesign.faint,
         )
     }

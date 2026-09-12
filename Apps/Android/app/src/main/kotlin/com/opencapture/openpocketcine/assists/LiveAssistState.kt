@@ -135,6 +135,9 @@ class LiveAssistState(
 
     var configureTool by mutableStateOf<LiveAssistTool?>(null)
 
+    /** Mounted, resumed inspector demand; never changes a monitor visibility flag. */
+    internal var inspectorScopeDemand by mutableStateOf<InspectorScopeDemand?>(null)
+
     /** Pressed assist chip, viewport-absolute. iOS `LiveAssistState.longPressAnchor`. */
     var longPressAnchor by mutableStateOf(com.opencapture.openpocketcine.ChromeRect(0f, 0f, 0f, 0f))
 
@@ -644,3 +647,6 @@ class LiveAssistState(
         }
     }
 }
+
+/** Owner identity prevents one disappearing host from cancelling another preview. */
+internal data class InspectorScopeDemand(val owner: Any, val tool: LiveAssistTool, val playback: Boolean)

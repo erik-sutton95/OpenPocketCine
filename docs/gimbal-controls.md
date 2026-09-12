@@ -4,9 +4,9 @@
 
 **Direction Lock** keeps the camera pointing in the same direction while the
 operator rotates the handle. It is the camera's **Lock Camera Direction** action.
-The gimbal popup has Mode, Speed, and Ramp tabs, with one set of settings below.
-Mode offers Follow, Tilt locked, FPV, and Direction Lock. The separate
-Gimbal tools footer opens experimental Motion Control.
+The trailing gimbal drawer has inline Mode, Speed and Ramp drums.
+Mode offers Follow, Tilt locked, FPV and Direction Lock. The Motion Control
+footer opens the experimental editor.
 Choose another mode to release Direction Lock. Selecting a mode in the iOS
 menu switches off AirPods head tracking; enable and calibrate it again to resume.
 

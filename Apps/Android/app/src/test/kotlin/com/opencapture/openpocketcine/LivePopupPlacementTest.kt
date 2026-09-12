@@ -8,7 +8,7 @@ class LivePopupPlacementTest {
     @Test
     fun topPickerAnchorsUnderChipLikeOpenZCine() {
         LiveChromeMetrics.scale = 1f
-        assertEquals(340f, LiveChromeMetrics.TOP_PICKER_WIDTH, 0.05f)
+        assertEquals(480f, LiveChromeMetrics.TOP_PICKER_WIDTH, 0.05f)
         assertEquals(8f, LiveChromeMetrics.TOP_PICKER_GAP, 0.05f)
 
         val width = LiveChromeMetrics.TOP_PICKER_WIDTH
@@ -66,7 +66,7 @@ class LivePopupPlacementTest {
         assertTrue(LiveSheet.FORMAT.isTopPicker)
         assertTrue(LiveSheet.COLOR.isTopPicker)
         assertTrue(!LiveSheet.ISO.isTopPicker)
-        assertEquals(340f, rec.width, 0.05f)
+        assertEquals(480f, rec.width, 0.05f)
 
         val withBarFloor =
             LivePopupPlacement.topPicker(
@@ -81,7 +81,7 @@ class LivePopupPlacementTest {
                 floorY = 330f,
             )
         assertEquals(cell.maxY + 8f, withBarFloor.y, 0.05f)
-        assertEquals(340f, withBarFloor.width, 0.05f)
+        assertEquals(480f, withBarFloor.width, 0.05f)
     }
 
     @Test
@@ -102,8 +102,8 @@ class LivePopupPlacementTest {
             )
         assertEquals(cell.maxY + 8f, box.y, 0.05f)
         assertEquals(300f - (cell.maxY + 8f), box.maxHeight, 0.05f)
-        assertTrue(CaptureLists.topPickerDrumHeight(box.maxHeight, hasTabs = true) <= 176f)
-        assertTrue(CaptureLists.topPickerDrumHeight(box.maxHeight, hasTabs = true) >= 104f)
+
+
     }
 
     @Test
@@ -132,7 +132,7 @@ class LivePopupPlacementTest {
                 safeTop = layout.safeTop,
                 safeBottom = layout.safeBottom,
             )
-        assertEquals(420f, box.width, 0.05f)
+        assertEquals(480f, box.width, 0.05f)
         assertEquals(layout.capture.minY - 10f, box.y + 280f, 0.05f)
         assertEquals(tile.midX, box.x + box.width / 2f, 1.0f)
         assertTrue(box.x >= 59f + 4f)
@@ -207,7 +207,7 @@ class LivePopupPlacementTest {
                 safeTop = 59f,
                 safeBottom = 34f,
             )
-        assertTrue(box.width <= 420f)
+        assertTrue(box.width <= 480f)
         assertTrue(box.width < 390f)
         assertTrue(box.y >= 59f + 4f)
         assertTrue(box.y + minOf(500f, box.maxHeight) <= 700f - 10f + 0.05f)

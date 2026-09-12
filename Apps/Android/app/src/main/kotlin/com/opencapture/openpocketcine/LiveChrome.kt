@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -547,7 +551,7 @@ object LivePopupPlacement {
     fun leadingX(desired: Float, width: Float, minX: Float, maxX: Float): Float =
         min(max(desired, minX), max(minX, maxX - width))
 
-    /** OpenZCine `topPickerBody`: 340-wide card, centred on the cell, 8dp under `cell.maxY`. */
+    /** Native picker card: 480 dp on phones, 620 dp on tablets, under the source chip. */
     fun topPicker(
         cell: ChromeRect,
         panelHeight: Float,
@@ -563,7 +567,7 @@ object LivePopupPlacement {
     ): Box {
         val (minX, maxX, width) =
             horizontalBand(
-                preferredWidth = preferredWidth,
+                preferredWidth = if (min(viewportWidth, viewportHeight) >= 600f) max(620f, preferredWidth) else preferredWidth,
                 viewportWidth = viewportWidth,
                 safeLeading = safeLeading,
                 safeTrailing = safeTrailing,
@@ -605,7 +609,8 @@ object LivePopupPlacement {
         gap: Float = LiveChromeMetrics.POPUP_GAP,
     ): Box {
         val hasBar = bar.width > 1f
-        val widthPref = if (hasBar) min(bar.width, preferredWidth) else preferredWidth
+        val cap = if (min(viewportWidth, viewportHeight) >= 600f) max(620f, preferredWidth) else preferredWidth
+        val widthPref = if (hasBar) min(bar.width, cap) else cap
         val (minX, maxX, width) =
             horizontalBand(
                 preferredWidth = widthPref,
@@ -979,15 +984,20 @@ data class LiveMonitorLayout(
         val gap = LiveChromeMetrics.STICK_GAP
         var barTop = Float.POSITIVE_INFINITY
         if (showsBottomBars) {
-            if (assist.height > 1f) barTop = min(barTop, assist.minY)
             if (capture.height > 1f) barTop = min(barTop, capture.minY)
         }
         val floorY =
             if (barTop < Float.POSITIVE_INFINITY) min(feed.maxY - inset, barTop - gap)
             else feed.maxY - inset
-        val avoid = if (record.width > 1f) record else null
+        // Landscape owns a separate trailing record/DISP rail. Park the whole
+        // cluster to its leading side instead of lifting it into DISP.
+        val landscape = viewportWidth >= viewportHeight
+        val gimbalWell = if (landscape && record.width > 1f) {
+            feed.copy(width = max(0f, min(feed.maxX, record.minX - 2f) - feed.minX))
+        } else feed
+        val avoid = if (!landscape && record.width > 1f) record else null
         return GimbalCluster.inTrailingBottom(
-            well = feed,
+            well = gimbalWell,
             floorY = floorY,
             canvasMaxY = viewportHeight - max(0f, safeBottom),
             avoid = avoid,
@@ -1084,6 +1094,33 @@ data class LiveMonitorLayout(
                     topDeck =
                         topDeckRect(layout.feed, layout.lock, layout.battery, layout.rail, constrained),
                 )
+            if (vw >= vh) {
+                val tablet = min(vw, vh) >= 600f
+                val btn = if (tablet) 48f else 54f
+                val record = if (tablet) 84f else 70f
+                val edge = 14f
+                val recordX = vw - 10f - record
+                val recordY = vh - 16f - record
+                val recordButtonX = recordX + (record - btn) / 2f
+                val buttonX = if (tablet) vw - 14f - btn else recordButtonX
+                val top = if (tablet) 12f else if (max(safeLeading, safeTrailing) < 20f) 52f else 8f
+                val valuesInset = if (tablet) 140f else 112f
+                layout = layout.copy(
+                    lock = ChromeRect(edge, 12f, btn, btn),
+                    battery = ChromeRect(edge, 12f + btn + 8f, 46f, 54f),
+                    topDeck = ChromeRect(max(78f, feed.minX + 12f), 4f,
+                        max(0f, (if (tablet) buttonX - btn - 8f else buttonX) - 12f -
+                            max(78f, feed.minX + 12f)), 35f),
+                    settings = ChromeRect(if (tablet) buttonX - btn - 8f else buttonX, top, btn, btn),
+                    media = ChromeRect(buttonX, if (tablet) top else top + btn + 8f, btn, btn),
+                    record = ChromeRect(recordX, recordY, record, record),
+                    disp = ChromeRect(recordButtonX, recordY - 8f - btn, btn, btn),
+                    rail = ChromeRect(recordX, 0f, record, vh),
+                    capture = ChromeRect(valuesInset, vh - 52f, max(0f, vw - 2 * valuesInset), 44f),
+                    assist = ChromeRect(edge, vh - 14f - (if (tablet) 115f else 99f),
+                        if (tablet) 78f else 72f, if (tablet) 115f else 99f),
+                )
+            }
             return layout
         }
 
@@ -1139,24 +1176,9 @@ data class LiveMonitorLayout(
                 val height = vw / aspect
                 return ChromeRect(0f, (vh - height) / 2f, vw, height)
             }
-            val remaining = max(0f, vw - width)
-            val leadCut = if (safeLeading >= LiveChromeMetrics.CUTOUT_MIN) safeLeading else 0f
-            val trailCut = if (safeTrailing >= LiveChromeMetrics.CUTOUT_MIN) safeTrailing else 0f
-            val leadingInset = if (trailCut > leadCut) 0f else leadCut
-            val xWanted =
-                if (isClassicNotch(safeLeading, safeTrailing)) {
-                    val available = max(0f, remaining - max(0f, safeLeading) - max(0f, safeTrailing))
-                    val shift = min(LiveChromeMetrics.CLASSIC_NOTCH_SHIFT, available)
-                    min(remaining, safeLeading + shift)
-                } else {
-                    min(remaining, leadingInset)
-                }
-            // S25 leftover 140. Reserve the rail plus a few dp so record
-            // clears the picture without parking the well in the lock lane.
-            // Auditor 874×402 still pins x at 59.
-            val trailLane = LiveChromeMetrics.RAIL_W + 8f
-            val x = min(xWanted, max(0f, remaining - trailLane))
-            return ChromeRect(x, 0f, width, vh)
+            // UI 2.0 keeps the picture centered when the device rotates left/right.
+            // Only the chrome changes its clearance around the physical cutout.
+            return ChromeRect(max(0f, (vw - width) / 2f), 0f, width, vh)
         }
 
         private fun isClassicNotch(leading: Float, trailing: Float): Boolean {
@@ -1372,7 +1394,7 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
             icon = OpcIcon.LOCK,
             contentDescription = null,
             tint = tint,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.fillMaxSize(.54f),
         )
     }
 }
@@ -1399,8 +1421,8 @@ fun DispButton(
     ) {
         Text(
             "DISP",
-            color = if (clean) LiveDesign.text else LiveDesign.info,
-            style = LiveType.ui(12f, FontWeight.Bold),
+            color = LiveDesign.muted,
+            style = LiveType.ui(11f, FontWeight.SemiBold),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Box(
@@ -1422,13 +1444,13 @@ fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @
     Box(
         modifier
             .size(LiveChromeMetrics.AUX.dp)
-            .monitorGlass(CircleShape)
+            .monitorGlass(RoundedCornerShape(14.dp))
             .chromeClickable(onClick = onClick)
             .semantics { role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.size((LiveChromeMetrics.AUX * 0.36f).dp),
+            Modifier.fillMaxSize(.54f),
             contentAlignment = Alignment.Center,
         ) {
             glyph(LiveDesign.text.copy(alpha = 0.86f))
@@ -1523,34 +1545,16 @@ fun RecordButton(
 
 @Composable
 private fun RecordLamp(recording: Boolean) {
-    val transition = rememberInfiniteTransition(label = "recordPulse")
-    val pulse by
-        transition.animateFloat(
-            initialValue = 0.22f,
-            targetValue = 0.55f,
-            animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
-            label = "recordGlow",
-        )
-    val glow = if (recording) pulse else 0f
+    val morph by animateFloatAsState(if (recording) 1f else 0f, tween(180), label = "record-shape")
     Canvas(Modifier.fillMaxSize()) {
         val d = size.minDimension
-        val center = Offset(size.width / 2, size.height / 2)
-        val ring = d * 0.50f
-        val ringLine = max(2.dp.toPx(), d * 0.026f)
-        if (recording) {
-            drawCircle(LiveDesign.pocketRing.copy(alpha = glow), radius = d * 0.58f, center = center)
-        }
-        drawCircle(LiveDesign.recordWell, radius = d / 2f, center = center)
-        drawCircle(Color.Black.copy(alpha = 0.55f), radius = d / 2f, center = center, style = Stroke(1.5.dp.toPx()))
-        if (recording) {
-            drawCircle(LiveDesign.pocketRing, radius = ring / 2f, center = center)
-        } else {
-            drawCircle(
-                LiveDesign.pocketRing,
-                radius = ring / 2f,
-                center = center,
-                style = Stroke(ringLine),
-            )
+        drawCircle(LiveDesign.tile, radius = d / 2f)
+        drawCircle(Color.White.copy(alpha = .14f), radius = d / 2f - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+        drawCircle(LiveDesign.rec, radius = d * .40f, style = Stroke(d * .065f))
+        if (morph > 0f) {
+            val side = d * .33f * morph
+            drawRoundRect(LiveDesign.rec, topLeft = center - Offset(side / 2, side / 2),
+                size = Size(side, side), cornerRadius = CornerRadius(d * .04f))
         }
     }
 }
@@ -1702,35 +1706,27 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
     }
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(color = LiveDesign.text)) { append("TC $head") }
+            withStyle(SpanStyle(color = LiveDesign.text)) { append(head) }
             withStyle(SpanStyle(color = LiveDesign.accent)) { append(tail) }
         },
-        style = LiveType.mono(20f, FontWeight.Medium),
+        style = LiveType.mono(24f, FontWeight.SemiBold),
         maxLines = 1,
         softWrap = false,
         modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
     )
 }
 
+/** Elapsed time comes from camera telemetry; this view never starts a timer. */
 @Composable
-fun RecChip(recording: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        modifier =
-            Modifier
-                .wrapContentWidth(unbounded = true)
-                .chipGlass(CircleShape)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-    ) {
-        Box(Modifier.size(9.dp).clip(CircleShape).background(if (recording) LiveDesign.rec else LiveDesign.faint))
-        Text(
-            if (recording) "REC" else "STBY",
-            color = if (recording) LiveDesign.text else LiveDesign.muted,
-            style = LiveType.ui(11f, FontWeight.Bold),
-            maxLines = 1,
-            softWrap = false,
-        )
+fun RecChip(recording: Boolean, elapsedSeconds: Int = 0) {
+    val elapsed = elapsedSeconds.coerceAtLeast(0)
+    val duration = "%02d:%02d".format(java.util.Locale.ROOT, elapsed / 60, elapsed % 60)
+    Row(Modifier.background(Color.Black.copy(alpha = .52f), RoundedCornerShape(10.dp))
+        .padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(if (recording) "REC" else "STBY", color = if (recording) LiveDesign.rec else LiveDesign.text,
+            style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
+        Text(duration, color = LiveDesign.muted, style = LiveType.mono(9f, FontWeight.SemiBold), maxLines = 1)
     }
 }
 
@@ -1946,6 +1942,12 @@ fun LiveGimbalStick(
 ) {
     val knobRatio = LiveDesign.GIMBAL_KNOB_DP / LiveDesign.GIMBAL_STICK_DP
     var knobOffset by remember { mutableStateOf(Offset.Zero) }
+    var pressed by remember { mutableStateOf(false) }
+    val renderedOffset by animateOffsetAsState(knobOffset,
+        if (pressed) snap() else spring(dampingRatio = .8f, stiffness = 300f), label = "stick-return")
+    val stickTint by animateColorAsState(
+        if (pressed) LiveDesign.accent.copy(alpha = .8f) else Color.White.copy(alpha = .55f),
+        tween(120), label = "stick-press")
     val scope = rememberCoroutineScope()
     var recenterJob by remember { mutableStateOf<Job?>(null) }
     Box(
@@ -1960,55 +1962,65 @@ fun LiveGimbalStick(
                 var lastTap = 0L
                 awaitEachGesture {
                     val down = awaitFirstDown()
+                    pressed = true
                     var dragged = false
                     var translation = Offset.Zero
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (change.pressed) {
-                            translation += change.positionChange()
-                            val mag = hypot(translation.x, translation.y)
-                            if (travel > 0f && mag / travel > CameraCommands.GIMBAL_STICK_TAP_SLOP) {
-                                dragged = true
-                                taps = 0
-                                recenterJob?.cancel()
-                                val limited =
-                                    if (mag > travel && mag > 0f) translation * (travel / mag) else translation
-                                knobOffset = limited
-                                val denom = if (travel > 0f) travel else 1f
-                                onMove(limited.x / denom, -limited.y / denom)
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.pressed) {
+                                translation += change.positionChange()
+                                val mag = hypot(translation.x, translation.y)
+                                if (travel > 0f && mag / travel > CameraCommands.GIMBAL_STICK_TAP_SLOP) {
+                                    dragged = true
+                                    taps = 0
+                                    recenterJob?.cancel()
+                                    val limited =
+                                        if (mag > travel && mag > 0f) translation * (travel / mag) else translation
+                                    knobOffset = limited
+                                    val denom = if (travel > 0f) travel else 1f
+                                    onMove(limited.x / denom, -limited.y / denom)
+                                }
+                                change.consume()
+                            } else {
+                                break
                             }
-                            change.consume()
+                        }
+                        if (dragged) {
+                            knobOffset = Offset.Zero
+                            dragged = false
+                            onRelease()
                         } else {
-                            break
-                        }
-                    }
-                    if (dragged) {
-                        knobOffset = Offset.Zero
-                        onRelease()
-                    } else {
-                        knobOffset = Offset.Zero
-                        val now = System.currentTimeMillis()
-                        if (now - lastTap > 420L) taps = 0
-                        taps += 1
-                        lastTap = now
-                        when (taps) {
-                            2 -> {
-                                recenterJob?.cancel()
-                                recenterJob =
-                                    scope.launch {
-                                        delay(280)
-                                        onRecenter()
-                                        taps = 0
-                                    }
-                            }
-                            3 -> {
-                                recenterJob?.cancel()
-                                recenterJob = null
-                                taps = 0
-                                onFlip()
+                            knobOffset = Offset.Zero
+                            val now = System.currentTimeMillis()
+                            if (now - lastTap > 420L) taps = 0
+                            taps += 1
+                            lastTap = now
+                            when (taps) {
+                                2 -> {
+                                    recenterJob?.cancel()
+                                    recenterJob =
+                                        scope.launch {
+                                            delay(280)
+                                            onRecenter()
+                                            taps = 0
+                                        }
+                                }
+                                3 -> {
+                                    recenterJob?.cancel()
+                                    recenterJob = null
+                                    taps = 0
+                                    onFlip()
+                                }
                             }
                         }
+                    } finally {
+                        pressed = false
+                        knobOffset = Offset.Zero
+                        // Cancellation/rotation must release the existing stick
+                        // intent just as lifting the pointer does.
+                        if (dragged) onRelease()
                     }
                 }
             },
@@ -2019,14 +2031,14 @@ fun LiveGimbalStick(
             val knobPx = stickPx * knobRatio
             val stroke = 2.dp.toPx()
             drawCircle(
-                color = Color.White.copy(alpha = 0.30f),
+                color = stickTint,
                 radius = stickPx / 2f - stroke / 2f,
                 style = Stroke(width = stroke),
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.30f),
+                color = stickTint,
                 radius = knobPx / 2f,
-                center = center + knobOffset,
+                center = center + renderedOffset,
             )
         }
     }
@@ -2077,42 +2089,12 @@ fun CameraGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun VideoGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(14.dp, 11.dp)) {
-        drawRoundRect(tint, style = Stroke(1.4.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx()))
-        val path =
-            Path().apply {
-                moveTo(size.width * 0.42f, size.height * 0.32f)
-                lineTo(size.width * 0.68f, size.height * 0.5f)
-                lineTo(size.width * 0.42f, size.height * 0.68f)
-                close()
-            }
-        drawPath(path, tint)
-    }
-}
-
-@Composable
-fun ColorGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(12.dp)) {
-        drawCircle(tint, radius = size.minDimension / 2, style = Stroke(1.4.dp.toPx()))
-        drawCircle(tint, radius = size.minDimension * 0.18f)
-    }
+    OpcIcon(OpcIcon.VIDEO, null, modifier.size(14.dp), tint)
 }
 
 @Composable
 fun SdCardGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(11.dp, 14.dp)) {
-        val path =
-            Path().apply {
-                moveTo(size.width * 0.15f, 0f)
-                lineTo(size.width * 0.62f, 0f)
-                lineTo(size.width, size.height * 0.22f)
-                lineTo(size.width, size.height)
-                lineTo(0f, size.height)
-                lineTo(0f, size.height * 0.18f)
-                close()
-            }
-        drawPath(path, tint, style = Stroke(1.3.dp.toPx()))
-    }
+    OpcIcon(OpcIcon.CARD_SIM, null, modifier.size(14.dp), tint)
 }
 
 @Composable

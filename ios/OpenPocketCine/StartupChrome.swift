@@ -1,91 +1,56 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
 enum StartupColors {
-    /// DJI Black / Titan pairing chrome — Sky Blue accent, no Nikon gold.
-    static let background = Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255)
-    static let surface = Color(red: 28 / 255, green: 28 / 255, blue: 28 / 255)
-    static let tile = Color(red: 36 / 255, green: 36 / 255, blue: 36 / 255)
-    static let control = Color(red: 94 / 255, green: 98 / 255, blue: 98 / 255)
-    static let ink = Color.white
-    static let muted = Color(red: 160 / 255, green: 165 / 255, blue: 165 / 255)
-    static let dim = Color(red: 94 / 255, green: 98 / 255, blue: 98 / 255)
+    static let background = MonitorTheme.background
+    static let surface = MonitorTheme.surface
+    static let tile = MonitorTheme.raised
+    static let control = MonitorTheme.faint
+    static let ink = MonitorTheme.text
+    static let muted = MonitorTheme.muted
+    static let dim = MonitorTheme.faint
     static let border = Color.white
-    static let card = surface.opacity(0.58)
-    static let accent = Color(red: 0, green: 163 / 255, blue: 230 / 255)
+    static let card = MonitorTheme.surface
+    static let accent = MonitorTheme.accent
     static let ready = Color(red: 0.247, green: 0.710, blue: 0.416)
-    static let destructive = Color(red: 0.930, green: 0.267, blue: 0.267)
-    static let darkText = Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255)
-
-    static var backdrop: some View {
-        ZStack {
-            Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255)
-            RadialGradient(
-                colors: [
-                    Color(red: 0, green: 163 / 255, blue: 230 / 255).opacity(0.10),
-                    Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255).opacity(0),
-                ],
-                center: UnitPoint(x: 0.5, y: 0.24),
-                startRadius: 8,
-                endRadius: 760
-            )
-        }
-    }
+    static let destructive = MonitorTheme.recording
+    static let darkText = MonitorTheme.canvas
+    static var backdrop: some View { MonitorTheme.background }
 }
 
 enum LiveDesign {
-    /// DJI Black `#141414`.
-    private static let djiBlack = Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255)
-    /// DJI Titan `#5E6262` — hairlines and low-opacity inactive fills only.
-    private static let djiTitan = Color(red: 94 / 255, green: 98 / 255, blue: 98 / 255)
-    /// DJI Silver `#A0A5A5`.
-    private static let djiSilver = Color(red: 160 / 255, green: 165 / 255, blue: 165 / 255)
-    /// DJI Sky Blue `#00A3E0`.
-    private static let djiSky = Color(red: 0, green: 163 / 255, blue: 230 / 255)
-
-    static let background = djiBlack
-    /// Slightly lifted black for cards — stays dark, not a Titan slab.
-    static let surface = Color(red: 28 / 255, green: 28 / 255, blue: 28 / 255)
-    static let glass = djiBlack.opacity(0.24)
-    static let glassOpaque = djiBlack.opacity(0.38)
-    /// Plate *behind* Liquid Glass. Dense charcoal, not Titan — a gray mix
-    /// desaturates refraction and reads as weaker glass, not a darker HUD.
-    static let chromePlate = djiBlack.opacity(0.34)
-    /// Black ND on `Glass.regular`. Titan here turned the bars gray.
-    static let chromeTint = djiBlack.opacity(0.42)
-    /// Inactive pills: Titan at low opacity so chrome stays light-on-dark.
-    static let glassBright = djiTitan.opacity(0.18)
-    static let hairline = djiTitan.opacity(0.45)
-    static let hairlineStrong = djiTitan.opacity(0.70)
-    static let text = Color.white
-    static let muted = djiSilver
-    static let faint = djiTitan
-    static let accent = djiSky
-    static let accentDim = djiSky.opacity(0.16)
-    /// Zebra amber swatch — scientific gold, not chrome accent.
+    static let background = MonitorTheme.canvas
+    static let surface = MonitorTheme.surface
+    static let glass = MonitorTheme.surface
+    static let glassOpaque = MonitorTheme.surface
+    static let chromePlate = MonitorTheme.surface
+    static let chromeTint = MonitorTheme.surface
+    static let glassBright = MonitorTheme.raised
+    static let hairline = MonitorTheme.border
+    static let hairlineStrong = MonitorTheme.faint.opacity(0.5)
+    static let text = MonitorTheme.text
+    static let muted = MonitorTheme.muted
+    static let faint = MonitorTheme.faint
+    static let accent = MonitorTheme.accent
+    static let accentDim = MonitorTheme.accent.opacity(0.16)
     static let amber = Color(red: 0.914, green: 0.674, blue: 0.208)
     static let good = Color(red: 0.18, green: 0.78, blue: 0.42)
-    static let rec = Color(red: 0.82, green: 0.20, blue: 0.23)
-    static let info = Color(red: 0.10, green: 0.58, blue: 0.98)
+    static let rec = MonitorTheme.recording
+    static let info = MonitorTheme.accent
     static let cornerRadius = DesignTokens.cornerRadius
-    /// Assist toolbar + capture strip (OpenZCine `LiveDesign.controlHeight`).
     static let controlHeight: CGFloat = 58
 }
 
 extension View {
-    /// Field-monitor HUD: frosted glass over a dark plate so the feed cannot
-    /// bleach one bar and leave the other charcoal.
+    /// Compositor-owned Field Monitor material; no application-side frame copy.
     func liveChromeGlass(in shape: some Shape, interactive: Bool = false) -> some View {
-        self
-            .liquidGlass(in: shape, tint: LiveDesign.chromeTint, interactive: interactive)
-            .background(LiveDesign.chromePlate, in: shape)
+        monitorGlass(in: shape)
             .environment(\.colorScheme, .dark)
     }
-
     func liveChromeCapsule(interactive: Bool = false) -> some View {
         liveChromeGlass(in: Capsule(), interactive: interactive)
     }
-
     func liveChromeCircle(interactive: Bool = false) -> some View {
         liveChromeGlass(in: Circle(), interactive: interactive)
     }

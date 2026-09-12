@@ -70,10 +70,10 @@ enum MediaDeliveryDestination: String, CaseIterable, Identifiable, Sendable {
         case .frameio: "Upload to your Frame.io project"
         }
     }
-    var systemImage: String {
+    var icon: OpcIcon {
         switch self {
-        case .nativeShare: "square.and.arrow.up"
-        case .frameio: "arrow.up.circle"
+        case .nativeShare: .share
+        case .frameio: .upload
         }
     }
     var actionTitle: String {

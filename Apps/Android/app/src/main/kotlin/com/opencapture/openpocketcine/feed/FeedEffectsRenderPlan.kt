@@ -63,11 +63,14 @@ internal class FeedEffectsRenderPlan(
             h = 31 * h + System.identityHashCode(falseColorWeight)
             h = 31 * h + if (peaking) 1 else 0
             h = 31 * h + peakingColor.contentHashCode()
+            h = 31 * h + peakingRatioThreshold.hashCode()
+            h = 31 * h + peakingNoiseGate.hashCode()
             h = 31 * h + if (zebraHighlightOn) 1 else 0
             h = 31 * h + zebraHighlightCode.hashCode()
             h = 31 * h + zebraHighlightColor.contentHashCode()
             h = 31 * h + if (zebraMidtoneOn) 1 else 0
             h = 31 * h + zebraMidtoneCode.hashCode()
+            h = 31 * h + zebraMidtoneHalf.hashCode()
             h = 31 * h + zebraMidtoneColor.contentHashCode()
             h = 31 * h + if (splitComparison) 1 else 0
             h = 31 * h + if (splitVertical) 1 else 0
@@ -107,9 +110,12 @@ internal object FeedEffectsRenderPlanFactory {
         family: String,
         cameraName: String?,
         playback: Boolean = false,
+        previewTool: LiveAssistTool? = null,
     ): FeedEffectsRenderPlan {
         val shown: (LiveAssistTool) -> Boolean =
-            if (playback) {
+            if (previewTool != null) {
+                { it == previewTool }
+            } else if (playback) {
                 { assist.isPlaybackVisible(it) }
             } else {
                 { assist.isVisible(it) }
@@ -118,11 +124,18 @@ internal object FeedEffectsRenderPlanFactory {
         val peaking = shown(LiveAssistTool.PEAK)
         val falseColor = shown(LiveAssistTool.FALSE)
         val zebra = shown(LiveAssistTool.ZEBRA)
-        val waveform = shown(LiveAssistTool.WAVE)
-        val parade = shown(LiveAssistTool.PARADE)
-        val histogram = shown(LiveAssistTool.HISTO)
-        val vectorscope = shown(LiveAssistTool.VECTOR)
-        val trafficLights = shown(LiveAssistTool.LIGHTS)
+        val inspectorDemand = assist.inspectorScopeDemand?.takeIf { it.playback == playback && previewTool == null }
+        val inspector = inspectorDemand?.tool
+        val previewOwner = inspectorDemand?.takeIf {
+            it.tool in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA)
+        }?.owner
+        val inspectorOnly = inspector != null && listOf(LiveAssistTool.WAVE, LiveAssistTool.PARADE,
+            LiveAssistTool.HISTO, LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.ND).none(shown)
+        val waveform = shown(LiveAssistTool.WAVE) || inspector == LiveAssistTool.WAVE
+        val parade = shown(LiveAssistTool.PARADE) || inspector == LiveAssistTool.PARADE
+        val histogram = shown(LiveAssistTool.HISTO) || inspector == LiveAssistTool.HISTO
+        val vectorscope = shown(LiveAssistTool.VECTOR) || inspector == LiveAssistTool.VECTOR
+        val trafficLights = shown(LiveAssistTool.LIGHTS) || inspector == LiveAssistTool.LIGHTS
         val look =
             LutLookResolver.resolve(
                 selection = lutSelection,
@@ -188,6 +201,9 @@ internal object FeedEffectsRenderPlanFactory {
             splitVertical = assist.splitVertical,
             scopeTap =
                 ScopeTapPolicy(
+                    inspectorOnly = inspectorOnly,
+                    previewOwner = previewOwner,
+                    playback = playback,
                     waveform = waveform,
                     parade = parade,
                     histogram = histogram,

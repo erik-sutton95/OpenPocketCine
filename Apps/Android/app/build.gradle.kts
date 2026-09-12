@@ -143,6 +143,7 @@ afterEvaluate {
 
 dependencies {
     implementation(project(":core-api"))
+    implementation(project(":monitor-ui"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)

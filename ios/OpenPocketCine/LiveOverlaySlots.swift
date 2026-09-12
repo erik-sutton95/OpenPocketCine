@@ -3,13 +3,16 @@ import SwiftUI
 
 /// OpenZCine `MonitorSystemCluster.settingsButton` (`MonitorUnified.swift` ~1098).
 struct LiveSettingsButton: View {
+    @Environment(\.interfaceLocked) private var locked
+    var size: CGFloat = LiveChromeMetrics.auxiliaryButtonSize
     var onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
-            LiveRailCircle(icon: .settings)
+            LiveRailCircle(icon: .settings, size: size)
         }
         .buttonStyle(.zcTapTarget)
+        .disabled(locked).opacity(locked ? 0.4 : 1)
         .accessibilityLabel("Open Operator Setup")
         .accessibilityIdentifier("monitor.system.settings")
     }
@@ -17,13 +20,16 @@ struct LiveSettingsButton: View {
 
 /// OpenZCine `MonitorSystemCluster.mediaButton` (`MonitorUnified.swift` ~1114).
 struct LiveMediaButton: View {
+    @Environment(\.interfaceLocked) private var locked
+    var size: CGFloat = LiveChromeMetrics.auxiliaryButtonSize
     var onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
-            LiveRailCircle(icon: .layers)
+            LiveRailCircle(icon: .film, size: size)
         }
         .buttonStyle(.zcTapTarget)
+        .disabled(locked).opacity(locked ? 0.4 : 1)
         .accessibilityLabel("Open Media")
         .accessibilityIdentifier("monitor.system.media")
     }
@@ -120,13 +126,13 @@ struct LiveHeadTrackCalibrateButton: View {
 /// Rail circle with a Lucide glyph (no copyrighted rail assets, no SF Symbols).
 private struct LiveRailCircle: View {
     let icon: OpcIcon
+    var size: CGFloat
 
     var body: some View {
-        let size = LiveChromeMetrics.auxiliaryButtonSize
         icon
-            .frame(width: size * 0.36, height: size * 0.36)
+            .frame(width: size * (29.0 / 54.0), height: size * (29.0 / 54.0))
             .foregroundStyle(LiveDesign.text.opacity(0.86))
             .frame(width: size, height: size)
-            .liveChromeCircle()
+            .liveChromeGlass(in: RoundedRectangle(cornerRadius: 14))
     }
 }

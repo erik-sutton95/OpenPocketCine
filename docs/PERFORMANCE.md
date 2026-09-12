@@ -2,7 +2,7 @@
 
 The picture is the product. Chrome, scopes, and SET traffic ride around it.
 Target hardware is mid/high-end: iPhone 13-class and newer; Android API 33+
-with ≥4 GB RAM (the Kyant glass gate). Prove **physical** after any live-path
+with ≥4 GB RAM. Prove **physical** after any live-path
 change.
 
 Numbers that already have a home stay there. This file is the SLO index and the
@@ -21,7 +21,8 @@ the same PR.
 | Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits two enables, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
 | Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. Assists-off is one blit — no 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
-| HUD glass sample | PixelCopy ~20 Hz when Kyant cannot sample the SurfaceView | [`ANDROID.md`](../ANDROID.md) |
+| Floating chrome | iOS native compositor material; Android translucent tint. No application-side full-frame backdrop copy for UI 2.0 chrome. Page surfaces are opaque. | `MonitorUI`, Android `monitor-ui` |
+| Inspector preview | Only while the visible source’s inspector is open and the scene is active: at most 5 Hz, latest source, downsample to at most 320 px before image processing, one job in flight; cancel/discard on close or source change. Playback cannot request samples from a hidden live inspector. Scope previews reuse the existing bounded scope products. | `AssistInspectorPreview` |
 | Zoom pinch | Distinct lens ticks at 20 Hz, no ACK wait | [`PARITY.md`](PARITY.md) |
 | Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; a 25 Hz pump publishes native targets to a latest-only mailbox. Native wire emission has a 40 ms minimum interval on the 25 ms ACK timer (typically 20 Hz). Duplicate targets are suppressed; a not-ready socket cannot accumulate a backlog. HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). Motion Control waypoint letters follow the 25 Hz stick budget — not 60 Hz `TimelineView.animation` / `withFrameNanos` on the live canvas (that starved ingest and flashed Reconnecting). Motion Control session progress is 5 Hz; no debug overlay is drawn. Timed-path ticks use monotonic elapsed time; a gap over 120 ms or attitude receipt age over 300 ms aborts the take. Physical precision remains unqualified ([Motion Control takes](programmed-moves.md)). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
 | Gimbal mode readback | At most 1 Hz tilt/speed GET, driven by existing attitude receipts; no extra timer | `GimbalParamPoll` |
@@ -96,8 +97,9 @@ UI thread (`allowsNextDrawableTimeout` on iOS).
 
 ## Hardware
 
-Kyant liquid glass: API 33+ and ≥4 GB, not `isLowRamDevice`. FULL stays FULL —
-no frame-budget demote. Older / low-RAM devices stay on solid frost.
+UI 2.0 floating chrome uses platform compositing, not an application-side
+SurfaceView capture loop. iOS Reduce Transparency uses solid plates. Keep the
+legacy Android glass capability policy isolated from the new monitor chrome.
 
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
 fallback. GLES `FeedEffectsGlProgram` is the Android decode fallback when
@@ -111,3 +113,14 @@ A live-path, HUD, scope, ACK, playback-LUT, or smoothness change. After the
 edit, the row you touched still matches its owner, and the picture is
 **physical** at the camera’s live rate on mid/high-end hardware. Playback LUT
 on a 720p proxy is the same bar.
+
+### UI 2.0 window geometry
+
+Native window geometry is sampled after UIKit layout callbacks and published only
+when size or insets change. SwiftUI consumes the snapshot through the environment.
+No geometry polling or frame-tick subscription is added; same-size landscape
+rotations still update the physical cutout edges.
+
+The UI 2.0 joystick uses the reference white/cyan treatment. Its former 150 ms
+image-luminance sampling loop and Core Image readback are removed; movement,
+release and the existing transport cadence are unchanged.

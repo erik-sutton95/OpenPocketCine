@@ -2,7 +2,7 @@ import SwiftUI
 
 /// OpenZCine `MonitorLiveViewModuleLayout` / `MonitorSideRailControlLayout` / chrome insets.
 enum LiveChromeMetrics {
-    static var scale: CGFloat = 1
+    static let scale: CGFloat = 1
     static var lockButtonSize: CGFloat { 40 * scale }
     static var lockBatteryGap: CGFloat { 4 * scale }
     static var auxiliaryButtonSize: CGFloat { 63.25 * scale }
@@ -73,17 +73,18 @@ extension EnvironmentValues {
 /// OpenZCine `MonitorSystemCluster.lockButton` (`MonitorUnified.swift` ~1068).
 struct LiveLockButton: View {
     @Binding var locked: Bool
+    var size: CGFloat = LiveChromeMetrics.lockButtonSize
 
     var body: some View {
         Button {
             locked.toggle()
         } label: {
             OpcIcon.lock
-                .frame(width: 16, height: 16)
+                .frame(width: size * 29 / 54, height: size * 29 / 54)
                 .foregroundStyle(locked ? LiveDesign.accent : LiveDesign.text.opacity(0.86))
                 .frame(
-                    width: LiveChromeMetrics.lockButtonSize,
-                    height: LiveChromeMetrics.lockButtonSize
+                    width: size,
+                    height: size
                 )
                 .liveChromeGlass(
                     in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)

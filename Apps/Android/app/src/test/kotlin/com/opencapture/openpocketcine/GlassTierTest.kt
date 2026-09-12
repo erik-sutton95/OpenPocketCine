@@ -86,17 +86,17 @@ class GlassTierTest {
     }
 
     @Test
-    fun playbackBarPlateIsHalfHudNd() {
-        assertEquals(LiveDesign.chromePlate.alpha * 0.5f, LiveDesign.playbackBarPlate.alpha, 0.01f)
-        assertEquals(LiveDesign.chromeTint.alpha * 0.5f, LiveDesign.playbackBarTint.alpha, 0.01f)
+    fun playbackAndLiveUseTheSameOpaqueSurface() {
+        assertEquals(LiveDesign.chromePlate.alpha, LiveDesign.playbackBarPlate.alpha, 0.01f)
+        assertEquals(LiveDesign.chromeTint.alpha, LiveDesign.playbackBarTint.alpha, 0.01f)
     }
 
     @Test
-    fun shareSheetPlateIsDjiBlackAndNearlyOpaque() {
-        assertEquals(20 / 255f, LiveDesign.sheetPlate.red, 0.001f)
-        assertEquals(20 / 255f, LiveDesign.sheetPlate.green, 0.001f)
-        assertEquals(20 / 255f, LiveDesign.sheetPlate.blue, 0.001f)
-        assertEquals(0.94f, LiveDesign.sheetPlate.alpha, 0.01f)
+    fun shareSheetUsesTheOpaqueMonitorSurface() {
+        assertEquals(26 / 255f, LiveDesign.sheetPlate.red, 0.001f)
+        assertEquals(27 / 255f, LiveDesign.sheetPlate.green, 0.001f)
+        assertEquals(28 / 255f, LiveDesign.sheetPlate.blue, 0.001f)
+        assertEquals(1f, LiveDesign.sheetPlate.alpha, 0.01f)
         assertTrue(LiveDesign.sheetPlate.alpha > LiveDesign.scopePlate.alpha)
         assertEquals(0.48f, LiveDesign.sheetScrim.alpha, 0.01f)
         assertTrue(LiveDesign.sheetScrim.alpha > 0.18f)
