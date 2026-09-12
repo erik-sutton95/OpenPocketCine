@@ -327,14 +327,32 @@ final class FalseColorAssistTests: XCTestCase {
     /// The compositor reads the async-warmed cube bytes (`overlayPaintData` /
     /// `overlayWeightData` return nil until the lattice build lands). Tests
     /// must warm first — the app shows the plain look meanwhile.
-    private func warmOverlayCubes(scale: FalseColorScaleKind, mode: ColorMode) throws {
+    private func warmOverlayCubes(
+        scale: FalseColorScaleKind, mode: ColorMode, recordReadinessDuration: Bool = false
+    ) throws {
+        let started = ProcessInfo.processInfo.systemUptime
         PocketFalseColorMap.warm(scale: scale, mode: mode)
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline {
+        // This bounds functional setup, not a live-performance benchmark. The
+        // two cold 64³ lattices already take about five seconds in unoptimized
+        // simulator builds, so normal host contention must not skip pixel checks.
+        let deadline = started + 30
+        while ProcessInfo.processInfo.systemUptime < deadline {
             let ready =
                 PocketFalseColorMap.overlayPairData(scale: scale, mode: mode)?.clipByte
                 == ScopeExposureCeiling.clipByte(transfer: MonitorTransfer(mode))
-            if ready { return }
+            if ready {
+                if recordReadinessDuration {
+                    let duration = ProcessInfo.processInfo.systemUptime - started
+                    XCTContext.runActivity(named: "Cold false-color cube readiness") { activity in
+                        let attachment = XCTAttachment(
+                            string: String(
+                                format: "Exact exposure map ready after %.3f s", duration))
+                        attachment.lifetime = .keepAlways
+                        activity.add(attachment)
+                    }
+                }
+                return
+            }
             usleep(20_000)
         }
         XCTFail("false-colour cube warm did not finish in time")
@@ -444,7 +462,7 @@ final class FalseColorAssistTests: XCTestCase {
     }
 
     func testAssistOverlayPaintsGrayInCineStopGap() throws {
-        try warmOverlayCubes(scale: .stops, mode: .dLog2)
+        try warmOverlayCubes(scale: .stops, mode: .dLog2, recordReadinessDuration: true)
         let encoded = UInt8(
             clamping: Int(
                 (ScopeDisplayScale.signalNative(monitorPercent: 20, transfer: .dlog2) * 255)
