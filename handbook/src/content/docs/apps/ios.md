@@ -185,6 +185,12 @@ change `Sources/`, `ios/`, or `Package.swift` replace
 `ios/TestFlight/WhatToTest.en-US.txt` with the this-build window. See
 [`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md).
 
+Maintainers using Xcode Cloud must register both the iPhone bundle ID and
+`com.opencapture.openpocketcine.watch` on their Apple Developer team before
+exporting an archive with the Watch companion. Cloud cannot register the Watch
+identifier during export. Setup and export-log troubleshooting:
+[Watch companion signing](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md#watch-companion-signing).
+
 If pairing or live view fails: Connection setup **Share Diagnostics**, or
 Operator Setup → System → **Share Diagnostics**, or take a screenshot for
 TestFlight and paste the copied report into the feedback. The report has no
