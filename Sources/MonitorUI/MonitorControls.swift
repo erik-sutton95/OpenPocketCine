@@ -1,6 +1,15 @@
 #if os(iOS)
     import SwiftUI
 
+    extension View {
+        /// Local text/icon shadows keep bright footage legible without copying
+        /// or darkening the camera picture beneath an entire HUD row.
+        public func monitorReadoutShadow() -> some View {
+            shadow(color: .black, radius: 2, y: 1)
+                .shadow(color: .black.opacity(0.95), radius: 6)
+        }
+    }
+
     /// Plain camera values remain legible over the picture without an opaque bar.
     public struct MonitorReadout<Value: View>: View {
         private let label: String
@@ -12,29 +21,32 @@
             self.value = value()
         }
         public var body: some View {
-            VStack(spacing: 2) {
-                value.font(MonitorTheme.font(17, weight: .semibold))
+            VStack(spacing: 4) {
+                value.font(MonitorTheme.font(16, weight: .medium))
                     .monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
                     .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.text)
-                Text(label).font(MonitorTheme.font(8.5, weight: .bold)).tracking(1.1)
+                Text(label).font(MonitorTheme.font(9, weight: .semibold)).tracking(1.26)
                     .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.muted)
                     .lineLimit(1)
             }
-            .shadow(color: .black.opacity(0.85), radius: 2, y: 1)
+            .monitorReadoutShadow()
+            .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, minHeight: 34)
             .contentShape(Rectangle())
         }
     }
 
-    /// Six values become two rows on a phone in portrait (or a short landscape
-    /// canvas). Layout consumes slots, so camera capability changes cannot leave
+    /// Six values become two rows on a phone in portrait. Layout consumes slots,
+    /// so camera capability changes cannot leave
     /// empty columns or require brand-specific screen forks.
     public struct MonitorControlGrid: Layout {
         public var columns: Int
         public var spacing: CGFloat
-        public init(columns: Int, spacing: CGFloat = 10) {
+        public var equalColumns: Bool
+        public init(columns: Int, spacing: CGFloat = 10, equalColumns: Bool = true) {
             self.columns = max(1, columns)
             self.spacing = spacing
+            self.equalColumns = equalColumns
         }
         public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ())
             -> CGSize
@@ -48,6 +60,22 @@
             in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
         ) {
             let count = min(columns, max(1, subviews.count))
+            if !equalColumns, subviews.count <= columns {
+                let widths = subviews.map { max(44, $0.sizeThatFits(.unspecified).width) }
+                let total = widths.reduce(0, +)
+                let gap = min(32, max(14, (bounds.width - total) / CGFloat(max(1, count - 1))))
+                let proposedWidth = total + CGFloat(max(0, count - 1)) * gap
+                // Compress only when the actual labels exceed the available band.
+                let scale = min(1, bounds.width / max(1, proposedWidth))
+                var x = bounds.midX - proposedWidth * scale / 2
+                for (index, view) in subviews.enumerated() {
+                    view.place(
+                        at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
+                        proposal: ProposedViewSize(width: widths[index] * scale, height: 34))
+                    x += (widths[index] + gap) * scale
+                }
+                return
+            }
             let cell = max(0, (bounds.width - CGFloat(count - 1) * spacing) / CGFloat(count))
             for (index, view) in subviews.enumerated() {
                 view.place(

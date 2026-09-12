@@ -24,17 +24,17 @@ final class NDAssistTests: XCTestCase {
         XCTAssertEqual(NDAssist.notationOptions, ["Stops", "ND32", "ND 0.3"])
     }
 
-    func testDefaultCenterParksBottomLeadingAboveAssistBar() {
+    func testUnplacedMeterStartsAtCanvasCenter() {
         let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
         let feed = CGRect(x: 59, y: 0, width: 714.7, height: 402)
         let size = NDAssist.baseSize
         let chrome = EdgeInsets(top: 60, leading: 0, bottom: 72, trailing: 0)
         let center = NDAssist.defaultCenter(
             feed: feed, size: size, bounds: bounds, chromeClearance: chrome)
-        XCTAssertEqual(center.x, feed.minX + size.width / 2, accuracy: 0.5)
+        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
         XCTAssertLessThanOrEqual(center.y + size.height / 2, bounds.maxY - chrome.bottom + 0.5)
         XCTAssertGreaterThanOrEqual(center.y - size.height / 2, bounds.minY - 0.5)
-        XCTAssertGreaterThan(center.y, feed.midY)
         let chipBottom = center.y + size.height / 2
         let assistTop = bounds.maxY - chrome.bottom
         XCTAssertLessThan(chipBottom, assistTop)

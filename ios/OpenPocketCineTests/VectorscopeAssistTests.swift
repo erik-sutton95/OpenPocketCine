@@ -38,14 +38,14 @@ final class VectorscopeAssistTests: XCTestCase {
         XCTAssertEqual(VectorscopeAssist.panelSize(scale: 0.6), CGSize(width: 114, height: 114))
     }
 
-    func testDefaultCenterIsTopTrailingInsideTheFeed() {
+    func testUnplacedScopeStartsAtCanvasCenter() {
         let bounds = CGRect(x: 0, y: 0, width: 800, height: 400)
         let feed = CGRect(x: 40, y: 20, width: 720, height: 360)
         let size = CGSize(width: 190, height: 190)
         let center = VectorscopeAssist.defaultCenter(feed: feed, size: size, bounds: bounds)
-        XCTAssertEqual(center.x, feed.maxX - size.width / 2, accuracy: 0.5)
+        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
         XCTAssertGreaterThan(center.y, feed.minY)
-        XCTAssertLessThan(center.y, feed.midY)
         let clamped = VectorscopeAssist.clamp(center, size: size, bounds: bounds)
         XCTAssertEqual(clamped.x, center.x, accuracy: 0.01)
         XCTAssertEqual(clamped.y, center.y, accuracy: 0.01)

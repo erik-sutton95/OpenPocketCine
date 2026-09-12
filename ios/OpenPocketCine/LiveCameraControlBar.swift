@@ -1,3 +1,4 @@
+import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -8,6 +9,7 @@ struct LiveCameraControlBar: View {
     var columns = 6
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
+    @State private var readoutOwnership = MonitorReadoutOwnership()
 
     var body: some View {
         tileStrip
@@ -35,7 +37,9 @@ struct LiveCameraControlBar: View {
     }
 
     private var tileStrip: some View {
-        MonitorControlGrid(columns: columns, spacing: columns == 3 ? 6 : 10) {
+        MonitorControlGrid(
+            columns: columns, spacing: columns == 3 ? 6 : 10, equalColumns: columns == 3
+        ) {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
                 tile(
@@ -70,6 +74,8 @@ struct LiveCameraControlBar: View {
         badgeIcon: OpcIcon? = nil
     ) -> some View {
         let isActive = model.captureSheet == sheet || model.captureDrum?.sheet == sheet
+        let acceptsTouch =
+            !tilesLocked && (model.captureDrum == nil || model.captureDrum?.sheet == sheet)
         return CaptureBarReadout(
             label: label,
             value: value,
@@ -78,8 +84,13 @@ struct LiveCameraControlBar: View {
             valueIcon: valueIcon,
             badgeIcon: badgeIcon
         )
-        .modifier(CaptureReadoutGesture(sheet: sheet, locked: tilesLocked) { open(sheet) })
+        .modifier(
+            CaptureReadoutGesture(
+                sheet: sheet, locked: tilesLocked, ownership: $readoutOwnership
+            ) { open(sheet) }
+        )
         .disabled(tilesLocked)
+        .allowsHitTesting(acceptsTouch)
         .frame(maxWidth: .infinity)
         .geometryGroup()
         .background {
@@ -97,7 +108,7 @@ struct LiveCameraControlBar: View {
     }
 
     private func open(_ sheet: CaptureSheet) {
-        guard !tilesLocked else { return }
+        guard !tilesLocked, model.captureDrum == nil, readoutOwnership.owner == nil else { return }
         model.captureDrum = nil
         if model.captureSheet == nil {
             model.captureSheet = sheet

@@ -14,9 +14,9 @@ write the exception in the table in the same PR.
 | Saved camera home | PAIRED and NEARBY groups, full-width camera rows, selected-row progress and Cancel, Pair new camera and global Media/Settings actions. Pairing selection advances with Continue; reported connection phases remain authoritative. | iOS Multiview opens with one tap; hold its header button for Watch a feed. Android sharing and Multiview remain deferred. | UI 2.0 simulator/emulator checks; physical qualification pending. |
 | Gimbal drawer | Trailing inspector with Mode / Speed / Ramp; full landscape height and bounded portrait height. Motion Control footer retains existing experimental editor and actions. Capability hides this surface on bodies without a gimbal. | Native option controls and compositor implementation. | UI 2.0 simulator/emulator checks; physical qualification pending. |
 | Live chrome | DISP 1/2 maps, Field Monitor geometry (portrait 3×2 camera values, landscape row, fit/fill, corner controls), picker chrome, record as bottom sheet, zoom chip, gimbal 1–5 gain, expo stick throw (on-screen and a connected game controller), stick pan picture-relative (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs), rec lamp `pressShutter`. Game controller (discussion #159): left stick is the gimbal stick; Cross/A records (skips the rec-confirmation sheet); Circle/B recenters; Square/X is rotate-180; Triangle/Y tracks a face in frame or cancels; L1/R1 jump zoom out/in (out does not wrap to tele); L2/R2 hold-to-zoom (deeper trigger is faster); D-pad up/down ISO, left/right shutter. Toast Gamepad connected/disconnected. Unplug rests stick and zoom. Controls **Gamepad** row is Connected / Not connected. Limit haptic is a rising-edge pulse after the head moves then stalls (phone plus controller rumble). Mapping, extra deadzone slider, and Linear/Smooth/Cinematic curves are not a Controls picker (fixed map; existing 0.08 deadzone + expo + 1–5 gain). iPad hides the system time / battery bar (HUD chips stay). Control toast parks under the mounted top bar (DISP 1 / operator-shown status bar) and on the feed edge when that bar is off (DISP 2). | iOS compositor-owned material vs Android composited translucent tint (no backdrop frame capture); Lucide icons plus the exact custom View Assist catalog. Android edge-to-edge keeps a transparent system bar. DualSense rumble uses `GCDeviceHaptics` on iOS and the pad `Vibrator` on Android (phone vibrator if the pad has none). iOS binds `GCController`; Android `KeyEvent`/`MotionEvent` plus `InputManager` for connect. Both shells GET Selfie Flip pid `0x0038` ~1 Hz on the live UDP ACK pump (untracked; not the shared `0x8E` SET/GET waiter) and echo pktType-`0x03` seq in window-ACK group 1 so those replies do not stall. A keepalive BLE Flip GET fires when UDP replies go stale (≥2 s). | **physical** both |
-| Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, MIRROR); collapsed palette ranked by use; expanded catalog; leading options inspector; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that parks bottom-leading above the view-assist toolbar, directly draggable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup) | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; native compositors; inspectors reuse existing scope products and bounded source samples | Existing effects: **physical** both; new chrome: UI 2.0 qualification below. |
+| Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, MIRROR); collapsed palette ranked by use; expanded catalog; leading options inspector; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that first opens in the center, directly draggable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup) | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; native compositors; inspectors reuse existing scope products and bounded source samples | Existing effects: **physical** both; new chrome: UI 2.0 qualification below. |
 | Camera SETs | `CameraSetMailbox` fire-and-forget + 300 ms retransmit + 2 s settle; missed ACK does not revert HUD. FORMAT pin holds the chip/sheet until `cam_video_param_v2` reports the pair — other HUD copies are not confirmation. WB `0x02/0x2C` Auto keeps tint (`00 00 00 <tint i16>`); Custom is kelvin+tint; one in flight (100 ms coalesce). COLOR drum follows the body (D-Log2 is Pocket 4 Pro only; Pocket 4 Normal/HDR/D-Log; Pocket 3 Normal/HDR/D-Log M; Nano 8-bit/10-bit/D-Log M). Auto ISO range floor is 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro (wide); SET bytes unchanged. ISO D-Log ↔ D-Log2 hop; audio blobs and tap-focus stay round-trips. Two genuine SET timeouts in 5 s may rebuild UDP only when video **and** status are stale (encoder-pause with young `0x01` must not tear the socket). | JNI vs Swift `fireCamera` | **physical** both |
-| Zoom | Tap cycles the existing body stops; hold opens the continuous logarithmic dial. Dial uses the same coalesced pinch path and safety checks. Chip follows the body (DJI spec): Pocket 4 Pro 1×→3×→6×→12×; Pocket 4 / 3 1×→2×→4× (Pocket 3 4K Video max 2×); Nano 1×. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
+| Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops (DJI spec): Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 / 3 1×/2×/4× (Pocket 3 4K Video max 2×); Nano 1×. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset. Gamepad Triangle/Y tracks the AF-C face in frame, or cancels if already tracking. | Vision vs ML Kit Face Detection | **physical** both |
 | Motion Control speed | No operator rate calibration. No artificial speed ceiling; duration controls retain a 0.5 s floor. Native maximum repeatable speed is not yet qualified. | Both shells | **physical** both |
 | Head tracking | iOS: Controls **Head Tracking (Experimental)**, off by default. **Calibrate Head Lock** captures shared forward from a still head and fresh native camera pose. Nose direction maps to native pan/tilt targets; the native command horizon is 100 ms. Roll is readout only. STOP clears Head Lock. Manual control, Motion Control takes and inactive scenes take priority. Stale measurements and callbacks cannot keep driving. One motion request owns permission-pending startup; missing samples show motion/permission guidance and an explicit retry. Scopes may sit beneath Calibrate/STOP in either orientation. | Android has no AirPods IMU — no Controls row. Native head response remains under physical qualification; [contract](head-tracking.md). | **physical** iOS |
@@ -42,13 +42,17 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 
 - The reference and device matrix are [UI 2.0 design](UI-2.0-DESIGN.md).
   Sora, cyan `#00A3E0`, dark solid page cards and translucent floating chrome.
-- Capture drums are 86 pt/dp tall with cylindrical values and fading edges.
+- Capture drums are 86 pt/dp tall with animated horizontal values, a fine tick ruler,
+  a cyan center mark and fading edges.
   Camera-derived options remain authoritative; settle commits through existing
   command handlers. Width caps: 480 phone / 620 tablet, also bounded by viewport.
-- FORMAT / COLOR / MODE grow from the top; exposure controls grow from below.
-  Portrait REC SETUP groups Format / Color / Mode. Options scroll within the safe
-  viewport and retain an explicit close action.
-- LUT 50/50 stays pinned. LUT exposure stepper is −3…+3 at ½ stop,
+- Every persistent camera picker grows from bottom-center, including FORMAT /
+  COLOR / MODE. REC SETUP groups Format / Color / Mode. Portrait pickers end above
+  the system row; landscape pickers meet the screen bottom. Headers and the bottom
+  grabber remain visible while long option lists scroll. Only camera-supported
+  focus and white-balance choices are offered; the prototype's independent Face
+  tracking switch has no corresponding backend operation.
+- LUT 50/50 stays pinned. LUT exposure slider is −3…+3 at ½ stop,
   input-referred before the cube (ETTR pull). Not camera EV. Playback Auto
   uses clip Keys `com.dji.camera.ColorGammaSxS` on the **original** take
   (D-Log / D-Log2 / Rec.709 / Rec.2100 HLG). LRF/XRF proxies are Rec.709
@@ -60,12 +64,23 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   iOS Share Bake LUT nests Bake exposure (on by default). Share **Convert
   log** is exclusive with Bake LUT (off by default; D-Log ↔ D-Log2 only).
   Share card hugs; max height 520 dp so portrait Back stays off the status bar.
-- Floating chrome tint is RGB (20,22,24): 0.52 collapsed, 0.62 expanded;
-  info 0.82 and delivery 0.86. iOS honors Reduce Transparency with a solid plate.
+- Floating chrome uses black tint: 0.78 compact, 0.84 expanded;
+  info 0.90 and delivery 0.92. Text and icons use stronger local black shadows.
+  iOS honors Reduce Transparency with a solid near-black plate.
   Android uses translucent compositing to avoid copying the live picture for blur;
   large drawers and editors use a denser 0.96 tint to keep underlying text from
   competing with their controls.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
+- Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
+  floating false-color reference key open at
+  the canvas center. Existing saved centers remain unchanged. AUDIO first opens
+  on the left at vertical center; it is draggable and provides Vertical / Horizontal
+  orientation plus optional per-channel dBFS readings. Its position and options
+  persist independently of camera audio configuration, with separate portrait
+  and landscape placements. Silent channels keep the meter visible at its floor.
+- Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
+  the active mode supports digital zoom. Other cameras retain their supported
+  single-tap stops. Holding the chip still opens the continuous dial.
 - Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
   immediately after 4 pt/dp of movement. Drag the corner directly to resize;
   preferred scale 0.6…1.6. A shared placement rectangle excludes record/media/
@@ -368,9 +383,12 @@ feed ownership remain the existing implementations. Earlier physical results in
 this document apply to those earlier builds; they do not qualify the new chrome.
 
 - iOS: automated navigation, both landscape orientations, portrait, input and
-  geometry checks. The signed build and physical iPhone navigation through Operator
-  Setup and Media passed on 2026-09-12. Camera-connected touch, thermal and
-  long-session proof remains pending.
+  geometry checks. The feedback round passed native tests and targeted UI checks
+  on pre-notch, notch and pill iPhones plus iPad on 2026-09-13. A signed feedback
+  build was installed on the physical iPhone; its navigation tests could not
+  launch because the device was locked. The earlier 2026-09-12 physical navigation
+  result applies to the initial UI build. Current physical camera-connected touch,
+  thermal and long-session proof remains pending.
 - Android: build, unit tests and lint plus emulator layout review. Physical Android
   hardware and camera-session proof pending.
 - Android floating chrome approximates backdrop glass with translucent tint;

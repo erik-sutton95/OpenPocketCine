@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// OpenZCine framing grid — `AssistConfiguration.Grid`, `FeedGridView`, and `AssistPanel` `.grid`.
@@ -90,14 +91,15 @@ private struct GridLongPressMenu: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(GridAssist.Option.allCases) { option in
-                Button {
+        VStack(spacing: 0) {
+            MonitorSnapshotRows(GridAssist.Option.allCases) { option in
+                SettingsSwitchInlineRow(
+                    title: option.rawValue, showTopDivider: option != .thirds,
+                    isOn: isOn(option)
+                ) {
+                    OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
                     toggle(option)
-                } label: {
-                    gridChoice(option.rawValue, isOn: isOn(option))
                 }
-                .buttonStyle(.zcTapTarget)
             }
         }
     }
@@ -119,26 +121,6 @@ private struct GridLongPressMenu: View {
         assist.persist()
     }
 
-    /// OpenZCine `GlassChoice` used by `GridToggle`.
-    private func gridChoice(_ title: String, isOn: Bool) -> some View {
-        Text(title)
-            .font(.system(size: 14, weight: .medium, design: .monospaced))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .allowsTightening(true)
-            .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.text)
-            .padding(.horizontal, 2)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                isOn ? LiveDesign.accentDim : LiveDesign.glassBright,
-                in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-                    .stroke(isOn ? LiveDesign.accentDim : LiveDesign.hairline, lineWidth: 1)
-            )
-    }
 }
 
 private struct GridOverlay: View {

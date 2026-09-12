@@ -294,8 +294,7 @@ struct LiveTopPickerHost: View {
                 }
 
             CapturePickerPanel(
-                sheet: menu == .color ? .color : .resolution,
-                showsGrabber: false
+                sheet: menu == .color ? .color : .resolution
             ) {
                 menu = nil
             }
@@ -353,8 +352,7 @@ struct LiveTopPickerCard: View {
 
     var body: some View {
         CapturePickerPanel(
-            sheet: menu == .color ? .color : .resolution,
-            showsGrabber: false
+            sheet: menu == .color ? .color : .resolution
         ) {
             menu = nil
         }

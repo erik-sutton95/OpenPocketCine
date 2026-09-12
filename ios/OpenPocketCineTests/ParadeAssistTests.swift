@@ -78,7 +78,7 @@ final class ParadeAssistTests: XCTestCase {
             ParadeAssist.hapticCell(CGPoint(x: 23, y: 45)))
     }
 
-    func testDefaultCenterIsTopTrailingInsideFullBleedFeed() {
+    func testUnplacedScopeStartsAtCanvasCenter() {
         let layout = LiveMonitorLayout.fit(
             viewportWidth: 874,
             viewportHeight: 402,
@@ -96,9 +96,9 @@ final class ParadeAssistTests: XCTestCase {
             chromeClearance: EdgeInsets(
                 top: layout.topDeck.maxY, leading: 0, bottom: 0, trailing: 0)
         )
-        XCTAssertEqual(center.x, layout.feed.maxX - size.width / 2, accuracy: 0.6)
+        XCTAssertEqual(center.x, canvas.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, canvas.midY, accuracy: 0.05)
         XCTAssertGreaterThan(center.y, layout.topDeck.maxY)
-        XCTAssertLessThan(center.y, layout.feed.midY)
         XCTAssertGreaterThanOrEqual(center.x - size.width / 2, canvas.minX - 0.5)
         XCTAssertLessThanOrEqual(center.x + size.width / 2, canvas.maxX + 0.5)
     }

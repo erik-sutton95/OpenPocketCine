@@ -1,19 +1,11 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
-/// OpenZCine `AudioMetersPanelMini` + tap-only AUDIO assist.
-///
-/// Live source is Pocket `cam_audio_status_v2` (decoded onto `CameraStatus.audioMeters`).
-/// OpenZCine live reads the Nikon LiveViewObject header instead; both feed the same
-/// green→yellow→red stereo bars with a camera-held peak tick. There is no operator
-/// menu: `MonitorAssistTool.hasConfiguration` is false — no channel picker, no local
-/// peak-hold toggle. Peak hold is the body's.
+/// Presentation of the existing camera/clip level and peak measurements.
 enum AudioAssist {
-    /// Popup width OpenZCine uses for tap-only tools (`assistPanelWidth` — 400).
     static let longPressPanelWidth: CGFloat = 400
-    static let panelSize = CGSize(width: 28, height: 168)
-
-    /// OpenZCine live copy. Playback uses `playbackHelpCopy`.
+    static let panelSize = CGSize(width: 84, height: 184)
     static let helpCopy = "Meters the camera's audio. Available while live view is up."
     static let playbackHelpCopy = "Meters the playing clip."
 
@@ -22,11 +14,9 @@ enum AudioAssist {
         return trimmed.isEmpty ? "—" : trimmed.uppercased()
     }
 
-    /// OpenZCine `AssistPanel` `.audioMeters` — help copy only.
-    static func longPressMenu(
-        assist _: LiveAssistState,
-        compact: Bool = false
-    ) -> AudioLongPressMenu {
+    static func longPressMenu(assist _: LiveAssistState, compact: Bool = false)
+        -> AudioLongPressMenu
+    {
         AudioLongPressMenu(compact: compact)
     }
 
@@ -34,158 +24,157 @@ enum AudioAssist {
         AudioLongPressMenu(compact: compact)
     }
 
-    static func meter(
-        levels: AudioMeterLevels,
-        sensitivity: String?
-    ) -> AudioMetersPanelMini {
+    static func meter(levels: AudioMeterLevels, sensitivity: String?) -> AudioMetersPanelMini {
         AudioMetersPanelMini(levels: levels, sensitivity: sensitivity)
     }
 }
 
-/// OpenZCine `AssistPanel` AUDIO copy: 13pt muted. Android `OptionCopy` is 11pt.
 struct AudioLongPressMenu: View {
-    var compact: Bool = false
+    @Environment(AppModel.self) private var model
+    @Bindable private var store = AudioAssist.store
+    var compact = false
 
     var body: some View {
-        Text(AudioAssist.helpCopy)
-            .font(LiveType.ui(size: compact ? 11 : 13))
-            .foregroundStyle(LiveDesign.muted)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Orientation").font(MonitorTheme.font(11, weight: .semibold))
+            MonitorSegmentedControl(
+                options: AudioAssist.Orientation.allCases,
+                selection: Binding(
+                    get: { store.options.orientation },
+                    set: {
+                        store.options.orientation = $0
+                        store.persist()
+                    }),
+                stacked: true, title: { $0.rawValue },
+                onSelectionFeedback: {
+                    OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
+                }
+            )
+            .buttonStyle(MonitorButtonStyle())
+            Toggle(
+                "Show dB values",
+                isOn: Binding(
+                    get: { store.options.showsDB },
+                    set: {
+                        store.options.showsDB = $0
+                        store.persist()
+                    })
+            )
+            .font(MonitorTheme.font(12)).tint(MonitorTheme.accent)
+            Text(model.assist.gradesClip ? AudioAssist.playbackHelpCopy : AudioAssist.helpCopy)
+                .font(MonitorTheme.font(compact ? 11 : 12))
+                .foregroundStyle(MonitorTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
-/// OpenZCine `AudioMetersPanelMini` — 28×168, zones at −18 / −6 dBFS, peak-hold tick, SENS.
+/// Draw-only body; movement and options gestures belong to AudioMeterOverlay.
 struct AudioMetersPanelMini: View {
     let levels: AudioMeterLevels
     let sensitivity: String?
-
-    private static let yellowFromDB = -18.0
-    private static let redFromDB = -6.0
-    private static let guideMarks: [Double] = [0, -6, -18, -36]
+    var orientation: AudioAssist.Orientation = .vertical
+    var showsDB = false
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text("AUDIO")
-                .font(.system(size: 6, weight: .bold, design: .monospaced))
-                .foregroundStyle(LiveDesign.text.opacity(0.58))
-            Canvas { context, size in
-                drawMeters(in: context, size: size)
+        VStack(spacing: 7) {
+            HStack {
+                Text("AUDIO").font(MonitorTheme.font(9, weight: .semibold))
+                if orientation == .horizontal { Spacer(minLength: 0) }
+                if showsDB { Text("dBFS").font(MonitorTheme.font(8)) }
             }
-            VStack(spacing: 0) {
-                Text("SENS")
-                    .font(.system(size: 5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.42))
-                Text(AudioAssist.displayedSensitivity(sensitivity))
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.72))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+            .foregroundStyle(MonitorTheme.muted)
+            if orientation == .vertical {
+                HStack(spacing: 10) {
+                    verticalChannel("L", levels.left)
+                    verticalChannel("R", levels.right)
+                }
+            } else {
+                VStack(spacing: 9) {
+                    horizontalChannel("L", levels.left)
+                    horizontalChannel("R", levels.right)
+                }
             }
-            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 3)
-        .padding(.vertical, 7)
-        .frame(width: AudioAssist.panelSize.width, height: AudioAssist.panelSize.height)
-        .background(Color(red: 0.025, green: 0.036, blue: 0.03).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-                .stroke(LiveDesign.hairline, lineWidth: 1)
+        .padding(10)
+        .frame(
+            width: AudioAssist.panelSize(orientation: orientation).width,
+            height: AudioAssist.panelSize(orientation: orientation).height
         )
-        .shadow(color: .black.opacity(0.34), radius: 16, x: 0, y: 12)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 12), density: .compact)
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Audio Levels")
-        .accessibilityValue(accessibilityValue)
+        .accessibilityValue(
+            "Left \(AudioAssist.dbText(levels.left.levelDB)) dBFS, right \(AudioAssist.dbText(levels.right.levelDB)) dBFS, sensitivity \(AudioAssist.displayedSensitivity(sensitivity))"
+        )
     }
 
-    private var accessibilityValue: String {
-        func channel(_ name: String, _ ch: AudioMeterChannel) -> String {
-            ch.levelDB <= AudioMeterBallistics.floorDB + 0.5
-                ? "\(name) silent"
-                : String(format: "%@ %.0f dB, peak %.0f", name, ch.levelDB, ch.peakDB)
+    private func verticalChannel(_ name: String, _ channel: AudioMeterChannel) -> some View {
+        VStack(spacing: 4) {
+            Self.meter(channel, orientation: orientation).frame(
+                maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 3) {
+                Text(name)
+                if showsDB { Text(AudioAssist.dbText(channel.levelDB)).monospacedDigit() }
+            }
+            .font(MonitorTheme.font(9, weight: .medium)).foregroundStyle(MonitorTheme.secondary)
+            .lineLimit(1).minimumScaleFactor(0.8)
         }
-        return
-            "\(channel("left", levels.left)), \(channel("right", levels.right)), sensitivity \(AudioAssist.displayedSensitivity(sensitivity))"
     }
 
-    private func zoneColor(_ db: Double) -> Color {
-        if db >= Self.redFromDB {
-            return Color(red: 1, green: 92 / 255, blue: 82 / 255).opacity(0.95)
+    private func horizontalChannel(_ name: String, _ channel: AudioMeterChannel) -> some View {
+        HStack(spacing: 7) {
+            Text(name).font(MonitorTheme.font(9, weight: .medium))
+                .foregroundStyle(MonitorTheme.secondary)
+            Self.meter(channel, orientation: orientation).frame(maxWidth: .infinity).frame(
+                height: 12)
+            if showsDB {
+                Text(AudioAssist.dbText(channel.levelDB))
+                    .font(MonitorTheme.font(10, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(MonitorTheme.secondary).frame(width: 27, alignment: .trailing)
+            }
         }
-        if db >= Self.yellowFromDB {
-            return Color(red: 245 / 255, green: 208 / 255, blue: 82 / 255).opacity(0.95)
-        }
-        return Color(red: 86 / 255, green: 235 / 255, blue: 132 / 255).opacity(0.9)
     }
 
-    private func drawMeters(in context: GraphicsContext, size: CGSize) {
-        let floor = AudioMeterBallistics.floorDB
-        let labelReserve: CGFloat = 10
-        let barsRect = CGRect(x: 0, y: 2, width: size.width, height: size.height - labelReserve - 2)
-        func y(_ db: Double) -> CGFloat {
-            let fraction = max(0, min(1, (db - floor) / -floor))
-            return barsRect.maxY - CGFloat(fraction) * barsRect.height
-        }
-
-        for mark in Self.guideMarks {
-            let tickY = y(mark)
-            var line = Path()
-            line.move(to: CGPoint(x: barsRect.minX, y: tickY))
-            line.addLine(to: CGPoint(x: barsRect.maxX, y: tickY))
-            context.stroke(
-                line,
-                with: .color(
-                    Color(red: 220 / 255, green: 235 / 255, blue: 225 / 255).opacity(0.10)),
-                lineWidth: 1)
-        }
-
-        let gap: CGFloat = 2
-        let inset: CGFloat = 1
-        let barWidth = (barsRect.width - gap - inset * 2) / 2
-        for (index, pair) in [("L", levels.left), ("R", levels.right)].enumerated() {
-            let x = barsRect.minX + inset + CGFloat(index) * (barWidth + gap)
-            let track = CGRect(x: x, y: barsRect.minY, width: barWidth, height: barsRect.height)
+    private nonisolated static func meter(
+        _ channel: AudioMeterChannel, orientation: AudioAssist.Orientation
+    ) -> some View {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
             context.fill(
-                Path(roundedRect: track, cornerRadius: 2),
-                with: .color(LiveDesign.text.opacity(0.08)))
-
-            let levelY = y(pair.1.levelDB)
-            if levelY < track.maxY - 0.5 {
-                var zones = context
-                zones.clip(
-                    to: Path(
-                        roundedRect: CGRect(
-                            x: track.minX, y: levelY, width: track.width,
-                            height: track.maxY - levelY),
-                        cornerRadius: 2))
-                let bands: [(from: Double, to: Double)] = [
-                    (floor, Self.yellowFromDB), (Self.yellowFromDB, Self.redFromDB),
-                    (Self.redFromDB, 0),
-                ]
-                for band in bands {
-                    let top = y(band.to)
-                    let bottom = y(band.from)
-                    zones.fill(
-                        Path(
-                            CGRect(x: track.minX, y: top, width: track.width, height: bottom - top)),
-                        with: .color(zoneColor(band.from)))
-                }
+                Path(roundedRect: rect, cornerRadius: 2), with: .color(.white.opacity(0.08)))
+            let level = AudioAssist.levelFraction(channel.levelDB)
+            let bands: [(Double, Double, Color)] = [
+                (AudioMeterBallistics.floorDB, -18, Color(red: 0.34, green: 0.92, blue: 0.52)),
+                (-18, -6, Color(red: 0.96, green: 0.82, blue: 0.32)),
+                (-6, 0, Color(red: 1, green: 0.36, blue: 0.32)),
+            ]
+            for (low, high, color) in bands {
+                let start = AudioAssist.levelFraction(low)
+                let end = min(level, AudioAssist.levelFraction(high))
+                guard end > start else { continue }
+                let band =
+                    orientation == .vertical
+                    ? CGRect(
+                        x: 0, y: (1 - end) * size.height, width: size.width,
+                        height: (end - start) * size.height)
+                    : CGRect(
+                        x: start * size.width, y: 0, width: (end - start) * size.width,
+                        height: size.height)
+                context.fill(Path(band), with: .color(color))
             }
-
-            if pair.1.peakDB > floor + 0.5 {
-                let peakY = y(pair.1.peakDB)
-                var tick = Path()
-                tick.move(to: CGPoint(x: track.minX, y: peakY))
-                tick.addLine(to: CGPoint(x: track.maxX, y: peakY))
-                context.stroke(tick, with: .color(zoneColor(pair.1.peakDB)), lineWidth: 1.5)
+            let peak = AudioAssist.levelFraction(channel.peakDB)
+            if peak > 0 {
+                let tick =
+                    orientation == .vertical
+                    ? CGRect(
+                        x: 0, y: max(0, (1 - peak) * size.height - 1), width: size.width, height: 2)
+                    : CGRect(
+                        x: min(size.width - 2, peak * size.width), y: 0, width: 2,
+                        height: size.height)
+                context.fill(Path(tick), with: .color(.white.opacity(0.9)))
             }
-
-            context.draw(
-                Text(pair.0)
-                    .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.58)),
-                at: CGPoint(x: track.midX, y: size.height - labelReserve / 2))
         }
     }
 }

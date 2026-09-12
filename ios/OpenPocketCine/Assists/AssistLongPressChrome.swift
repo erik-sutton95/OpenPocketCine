@@ -127,7 +127,7 @@ struct AssistLongPressOverlay: View {
                     portrait
                     ? AnyLayout(HStackLayout(spacing: 3)) : AnyLayout(VStackLayout(spacing: 3))
                 axis {
-                    ForEach(tools) { item in
+                    MonitorSnapshotRows(tools) { item in
                         Button {
                             assist.configureTool = item
                         } label: {
@@ -153,12 +153,21 @@ struct AssistLongPressOverlay: View {
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 AssistInspectorPreview(tool: tool)
-                AssistLongPressChrome.menu(for: tool, assist: assist)
-                    .environment(\.monitorInspectorHelp, helpVisible)
+                Group {
+                    if tool == .waveform || tool == .parade {
+                        AssistLongPressChrome.menu(for: tool, assist: assist)
+                    } else {
+                        MonitorInspectorCard {
+                            AssistLongPressChrome.menu(for: tool, assist: assist)
+                        }
+                    }
+                }
+                .environment(\.monitorInspectorHelp, helpVisible)
             }
         } footer: {
             AssistLongPressChrome.footer(for: tool, assist: assist)
         }
+        .environment(\.monitorSegmentedAppearance, .inspector)
     }
 
     private func dismiss() {

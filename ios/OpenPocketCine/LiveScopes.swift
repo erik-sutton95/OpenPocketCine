@@ -1003,7 +1003,7 @@ struct TrafficLightsMeterMini: View {
             .padding(.vertical, TrafficLightsAssist.panelPad * uiScale)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .background(ScopePalette.panelFill)
+        .background(Color.black.opacity(0.84))
         .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
@@ -1133,6 +1133,8 @@ private struct ScopeMiniChrome<Content: View>: View {
             }
             .padding(.horizontal, 8)
             .padding(.top, 4)
+            .padding(.bottom, 3)
+            .background(Color.black.opacity(0.84))
         }
         .frame(width: size.width, height: size.height)
         .compositingGroup()

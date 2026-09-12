@@ -3,6 +3,8 @@ package com.opencapture.openpocketcine
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -94,7 +96,10 @@ fun LiveZoomChip(
     onDialEnd: () -> Unit = {},
     dialForeground: @Composable BoxScope.() -> Unit = {},
     opticalStops: List<Double> = listOf(1.0),
+    onDigitalCycle: (() -> Unit)? = null,
 ) {
+    val haptics = LocalOperatorHaptics.current
+    val interaction = remember { MutableInteractionSource() }
     var dialOpen by remember { mutableStateOf(false) }
     var dialBase by remember { mutableStateOf(factor) }
     if (dialOpen && !locked && onDial != null) {
@@ -115,10 +120,15 @@ fun LiveZoomChip(
     Box(
         modifier
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
-            .chromeClickable(enabled = !locked && !dimmed, onClick = onCycle,
-                onLongClick = if (onDial != null && maximum > 1.0) { { dialBase = factor; dialOpen = true } } else null)
+            .combinedClickable(enabled = !locked, interactionSource = interaction, indication = null,
+                onClick = { haptics.selection(); onCycle() },
+                onDoubleClick = onDigitalCycle?.let { action -> { haptics.selection(); action() } },
+                onLongClick = if (!dimmed && onDial != null && maximum > 1.0) {
+                    { haptics.longPress(); dialBase = factor; dialOpen = true }
+                } else null)
             .semantics {
-                contentDescription = "Zoom ${LiveZoom.label(held)}. Tap to cycle; hold to adjust"
+                contentDescription = "Zoom ${LiveZoom.label(held)}. Tap to cycle; hold to adjust" +
+                    if (onDigitalCycle != null) "; double tap for digital zoom" else ""
             },
         contentAlignment = Alignment.Center,
     ) {

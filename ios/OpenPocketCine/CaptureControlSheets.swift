@@ -21,9 +21,8 @@ struct LiveCaptureTileFramesKey: PreferenceKey {
     }
 }
 
-/// OpenZCine `PanelHost.bottomPickerBody`: backdrop tap, slide-up from below the
-/// capture bar, width capped at 420, parked 10pt above the bar and centred on
-/// the tile. Card height is the hugged `PickerPanel`, not a shared well.
+/// All persistent camera drawers share a bottom-center anchor. The host may
+/// keep visible controls touchable; every other outside tap dismisses the drawer.
 struct LiveCapturePickerHost: View {
     @Binding var sheet: CaptureSheet?
     var frames: [CaptureSheet: CGRect]
@@ -31,91 +30,64 @@ struct LiveCapturePickerHost: View {
     var viewport: CGSize
     var safeArea: EdgeInsets = EdgeInsets()
     var ceilingY: CGFloat = 0
+    var bottomY: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var revealed = false
-    @State private var panelHeight: CGFloat = 280
-
-    private static let revealCurve = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.20)
+    private var reveal: Animation? {
+        reduceMotion ? nil : .timingCurve(0.2, 0.9, 0.2, 1, duration: 0.26)
+    }
 
     var body: some View {
-        let current = sheet ?? .iso
-        let fromTop = [.resolution, .color, .mode].contains(current)
-        let place =
-            fromTop
-            ? LivePopupPlacement.topPicker(
-                cell: frames[current] ?? .zero, panelHeight: panelHeight, viewport: viewport,
-                safeArea: safeArea,
-                floorY: bar.width > 1 ? bar.minY - 8 : nil
-            )
-            : LivePopupPlacement.capturePicker(
-                tile: frames[current] ?? .zero, bar: bar, panelHeight: panelHeight,
-                viewport: viewport, safeArea: safeArea, ceilingY: ceilingY
-            )
-        let slide = place.maxHeight + 20
-
+        let place = MonitorCapturePopupLayout(
+            viewportWidth: viewport.width, viewportHeight: viewport.height,
+            tablet: UIDevice.current.userInterfaceIdiom == .pad,
+            safeArea: MonitorSafeArea(
+                top: safeArea.top, leading: safeArea.leading,
+                bottom: safeArea.bottom, trailing: safeArea.trailing),
+            bottomBoundary: bottomY.map(Double.init), ceiling: ceilingY)
         ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(CapturePickerBackdrop(frames: frames), eoFill: true)
-                .onTapGesture(coordinateSpace: .named(LiveCanvasSpace.name)) { location in
-                    handleBackdrop(at: location)
-                }
-
-            CapturePickerPanel(
-                sheet: current,
-                showsGrabber: false,
-                isPresented: { sheet == current },
-                onSelectRecordingCategory: fromTop && viewport.height > viewport.width
-                    ? { sheet = $0 } : nil
-            ) {
-                sheet = nil
+            if sheet != nil {
+                Color.clear
+                    .contentShape(CapturePickerBackdrop(frames: frames), eoFill: true)
+                    .onTapGesture(coordinateSpace: .named(LiveCanvasSpace.name)) { location in
+                        handleBackdrop(at: location)
+                    }
             }
-            .id(current)
-            .transition(.opacity)
-            .frame(width: place.width)
-            .background(panelHeightReader)
-            // Overflow clip only — height is the hugged glass, never the shared well.
-            .frame(
-                height: min(max(panelHeight, 1), place.maxHeight),
-                alignment: .bottom
-            )
-            .clipped()
-            .opacity(revealed ? 1 : 0)
-            .offset(x: place.x, y: place.y + (revealed ? 0 : (fromTop ? -slide : slide)))
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if let current = sheet {
+                    CapturePickerPanel(
+                        sheet: current, maximumHeight: place.maximumHeight,
+                        bottomPadding: place.bottomPadding,
+                        isPresented: { sheet == current },
+                        onSelectRecordingCategory: [.resolution, .color, .mode].contains(current)
+                            ? { sheet = $0 } : nil
+                    ) { sheet = nil }
+                    .id(current)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("monitor.capture.panel")
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .frame(width: place.width, height: place.bottom, alignment: .bottom)
+            .offset(x: place.centerX - place.width / 2)
         }
         .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
-        .onAppear { scheduleReveal() }
-    }
-
-    private var panelHeightReader: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .onAppear { panelHeight = proxy.size.height }
-                .onChange(of: proxy.size.height) { _, height in
-                    panelHeight = height
-                }
-        }
-    }
-
-    private func scheduleReveal() {
-        DispatchQueue.main.async {
-            withAnimation(Self.revealCurve) { revealed = true }
-        }
+        .animation(reveal, value: sheet)
+        .allowsHitTesting(sheet != nil)
     }
 
     private func handleBackdrop(at location: CGPoint) {
-        if let hit = frames.first(where: { $0.value.insetBy(dx: -10, dy: -8).contains(location) }) {
-            if hit.key == sheet {
-                sheet = nil
-            } else {
-                withAnimation(.easeInOut(duration: 0.14)) { sheet = hit.key }
-            }
-            return
+        if let hit = frames.first(where: { $0.value.insetBy(dx: -10, dy: -8).contains(location) })?
+            .key
+        {
+            sheet = hit == sheet ? nil : hit
+        } else {
+            sheet = nil
         }
-        sheet = nil
     }
 }
 
-/// OpenZCine `PickerPanel` chrome: glass card, grabber, heavy header, close, drum or checked rows.
 struct CaptureControlSheet: View {
     let sheet: CaptureSheet
     var onClose: (() -> Void)? = nil
@@ -140,7 +112,8 @@ struct CaptureControlSheet: View {
 
 struct CapturePickerPanel: View {
     let sheet: CaptureSheet
-    var showsGrabber: Bool = true
+    var maximumHeight: CGFloat = .infinity
+    var bottomPadding: CGFloat = 12
     var isPresented: () -> Bool = { true }
     var onSelectRecordingCategory: ((CaptureSheet) -> Void)? = nil
     var onClose: () -> Void
@@ -152,7 +125,7 @@ struct CapturePickerPanel: View {
     @State private var selectedAspect: VideoAspect = .sixteenNine
     @State private var drumSelection = ""
     @State private var lastApplied = ""
-    @State private var tintDraft: Double = 0
+    @State private var tintDraft: Double?
     @State private var drumSendTask: Task<Void, Never>?
     @State private var deferredDrum = MonitorDeferredSelection<DrumContext>()
     @State private var appeared = false
@@ -167,6 +140,7 @@ struct CapturePickerPanel: View {
         let fps: Int
         let shutterDenoms: [Int]
         let snapshot: CaptureQuickSnapshot?
+        let focusTrack: FocusTrackMode?
         let options: [String]
     }
 
@@ -189,7 +163,9 @@ struct CapturePickerPanel: View {
             cameraID: model.session.connectedCamera?.id, phase: model.session.phase.label,
             sheet: sheet, mode: selectedMode, color: model.session.status.colorMode,
             fps: model.session.status.fps, shutterDenoms: shutterDenoms,
-            snapshot: CaptureQuickSnapshot.primary(sheet, model: model), options: drumOptions)
+            snapshot: CaptureQuickSnapshot.primary(sheet, model: model),
+            focusTrack: sheet == .focus ? model.session.status.focusTrack : nil,
+            options: drumOptions)
     }
 
     private var canApplyDrum: Bool {
@@ -198,50 +174,27 @@ struct CapturePickerPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if showsGrabber { grabber }
-            header
-            content
-            if sheet == .resolution, formatAspects.count > 1 {
-                aspectBar
-            }
-            if !modeTabs.isEmpty {
-                modeBar
-            }
-            if let onSelectRecordingCategory {
-                HStack(spacing: 6) {
-                    ForEach([CaptureSheet.resolution, .color, .mode]) { category in
-                        Button {
-                            cancelDrumSend()
-                            onSelectRecordingCategory(category)
-                        } label: {
-                            Text(
-                                category == .resolution
-                                    ? "FORMAT" : category == .color ? "COLOR" : "MODE"
-                            )
-                            .font(MonitorTheme.font(11, weight: .semibold))
-                            .foregroundStyle(
-                                sheet == category ? MonitorTheme.accent : MonitorTheme.muted
-                            )
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(
-                                sheet == category
-                                    ? MonitorTheme.accent.opacity(0.18) : Color.white.opacity(0.05),
-                                in: RoundedRectangle(cornerRadius: 9))
-                        }
-                        .buttonStyle(MonitorButtonStyle())
+        MonitorCapturePanel(
+            title: headerTitle, subtitle: headerSubtitle,
+            maximumHeight: maximumHeight, bottomPadding: bottomPadding, close: onClose
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                content
+                if sheet == .resolution, formatAspects.count > 1 { aspectBar }
+                if !modeTabs.isEmpty { modeBar }
+                if let onSelectRecordingCategory {
+                    MonitorCaptureTabs(
+                        options: [CaptureSheet.resolution, .color, .mode], selection: sheet,
+                        title: { $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode" }
+                    ) { category in
+                        cancelDrumSend()
+                        onSelectRecordingCategory(category)
                     }
                 }
+                if sheet == .iso { nativeIsoHopToggle }
+                if isEvSheet { facePriorityToggle }
             }
         }
-        .padding(EdgeInsets(top: showsGrabber ? 10 : 12, leading: 14, bottom: 14, trailing: 14))
-        // OpenZCine `GlassPanel`: hug header + drum + optional mode bar. Do not
-        // stretch to the host well — that made every capture sheet the same height.
-        .fixedSize(horizontal: false, vertical: true)
-        // Picker cards float over the picture — pinned dark like the rest of the
-        // HUD (`liveChromeGlass`), never adaptive `liquidGlass` that flips light
-        // over a bright feed.
-        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .expanded)
         .environment(
             \.captureDrumInteractionIdentity,
             {
@@ -323,38 +276,6 @@ struct CapturePickerPanel: View {
         }
     }
 
-    private var grabber: some View {
-        Capsule()
-            .fill(LiveDesign.hairlineStrong)
-            .frame(width: 36, height: 4)
-            .frame(maxWidth: .infinity)
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(headerTitle)
-                    .font(MonitorTheme.font(9, weight: .semibold))
-                    .kerning(1.8)
-                    .foregroundStyle(LiveDesign.text)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Text(headerSubtitle)
-                    .font(MonitorTheme.font(8.5, weight: .medium))
-                    .kerning(1.1)
-                    .textCase(.uppercase)
-                    .foregroundStyle(LiveDesign.faint)
-            }
-            Spacer(minLength: 8)
-            CloseButton(
-                action: {
-                    appeared = false
-                    cancelDrumSend()
-                    onClose()
-                }, size: 26)
-        }
-    }
-
     @ViewBuilder private var content: some View {
         switch sheet {
         case .iso:
@@ -367,7 +288,6 @@ struct CapturePickerPanel: View {
                         options: isoDrumLabels, selection: $drumSelection,
                         markedValues: isoMarkedLabels)
                 }
-                nativeIsoHopToggle
             }
         case .shutter:
             if isEvSheet {
@@ -377,7 +297,6 @@ struct CapturePickerPanel: View {
                         isInteractive: !model.facePriorityExposureEnabled
                     )
                     .id(evLabels)
-                    facePriorityToggle
                 }
             } else if isAngleSheet {
                 CaptureDrumWheel(options: shutterAngleLabels, selection: $drumSelection)
@@ -438,51 +357,26 @@ struct CapturePickerPanel: View {
     }
 
     private var focusRows: some View {
-        let continuous = model.session.status.focusMode == .continuous
-        return VStack(alignment: .leading, spacing: 12) {
-            choiceDrum(
-                ["AF-S", "AF-C"],
-                selected: model.session.status.focusMode.map { $0 == .continuous ? "AF-C" : "AF-S" }
-            ) { value in
-                model.session.setFocusMode(value == "AF-C" ? .continuous : .single)
-            }
-            if continuous {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(FocusTrackMode.allCases, id: \.self) { track in
-                            let on = (model.session.status.focusTrack ?? .default) == track
-                            Button {
-                                model.session.setFocusTrack(track)
-                            } label: {
-                                Text(track.label)
-                                    .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                                    .kerning(0.3)
-                                    .foregroundStyle(on ? LiveDesign.accent : LiveDesign.muted)
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        on
-                                            ? LiveDesign.accentDim
-                                            : LiveDesign.background.opacity(0.28),
-                                        in: Capsule()
-                                    )
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(
-                                                on ? LiveDesign.accent : LiveDesign.hairline,
-                                                lineWidth: 1.5)
-                                    }
-                            }
-                            .buttonStyle(.zcTapTarget)
-                        }
-                    }
+        let selected = CaptureLists.focusOption(from: model.session.status)
+        return VStack(alignment: .leading, spacing: 8) {
+            choiceDrum(FocusOption.allCases.map(\.chip), selected: selected?.chip) { value in
+                guard let option = FocusOption.allCases.first(where: { $0.chip == value }) else {
+                    return
                 }
-                .transition(.opacity)
+                model.session.setFocusOption(option)
             }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(CaptureLists.focusTitle(selected))
+                    .font(MonitorTheme.font(11.5, weight: .semibold)).foregroundStyle(
+                        MonitorTheme.text)
+                Text(CaptureLists.focusHelp(selected))
+                    .font(MonitorTheme.font(9.5)).lineSpacing(2).foregroundStyle(MonitorTheme.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 9)
+            .overlay(alignment: .top) { Color.white.opacity(0.08).frame(height: 1) }
         }
-        .animation(.easeInOut(duration: 0.16), value: continuous)
     }
 
     @ViewBuilder private var audioBody: some View {
@@ -529,132 +423,51 @@ struct CapturePickerPanel: View {
         CaptureDrumWheel(
             options: (-100...100).map(String.init),
             selection: Binding(
-                get: { String(Int(tintDraft.rounded())) },
+                get: { tintDraft.map { String(Int($0.rounded())) } ?? "" },
                 set: { value in
                     guard let tint = Int(value), (-100...100).contains(tint) else { return }
                     tintDraft = Double(tint)
                     applyTint(tint)
                 })
         )
-        .onAppear { tintDraft = Double(currentTint) }
+        .onAppear { tintDraft = model.session.status.whiteBalanceTint.map(Double.init) }
         .onChange(of: model.session.status.whiteBalanceTint) { _, _ in
-            tintDraft = Double(currentTint)
+            tintDraft = model.session.status.whiteBalanceTint.map(Double.init)
         }
     }
 
     private var facePriorityToggle: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(CaptureLists.facePriorityTitle)
-                .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                .kerning(0.4)
-                .textCase(.uppercase)
-                .foregroundStyle(LiveDesign.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            HelpBadge(text: CaptureLists.facePriorityHelp)
-            Spacer(minLength: 8)
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { model.facePriorityExposureEnabled },
-                    set: { model.facePriorityExposureEnabled = $0 }
-                )
-            )
-            .labelsHidden()
-            .tint(LiveDesign.accent)
-            .accessibilityLabel(CaptureLists.facePriorityTitle)
-            .accessibilityHint(CaptureLists.facePriorityHelp)
-        }
+        MonitorCaptureToggle(
+            "Face priority",
+            help: "EV follows faces to middle gray. Several faces use the median.",
+            isOn: Binding(
+                get: { model.facePriorityExposureEnabled },
+                set: { model.facePriorityExposureEnabled = $0 }))
     }
 
     private var nativeIsoHopToggle: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(CaptureLists.nativeIsoHopTitle)
-                .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                .kerning(0.4)
-                .textCase(.uppercase)
-                .foregroundStyle(LiveDesign.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            HelpBadge(text: CaptureLists.nativeIsoHopHelp)
-            Spacer(minLength: 8)
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { model.nativeISOHopEnabled },
-                    set: { model.nativeISOHopEnabled = $0 }
-                )
-            )
-            .labelsHidden()
-            .tint(LiveDesign.accent)
-            .accessibilityLabel(CaptureLists.nativeIsoHopTitle)
-            .accessibilityHint(CaptureLists.nativeIsoHopHelp)
-        }
+        MonitorCaptureToggle(
+            "Auto native ISO",
+            help: "Hop to the curve's native ISO when the color mode changes.",
+            isOn: Binding(
+                get: { model.nativeISOHopEnabled },
+                set: { model.nativeISOHopEnabled = $0 }))
     }
 
     private var aspectBar: some View {
-        HStack(spacing: 10) {
-            ForEach(formatAspects, id: \.self) { aspect in
-                let active = aspect == selectedAspect
-                Button {
-                    handleAspectChange(aspect)
-                } label: {
-                    Text(aspect.label)
-                        .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                        .kerning(0.5)
-                        .foregroundStyle(active ? LiveDesign.accent : LiveDesign.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            active ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
-                            in: RoundedRectangle(
-                                cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: LiveDesign.cornerRadius, style: .continuous
-                            )
-                            .stroke(
-                                active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
-                        }
-                }
-                .buttonStyle(.zcTapTarget)
-                .accessibilityLabel("Aspect \(aspect.label)")
-            }
-        }
+        MonitorCaptureTabs(
+            options: formatAspects, selection: selectedAspect,
+            title: { $0.label }, select: handleAspectChange)
     }
 
     private var modeBar: some View {
-        HStack(spacing: 10) {
-            ForEach(Array(modeTabs.enumerated()), id: \.offset) { index, title in
-                let active = index == selectedMode
-                Button {
-                    selectedMode = index
-                    handleModeChange(index)
-                } label: {
-                    Text(title)
-                        .font(LiveType.ui(size: 13, weight: .bold, design: .default))
-                        .kerning(0.5)
-                        .textCase(.uppercase)
-                        .foregroundStyle(active ? LiveDesign.accent : LiveDesign.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            active ? LiveDesign.accentDim : LiveDesign.background.opacity(0.28),
-                            in: RoundedRectangle(
-                                cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: LiveDesign.cornerRadius, style: .continuous
-                            )
-                            .stroke(
-                                active ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1.5)
-                        }
-                }
-                .buttonStyle(.zcTapTarget)
-            }
-        }
+        MonitorCaptureTabs(
+            options: Array(modeTabs.indices), selection: selectedMode,
+            title: { modeTabs[$0] },
+            select: { index in
+                selectedMode = index
+                handleModeChange(index)
+            })
     }
 
     private func choiceDrum(
@@ -667,15 +480,15 @@ struct CapturePickerPanel: View {
     }
 
     private var headerTitle: String {
-        if isEvSheet { return "EV" }
+        if isEvSheet { return "EXPOSURE" }
         return sheet.headerLabel
     }
 
     private var headerSubtitle: String {
         if isEvSheet {
-            return model.facePriorityExposureEnabled ? "Face priority" : "Compensation"
+            return "Compensation"
         }
-        if sheet == .shutter { return isAngleSheet ? "Angle" : "Speed" }
+        if sheet == .shutter { return "Angle · speed" }
         return sheet.subtitle
     }
 
@@ -684,7 +497,7 @@ struct CapturePickerPanel: View {
         case .iso where offersIsoAuto: ["Auto", "Manual"]
         case .shutter where !isEvSheet: ["Speed", "Angle"]
         case .wb: ["Mode", "Kelvin", "Tint"]
-        case .audio: ["Channel", "Wind", "Dir", "Vocal"]
+        case .audio: ["Channel", "Wind", "Direction", "Vocal"]
         case .resolution: formatResolutions.map(\.tabTitle)
         default: []
         }
@@ -773,9 +586,10 @@ struct CapturePickerPanel: View {
             let mode = model.session.status.whiteBalance?.mode
             selectedMode = (mode == nil || mode == .auto) ? 0 : 1
             let k = "\(currentKelvin)K"
-            drumSelection = CaptureLists.kelvinLabels.contains(k) ? k : "5600K"
+            drumSelection =
+                (2_000...10_000).contains(model.session.status.whiteBalanceKelvin) ? k : ""
             lastApplied = drumSelection
-            tintDraft = Double(currentTint)
+            tintDraft = model.session.status.whiteBalanceTint.map(Double.init)
         case .audio:
             selectedMode = 0
             Task { await model.session.refreshAudioState() }
@@ -791,8 +605,8 @@ struct CapturePickerPanel: View {
             let family = model.session.bodyFamily
             let live =
                 model.session.status.colorMode?.label(for: family)
-                ?? ColorMode.normal.label(for: family)
-            drumSelection = colorWheelLabels.contains(live) ? live : colorWheelLabels[0]
+                ?? ""
+            drumSelection = colorWheelLabels.contains(live) ? live : ""
             lastApplied = drumSelection
         default:
             selectedMode = 0
@@ -1202,6 +1016,32 @@ enum CaptureLists {
         CamCapIso.markedLabels(transfer: status.monitorTransfer)
     }
 
+    static func focusOption(from status: CameraStatus) -> FocusOption? {
+        FocusOption.resolve(mode: status.focusMode, track: status.focusTrack)
+    }
+
+    static func focusTitle(_ option: FocusOption?) -> String {
+        switch option {
+        case .single: "Single autofocus"
+        case .continuousDefault: "Continuous autofocus"
+        case .productShowcase: "Product showcase"
+        case .subjectLock: "Subject lock tracking"
+        case .registeredPriority: "Registered subject priority"
+        case nil: "Focus tracking"
+        }
+    }
+
+    static func focusHelp(_ option: FocusOption?) -> String {
+        switch option {
+        case .single: "Set focus once. Tap the picture to choose the focus point."
+        case .continuousDefault: "Keep focus adjusting as the subject moves through frame."
+        case .productShowcase: "Prioritize a product presented close to the camera."
+        case .subjectLock: "Keep focus on the selected subject as it moves through frame."
+        case .registeredPriority: "Give a subject registered on the camera priority when focusing."
+        case nil: "Choose a focus mode supported by the connected camera."
+        }
+    }
+
     static let facePriorityTitle = "Face Priority"
     static let facePriorityBadgeIcon = OpcIcon.scan
     static let facePriorityHelp =
@@ -1224,12 +1064,12 @@ extension CaptureSheet {
         switch self {
         case .iso: "ISO"
         case .shutter: "SHUTTER"
-        case .wb: "WB"
+        case .wb: "WHITE BALANCE"
         case .focus: "FOCUS"
-        case .exposure: "MODE"
+        case .exposure: "EXPOSURE MODE"
         case .audio: "AUDIO"
-        case .mode: "MODE"
-        case .resolution: "RESOLUTION"
+        case .mode: "SHOOTING MODE"
+        case .resolution: "FORMAT"
         case .color: "COLOR"
         }
     }
@@ -1237,13 +1077,13 @@ extension CaptureSheet {
     var subtitle: String {
         switch self {
         case .iso: "Sensitivity"
-        case .shutter: "Angle / speed"
-        case .wb: "Kelvin / auto / tint"
-        case .focus: "AF-S / AF-C"
+        case .shutter: "Angle · speed"
+        case .wb: "Kelvin · auto · tint"
+        case .focus: "AF-S · AF-C · tracking"
         case .exposure: "Exposure"
         case .audio: "Channel · wind · direction · vocal"
         case .mode: "Shooting mode"
-        case .resolution: "Frame rate"
+        case .resolution: "Resolution · frame rate"
         case .color: "Color mode"
         }
     }

@@ -25,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -44,7 +45,7 @@ fun MonitorSwitchGraphic(isOn: Boolean) {
 /** A 3dp track and 14dp thumb inside an accessible 44dp interaction area. */
 @Composable
 fun MonitorSlider(value: Float, range: ClosedFloatingPointRange<Float>,
-    modifier: Modifier = Modifier, onChange: (Float) -> Unit) {
+    modifier: Modifier = Modifier, enabled: Boolean = true, onChange: (Float) -> Unit) {
     val start = range.start
     val end = range.endInclusive.coerceAtLeast(start)
     val span = (end - start).coerceAtLeast(.0001f)
@@ -52,18 +53,21 @@ fun MonitorSlider(value: Float, range: ClosedFloatingPointRange<Float>,
     val send by rememberUpdatedState(onChange)
     var cursor by remember { mutableFloatStateOf(current) }
     var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(enabled) { if (!enabled) { dragging = false; cursor = current } }
     LaunchedEffect(value, start, end) { if (!dragging) cursor = current }
     fun update(next: Float) {
-        if (next.isFinite()) { cursor = next.coerceIn(start, end); send(cursor) }
+        if (enabled && next.isFinite()) { cursor = next.coerceIn(start, end); send(cursor) }
     }
     Canvas(modifier.fillMaxWidth().height(44.dp).semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(current, start..end)
-        setProgress { update(it); true }
-    }.pointerInput(start, end) {
+        if (enabled) setProgress { update(it); true } else disabled()
+    }.pointerInput(start, end, enabled) {
+        if (!enabled) return@pointerInput
         val inset = 7.dp.toPx()
         fun at(x: Float) = start + ((x - inset) / (size.width - 2 * inset).coerceAtLeast(1f)).coerceIn(0f, 1f) * span
         detectTapGestures { update(at(it.x)) }
-    }.pointerInput(start, end) {
+    }.pointerInput(start, end, enabled) {
+        if (!enabled) return@pointerInput
         val inset = 7.dp.toPx()
         fun at(x: Float) = start + ((x - inset) / (size.width - 2 * inset).coerceAtLeast(1f)).coerceIn(0f, 1f) * span
         detectDragGestures(onDragStart = { dragging = true; update(at(it.x)) },

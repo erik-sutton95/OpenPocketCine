@@ -587,6 +587,7 @@ struct MediaPlayerView: View {
                         viewport: geo.size,
                         onDismiss: { model.assist.configureTool = nil }
                     )
+                    .environment(\.audioInspectorLevels, playbackAudioLevels)
                 }
                 .ignoresSafeArea()
                 .zIndex(6)
@@ -971,17 +972,19 @@ struct MediaPlayerView: View {
             NDMeterOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
         }
         if model.assist.isPlaybackVisible(.audioMeters) {
-            AudioMetersPanelMini(levels: playbackAudioLevels, sensitivity: nil)
-                .position(
-                    x: min(videoRect.maxX - 22, canvas.maxX - 28),
-                    y: min(videoRect.maxY - 96, canvas.maxY - 120))
+            AudioMeterOverlay(
+                levels: playbackAudioLevels, sensitivity: nil,
+                bounds: canvas, chromeClearance: clearance,
+                hapticsEnabled: model.hapticsEnabled,
+                onConfigure: { presentPlaybackAssistOptions(.audioMeters) })
         }
         if model.assist.isPlaybackVisible(.falseColor), model.assist.falseColorReference {
-            FalseColorAssist.referenceDisplay(
+            FalseColorReferenceOverlay(
                 scale: model.assist.falseColorScale,
-                colorMode: model.assist.monitorColorMode ?? .normal
-            )
-            .position(x: videoRect.minX + 140, y: min(videoRect.maxY - 36, canvas.maxY - 80))
+                transfer: model.monitorTransfer
+                    ?? MonitorTransfer(model.assist.monitorColorMode ?? .normal),
+                bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
+                onConfigure: { presentPlaybackAssistOptions(.falseColor) })
         }
     }
 

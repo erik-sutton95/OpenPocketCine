@@ -1,4 +1,5 @@
 import MonitorPresentation
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -211,25 +212,16 @@ enum HistogramAssist {
             height: (baseSize.height * clamped).rounded())
     }
 
-    /// OpenZCine `feedOutsideCenter` for the histogram's bottom-trailing default.
+    /// Unplaced tools start at the canvas center; saved/session centers win later.
     static func defaultCenter(
-        feed: CGRect,
+        feed _: CGRect,
         size: CGSize,
         bounds: CGRect,
-        chromeClearance: EdgeInsets = EdgeInsets(),
-        gap: CGFloat = 10
+        chromeClearance _: EdgeInsets = EdgeInsets(),
+        gap _: CGFloat = 10
     ) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        let x = feed.maxX - halfWidth
-        let outside = feed.maxY + gap + halfHeight
-        let y: CGFloat
-        if outside + halfHeight <= bounds.maxY {
-            y = outside
-        } else {
-            y = min(feed.maxY, bounds.maxY - chromeClearance.bottom) - gap - halfHeight
-        }
-        return clamp(CGPoint(x: x, y: y), size: size, bounds: bounds)
+        clamp(
+            CGPoint(x: bounds.midX, y: bounds.midY), size: size, bounds: bounds)
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, bounds: CGRect) -> CGPoint {
@@ -445,7 +437,7 @@ private struct HistogramCrushClipSegmented: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(HistogramAssist.CrushClipCompensation.allCases) { option in
+            MonitorSnapshotRows(HistogramAssist.CrushClipCompensation.allCases) { option in
                 let active = option == selected
                 Button {
                     onSelect(option)
@@ -629,8 +621,6 @@ struct HistogramCornerResizeGrip: Shape {
 private enum HistogramAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }

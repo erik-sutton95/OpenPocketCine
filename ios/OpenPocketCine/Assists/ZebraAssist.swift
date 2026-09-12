@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -302,7 +303,6 @@ struct ZebraLongPressMenu: View {
                 ) {
                     let unit = ZebraAssist.Unit.fromEditorLabel($0)
                     guard unit != options.unit else { return }
-                    ZebraAssistHaptics.selection()
                     options.unit = unit
                 }
             }
@@ -315,8 +315,8 @@ struct ZebraLongPressMenu: View {
                     options.highlightEnabled.toggle()
                 },
                 value: Binding(
-                    get: { options.displayValue(for: options.highlightIRE, transfer: transfer) },
-                    set: { options.setHighlight(fromDisplay: $0, transfer: transfer) }),
+                    get: { options.highlightIRE },
+                    set: { options.highlightIRE = min(100, max(0, $0)) }),
                 colors: ZebraAssist.highlightPalette,
                 selectedColor: options.highlightColor
             ) { color in
@@ -331,8 +331,8 @@ struct ZebraLongPressMenu: View {
                     options.midtoneEnabled.toggle()
                 },
                 value: Binding(
-                    get: { options.displayValue(for: options.midtoneIRE, transfer: transfer) },
-                    set: { options.setMidtone(fromDisplay: $0, transfer: transfer) }),
+                    get: { options.midtoneIRE },
+                    set: { options.midtoneIRE = min(100, max(0, $0)) }),
                 colors: ZebraAssist.midtonePalette,
                 selectedColor: options.midtoneColor
             ) { color in
@@ -346,38 +346,39 @@ struct ZebraLongPressMenu: View {
         help: String,
         enabled: Bool,
         onEnabledToggle: @escaping () -> Void,
-        value: Binding<Int>,
+        value: Binding<Double>,
         colors: [ZebraAssist.StripeColor],
         selectedColor: ZebraAssist.StripeColor,
         onColor: @escaping (ZebraAssist.StripeColor) -> Void
     ) -> some View {
-        SettingsInlineRow(title: title, help: help, stacked: compact) {
-            if compact {
-                HStack(spacing: 8) {
-                    enableSwitch(enabled: enabled, action: onEnabledToggle)
-                    SettingsNumberField(value: value, maximum: options.editorMaximum)
-                    Spacer(minLength: 4)
-                    ZebraColorDots(
-                        colors: colors, selected: selectedColor, compact: true, onSelect: onColor)
+        VStack(spacing: 0) {
+            SettingsSwitchInlineRow(
+                title: title, help: help, isOn: enabled, action: onEnabledToggle)
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsInlineRow(title: "Threshold") {
+                    HStack(spacing: 9) {
+                        Slider(value: value, in: 0...100, step: 1)
+                            .frame(minWidth: 76, idealWidth: 110, maxWidth: 140)
+                            .tint(MonitorTheme.accent)
+                            .accessibilityLabel("\(title) threshold")
+                        Text("\(options.displayValue(for: value.wrappedValue, transfer: transfer))")
+                            .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
+                            .foregroundStyle(MonitorTheme.secondary)
+                            .frame(width: 34, alignment: .trailing)
+                    }
                 }
-            } else {
-                HStack(spacing: 8) {
-                    enableSwitch(enabled: enabled, action: onEnabledToggle)
-                    SettingsNumberField(value: value, maximum: options.editorMaximum)
+                SettingsInlineRow(title: "Colour") {
                     ZebraColorDots(
-                        colors: colors, selected: selectedColor, compact: false, onSelect: onColor)
+                        colors: colors, selected: selectedColor, compact: compact, onSelect: onColor
+                    )
                 }
             }
+            .padding(.leading, 14)
+            .opacity(enabled ? 1 : 0.4)
+            .disabled(!enabled)
         }
     }
 
-    private func enableSwitch(enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            SettingsSwitchGraphic(isOn: enabled)
-        }
-        .buttonStyle(.zcTapTarget)
-        .accessibilityLabel(enabled ? "On" : "Off")
-    }
 }
 
 /// OpenZCine `SettingsColorDots` + highlight / midtone palettes (token swatches, not overlay RGB).
@@ -392,7 +393,7 @@ private struct ZebraColorDots: View {
 
     var body: some View {
         HStack(spacing: compact ? 4 : 6) {
-            ForEach(colors) { color in
+            MonitorSnapshotRows(colors) { color in
                 Button {
                     guard color != selected else { return }
                     ZebraAssistHaptics.selection()
@@ -401,12 +402,15 @@ private struct ZebraColorDots: View {
                     Circle()
                         .fill(color.swatch)
                         .frame(width: dotDiameter, height: dotDiameter)
-                        .frame(width: hitTarget, height: hitTarget)
+                        .frame(width: 36, height: 36)
                         .background(LiveDesign.background.opacity(0.5), in: Circle())
                         .overlay(
                             Circle().stroke(
                                 color == selected ? color.swatch : LiveDesign.hairline,
-                                lineWidth: color == selected ? 2 : 1))
+                                lineWidth: color == selected ? 2 : 1)
+                        )
+                        .frame(width: hitTarget, height: hitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.zcTapTarget)
                 .accessibilityLabel(color.rawValue)
@@ -419,8 +423,6 @@ private struct ZebraColorDots: View {
 private enum ZebraAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }

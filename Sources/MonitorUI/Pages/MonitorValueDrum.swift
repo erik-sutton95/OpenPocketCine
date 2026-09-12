@@ -41,24 +41,23 @@
         }
         private var focusedIndex: Int { Int(position.rounded()) }
         private var settleAnimation: Animation? {
-            reduceMotion ? nil : .spring(duration: 0.22, bounce: 0.1)
+            reduceMotion ? nil : .timingCurve(0.22, 1.2, 0.36, 1, duration: 0.22)
         }
 
         public var body: some View {
-            GeometryReader { geometry in
-                let cellWidth = min(
-                    180, max(76, CGFloat(options.map(\.count).max() ?? 4) * 10 + 24))
-                ZStack {
-                    ForEach(Array(options.enumerated()), id: \.element) { index, option in
-                        let distance = Double(index) - position
-                        if abs(distance) < 4 {
-                            drumCell(option, distance: distance, width: cellWidth)
-                                .position(x: geometry.size.width / 2 + distance * cellWidth, y: 43)
-                                .onTapGesture { commit(option) }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            let metrics = MonitorDrumMetrics(options: options)
+            let currentPosition = position
+            let hasSelection = dragging || previewPosition != nil || options.contains(selection)
+            let rows = options.enumerated().compactMap { index, option -> MonitorDrumRow? in
+                let distance = Double(index) - currentPosition
+                guard abs(distance) < 4 else { return nil }
+                return MonitorDrumRow(
+                    option: option, distance: distance,
+                    selected: abs(distance) < 0.5 && hasSelection,
+                    marked: markedValues.contains(option), metrics: metrics,
+                    action: { commit(option) })
+            }
+            Self.drawing(rows: rows, position: currentPosition, cellWidth: metrics.cellWidth)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 3)
@@ -83,38 +82,34 @@
                             commit(options[index])
                         }
                 )
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
-                            .init(color: .black, location: 0.86), .init(color: .clear, location: 1),
-                        ], startPoint: .leading, endPoint: .trailing)
+                .frame(height: 86)
+                .animation(
+                    dragging || previewPosition != nil ? nil : settleAnimation, value: selection
+                )
+                .opacity(isInteractive ? 1 : 0.45)
+                .onChange(of: options) { _, _ in cancelDrag() }
+                .onChange(of: selection) { _, _ in if drag.origin != nil { cancelDrag() } }
+                .onChange(of: interactionIdentity()) { _, _ in cancelDrag() }
+                .onChange(of: isInteractive) { _, active in if !active { cancelDrag() } }
+                .onChange(of: dragging) { _, active in
+                    if !active {
+                        resetDrag()
+                    }
                 }
-                .clipped()
-            }
-            .frame(height: 86)
-            .opacity(isInteractive ? 1 : 0.45)
-            .onChange(of: options) { _, _ in cancelDrag() }
-            .onChange(of: selection) { _, _ in if drag.origin != nil { cancelDrag() } }
-            .onChange(of: interactionIdentity()) { _, _ in cancelDrag() }
-            .onChange(of: isInteractive) { _, active in if !active { cancelDrag() } }
-            .onChange(of: dragging) { _, active in
-                if !active {
-                    resetDrag()
+                .sensoryFeedback(.selection, trigger: focusedIndex) { _, _ in
+                    haptics && isInteractive
                 }
-            }
-            .sensoryFeedback(.selection, trigger: focusedIndex) { _, _ in haptics && isInteractive }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Value")
-            .accessibilityValue(selection.isEmpty ? "Not set" : selection)
-            .accessibilityAdjustableAction { direction in
-                guard isInteractive, !options.isEmpty else { return }
-                let next =
-                    options.firstIndex(of: selection).map {
-                        direction == .increment ? $0 + 1 : $0 - 1
-                    } ?? 0
-                if options.indices.contains(next) { commit(options[next]) }
-            }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Value")
+                .accessibilityValue(selection.isEmpty ? "Not set" : selection)
+                .accessibilityAdjustableAction { direction in
+                    guard isInteractive, !options.isEmpty else { return }
+                    let next =
+                        options.firstIndex(of: selection).map {
+                            direction == .increment ? $0 + 1 : $0 - 1
+                        } ?? 0
+                    if options.indices.contains(next) { commit(options[next]) }
+                }
         }
 
         private func commit(_ option: String) {
@@ -135,41 +130,98 @@
             translation = 0
         }
 
-        private func drumCell(_ option: String, distance: Double, width: CGFloat) -> some View {
-            let proximity = max(0, 1 - abs(distance))
-            let selected =
-                abs(distance) < 0.5
-                && (dragging || previewPosition != nil || options.contains(selection))
-            return VStack(spacing: 8) {
-                Spacer(minLength: 0)
-                HStack(spacing: 4) {
-                    Text(option).font(
-                        MonitorTheme.font(
-                            15 + 8 * proximity, weight: selected ? .semibold : .regular)
-                    )
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                    if markedValues.contains(option) {
-                        MonitorIcon.star.view(filled: true).frame(width: 9, height: 9)
-                    }
+        /// SwiftUI may call deferred GeometryReader/ForEach render closures on
+        /// AsyncRenderer. These factories capture immutable drawing data only;
+        /// camera state and binding access stay in body or an explicit action.
+        nonisolated private static func drawing(
+            rows: [MonitorDrumRow], position: Double, cellWidth: Double
+        ) -> some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .topLeading) {
+                    ruler(position: position, cellWidth: cellWidth)
+                    renderRows(rows, width: geometry.size.width)
                 }
-                .foregroundStyle(selected ? MonitorTheme.text : MonitorTheme.muted)
-                .frame(height: 32, alignment: .bottom)
-                .rotation3DEffect(
-                    .degrees(max(-65, min(65, distance * -22))), axis: (x: 0, y: 1, z: 0),
-                    perspective: 0.5)
-                Spacer(minLength: 0)
-                ZStack(alignment: .bottom) {
-                    HStack(alignment: .bottom, spacing: 6) {
-                        ForEach(0..<10, id: \.self) { _ in
-                            Rectangle().fill(Color.white.opacity(0.22)).frame(width: 1, height: 5)
-                        }
-                    }
-                    Rectangle().fill(selected ? MonitorTheme.accent : MonitorTheme.muted)
-                        .frame(width: 2, height: selected ? 15 : 9)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                            .init(color: .black, location: 0.86), .init(color: .clear, location: 1),
+                        ], startPoint: .leading, endPoint: .trailing)
                 }
+                .clipped()
             }
-            .frame(width: width, height: 78)
+        }
+
+        nonisolated static func renderRows(_ rows: [MonitorDrumRow], width: CGFloat)
+            -> ForEach<[MonitorDrumRow], String, MonitorDrumValueCell>
+        {
+            ForEach(rows, id: \.option) { row in
+                MonitorDrumValueCell(row: row, canvasWidth: width)
+            }
+        }
+
+        nonisolated private static func ruler(position: Double, cellWidth: Double) -> some View {
+            Canvas { context, size in
+                let phase = (size.width / 2 - position * cellWidth).truncatingRemainder(
+                    dividingBy: 6.75)
+                var ticks = Path()
+                for offset in stride(from: phase - 6.75, through: size.width + 6.75, by: 6.75) {
+                    ticks.move(to: CGPoint(x: offset, y: 73))
+                    ticks.addLine(to: CGPoint(x: offset, y: 78))
+                }
+                context.stroke(ticks, with: .color(.white.opacity(0.22)), lineWidth: 1)
+            }
+            .allowsHitTesting(false).accessibilityHidden(true)
+        }
+    }
+
+    struct MonitorDrumRow: Sendable {
+        let option: String
+        let distance: Double
+        let selected: Bool
+        let marked: Bool
+        let metrics: MonitorDrumMetrics
+        let action: @MainActor @Sendable () -> Void
+    }
+
+    struct MonitorDrumValueCell: View {
+        nonisolated let row: MonitorDrumRow
+        nonisolated let canvasWidth: CGFloat
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        nonisolated init(row: MonitorDrumRow, canvasWidth: CGFloat) {
+            self.row = row
+            self.canvasWidth = canvasWidth
+        }
+
+        var body: some View {
+            ZStack(alignment: .top) {
+                HStack(spacing: 3) {
+                    Text(row.option).font(
+                        MonitorTheme.font(15, weight: row.selected ? .semibold : .regular)
+                    )
+                    .monospacedDigit().lineLimit(1).fixedSize()
+                    if row.marked {
+                        MonitorIcon.star.view(filled: true).frame(width: 8, height: 8)
+                    }
+                }
+                .foregroundStyle(row.selected ? Color.white : Color.white.opacity(0.45))
+                .frame(height: 26, alignment: .bottom)
+                .scaleEffect(row.selected ? row.metrics.selectedScale : 1, anchor: .bottom)
+                .padding(.top, 18)
+                Rectangle().fill(row.selected ? MonitorTheme.accent : Color.white.opacity(0.34))
+                    .frame(width: 2, height: row.selected ? 17 : 10)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(width: row.metrics.cellWidth, height: 78)
             .contentShape(Rectangle())
+            .animation(
+                reduceMotion ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.18),
+                value: row.selected
+            )
+            .position(x: canvasWidth / 2 + row.distance * row.metrics.cellWidth, y: 39)
+            .onTapGesture(perform: row.action)
         }
     }
 #endif

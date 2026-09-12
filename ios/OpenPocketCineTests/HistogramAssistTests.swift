@@ -185,7 +185,7 @@ final class HistogramAssistTests: XCTestCase {
         XCTAssertEqual(restored.y, 70, accuracy: 1e-9)
     }
 
-    func testDefaultCenterFallsInsideAboveAssistBar() {
+    func testUnplacedScopeStartsAtCanvasCenter() {
         let layout = LiveMonitorLayout.fit(
             viewportWidth: 874,
             viewportHeight: 402,
@@ -203,7 +203,8 @@ final class HistogramAssistTests: XCTestCase {
             trailing: 0)
         let center = HistogramAssist.defaultCenter(
             feed: layout.feed, size: size, bounds: bounds, chromeClearance: clearance)
-        XCTAssertEqual(center.x, layout.feed.maxX - size.width / 2, accuracy: 0.6)
+        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
         XCTAssertLessThan(center.y + size.height / 2, layout.assist.minY + 0.5)
         XCTAssertGreaterThan(center.y - size.height / 2, bounds.minY - 0.5)
         XCTAssertLessThanOrEqual(center.x + size.width / 2, bounds.maxX + 0.5)

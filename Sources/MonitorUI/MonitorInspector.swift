@@ -39,10 +39,17 @@
 
         private var portrait: Bool { viewport.height > viewport.width }
         private var width: CGFloat {
-            min(trailing ? 312 : 424, viewport.width * (trailing ? 0.66 : 0.86))
+            min(trailing ? 312 : 460, viewport.width * (trailing ? 0.66 : 0.92))
         }
         private var height: CGFloat {
             portrait && trailing ? min(viewport.height * 0.52, 620) : viewport.height
+        }
+
+        /// Fixed columns prevent a selected menu's ideal width from expanding
+        /// the shell; only the content's vertical scroll extent may change.
+        private var contentWidth: CGFloat {
+            let edge = portrait ? 0 : min(44, trailing ? safeArea.trailing : safeArea.leading)
+            return max(1, width - edge - (!portrait && hasNavigation ? 109 : 0))
         }
 
         public var body: some View {
@@ -55,7 +62,9 @@
                     .accessibilityAddTraits(.isButton)
                 VStack(spacing: 0) {
                     header
-                    if portrait && hasNavigation { navigation.padding(.bottom, 8) }
+                    if portrait && hasNavigation {
+                        navigation.frame(height: 44).padding(.bottom, 8)
+                    }
                     HStack(alignment: .top, spacing: 0) {
                         if !portrait && hasNavigation {
                             navigation.frame(width: 108)
@@ -63,10 +72,13 @@
                         }
                         VStack(spacing: 0) {
                             ScrollView {
-                                content.frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                                content
+                                    .frame(width: max(1, contentWidth - 28), alignment: .leading)
+                                    .padding(14)
                             }.scrollBounceBehavior(.basedOnSize)
                             footer.padding(.horizontal, 14).padding(.bottom, 10)
                         }
+                        .frame(width: contentWidth)
                     }
                     .frame(maxHeight: .infinity)
                 }
@@ -126,4 +138,34 @@
             .padding(.leading, 14).padding(.trailing, 2)
         }
     }
+
+    /// A bounded set of related inspector controls, with an optional section title.
+    public struct MonitorInspectorCard<Content: View>: View {
+        private let title: String?
+        private let content: Content
+
+        public init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+            self.title = title
+            self.content = content()
+        }
+
+        public var body: some View {
+            VStack(alignment: .leading, spacing: 7) {
+                if let title {
+                    Text(title.uppercased())
+                        .font(MonitorTheme.font(9, weight: .semibold))
+                        .foregroundStyle(MonitorTheme.muted)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                VStack(spacing: 0) { content }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.022), in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10).stroke(
+                            .white.opacity(0.055), lineWidth: 1))
+            }
+        }
+    }
+
 #endif

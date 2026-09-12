@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -301,101 +302,67 @@ struct LUTPicker: View {
     }
 }
 
-/// Compact ± stepper for the LUT footer. Sits on the same row as 50/50.
+/// Input exposure still follows the native half-stop compensation path.
 struct LUTExposureCompensationBar: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        HStack(spacing: 6) {
-            stepButton(
-                "−",
-                enabled: LUTExposureCompensation.canStep(assist.lutExposureStops, by: -0.5)
-            ) {
-                assist.nudgeLUTExposure(-0.5)
-            }
-            Text(LUTExposureCompensation.label(assist.lutExposureStops))
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundStyle(
-                    assist.lutExposureStops == 0 ? LiveDesign.text : LiveDesign.accent
+        SettingsInlineRow(
+            title: LUTAssist.exposureTitle, help: LUTAssist.exposureHelp, showTopDivider: false,
+            stacked: true
+        ) {
+            HStack(spacing: 9) {
+                Slider(
+                    value: Binding(
+                        get: { assist.lutExposureStops },
+                        set: { assist.nudgeLUTExposure($0 - assist.lutExposureStops) }),
+                    in: -3...3, step: 0.5
                 )
-                .frame(minWidth: 44)
+                .tint(MonitorTheme.accent)
                 .accessibilityLabel(LUTAssist.exposureTitle)
-                .accessibilityValue(LUTExposureCompensation.label(assist.lutExposureStops))
                 .accessibilityHint(LUTAssist.exposureHelp)
-            stepButton(
-                "+",
-                enabled: LUTExposureCompensation.canStep(assist.lutExposureStops, by: 0.5)
-            ) {
-                assist.nudgeLUTExposure(0.5)
+                Text(LUTExposureCompensation.label(assist.lutExposureStops) + " ST")
+                    .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(
+                        assist.lutExposureStops == 0 ? MonitorTheme.text : MonitorTheme.accent
+                    )
+                    .frame(width: 58, alignment: .trailing)
             }
         }
-        .sensoryFeedback(.selection, trigger: assist.lutExposureStops)
-    }
-
-    private func stepButton(_ title: String, enabled: Bool, action: @escaping () -> Void)
-        -> some View
-    {
-        Button(action: action) {
-            Text(title)
-                .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.muted)
-                .frame(width: 32, height: 32)
-                .background(LiveDesign.glassBright, in: Capsule())
+        .sensoryFeedback(trigger: assist.lutExposureStops) { _, _ in
+            OperatorPrefs.hapticsEnabled ? .selection : nil
         }
-        .buttonStyle(.zcTapTarget)
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.45)
-        .accessibilityLabel(title == "+" ? "Add half stop" : "Subtract half stop")
     }
 }
 
 /// OpenZCine 50/50: off-by-default toggle; orientation chips only while armed.
 /// Labels are `Left / Right` and `Top / Bottom`, not Vertical/Horizontal.
 ///
-/// Exposure stepper shares this row. Orientation chips drop under 50/50 when
-/// armed so the catalog keeps the height.
+/// Exposure and split remain pinned beneath the catalog. Orientation choices
+/// appear only while split is armed.
 struct LUTSplitComparisonBar: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        MonitorInspectorCard {
+            VStack(spacing: 0) {
                 LUTExposureCompensationBar(assist: assist)
-                Spacer(minLength: 8)
-                Button {
+                SettingsSwitchInlineRow(title: "50 / 50 split", isOn: assist.splitComparison) {
+                    OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
                     assist.splitComparison.toggle()
-                    if assist.splitComparison {
-                        if !assist.lutArmed { assist.armLastLUT() }
-                    }
+                    if assist.splitComparison && !assist.lutArmed { assist.armLastLUT() }
                     assist.persist()
-                } label: {
-                    HStack(spacing: 8) {
-                        (assist.splitComparison ? OpcIcon.circleCheck : OpcIcon.circle)
-                            .frame(width: 16, height: 16)
-                            .foregroundStyle(
-                                assist.splitComparison ? LiveDesign.accent : LiveDesign.muted)
-                        Text("50/50")
-                            .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(LiveDesign.text)
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                    .background(
-                        assist.splitComparison
-                            ? LiveDesign.accentDim : LiveDesign.glassBright,
-                        in: Capsule())
                 }
-                .buttonStyle(.zcTapTarget)
-            }
-            if assist.splitComparison {
-                LUTSegmentedButtons(
-                    items: LUTSplitOrientation.allCases.map(\.rawValue),
-                    selected: LUTSplitOrientation.current(vertical: assist.splitVertical)
-                        .rawValue
-                ) { raw in
-                    guard let next = LUTSplitOrientation(rawValue: raw) else { return }
-                    assist.splitVertical = next.isVertical
-                    assist.persist()
+                if assist.splitComparison {
+                    SettingsSegmented(
+                        options: LUTSplitOrientation.allCases.map(\.rawValue),
+                        selected: LUTSplitOrientation.current(vertical: assist.splitVertical)
+                            .rawValue
+                    ) { raw in
+                        guard let next = LUTSplitOrientation(rawValue: raw) else { return }
+                        assist.splitVertical = next.isVertical
+                        assist.persist()
+                    }.padding(.bottom, 8)
                 }
             }
         }
@@ -422,7 +389,7 @@ private struct LUTSegmentedButtons: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(items, id: \.self) { item in
+            MonitorSnapshotRows(items, id: \.self) { item in
                 Button {
                     onSelect(item)
                 } label: {

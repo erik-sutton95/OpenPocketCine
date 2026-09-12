@@ -13,3 +13,10 @@ internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabili
         timecode = status.timecode?.isNotBlank() == true,
     )
 }
+
+/** The camera profile, including current recording mode limits, owns shortcut availability. */
+internal fun AppModel.monitorZoomStops(): com.opencapture.monitorui.MonitorZoomStops {
+    val profile = session.connectedCamera?.model
+    val separateDigital = profile?.zoomStops?.containsAll(listOf(1.0, 3.0, 6.0, 12.0)) == true
+    return com.opencapture.monitorui.MonitorZoomStops.from(session.zoomStops(), separateDigital)
+}

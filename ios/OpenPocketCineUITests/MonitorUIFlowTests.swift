@@ -36,6 +36,13 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(buttonFrame.minX, 0)
             XCTAssertLessThanOrEqual(buttonFrame.maxX, app.frame.width)
             XCTAssertLessThanOrEqual(buttonFrame.maxY, app.frame.height)
+            if UIDevice.current.userInterfaceIdiom == .phone, orientation != .portrait,
+                app.frame.width > 700
+            {
+                XCTAssertEqual(
+                    app.buttons["monitor.system.settings"].frame.minY, 8, accuracy: 1,
+                    "Rounded iPhone corners must not add the iPad window-control top exclusion")
+            }
             capture("monitor-\(orientation.rawValue)")
         }
     }
@@ -128,6 +135,119 @@ final class MonitorUIFlowTests: XCTestCase {
         app.buttons["Zebra"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Close Zebra"].waitForExistence(timeout: 5))
         capture("assist-inspector-landscape")
+    }
+
+    func testAssistInspectorRepeatedTabSwitchesKeepOneStablePanel() {
+        app.launch()
+        rotate(.landscapeLeft)
+        app.buttons["monitor.assists.expand"].tap()
+        let peak = app.buttons["monitor.assist.PEAK"]
+        XCTAssertTrue(peak.waitForExistence(timeout: 5))
+        peak.press(forDuration: 0.55)
+        let inspector = app.otherElements["monitor.inspector"]
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+        let initialFrame = inspector.frame
+        for iteration in 0..<20 {
+            for title in ["False Color", "Zebra", "Peaking"] {
+                app.buttons[title].firstMatch.tap()
+                XCTAssertEqual(
+                    app.state, .runningForeground, "Terminated at \(iteration): \(title)")
+                XCTAssertTrue(app.buttons["Close \(title)"].waitForExistence(timeout: 3))
+                XCTAssertEqual(inspector.frame.width, initialFrame.width, accuracy: 1)
+                XCTAssertEqual(inspector.frame.height, initialFrame.height, accuracy: 1)
+                if iteration == 0 { capture("assist-options-\(title)") }
+            }
+        }
+        capture("assist-inspector-stress")
+        app.buttons["Close Peaking"].tap()
+        XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+    }
+
+    func testTopRecordingFormatOpensFromLandscape() {
+        app.launch()
+        rotate(.landscapeLeft)
+        let format = app.buttons["monitor.capture.format"]
+        XCTAssertTrue(format.isHittable)
+        XCTAssertGreaterThanOrEqual(format.frame.minY, 0)
+        format.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["monitor.capture.panel"].firstMatch.waitForExistence(
+                timeout: 5))
+        capture("capture-top-format-landscape")
+    }
+
+    func testCameraPickersShareTheBottomCenterAnchor() {
+        app.launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            let identifiers =
+                ["iso", "shutter", "exposure", "wb", "focus", "audio", "format"]
+                + (orientation == .landscapeLeft ? ["color"] : [])
+            for id in identifiers {
+                app.buttons["monitor.capture.\(id)"].tap()
+                let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
+                XCTAssertTrue(panel.waitForExistence(timeout: 5), id)
+                XCTAssertEqual(panel.frame.midX, app.frame.midX, accuracy: 1, id)
+                XCTAssertLessThanOrEqual(panel.frame.maxY, app.frame.maxY + 1, id)
+                XCTAssertGreaterThan(panel.frame.minY, app.frame.minY, id)
+                XCTAssertTrue(app.buttons["monitor.system.record"].isHittable, id)
+                XCTAssertTrue(app.buttons["monitor.system.display"].isHittable, id)
+                XCTAssertFalse(app.buttons["monitor.system.zoom"].isHittable, id)
+                if orientation == .landscapeLeft {
+                    XCTAssertFalse(app.buttons["monitor.system.settings"].isHittable, id)
+                    XCTAssertFalse(app.buttons["monitor.system.media"].isHittable, id)
+                }
+                capture("capture-\(id)-\(orientation.rawValue)")
+                app.buttons["Close"].firstMatch.tap()
+                XCTAssertFalse(panel.exists)
+            }
+        }
+    }
+
+    func testAudioMeterMovesAndRetainsOrientationOptions() {
+        app.launch()
+        rotate(.landscapeLeft)
+        app.buttons["monitor.assists.expand"].tap()
+        let audio = app.buttons["monitor.assist.AUDIO"]
+        XCTAssertTrue(audio.waitForExistence(timeout: 5))
+        audio.tap()
+        app.buttons["Collapse View Assist tools"].tap()
+        let meter = app.descendants(matching: .any)["monitor.audio.meter"].firstMatch
+        XCTAssertTrue(meter.waitForExistence(timeout: 5))
+        let original = meter.frame
+        XCTAssertLessThan(original.midX, app.frame.midX)
+        XCTAssertEqual(original.midY, app.frame.midY, accuracy: 1)
+        let start = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 130, dy: -40)))
+        XCTAssertGreaterThan(meter.frame.midX, original.midX + 90)
+        meter.press(forDuration: 0.55)
+        let horizontal = app.buttons["Horizontal"].firstMatch
+        XCTAssertTrue(horizontal.waitForExistence(timeout: 5))
+        horizontal.tap()
+        app.switches["Show dB values"].tap()
+        capture("audio-options-horizontal-db")
+        app.buttons["Close Audio Levels"].tap()
+        XCTAssertGreaterThan(meter.frame.width, meter.frame.height)
+        capture("audio-meter-moved-horizontal")
+    }
+
+    func testFalseColorReferenceStartsCenteredAndCanBePlaced() {
+        app.launch()
+        rotate(.landscapeLeft)
+        app.buttons["monitor.assists.expand"].tap()
+        app.buttons["monitor.assist.FALSE"].tap()
+        app.buttons["Collapse View Assist tools"].tap()
+        let key = app.descendants(matching: .any)["monitor.falseColor.reference"].firstMatch
+        XCTAssertTrue(key.waitForExistence(timeout: 5))
+        XCTAssertEqual(key.frame.midX, app.frame.midX, accuracy: 1)
+        XCTAssertEqual(key.frame.midY, app.frame.midY, accuracy: 1)
+        let original = key.frame
+        capture("false-color-reference-centered")
+        let start = key.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 50, dy: -60)))
+        XCTAssertGreaterThan(key.frame.midX, original.midX + 30)
+        XCTAssertLessThan(key.frame.midY, original.midY - 40)
+        capture("false-color-reference-placed")
     }
 
     func testMediaPageAdaptsToOrientation() {

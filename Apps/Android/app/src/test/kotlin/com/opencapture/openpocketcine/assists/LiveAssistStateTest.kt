@@ -7,6 +7,18 @@ import kotlin.test.assertTrue
 
 class LiveAssistStateTest {
     @Test
+    fun lutExposureSliderUsesAbsoluteSnappedValuesWithoutAccumulating() {
+        val state = LiveAssistState()
+        state.updateLutExposure(1.1)
+        state.updateLutExposure(1.2)
+        assertEquals(1.0, state.lutExposureStops)
+        state.updateLutExposure(9.0)
+        assertEquals(3.0, state.lutExposureStops)
+        state.updateLutExposure(-9.0)
+        assertEquals(-3.0, state.lutExposureStops)
+    }
+
+    @Test
     fun toolbarOrderMatchesPocketCinemaSet() {
         assertEquals(
             listOf(
@@ -32,8 +44,8 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun audioAndMirrorAreTapOnly() {
-        assertFalse(LiveAssistTool.AUDIO.hasConfiguration)
+    fun audioHasMonitorOptionsAndMirrorStaysTapOnly() {
+        assertTrue(LiveAssistTool.AUDIO.hasConfiguration)
         assertFalse(LiveAssistTool.MIRROR.hasConfiguration)
         for (tool in LiveAssistTool.settingsCases) {
             if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.MIRROR) continue
@@ -213,4 +225,67 @@ class LiveAssistStateTest {
         assertTrue(state.playbackNeedsScopeTap())
         assertFalse(state.playbackNeedsLookOverlay())
     }
+    @Test
+    fun newWindowPreferencesRoundTripWithoutSeedingExistingCenters() {
+        val fresh = LiveAssistState()
+        assertEquals(null, fresh.waveCenter)
+        assertEquals(null, fresh.audioCenter)
+        assertEquals(com.opencapture.monitorui.MonitorAudioOrientation.VERTICAL, fresh.audioOrientation)
+        assertFalse(fresh.audioShowDB)
+        val wave = StoredCenter(.72, .36)
+        val audio = StoredCenter(.14, .5)
+        val reference = StoredCenter(.4, .6)
+        fresh.storeCenter(LiveAssistTool.WAVE, wave)
+        fresh.storeAudioCenter(audio, portrait = true)
+        fresh.storeCenter(LiveAssistTool.FALSE, reference)
+        fresh.updateAudioOrientation(com.opencapture.monitorui.MonitorAudioOrientation.HORIZONTAL)
+        fresh.updateAudioShowDB(true)
+        fresh.toggle(LiveAssistTool.WAVE)
+        fresh.toggle(LiveAssistTool.WAVE)
+        val restored = LiveAssistState(fresh.encoded())
+        assertEquals(wave, restored.waveCenter)
+        assertEquals(audio, restored.audioCenter)
+        assertEquals(reference, restored.falseColorReferenceCenter)
+        assertEquals(com.opencapture.monitorui.MonitorAudioOrientation.HORIZONTAL, restored.audioOrientation)
+        assertTrue(restored.audioShowDB)
+        assertEquals(null, restored.paradeCenter)
+    }
+
+    @Test
+    fun audioCentersPersistIndependentlyAndKeepALegacyPlacement() {
+        val portrait = StoredCenter(.14, .5)
+        val landscape = StoredCenter(.82, .28)
+        val state = LiveAssistState()
+        state.storeAudioCenter(landscape, portrait = false)
+        assertEquals(null, state.audioCenterFor(true))
+        assertEquals(landscape, state.audioCenterFor(false))
+        val restored = LiveAssistState(state.encoded())
+        assertEquals(null, restored.audioCenterFor(true))
+        assertEquals(landscape, restored.audioCenterFor(false))
+        restored.storeAudioCenter(portrait, portrait = true)
+        assertEquals(portrait, restored.audioCenterFor(true))
+        assertEquals(landscape, restored.audioCenterFor(false))
+        val both = LiveAssistState(restored.encoded())
+        assertEquals(portrait, both.audioCenterFor(true))
+        assertEquals(landscape, both.audioCenterFor(false))
+
+        val legacy = StoredCenter(.2, .4)
+        val legacyJson = org.json.JSONObject()
+            .put("audioCenter", org.json.JSONObject().put("xFraction", legacy.xFraction).put("yFraction", legacy.yFraction))
+            .toString()
+        val migrated = LiveAssistState(legacyJson)
+        assertEquals(legacy, migrated.audioCenter)
+        assertEquals(legacy, migrated.audioCenterFor(true))
+        assertEquals(legacy, migrated.audioCenterFor(false))
+        val moved = StoredCenter(.31, .62)
+        migrated.storeAudioCenter(moved, portrait = true)
+        assertEquals(moved, migrated.audioCenterFor(true))
+        assertEquals(legacy, migrated.audioCenterFor(false))
+        val again = LiveAssistState(migrated.encoded())
+        assertEquals(moved, again.audioCenterFor(true))
+        assertEquals(legacy, again.audioCenterFor(false))
+        assertEquals(null, LiveAssistState().audioCenterFor(true))
+        assertEquals(null, LiveAssistState().audioCenterFor(false))
+    }
+
 }

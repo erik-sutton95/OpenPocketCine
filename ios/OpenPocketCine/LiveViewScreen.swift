@@ -31,6 +31,9 @@ struct LiveViewScreen: View {
     }
     private var showsLock: Bool { model.chromeSectionMounts(.lockButton) || interfaceLocked }
     private var showsBatteries: Bool { model.chromeSectionMounts(.batteries) }
+    private var captureControlsPresented: Bool {
+        model.captureSheet != nil || model.captureDrum != nil
+    }
     private var showsGimbalButton: Bool {
         OsmoMonitorPresentation.capabilities(model.session).gimbal
             && model.chromeSectionMounts(.gimbalStick)
@@ -258,7 +261,7 @@ struct LiveViewScreen: View {
             )
             .environment(\.interfaceLocked, interfaceLocked)
             .allowsHitTesting(chromeInteractive && model.liveChromeInteractive)
-            .zIndex(zoomDialVisible ? 11 : 0)
+            .zIndex(zoomDialVisible || captureControlsPresented ? 11 : 0)
 
             // After chrome so the bezel stroke sits on the physical screen, not the feed well.
             LiveRecordingTallyGate()
@@ -337,6 +340,9 @@ struct LiveViewScreen: View {
     /// Physical-screen overlay. OpenZCine `canvasLayer` + `ignoresSafeArea` — not the safe-area box.
     @ViewBuilder
     private func chrome(_ layout: LiveMonitorLayout) -> some View {
+        let captureHidesNavigation =
+            model.captureDrum != nil
+            || (model.captureSheet != nil && layout.presentation?.portrait != true)
         ZStack(alignment: .topLeading) {
             Color.clear
                 .allowsHitTesting(false)
@@ -422,11 +428,17 @@ struct LiveViewScreen: View {
                 }
                 .chromeEditable(.railSettings, editing: editingMode)
                 .liveModuleFrame(layout.settings)
+                .opacity(captureHidesNavigation ? 0 : 1)
+                .allowsHitTesting(!captureHidesNavigation)
+                .accessibilityHidden(captureHidesNavigation)
             }
             if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton(size: layout.media.width) { model.liveOperatorPanel = .media }
                     .chromeEditable(.railMedia, editing: editingMode)
                     .liveModuleFrame(layout.media)
+                    .opacity(captureHidesNavigation ? 0 : 1)
+                    .allowsHitTesting(!captureHidesNavigation)
+                    .accessibilityHidden(captureHidesNavigation)
             }
 
             // After the scope well — that well covers this chip and used to eat the tap.
@@ -436,14 +448,18 @@ struct LiveViewScreen: View {
                 LiveZoomChip(onOpenDial: openZoomDial)
                     .chromeEditable(.zoomChip, editing: editingMode)
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
-                    .allowsHitTesting(!interfaceLocked)
+                    .opacity(captureControlsPresented ? 0 : 1)
+                    .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
+                    .accessibilityHidden(captureControlsPresented)
                     .zIndex(2)
             }
 
             if showsGimbalButton {
                 LiveGimbalButton()
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
-                    .allowsHitTesting(!interfaceLocked)
+                    .opacity(captureControlsPresented ? 0 : 1)
+                    .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
+                    .accessibilityHidden(captureControlsPresented)
                     .zIndex(2)
             }
 
@@ -452,10 +468,12 @@ struct LiveViewScreen: View {
             {
                 LiveGimbalStick(
                     enabled: !interfaceLocked && model.liveOperatorPanel == nil
-                        && chromeInteractive
+                        && chromeInteractive && !captureControlsPresented
                 )
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
+                .opacity(captureControlsPresented ? 0 : 1)
+                .accessibilityHidden(captureControlsPresented)
                 .zIndex(3)
             }
 
@@ -509,8 +527,11 @@ struct LiveViewScreen: View {
                 LiveCameraControlBar(columns: layout.capture.height > 60 ? 3 : 6)
                     .chromeEditable(.cameraValues, editing: editingMode)
                     .liveModuleFrame(layout.capture, alignment: .bottom)
-                    .opacity(interfaceLocked ? 0.4 : 1)
-                    .allowsHitTesting(!interfaceLocked)
+                    .opacity(captureControlsPresented ? 0 : (interfaceLocked ? 0.4 : 1))
+                    // A held readout retains its existing pointer until lift;
+                    // persistent pickers own their outside-tap dismissal instead.
+                    .allowsHitTesting(!interfaceLocked && model.captureSheet == nil)
+                    .accessibilityHidden(captureControlsPresented)
             }
         }
         .frame(width: layout.viewport.width, height: layout.viewport.height)
@@ -570,17 +591,19 @@ struct LiveViewScreen: View {
             )
         }
 
-        if chromeInteractive, model.captureSheet != nil, !interfaceLocked {
+        if chromeInteractive, !interfaceLocked {
             LiveCapturePickerHost(
                 sheet: Bindable(model).captureSheet,
-                frames: captureTileFrames,
+                frames: [:],
                 bar: layout.capture,
                 viewport: layout.viewport,
                 safeArea: layout.safeArea,
                 ceilingY: max(
                     layout.safeArea.top + LivePopupPlacement.assistTopInset,
                     LivePopupPlacement.edgeMargin
-                )
+                ),
+                bottomY: layout.presentation?.portrait == true
+                    ? layout.rail.minY - 12 : layout.viewport.height
             )
         }
 
@@ -974,6 +997,18 @@ private struct LiveScopeOverlays: View {
                 chromeClearance: clearance
             )
         }
+        if !model.isWatchingFeed, model.assist.isVisible(.audioMeters) {
+            LiveAudioMeterOverlay(bounds: canvas, chromeClearance: clearance)
+        }
+        if model.assist.isVisible(.falseColor), model.assist.falseColorReference {
+            FalseColorReferenceOverlay(
+                scale: model.assist.falseColorScale,
+                transfer: model.monitorTransfer
+                    ?? MonitorTransfer(model.monitorColorMode ?? .normal),
+                bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
+                onConfigure: { model.assist.configureTool = .falseColor })
+        }
+
     }
 }
 

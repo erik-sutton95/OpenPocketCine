@@ -162,19 +162,17 @@ final class TrafficLightsAssistTests: XCTestCase {
         XCTAssertEqual(restored.y, center.y, accuracy: 0.001)
     }
 
-    func testDefaultCenterParksInsideFullBleedFeed() {
+    func testUnplacedMeterStartsAtCanvasCenter() {
         let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
         let feed = CGRect(x: 59, y: 0, width: 714.7, height: 402)
         let size = TrafficLightsAssist.baseSize
         let chrome = EdgeInsets(top: 60, leading: 0, bottom: 72, trailing: 100)
         let center = TrafficLightsAssist.defaultCenter(
             feed: feed, size: size, bounds: bounds, chromeClearance: chrome)
-        XCTAssertEqual(center.x, feed.minX + size.width / 2, accuracy: 0.5)
+        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
         XCTAssertLessThanOrEqual(center.y + size.height / 2, bounds.maxY - chrome.bottom + 0.5)
         XCTAssertGreaterThanOrEqual(center.y - size.height / 2, bounds.minY - 0.5)
-        // OpenZCine .bottomLeading: parks just inside the picture, above the
-        // assist/capture strip — the lower half of a full-bleed feed.
-        XCTAssertGreaterThan(center.y, feed.midY)
     }
 
     func testCompensationThresholdLightsCrushBand() {

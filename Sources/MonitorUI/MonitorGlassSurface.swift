@@ -8,10 +8,10 @@
 
         fileprivate var opacity: Double {
             switch self {
-            case .compact: 0.52
-            case .expanded: 0.62
-            case .information: 0.82
-            case .delivery: 0.86
+            case .compact: 0.78
+            case .expanded: 0.84
+            case .information: 0.90
+            case .delivery: 0.92
             }
         }
     }
@@ -24,10 +24,10 @@
         func body(content: Content) -> some View {
             content.background {
                 if reduceTransparency {
-                    shape.fill(MonitorTheme.surface)
+                    shape.fill(MonitorTheme.canvas)
                 } else {
                     shape.fill(.ultraThinMaterial)
-                        .overlay(shape.fill(MonitorTheme.color(0x141618).opacity(density.opacity)))
+                        .overlay(shape.fill(Color.black.opacity(density.opacity)))
                         .environment(\.colorScheme, .dark)
                 }
             }

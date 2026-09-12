@@ -89,6 +89,8 @@ fun LiveAssistLayer(
     feedFrame: ChromeRect? = null,
     /** Clear space between fixed controls, in dp. Storage still uses the full canvas. */
     placementFrame: ChromeRect? = null,
+    /** Audio defaults at the safe leading edge, independent of the expanded palette. */
+    audioPlacementFrame: ChromeRect? = null,
     /** Live 180 / MIRROR compose. Defaults to the MIRROR chip. */
     pictureMirrored: Boolean = state.mirror,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
@@ -140,7 +142,12 @@ fun LiveAssistLayer(
             CrosshairOverlay(feed)
         }
         if (shown(LiveAssistTool.FALSE) && state.falseColorReference) {
-            FalseColorReferenceRuler(state, status.colorMode, Modifier.align(Alignment.BottomStart).padding(14.dp, 0.dp, 0.dp, 86.dp))
+            MovableAssistPanel(LiveAssistTool.FALSE, ScopePanelSize.falseColorReference, 1.0,
+                state.falseColorReferenceCenter, canvas, placement, AssistPoint(canvas.midX, canvas.midY),
+                enabled = !locked, onStore = { state.storeCenter(LiveAssistTool.FALSE, it) }, fillPlate = false,
+                onOpenOptions = onOpenOptions?.let { open -> { open(LiveAssistTool.FALSE, it) } }) {
+                FalseColorReferenceRuler(state, status.colorMode, Modifier.fillMaxSize())
+            }
         }
         if (!playback) {
             Box(
@@ -183,26 +190,14 @@ fun LiveAssistLayer(
             }
         }
         if (!playback && shown(LiveAssistTool.AUDIO)) {
-            val meters = status.audioMetersLeftRight()
-            if (meters != null) {
-                val channels = meters.asMeterChannels()
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 14.dp, bottom = 86.dp)
-                        .size(AudioAssist.PANEL_WIDTH_DP.dp, AudioAssist.PANEL_HEIGHT_DP.dp)
-                        .clip(scopePanelShape())
-                        .background(LiveDesign.scopePlate)
-                        .border(1.dp, LiveDesign.hairline, scopePanelShape())
-                        .zIndex(0.5f),
-                ) {
-                    AudioMetersPanel(
-                        left = channels.first,
-                        right = channels.second,
-                        sensitivity = status.audioLabel,
-                    )
-                }
-            }
+            val channels = audioOverlayChannels(status)
+            val audioPlacement = audioPlacementFrame?.let { frame -> with(density) {
+                val inset = 8.dp.toPx()
+                AssistRect(frame.x.dp.toPx() + inset, frame.y.dp.toPx() + inset,
+                    maxOf(0f, frame.width.dp.toPx() - 2 * inset), maxOf(0f, frame.height.dp.toPx() - 2 * inset))
+            } } ?: placement
+            AssistAudioOverlay(state, channels.first, channels.second, canvas, audioPlacement, locked,
+                onOpenOptions = onOpenOptions?.let { open -> { open(LiveAssistTool.AUDIO, it) } })
         }
     }
 }
@@ -219,19 +214,13 @@ private fun StackedScopePanel(
     locked: Boolean,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)?,
 ) {
-    val (base, scale, stored, defaultCenter, onScale) =
+    val (base, scale, stored, onScale) =
         when (tool) {
             LiveAssistTool.WAVE ->
                 ScopePanelSpec(
                     ScopePanelSize.waveform,
                     state.waveScale,
                     state.waveCenter,
-                    MovablePanelMath.defaultCenterTopLeading(
-                        feed,
-                        panelPx(ScopePanelSize.waveform, state.waveScale, density),
-                        canvas,
-                        topClearance = 8f,
-                    ),
                     { state.setScale(LiveAssistTool.WAVE, it) },
                 )
             LiveAssistTool.PARADE ->
@@ -239,12 +228,6 @@ private fun StackedScopePanel(
                     ScopePanelSize.parade,
                     state.paradeScale,
                     state.paradeCenter,
-                    MovablePanelMath.defaultCenterTopTrailing(
-                        feed,
-                        panelPx(ScopePanelSize.parade, state.paradeScale, density),
-                        canvas,
-                        topClearance = 8f,
-                    ),
                     { state.setScale(LiveAssistTool.PARADE, it) },
                 )
             LiveAssistTool.VECTOR ->
@@ -252,12 +235,6 @@ private fun StackedScopePanel(
                     ScopePanelSize.vectorscope,
                     state.vectorScale,
                     state.vectorCenter,
-                    MovablePanelMath.defaultCenterTopTrailing(
-                        feed,
-                        panelPx(ScopePanelSize.vectorscope, state.vectorScale, density),
-                        canvas,
-                        topClearance = 8f,
-                    ),
                     { state.setScale(LiveAssistTool.VECTOR, it) },
                 )
             LiveAssistTool.HISTO ->
@@ -265,12 +242,6 @@ private fun StackedScopePanel(
                     ScopePanelSize.histogram,
                     state.histoScale,
                     state.histoCenter,
-                    MovablePanelMath.defaultCenterBottomTrailing(
-                        feed,
-                        panelPx(ScopePanelSize.histogram, state.histoScale, density),
-                        canvas,
-                        bottomClearance = 80f,
-                    ),
                     { state.setScale(LiveAssistTool.HISTO, it) },
                 )
             LiveAssistTool.LIGHTS ->
@@ -278,12 +249,6 @@ private fun StackedScopePanel(
                     ScopePanelSize.trafficLights,
                     state.lightsScale,
                     state.lightsCenter,
-                    MovablePanelMath.defaultCenterBottomLeading(
-                        feed,
-                        panelPx(ScopePanelSize.trafficLights, state.lightsScale, density),
-                        canvas,
-                        bottomClearance = 80f,
-                    ),
                     { state.setScale(LiveAssistTool.LIGHTS, it) },
                 )
             LiveAssistTool.ND ->
@@ -291,12 +256,6 @@ private fun StackedScopePanel(
                     ScopePanelSize.ndMeter,
                     state.ndScale,
                     state.ndCenter,
-                    MovablePanelMath.defaultCenterBottomLeading(
-                        feed,
-                        panelPx(ScopePanelSize.ndMeter, state.ndScale, density),
-                        canvas,
-                        bottomClearance = 80f,
-                    ),
                     { state.setScale(LiveAssistTool.ND, it) },
                 )
             LiveAssistTool.LUT,
@@ -317,7 +276,7 @@ private fun StackedScopePanel(
             stored = stored,
             canvas = canvas,
             placementBounds = placementBounds,
-            defaultCenter = defaultCenter,
+            defaultCenter = AssistPoint(canvas.midX, canvas.midY),
             enabled = !locked,
             onStore = { state.storeCenter(tool, it) },
             onScale = onScale,
@@ -351,7 +310,6 @@ private data class ScopePanelSpec(
     val base: AssistSize,
     val scale: Double,
     val stored: StoredCenter?,
-    val defaultCenter: AssistPoint,
     val onScale: (Double) -> Unit,
 )
 
@@ -443,7 +401,7 @@ private fun FocusBox(nx: Float, ny: Float) {
 }
 
 @Composable
-private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
+internal fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
     val segments = FalseColorReference.segments(state.falseColorScale, transfer)
     val markers =

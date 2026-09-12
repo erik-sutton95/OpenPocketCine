@@ -77,8 +77,8 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
 
     var hasConfiguration: Bool {
         switch self {
-        // AUDIO / MIRROR match OpenZCine: tap-only. No channel picker, no H/V flip.
-        case .audioMeters, .mirror, .evMeter, .instantReview, .magnification, .level, .desqueeze:
+        // Mirror stays tap-only; audio options affect presentation only.
+        case .mirror, .evMeter, .instantReview, .magnification, .level, .desqueeze:
             false
         default: true
         }
@@ -1259,12 +1259,6 @@ struct FeedAlignedAssists: View {
                     HStack(alignment: .bottom, spacing: 8) {
                         extraScopes(assist)
                         Spacer(minLength: 0)
-                        if !model.isWatchingFeed, assist.isVisible(.audioMeters) {
-                            AudioAssist.meter(
-                                levels: model.session.status.audioMeters,
-                                sensitivity: model.session.status.audioChannel?.label
-                            )
-                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 86)
@@ -1277,12 +1271,6 @@ struct FeedAlignedAssists: View {
     @ViewBuilder
     private func extraScopes(_ assist: LiveAssistState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if assist.isVisible(.falseColor), assist.falseColorReference {
-                FalseColorLegend(
-                    scale: assist.falseColorScale,
-                    colorMode: model.monitorColorMode ?? .normal
-                )
-            }
             if !model.isWatchingFeed, assist.evMeter {
                 EVMeterOverlay()
             }

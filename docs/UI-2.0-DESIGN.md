@@ -230,6 +230,24 @@ overlays remain clipped to the picture. Do not transfer the prototype's permissi
 24-point visibility clamp into production: preserve [scope movement bounds](UX.md)
 and preferred-size restoration. Preserve actual scope GPU rendering/cadence.
 
+## Operator feedback, 13 September 2026
+
+These accepted refinements supersede the corresponding prototype defaults:
+
+- Fresh windowed tools open in the canvas center; saved placement survives.
+  Audio opens left/vertical-center, can be dragged, and adds orientation and
+  optional per-channel dBFS display preferences.
+- Assist inspectors keep one stable viewport-bounded size across tool changes,
+  with more horizontal space for options.
+- Floating plates and local readout shadows are darker, near black.
+- Every persistent camera picker rises from bottom-center, including the three
+  recording categories. Use the reference ruler, horizontal value movement,
+  selected type scaling, inline toggle details, header and bottom grabber.
+- Pocket 4 Pro separates 1×/3× single taps from 6×/12× double taps when supported.
+  Other camera limits and command mapping remain authoritative.
+- iPhone top controls do not receive iPad window-control exclusions. Landscape
+  camera values use intrinsic widths and bounded gaps; portrait retains 3×2.
+
 ## Capture drums, zoom and gimbal
 
 All capture values reuse one drum. Tap opens/closes its persistent panel. Hold

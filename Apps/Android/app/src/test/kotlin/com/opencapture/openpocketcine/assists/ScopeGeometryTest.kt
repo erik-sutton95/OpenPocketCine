@@ -278,6 +278,12 @@ class ScopeGeometryTest {
     @Test
     fun audioMetersHideWhenStatusHasNoFields() {
         assertNull(CameraStatus().audioMetersLeftRight())
+        val silent = audioOverlayChannels(CameraStatus())
+        assertEquals(AudioAssist.FLOOR_DB, silent.first.levelDB, 0.01)
+        assertEquals(AudioAssist.FLOOR_DB, silent.second.levelDB, 0.01)
+        val live = audioOverlayChannels(CameraStatus(audioMetersLeft = -21.0, audioMetersRight = -14.0))
+        assertEquals(-21.0, live.first.levelDB, 0.01)
+        assertEquals(-14.0, live.second.levelDB, 0.01)
         assertEquals("—", AudioAssist.displayedSensitivity(null))
         assertEquals("STEREO", AudioAssist.displayedSensitivity("  stereo "))
         val yTop = AudioAssist.y(0.0, 0f, 100f)

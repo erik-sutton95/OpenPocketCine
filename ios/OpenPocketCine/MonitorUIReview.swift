@@ -16,6 +16,7 @@
             model.assist.peaking = false
             model.assist.zebra = false
             model.assist.falseColor = false
+            model.assist.falseColorReference = true
             model.assist.waveform = false
             model.assist.parade = false
             model.assist.histogram = false
@@ -33,6 +34,8 @@
             ParadeAssist.store.options = .default
             HistogramAssist.store.options = .default
             VectorscopeAssist.store.options = .default
+            AudioAssist.store.options = .init()
+            FalseColorReferencePositionStore.shared.positions = FalseColorReferencePositions()
             WaveformAssist.store.sessionCenter = nil
             WaveformAssist.store.sessionCenterPortrait = nil
             ParadeAssist.store.sessionCenter = nil

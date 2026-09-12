@@ -88,9 +88,7 @@
                         onPair(nil)
                     } label: {
                         HStack(spacing: 9) {
-                            CameraPageGlyph(icon: .plus).stroke(
-                                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                            ).frame(width: 14, height: 14)
+                            CameraPageGlyph(icon: .plus).frame(width: 14, height: 14)
                             Text("Pair a new camera").font(MonitorTheme.font(13, weight: .semibold))
                         }
                         .frame(maxWidth: .infinity).frame(height: 46)
@@ -207,11 +205,9 @@
             _ icon: CameraPageIcon, title: String? = nil, tablet: Bool, accented: Bool = false
         ) -> some View {
             HStack(spacing: 8) {
-                CameraPageGlyph(icon: icon).stroke(
-                    style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round)
-                )
-                .foregroundStyle(accented ? MonitorTheme.accent : MonitorTheme.secondary)
-                .frame(width: tablet ? 26 : 23, height: tablet ? 26 : 23)
+                CameraPageGlyph(icon: icon)
+                    .foregroundStyle(accented ? MonitorTheme.accent : MonitorTheme.secondary)
+                    .frame(width: tablet ? 26 : 23, height: tablet ? 26 : 23)
                 if let title {
                     Text(title).font(MonitorTheme.font(12.5, weight: .semibold)).fixedSize()
                 }
@@ -241,27 +237,88 @@
                         repeating: GridItem(.flexible(), spacing: 8), count: tablet ? 2 : 1),
                     spacing: 8
                 ) {
-                    ForEach(items) { item in cameraCard(item, saved: saved) }
+                    cameraRows(items, saved: saved)
                 }
             }
         }
 
-        private func cameraCard(_ item: CameraListItem, saved: Bool) -> some View {
+        private func cameraRows(_ items: [CameraListItem], saved: Bool)
+            -> ForEach<[CameraListItem], String, CameraCatalogCard>
+        {
+            let rename: (@MainActor @Sendable (CameraListItem) -> Void)?
+            if onRename == nil {
+                rename = nil
+            } else {
+                rename = { item in
+                    renameText = item.name
+                    renameItem = item
+                }
+            }
+            let remove: (@MainActor @Sendable (CameraListItem) -> Void)?
+            if onForget == nil {
+                remove = nil
+            } else {
+                remove = { item in removeItem = item }
+            }
+            let actions = CameraCatalogActions(
+                activate: { activate($0, saved: saved) }, cancel: { onCancel() },
+                rename: rename, remove: remove)
+            return CameraCatalogRows.make(items, saved: saved, busy: busy, actions: actions)
+        }
+
+        private func activate(_ item: CameraListItem, saved: Bool) {
+            guard !busy else { return }
+            if saved { onConnect(item.id) } else { onPair(item.id) }
+        }
+    }
+    /// Rendering a lazy camera collection only copies immutable row values.
+    /// Native session and rename/remove bindings are captured as MainActor actions.
+    struct CameraCatalogActions: Sendable {
+        let activate: @MainActor @Sendable (CameraListItem) -> Void
+        let cancel: @MainActor @Sendable () -> Void
+        let rename: (@MainActor @Sendable (CameraListItem) -> Void)?
+        let remove: (@MainActor @Sendable (CameraListItem) -> Void)?
+    }
+
+    enum CameraCatalogRows {
+        nonisolated static func make(
+            _ items: [CameraListItem], saved: Bool, busy: Bool, actions: CameraCatalogActions
+        ) -> ForEach<[CameraListItem], String, CameraCatalogCard> {
+            ForEach(items) { item in
+                CameraCatalogCard(item: item, saved: saved, busy: busy, actions: actions)
+            }
+        }
+    }
+
+    struct CameraCatalogCard: View {
+        nonisolated let item: CameraListItem
+        nonisolated let saved: Bool
+        nonisolated let busy: Bool
+        nonisolated let actions: CameraCatalogActions
+
+        nonisolated init(
+            item: CameraListItem, saved: Bool, busy: Bool, actions: CameraCatalogActions
+        ) {
+            self.item = item
+            self.saved = saved
+            self.busy = busy
+            self.actions = actions
+        }
+
+        var body: some View {
             VStack(alignment: .leading, spacing: 11) {
                 HStack(spacing: 11) {
-                    CameraPageGlyph(icon: .camera).stroke(
-                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
-                    )
-                    .frame(width: 19, height: 19).foregroundStyle(
-                        item.isPrimary ? MonitorTheme.accent : MonitorTheme.muted
-                    )
-                    .frame(width: 40, height: 40)
-                    .background(
-                        item.isPrimary
-                            ? MonitorTheme.accent.opacity(0.14) : Color.white.opacity(0.05),
-                        in: RoundedRectangle(cornerRadius: 10))
+                    CameraPageGlyph(icon: .camera)
+                        .frame(width: 19, height: 19).foregroundStyle(
+                            item.isPrimary ? MonitorTheme.accent : MonitorTheme.muted
+                        )
+                        .frame(width: 40, height: 40)
+                        .background(
+                            item.isPrimary
+                                ? MonitorTheme.accent.opacity(0.14) : Color.white.opacity(0.05),
+                            in: RoundedRectangle(cornerRadius: 10))
                     Button {
-                        activate(item, saved: saved)
+                        actions.activate(item)
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(item.name).font(MonitorTheme.font(14.5, weight: .semibold))
@@ -293,7 +350,7 @@
                         columns: [GridItem(.adaptive(minimum: 80), alignment: .leading)],
                         alignment: .leading, spacing: 8
                     ) {
-                        ForEach(item.details) { detail in
+                        MonitorSnapshotRows(item.details) { detail in
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(detail.title.uppercased()).font(
                                     MonitorTheme.font(8, weight: .bold)
@@ -313,25 +370,22 @@
                         ).lineLimit(2)
                     }
                     Spacer(minLength: 0)
-                    if saved && (onRename != nil || onForget != nil) {
+                    if saved && (actions.rename != nil || actions.remove != nil) {
                         Menu {
-                            if onRename != nil {
-                                Button("Rename") {
-                                    renameText = item.name
-                                    renameItem = item
-                                }
+                            if let rename = actions.rename {
+                                Button("Rename") { rename(item) }
                             }
-                            if onForget != nil {
-                                Button("Remove", role: .destructive) { removeItem = item }
+                            if let remove = actions.remove {
+                                Button("Remove", role: .destructive) { remove(item) }
                             }
                         } label: {
-                            CameraPageGlyph(icon: .more).stroke(lineWidth: 1.8).frame(
+                            CameraPageGlyph(icon: .more).frame(
                                 width: 15, height: 15
                             ).frame(width: 36, height: 44)
                         }.disabled(busy).accessibilityLabel("Options for \(item.name)")
                     }
                     Button {
-                        if item.isBusy { onCancel() } else { activate(item, saved: saved) }
+                        if item.isBusy { actions.cancel() } else { actions.activate(item) }
                     } label: {
                         Text(item.isBusy ? "Cancel" : item.actionTitle)
                     }
@@ -356,9 +410,5 @@
                     lineWidth: 1))
         }
 
-        private func activate(_ item: CameraListItem, saved: Bool) {
-            guard !busy else { return }
-            if saved { onConnect(item.id) } else { onPair(item.id) }
-        }
     }
 #endif

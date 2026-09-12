@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -221,26 +222,16 @@ enum TrafficLightsAssist {
             height: (baseSize.height * clamped).rounded())
     }
 
-    /// OpenZCine `feedOutsideCenter` for `.bottomLeading`. Full-bleed feed parks the
-    /// panel just inside the picture, above the assist/capture strip.
+    /// Unplaced tools start at the canvas center; saved/session centers win later.
     static func defaultCenter(
-        feed: CGRect,
+        feed _: CGRect,
         size: CGSize,
         bounds: CGRect,
-        chromeClearance: EdgeInsets,
-        gap: CGFloat = 10
+        chromeClearance _: EdgeInsets,
+        gap _: CGFloat = 10
     ) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        let x = feed.minX + halfWidth
-        let outside = feed.maxY + gap + halfHeight
-        let y: CGFloat
-        if outside + halfHeight <= bounds.maxY {
-            y = outside
-        } else {
-            y = min(feed.maxY, bounds.maxY - chromeClearance.bottom) - gap - halfHeight
-        }
-        return clamp(CGPoint(x: x, y: y), size: size, in: bounds)
+        clamp(
+            CGPoint(x: bounds.midX, y: bounds.midY), size: size, in: bounds)
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
@@ -399,7 +390,7 @@ private struct TrafficLightsCrushClipSegmented: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(TrafficLightsAssist.CrushClipCompensation.allCases) { option in
+            MonitorSnapshotRows(TrafficLightsAssist.CrushClipCompensation.allCases) { option in
                 let active = option == selected
                 Button {
                     onSelect(option)
@@ -441,9 +432,7 @@ private struct TrafficLightsCrushClipSegmented: View {
 private enum TrafficLightsAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }
 

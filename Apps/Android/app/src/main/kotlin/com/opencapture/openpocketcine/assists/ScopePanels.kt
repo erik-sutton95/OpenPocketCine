@@ -220,7 +220,7 @@ internal fun MovableAssistPanel(
                 .clip(plateShape)
                 .then(if (fillPlate) Modifier.background(LiveDesign.scopePlate) else Modifier)
                 .onGloballyPositioned { panelCoords = it }
-                .pointerInput(tool, enabled) {
+                .pointerInput(tool, enabled, base, canvas, placementBounds, density.density) {
                     detectPanelDrag(
                         holdMs = AssistLongPress.PANEL_MS,
                         enabled = enabled,
@@ -249,8 +249,9 @@ internal fun MovableAssistPanel(
                             publishSlot(snapped, size)
                         },
                         onEnd = { _ ->
-                            val final = session ?: centerState.value
-                            onStore(StoredCenter(final, canvasState.value))
+                            if (canvas == canvasState.value && placementBounds == placementState.value) {
+                                session?.let { onStore(StoredCenter(it, canvas)) }
+                            } else session = null
                             origin = null
                             active = false
                         },
@@ -538,80 +539,6 @@ internal fun TrafficLightsPanel(state: LiveAssistState, modifier: Modifier = Mod
     }
 }
 
-@Composable
-internal fun AudioMetersPanel(
-    left: AudioMeterReading,
-    right: AudioMeterReading,
-    sensitivity: String?,
-    modifier: Modifier = Modifier,
-) {
-    val measurer = rememberTextMeasurer()
-    Canvas(modifier.size(AudioAssist.PANEL_WIDTH_DP.dp, AudioAssist.PANEL_HEIGHT_DP.dp)) {
-        drawText(
-            measurer,
-            "AUDIO",
-            Offset(2f, 4f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 6.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
-        )
-        val labelReserve = 22f
-        val bars = AssistRect(0f, 16f, this.size.width, this.size.height - labelReserve - 16f)
-        for (mark in AudioAssist.guideMarks) {
-            val y = AudioAssist.y(mark, bars.minY, bars.maxY)
-            drawLine(Color(220 / 255f, 235 / 255f, 225 / 255f, 0.10f), Offset(bars.minX, y), Offset(bars.maxX, y), 1f)
-        }
-        val gap = 2f
-        val inset = 1f
-        val barW = (bars.width - gap - inset * 2) / 2f
-        listOf("L" to left, "R" to right).forEachIndexed { index, pair ->
-            val x = bars.minX + inset + index * (barW + gap)
-            val track = AssistRect(x, bars.minY, barW, bars.height)
-            drawRoundRect(
-                LiveDesign.text.copy(alpha = 0.08f),
-                Offset(track.minX, track.minY),
-                Size(track.width, track.height),
-                CornerRadius(2f, 2f),
-            )
-            val levelY = AudioAssist.y(pair.second.levelDB, track.minY, track.maxY)
-            if (levelY < track.maxY - 0.5f) {
-                val bands =
-                    listOf(
-                        AudioAssist.FLOOR_DB to AudioAssist.YELLOW_FROM_DB,
-                        AudioAssist.YELLOW_FROM_DB to AudioAssist.RED_FROM_DB,
-                        AudioAssist.RED_FROM_DB to 0.0,
-                    )
-                for (band in bands) {
-                    val top = AudioAssist.y(band.second, track.minY, track.maxY).coerceAtLeast(levelY)
-                    val bottom = AudioAssist.y(band.first, track.minY, track.maxY).coerceAtLeast(levelY)
-                    if (bottom > top) {
-                        drawRect(zoneColor(band.first), Offset(track.minX, top), Size(track.width, bottom - top))
-                    }
-                }
-            }
-            if (pair.second.peakDB > AudioAssist.FLOOR_DB + 0.5) {
-                val peakY = AudioAssist.y(pair.second.peakDB, track.minY, track.maxY)
-                drawLine(zoneColor(pair.second.peakDB), Offset(track.minX, peakY), Offset(track.maxX, peakY), 1.5f)
-            }
-            drawText(
-                measurer,
-                pair.first,
-                Offset(track.midX - 3f, this.size.height - 18f),
-                TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 7.5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
-            )
-        }
-        drawText(
-            measurer,
-            "SENS",
-            Offset(2f, this.size.height - 12f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.42f), fontSize = 5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora),
-        )
-        drawText(
-            measurer,
-            AudioAssist.displayedSensitivity(sensitivity),
-            Offset(this.size.width / 2f - 6f, this.size.height - 12f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.72f), fontSize = 8.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
-        )
-    }
-}
 
 object NDAssist {
     const val HELP =

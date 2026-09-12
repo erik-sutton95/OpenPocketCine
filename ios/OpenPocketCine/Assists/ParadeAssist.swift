@@ -1,4 +1,5 @@
 import MonitorPresentation
+import MonitorUI
 import SwiftUI
 import UIKit
 
@@ -187,25 +188,16 @@ enum ParadeAssist {
             height: (baseSize.height * clamped).rounded())
     }
 
-    /// OpenZCine `feedOutsideCenter` for the parade's top-trailing default.
+    /// Unplaced tools start at the canvas center; saved/session centers win later.
     static func defaultCenter(
-        feed: CGRect,
+        feed _: CGRect,
         size: CGSize,
         bounds: CGRect,
-        chromeClearance: EdgeInsets = EdgeInsets(),
-        gap: CGFloat = 10
+        chromeClearance _: EdgeInsets = EdgeInsets(),
+        gap _: CGFloat = 10
     ) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        let x = feed.maxX - halfWidth
-        let outside = feed.minY - gap - halfHeight
-        let y: CGFloat
-        if outside - halfHeight >= bounds.minY {
-            y = outside
-        } else {
-            y = max(feed.minY, bounds.minY + chromeClearance.top) + gap + halfHeight
-        }
-        return clamp(CGPoint(x: x, y: y), size: size, bounds: bounds)
+        clamp(
+            CGPoint(x: bounds.midX, y: bounds.midY), size: size, bounds: bounds)
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, bounds: CGRect) -> CGPoint {
@@ -371,60 +363,65 @@ struct ParadeLongPressMenu: View {
     var compact: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsInlineRow(title: "Mode", showTopDivider: false, stacked: compact) {
-                SettingsSegmented(
-                    options: ParadeAssist.Mode.allCases.map(\.rawValue),
-                    selected: options.mode.rawValue,
-                    compact: compact,
+        VStack(alignment: .leading, spacing: 12) {
+            MonitorInspectorCard {
+                SettingsInlineRow(title: "Mode", showTopDivider: false, stacked: compact) {
+                    SettingsSegmented(
+                        options: ParadeAssist.Mode.allCases.map(\.rawValue),
+                        selected: options.mode.rawValue,
+                        compact: compact,
+                        stacked: compact
+                    ) {
+                        guard let mode = ParadeAssist.Mode(rawValue: $0), mode != options.mode
+                        else {
+                            return
+                        }
+                        options.mode = mode
+                    }
+                }
+                SettingsInlineRow(
+                    title: "Brightness",
+                    help: ParadeAssist.brightnessHelp,
                     stacked: compact
                 ) {
-                    guard let mode = ParadeAssist.Mode(rawValue: $0), mode != options.mode else {
-                        return
-                    }
-                    ParadeAssistHaptics.selection()
-                    options.mode = mode
+                    ParadePercentSlider(
+                        value: Binding(
+                            get: { options.brightness },
+                            set: {
+                                let next = ParadeAssist.Options.clampedBrightness($0)
+                                guard next != options.brightness else { return }
+                                ParadeAssistHaptics.selection()
+                                options.brightness = next
+                            }),
+                        range: ParadeAssist.brightnessRange)
                 }
             }
-            SettingsInlineRow(
-                title: "Brightness",
-                help: ParadeAssist.brightnessHelp,
-                stacked: compact
-            ) {
-                ParadePercentSlider(
-                    value: Binding(
-                        get: { options.brightness },
-                        set: {
-                            let next = ParadeAssist.Options.clampedBrightness($0)
-                            guard next != options.brightness else { return }
-                            ParadeAssistHaptics.selection()
-                            options.brightness = next
-                        }),
-                    range: ParadeAssist.brightnessRange)
-            }
-            SettingsSwitchInlineRow(
-                title: "Safe Border Clip",
-                stacked: compact,
-                isOn: options.guides.clip
-            ) {
-                ParadeAssistHaptics.selection()
-                options.guides.clip.toggle()
-            }
-            SettingsSwitchInlineRow(
-                title: "Safe Border Crush",
-                stacked: compact,
-                isOn: options.guides.crush
-            ) {
-                ParadeAssistHaptics.selection()
-                options.guides.crush.toggle()
-            }
-            SettingsSwitchInlineRow(
-                title: "Middle Gray",
-                stacked: compact,
-                isOn: options.guides.middle
-            ) {
-                ParadeAssistHaptics.selection()
-                options.guides.middle.toggle()
+            MonitorInspectorCard("Guide lines") {
+                SettingsSwitchInlineRow(
+                    title: "Safe clip",
+                    showTopDivider: false,
+                    stacked: compact,
+                    isOn: options.guides.clip
+                ) {
+                    ParadeAssistHaptics.selection()
+                    options.guides.clip.toggle()
+                }
+                SettingsSwitchInlineRow(
+                    title: "Safe crush",
+                    stacked: compact,
+                    isOn: options.guides.crush
+                ) {
+                    ParadeAssistHaptics.selection()
+                    options.guides.crush.toggle()
+                }
+                SettingsSwitchInlineRow(
+                    title: "Middle gray",
+                    stacked: compact,
+                    isOn: options.guides.middle
+                ) {
+                    ParadeAssistHaptics.selection()
+                    options.guides.middle.toggle()
+                }
             }
         }
     }
@@ -602,8 +599,6 @@ struct ParadeCornerResizeGrip: Shape {
 private enum ParadeAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }

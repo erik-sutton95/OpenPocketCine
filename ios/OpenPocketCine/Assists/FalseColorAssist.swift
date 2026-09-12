@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -15,7 +16,7 @@ enum FalseColorAssist {
     static let referencePanelSize = FalseColorReference.panelSize
 
     /// OpenZCine `falseColorRows` titles, in order.
-    static let popupTitles = ["Scale", "Reference Display"]
+    static let popupTitles = ["Scale", "Reference key", "Reference Display"]
 
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
@@ -87,11 +88,13 @@ enum FalseColorAssist {
     static func longPressMenu(
         options: Binding<Options>,
         compact: Bool = false,
+        transfer: MonitorTransfer = .rec709,
         onReferenceEnabled: (() -> Void)? = nil
     ) -> FalseColorLongPressMenu {
         FalseColorLongPressMenu(
             options: options,
             compact: compact,
+            transfer: transfer,
             onReferenceEnabled: onReferenceEnabled
         )
     }
@@ -177,6 +180,8 @@ private struct FalseColorAssistMenuHost: View {
                 }
             ),
             compact: compact,
+            transfer: model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init)
+                ?? .rec709,
             onReferenceEnabled: { assist.falseColor = true }
         )
     }
@@ -185,6 +190,7 @@ private struct FalseColorAssistMenuHost: View {
 struct FalseColorLongPressMenu: View {
     @Binding var options: FalseColorAssist.Options
     var compact: Bool = false
+    var transfer: MonitorTransfer = .rec709
     var onReferenceEnabled: (() -> Void)? = nil
 
     var body: some View {
@@ -193,19 +199,23 @@ struct FalseColorLongPressMenu: View {
                 title: "Scale",
                 help: FalseColorAssist.scaleHelp,
                 showTopDivider: false,
-                stacked: compact
+                stacked: true
             ) {
                 SettingsSegmented(
                     options: FalseColorAssist.scaleOptions,
                     selected: FalseColorAssist.menuLabel(for: options.scale),
                     compact: compact,
-                    stacked: compact
+                    stacked: true
                 ) { label in
                     let scale = FalseColorAssist.scale(forMenuLabel: label)
                     guard scale != options.scale else { return }
-                    FalseColorAssistHaptics.selection()
                     options.scale = scale
                 }
+            }
+
+            SettingsInlineRow(title: "Reference key", stacked: true) {
+                FalseColorReference(scale: options.scale, transfer: transfer, inspector: true)
+                    .accessibilityLabel("False color reference key")
             }
 
             SettingsSwitchInlineRow(
@@ -227,9 +237,7 @@ struct FalseColorLongPressMenu: View {
 private enum FalseColorAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }
 
@@ -260,9 +268,10 @@ struct FalseColorReference: View {
         self.transfer = MonitorTransfer(colorMode)
     }
 
-    init(scale: FalseColorScaleKind, transfer: MonitorTransfer) {
+    init(scale: FalseColorScaleKind, transfer: MonitorTransfer, inspector: Bool = false) {
         self.scale = scale
         self.transfer = transfer
+        self.inspector = inspector
     }
 
     /// OpenZCine `FalseColorReference.curveKeyLabel` — Pocket transfers, compact keys.
@@ -285,15 +294,37 @@ struct FalseColorReference: View {
         }
     }
 
+    var inspector = false
+
     var body: some View {
+        Group {
+            if inspector {
+                referenceContent.frame(height: 26)
+            } else {
+                referenceContent
+                    .padding(7)
+                    .frame(
+                        width: Self.panelSize.width, height: Self.panelSize.height,
+                        alignment: .topLeading
+                    )
+                    .liveChromeGlass(
+                        in: RoundedRectangle(
+                            cornerRadius: LiveDesign.cornerRadius, style: .continuous))
+            }
+        }
+    }
+
+    private var referenceContent: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text("False Color")
-                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                Spacer()
-                Text("\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(transfer))")
-                    .font(.system(size: 7.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
+            if !inspector {
+                HStack {
+                    Text("False Color")
+                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                    Spacer()
+                    Text("\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(transfer))")
+                        .font(.system(size: 7.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -301,7 +332,8 @@ struct FalseColorReference: View {
                         colors: neutralGradientColors,
                         startPoint: .leading,
                         endPoint: .trailing)
-                    ForEach(Self.segments(scale: scale, transfer: transfer)) { segment in
+                    MonitorSnapshotRows(Self.segments(scale: scale, transfer: transfer)) {
+                        segment in
                         Rectangle()
                             .fill(
                                 Color(
@@ -320,13 +352,9 @@ struct FalseColorReference: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
             }
-            .frame(height: 8)
+            .frame(height: inspector ? 14 : 8)
             axisView
         }
-        .padding(7)
-        .frame(width: Self.panelSize.width, height: Self.panelSize.height, alignment: .topLeading)
-        .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
     }
 
     static func segments(
@@ -407,26 +435,35 @@ struct FalseColorReference: View {
     @ViewBuilder private var axisView: some View {
         if scale == .elZone {
             GeometryReader { geometry in
-                ForEach(Self.elZoneAxisMarkers()) { marker in
+                MonitorSnapshotRows(Self.elZoneAxisMarkers()) { marker in
                     Text(marker.label)
-                        .font(.system(size: 5.5, weight: .medium, design: .monospaced))
+                        .font(
+                            inspector
+                                ? MonitorTheme.font(7, weight: .medium)
+                                : .system(size: 5.5, weight: .medium, design: .monospaced)
+                        )
                         .foregroundStyle(.secondary)
                         .fixedSize()
                         .position(
                             x: min(
                                 geometry.size.width - 8,
                                 max(8, geometry.size.width * marker.fraction)),
-                            y: 3.5)
+                            y: inspector ? 4.5 : 3.5)
                 }
             }
-            .frame(height: 7)
+            .frame(height: inspector ? 9 : 7)
         } else {
             HStack(spacing: 4) {
-                ForEach(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset) {
+                MonitorSnapshotRows(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset)
+                {
                     index, label in
                     if index > 0 { Spacer(minLength: 0) }
                     Text(label)
-                        .font(.system(size: 5.5, weight: .medium, design: .monospaced))
+                        .font(
+                            inspector
+                                ? MonitorTheme.font(7, weight: .medium)
+                                : .system(size: 5.5, weight: .medium, design: .monospaced)
+                        )
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)

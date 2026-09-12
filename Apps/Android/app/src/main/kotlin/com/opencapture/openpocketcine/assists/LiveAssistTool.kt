@@ -50,11 +50,11 @@ enum class LiveAssistTool {
                 MIRROR -> "Mirror"
             }
 
-    /** AUDIO / MIRROR are tap-only — no channel picker, no H/V flip. */
+    /** Audio exposes monitor orientation; mirror has no H/V-flip submenu. */
     val hasConfiguration: Boolean
         get() =
             when (this) {
-                AUDIO, MIRROR -> false
+                MIRROR -> false
                 else -> true
             }
 

@@ -146,25 +146,16 @@ enum VectorscopeAssist {
         "MON · \(zoom.rawValue.uppercased())"
     }
 
-    /// OpenZCine `feedOutsideCenter` for the vectorscope's top-trailing default.
+    /// Unplaced tools start at the canvas center; saved/session centers win later.
     static func defaultCenter(
-        feed: CGRect,
+        feed _: CGRect,
         size: CGSize,
         bounds: CGRect,
-        chromeClearance: EdgeInsets = EdgeInsets(),
-        gap: CGFloat = 10
+        chromeClearance _: EdgeInsets = EdgeInsets(),
+        gap _: CGFloat = 10
     ) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        let x = feed.maxX - halfWidth
-        let outside = feed.minY - gap - halfHeight
-        let y: CGFloat
-        if outside - halfHeight >= bounds.minY {
-            y = outside
-        } else {
-            y = max(feed.minY, bounds.minY + chromeClearance.top) + gap + halfHeight
-        }
-        return clamp(CGPoint(x: x, y: y), size: size, bounds: bounds)
+        clamp(
+            CGPoint(x: bounds.midX, y: bounds.midY), size: size, bounds: bounds)
     }
 
     static func clamp(_ point: CGPoint, size: CGSize, bounds: CGRect) -> CGPoint {
@@ -548,8 +539,6 @@ struct VectorscopeCornerResizeGrip: Shape {
 private enum VectorscopeAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }

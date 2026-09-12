@@ -129,7 +129,7 @@ fun LUTPicker(model: AppModel, onClose: () -> Unit) {
         lutExposureStops = assist.lutExposureStops,
         onToggleSplit = { assist.setSplitComparison(!assist.splitComparison) },
         onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
-        onNudgeExposure = { assist.nudgeLutExposure(it) },
+        onExposure = { assist.updateLutExposure(it) },
         onArmLut = { assist.armLut() },
         colorMode = status.colorMode,
         family = model.session.connectedCamera?.model?.family ?: "pocket",
@@ -151,7 +151,7 @@ internal fun LUTPicker(
     lutExposureStops: Double = 0.0,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
-    onNudgeExposure: (Double) -> Unit = {},
+    onExposure: (Double) -> Unit = {},
     onArmLut: () -> Unit = {},
     onClose: (() -> Unit)? = null,
     colorMode: Int = CameraCommands.COLOR_NORMAL,
@@ -241,7 +241,7 @@ internal fun LUTPicker(
                 lutExposureStops = lutExposureStops,
                 onToggleSplit = onToggleSplit,
                 onSplitVertical = onSplitVertical,
-                onNudgeExposure = onNudgeExposure,
+                onExposure = onExposure,
                 colorMode = colorMode,
                 family = family,
                 cameraName = cameraName,
@@ -335,7 +335,7 @@ private fun LUTPickerBody(
     lutExposureStops: Double,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
-    onNudgeExposure: (Double) -> Unit,
+    onExposure: (Double) -> Unit,
     colorMode: Int,
     family: String,
     cameraName: String?,
@@ -400,7 +400,7 @@ private fun LUTPickerBody(
                 lutExposureStops = lutExposureStops,
                 onToggleSplit = onToggleSplit,
                 onSplitVertical = onSplitVertical,
-                onNudgeExposure = onNudgeExposure,
+                onExposure = onExposure,
             )
         }
         if (importError != null) {
@@ -533,54 +533,21 @@ private fun CustomTab(
     }
 }
 
-/** Compact ± stepper. Sits on the same row as 50/50 (iOS `LUTExposureCompensationBar`). */
+/** Absolute half-stop slider over the existing input-referred LUT compensation. */
 @Composable
-internal fun LUTExposureCompensationBar(
-    stops: Double,
-    onNudge: (Double) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val minusOn = LutExposureCompensation.canStep(stops, -LutExposureCompensation.STEP)
-    val plusOn = LutExposureCompensation.canStep(stops, LutExposureCompensation.STEP)
-    Row(
-        modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        ExposureStepButton("−", enabled = minusOn) {
-            onNudge(-LutExposureCompensation.STEP)
+internal fun LUTExposureCompensationBar(stops: Double, onChange: (Double) -> Unit,
+    modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Exposure", style = LiveType.ui(11f, FontWeight.Medium), color = LiveDesign.text)
+            Spacer(Modifier.weight(1f))
+            Text(LutExposureCompensation.label(stops) + " EV", style = LiveType.ui(11f, FontWeight.Medium),
+                color = LiveDesign.muted)
         }
-        Text(
-            LutExposureCompensation.label(stops),
-            color = if (stops == 0.0) LiveDesign.text else LiveDesign.accent,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-            modifier = Modifier.widthIn(min = 44.dp),
-            textAlign = TextAlign.Center,
-        )
-        ExposureStepButton("+", enabled = plusOn) {
-            onNudge(LutExposureCompensation.STEP)
+        com.opencapture.monitorui.MonitorSlider(stops.toFloat(), -3f..3f) {
+            val next = LutExposureCompensation.snap(it.toDouble())
+            if (next != stops) onChange(next)
         }
-    }
-}
-
-@Composable
-private fun ExposureStepButton(label: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(width = 32.dp, height = 32.dp)
-            .clip(RoundedCornerShape(50))
-            .background(LiveDesign.glassBright)
-            .then(if (enabled) Modifier.chromeClickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (enabled) LiveDesign.text else LiveDesign.muted,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
     }
 }
 
@@ -592,16 +559,17 @@ internal fun LUTSplitComparisonBar(
     lutExposureStops: Double = 0.0,
     onToggleSplit: () -> Unit,
     onSplitVertical: (Boolean) -> Unit,
-    onNudgeExposure: (Double) -> Unit = {},
+    onExposure: (Double) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LUTExposureCompensationBar(stops = lutExposureStops, onChange = onExposure)
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            LUTExposureCompensationBar(stops = lutExposureStops, onNudge = onNudgeExposure)
+            Text("Split comparison", style = LiveType.ui(11f, FontWeight.Medium), color = LiveDesign.text)
             Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(RoundedCornerShape(50))
@@ -651,7 +619,7 @@ private fun LutSegmentedButtons(
             Box(
                 Modifier.weight(1f)
                     .clip(RoundedCornerShape(50))
-                    .background(if (on) LiveDesign.accentDim else LiveDesign.glassBright)
+                    .background(if (on) LiveDesign.accent else LiveDesign.glassBright)
                     .chromeClickable { onSelect(item) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -659,7 +627,7 @@ private fun LutSegmentedButtons(
                 Text(
                     item,
                     style = LiveType.ui(13f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
-                    color = if (on) LiveDesign.accent else LiveDesign.muted,
+                    color = if (on) Color(0xFF08191F) else LiveDesign.muted,
                     maxLines = 1,
                 )
             }

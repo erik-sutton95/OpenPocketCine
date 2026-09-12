@@ -90,7 +90,9 @@ import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.AudioAssist
-import com.opencapture.openpocketcine.assists.AudioMetersPanel
+import com.opencapture.openpocketcine.assists.AssistAudioOverlay
+import com.opencapture.openpocketcine.assists.AssistRect
+import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.MirrorAssist
@@ -767,6 +769,7 @@ fun MediaPlayerScreen(
                         canvas = local,
                         left = meterLeft,
                         right = meterRight,
+                        state = assist,
                     )
                 }
             }
@@ -1037,20 +1040,15 @@ private fun PlaybackAudioMetersOverlay(
     canvas: PlaybackVideoLayout.Rect,
     left: AudioMeterChannel,
     right: AudioMeterChannel,
+    state: LiveAssistState,
 ) {
-    val density = LocalDensity.current
-    val panelW = with(density) { AudioAssist.PANEL_WIDTH_DP.dp.toPx() }
-    val panelH = with(density) { AudioAssist.PANEL_HEIGHT_DP.dp.toPx() }
-    val cx = min(video.maxX - 22f, canvas.maxX - 28f)
-    val cy = min(video.maxY - 96f, canvas.maxY - 120f)
-    Box(
-        Modifier
-            .offset { IntOffset((cx - panelW / 2f).roundToInt(), (cy - panelH / 2f).roundToInt()) }
-            .size(AudioAssist.PANEL_WIDTH_DP.dp, AudioAssist.PANEL_HEIGHT_DP.dp)
-            .scopePanelChrome(),
-    ) {
-        AudioMetersPanel(left = left.asReading(), right = right.asReading(), sensitivity = null)
-    }
+    val density = LocalDensity.current.density
+    val bounds = AssistRect(0f, 0f, canvas.width, canvas.height)
+    val edge = 14f * density
+    val placement = AssistRect(edge, edge, (canvas.width - 2 * edge).coerceAtLeast(1f),
+        (canvas.height - 2 * edge).coerceAtLeast(1f))
+    AssistAudioOverlay(state, left.asReading(), right.asReading(), bounds, placement,
+        onOpenOptions = { state.configureTool = LiveAssistTool.AUDIO })
 }
 
 @Composable

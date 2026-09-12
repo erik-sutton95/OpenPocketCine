@@ -59,6 +59,7 @@ import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
@@ -551,88 +552,13 @@ object LivePopupPlacement {
     fun leadingX(desired: Float, width: Float, minX: Float, maxX: Float): Float =
         min(max(desired, minX), max(minX, maxX - width))
 
-    /** Native picker card: 480 dp on phones, 620 dp on tablets, under the source chip. */
-    fun topPicker(
-        cell: ChromeRect,
-        panelHeight: Float,
-        viewportWidth: Float,
-        viewportHeight: Float,
-        safeLeading: Float,
-        safeTrailing: Float,
-        safeTop: Float,
-        safeBottom: Float,
-        floorY: Float? = null,
-        preferredWidth: Float = LiveChromeMetrics.TOP_PICKER_WIDTH,
-        gap: Float = LiveChromeMetrics.TOP_PICKER_GAP,
-    ): Box {
-        val (minX, maxX, width) =
-            horizontalBand(
-                preferredWidth = if (min(viewportWidth, viewportHeight) >= 600f) max(620f, preferredWidth) else preferredWidth,
-                viewportWidth = viewportWidth,
-                safeLeading = safeLeading,
-                safeTrailing = safeTrailing,
-                margin = EDGE_MARGIN,
-            )
-        val hasCell = cell.width > 1f && cell.height > 1f
-        val x =
-            leadingX(
-                desired = if (hasCell) cell.midX - width / 2f else minX,
-                width = width,
-                minX = minX,
-                maxX = maxX,
-            )
-        val minY = max(EDGE_MARGIN, safeTop + LiveChromeMetrics.CHROME_TOP + EDGE_MARGIN)
-        val floor = floorY ?: (viewportHeight - max(EDGE_MARGIN, safeBottom))
-        val desiredTop = if (hasCell) cell.maxY + gap else minY
-        // Pin under the chip. A too-tall first measure must shrink into
-        // maxHeight — not slide up over STBY / the originating chip.
-        val y = max(minY, desiredTop)
-        return Box(x = x, y = y, width = width, maxHeight = max(0f, floor - y))
-    }
-
-    /**
-     * OpenZCine `bottomPickerBody`: 420 cap, 10dp above the capture bar, centred on
-     * the originating tile (or the bar when the tile frame is missing).
-     */
-    fun capturePicker(
-        tile: ChromeRect,
-        bar: ChromeRect,
-        panelHeight: Float,
-        viewportWidth: Float,
-        viewportHeight: Float,
-        safeLeading: Float,
-        safeTrailing: Float,
-        safeTop: Float,
-        safeBottom: Float,
-        ceilingY: Float = 0f,
-        preferredWidth: Float = LiveChromeMetrics.CAPTURE_PICKER_MAX_WIDTH,
-        gap: Float = LiveChromeMetrics.POPUP_GAP,
-    ): Box {
-        val hasBar = bar.width > 1f
-        val cap = if (min(viewportWidth, viewportHeight) >= 600f) max(620f, preferredWidth) else preferredWidth
-        val widthPref = if (hasBar) min(bar.width, cap) else cap
-        val (minX, maxX, width) =
-            horizontalBand(
-                preferredWidth = widthPref,
-                viewportWidth = viewportWidth,
-                safeLeading = safeLeading,
-                safeTrailing = safeTrailing,
-                margin = EDGE_MARGIN,
-            )
-        val midX =
-            when {
-                tile.width > 1f -> tile.midX
-                hasBar -> bar.midX
-                else -> viewportWidth / 2f
-            }
-        val x = leadingX(desired = midX - width / 2f, width = width, minX = minX, maxX = maxX)
-        val minY = max(EDGE_MARGIN, max(safeTop + ASSIST_TOP_INSET, ceilingY))
-        val boxBottom =
-            (if (hasBar) bar.minY else viewportHeight - max(EDGE_MARGIN, safeBottom)) - gap
-        val maxHeight = max(0f, boxBottom - minY)
-        val height = min(max(0f, panelHeight), maxHeight)
-        val y = max(minY, boxBottom - height)
-        return Box(x = x, y = y, width = width, maxHeight = maxHeight)
+    /** One viewport-centered floor for every camera picker, independent of its source readout. */
+    fun bottomCapturePanel(panelHeight: Float, viewportWidth: Float, viewportHeight: Float,
+        safeLeading: Float, safeTrailing: Float, safeTop: Float, safeBottom: Float,
+        floorY: Float? = null): Box {
+        val panel = com.opencapture.monitorui.MonitorLayoutPolicy.bottomPanel(panelHeight, viewportWidth,
+            viewportHeight, safeLeading, safeTrailing, safeTop, safeBottom, floorY)
+        return Box(panel.x, panel.y, panel.width, panel.maxHeight)
     }
 
     /**
@@ -687,48 +613,6 @@ object LivePopupPlacement {
         val y = max(minY, boxBottom - height)
         return Box(x = x, y = y, width = width, maxHeight = maxHeight)
     }
-}
-
-/** OpenZCine `topPickerBody` convenience used by tests and the landscape host. */
-object LiveTopPickerPlacement {
-    fun leadingX(
-        cellMidX: Float,
-        width: Float,
-        viewportWidth: Float,
-        safeLeading: Float = 0f,
-        safeTrailing: Float = 0f,
-    ): Float =
-        LivePopupPlacement.topPicker(
-            cell = ChromeRect(cellMidX - 1f, 0f, 2f, 2f),
-            panelHeight = 80f,
-            viewportWidth = viewportWidth,
-            viewportHeight = 400f,
-            safeLeading = safeLeading,
-            safeTrailing = safeTrailing,
-            safeTop = 0f,
-            safeBottom = 0f,
-            preferredWidth = width,
-        ).x
-
-    fun topY(
-        cellMaxY: Float,
-        panelHeight: Float,
-        viewportHeight: Float,
-        safeTop: Float = 0f,
-        safeBottom: Float = 0f,
-        floorY: Float? = null,
-    ): Float =
-        LivePopupPlacement.topPicker(
-            cell = ChromeRect(0f, cellMaxY - 2f, 2f, 2f),
-            panelHeight = panelHeight,
-            viewportWidth = 400f,
-            viewportHeight = viewportHeight,
-            safeLeading = 0f,
-            safeTrailing = 0f,
-            safeTop = safeTop,
-            safeBottom = safeBottom,
-            floorY = floorY,
-        ).y
 }
 
 /** Hold a numeric FPS string until it moves by [step] so hundredths do not tick the chip. */
@@ -1108,9 +992,9 @@ data class LiveMonitorLayout(
                 layout = layout.copy(
                     lock = ChromeRect(edge, 12f, btn, btn),
                     battery = ChromeRect(edge, 12f + btn + 8f, 46f, 54f),
-                    topDeck = ChromeRect(max(78f, feed.minX + 12f), 4f,
+                    topDeck = ChromeRect(max(72f, feed.minX + 12f), 12f,
                         max(0f, (if (tablet) buttonX - btn - 8f else buttonX) - 12f -
-                            max(78f, feed.minX + 12f)), 35f),
+                            max(72f, feed.minX + 12f)), if (vw < 760f) 46f else 35f),
                     settings = ChromeRect(if (tablet) buttonX - btn - 8f else buttonX, top, btn, btn),
                     media = ChromeRect(buttonX, if (tablet) top else top + btn + 8f, btn, btn),
                     record = ChromeRect(recordX, recordY, record, record),
@@ -1683,6 +1567,8 @@ fun CameraBatteryReadout(percent: Int, modifier: Modifier = Modifier) {
 
 @Composable
 fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: Boolean = false) {
+    val config = LocalConfiguration.current
+    val tablet = min(config.screenWidthDp, config.screenHeightDp) >= 600
     val incoming = timecode?.takeIf { it.isNotBlank() }
     val clock =
         incoming?.let { value ->
@@ -1709,7 +1595,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             withStyle(SpanStyle(color = LiveDesign.text)) { append(head) }
             withStyle(SpanStyle(color = LiveDesign.accent)) { append(tail) }
         },
-        style = LiveType.mono(24f, FontWeight.SemiBold),
+        style = LiveType.mono(if (tablet) 25f else 23f, FontWeight.Medium),
         maxLines = 1,
         softWrap = false,
         modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
@@ -1719,14 +1605,17 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
 /** Elapsed time comes from camera telemetry; this view never starts a timer. */
 @Composable
 fun RecChip(recording: Boolean, elapsedSeconds: Int = 0) {
+    val config = LocalConfiguration.current
+    val size = if (min(config.screenWidthDp, config.screenHeightDp) >= 600) 11.5f else 10.5f
     val elapsed = elapsedSeconds.coerceAtLeast(0)
     val duration = "%02d:%02d".format(java.util.Locale.ROOT, elapsed / 60, elapsed % 60)
-    Row(Modifier.background(Color.Black.copy(alpha = .52f), RoundedCornerShape(10.dp))
-        .padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically,
+    Row(Modifier.background(if (recording) LiveDesign.rec.copy(alpha = .9f) else Color(0xFF060708).copy(alpha = .78f), RoundedCornerShape(percent = 50))
+        .padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(if (recording) "REC" else "STBY", color = if (recording) LiveDesign.rec else LiveDesign.text,
-            style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
-        Text(duration, color = LiveDesign.muted, style = LiveType.mono(9f, FontWeight.SemiBold), maxLines = 1)
+        if (recording) Box(Modifier.size(6.dp).background(Color.White, CircleShape))
+        Text(if (recording) "REC" else "STBY", color = LiveDesign.text,
+            style = LiveType.ui(size, FontWeight.Medium).copy(letterSpacing = .6.sp), maxLines = 1)
+        Text(duration, color = Color.White.copy(alpha = .75f), style = LiveType.mono(size, FontWeight.Medium), maxLines = 1)
     }
 }
 

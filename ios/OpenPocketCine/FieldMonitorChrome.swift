@@ -29,6 +29,7 @@ struct FieldMonitorStatusChrome: View {
                             .font(MonitorTheme.font(12, weight: .semibold))
                             .foregroundStyle(.white).buttonStyle(.zcTapTarget)
                             .accessibilityLabel("Recording options")
+                            .accessibilityIdentifier("monitor.capture.format")
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -37,7 +38,7 @@ struct FieldMonitorStatusChrome: View {
                     }
                 }
             } else {
-                HStack(spacing: layout.viewport.width < 740 ? 10 : 18) {
+                HStack(spacing: 24) {
                     if model.chromeSectionMounts(.storage) { storageButton }
                     if model.chromeSectionMounts(.format) {
                         topButton(
@@ -52,22 +53,25 @@ struct FieldMonitorStatusChrome: View {
                         }
                         .font(
                             MonitorTheme.font(
-                                layout.presentation?.tablet == true ? 18 : 16, weight: .semibold)
+                                layout.presentation?.tablet == true ? 18 : 16, weight: .medium)
                         )
                         .foregroundStyle(MonitorTheme.accent).buttonStyle(.zcTapTarget)
+                        .accessibilityIdentifier("monitor.capture.mode")
                     }
                     Spacer(minLength: 4)
-                    tally
-                    if model.chromeSectionMounts(.timecode) {
-                        MonitorClock(
-                            model.session.status.timecodeClock,
-                            fontSize: layout.presentation?.tablet == true ? 25 : 23)
+                    HStack(spacing: 10) {
+                        tally
+                        if model.chromeSectionMounts(.timecode) {
+                            MonitorClock(
+                                model.session.status.timecodeClock,
+                                fontSize: layout.presentation?.tablet == true ? 25 : 23)
+                        }
                     }
                 }
             }
         }
         .frame(height: layout.topDeck.height)
-        .shadow(color: .black.opacity(0.65), radius: 2, y: 1)
+        .monitorReadoutShadow()
     }
 
     @ViewBuilder private var tally: some View {
@@ -97,7 +101,12 @@ struct FieldMonitorStatusChrome: View {
         } label: {
             HStack(spacing: 5) {
                 OpcIcon.cardSim.frame(width: 12, height: 12)
-                Text(storage).font(MonitorTheme.font(14, weight: .semibold)).monospacedDigit()
+                Text(storage).font(
+                    MonitorTheme.font(
+                        layout.presentation?.portrait == true
+                            ? 14
+                            : (layout.presentation?.tablet == true ? 18 : 16), weight: .medium)
+                ).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.75)
             }.foregroundStyle(.white)
         }
@@ -116,14 +125,17 @@ struct FieldMonitorStatusChrome: View {
     }
 
     private func topButton(_ item: LiveTopMenu, value: String) -> some View {
-        Button {
-            if !locked { menu = menu == item ? nil : item }
+        let sheet: CaptureSheet = item == .color ? .color : .resolution
+        return Button {
+            guard !locked else { return }
+            menu = nil
+            model.captureSheet = model.captureSheet == sheet ? nil : sheet
         } label: {
             Text(value).font(
-                MonitorTheme.font(layout.presentation?.tablet == true ? 18 : 16, weight: .semibold)
+                MonitorTheme.font(layout.presentation?.tablet == true ? 18 : 16, weight: .medium)
             ).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .foregroundStyle(menu == item ? MonitorTheme.accent : .white)
+                .foregroundStyle(model.captureSheet == sheet ? MonitorTheme.accent : .white)
         }
         .buttonStyle(.zcTapTarget)
         .background {
@@ -134,6 +146,9 @@ struct FieldMonitorStatusChrome: View {
             }
         }
         .accessibilityLabel(item == .color ? "Color mode" : "Recording format")
+        .accessibilityIdentifier(
+            item == .color ? "monitor.capture.color" : "monitor.capture.format"
+        )
         .accessibilityValue(value)
     }
 }

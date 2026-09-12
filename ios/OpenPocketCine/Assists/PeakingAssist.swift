@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 import UIKit
 
@@ -198,18 +199,17 @@ struct PeakingLongPressMenu: View {
                 title: "Sensitivity",
                 help: PeakingAssist.sensitivityHelp,
                 showTopDivider: false,
-                stacked: compact
+                stacked: true
             ) {
                 SettingsSegmented(
                     options: PeakingAssist.sensitivityOptions,
                     selected: options.sensitivity.rawValue,
                     compact: compact,
-                    stacked: compact
+                    stacked: true
                 ) {
                     guard let level = PeakingAssist.Sensitivity(rawValue: $0),
                         level != options.sensitivity
                     else { return }
-                    PeakingAssistHaptics.selection()
                     options.sensitivity = level
                 }
             }
@@ -242,19 +242,22 @@ private struct PeakingColorDots: View {
 
     var body: some View {
         HStack(spacing: compact ? 4 : 6) {
-            ForEach(PeakingAssist.palette) { color in
+            MonitorSnapshotRows(PeakingAssist.palette) { color in
                 Button {
                     onSelect(color)
                 } label: {
                     Circle()
                         .fill(color.swatch)
                         .frame(width: dotDiameter, height: dotDiameter)
-                        .frame(width: hitTarget, height: hitTarget)
+                        .frame(width: 36, height: 36)
                         .background(LiveDesign.background.opacity(0.5), in: Circle())
                         .overlay(
                             Circle().stroke(
                                 color == selected ? color.swatch : LiveDesign.hairline,
-                                lineWidth: color == selected ? 2 : 1))
+                                lineWidth: color == selected ? 2 : 1)
+                        )
+                        .frame(width: hitTarget, height: hitTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.zcTapTarget)
                 .accessibilityLabel(color.rawValue)
@@ -267,8 +270,6 @@ private struct PeakingColorDots: View {
 private enum PeakingAssistHaptics {
     @MainActor
     static func selection() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
+        OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
     }
 }

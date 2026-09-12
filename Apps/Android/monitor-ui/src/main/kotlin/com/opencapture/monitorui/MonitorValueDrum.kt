@@ -1,6 +1,7 @@
 package com.opencapture.monitorui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -37,13 +38,14 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 
-/** 56dp detents and continuously projected 78dp cells, independent of camera commands. */
+/** The reference horizontal drum: 56dp travel, label-sized cells and a continuous fine ruler. */
 @Composable
 fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifier = Modifier,
     markedValues: Set<String> = emptySet(), interactive: Boolean = true,
     displayPosition: Float? = null, dimDisabled: Boolean = true, onSelect: (String) -> Unit) {
     if (options.isEmpty()) return
     var cursor by remember(options) { mutableFloatStateOf(options.indexOf(selection).coerceAtLeast(0).toFloat()) }
+    var dragOrigin by remember(options) { mutableFloatStateOf(cursor) }
     var dragging by remember(options) { mutableStateOf(false) }
     var expected by remember(options) { mutableStateOf<String?>(null) }
     var cancelled by remember(options) { mutableStateOf(false) }
@@ -51,7 +53,8 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
     val actualSelection by rememberUpdatedState(selection)
     val density = LocalDensity.current
     val detent = with(density) { 56.dp.toPx() }
-    val cell = with(density) { 78.dp.toPx() }
+    val metrics = remember(options) { MonitorDrumSelection.metrics(options) }
+    val cell = with(density) { metrics.cellWidth.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
     LaunchedEffect(selection, options, interactive) {
         if (selection != expected || !interactive) {
@@ -64,6 +67,7 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
         expected = null
     }
     fun choose(position: Float) {
+        if (!position.isFinite()) return
         cursor = position.coerceIn(0f, options.lastIndex.toFloat())
         val value = options[cursor.roundToInt()]
         if (value != expected && value != actualSelection) {
@@ -71,23 +75,27 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
             send(value)
         }
     }
-    val rendered by animateFloatAsState(displayPosition ?: cursor, animationSpec = if (dragging || displayPosition != null) snap() else tween(160), label = "drum detent")
+    val rendered by animateFloatAsState(displayPosition ?: cursor, animationSpec = if (dragging || displayPosition != null) snap() else tween(220, easing = CubicBezierEasing(.22f, 1.2f, .36f, 1f)), label = "drum detent")
     Canvas(modifier.fillMaxWidth().height(86.dp).alpha(if (interactive || !dimDisabled) 1f else .45f)
         .semantics {
             contentDescription = selection.ifBlank { "Choose value" }
             progressBarRangeInfo = ProgressBarRangeInfo(cursor, 0f..options.lastIndex.toFloat(), (options.size - 2).coerceAtLeast(0))
             if (interactive) setProgress { choose(it.roundToInt().toFloat()); true }
         }
-        .pointerInput(options, interactive) {
+        .pointerInput(options, interactive, density.density, density.fontScale) {
             if (interactive) detectTapGestures { point ->
                 choose((cursor + (point.x - size.width / 2f) / cell).roundToInt().toFloat())
             }
         }
-        .pointerInput(options, interactive) {
+        .pointerInput(options, interactive, density.density, density.fontScale) {
             if (interactive) detectHorizontalDragGestures(
-                onDragStart = { dragging = true; cancelled = false },
+                onDragStart = { dragOrigin = cursor; dragging = true; cancelled = false },
                 onDragCancel = { dragging = false; cursor = options.indexOf(actualSelection).coerceAtLeast(0).toFloat() },
-                onDragEnd = { dragging = false; if (!cancelled) choose(cursor.roundToInt().toFloat()) },
+                onDragEnd = {
+                    dragging = false
+                    if (!cancelled && MonitorDrumSelection.changedDetent(dragOrigin, cursor)) choose(cursor.roundToInt().toFloat())
+                    else cursor = options.indexOf(actualSelection).coerceAtLeast(0).toFloat()
+                },
                 onHorizontalDrag = { change, delta ->
                     change.consume()
                     if (!cancelled) cursor = (cursor - delta / detent).coerceIn(0f, options.lastIndex.toFloat())
@@ -97,22 +105,32 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
         val visible = (size.width / cell / 2f).toInt() + 2
         val projectedPosition = MonitorDrumSelection.projectedPosition(rendered)
         val base = rendered.roundToInt()
+        val fineSpacing = 6.75.dp.toPx()
+        val phase = (center - projectedPosition * cell) % fineSpacing
+        var tickX = phase - fineSpacing
+        while (tickX < size.width) {
+            val fade = (minOf(tickX, size.width - tickX) / (size.width * .14f)).coerceIn(0f, 1f)
+            drawLine(Color.White.copy(alpha = .22f * fade), Offset(tickX, 73.dp.toPx()),
+                Offset(tickX, 78.dp.toPx()), 1.dp.toPx())
+            tickX += fineSpacing
+        }
         for (index in (base - visible).coerceAtLeast(0)..(base + visible).coerceAtMost(options.lastIndex)) {
             val distance = index - projectedPosition
-            val projection = cos((distance * .24f).coerceIn(-1.4f, 1.4f))
+            val labelScale = 1f + (metrics.selectedScale - 1f) * (1f - abs(distance)).coerceIn(0f, 1f)
             val emphasis = (1f - abs(distance)).coerceIn(0f, 1f)
             val x = center + distance * cell
             val edgeAlpha = (minOf(x, size.width - x) / (size.width * .14f)).coerceIn(0f, 1f)
-            val tint = androidx.compose.ui.graphics.lerp(MonitorPalette.muted, MonitorPalette.text, emphasis).copy(alpha = edgeAlpha)
+            val tint = Color.White.copy(alpha = (.45f + .55f * emphasis) * edgeAlpha)
             val text = options[index]
-            val layout = textMeasurer.measure(text, MonitorTypography.readout(15f + 8f * emphasis, FontWeight.Medium), maxLines = 1)
-            withTransform({ scale(projection, projection, Offset(x, size.height * .43f)) }) {
-                drawText(layout, color = tint, topLeft = Offset(x - layout.size.width / 2f, size.height * .43f - layout.size.height / 2f))
+            val layout = textMeasurer.measure(text, MonitorTypography.readout(15f, if (index == base) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
+            val baseline = 44.dp.toPx()
+            withTransform({ scale(labelScale, labelScale, Offset(x, baseline)) }) {
+                drawText(layout, color = tint, topLeft = Offset(x - layout.size.width / 2f, baseline - layout.size.height))
             }
             if (options[index] in markedValues) drawCircle(MonitorPalette.accent.copy(alpha = edgeAlpha),
                 radius = 2.dp.toPx(), center = Offset(x, 9.dp.toPx()))
             drawLine(if (index == base) MonitorPalette.accent else MonitorPalette.faint.copy(alpha = edgeAlpha),
-                Offset(x, size.height - 8.dp.toPx()), Offset(x, size.height - (17f + 6f * emphasis).dp.toPx()),
+                Offset(x, 78.dp.toPx()), Offset(x, (78f - 10f - 7f * emphasis).dp.toPx()),
                 strokeWidth = 2.dp.toPx())
         }
     }

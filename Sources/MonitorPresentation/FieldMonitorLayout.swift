@@ -153,11 +153,14 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 y: tablet ? cornerTop : settings.maxY + 8, width: button, height: button)
             lock = .init(x: 18, y: 12 + controlInset, width: button, height: button)
             gauges = .init(x: 18, y: lock.maxY + 6, width: 49, height: 52)
+            // Keep the full 44pt touch target inside the screen. A 35pt band
+            // centred at 21.5pt put its accessibility bounds above the window,
+            // causing automatic hit-point selection to miss the top buttons.
             status = .init(
-                x: max(77, picture.x + 12), y: 4 + controlInset,
-                width: settings.x - max(77, picture.x + 12) - 12, height: tablet ? 46 : 35)
+                x: max(77, picture.x + 12), y: (tablet ? 4 : 0) + controlInset,
+                width: settings.x - max(77, picture.x + 12) - 12, height: tablet ? 46 : 44)
             let side = 14 + rec + 28
-            let valuesH = showsValues ? (w < 740 ? 68.0 : 43.0) : 0
+            let valuesH = showsValues ? 43.0 : 0
             values = .init(
                 x: side, y: h - (hasHome ? 14 : 8) - valuesH,
                 width: w - side * 2, height: valuesH)

@@ -57,8 +57,9 @@ safe areas during SwiftUI layout. This prevents reentrant layout on iOS 26 and
 keeps rotation and same-size landscape-side changes independent of camera state.
 The observer has no polling loop or video-frame subscription.
 On iPadOS 26 it also samples the vertically corner-adapted safe area to reserve
-the system window controls. The resulting additional top inset moves controls
-and page headers; it does not crop or resize the live picture. Full-screen
+the system window controls. This corner-adapted sample is iPad-only: iPhone
+rounded corners must not add a second top offset. The resulting additional top
+inset moves controls and page headers; it does not crop or resize the live picture. Full-screen
 windows without corner occlusion retain the reference geometry.
 The iOS shell supports native iPad window resizing and does not set the deprecated
 `UIRequiresFullScreen` compatibility flag. That mode scales a fixed-size scene on
@@ -74,6 +75,13 @@ reported connection phase; a design-demo button cannot declare Wi-Fi or picture
 ready. Unknown disconnected telemetry stays absent. Media catalog cells and
 navigation accept shared descriptors while catalog, cache, playback and delivery
 operations remain with their existing owners.
+
+Small option collections use `MonitorSnapshotRows`: bindings and label callbacks
+are evaluated on the main actor into immutable row values. SwiftUI may later
+materialize `ForEach` content on its asynchronous renderer; that deferred closure
+only returns the stored row. Button actions retain main-actor ownership. Native
+regression tests invoke the real deferred content off-main. This is for bounded
+option groups, not eager rendering of unbounded media catalogs.
 
 `MultiviewPresentationLayout` computes four persistent tile rectangles and fixed
 transport/control positions. iOS maps the saved arrangement to that policy;
@@ -106,7 +114,12 @@ On iOS, fresh scope sizes follow `MonitorScopeSizing` for phone/tablet and orien
 Their first manual resize becomes a saved absolute preference. Existing saved
 scales and centers survive migration, including a legacy 1.0 scale whose original
 intent cannot be inferred. Rotation changes automatic presentation without
-rewriting scope options; resetting a scope restores automatic sizing.
+rewriting scope options; resetting a scope restores automatic sizing. Fresh
+windowed tools and the floating false-color reference key open at the canvas
+center; existing saved positions survive. The audio meter uses the same movement
+bounds with a left/vertical-center initial position and separate persisted bar
+orientation, dB display and portrait/landscape position preferences. Live and
+playback inject their existing level measurements without another audio sampler.
 
 The migration is intentionally incomplete: media/playback orchestration, scope
 implementations and delivery coordinators still live in the Osmo shell, and
@@ -151,7 +164,7 @@ SDK). Both apps must call the same state machines:
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`; Android JNI |
 | Diagnostics redaction and report shape | `PrivacyRedactor`, `DiagnosticReport` | iOS `DiagnosticCenter` (os.Logger, MetricKit, screenshot paste); Android `diagnostics/DiagnosticCenter` (logcat + share) |
-| Live-picture ND meter (stops / ND32 / ND 0.3 to balance the frame) | `NDFilterRecommendation` | iOS/Android **ND** HUD chip (Kotlin lockstep). Parks bottom-leading above the assist bar; directly draggable within the fixed-control boundaries. Long-press switches notation. Suggestion only — not a SET. Shares the LIGHTS/HISTO scope tap when the chip is on. |
+| Live-picture ND meter (stops / ND32 / ND 0.3 to balance the frame) | `NDFilterRecommendation` | iOS/Android **ND** HUD chip (Kotlin lockstep). Starts centered until placed; directly draggable within the fixed-control boundaries. Long-press switches notation. Suggestion only — not a SET. Shares the LIGHTS/HISTO scope tap when the chip is on. |
 | Watcher relay (Bonjour second-screen) | `WatcherRelayProtocol`, framing, join, bitrate ladder, `WatcherRelayEncodePolicy` admission/keyframe cooldown, `WatcherRelayRecovery` deadlines/backoff, frame freshness, fitted `WatcherFocusPoint`, control lease | iOS `WatcherRelayHost` (observable state), `WatcherRelayTransport` (socket queue), `WatcherRelayEncoder`, `WatcherRelayBrowser` / `WatcherRelayClient` (shared camera Wi-Fi only; `WatcherRelayNetwork` disables peer-to-peer everywhere). Android: PARITY exception — Sharing stays Coming soon. |
 
 Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering,

@@ -128,6 +128,18 @@ class LiveAssistState(
     var ndScale by mutableDoubleStateOf(1.0)
     var ndCenter by mutableStateOf<StoredCenter?>(null)
     var ndNotation by mutableStateOf(NDFilterNotation.FACTOR)
+    /** Last written slot, for reading pre-schema saves only. Overlay placement uses [audioCenterFor]. */
+    var audioCenter by mutableStateOf<StoredCenter?>(null)
+        private set
+    var audioPortraitCenter by mutableStateOf<StoredCenter?>(null)
+        private set
+    var audioLandscapeCenter by mutableStateOf<StoredCenter?>(null)
+        private set
+    var audioShowDB by mutableStateOf(false)
+        private set
+    var audioOrientation by mutableStateOf(com.opencapture.monitorui.MonitorAudioOrientation.VERTICAL)
+        private set
+    var falseColorReferenceCenter by mutableStateOf<StoredCenter?>(null)
 
     /** Last-moved / last-selected is last. Compose and Vulkan draw in this order. */
     var scopeStack by mutableStateOf(defaultScopeStack)
@@ -202,8 +214,10 @@ class LiveAssistState(
         persist()
     }
 
-    fun nudgeLutExposure(delta: Double) {
-        val next = LutExposureCompensation.stepped(lutExposureStops, delta)
+    fun nudgeLutExposure(delta: Double) = updateLutExposure(lutExposureStops + delta)
+
+    fun updateLutExposure(stops: Double) {
+        val next = LutExposureCompensation.snap(stops)
         if (next == lutExposureStops) return
         lutExposureStops = next
         persist()
@@ -366,6 +380,22 @@ class LiveAssistState(
         persist()
     }
 
+    fun updateAudioShowDB(value: Boolean) { audioShowDB = value; persist() }
+
+    fun updateAudioOrientation(value: com.opencapture.monitorui.MonitorAudioOrientation) {
+        audioOrientation = value
+        persist()
+    }
+
+    fun audioCenterFor(portrait: Boolean): StoredCenter? =
+        if (portrait) audioPortraitCenter else audioLandscapeCenter
+
+    fun storeAudioCenter(center: StoredCenter, portrait: Boolean) {
+        if (portrait) audioPortraitCenter = center else audioLandscapeCenter = center
+        audioCenter = center
+        persist()
+    }
+
     fun storeCenter(tool: LiveAssistTool, center: StoredCenter) {
         when (tool) {
             LiveAssistTool.WAVE -> waveCenter = center
@@ -374,6 +404,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorCenter = center
             LiveAssistTool.LIGHTS -> lightsCenter = center
             LiveAssistTool.ND -> ndCenter = center
+            LiveAssistTool.FALSE -> falseColorReferenceCenter = center
             else -> return
         }
         persist()
@@ -473,6 +504,13 @@ class LiveAssistState(
             .put("lightsCenter", encodeCenter(lightsCenter))
             .put("ndScale", ndScale)
             .put("ndCenter", encodeCenter(ndCenter))
+            .put("audioCenter", encodeCenter(audioCenter))
+            .put("audioCentersSchema", 1)
+            .put("audioPortraitCenter", encodeCenter(audioPortraitCenter))
+            .put("audioLandscapeCenter", encodeCenter(audioLandscapeCenter))
+            .put("audioOrientation", audioOrientation.name)
+            .put("audioShowDB", audioShowDB)
+            .put("falseColorReferenceCenter", encodeCenter(falseColorReferenceCenter))
             .put("ndNotation", ndNotation.persisted)
             .put("scopeStack", JSONArray(scopeStack.map { it.name }))
             .toString()
@@ -549,6 +587,21 @@ class LiveAssistState(
         lightsCenter = decodeCenter(obj.optJSONObject("lightsCenter"))
         ndScale = MovablePanelMath.clampedScale(obj.optDouble("ndScale", 1.0))
         ndCenter = decodeCenter(obj.optJSONObject("ndCenter"))
+        audioCenter = decodeCenter(obj.optJSONObject("audioCenter"))
+        val hasOrientationSlots = obj.has("audioCentersSchema") ||
+            obj.has("audioPortraitCenter") || obj.has("audioLandscapeCenter")
+        if (hasOrientationSlots) {
+            audioPortraitCenter = decodeCenter(obj.optJSONObject("audioPortraitCenter"))
+            audioLandscapeCenter = decodeCenter(obj.optJSONObject("audioLandscapeCenter"))
+        } else {
+            audioPortraitCenter = audioCenter
+            audioLandscapeCenter = audioCenter
+        }
+        audioShowDB = obj.optBoolean("audioShowDB", false)
+        audioOrientation = com.opencapture.monitorui.MonitorAudioOrientation.entries.firstOrNull {
+            it.name == obj.optString("audioOrientation")
+        } ?: com.opencapture.monitorui.MonitorAudioOrientation.VERTICAL
+        falseColorReferenceCenter = decodeCenter(obj.optJSONObject("falseColorReferenceCenter"))
         ndNotation = NDFilterNotation.fromPersisted(obj.optString("ndNotation", NDFilterNotation.FACTOR.persisted))
         scopeStack = decodeScopeStack(obj.optJSONArray("scopeStack"))
     }

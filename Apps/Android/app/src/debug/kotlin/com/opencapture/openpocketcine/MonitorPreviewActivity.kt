@@ -81,14 +81,13 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
             shootingMode = 1, iso = 1600, isoIndex = 7, shutterDenom = 50,
             expoMode = CameraCommands.EXPO_MANUAL, colorMode = CameraCommands.COLOR_DLOG2,
             resolutionCode = CameraCommands.RES_4K, fps = 25, fpsIndex = 2,
-            wbMode = 6, wbKelvin = 5600, focusMode = 2, audioChannel = 2)
+            wbMode = 6, wbKelvin = 5600, focusMode = 2, focusTrack = 0, audioChannel = 2, audioMetersLeft = -21.0, audioMetersRight = -14.0)
     }
     LaunchedEffect(model.liveOperatorPanel) {
         if (model.liveOperatorPanel != null) model.assist.configureTool = null
     }
     var locked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<LiveSheet?>(null) }
-    val frames = remember { mutableStateMapOf<LiveSheet, ChromeRect>() }
     BoxWithConstraints(Modifier.fillMaxSize().background(LiveDesign.background)) {
         val width = maxWidth.value
         val height = maxHeight.value
@@ -104,21 +103,23 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
             zones.controls.minY - 8f, capabilities.gimbal) else layout.gimbalCluster(capabilities.gimbal)
         // Uniform fixture makes geometry, alpha and clipping differences visible.
         Box(Modifier.liveModuleFrame(layout.onFeed).background(Color(0xFF4A4C48)))
+        com.opencapture.openpocketcine.assists.LiveAssistLayer(model.assist, status, focus = null,
+            feedFrame = layout.onFeed, placementFrame = ChromeRect(6f, safeTop + 6f, width - 12f,
+                (zones?.systemBar?.minY ?: (height - safeBottom)) - safeTop - 12f), locked = locked,
+            onOpenOptions = { tool, frame -> model.assist.longPressAnchor = frame; model.assist.configureTool = tool })
         if (zones != null) {
             LivePortraitChrome(model, layout, zones, status, locked, { locked = !locked }, sheet,
                 { sheet = it }, model.assist, { model.assist.configureTool = it }, true, false,
                 fpsLabel = "25", bars = 4, sourceIsVertical = sourceAspect < 1f,
-                capabilities = capabilities, onTileFrame = { key, rect -> frames[key] = rect })
+                capabilities = capabilities)
         } else {
             LandscapeChrome(model, layout, status, locked, { locked = !locked }, sheet,
                 { sheet = it }, model.assist, { model.assist.configureTool = it }, true, false,
                 "25", 4, false, {}, cluster.zoom, cluster.stick, cluster.controls, false, {},
-                1.0, false, capabilities = capabilities,
-                onTileFrame = { key, rect -> frames[key] = rect })
+                1.0, false, capabilities = capabilities)
         }
         if (!locked) sheet?.let {
-            LivePickerHost(it, frames, zones?.controls ?: layout.capture, zones?.topBar ?: layout.topDeck,
-                width, height, 0f, 0f, 0f, 0f, 0f, zones?.controls?.minY,
+            LivePickerHost(it, width, height, 0f, 0f, safeTop, safeBottom, zones?.systemBar?.minY,
                 model, status, false, { sheet = it })
         }
         if (!locked && capabilities.gimbal && model.liveGimbalPanel == LiveGimbalPanel.SHEET) {

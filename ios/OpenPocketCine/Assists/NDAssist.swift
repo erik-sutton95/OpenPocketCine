@@ -30,25 +30,16 @@ enum NDAssist {
         NDLongPressMenu()
     }
 
-    /// Bottom-leading, just inside the picture and above the assist/capture strip.
+    /// Unplaced tools start at the canvas center; saved/session centers win later.
     static func defaultCenter(
-        feed: CGRect,
+        feed _: CGRect,
         size: CGSize,
         bounds: CGRect,
-        chromeClearance: EdgeInsets,
-        gap: CGFloat = 10
+        chromeClearance _: EdgeInsets,
+        gap _: CGFloat = 10
     ) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        let x = feed.minX + halfWidth
-        let outside = feed.maxY + gap + halfHeight
-        let y: CGFloat
-        if outside + halfHeight <= bounds.maxY {
-            y = outside
-        } else {
-            y = min(feed.maxY, bounds.maxY - chromeClearance.bottom) - gap - halfHeight
-        }
-        return clamp(CGPoint(x: x, y: y), size: size, in: bounds)
+        clamp(
+            CGPoint(x: bounds.midX, y: bounds.midY), size: size, in: bounds)
     }
 
     static func reading(from bundle: ScopeAssistBundle) -> NDFilterSuggestion? {

@@ -29,8 +29,7 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
         LiveSheet.WB -> if (status.wbMode == CameraCommands.WB_CUSTOM) {
             MonitorQuickControl(CaptureLists.kelvinLabels, CaptureLists.wbDrumSelection(status), context = "${CaptureLists.currentTint(status)}")
         } else MonitorQuickControl(CaptureLists.wbModeRows, CaptureLists.wbModeRowSelected(status))
-        LiveSheet.FOCUS -> MonitorQuickControl(listOf("AF-S", "AF-C"),
-            if (CaptureLists.focusIsContinuous(status)) "AF-C" else "AF-S", context = "${status.focusTrack}")
+        LiveSheet.FOCUS -> captureQuickFocusControl(status)
         LiveSheet.EXPO -> MonitorQuickControl(CaptureLists.expoLabels, CaptureLists.expoLabel(status.expoMode))
         LiveSheet.AUDIO -> MonitorQuickControl(CaptureLists.audioChannelLabels, CaptureLists.audioChannelLabel(status.audioChannel).orEmpty())
         else -> null
@@ -71,5 +70,32 @@ internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: C
         LiveSheet.EXPO -> CaptureLists.expoModeFromLabel(value)?.let(model::setExpoMode)
         LiveSheet.AUDIO -> CaptureLists.audioChannelValue(value)?.let(model::setAudioChannel)
         else -> Unit
+    }
+}
+
+internal fun captureQuickFocusControl(status: CameraStatus) = MonitorQuickControl(
+    listOf("AF-S", "AF-C"),
+    if (CaptureLists.focusIsContinuous(status)) "AF-C" else "AF-S",
+    context = "${status.focusMode}:${status.focusTrack}",
+)
+
+/** Persistent FOCUS picker; the capture-strip drag stays AF-S / AF-C. */
+internal object CaptureFocusChoices {
+    val labels = com.opencapture.openpocketcine.session.FocusOption.entries.map { it.chip }
+    fun track(label: String): Int? = when (label) {
+        "AF-C" -> 0
+        "Showcase" -> 1
+        "Lock" -> 2
+        "Priority" -> 3
+        else -> null
+    }
+}
+
+internal fun applyCaptureFocusChoice(label: String, status: CameraStatus, model: AppModel) {
+    if (label !in CaptureFocusChoices.labels || label == status.focusLabel) return
+    if (label == "AF-S") model.setFocusMode(false)
+    else CaptureFocusChoices.track(label)?.let { track ->
+        if (!CaptureLists.focusIsContinuous(status)) model.setFocusMode(true)
+        if (status.focusTrack != track) model.setFocusTrack(track)
     }
 }

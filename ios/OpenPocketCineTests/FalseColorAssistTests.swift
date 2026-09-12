@@ -91,7 +91,8 @@ final class FalseColorAssistTests: XCTestCase {
     }
     func testScaleOptionsMatchOpenZCine() {
         XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "EL Zone", "IRE", "Limits"])
-        XCTAssertEqual(FalseColorAssist.popupTitles, ["Scale", "Reference Display"])
+        XCTAssertEqual(
+            FalseColorAssist.popupTitles, ["Scale", "Reference key", "Reference Display"])
         XCTAssertEqual(FalseColorAssist.Options.default.scale, .stops)
         XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .stops)

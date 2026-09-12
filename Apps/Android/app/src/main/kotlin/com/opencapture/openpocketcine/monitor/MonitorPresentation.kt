@@ -16,10 +16,12 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
     modifier: Modifier = Modifier,
     quickControl: (String) -> com.opencapture.monitorui.MonitorQuickControl? = { null },
     onQuickCommit: (String, String) -> Unit = { _, _ -> },
+    onQuickActiveChange: (Boolean) -> Unit = {},
+    quickBottomClearanceDp: Float = 0f,
     onOpen: (String) -> Unit, onFrame: (String, ChromeRect) -> Unit) {
     com.opencapture.monitorui.MonitorCameraValues(values, enabled, portrait, modifier,
         itemModifier = { id -> Modifier.reportChromeFrame { onFrame(id, it) } },
-        quickControl = quickControl, onQuickCommit = onQuickCommit, onOpen = onOpen)
+        quickControl = quickControl, onQuickCommit = onQuickCommit, onQuickActiveChange = onQuickActiveChange, quickBottomClearanceDp = quickBottomClearanceDp, onOpen = onOpen)
 }
 
 @Composable

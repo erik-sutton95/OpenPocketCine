@@ -64,12 +64,10 @@
                 HStack(spacing: 9) {
                     if presentation.backAction != nil {
                         Button(action: onBack) {
-                            CameraPageGlyph(icon: .back).stroke(
-                                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                            )
-                            .frame(width: 13, height: 13).frame(width: 32, height: 32)
-                            .background(MonitorTheme.secondary.opacity(0.12), in: Circle())
-                            .frame(width: 44, height: 44)
+                            CameraPageGlyph(icon: .back)
+                                .frame(width: 13, height: 13).frame(width: 32, height: 32)
+                                .background(MonitorTheme.secondary.opacity(0.12), in: Circle())
+                                .frame(width: 44, height: 44)
                         }.buttonStyle(.plain).accessibilityLabel(
                             presentation.backAction ?? "Your cameras")
                     }
@@ -84,7 +82,7 @@
                         Button("Share Diagnostics", action: onDiagnostics)
                         if let onWatchFeed { Button("Watch a feed", action: onWatchFeed) }
                     } label: {
-                        CameraPageGlyph(icon: .more).stroke(lineWidth: 1.8).frame(
+                        CameraPageGlyph(icon: .more).frame(
                             width: 15, height: 15
                         ).frame(width: 32, height: 44)
                     }.accessibilityLabel("Pairing help and diagnostics")
@@ -92,7 +90,9 @@
                 Group {
                     if portrait {
                         HStack(spacing: 3) {
-                            ForEach(Array(presentation.steps.enumerated()), id: \.element.id) {
+                            MonitorSnapshotRows(
+                                Array(presentation.steps.enumerated()), id: \.element.id
+                            ) {
                                 index, step in
                                 stepRow(step, index: index, portrait: true)
                             }
@@ -100,7 +100,9 @@
                     } else {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 3) {
-                                ForEach(Array(presentation.steps.enumerated()), id: \.element.id) {
+                                MonitorSnapshotRows(
+                                    Array(presentation.steps.enumerated()), id: \.element.id
+                                ) {
                                     index, step in
                                     stepRow(step, index: index, portrait: false)
                                 }
@@ -197,7 +199,7 @@
                                 MonitorTheme.recording.opacity(0.12),
                                 in: RoundedRectangle(cornerRadius: 11))
                         }
-                        ForEach(presentation.devices) { device in discoveryRow(device) }
+                        CameraPairingDeviceRows.make(presentation.devices, select: { onSelect($0) })
                         if let emptyTitle = presentation.emptyTitle {
                             Text(emptyTitle).font(MonitorTheme.font(13, weight: .semibold))
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(13)
@@ -205,17 +207,17 @@
                                     Color.white.opacity(0.03),
                                     in: RoundedRectangle(cornerRadius: 11))
                         }
-                        ForEach(presentation.instructions) { instruction in
+                        MonitorSnapshotRows(presentation.instructions) { instruction in
                             instructionCard(instruction)
                         }
-                        ForEach(presentation.checks) { check in checkRow(check) }
+                        MonitorSnapshotRows(presentation.checks) { check in checkRow(check) }
                         if !presentation.summary.isEmpty {
                             LazyVGrid(
                                 columns: Array(
                                     repeating: GridItem(.flexible(), alignment: .leading),
                                     count: portrait || tablet ? 2 : 3), spacing: 8
                             ) {
-                                ForEach(presentation.summary) { detail in
+                                MonitorSnapshotRows(presentation.summary) { detail in
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(detail.title.uppercased()).font(
                                             MonitorTheme.font(8, weight: .bold)
@@ -249,49 +251,10 @@
                 RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.04), lineWidth: 1))
         }
 
-        private func discoveryRow(_ device: CameraListItem) -> some View {
-            Button {
-                onSelect(device.id)
-            } label: {
-                HStack(spacing: 11) {
-                    Circle().fill(device.isPrimary ? MonitorTheme.accent : MonitorTheme.faint)
-                        .frame(width: 7, height: 7).frame(width: 26, height: 26)
-                        .background(
-                            device.isPrimary
-                                ? MonitorTheme.accent.opacity(0.16) : Color.white.opacity(0.05),
-                            in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(device.name).font(MonitorTheme.font(13.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                        Text(device.subtitle).font(MonitorTheme.font(9.5)).foregroundStyle(
-                            MonitorTheme.muted)
-                    }.frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
-                    if let bars = device.signalBars { CameraSignalBars(count: bars) }
-                }
-                .padding(.horizontal, 13).padding(.vertical, 12)
-                .background(
-                    device.isPrimary
-                        ? MonitorTheme.accent.opacity(0.08) : Color.white.opacity(0.03),
-                    in: RoundedRectangle(cornerRadius: 11)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 11).stroke(
-                        device.isPrimary
-                            ? MonitorTheme.accent.opacity(0.5) : Color.white.opacity(0.06),
-                        lineWidth: device.isPrimary ? 1.5 : 1))
-            }
-            .buttonStyle(.plain).disabled(device.isBusy)
-            .accessibilityLabel("Connect \(device.name)")
-            .accessibilityIdentifier("pair.device.\(device.id)")
-        }
-
         private func instructionCard(_ instruction: CameraPairingInstruction) -> some View {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(spacing: 9) {
                     CameraPageGlyph(icon: instruction.icon == .camera ? .camera : .phone)
-                        .stroke(
-                            style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
-                        )
                         .frame(width: 14, height: 14).foregroundStyle(MonitorTheme.accent).frame(
                             width: 26, height: 26
                         )
@@ -301,7 +264,7 @@
                     Text(instruction.title.uppercased()).font(MonitorTheme.font(9, weight: .bold))
                         .tracking(1.4)
                 }
-                ForEach(instruction.lines, id: \.self) { line in
+                MonitorSnapshotRows(instruction.lines, id: \.self) { line in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•").foregroundStyle(MonitorTheme.faint)
                         Text(line).font(MonitorTheme.font(12.5)).lineSpacing(3)
@@ -374,5 +337,61 @@
                 }
             }.frame(maxWidth: .infinity)
         }
+    }
+    enum CameraPairingDeviceRows {
+        nonisolated static func make(
+            _ devices: [CameraListItem], select: @escaping @MainActor @Sendable (String) -> Void
+        ) -> ForEach<[CameraListItem], String, CameraPairingDeviceRow> {
+            ForEach(devices) { device in CameraPairingDeviceRow(device: device, select: select) }
+        }
+    }
+
+    struct CameraPairingDeviceRow: View {
+        nonisolated let device: CameraListItem
+        nonisolated let select: @MainActor @Sendable (String) -> Void
+
+        nonisolated init(
+            device: CameraListItem, select: @escaping @MainActor @Sendable (String) -> Void
+        ) {
+            self.device = device
+            self.select = select
+        }
+
+        var body: some View {
+            Button {
+                select(device.id)
+            } label: {
+                HStack(spacing: 11) {
+                    Circle().fill(device.isPrimary ? MonitorTheme.accent : MonitorTheme.faint)
+                        .frame(width: 7, height: 7).frame(width: 26, height: 26)
+                        .background(
+                            device.isPrimary
+                                ? MonitorTheme.accent.opacity(0.16) : Color.white.opacity(0.05),
+                            in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(device.name).font(MonitorTheme.font(13.5, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(device.subtitle).font(MonitorTheme.font(9.5)).foregroundStyle(
+                            MonitorTheme.muted)
+                    }.frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
+                    if let bars = device.signalBars { CameraSignalBars(count: bars) }
+                }
+                .padding(.horizontal, 13).padding(.vertical, 12)
+                .background(
+                    device.isPrimary
+                        ? MonitorTheme.accent.opacity(0.08) : Color.white.opacity(0.03),
+                    in: RoundedRectangle(cornerRadius: 11)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11).stroke(
+                        device.isPrimary
+                            ? MonitorTheme.accent.opacity(0.5) : Color.white.opacity(0.06),
+                        lineWidth: device.isPrimary ? 1.5 : 1))
+            }
+            .buttonStyle(.plain).disabled(device.isBusy)
+            .accessibilityLabel("Connect \(device.name)")
+            .accessibilityIdentifier("pair.device.\(device.id)")
+        }
+
     }
 #endif

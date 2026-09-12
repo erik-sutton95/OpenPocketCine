@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// OpenZCine `AssistPanel` `.guides` body + `AspectGuideFrameView`.
@@ -64,39 +65,39 @@ private struct GuidesLongPressMenu: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            GuidesSegmentedButtons(
-                items: GuideFamily.allCases.map(\.rawValue),
-                selected: assist.guideFamily.rawValue
-            ) { value in
-                if let family = GuideFamily(rawValue: value) {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsInlineRow(title: "Family", showTopDivider: false) {
+                SettingsSegmented(
+                    options: GuideFamily.allCases.map(\.rawValue),
+                    selected: assist.guideFamily.rawValue
+                ) { value in
+                    guard let family = GuideFamily(rawValue: value) else { return }
                     assist.guideFamily = family
                     assist.persist()
                 }
             }
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible()), count: 5),
-                spacing: 10
-            ) {
-                ForEach(GuideAspect.ratios(for: assist.guideFamily)) { ratio in
-                    Button {
-                        assist.toggleGuide(ratio)
-                    } label: {
-                        GuidesGlassChoice(
-                            title: ratio.rawValue,
-                            isSelected: assist.selectedGuides.contains(ratio)
-                        )
+            SettingsInlineRow(title: "Ratios", stacked: true) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 62), spacing: 6)], spacing: 6) {
+                    MonitorSnapshotRows(GuideAspect.ratios(for: assist.guideFamily)) { ratio in
+                        Button {
+                            OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
+                            assist.toggleGuide(ratio)
+                        } label: {
+                            GuidesGlassChoice(
+                                title: ratio.rawValue,
+                                isSelected: assist.selectedGuides.contains(ratio))
+                        }
+                        .buttonStyle(.zcTapTarget)
+                        .accessibilityAddTraits(
+                            assist.selectedGuides.contains(ratio) ? .isSelected : [])
                     }
-                    .buttonStyle(.zcTapTarget)
                 }
             }
-            Button {
+            SettingsSwitchInlineRow(title: "Mask outside frame", isOn: assist.guideMask) {
+                OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
                 assist.guideMask.toggle()
                 assist.persist()
-            } label: {
-                GuidesToggleRow(title: "Mask outside frame", isOn: assist.guideMask)
             }
-            .buttonStyle(.zcTapTarget)
         }
     }
 }
@@ -129,7 +130,7 @@ struct AspectGuideFrameView: View {
                     }
                 }
             }
-            ForEach(frames) { frame in
+            MonitorSnapshotRows(frames) { frame in
                 Rectangle()
                     .stroke(LiveDesign.accent.opacity(0.85), lineWidth: 1)
                     .frame(width: frame.rect.width, height: frame.rect.height)
@@ -149,34 +150,6 @@ struct AspectGuideFrameView: View {
     }
 }
 
-/// OpenZCine `SegmentedButtons` — capsule chips, gold when selected.
-private struct GuidesSegmentedButtons: View {
-    let items: [String]
-    let selected: String
-    let onSelect: (String) -> Void
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(items, id: \.self) { item in
-                Button {
-                    onSelect(item)
-                } label: {
-                    Text(item)
-                        .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(item == selected ? LiveDesign.accent : LiveDesign.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            item == selected ? LiveDesign.accentDim : LiveDesign.glassBright,
-                            in: Capsule()
-                        )
-                }
-                .buttonStyle(.zcTapTarget)
-            }
-        }
-    }
-}
-
 /// OpenZCine `GlassChoice`.
 private struct GuidesGlassChoice: View {
     let title: String
@@ -184,49 +157,23 @@ private struct GuidesGlassChoice: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 14, weight: .medium, design: .monospaced))
+            .font(MonitorTheme.font(11, weight: .medium))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .allowsTightening(true)
-            .foregroundStyle(isSelected ? LiveDesign.accent : LiveDesign.text)
+            .foregroundStyle(
+                isSelected ? Color(red: 8 / 255, green: 25 / 255, blue: 31 / 255) : LiveDesign.text
+            )
             .padding(.horizontal, 2)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .frame(minHeight: 36)
             .background(
-                isSelected ? LiveDesign.accentDim : LiveDesign.glassBright,
+                isSelected ? LiveDesign.accent : LiveDesign.glassBright,
                 in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
                     .stroke(isSelected ? LiveDesign.accentDim : LiveDesign.hairline, lineWidth: 1)
             )
-    }
-}
-
-/// OpenZCine `ToggleRow`.
-private struct GuidesToggleRow: View {
-    let title: String
-    let isOn: Bool
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
-            Spacer()
-            Group {
-                if isOn {
-                    LucideIconView(name: OpcIcon.circleCheck.lucideName, filled: true)
-                } else {
-                    OpcIcon.circle
-                }
-            }
-            .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.muted)
-            .frame(width: 18, height: 18)
-        }
-        .padding(14)
-        .background(
-            isOn ? LiveDesign.accentDim : LiveDesign.glassBright,
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-        )
     }
 }

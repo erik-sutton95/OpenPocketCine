@@ -66,6 +66,19 @@ struct FieldMonitorLayoutTests {
         }
     }
 
+    @Test func landscapeStatusTouchTargetsStayInsideTheWindow() {
+        for (width, height, inset) in [
+            (667.0, 375.0, 0.0), (844, 390, 47), (874, 402, 62),
+        ] {
+            let layout = FieldMonitorLayout(
+                width: width, height: height,
+                safeArea: .init(leading: inset, bottom: inset > 0 ? 21 : 0))
+            #expect(layout.status.midY - 22 >= 0)
+            #expect(layout.status.height >= 44)
+            #expect(abs(layout.status.midY - 21.5) <= 0.5)
+        }
+    }
+
     @Test func sourceAspectChangesOnlyPresentation() {
         let vertical = FieldMonitorLayout(width: 744, height: 1133, sourceAspect: 9 / 16)
         #expect(vertical.fillsPicture)

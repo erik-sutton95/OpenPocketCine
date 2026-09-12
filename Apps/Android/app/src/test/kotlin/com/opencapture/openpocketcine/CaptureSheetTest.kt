@@ -625,6 +625,15 @@ class CaptureSheetTest {
         assertTrue(CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(lock, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = false))
+        assertEquals(
+            listOf("AF-S", "AF-C", "Showcase", "Lock", "Priority"),
+            CaptureFocusChoices.labels,
+        )
+        assertEquals(listOf("AF-S", "AF-C"), captureQuickFocusControl(afs).options)
+        assertEquals("AF-S", captureQuickFocusControl(afs).selection)
+        assertEquals("AF-C", captureQuickFocusControl(afc).selection)
+        assertEquals(listOf("AF-S", "AF-C"), captureQuickFocusControl(lock).options)
+        assertEquals("AF-C", captureQuickFocusControl(lock).selection)
     }
 
     @Test

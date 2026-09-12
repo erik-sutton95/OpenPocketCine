@@ -1,3 +1,5 @@
+import MonitorPresentation
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -285,7 +287,7 @@ enum LiveZoomLabelHold {
     }
 }
 
-/// One round cycle hit inside the feed: 1× → 3× → 6× → 12× → 1×.
+/// Separate ordinary and extended tap cycles, with the existing hold-to-open dial.
 struct LiveZoomChip: View {
     var onOpenDial: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
@@ -303,17 +305,31 @@ struct LiveZoomChip: View {
             ?? model.session.zoomStop
     }
     private var title: String { CamFov.displayLabel(factor: displayFactor) }
+    private var tapStops: MonitorZoomTapStops {
+        OsmoMonitorPresentation.zoomTapStops(model.session)
+    }
+    private var tapGesture: AnyGesture<Bool> {
+        guard !tapStops.doubleTap.isEmpty else {
+            return AnyGesture(TapGesture().map { false })
+        }
+        return AnyGesture(
+            TapGesture(count: 2).exclusively(before: TapGesture()).map { result in
+                if case .first = result { return true }
+                return false
+            })
+    }
     /// D-Log2 while rolling: gray like lock, but keep the tap so we can toast.
     private var zoomBlockedWhileRecording: Bool {
         CamFov.zoomNeedsColorHopWhileRecording(
-            factor: CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops),
+            factor: tapStops.next(from: cycleFrom) ?? cycleFrom,
             current: model.session.status.colorMode,
             isRecording: model.session.status.isRecording)
     }
 
-    private func cycle() {
-        guard !interfaceLocked else { return }
-        let next = CamFov.nextJump(from: cycleFrom, stops: model.session.zoomStops)
+    private func cycle(extended: Bool = false) {
+        guard !interfaceLocked, let next = tapStops.next(from: cycleFrom, extended: extended) else {
+            return
+        }
         snapTick += 1
         model.session.setZoom(next)
     }
@@ -326,26 +342,35 @@ struct LiveZoomChip: View {
             .frame(
                 width: LiveChromeMetrics.zoomButtonSize, height: LiveChromeMetrics.zoomButtonSize
             )
-            .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
+            .monitorReadoutShadow()
             .contentShape(Rectangle())
             .gesture(
-                LongPressGesture(minimumDuration: 0.38).exclusively(before: TapGesture())
+                LongPressGesture(minimumDuration: 0.38).exclusively(before: tapGesture)
                     .onEnded { gesture in
                         guard !interfaceLocked else { return }
                         switch gesture {
                         case .first: onOpenDial?()
-                        case .second: cycle()
+                        case .second(let extended): cycle(extended: extended)
                         }
                     }
             )
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { cycle() }
-            .accessibilityAction(named: "Continuous zoom") { if !interfaceLocked { onOpenDial?() } }
+            .accessibilityActions {
+                if !tapStops.doubleTap.isEmpty {
+                    Button("Extended zoom") { cycle(extended: true) }
+                }
+                Button("Continuous zoom") { if !interfaceLocked { onOpenDial?() } }
+            }
             .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
             .allowsHitTesting(!interfaceLocked)
             .disabled(interfaceLocked)
             .accessibilityLabel("Zoom \(title)")
-            .accessibilityHint("Tap cycles camera zoom stops. Hold opens the continuous zoom dial.")
+            .accessibilityHint(
+                tapStops.doubleTap.isEmpty
+                    ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."
+                    : "Tap cycles 1 and 3 times. Double tap cycles 6 and 12 times. Hold opens the continuous zoom dial."
+            )
             .accessibilityIdentifier("monitor.system.zoom")
             .sensoryFeedback(.impact(weight: .medium), trigger: snapTick)
             .onAppear { heldFactor = factor }

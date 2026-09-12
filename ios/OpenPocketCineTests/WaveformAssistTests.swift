@@ -234,14 +234,15 @@ final class WaveformAssistTests: XCTestCase {
         XCTAssertEqual(restored.y, center.y, accuracy: 0.05)
     }
 
-    func testDefaultCenterFallsInsideWhenOutsideIsOffscreen() {
+    func testUnplacedScopeStartsAtCanvasCenter() {
         let feed = CGRect(x: 59, y: 0, width: 714.7, height: 402)
         let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
         let size = WaveformAssist.baseSize
         let clearance = EdgeInsets(top: 60, leading: 0, bottom: 72, trailing: 0)
         let center = WaveformAssist.defaultCenter(
             feed: feed, size: size, bounds: bounds, chromeClearance: clearance)
-        XCTAssertEqual(center.x, feed.minX + size.width / 2, accuracy: 0.05)
+        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
+        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
         XCTAssertGreaterThan(center.y - size.height / 2, bounds.minY - 0.05)
         XCTAssertGreaterThanOrEqual(center.y - size.height / 2, clearance.top + 10 - 0.5)
         XCTAssertLessThan(center.x + size.width / 2, bounds.maxX + 0.05)

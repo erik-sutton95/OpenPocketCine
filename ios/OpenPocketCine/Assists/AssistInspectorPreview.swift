@@ -84,6 +84,7 @@ struct AssistInspectorPreview: View {
     var tool: LiveAssistTool
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.audioInspectorLevels) private var audioInspectorLevels
     @State private var renderer = AssistInspectorImageRenderer()
     @State private var image: CGImage?
     @State private var renderedTool: LiveAssistTool?
@@ -194,13 +195,25 @@ struct AssistInspectorPreview: View {
             )
             .frame(width: 120, height: 44)
         case .audioMeters:
-            AudioAssist.meter(
-                levels: model.session.status.audioMeters,
-                sensitivity: model.session.status.audioChannel?.label
-            )
-            .scaleEffect(0.8)
+            if let levels = audioInspectorLevels {
+                audioPreview(levels: levels, sensitivity: nil)
+            } else if !model.assist.gradesClip {
+                audioPreview(
+                    levels: model.session.status.audioMeters,
+                    sensitivity: model.session.status.audioChannel?.label)
+            }
+
         default:
             EmptyView()
+        }
+    }
+
+    private func audioPreview(levels: AudioMeterLevels, sensitivity: String?) -> some View {
+        let options = AudioAssist.store.options
+        return fittedScope(size: AudioAssist.panelSize(orientation: options.orientation)) {
+            AudioMetersPanelMini(
+                levels: levels, sensitivity: sensitivity,
+                orientation: options.orientation, showsDB: options.showsDB)
         }
     }
 

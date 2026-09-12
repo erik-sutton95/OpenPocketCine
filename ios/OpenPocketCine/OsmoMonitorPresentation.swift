@@ -6,6 +6,16 @@ import OpenPocketViewCore
 /// never need to identify a camera brand, body name, or wire opcode.
 @MainActor
 enum OsmoMonitorPresentation {
+    static func zoomTapStops(_ session: CameraSession) -> MonitorZoomTapStops {
+        // Only the Pro's native capability table includes the 6×/12× range.
+        // Other bodies retain their full ordinary tap sequence (including 4×).
+        let supportsExtended =
+            session.connectedCamera?.model.zoomStops.contains(12)
+            ?? session.zoomStops.contains(12)
+        return MonitorZoomTapStops(
+            supported: session.zoomStops, extended: supportsExtended ? [6, 12] : [])
+    }
+
     static func zoomCaption(_ session: CameraSession) -> String {
         let factor = session.zoomReadout
         if abs(factor - 1) < 0.05 { return "WIDE" }

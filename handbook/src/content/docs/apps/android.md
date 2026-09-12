@@ -26,10 +26,13 @@ The native UI uses Sora typography, cyan controls and dark panels. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
 format, color and shooting options. Drag a value drum to select a supported
-camera value; lift to apply it. Hold Record to open shooting mode.
+camera value; lift to apply it. All camera pickers open from bottom-center.
+Hold Record to open shooting mode.
 
 The View Assist palette collapses into the picture corner. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
+On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
+when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions
 remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
 experimental Motion Control editor in a trailing drawer. All three waypoint rows show the
@@ -42,6 +45,12 @@ in portrait. Media retains grid/list views, selection, favorites, cache state,
 playback assists and the existing delivery actions.
 
 ## Moving scopes
+
+Newly enabled windowed scopes start in the center, ready for you to place them.
+The false-color reference key also starts centered and can be dragged.
+Saved positions remain yours. AUDIO starts on the left at vertical center and
+can also be dragged. Hold AUDIO for Vertical / Horizontal bars and optional
+left/right dBFS readings; these affect the meter display, not camera recording.
 
 Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
 corner grip to resize. Scopes can sit partly under the top and bottom bars.
@@ -87,7 +96,7 @@ COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
 10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
-(bottom-left, above the assist bar; drag to move). Long-press to
+(centered until placed; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits

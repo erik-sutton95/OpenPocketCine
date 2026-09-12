@@ -23,6 +23,10 @@ separate iOS and Android lists.
   Camera-value drums, a compact assist palette, leading/trailing inspectors and
   the half-disc zoom control retain the existing camera actions and live pipeline.
   Fresh scope sizes adapt to device geometry without replacing saved manual sizes.
+  New windowed tools start centered; audio is movable with vertical/horizontal
+  bars and optional channel dB readings. Camera pickers rise from bottom-center,
+  with animated ruler drums, darker panels and corrected iPhone top spacing.
+  Pocket 4 Pro zoom separates 1×/3× taps from 6×/12× double taps.
   Physical camera-session qualification and the Android rendering exceptions are
   tracked in [parity](docs/PARITY.md#ui-20-qualification).
 

@@ -52,6 +52,25 @@ object MonitorLayoutPolicy {
             MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
     }
 
+    fun portraitReadoutTop(tablet: Boolean, safeTop: Float, statusTop: Float, pictureTop: Float): Float {
+        if (tablet) return 12f
+        val gaugeTop = if (safeTop > 20f) max(4f, statusTop - 16f) else 4f
+        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f)
+    }
+
+    data class Panel(val x: Float, val y: Float, val width: Float, val maxHeight: Float)
+
+    fun bottomPanel(panelHeight: Float, width: Float, height: Float, safeLeading: Float,
+        safeTrailing: Float, safeTop: Float, safeBottom: Float, portraitFloor: Float? = null): Panel {
+        val edge = max(14f, max(safeLeading, safeTrailing) + 4f)
+        val panelWidth = min(if (min(width, height) >= 600f) 620f else 480f, max(0f, width - edge * 2f))
+        val bottom = if (height > width && portraitFloor != null) min(height, portraitFloor - 12f)
+            else height - max(0f, safeBottom)
+        val top = max(14f, safeTop + 10f)
+        val room = max(0f, bottom - top)
+        return Panel((width - panelWidth) / 2f, max(top, bottom - min(panelHeight, room)), panelWidth, room)
+    }
+
     fun valueColumns(width: Float, portrait: Boolean, count: Int): Int =
         if (portrait && width < 600f) 3 else count.coerceAtLeast(1)
 }

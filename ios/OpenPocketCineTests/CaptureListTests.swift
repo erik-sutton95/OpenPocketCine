@@ -4,6 +4,22 @@ import XCTest
 @testable import OpenPocketCine
 
 final class CaptureListTests: XCTestCase {
+    func testFocusDrumPreservesUnknownStateAndEveryExistingTrackingMode() {
+        var status = CameraStatus()
+        XCTAssertNil(CaptureLists.focusOption(from: status))
+        status.focusMode = .single
+        status.focusTrack = .registeredPriority
+        XCTAssertEqual(CaptureLists.focusOption(from: status), .single)
+        status.focusMode = .continuous
+        for option in FocusOption.allCases where option != .single {
+            status.focusTrack = option.track
+            XCTAssertEqual(CaptureLists.focusOption(from: status), option)
+            XCTAssertFalse(CaptureLists.focusHelp(option).isEmpty)
+        }
+        XCTAssertEqual(
+            FocusOption.allCases.map(\.chip), ["AF-S", "AF-C", "Showcase", "Lock", "Priority"])
+    }
+
     func testShutterWheelUsesCameraListNotHardcoded24pTable() {
         var status = CameraStatus()
         status.fps = 60

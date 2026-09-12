@@ -1,8 +1,8 @@
 New and changed
 
-- UI 2.0 adds Sora type, Lucide icons, adaptive camera/settings/media pages, and redesigned monitor controls for phones and tablets.
-- Tap a camera value for its picker; hold or drag for a temporary drum. Hold Zoom for the lens dial. View Assist expands from a compact palette with scope previews.
-- Gimbal Mode, Speed and Ramp use inline drums. Drag and resize scopes, LIGHTS and ND. Your cameras shows connection progress and Cancel.
+- UI 2.0 adds Sora, Lucide and adaptive pages. Camera pickers rise from bottom-center with animated ruler drums; View Assist options are wider and stay the same size between tabs.
+- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the lens dial.
+- New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
 
 Fixes
 
@@ -13,6 +13,6 @@ Fixes
 
 What to test
 
-- Rotate UI 2.0 pages and drawers on phones/tablets. Try value drums, View Assist, zoom, lock/unlock, media selection, playback and TalkBack.
+- Rotate UI 2.0 pages and drawers on phones/tablets. Try value drums, rapid View Assist tab changes, audio placement, zoom, lock/unlock, media selection, playback and TalkBack.
 - On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
 - Check joystick after first picture, app return, Wi-Fi changes, Retry/Cancel and reconnects. Test Pocket 3 portrait 3K. Motion Control remains experimental.

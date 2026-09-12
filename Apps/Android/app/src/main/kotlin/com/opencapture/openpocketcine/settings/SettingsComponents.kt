@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -431,6 +432,7 @@ fun SettingsSegmented(
     options: List<String>,
     selected: String,
     compact: Boolean = true,
+    accentSelection: Boolean = false,
     onSelect: (String) -> Unit,
 ) {
     Row(
@@ -449,7 +451,7 @@ fun SettingsSegmented(
                     .then(if (compact) Modifier.weight(1f) else Modifier)
                     .defaultMinSize(minHeight = if (compact) 32.dp else 30.dp)
                     .background(
-                        if (active) LiveDesign.surface else Color.Transparent,
+                        if (active) { if (accentSelection) LiveDesign.accent else LiveDesign.surface } else Color.Transparent,
                         ChromeShape,
                     )
                     .selectable(
@@ -463,7 +465,7 @@ fun SettingsSegmented(
                 Text(
                     option,
                     style = chromeStyle(if (compact) 11f else 11.5f, if (active) FontWeight.SemiBold else FontWeight.Medium),
-                    color = if (active) LiveDesign.text else LiveDesign.muted,
+                    color = if (active) { if (accentSelection) Color(0xFF08191F) else LiveDesign.text } else LiveDesign.muted,
                     maxLines = 1,
                 )
             }
@@ -480,6 +482,7 @@ fun SettingsColorDots(
     dots: List<SettingsColorDot>,
     selectedName: String,
     compact: Boolean = true,
+    enabled: Boolean = true,
     onSelect: (String) -> Unit,
 ) {
     val diameter = if (compact) 15.dp else 13.dp
@@ -491,9 +494,9 @@ fun SettingsColorDots(
                 Modifier
                     .size(hit)
                     .settingsClickable(role = Role.RadioButton) {
-                        if (!active) onSelect(dot.name)
+                        if (enabled && !active) onSelect(dot.name)
                     }
-                    .semantics { contentDescription = dot.name },
+                    .semantics { contentDescription = dot.name; if (!enabled) disabled() },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -659,6 +662,7 @@ fun GlassPillSlider(value: Int, range: IntRange, onChange: (Int) -> Unit, modifi
 fun SettingsCrushClipSegmented(
     options: List<Pair<String, String>>,
     selectedLabel: String,
+    accentSelection: Boolean = false,
     onSelect: (String) -> Unit,
 ) {
     Row(
@@ -677,7 +681,7 @@ fun SettingsCrushClipSegmented(
                     .weight(1f)
                     .defaultMinSize(minHeight = 34.dp)
                     .background(
-                        if (active) LiveDesign.surface else Color.Transparent,
+                        if (active) { if (accentSelection) LiveDesign.accent else LiveDesign.surface } else Color.Transparent,
                         ChromeShape,
                     )
                     .selectable(
@@ -693,7 +697,7 @@ fun SettingsCrushClipSegmented(
                 Text(
                     compact,
                     style = chromeStyle(12f, if (active) FontWeight.SemiBold else FontWeight.Medium),
-                    color = if (active) LiveDesign.text else LiveDesign.muted,
+                    color = if (active) { if (accentSelection) Color(0xFF08191F) else LiveDesign.text } else LiveDesign.muted,
                     maxLines = 1,
                 )
             }

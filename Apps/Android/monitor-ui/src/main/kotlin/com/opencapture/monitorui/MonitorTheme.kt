@@ -15,7 +15,9 @@ object MonitorPalette {
     val surface = Color(0xFF1A1B1C)
     val tile = Color(0xFF232527)
     /** Dense modal tint suppresses underlying text without sampling a blurred frame. */
-    val overlayPanel = Color(0xFF141618).copy(alpha = .96f)
+    val overlayPanel = Color(0xFF050607).copy(alpha = .96f)
+    val compactGlass = Color(0xFF050607).copy(alpha = .78f)
+    val expandedGlass = Color(0xFF050607).copy(alpha = .84f)
     val accent = Color(0xFF00A3E0)
     val text = Color.White
     val muted = Color(0xFF8D9293)

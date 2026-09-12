@@ -42,37 +42,42 @@ data class MonitorQuickControl(val options: List<String>, val selection: String,
 /** One recognizer owns tap, 280ms hold, and >14dp travel. Only release commits. */
 @Composable
 internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabled: Boolean,
-    onOpen: () -> Unit, onCommit: (String) -> Unit): Modifier {
+    onOpen: () -> Unit, onCommit: (String) -> Unit, bottomClearanceDp: Float,
+    owner: MonitorQuickGestureOwner, ownerId: String): Modifier {
     var active by remember { mutableStateOf(false) }
     var position by remember { mutableFloatStateOf(0f) }
     val open by rememberUpdatedState(onOpen)
     val commit by rememberUpdatedState(onCommit)
     val density = LocalDensity.current
     val config = LocalConfiguration.current
-    val margin = with(density) { 10.dp.roundToPx() }
+    val margin = with(density) { 14.dp.roundToPx() }
+    val bottomClearance = with(density) { bottomClearanceDp.dp.roundToPx() }
     val detent = with(density) { MonitorDrumSelection.POINTS_PER_VALUE.dp.toPx() }
     val threshold = with(density) { MonitorDrumSelection.DRAG_THRESHOLD.dp.toPx() }
     val origin = control?.options?.indexOf(control.selection)?.coerceAtLeast(0) ?: 0
     if (active && control != null) Popup(
-        popupPositionProvider = remember(margin) { object : PopupPositionProvider {
+        popupPositionProvider = remember(margin, bottomClearance) { object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
                 layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset = IntOffset(
-                (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(margin,
+                (windowSize.width / 2 - popupContentSize.width / 2).coerceIn(margin,
                     (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
-                (anchorBounds.top - popupContentSize.height - margin).coerceAtLeast(margin))
+                (windowSize.height - popupContentSize.height - bottomClearance).coerceAtLeast(margin))
         } }, properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
         Box(Modifier.width(minOf(if (minOf(config.screenWidthDp, config.screenHeightDp) >= 600) 620 else 480,
-            config.screenWidthDp - 20).dp).background(Color(0xFF141618).copy(alpha = .62f), RoundedCornerShape(16.dp)).padding(8.dp)) {
+            config.screenWidthDp - 28).dp).background(MonitorPalette.expandedGlass, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).padding(8.dp)) {
             MonitorValueDrum(control.options, control.selection, markedValues = control.marked,
                 interactive = false, displayPosition = position, dimDisabled = false, onSelect = {})
         }
     }
     return this.semantics { role = Role.Button; if (enabled) onClick { open(); true } }
-        .pointerInput(control, enabled, config.orientation, config.screenWidthDp, config.screenHeightDp) {
+        .pointerInput(control, enabled, config.orientation, config.screenWidthDp, config.screenHeightDp, bottomClearanceDp, density.density, density.fontScale) {
             if (!enabled) { active = false; return@pointerInput }
+            var held: MonitorQuickGestureOwner.Lease? = null
             try {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = true)
+                    val token = owner.acquire(ownerId) ?: return@awaitEachGesture
+                    held = token
                     down.consume()
                     var elapsed = 0L
                     var startX = down.position.x
@@ -84,7 +89,7 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
                                 withTimeoutOrNull((MonitorDrumSelection.HOLD_MILLISECONDS - elapsed).coerceAtLeast(1L)) { awaitPointerEvent() }
                             } else awaitPointerEvent()
                             if (event == null) {
-                                armed = true; active = true; startX = lastX; position = origin.toFloat()
+                                armed = true; active = true; owner.setActive(token, true); startX = lastX; position = origin.toFloat()
                                 continue
                             }
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -94,7 +99,7 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
                             val delta = change.position - down.position
                             if (!armed && kotlin.math.abs(delta.y) > threshold && kotlin.math.abs(delta.y) > kotlin.math.abs(delta.x)) break
                             if (!armed && control?.enabled == true && control.options.isNotEmpty() && kotlin.math.abs(delta.x) > threshold) {
-                                armed = true; active = true; startX = lastX
+                                armed = true; active = true; owner.setActive(token, true); startX = lastX
                             }
                             if (armed) position = MonitorDrumSelection.position(origin.toFloat(), (lastX - startX) / density.density, control!!.options.size)
                             change.consume()
@@ -102,13 +107,13 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
                                 active = false
                                 if (armed) {
                                     val value = control!!.options[position.roundToInt()]
-                                    if (position.roundToInt() != origin && value != control.selection) commit(value)
+                                    if (MonitorDrumSelection.changedDetent(origin.toFloat(), position) && value != control.selection) commit(value)
                                 } else if (delta.getDistance() <= with(density) { 8.dp.toPx() }) open()
                                 break
                             }
                         }
-                    } finally { active = false }
+                    } finally { active = false; owner.release(token); held = null }
                 }
-            } finally { active = false }
+            } finally { active = false; held?.let(owner::release) }
         }
 }

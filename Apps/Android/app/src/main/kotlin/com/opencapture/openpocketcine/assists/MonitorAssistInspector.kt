@@ -50,7 +50,7 @@ fun MonitorAssistInspector(
     playback: Boolean = false,
 ) {
     val portrait = viewportHeight > viewportWidth
-    val width = min(424f, viewportWidth * .86f)
+    val width = min(460f, viewportWidth * .92f)
     val height = if (portrait) min(viewportHeight, controlsFloor) else viewportHeight
     val leading = max(14f, safeLeading + 10f)
     val top = max(16f, safeTop + 10f)
@@ -71,9 +71,11 @@ fun MonitorAssistInspector(
                         LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, portrait = true) }
                     }
                     Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        androidx.compose.runtime.key(tool, playback) {
                         AssistOptionsPopup(tool, state, onDismiss, model = model,
                             maxHeightDp = (height - top - 72f).coerceAtLeast(100f),
                             colorMode = colorMode, embedded = true, playback = playback)
+                        }
                     }
                 }
             } else {
@@ -84,9 +86,11 @@ fun MonitorAssistInspector(
                         LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, portrait = false) }
                     }
                     Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        androidx.compose.runtime.key(tool, playback) {
                         AssistOptionsPopup(tool, state, onDismiss, model = model,
                             maxHeightDp = (height - top - max(12f, safeBottom)).coerceAtLeast(100f),
                             colorMode = colorMode, embedded = true, playback = playback)
+                        }
                     }
                 }
             }

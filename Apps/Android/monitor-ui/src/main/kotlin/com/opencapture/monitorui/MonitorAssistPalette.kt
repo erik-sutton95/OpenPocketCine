@@ -73,7 +73,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
         }
     }
     Box(modifier, contentAlignment = Alignment.BottomStart) {
-        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xFF141618).copy(alpha = .52f)).padding(4.dp),
+        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(MonitorPalette.compactGlass).padding(4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 if (portrait) expand(false)
@@ -84,13 +84,13 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
         }
         if (expanded && !locked) Popup(alignment = Alignment.BottomStart, onDismissRequest = { expanded = false },
             properties = PopupProperties(focusable = true)) {
-            if (portrait) Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xFF141618).copy(alpha = .62f))
+            if (portrait) Column(Modifier.clip(RoundedCornerShape(14.dp)).background(MonitorPalette.expandedGlass)
                 .padding(4.dp).heightIn(max = (config.screenHeightDp * .62f).dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 expand(true)
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     tools.forEach { key(it, true) }
                 }
-            } else Row(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xFF141618).copy(alpha = .62f))
+            } else Row(Modifier.clip(RoundedCornerShape(14.dp)).background(MonitorPalette.expandedGlass)
                 .padding(4.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     tools.chunked((tools.size + 1) / 2).forEach { row ->

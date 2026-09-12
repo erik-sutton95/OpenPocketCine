@@ -114,67 +114,87 @@
             atan2(radius - point.x, point.y - radius)
         }
 
+        /// Freeze native value/label projections before SwiftUI dispatches the
+        /// Canvas renderer. The drawing snapshot contains no session callbacks.
+        var canvasSnapshot: MonitorZoomCanvasSnapshot {
+            let zoom = value
+            return MonitorZoomCanvasSnapshot(
+                radius: radius, scale: scale, position: scale.position(zoom),
+                opticalMaximum: opticalStops.max() ?? scale.minimum,
+                marks: marks.filter { $0 >= scale.minimum && $0 <= scale.maximum }.map {
+                    MonitorZoomCanvasMark(value: $0, fraction: scale.position($0), label: label($0))
+                }, ink: ink, digitalInk: MonitorTheme.color(0xF0B23C),
+                secondaryInk: MonitorTheme.secondary,
+                labelFont: MonitorTheme.font(12, weight: .semibold))
+        }
+
+        nonisolated static func canvas(_ snapshot: MonitorZoomCanvasSnapshot) -> Canvas<EmptyView> {
+            Canvas { context, _ in
+                let radius = snapshot.radius
+                let scale = snapshot.scale
+                let unit = radius / 190
+                let position = snapshot.position
+                let center = CGPoint(x: radius, y: radius)
+                let window = Double.pi * 0.36
+                let opticalMaximum = snapshot.opticalMaximum
+                func point(_ angle: Double, _ distance: CGFloat) -> CGPoint {
+                    CGPoint(
+                        x: center.x + cos(angle) * distance,
+                        y: center.y + sin(angle) * distance)
+                }
+                func fade(_ delta: Double) -> Double {
+                    min(1, max(0, (window - abs(delta)) / (0.3 * window)))
+                }
+                func stroke(_ fraction: Double, major: Bool) {
+                    let delta = (fraction - position) * MonitorZoomScale.angularSpan
+                    guard abs(delta) <= window else { return }
+                    let angle = .pi + delta
+                    let digital = scale.value(at: fraction) > opticalMaximum + 0.02
+                    let color = digital ? snapshot.digitalInk : Color.white
+                    var path = Path()
+                    path.move(to: point(angle, 164 * unit))
+                    path.addLine(to: point(angle, (major ? 143 : 155) * unit))
+                    context.stroke(
+                        path, with: .color(color.opacity((major ? 0.7 : 0.3) * fade(delta))),
+                        lineWidth: (major ? 2.2 : 1.2) * unit)
+                }
+                var rim = Path()
+                rim.addArc(
+                    center: center, radius: 186 * unit,
+                    startAngle: .degrees(90), endAngle: .degrees(270), clockwise: false)
+                context.stroke(rim, with: .color(.white.opacity(0.07)), lineWidth: 1.5 * unit)
+                for tick in 0...48 { stroke(Double(tick) / 48, major: false) }
+                for mark in snapshot.marks {
+                    let fraction = mark.fraction
+                    stroke(fraction, major: true)
+                    let delta = (fraction - position) * MonitorZoomScale.angularSpan
+                    guard abs(delta) <= window else { continue }
+                    let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
+                    let color =
+                        mark.value > opticalMaximum + 0.02
+                        ? snapshot.digitalInk : snapshot.secondaryInk
+                    context.draw(
+                        Text(mark.label).font(snapshot.labelFont)
+                            .foregroundStyle(color.opacity(opacity)),
+                        at: point(.pi + delta, 124 * unit))
+                }
+                var marker = Path()
+                marker.move(to: CGPoint(x: 14 * unit, y: radius))
+                marker.addLine(to: CGPoint(x: 46 * unit, y: radius))
+                context.stroke(
+                    marker, with: .color(snapshot.ink),
+                    style: StrokeStyle(lineWidth: 3 * unit, lineCap: .round))
+                context.fill(
+                    Path(
+                        ellipseIn: CGRect(
+                            x: 48.5 * unit, y: radius - 3.5 * unit,
+                            width: 7 * unit, height: 7 * unit)), with: .color(snapshot.ink))
+            }
+        }
+
         private var dial: some View {
             ZStack(alignment: .leading) {
-                Canvas { context, _ in
-                    let unit = radius / 190
-                    let position = scale.position(value)
-                    let center = CGPoint(x: radius, y: radius)
-                    let window = Double.pi * 0.36
-                    let opticalMaximum = opticalStops.max() ?? scale.minimum
-                    func point(_ angle: Double, _ distance: CGFloat) -> CGPoint {
-                        CGPoint(
-                            x: center.x + cos(angle) * distance,
-                            y: center.y + sin(angle) * distance)
-                    }
-                    func fade(_ delta: Double) -> Double {
-                        min(1, max(0, (window - abs(delta)) / (0.3 * window)))
-                    }
-                    func stroke(_ fraction: Double, major: Bool) {
-                        let delta = (fraction - position) * MonitorZoomScale.angularSpan
-                        guard abs(delta) <= window else { return }
-                        let angle = .pi + delta
-                        let digital = scale.value(at: fraction) > opticalMaximum + 0.02
-                        let color = digital ? MonitorTheme.color(0xF0B23C) : Color.white
-                        var path = Path()
-                        path.move(to: point(angle, 164 * unit))
-                        path.addLine(to: point(angle, (major ? 143 : 155) * unit))
-                        context.stroke(
-                            path, with: .color(color.opacity((major ? 0.7 : 0.3) * fade(delta))),
-                            lineWidth: (major ? 2.2 : 1.2) * unit)
-                    }
-                    var rim = Path()
-                    rim.addArc(
-                        center: center, radius: 186 * unit,
-                        startAngle: .degrees(90), endAngle: .degrees(270), clockwise: false)
-                    context.stroke(rim, with: .color(.white.opacity(0.07)), lineWidth: 1.5 * unit)
-                    for tick in 0...48 { stroke(Double(tick) / 48, major: false) }
-                    for mark in marks where mark >= scale.minimum && mark <= scale.maximum {
-                        let fraction = scale.position(mark)
-                        stroke(fraction, major: true)
-                        let delta = (fraction - position) * MonitorZoomScale.angularSpan
-                        guard abs(delta) <= window else { continue }
-                        let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
-                        let color =
-                            mark > opticalMaximum + 0.02
-                            ? MonitorTheme.color(0xF0B23C) : MonitorTheme.secondary
-                        context.draw(
-                            Text(label(mark)).font(MonitorTheme.font(12, weight: .semibold))
-                                .foregroundStyle(color.opacity(opacity)),
-                            at: point(.pi + delta, 124 * unit))
-                    }
-                    var marker = Path()
-                    marker.move(to: CGPoint(x: 14 * unit, y: radius))
-                    marker.addLine(to: CGPoint(x: 46 * unit, y: radius))
-                    context.stroke(
-                        marker, with: .color(ink),
-                        style: StrokeStyle(lineWidth: 3 * unit, lineCap: .round))
-                    context.fill(
-                        Path(
-                            ellipseIn: CGRect(
-                                x: 48.5 * unit, y: radius - 3.5 * unit,
-                                width: 7 * unit, height: 7 * unit)), with: .color(ink))
-                }
+                Self.canvas(canvasSnapshot)
                 VStack(spacing: 5) {
                     Text(label(value)).font(MonitorTheme.font(radius * 0.19, weight: .bold))
                         .monospacedDigit().foregroundStyle(MonitorTheme.text)
@@ -188,6 +208,24 @@
                 .allowsHitTesting(false)
             }
         }
+    }
+
+    struct MonitorZoomCanvasMark: Sendable {
+        let value: Double
+        let fraction: Double
+        let label: String
+    }
+
+    struct MonitorZoomCanvasSnapshot: Sendable {
+        let radius: CGFloat
+        let scale: MonitorZoomScale
+        let position: Double
+        let opticalMaximum: Double
+        let marks: [MonitorZoomCanvasMark]
+        let ink: Color
+        let digitalInk: Color
+        let secondaryInk: Color
+        let labelFont: Font
     }
 
     private struct MonitorZoomHalfDisc: Shape {
