@@ -36,6 +36,7 @@ final class AppModel {
     }
     var homePanel: AppPanel?
     var captureSheet: CaptureSheet?
+    var captureDrum: CaptureDrumPresentation?
     var keepScreenAwake: Bool = OperatorPrefs.keepScreenAwake {
         didSet { OperatorPrefs.keepScreenAwake = keepScreenAwake }
     }
@@ -72,7 +73,7 @@ final class AppModel {
     /// Extended gamepad is bound. Toast on rising/falling edge.
     var gamepadConnected = false
     var liveGimbalPanel: LiveGimbalPanel = .none
-    /// Canvas-space centre of the programmed-move editor / Run pill. Nil until first open or drag.
+    /// Canvas-space centre of the programmed-move editor / Run pill. Nil until the operator drags it.
     var gimbalFloatCenter: CGPoint?
     /// Canvas-space centre of the programmed-move debug plate.
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp {
@@ -249,6 +250,11 @@ final class AppModel {
     }
 
     var isLive: Bool {
+        #if targetEnvironment(simulator)
+            if let screen = MonitorUIReview.screen {
+                return screen != "cameras" && screen != "pair"
+            }
+        #endif
         if session.holdsMonitor { return true }
         if case .live = session.phase { return true }
         #if targetEnvironment(simulator)
@@ -271,6 +277,12 @@ final class AppModel {
     }
 
     func prepareStartup() {
+        #if targetEnvironment(simulator)
+            if MonitorUIReview.isActive {
+                MonitorUIReview.prepare(self)
+                return
+            }
+        #endif
         savedCameras = SavedCameraStore.load()
         switch CameraStartupPolicy.launchDestination(savedCameras: savedCameras) {
         case .addCamera:
@@ -628,22 +640,34 @@ struct AppRoot: View {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
+    @ViewBuilder private var primaryExperience: some View {
+        if model.showsWatcherMonitor {
+            WatcherLiveView()
+                .environment(model)
+                .transition(.opacity)
+        } else if model.isLive {
+            LiveViewScreen()
+                .environment(model)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        } else {
+            LinkExperience()
+                .environment(model)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        }
+    }
+
     var body: some View {
         ZStack {
             ZCBackground()
-            if model.showsWatcherMonitor {
-                WatcherLiveView()
-                    .environment(model)
-                    .transition(.opacity)
-            } else if model.isLive {
-                LiveViewScreen()
-                    .environment(model)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            } else {
-                LinkExperience()
-                    .environment(model)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            }
+            #if targetEnvironment(simulator)
+                if MonitorMediaReview.isActive {
+                    MonitorMediaReviewView()
+                } else {
+                    primaryExperience
+                }
+            #else
+                primaryExperience
+            #endif
 
             if model.showsLaunchSplash {
                 LaunchSplashOverlay(isVisible: Bindable(model).showsLaunchSplash)
@@ -735,7 +759,9 @@ struct AppRoot: View {
             Button("Grant") { model.relayHost.grantControl() }
             Button("Deny", role: .cancel) { model.relayHost.denyControl() }
         }
+        .onAppear { model.assist.inspectorSceneActive = scenePhase == .active }
         .onChange(of: scenePhase) { _, phase in
+            model.assist.inspectorSceneActive = phase == .active
             switch phase {
             case .active:
                 model.session.noteSceneBecameActive()
@@ -750,11 +776,13 @@ struct AppRoot: View {
         .onReceive(
             NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
         ) { _ in
+            model.assist.inspectorSceneActive = false
             model.session.noteSceneBecameInactive()
         }
         .onReceive(
             NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
         ) { _ in
+            model.assist.inspectorSceneActive = true
             model.session.noteSceneBecameActive()
         }
     }
@@ -763,61 +791,15 @@ struct AppRoot: View {
 /// Connection home: first-pair wizard, or saved cameras. Mirrors OpenZCine `LinkExperience`.
 struct LinkExperience: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
-
     var body: some View {
         GeometryReader { proxy in
-            let compact = proxy.size.width < 640
-            let isPortrait = proxy.size.height > proxy.size.width
-            let topPadding: CGFloat = isPortrait ? 16 : 24
-            let wizardFillsViewport = model.shouldShowWizard
-
-            VStack(alignment: .leading, spacing: 0) {
-                StartupHeader(
-                    title: headerTitle,
-                    statusTitle: statusTitle,
-                    isBusy: isBusy,
-                    onPrivacy: { if let url = OpenPocketCineLinks.privacy { openURL(url) } },
-                    onTerms: { if let url = OpenPocketCineLinks.terms { openURL(url) } }
-                )
-                .padding(.horizontal, 20)
-
-                if wizardFillsViewport {
-                    ConnectionSetupView(compact: compact)
-                        .environment(model)
-                        .padding(.leading, 20)
-                        .padding(.trailing, 24)
-                        .padding(.top, compact ? 8 : 16)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                } else {
-                    SavedCamerasView(compact: compact)
-                        .environment(model)
-                        .padding(.horizontal, 20)
-                        .padding(.top, compact ? 14 : 20)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
+            if model.shouldShowWizard {
+                ConnectionSetupView(compact: proxy.size.width < 640)
+            } else {
+                SavedCamerasView(compact: proxy.size.width < 640)
             }
-            .padding(.top, topPadding)
-            .padding(.bottom, 16)
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
-        .background(StartupColors.backdrop.ignoresSafeArea())
+        .background(StartupColors.background.ignoresSafeArea())
         .foregroundStyle(StartupColors.ink)
     }
-
-    private var headerTitle: String {
-        if model.shouldShowWizard { return "Connection setup" }
-        if !model.savedCameras.isEmpty { return "Operator Setup" }
-        return "Find your camera"
-    }
-
-    private var statusTitle: String {
-        if model.session.isReconnecting { return "Reconnecting" }
-        return StartupConnectionCopy.statusTitle(
-            for: model.session.phase,
-            isDiscovering: model.isScanning || (model.shouldShowWizard && !model.isLive)
-        )
-    }
-
-    private var isBusy: Bool { model.isBusy }
 }

@@ -1,3 +1,4 @@
+import MonitorPresentation
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -7,6 +8,7 @@ import UIKit
 /// The feed is an explicit 16:9 **full-height** well, leading-shifted for the island — not a
 /// `resizeAspect`-centered island that then hosts chrome.
 struct LiveMonitorLayout: Equatable {
+    var presentation: FieldMonitorLayout? = nil
     var viewport: CGSize
     /// Cinema 16:9 well — lock, deck, rail, and bottom bars stay on this even
     /// when the Pocket screen is flipped to a 9:16 picture.
@@ -187,29 +189,6 @@ struct LiveMonitorLayout: Equatable {
         }
     }
 
-    static var sceneSize: CGSize? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene =
-            scenes.first { $0.activationState == .foregroundActive }
-            ?? scenes.first { $0.activationState == .foregroundInactive }
-            ?? scenes.first
-        let size = scene?.coordinateSpace.bounds.size ?? .zero
-        return size.width > 0 ? size : nil
-    }
-
-    /// UIKit insets for full-screen panels. SwiftUI `GeometryReader.safeAreaInsets` is 0
-    /// after a parent `ignoresSafeArea` — OpenZCine reads the window the same way.
-    static var sceneSafeArea: EdgeInsets {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene =
-            scenes.first { $0.activationState == .foregroundActive }
-            ?? scenes.first { $0.activationState == .foregroundInactive }
-            ?? scenes.first
-        guard let insets = scene?.keyWindow?.safeAreaInsets else { return EdgeInsets() }
-        return EdgeInsets(
-            top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
-    }
-
     private static func deviceOrientation() -> UIInterfaceOrientation {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene =
@@ -226,12 +205,29 @@ struct LiveMonitorLayout: Equatable {
 @Observable
 final class InterfaceOrientationObserver {
     private(set) var orientation = LiveMonitorLayout.monitorDeviceOrientation()
+    @ObservationIgnored private let notificationCenter: NotificationCenter
     @ObservationIgnored private var geometryObservation: NSKeyValueObservation?
     @ObservationIgnored private var deviceObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var isObserving = false
+
+    init(notificationCenter: NotificationCenter = .default) {
+        self.notificationCenter = notificationCenter
+    }
+
+    deinit {
+        geometryObservation?.invalidate()
+        if let deviceObserver { notificationCenter.removeObserver(deviceObserver) }
+        if isObserving {
+            Task { @MainActor in UIDevice.current.endGeneratingDeviceOrientationNotifications() }
+        }
+    }
 
     func start() {
         refresh()
-        guard geometryObservation == nil else { return }
+        // A scene is not guaranteed during launch or an app transition. The
+        // notification subscription is still live when there is no KVO token.
+        guard !isObserving else { return }
+        isObserving = true
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene =
             scenes.first { $0.activationState == .foregroundActive }
@@ -241,11 +237,21 @@ final class InterfaceOrientationObserver {
             Task { @MainActor [weak self] in self?.refresh() }
         }
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-        deviceObserver = NotificationCenter.default.addObserver(
+        deviceObserver = notificationCenter.addObserver(
             forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.refresh() }
         }
+    }
+
+    func stop() {
+        guard isObserving else { return }
+        isObserving = false
+        geometryObservation?.invalidate()
+        geometryObservation = nil
+        if let deviceObserver { notificationCenter.removeObserver(deviceObserver) }
+        deviceObserver = nil
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
     }
 
     private func refresh() {
@@ -576,6 +582,19 @@ extension LiveMonitorLayout {
     /// Stick + zoom (+ gimbal-controls button beside zoom). Trailing-bottom of
     /// the cinema well — not glued to record. Same cluster in every orientation.
     func gimbalCluster(showGimbalButton: Bool = false) -> GimbalCluster {
+        if let presentation {
+            var cluster = GimbalCluster.inTrailingBottom(
+                well: MonitorLayoutRegion(
+                    x: 0, y: 0, width: viewport.width, height: viewport.height),
+                floorY: viewport.height, canvasMaxY: viewport.height)
+            cluster.stick = presentation.stick.coreRegion
+            cluster.zoom = presentation.zoom.coreRegion
+            cluster.controls =
+                showGimbalButton
+                ? presentation.gimbal.coreRegion
+                : MonitorLayoutRegion(x: 0, y: 0, width: 0, height: 0)
+            return cluster
+        }
         let inset = Double(LiveChromeMetrics.gimbalStickInset)
         let gap = Double(LiveChromeMetrics.gimbalStickGap)
         var barTop = Double.greatestFiniteMagnitude
@@ -646,6 +665,7 @@ extension LiveMonitorLayout {
     /// OpenZCine recenter key. Landscape: just past the battery, toward the feed,
     /// above the assist bar. Portrait: bottom-right of the feed.
     var focusReset: CGRect {
+        if let presentation { return presentation.focusReset.cgRect }
         let size = LiveChromeMetrics.focusResetSize
         if viewport.height > viewport.width {
             let well = onFeed
@@ -736,18 +756,20 @@ enum LivePopupPlacement {
         min(max(desired, minX), max(minX, maxX - width))
     }
 
-    /// OpenZCine `topPickerBody`: 340-wide card, centred on the cell, 8pt under `cell.maxY`.
+    /// Field Monitor top category drum. A missing cell uses the viewport center;
+    /// the physical safe-area band always wins over the preferred card width.
     static func topPicker(
         cell: CGRect,
         panelHeight: CGFloat,
         viewport: CGSize,
         safeArea: EdgeInsets,
         floorY: CGFloat? = nil,
-        preferredWidth: CGFloat = LiveChromeMetrics.topPickerWidth,
+        preferredWidth: CGFloat? = nil,
         gap: CGFloat = LiveChromeMetrics.topPickerGap
     ) -> Box {
         let band = horizontalBand(
-            preferredWidth: preferredWidth,
+            preferredWidth: preferredWidth
+                ?? (min(viewport.width, viewport.height) >= 600 ? 620 : 480),
             viewportWidth: viewport.width,
             safeLeading: safeArea.leading,
             safeTrailing: safeArea.trailing,
@@ -755,7 +777,7 @@ enum LivePopupPlacement {
         )
         let hasCell = cell.width > 1 && cell.height > 1
         let x = leadingX(
-            desired: hasCell ? cell.midX - band.width / 2 : band.minX,
+            desired: hasCell ? cell.midX - band.width / 2 : (viewport.width - band.width) / 2,
             width: band.width,
             minX: band.minX,
             maxX: band.maxX
@@ -771,8 +793,8 @@ enum LivePopupPlacement {
         return Box(x: x, y: y, width: band.width, maxHeight: max(0, floor - y))
     }
 
-    /// OpenZCine `bottomPickerBody`: 420 cap, 10pt above the capture bar, centred on the
-    /// originating tile (or the bar when the tile frame is missing).
+    /// Bottom category drum, above the capture/system rail. Its maximum width
+    /// follows the viewport class and is independent of the originating value's width.
     static func capturePicker(
         tile: CGRect,
         bar: CGRect,
@@ -780,11 +802,11 @@ enum LivePopupPlacement {
         viewport: CGSize,
         safeArea: EdgeInsets,
         ceilingY: CGFloat = 0,
-        preferredWidth: CGFloat = LiveChromeMetrics.capturePickerMaxWidth,
+        preferredWidth: CGFloat? = nil,
         gap: CGFloat = LiveChromeMetrics.popupGap
     ) -> Box {
         let hasBar = bar.width > 1
-        let widthPref = hasBar ? min(bar.width, preferredWidth) : preferredWidth
+        let widthPref = preferredWidth ?? (min(viewport.width, viewport.height) >= 600 ? 620 : 480)
         let band = horizontalBand(
             preferredWidth: widthPref,
             viewportWidth: viewport.width,
@@ -873,5 +895,38 @@ extension View {
         self
             .frame(width: rect.width, height: rect.height, alignment: alignment)
             .position(x: rect.midX, y: rect.midY)
+    }
+}
+
+// The compatibility layout keeps existing scope/popup interfaces stable while
+// live chrome consumes the brand-neutral engine geometry.
+extension LiveMonitorLayout {
+    static func fieldMonitor(
+        size: CGSize, safeArea: EdgeInsets, sourceAspect: CGFloat,
+        fill: Bool, showsValues: Bool, showsBottomBars: Bool,
+        topControlInset: CGFloat = 0
+    ) -> Self {
+        let p = FieldMonitorLayout(
+            width: size.width, height: size.height,
+            safeArea: MonitorSafeArea(
+                top: safeArea.top, leading: safeArea.leading,
+                bottom: safeArea.bottom, trailing: safeArea.trailing),
+            sourceAspect: sourceAspect, fill: fill, showsValues: showsValues,
+            topControlInset: topControlInset)
+        return Self(
+            presentation: p, viewport: size, feed: p.picture.cgRect, picture: p.picture.cgRect,
+            lock: p.lock.cgRect, battery: p.gauges.cgRect, topDeck: p.status.cgRect,
+            assist: p.assists.cgRect, capture: p.values.cgRect,
+            rail: p.system.cgRect, settings: p.settings.cgRect, media: p.media.cgRect,
+            record: p.record.cgRect, disp: p.display.cgRect,
+            isWidthConstrained: !p.tablet && size.width < 740,
+            showsBottomBars: showsBottomBars, safeArea: safeArea)
+    }
+}
+
+extension MonitorRect {
+    var cgRect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+    var coreRegion: MonitorLayoutRegion {
+        MonitorLayoutRegion(x: x, y: y, width: width, height: height)
     }
 }

@@ -4,11 +4,6 @@ import XCTest
 @testable import OpenPocketCine
 
 final class AssistBarChromeTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        LiveChromeMetrics.scale = 1
-    }
-
     func testToolbarOmitsLevelAndDesqueeze() {
         XCTAssertEqual(
             LiveAssistTool.toolbarCases,

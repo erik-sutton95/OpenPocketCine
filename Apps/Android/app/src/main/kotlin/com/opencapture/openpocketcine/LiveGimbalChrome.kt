@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,7 +105,6 @@ fun LiveGimbalButton(
     Box(
         modifier
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
-            .monitorGlass(CircleShape)
             .chromeClickable(enabled = !locked, onClick = onClick)
             .semantics { contentDescription = "Gimbal controls" },
         contentAlignment = Alignment.Center,
@@ -128,50 +129,25 @@ fun LiveGimbalSheetHost(
     safeTop: Float,
     safeBottom: Float,
 ) {
-    val density = LocalDensity.current
-    var panelHeight by remember { mutableFloatStateOf(280f) }
-    val tile = cluster.controls
-    val bar = floorBar(layout, cluster)
-    val place =
-        LivePopupPlacement.capturePicker(
-            tile = tile,
-            bar = bar,
-            panelHeight = panelHeight,
-            viewportWidth = layout.viewportWidth,
-            viewportHeight = layout.viewportHeight,
-            safeLeading = safeLeading,
-            safeTrailing = safeTrailing,
-            safeTop = safeTop,
-            safeBottom = safeBottom,
-            ceilingY = max(LivePopupPlacement.EDGE_MARGIN, max(safeTop + LivePopupPlacement.ASSIST_TOP_INSET, 0f)),
-            preferredWidth = SHEET_WIDTH_DP,
-        )
+    val portrait = layout.viewportHeight > layout.viewportWidth
+    val width = min(312f, layout.viewportWidth * .66f)
+    val height = if (portrait) min(layout.onFeed.height * .52f, layout.viewportHeight * .52f).coerceAtLeast(280f)
+        else layout.viewportHeight
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
-    val revealed by
-        animateFloatAsState(
-            if (shown) 1f else 0f,
-            tween(200, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-            label = "gimbal-sheet-reveal",
-        )
-    val slide = place.maxHeight + 20f
-    Box(
-        Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures { model.liveGimbalPanel = LiveGimbalPanel.NONE }
-            },
-    ) {
-        Box(
-            Modifier
-                .offset(place.x.dp, (place.y + (1f - revealed) * slide).dp)
-                .width(place.width.dp)
-                .heightIn(max = place.maxHeight.dp)
-                .graphicsLayer { alpha = revealed }
-                .onSizeChanged { panelHeight = it.height / density.density }
-                .pointerInput(Unit) { detectTapGestures { } },
-        ) {
-            LiveGimbalSheet(model, maxHeightDp = place.maxHeight)
+    val reveal by animateFloatAsState(if (shown) 1f else 0f,
+        tween(150, easing = CubicBezierEasing(.16f, 1f, .3f, 1f)), label = "gimbal-drawer")
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        detectTapGestures { model.liveGimbalPanel = LiveGimbalPanel.NONE }
+    }) {
+        Box(Modifier.align(Alignment.CenterEnd).width(width.dp).height(height.dp)
+            .graphicsLayer { translationX = (1f - reveal) * size.width; alpha = reveal }
+            .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+            .padding(top = if (portrait) 8.dp else max(16f, safeTop + 10f).dp,
+                end = max(14f, safeTrailing + 10f).dp,
+                bottom = if (portrait) 8.dp else max(12f, safeBottom).dp)
+            .pointerInput(Unit) { detectTapGestures { } }) {
+            LiveGimbalSheet(model, maxHeightDp = height - 24f, embedded = true)
         }
     }
 }
@@ -212,18 +188,9 @@ fun LiveGimbalOverlay(
                 layout.viewportHeight - max(8f, layout.safeTop) - max(8f, layout.safeBottom),
             ),
         )
-    val defaultEditor =
-        Offset(
-            min(max(feed.minX + 16f + EDITOR_WIDTH_DP / 2f, 16f + EDITOR_WIDTH_DP / 2f),
-                layout.viewportWidth - 16f - EDITOR_WIDTH_DP / 2f),
-            min(max(feed.midY, 140f), layout.viewportHeight - 180f),
-        )
-    val defaultPill =
-        Offset(
-            defaultEditor.x,
-            min(feed.maxY - 36f, layout.viewportHeight - 80f),
-        )
-    Box(Modifier.fillMaxSize()) {
+    val defaultTopCenter = Offset(layout.viewportWidth / 2f,
+        max(16f, (layout.viewportHeight - 430f) / 2f))
+    Box(Modifier.fillMaxSize().zIndex(if (panel == LiveGimbalPanel.EDITOR) 1f else 0f)) {
         if (live != null &&
             (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running)
         ) {
@@ -272,23 +239,28 @@ fun LiveGimbalOverlay(
             }
         }
         if (panel == LiveGimbalPanel.EDITOR) {
+            // The full editor owns outside taps: minimizing must not also
+            // trigger Record, focus, or a gimbal gesture beneath the window.
+            Box(Modifier.fillMaxSize().chromeClickable {
+                model.liveGimbalPanel = LiveGimbalPanel.RUN_PILL
+            }.semantics { contentDescription = "Minimize Motion Control" })
             GimbalFloatMove(
                 model = model,
                 sizeHintW = EDITOR_WIDTH_DP,
                 sizeHintH = 280f,
                 bounds = bounds,
-                defaultCenter = defaultEditor,
+                defaultTopCenter = defaultTopCenter,
             ) {
-                LiveGimbalEditor(model, program, running)
+                LiveGimbalEditor(model, program, running, maxHeightDp = bounds.height)
             }
         }
         if (panel == LiveGimbalPanel.RUN_PILL) {
             GimbalFloatMove(
                 model = model,
-                sizeHintW = 200f,
+                sizeHintW = 172f,
                 sizeHintH = 44f,
                 bounds = bounds,
-                defaultCenter = defaultPill,
+                defaultTopCenter = defaultTopCenter,
                 immediateDrag = true,
             ) {
                 LiveGimbalRunPill(model, program, running)
@@ -303,7 +275,7 @@ private fun GimbalFloatMove(
     sizeHintW: Float,
     sizeHintH: Float,
     bounds: ChromeRect,
-    defaultCenter: Offset,
+    defaultTopCenter: Offset,
     immediateDrag: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -312,11 +284,11 @@ private fun GimbalFloatMove(
     var measuredW by remember { mutableFloatStateOf(sizeHintW) }
     var measuredH by remember { mutableFloatStateOf(sizeHintH) }
     var origin by remember { mutableStateOf<Offset?>(null) }
+    var moved by remember { mutableStateOf(false) }
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    LaunchedEffect(Unit) {
-        if (model.gimbalFloatCenter == null) model.gimbalFloatCenter = defaultCenter
-    }
-    val raw = model.gimbalFloatCenter ?: defaultCenter
+    // Opening, minimizing and rotating do not turn a default into a manual
+    // position. Only a real drag stores a center; defaults follow the viewport.
+    val raw = model.gimbalFloatCenter ?: defaultTopCenter.copy(y = defaultTopCenter.y + measuredH / 2f)
     val center = clampCenter(raw, measuredW, measuredH, bounds)
     val currentCenter by rememberUpdatedState(center)
     val dragModifier = Modifier
@@ -326,9 +298,12 @@ private fun GimbalFloatMove(
                     immediate = immediateDrag,
                     onHold = {
                         origin = currentCenter
+                        moved = false
                         haptics.confirm()
                     },
-                    onDrag = { translation ->
+                    onDrag = drag@{ translation ->
+                        if (!moved && translation == Offset.Zero) return@drag
+                        moved = true
                         val start = origin ?: currentCenter
                         val dx = translation.x / density.density
                         val dy = translation.y / density.density
@@ -341,7 +316,7 @@ private fun GimbalFloatMove(
                             )
                         model.gimbalFloatCenter = next
                     },
-                    onEnd = { origin = null },
+                    onEnd = { origin = null; moved = false },
                     toRoot = { local -> coords?.localToRoot(local) ?: local },
                 )
             }
@@ -366,100 +341,59 @@ private enum class GimbalSettingsTab(val title: String) {
 }
 
 @Composable
-private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float) {
-    var selectedTab by remember { mutableStateOf(GimbalSettingsTab.MODE) }
+private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float, embedded: Boolean = false) {
     val mode by model.session.gimbalMode.collectAsState()
     val speed by model.session.gimbalSpeed.collectAsState()
     val program by model.session.gimbalProgram.collectAsState()
-    Column(
-        Modifier
-            .monitorGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .heightIn(max = maxHeightDp.dp)
-            .padding(top = 10.dp, start = 20.dp, end = 20.dp, bottom = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().heightIn(max = maxHeightDp.dp)
+        .then(if (embedded) Modifier else Modifier.pickerPanelGlass(RoundedCornerShape(16.dp)))
+        .verticalScroll(rememberScrollState()).padding(start = 14.dp, top = 8.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                GimbalHudCopy.TITLE.uppercase(),
-                color = LiveDesign.text,
-                style = LiveType.ui(18f, FontWeight.ExtraBold).copy(letterSpacing = 2.sp),
-                maxLines = 1,
-            )
+            Text("GIMBAL", style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.6.sp))
             Spacer(Modifier.weight(1f))
-            LivePopupCloseButton(
-                onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
-            )
+            LivePopupCloseButton(onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE })
         }
-        Row {
-            GimbalSettingsTab.entries.forEach { tab ->
-                Column(
-                    Modifier.weight(1f).heightIn(min = 44.dp)
-                        .selectable(selected = selectedTab == tab, role = Role.Tab) { selectedTab = tab }
-                        .padding(top = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(tab.title,
-                        color = if (selectedTab == tab) LiveDesign.text else LiveDesign.muted,
-                        style = LiveType.ui(13f, FontWeight.SemiBold))
-                    Box(Modifier.fillMaxWidth().height(2.dp)
-                        .background(if (selectedTab == tab) LiveDesign.accent else LiveDesign.hairline))
-                }
-            }
+        Text("MODE", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
+        com.opencapture.monitorui.MonitorValueDrum(GimbalMode.pickerOrder.map { it.label }, mode.label) { label ->
+            GimbalMode.pickerOrder.firstOrNull { it.label == label }?.let(model.session::setGimbalMode)
         }
-        Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).heightIn(min = 76.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            when (selectedTab) {
-                GimbalSettingsTab.MODE ->
-                    chipGrid(GimbalMode.pickerOrder, mode, { it.label }) { model.session.setGimbalMode(it) }
-                GimbalSettingsTab.SPEED ->
-                    chipRow(GimbalSpeed.pickerOrder, speed, { it.label }) { model.session.setGimbalSpeed(it) }
-                GimbalSettingsTab.RAMP ->
-                    chipRow(GimbalRamp.pickerOrder, model.gimbalRamp, { it.label }) { model.updateGimbalRamp(it) }
-            }
+        Text("SPEED", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
+        com.opencapture.monitorui.MonitorValueDrum(GimbalSpeed.pickerOrder.map { it.label }, speed.label) { label ->
+            GimbalSpeed.pickerOrder.firstOrNull { it.label == label }?.let(model.session::setGimbalSpeed)
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
-        Text("GIMBAL TOOLS", color = LiveDesign.muted,
-            style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = 0.8.sp))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(LiveDesign.glassBright, RoundedCornerShape(12.dp))
-                .chromeClickable(onClick = { model.liveGimbalPanel = LiveGimbalPanel.EDITOR })
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(GimbalHudCopy.PROGRAMMED, color = LiveDesign.text,
-                    style = LiveType.ui(14f, FontWeight.SemiBold))
-                Text("Experimental", color = LiveDesign.muted, style = LiveType.ui(11f, FontWeight.Medium))
+        Text("RAMP", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
+        chipRow(GimbalRamp.pickerOrder, model.gimbalRamp, { it.label }) { model.updateGimbalRamp(it) }
+        Row(Modifier.fillMaxWidth().padding(top = 7.dp)
+            .background(LiveDesign.accentDim, RoundedCornerShape(10.dp))
+            .chromeClickable { model.liveGimbalPanel = LiveGimbalPanel.EDITOR }
+            .padding(horizontal = 12.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Motion Control", style = LiveType.ui(11.5f, FontWeight.SemiBold))
+                Text("${program.summary} · Experimental", color = LiveDesign.muted, style = LiveType.ui(9f))
             }
-            Spacer(Modifier.weight(1f))
-            Text(
-                program.summary,
-                color = LiveDesign.muted,
-                style = LiveType.ui(14f, FontWeight.SemiBold),
-            )
+            OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(15.dp), LiveDesign.accent)
         }
     }
 }
 
 @Composable
-private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: Boolean) {
+private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: Boolean, maxHeightDp: Float) {
     val countdown by model.session.gimbalMoveCountdown.collectAsState()
     val paused by model.session.gimbalMovePaused.collectAsState()
     Column(
         Modifier
             .width(EDITOR_WIDTH_DP.dp)
-            .monitorGlass(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .padding(top = 10.dp, start = 14.dp, end = 14.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .heightIn(max = maxHeightDp.dp)
+            .background(com.opencapture.monitorui.MonitorPalette.overlayPanel, RoundedCornerShape(16.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(top = 10.dp, start = 12.dp, end = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(GimbalHudCopy.PROGRAMMED, color = LiveDesign.text,
-                style = LiveType.ui(15f, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text("MOTION CONTROL", color = LiveDesign.text,
+                style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.6.sp),
+                modifier = Modifier.weight(1f))
             Box(
                 Modifier
                     .size(30.dp)
@@ -486,15 +420,13 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
             duration = program.durationAB,
             floor = GimbalProgram.minTravelDuration(program.a, program.b),
         )
-        if (program.b != null) {
-            waypointRow(
-                model,
-                program,
-                GimbalWaypointSlot.C,
-                duration = program.durationBC,
-                floor = GimbalProgram.minTravelDuration(program.b, program.c),
-            )
-        }
+        waypointRow(
+            model,
+            program,
+            GimbalWaypointSlot.C,
+            duration = program.durationBC,
+            floor = GimbalProgram.minTravelDuration(program.b, program.c),
+        )
         if (program.b != null && program.c != null) {
             Text(String.format(java.util.Locale.US, "Smoothness %.2f", program.smoothness),
                 color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
@@ -530,56 +462,58 @@ private fun waypointRow(
     duration: Double?,
     floor: Double?,
 ) {
-    val set = program.point(slot) != null
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            slot.letter,
-            color = if (set) LiveDesign.accent else LiveDesign.text,
-            style = LiveType.ui(16f, FontWeight.Bold),
-            modifier = Modifier.width(20.dp),
-        )
-        Spacer(Modifier.weight(1f))
+    val point = program.point(slot)
+    val set = point != null
+    val readout = point?.takeIf { it.yawDeg.isFinite() && it.pitchDeg.isFinite() && it.zoom.isFinite() }?.let {
+        String.format(java.util.Locale.US, "PAN %+.0f°  TILT %+.0f°  %.1f×", it.yawDeg, it.pitchDeg, it.zoom)
+    } ?: "Not set"
+    com.opencapture.monitorui.MonitorOptionGroup {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(22.dp).background(
+                if (set) LiveDesign.accentDim else LiveDesign.glassBright, CircleShape),
+                contentAlignment = Alignment.Center) {
+                Text(slot.letter, color = if (set) LiveDesign.accent else LiveDesign.muted,
+                    style = LiveType.ui(10f, FontWeight.Bold))
+            }
+            Text(readout, color = if (set) LiveDesign.text else LiveDesign.muted,
+                style = LiveType.ui(10f, FontWeight.Medium), maxLines = 1,
+                modifier = Modifier.weight(1f))
+            Box(Modifier.height(44.dp).widthIn(min = 44.dp)
+                .testTag("motion.waypoint.${slot.letter}")
+                .chromeClickable(onClick = { model.session.setGimbalWaypoint(slot) })
+                .semantics {
+                    contentDescription = if (set) "Reset waypoint ${slot.letter}" else "Set waypoint ${slot.letter}"
+                    role = Role.Button
+                }, contentAlignment = Alignment.Center) {
+                Text(if (set) "RESET" else "SET",
+                    color = if (set) androidx.compose.ui.graphics.Color(0xFFDFE4E4)
+                        else androidx.compose.ui.graphics.Color(0xFF08191F),
+                    style = LiveType.ui(10f, FontWeight.Bold).copy(letterSpacing = .6.sp),
+                    modifier = Modifier.background(
+                        if (set) androidx.compose.ui.graphics.Color.White.copy(alpha = .07f) else LiveDesign.accent,
+                        RoundedCornerShape(8.dp),
+                    ).padding(horizontal = 11.dp, vertical = 7.dp))
+            }
+            if (set) {
+                Box(Modifier.size(44.dp).chromeClickable(onClick = { model.session.clearGimbalWaypoint(slot) }),
+                    contentAlignment = Alignment.Center) {
+                    OpcIcon(OpcIcon.X, contentDescription = "Clear ${slot.letter}",
+                        modifier = Modifier.size(12.dp), tint = LiveDesign.muted)
+                }
+            }
+        }
         if (set && duration != null && floor != null) {
-            DurationDial(
-                value = duration,
-                floor = floor,
-                label = slot.letter,
-                onDuration = { next ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (slot == GimbalWaypointSlot.B) "A → B" else "B → C",
+                    style = LiveType.ui(8.5f, FontWeight.SemiBold), color = LiveDesign.muted,
+                    modifier = Modifier.weight(1f))
+                DurationDial(value = duration, floor = floor, label = slot.letter, onDuration = { next ->
                     when (slot) {
                         GimbalWaypointSlot.B -> model.session.setGimbalLegDuration(ab = next)
                         GimbalWaypointSlot.C -> model.session.setGimbalLegDuration(bc = next)
                         GimbalWaypointSlot.A -> Unit
                     }
-                },
-            )
-        }
-        if (set) {
-            Box(Modifier.size(32.dp).testTag("motion.waypoint.${slot.letter}")
-                .background(LiveDesign.glassBright, CircleShape)
-                .chromeClickable(onClick = { model.session.setGimbalWaypoint(slot) }),
-                contentAlignment = Alignment.Center) {
-                OpcIcon(OpcIcon.REFRESH_CW, contentDescription = "Update ${slot.letter}",
-                    modifier = Modifier.size(15.dp), tint = LiveDesign.text)
-            }
-        } else {
-            Chip("Set", selected = false, compact = true,
-                modifier = Modifier.testTag("motion.waypoint.${slot.letter}")) {
-                model.session.setGimbalWaypoint(slot)
-            }
-        }
-        if (set) {
-            Box(
-                Modifier
-                    .size(26.dp)
-                    .chromeClickable(onClick = { model.session.clearGimbalWaypoint(slot) }),
-                contentAlignment = Alignment.Center,
-            ) {
-                OpcIcon(
-                    OpcIcon.X,
-                    contentDescription = "Clear ${slot.letter}",
-                    modifier = Modifier.size(12.dp),
-                    tint = LiveDesign.muted,
-                )
+                })
             }
         }
     }
@@ -590,7 +524,8 @@ private fun LiveGimbalRunPill(model: AppModel, program: GimbalProgram, running: 
     val countdown by model.session.gimbalMoveCountdown.collectAsState()
     val paused by model.session.gimbalMovePaused.collectAsState()
     Row(
-        Modifier.monitorGlass(RoundedCornerShape(50)),
+        Modifier.widthIn(min = 172.dp).monitorGlass(RoundedCornerShape(50)),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (running && countdown == null) {

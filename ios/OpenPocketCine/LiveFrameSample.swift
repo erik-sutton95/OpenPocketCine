@@ -311,6 +311,14 @@ final class LiveFrameSampleBus {
     /// Playback composition tap. Scope overlays prefer this while a clip is open.
     var playbackBundle: ScopeAssistBundle?
     @ObservationIgnored var sourcePixelBuffer: CVPixelBuffer?
+    /// One retained playback source for inspector previews. Live source remains
+    /// separate so closing a clip cannot briefly preview the wrong camera frame.
+    @ObservationIgnored var playbackSourcePixelBuffer: CVPixelBuffer?
+    @ObservationIgnored var playbackSourceTransfer: MonitorTransfer = .rec709
+    @ObservationIgnored var usesPlaybackSource = false
+    /// Changes only when the source changes, so an inspector can hide a prior
+    /// clip immediately without observing every retained decoded frame.
+    private(set) var inspectorSourceEpoch: UInt64 = 0
     var transfer: MonitorTransfer = .rec709
     var colorMode: ColorMode?
     /// Bumps when a new scope bundle lands (≤25 Hz). Present is not gated on this.
@@ -342,10 +350,25 @@ final class LiveFrameSampleBus {
 
     var displayBundle: ScopeAssistBundle { playbackBundle ?? bundle }
 
+    var inspectorSource: (buffer: CVPixelBuffer, transfer: MonitorTransfer)? {
+        if usesPlaybackSource {
+            return playbackSourcePixelBuffer.map { ($0, playbackSourceTransfer) }
+        }
+        return sourcePixelBuffer.map { ($0, transfer) }
+    }
+
+    func clearPlaybackSource() {
+        playbackSourcePixelBuffer = nil
+        playbackSourceTransfer = .rec709
+        inspectorSourceEpoch &+= 1
+    }
+
     func reset() {
         playbackBundle = nil
         bundle = .empty
         sourcePixelBuffer = nil
+        clearPlaybackSource()
+        usesPlaybackSource = false
         transfer = .rec709
         colorMode = nil
         generation = 0

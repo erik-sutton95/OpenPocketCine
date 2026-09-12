@@ -97,21 +97,21 @@ struct MultiviewNetworkSetup: View {
         VStack(spacing: 12) {
             Text("How will this device and your cameras connect?")
                 .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.secondary)
-            sourceButton("Local Wi-Fi", icon: "wifi", hotspot: false)
-            sourceButton("Personal Hotspot", icon: "personalhotspot", hotspot: true)
+            sourceButton("Local Wi-Fi", icon: .wifi, hotspot: false)
+            sourceButton("Personal Hotspot", icon: .radio, hotspot: true)
         }
     }
-    private func sourceButton(_ title: String, icon: String, hotspot: Bool) -> some View {
+    private func sourceButton(_ title: String, icon: OpcIcon, hotspot: Bool) -> some View {
         Button {
             session.selectNetworkSource(hotspot: hotspot)
             step = 1
             if !hotspot && !locked { startScan() }
         } label: {
             HStack {
-                Image(systemName: icon)
+                icon.frame(width: 20, height: 20)
                 Text(title)
                 Spacer()
-                Image(systemName: "chevron.right")
+                OpcIcon.chevronRight.frame(width: 16, height: 16)
             }
             .padding(16).frame(minHeight: 56)
             .background(
@@ -126,10 +126,13 @@ struct MultiviewNetworkSetup: View {
             Text("Cameras are using this network. Remove them before changing it.").font(.footnote)
             Button("Done", action: complete).buttonStyle(.borderedProminent).controlSize(.large)
         } else if session.usePhoneHotspot {
-            Label(
-                hotspotActive ? "Personal Hotspot is active" : "Personal Hotspot is not detected",
-                systemImage: hotspotActive ? "personalhotspot" : "exclamationmark.triangle"
-            )
+            Label {
+                Text(
+                    hotspotActive
+                        ? "Personal Hotspot is active" : "Personal Hotspot is not detected")
+            } icon: {
+                (hotspotActive ? OpcIcon.radio : OpcIcon.triangleAlert).frame(width: 20, height: 20)
+            }
             .foregroundStyle(hotspotActive ? Color.green : Color.orange)
             .accessibilityIdentifier("multiview.hotspotStatus")
             Text(
@@ -154,10 +157,10 @@ struct MultiviewNetworkSetup: View {
                         choose(name)
                     } label: {
                         HStack {
-                            Image(systemName: "wifi")
+                            OpcIcon.wifi.frame(width: 20, height: 20)
                             Text(name)
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            OpcIcon.chevronRight.frame(width: 16, height: 16)
                         }.padding(.vertical, 12).frame(minHeight: 48).contentShape(Rectangle())
                     }.disabled(session.busy || session.configuringNetwork)
                     Divider()

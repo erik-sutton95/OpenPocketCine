@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// Idle = Pocket well + thin coral ring. Recording fills that ring. Stopping dims the face.
@@ -13,7 +14,9 @@ enum LiveRecordChromeState: Equatable {
 
 /// Record / shutter on the right rail. Hit target stays `LiveChromeMetrics.recordButtonSize`.
 struct LiveRecordButton: View {
+    var diameter: CGFloat = LiveChromeMetrics.recordButtonSize
     @Environment(AppModel.self) private var model
+    @Environment(\.interfaceLocked) private var locked
 
     private var state: LiveRecordChromeState {
         if model.session.status.isRecording {
@@ -25,19 +28,24 @@ struct LiveRecordButton: View {
     @State private var confirmRecord = false
 
     var body: some View {
-        Button {
-            if model.recordConfirmationEnabled {
-                confirmRecord = true
-            } else {
-                model.session.pressShutter()
-            }
-        } label: {
-            RecordLamp(
-                diameter: LiveChromeMetrics.recordButtonSize, recording: state.isRecordingLook)
-        }
-        .buttonStyle(.zcTapTarget)
-        .disabled(model.session.controlBusy)
-        .opacity(state == .stopping ? 0.72 : 1)
+        MonitorRecordLamp(
+            diameter: diameter, recording: state.isRecordingLook,
+            photo: model.session.currentShootingMode?.isPhoto == true
+        )
+        .contentShape(Circle())
+        .gesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .exclusively(before: TapGesture())
+                .onEnded { gesture in
+                    guard !model.session.controlBusy, !locked else { return }
+                    switch gesture {
+                    case .first: model.captureSheet = .mode
+                    case .second: pressShutter()
+                    }
+                }
+        )
+        .disabled(model.session.controlBusy || locked)
+        .opacity(locked ? 0.4 : (state == .stopping ? 0.72 : 1))
         .sensoryFeedback(
             model.hapticsEnabled
                 ? .impact(weight: .heavy) : .impact(flexibility: .solid, intensity: 0),
@@ -57,10 +65,23 @@ struct LiveRecordButton: View {
             Button("Cancel", role: .cancel) {}
         }
         .accessibilityLabel(accessibility)
+        .accessibilityHidden(false)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { pressShutter() }
+        .accessibilityAction(named: "Shooting mode") { if !locked { model.captureSheet = .mode } }
         .accessibilityIdentifier(
             model.session.currentShootingMode?.isPhoto == true
                 ? "monitor.system.shutter" : "monitor.system.record"
         )
+    }
+
+    private func pressShutter() {
+        guard !model.session.controlBusy, !locked else { return }
+        if model.recordConfirmationEnabled {
+            confirmRecord = true
+        } else {
+            model.session.pressShutter()
+        }
     }
 
     private var accessibility: String {
@@ -79,61 +100,7 @@ struct LiveRecordButton: View {
 struct RecordLamp: View {
     let diameter: CGFloat
     let recording: Bool
-
-    @State private var pulse = false
-
-    /// Physical Pocket face — matte charcoal, lifted off DJI Black chrome.
-    private static let well = Color(red: 44 / 255, green: 43 / 255, blue: 43 / 255)
-    /// Pocket shutter ring — coral, not cinema tally red.
-    private static let pocketRing = Color(red: 227 / 255, green: 83 / 255, blue: 70 / 255)
-    /// Hardware ring is ~half the face. Stroke stays thin like the Pocket button.
-    private static let ringRatio: CGFloat = 0.50
-    private static let ringLineRatio: CGFloat = 0.026
-
-    var body: some View {
-        let glow = recording ? (pulse ? 0.55 : 0.22) : 0
-        let glowRadius: CGFloat = recording ? (pulse ? 10 : 4) : 0
-        let ring = diameter * Self.ringRatio
-        let ringLine = max(2.0, diameter * Self.ringLineRatio)
-
-        return ZStack {
-            Circle()
-                .fill(Self.well)
-            // Physical gap where the Pocket button sits in its housing.
-            Circle()
-                .strokeBorder(Color.black.opacity(0.55), lineWidth: 1.5)
-
-            if recording {
-                Circle()
-                    .fill(Self.pocketRing)
-                    .frame(width: ring, height: ring)
-            } else {
-                Circle()
-                    .strokeBorder(Self.pocketRing, lineWidth: ringLine)
-                    .frame(width: ring, height: ring)
-            }
-        }
-        .frame(width: diameter, height: diameter)
-        .shadow(color: Color.black.opacity(0.40), radius: 2, y: 1)
-        .shadow(color: Self.pocketRing.opacity(glow), radius: glowRadius)
-        .onAppear { syncPulse(recording) }
-        .onChange(of: recording) { _, rec in
-            syncPulse(rec)
-        }
-    }
-
-    private func syncPulse(_ recording: Bool) {
-        if recording {
-            pulse = false
-            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        } else {
-            withAnimation(.easeOut(duration: 0.16)) {
-                pulse = false
-            }
-        }
-    }
+    var body: some View { MonitorRecordLamp(diameter: diameter, recording: recording) }
 }
 
 /// REC tally on the physical screen bezel — OpenZCine `RecordingBorderModule`.

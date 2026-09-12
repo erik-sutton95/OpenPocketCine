@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
@@ -58,19 +59,19 @@ private fun startupType(size: Float, weight: FontWeight = FontWeight.Normal) =
 
 /** Pairing chrome — DJI Sky Blue `#00A3E0` on Black, no Nikon gold. */
 object StartupColors {
-    val surface: Color = Color(28 / 255f, 28 / 255f, 28 / 255f)
-    val tile: Color = Color(36 / 255f, 36 / 255f, 36 / 255f)
-    val control: Color = Color(94 / 255f, 98 / 255f, 98 / 255f)
+    val surface: Color = LiveDesign.surface
+    val tile: Color = LiveDesign.tile
+    val control: Color = LiveDesign.tile
     val ink: Color = Color.White
-    val muted: Color = Color(160 / 255f, 165 / 255f, 165 / 255f)
+    val muted: Color = LiveDesign.muted
     val dim: Color = Color(94 / 255f, 98 / 255f, 98 / 255f)
     val border: Color = Color.White
-    val card: Color = surface.copy(alpha = 0.58f)
-    val accent: Color = Color(0f, 163 / 255f, 230 / 255f)
+    val card: Color = LiveDesign.surface
+    val accent: Color = LiveDesign.accent
     val ready: Color = Color(0.247f, 0.710f, 0.416f)
     val destructive: Color = Color(0.930f, 0.267f, 0.267f)
     val darkText: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
-    val backdropBase: Color = Color(20 / 255f, 20 / 255f, 20 / 255f)
+    val backdropBase: Color = LiveDesign.background
     /**
      * Operator Setup wash. iOS uses Sky Blue at 10% / 760 pt; Android is 20%
      * quieter and tighter on top of the OLED dim (6% / 608 pt).
@@ -78,33 +79,7 @@ object StartupColors {
     val backdropGlow: Color = Color(0f, 163 / 255f, 230 / 255f, 0.06f)
 }
 
-fun Modifier.startupBackdrop(): Modifier = drawBehind {
-    drawRect(StartupColors.backdropBase)
-    // iOS `RadialGradient` endRadius 760 on ~956×440 pt landscape. Android
-    // uses 80% of that (608) so the wash does not bloom as far, still
-    // fraction-of-the-window so a shorter-dp device does not fill the screen.
-    // Fade to DJI black at 0, not cyan at 0, so chroma collapses the way
-    // SwiftUI interpolates.
-    val radius =
-        minOf(
-            608.dp.toPx(),
-            size.maxDimension * (608f / 956f),
-            size.minDimension * (608f / 440f),
-        )
-    val inner = (8.dp.toPx() / radius).coerceIn(0f, 0.2f)
-    drawRect(
-        Brush.radialGradient(
-            colorStops =
-                arrayOf(
-                    0f to StartupColors.backdropGlow,
-                    inner to StartupColors.backdropGlow,
-                    1f to StartupColors.backdropBase.copy(alpha = 0f),
-                ),
-            center = Offset(size.width * 0.5f, size.height * 0.24f),
-            radius = radius,
-        )
-    )
-}
+fun Modifier.startupBackdrop(): Modifier = background(StartupColors.backdropBase)
 
 /**
  * Fades out the bottom edge of a scrollable viewport while more content lies
@@ -139,20 +114,20 @@ fun Modifier.fadeOverflowBottom(scrollState: ScrollState, height: Dp = 28.dp): M
 }
 
 fun Modifier.startupCard(): Modifier =
-    clip(RoundedCornerShape(20.dp))
+    clip(RoundedCornerShape(13.dp))
         .background(StartupColors.card)
-        .border(1.dp, StartupColors.border.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+        .border(1.dp, StartupColors.border.copy(alpha = 0.08f), RoundedCornerShape(13.dp))
 
 /** Inner tile/row surface (iOS 14pt-radius tile). */
 fun Modifier.startupTile(borderColor: Color = StartupColors.border.copy(alpha = 0.10f)): Modifier =
-    clip(RoundedCornerShape(14.dp))
-        .background(StartupColors.tile.copy(alpha = 0.45f))
-        .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+    clip(RoundedCornerShape(13.dp))
+        .background(StartupColors.tile)
+        .border(1.dp, borderColor, RoundedCornerShape(13.dp))
 
 fun Modifier.startupInstructionCard(): Modifier =
-    clip(RoundedCornerShape(16.dp))
+    clip(RoundedCornerShape(11.dp))
         .background(StartupColors.card)
-        .border(1.dp, StartupColors.border.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+        .border(1.dp, StartupColors.border.copy(alpha = 0.10f), RoundedCornerShape(11.dp))
 
 fun ConnectionPhase.isBusy(): Boolean =
     when (this) {
@@ -471,9 +446,9 @@ fun StartupQuietButton(
     Box(
         modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(StartupColors.control.copy(alpha = if (enabled) 0.66f else 0.45f))
-            .border(1.dp, StartupColors.border.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+            .border(1.dp, StartupColors.border.copy(alpha = 0.08f), RoundedCornerShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
@@ -495,7 +470,7 @@ fun StartupFilledButton(
     Box(
         modifier
             .height(height)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(if (enabled) StartupColors.accent else StartupColors.control.copy(alpha = 0.6f))
             .clickable(enabled = enabled, onClick = onClick)
             .alpha(if (enabled) 1f else 0.55f)
@@ -522,9 +497,9 @@ fun StartupOutlineButton(
     Row(
         modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(StartupColors.control.copy(alpha = if (enabled) 0.82f else 0.55f))
-            .border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .alpha(if (enabled) 1f else 0.55f)
             .padding(horizontal = 14.dp),
@@ -549,9 +524,9 @@ fun StartupYourCamerasButton(
     Row(
         modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(StartupColors.control.copy(alpha = if (enabled) 0.82f else 0.55f))
-            .border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .alpha(if (enabled) 1f else 0.55f)
             .padding(horizontal = 14.dp),
@@ -580,13 +555,13 @@ fun StartupConnectChrome(
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         modifier =
-            Modifier.clip(RoundedCornerShape(16.dp))
+            Modifier.clip(RoundedCornerShape(11.dp))
                 .background(
                     if (filled) StartupColors.accent else StartupColors.control.copy(alpha = 0.82f)
                 )
                 .then(
                     if (filled) Modifier
-                    else Modifier.border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                    else Modifier.border(1.dp, StartupColors.border.copy(alpha = 0.12f), RoundedCornerShape(11.dp))
                 )
                 .alpha(if (enabled) 1f else 0.4f)
                 .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -597,9 +572,9 @@ fun StartupConnectChrome(
 fun StartupInfoBanner(text: String, tight: Boolean = false) {
     Row(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(StartupColors.surface.copy(alpha = 0.72f))
-            .border(1.dp, StartupColors.accent.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+            .border(1.dp, StartupColors.accent.copy(alpha = 0.28f), RoundedCornerShape(11.dp))
             .padding(horizontal = if (tight) 10.dp else 12.dp, vertical = if (tight) 8.dp else 10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 10.dp),

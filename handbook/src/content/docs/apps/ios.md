@@ -7,6 +7,28 @@ The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
 project with XcodeGen — see [Setup](../guides/setup/).
 
+## Field Monitor interface
+
+The native UI uses Sora typography, cyan controls and dark panels. Portrait
+phones place exposure values in two rows above the system buttons; landscape
+puts those values along the bottom of the picture. **REC SETUP** opens capture
+format, color and shooting options. Drag a value drum to select a supported
+camera value; lift to apply it. Hold Record to open shooting mode.
+
+The View Assist palette collapses into the picture corner. Expand it for the
+full catalog; tap a tool to toggle it or hold to open its options inspector.
+Hold the zoom value for a continuous dial. Its limits and recording restrictions
+remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
+experimental Motion Control editor in a trailing drawer.
+
+Operator Setup and Media use a navigation rail in landscape and scrolling tabs
+in portrait. Media retains grid/list views, selection, favorites, cache state,
+playback assists and the existing delivery actions.
+
+On iPad, the interface reflows as you resize the app window. System window buttons
+stay clear of the monitor controls. Camera-connected use while resizing is still
+under physical iPad validation.
+
 ## Moving scopes
 
 Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
@@ -59,10 +81,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   The gimbal stick
   and zoom chip sit together as a cluster in the trailing-bottom of the
   picture — the same on iPhone and iPad, portrait and landscape. A
-  gimbal-controls button sits beside zoom (Pocket only). That sheet parks
-  like a capture picker. Mode / Speed / Ramp tabs reveal their settings below:
-  Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast, and stick ramp.
-  A separate Gimbal tools footer opens experimental Motion Control for an A→B (optional C) take
+  gimbal-controls button sits beside zoom (Pocket only). Its trailing drawer
+  has inline Mode, Speed and Ramp drums: Follow / Tilt locked / FPV / Direction Lock,
+  Slow / Default / Fast, and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take
   (set A and B, choose each leg’s duration; hold and drag
   anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
   Zero hits B exactly; higher values bypass B while preserving A/C and total
@@ -139,10 +160,10 @@ dedicated physical acceptance. The earlier one-iPad smoothness report does not
 qualify those newer flows or multiple wireless watchers. See the
 [watcher relay evidence](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/watcher-relay.md).
 
-On **Your cameras**, the selected row shows connection progress and **Cancel**,
-including while looking for an offline camera. The eye button in the camera-list
-header opens **Watch a feed**, beside the Multiview grid button. Pair new camera,
-Media library, and Settings remain on the intro card.
+On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
+new discoveries. Select a camera to see its connection progress and **Cancel**.
+**Pair new camera** opens the guided flow; select a discovered camera, then
+**Continue**. Media and Settings remain available without connecting.
 
 **Multiview** is an experimental iPhone/iPad stage for several cameras on shared
 Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add
@@ -154,7 +175,12 @@ Nano preview and recording have been checked together on iPhone. Pocket 3
 recovery after an app switch required a full rejoin and roughly a minute in the
 recorded test. Android Multiview remains unavailable.
 
-Motion Control durations use half-second dials up to 120 seconds. Swipe left
+Tap Layout to switch Grid/Center stage; hold Layout for Shared Wi-Fi. Clean
+hides the upper session controls and assist palette; DISP restores them.
+
+Motion Control shows A, B and C with their reported pan, tilt and zoom, or
+**Not set**. Tap outside the editor to minimize it without activating the
+controls behind it. Durations use half-second dials up to 120 seconds. Swipe left
 to increase duration and right to decrease it. Move the expanded
 window by holding anywhere, or drag the minimized pill directly. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second

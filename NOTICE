@@ -6,15 +6,18 @@ Third-party software distributed with this product is listed in THIRD-PARTY-NOTI
 The portable .cube parser (`CubeLUT`) is adapted from OpenZCine (Apache 2.0).
 
 Bundled UI typefaces (SIL Open Font License 1.1; copies in
-`ios/OpenPocketCine/Resources/Fonts/`):
+`Sources/MonitorUI/Resources/Fonts/` and `Apps/Android/monitor-ui/src/main/assets/`):
 - Sora, Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
-- IBM Plex Sans, Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
 
 Bundled HUD icons from Lucide (ISC; Feather-derived glyphs also MIT; copies in
-ios/OpenPocketCine/Resources/Icons/lucide/ and
-Apps/Android/app/src/main/assets/icons/lucide/):
+Sources/MonitorUI/Resources/Icons/lucide/ and
+Apps/Android/monitor-ui/src/main/assets/icons/lucide/):
 - Lucide, Copyright 2026 Lucide Icons and Contributors
   (https://github.com/lucide-icons/lucide)
+
+Custom View Assist glyphs extracted from the approved Field Monitor design include
+Tabler-derived paths (MIT; LICENSE-Tabler.txt in the shared assist icon folders):
+- Copyright (c) 2020-2026 Paweł Kuna (https://github.com/tabler/tabler-icons)
 
 This project is not affiliated with or endorsed by SZ DJI Technology Co., Ltd.
 "DJI", "Osmo", "Osmo Pocket", and "Mimo" are trademarks of SZ DJI Technology Co., Ltd.,

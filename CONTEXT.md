@@ -7,7 +7,26 @@ code and in `docs/`; this file is the glossary only.
 
 **Core**:
 The portable Swift protocol and business-logic package (`OpenPocketViewCore`).
-_Avoid_: SDK, engine, shared module
+_Avoid_: SDK; using engine or shared module as a synonym for this protocol target
+
+**Shared monitor engine**:
+The multi-brand architecture spanning reusable monitoring presentation, assists,
+media/playback and delivery. It is a direction, not another name for the Osmo
+protocol core. Current extraction: `MonitorPresentation` and `MonitorUI`.
+See [Shared Monitor Engine](docs/SHARED-MONITOR-ENGINE.md) and the
+[implemented boundary](docs/ARCHITECTURE.md#shared-monitor-presentation).
+_Avoid_: claiming the full engine migration is complete from shared styling alone
+
+**Monitor presentation**:
+`MonitorPresentation` owns portable geometry, capability gates and screen value
+models. `MonitorUI` supplies native SwiftUI pages and controls consuming those
+values and injected actions. Neither owns camera connection or signal mapping.
+_Avoid_: duplicating a page per camera brand
+
+**Capability**:
+An explicit backend-reported feature that controls a shared presentation slot,
+such as gimbal, focus, zoom or iris. Identity is display data, not a feature gate.
+_Avoid_: switching shared UI on manufacturer names
 
 **Shell**:
 The platform app that owns I/O and UI: SwiftUI on iOS, Compose on Android.

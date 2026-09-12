@@ -24,6 +24,7 @@ internal fun rememberLiveFeedEffectsPlan(
     cameraName: String?,
     playback: Boolean = false,
     clipColorMode: Int = -1,
+    previewTool: com.opencapture.openpocketcine.assists.LiveAssistTool? = null,
 ): FeedEffectsRenderPlan {
     val context = LocalContext.current
     var plan by remember { mutableStateOf(FeedEffectsRenderPlan.IDENTITY) }
@@ -55,7 +56,9 @@ internal fun rememberLiveFeedEffectsPlan(
     val lutExposureStops = assist.lutExposureStops
     LaunchedEffect(
         playback,
+        previewTool,
         playbackTools,
+        assist.inspectorScopeDemand,
         lutOn,
         lutSelection,
         peaking,
@@ -89,7 +92,7 @@ internal fun rememberLiveFeedEffectsPlan(
         clipColorMode,
     ) {
         val app = context.applicationContext
-        if (!playback && status.colorMode >= 0) {
+        if (!playback && previewTool == null && status.colorMode >= 0) {
             OperatorPrefs.setLastMonitorColorMode(app, status.colorMode)
         }
         val colorMode =
@@ -113,6 +116,7 @@ internal fun rememberLiveFeedEffectsPlan(
                     family = family,
                     cameraName = cameraName,
                     playback = playback,
+                    previewTool = previewTool,
                 )
             }
     }

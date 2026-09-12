@@ -1,17 +1,18 @@
 New and changed
 
-- Recovery shows the current connection stage and keeps Retry and Operator menu available. Share Diagnostics includes more detail about uneven live video.
-- Gimbal controls use Mode, Speed and Ramp tabs. Drag and resize scopes, LIGHTS and ND; Your cameras shows progress and Cancel.
+- UI 2.0 adds Sora type, Lucide icons, adaptive camera/settings/media pages, and redesigned monitor controls for phones and tablets.
+- Tap a camera value for its picker; hold or drag for a temporary drum. Hold Zoom for the lens dial. View Assist expands from a compact palette with scope previews.
+- Gimbal Mode, Speed and Ramp use inline drums. Drag and resize scopes, LIGHTS and ND. Your cameras shows connection progress and Cancel.
 
 Fixes
 
-- App return checks camera Wi-Fi and reconnects when needed. Recovery waits for a new picture and stops automatic retries after a bounded interval.
-- Reconnect starts a fresh camera session; old control requests cannot carry over. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
-- Live rendering now synchronizes the completed frame with presentation. Please check motion smoothness on your phone.
+- Playback controls, clip info and sharing support accessibility focus. Record stays reachable above the zoom dial, and tablet controls avoid collisions.
+- App return checks camera Wi-Fi. Recovery waits for a new picture, shows its current stage and bounds automatic retries; old control requests cannot cross reconnects.
+- Live rendering synchronizes completed frames with presentation. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
 - Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
 
 What to test
 
-- On Pocket 4 Pro, compare static shots and slow pans with LUT/scopes off and on, especially on Redmi and Samsung. Share diagnostics with the time of any stutter.
-- Try joystick and gimbal modes immediately after first picture. Leave the app for 15 and 60 seconds; check recovery after a camera Wi-Fi change or camera power cycle.
-- Try Retry, Cancel and reconnect repeatedly. Check portrait 3K on Pocket 3 and the gimbal menu. Motion Control remains experimental.
+- Rotate UI 2.0 pages and drawers on phones/tablets. Try value drums, View Assist, zoom, lock/unlock, media selection, playback and TalkBack.
+- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
+- Check joystick after first picture, app return, Wi-Fi changes, Retry/Cancel and reconnects. Test Pocket 3 portrait 3K. Motion Control remains experimental.

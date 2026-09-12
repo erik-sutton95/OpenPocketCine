@@ -6,11 +6,6 @@ import XCTest
 
 /// Golden pins from OpenZCine `MonitorLiveViewModuleLayout` on the auditor's 874×402 phone.
 final class LiveMonitorLayoutTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        LiveChromeMetrics.scale = 1
-    }
-
     func testAuditorPhonePinsLeadingIsland() {
         let layout = LiveMonitorLayout.fit(
             viewportWidth: 874,
@@ -507,7 +502,7 @@ final class LiveMonitorLayoutTests: XCTestCase {
             viewport: layout.viewport,
             safeArea: layout.safeArea
         )
-        XCTAssertEqual(box.width, 420, accuracy: 0.05)
+        XCTAssertEqual(box.width, 480, accuracy: 0.05)
         XCTAssertEqual(box.y + 280, layout.capture.minY - 10, accuracy: 0.05)
         XCTAssertEqual(box.x + box.width / 2, tile.midX, accuracy: 1.0)
         XCTAssertGreaterThanOrEqual(box.x, 59 + 4)

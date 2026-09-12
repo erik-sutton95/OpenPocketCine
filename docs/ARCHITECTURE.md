@@ -4,6 +4,9 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 
 | Layer | Path | Purpose |
 | --- | --- | --- |
+| **Monitor presentation policy** | `Sources/MonitorPresentation/` | Foundation-only viewport geometry, capability gates and camera/media presentation values. No camera protocol or platform I/O. |
+| **Shared native monitor UI** | `Sources/MonitorUI/` | SwiftUI pages, controls, navigation, camera home/pairing and media catalog presentation; bundled Sora resources. Camera state and actions are injected. iOS-only implementation, separate from the portable core. |
+| **Shared native Android UI** | `Apps/Android/monitor-ui/` | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. **Portable** Foundation. |
 | **iOS app** | `ios/OpenPocketCine/` | SwiftUI **shell**, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Teardown: [live-session](live-session.md). |
 | **Watch companion** | `ios/OpenPocketCineWatch/` | watchOS SwiftUI remote. WatchConnectivity only — never SoftAP. Embedded in the iPhone app. |
@@ -11,15 +14,106 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | **Android facade** | `Sources/OpenPocketCineAndroidFacade/` | Swift session and JNI boundary |
 | **Tests** | `Tests/OpenPocketViewCoreTests/` | Swift Testing suite for the portable core |
 
-HUD glyphs that both shells share are vendored Lucide SVGs (`OpcIcon` on iOS and Android).
-Regenerate Android VectorDrawables with `python3 scripts/vendor-lucide-icons.py`. Do not add a JS
-runtime. Custom keepers: zebra stripes, the Frame.io F mark, and the battery outline pill.
-SF Symbols / Material stay only on controls this catalog has not replaced yet.
+The shared native UI modules own the Lucide catalog and the 14 custom View Assist
+SVGs extracted from the approved mockup. `OpcIcon` remains a compatibility name
+for the shared catalog; future brand apps import those same assets and renderers.
+The assist catalog preserves the exact prototype paths, including its Tabler-derived
+artwork and license. Regenerate Lucide Android VectorDrawables with
+`just icons-vendor`. No JS runtime or system-icon substitutes are required.
 
 The iOS Xcode project is generated: `cd ios && xcodegen generate`. The Watch
 target is `OpenPocketCineWatch` in `ios/project.yml` — do not hand-edit the
 xcodeproj. Wrist protocol: `WatchRelayProtocol` in the core; `WCSession` lives
 in `WatchRelay` (iPhone) and `WatchSessionController` (watch).
+
+## Shared monitor presentation
+
+The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).
+UI 2.0 begins that extraction with two local SwiftPM products,
+`MonitorPresentation` and `MonitorUI`. It does not rename or replace
+`OpenPocketViewCore`. The [design inventory](UI-2.0-DESIGN.md) distinguishes the
+reference's device screens from its simulated camera controls and preview tools.
+
+The dependency direction is:
+
+```text
+OpenPocketCine app → MonitorUI → MonitorPresentation
+                 → OpenPocketViewCore
+```
+
+`MonitorPresentation` knows viewport, safe area, capabilities and display values.
+`MonitorUI` draws those values and forwards actions. Neither package imports
+`CameraSession`, `AppModel`, a camera-brand enum, DUML, or the Android facade.
+An app injects identity and a backend's actual capabilities; missing hardware
+controls disappear rather than selecting a different brand's screen. Sora font
+resources and registration travel with `MonitorUI`. Android uses the same boundary
+through the local `:monitor-ui` Gradle library and its Osmo presentation adapter.
+
+Each iOS app mounts `observeMonitorWindowGeometry()` around its root once.
+The shared observer samples its containing window after UIKit lifecycle/layout
+callbacks and publishes changed size/safe-area snapshots through the environment.
+View bodies consume that snapshot; they do not ask a window to calculate its
+safe areas during SwiftUI layout. This prevents reentrant layout on iOS 26 and
+keeps rotation and same-size landscape-side changes independent of camera state.
+The observer has no polling loop or video-frame subscription.
+On iPadOS 26 it also samples the vertically corner-adapted safe area to reserve
+the system window controls. The resulting additional top inset moves controls
+and page headers; it does not crop or resize the live picture. Full-screen
+windows without corner occlusion retain the reference geometry.
+The iOS shell supports native iPad window resizing and does not set the deprecated
+`UIRequiresFullScreen` compatibility flag. That mode scales a fixed-size scene on
+iPadOS 26, leaving its reported geometry unaware of overlaid window controls.
+Native resizing lets the same presentation layouts use the actual window bounds
+and UIKit's control exclusions. See Apple's [migration guidance](https://developer.apple.com/documentation/technotes/tn3192-migrating-your-app-from-the-deprecated-uirequiresfullscreen-key).
+
+The Osmo shell keeps `AppModel` and `CameraSession` as its integration owners.
+`OsmoMonitorPresentation` and `OsmoCameraPageAdapter` translate their observed
+state for shared presentation. Camera home and pairing forward the existing
+connect/reconnect/cancel/rename/remove actions. Pairing stages advance from the
+reported connection phase; a design-demo button cannot declare Wi-Fi or picture
+ready. Unknown disconnected telemetry stays absent. Media catalog cells and
+navigation accept shared descriptors while catalog, cache, playback and delivery
+operations remain with their existing owners.
+
+`MultiviewPresentationLayout` computes four persistent tile rectangles and fixed
+transport/control positions. iOS maps the saved arrangement to that policy;
+changing selection or layout never creates a second decoder for the selected
+camera. Tap Layout to switch Grid/Center stage; hold it to open Shared Wi-Fi.
+Clean hides the upper session controls and assist palette while retaining DISP
+to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
+remain in `MultiviewSession`. Its current shared assist control applies Auto LUT
+through the existing per-camera LUT operation. The design's additional multi-feed
+assists require a separate rendering and physical-performance qualification.
+
+Live video and assist views remain mounted beneath settings and media overlays.
+Geometry and chrome changes do not replace their decoder, Metal host, frame bus,
+or connection owner. The existing `CameraSession.status` publication budget
+still bounds observable telemetry; presentation adds no packet-driven updates
+or live-enable writes. On iOS, an open assist inspector reuses the existing scope
+tap or owns one cancellable image-preview task capped at 5 Hz. That task admits one
+latest source buffer, scales to 320 pixels before processing and drops stale
+work; it never attaches a second decoder or changes the native picture host.
+Inspector demand belongs to the visible live or playback source. Inactive scenes
+cancel image work, including UIKit inactivity notifications, and playback
+inspectors cannot activate sampling on the retained live monitor.
+Android previews reuse the existing raw scope tap, bounded to 213 × 120 pixels.
+A separate EGL pbuffer worker runs the existing production shaders; it adds no
+Vulkan render pass or decoder attachment. One admission includes rendering and
+pending main-thread delivery. Owner, source and option epochs reject stale
+results while preserving the 5 Hz cadence across option changes.
+
+On iOS, fresh scope sizes follow `MonitorScopeSizing` for phone/tablet and orientation.
+Their first manual resize becomes a saved absolute preference. Existing saved
+scales and centers survive migration, including a legacy 1.0 scale whose original
+intent cannot be inferred. Rotation changes automatic presentation without
+rewriting scope options; resetting a scope restores automatic sizing.
+
+The migration is intentionally incomplete: media/playback orchestration, scope
+implementations and delivery coordinators still live in the Osmo shell, and
+Nikon has not been migrated to these local packages. Full backend contracts and
+cross-repository package adoption follow the documented engine phases. Do not
+claim the thin-brand-app end state until another backend inherits the same
+screens and workflows without copying them.
 
 ## Connection spine
 

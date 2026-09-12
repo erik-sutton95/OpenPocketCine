@@ -1,4 +1,5 @@
 import CoreMotion
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -83,7 +84,29 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         }
     }
 
-    /// OpenZCine `MonitorAssistTool.icon`. ZEBRA draws `ZebraStripesShape` instead.
+    /// The approved prototype owns these tool glyphs; app-only tools retain
+    /// Lucide fallbacks without inventing a new visual language.
+    var monitorIcon: MonitorAssistIcon? {
+        switch self {
+        case .lut: .lut
+        case .peaking: .peaking
+        case .falseColor: .falseColor
+        case .zebra: .zebra
+        case .waveform: .waveform
+        case .parade: .rgbParade
+        case .histogram: .histogram
+        case .vectorscope: .vectorscope
+        case .trafficLights: .trafficLights
+        case .guides: .frameGuide
+        case .grid: .grid
+        case .crosshair: .crosshair
+        case .mirror: .mirror
+        case .audioMeters: .audioMeters
+        default: nil
+        }
+    }
+
+    /// Existing app-only assist glyphs use the shared Lucide catalog.
     var opcIcon: OpcIcon? {
         switch self {
         case .lut: .blend
@@ -255,7 +278,9 @@ final class LiveAssistState {
     /// OpenZCine `playbackVisibleAssistTools` — independent of the live toolbar.
     var playbackVisibleTools: Set<LiveAssistTool> = []
     var showLUTPicker = false
-    var configureTool: LiveAssistTool?
+    var configureTool: LiveAssistTool? {
+        didSet { if configureTool != .lut { inspectorLUTCache = nil } }
+    }
     /// Icon (or toolbar) frame in `LiveCanvasSpace` for the long-press options popup.
     var longPressAnchor: CGRect = .zero
     /// OpenZCine `scopes.crushClipCompensation` — shared by HISTO edge lights and LIGHTS.
@@ -271,11 +296,15 @@ final class LiveAssistState {
     /// Media player is grading a clip (connected or not). LUT sheet must not
     /// restamp Auto from the live SET — disconnected has no `inPlayback` flag.
     var gradesClip = false
+    /// Inspector-only sampling follows the active scene and its visible source.
+    /// Picture effects keep their existing lifetime beneath operator pages.
+    var inspectorSceneActive = true
 
     @ObservationIgnored private var lutCube: CubeLUT?
     @ObservationIgnored private var lutDimension = 0
     @ObservationIgnored private var lutRGBA = Data()
     @ObservationIgnored private var lastSaved: Data?
+    @ObservationIgnored private var inspectorLUTCache: InspectorLUTCache?
 
     var lutArmed: Bool { lutEnabled }
 
@@ -332,11 +361,13 @@ final class LiveAssistState {
             desqueezeHorizontal: desqueezeHorizontal,
             trafficThreshold: crushClipCompensation.pixelFractionThreshold
         )
+        .withInspectorDemand(inspectorSceneActive && !gradesClip ? configureTool : nil)
     }
 
     /// Same graph as live, gated by playback-visible tools (OpenZCine `playbackImageEffects`).
     var playbackEffects: LiveImageEffects {
         var fx = effects
+        fx.inspectorSample = false
         fx.peaking = isPlaybackVisible(.peaking)
         fx.zebra = isPlaybackVisible(.zebra)
         fx.falseColor = isPlaybackVisible(.falseColor)
@@ -351,7 +382,7 @@ final class LiveAssistState {
         fx.splitComparison = splitComparison && isPlaybackVisible(.lut)
         fx.mirror = isPlaybackVisible(.mirror)
         fx.desqueezeFactor = isPlaybackVisible(.desqueeze) ? desqueezeFactor : 1
-        return fx
+        return fx.withInspectorDemand(inspectorSceneActive && gradesClip ? configureTool : nil)
     }
 
     init() {
@@ -544,52 +575,57 @@ final class LiveAssistState {
     }
 
     func refreshLUTCube() {
-        guard lutEnabled else {
+        inspectorLUTCache = nil
+        guard lutEnabled, let cube = resolvedLUTCube() else {
             lutCube = nil
             lutDimension = 0
             lutRGBA = Data()
             return
         }
+        cache(cube)
+    }
+
+    /// Resolves the same selected look for the main picture and a forced-on
+    /// inspector. Calling this never changes enablement or preferences.
+    private func resolvedLUTCube() -> CubeLUT? {
         switch resolvedSource() {
         case .official(let id):
-            if let cube = BundledPocketLUT.cube(id) {
-                cache(cube)
-            } else {
-                lutCube = nil
-                lutDimension = 0
-                lutRGBA = Data()
-            }
+            return BundledPocketLUT.cube(id)
         case .dji(let id):
-            if let cube = BundledOfficialDJILUT.cube(id) {
-                cache(cube)
-            } else {
-                lutCube = nil
-                lutDimension = 0
-                lutRGBA = Data()
-            }
+            return BundledOfficialDJILUT.cube(id)
         case .creative(let look):
-            cache(look.cube())
+            return look.cube()
         case .custom(let slot):
-            if let cube = CustomLUTStore.cube(slot) {
-                cache(cube)
-            } else {
-                lutCube = nil
-                lutDimension = 0
-                lutRGBA = Data()
-            }
+            return CustomLUTStore.cube(slot)
         case .file(let name):
-            if let cube = CustomLUTStore.cube(fileName: name) {
-                cache(cube)
-            } else {
-                lutCube = nil
-                lutDimension = 0
-                lutRGBA = Data()
-            }
+            return CustomLUTStore.cube(fileName: name)
         case .off:
-            lutCube = nil
-            lutDimension = 0
-            lutRGBA = Data()
+            return nil
         }
+    }
+
+    func inspectorLUT(transfer: MonitorTransfer) -> (dimension: Int, rgba: Data) {
+        if let cached = inspectorLUTCache,
+            cached.selection == lutSelection, cached.transfer == transfer,
+            cached.stops == lutExposureStops
+        {
+            return (cached.dimension, cached.rgba)
+        }
+        guard let cube = resolvedLUTCube() else { return (0, Data()) }
+        let gpu = cube.colorCube.compensatingExposure(stops: lutExposureStops, transfer: transfer)
+        let rgba = gpu.rgbaComponents.withUnsafeBytes { Data($0) }
+        inspectorLUTCache = InspectorLUTCache(
+            selection: lutSelection, stops: lutExposureStops, transfer: transfer,
+            dimension: gpu.size, rgba: rgba)
+        return (gpu.size, rgba)
+    }
+
+    private struct InspectorLUTCache {
+        var selection: LUTSelection
+        var stops: Double
+        var transfer: MonitorTransfer
+        var dimension: Int
+        var rgba: Data
     }
 
     /// Import adds a custom cube. Auto rows keep following color; otherwise this file arms.
@@ -1818,36 +1854,10 @@ struct AssistToolIcon: View {
     var size: CGFloat = 19
 
     var body: some View {
-        if tool == .zebra {
-            ZebraStripesShape()
-                .stroke(
-                    style: StrokeStyle(
-                        lineWidth: max(1.6, size * 0.13), lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: size, height: size)
+        if let icon = tool.monitorIcon {
+            icon.frame(width: size, height: size)
         } else if let icon = tool.opcIcon {
-            icon
-                .frame(width: size, height: size)
+            icon.frame(width: size, height: size)
         }
-    }
-}
-
-struct ZebraStripesShape: Shape {
-    var count = 3
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let side = min(rect.width, rect.height)
-        let diag = CGFloat(0.5).squareRoot()
-        let halfLen = side * 0.40 / 2
-        let step = side * 0.27
-        for index in 0..<count {
-            let offset = CGFloat(index) - CGFloat(count - 1) / 2
-            let cx = rect.midX + offset * step * diag
-            let cy = rect.midY + offset * step * diag
-            path.move(to: CGPoint(x: cx - halfLen * diag, y: cy + halfLen * diag))
-            path.addLine(to: CGPoint(x: cx + halfLen * diag, y: cy - halfLen * diag))
-        }
-        return path
     }
 }

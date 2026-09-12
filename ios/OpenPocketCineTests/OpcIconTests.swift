@@ -1,6 +1,7 @@
 import SwiftUI
 import XCTest
 
+@testable import MonitorUI
 @testable import OpenPocketCine
 
 final class OpcIconTests: XCTestCase {
@@ -9,6 +10,7 @@ final class OpcIconTests: XCTestCase {
             OpcIcon.allCases.map(\.lucideName),
             [
                 "aperture",
+                "arrow-up-down",
                 "audio-lines",
                 "audio-waveform",
                 "blend",
@@ -22,6 +24,7 @@ final class OpcIconTests: XCTestCase {
                 "chevrons-up-down",
                 "circle",
                 "circle-check",
+                "circle-question-mark",
                 "circle-play",
                 "circle-plus",
                 "contrast",
@@ -42,6 +45,7 @@ final class OpcIconTests: XCTestCase {
                 "layers",
                 "layout-grid",
                 "layout-list",
+                "link-2-off",
                 "list-filter",
                 "lock",
                 "maximize",
@@ -55,8 +59,10 @@ final class OpcIconTests: XCTestCase {
                 "plus",
                 "radio",
                 "refresh-cw",
+                "repeat",
                 "rotate-cw",
                 "scan",
+                "card-sim",
                 "settings",
                 "share",
                 "signal",
@@ -71,6 +77,7 @@ final class OpcIconTests: XCTestCase {
                 "sun",
                 "thermometer",
                 "timer",
+                "triangle-alert",
                 "trash",
                 "unplug",
                 "upload",
@@ -91,6 +98,15 @@ final class OpcIconTests: XCTestCase {
             XCTAssertNotNil(document, "missing or invalid \(icon.lucideName).svg")
             XCTAssertFalse(document?.elements.isEmpty ?? true, icon.lucideName)
             XCTAssertFalse(document?.combinedPath().isEmpty ?? true, icon.lucideName)
+        }
+    }
+
+    @MainActor
+    func testCustomAssistArtworkIsBundledAndParses() {
+        for icon in MonitorAssistIcon.allCases {
+            let document = MonitorAssistIcon.documents[icon]
+            XCTAssertNotNil(document, "Missing or invalid custom assist SVG: \(icon.rawValue)")
+            XCTAssertFalse(document?.combinedPath().isEmpty ?? true, icon.rawValue)
         }
     }
 

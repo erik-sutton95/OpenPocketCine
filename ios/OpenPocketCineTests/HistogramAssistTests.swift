@@ -242,7 +242,9 @@ final class HistogramAssistTests: XCTestCase {
 
     func testOptionsDecodeFillsOpenZCineDefaults() throws {
         let decoded = try JSONDecoder().decode(HistogramAssist.Options.self, from: Data("{}".utf8))
-        XCTAssertEqual(decoded, .default)
+        var legacyDefaults = HistogramAssist.Options.default
+        legacyDefaults.hasCustomScale = true
+        XCTAssertEqual(decoded, legacyDefaults)
         let scaled = try JSONDecoder().decode(
             HistogramAssist.Options.self, from: Data(#"{"scale":0.7,"trafficLights":false}"#.utf8))
         XCTAssertEqual(scaled.scale, 0.7, accuracy: 1e-12)

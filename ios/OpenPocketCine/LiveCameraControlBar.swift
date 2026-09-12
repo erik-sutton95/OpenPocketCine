@@ -1,9 +1,11 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
 /// OpenZCine `MonitorCaptureStrip` + `CaptureSettingButton` for Pocket:
 /// ISO — SHUTTER — MODE — WB — FOCUS — AUDIO. Parent already sizes this to ~2/3 width.
 struct LiveCameraControlBar: View {
+    var columns = 6
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
 
@@ -11,11 +13,18 @@ struct LiveCameraControlBar: View {
         tileStrip
             .frame(maxWidth: .infinity, alignment: .trailing)
             .onChange(of: interfaceLocked) { _, locked in
-                if locked { model.captureSheet = nil }
+                if locked {
+                    model.captureSheet = nil
+                    model.captureDrum = nil
+                }
             }
             .onChange(of: model.session.isLocked) { _, locked in
-                if locked { model.captureSheet = nil }
+                if locked {
+                    model.captureSheet = nil
+                    model.captureDrum = nil
+                }
             }
+            .onChange(of: columns) { _, _ in model.captureDrum = nil }
             .onChange(of: model.session.supportsFocusMode) { _, on in
                 if !on, model.captureSheet == .focus { model.captureSheet = nil }
             }
@@ -26,7 +35,7 @@ struct LiveCameraControlBar: View {
     }
 
     private var tileStrip: some View {
-        HStack(spacing: 0) {
+        MonitorControlGrid(columns: columns, spacing: columns == 3 ? 6 : 10) {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
                 tile(
@@ -38,20 +47,14 @@ struct LiveCameraControlBar: View {
                     .shutter, label: "SHUTTER", value: shutterValue,
                     widest: OperatorPrefs.shutterUsesAngle ? "346°" : "1/16000")
             }
-            tile(.exposure, label: "MODE", value: expoValue, widest: "Manual")
+            tile(.exposure, label: "EXPOSURE", value: expoValue, widest: "Manual")
             tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
             if model.session.supportsFocusMode {
                 tile(.focus, label: "FOCUS", value: focusValue, widest: "Showcase")
             }
             tile(.audio, label: "AUDIO", value: audioValue, widest: "Spatial")
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
         .frame(maxWidth: .infinity)
-        .frame(height: LiveDesign.controlHeight)
-        .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-        )
         .contentShape(Rectangle())
         .onTapGesture {}
         .opacity(tilesLocked ? 0.4 : 1)
@@ -66,20 +69,16 @@ struct LiveCameraControlBar: View {
         valueIcon: OpcIcon? = nil,
         badgeIcon: OpcIcon? = nil
     ) -> some View {
-        let isActive = model.captureSheet == sheet
-        return Button {
-            open(sheet)
-        } label: {
-            CaptureBarReadout(
-                label: label,
-                value: value,
-                widest: widest,
-                isActive: isActive,
-                valueIcon: valueIcon,
-                badgeIcon: badgeIcon
-            )
-        }
-        .buttonStyle(.plain)
+        let isActive = model.captureSheet == sheet || model.captureDrum?.sheet == sheet
+        return CaptureBarReadout(
+            label: label,
+            value: value,
+            widest: widest,
+            isActive: isActive,
+            valueIcon: valueIcon,
+            badgeIcon: badgeIcon
+        )
+        .modifier(CaptureReadoutGesture(sheet: sheet, locked: tilesLocked) { open(sheet) })
         .disabled(tilesLocked)
         .frame(maxWidth: .infinity)
         .geometryGroup()
@@ -91,6 +90,7 @@ struct LiveCameraControlBar: View {
                 )
             }
         }
+        .accessibilityIdentifier("monitor.capture.\(sheet.rawValue)")
         .accessibilityLabel(label)
         .accessibilityValue(
             badgeIcon == nil ? value : "\(value), \(CaptureLists.facePriorityTitle)")
@@ -98,6 +98,7 @@ struct LiveCameraControlBar: View {
 
     private func open(_ sheet: CaptureSheet) {
         guard !tilesLocked else { return }
+        model.captureDrum = nil
         if model.captureSheet == nil {
             model.captureSheet = sheet
         } else if model.captureSheet == sheet {
@@ -149,7 +150,8 @@ struct LiveCameraControlBar: View {
     }
 
     private var expoValue: String {
-        model.session.status.expoMode?.label ?? "—"
+        model.session.status.expoMode == .manual
+            ? "M" : model.session.status.expoMode == .auto ? "A" : "—"
     }
 
     private var audioValue: String {
@@ -168,43 +170,12 @@ struct CaptureBarReadout: View {
     var badgeIcon: OpcIcon? = nil
 
     var body: some View {
-        VStack(spacing: 3) {
+        MonitorReadout(label, active: isActive) {
             HStack(spacing: 3) {
-                Text(label)
-                    .font(LiveType.ui(size: 9, weight: .semibold, design: .default))
-                if let badgeIcon {
-                    badgeIcon
-                        .frame(width: 11, height: 11)
-                }
+                if let valueIcon { valueIcon.frame(width: 17, height: 17) }
+                Text(value)
+                if let badgeIcon { badgeIcon.frame(width: 11, height: 11) }
             }
-            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.muted)
-            Text(widest)
-                .font(.system(size: 17, weight: .medium, design: .default))
-                .hidden()
-                .overlay {
-                    if let valueIcon {
-                        valueIcon
-                            .frame(width: 18, height: 18)
-                            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
-                    } else {
-                        Text(value)
-                            .font(.system(size: 17, weight: .medium, design: .default))
-                            .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 5)
-        .padding(.horizontal, 4)
-        .background {
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                .fill(isActive ? LiveDesign.accentDim : Color.clear)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                .strokeBorder(isActive ? LiveDesign.accentDim : Color.clear, lineWidth: 1)
         }
     }
 }

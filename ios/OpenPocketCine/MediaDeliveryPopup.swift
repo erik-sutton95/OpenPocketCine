@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -5,13 +6,19 @@ struct MediaDeliveryPopupOverlay: View {
     let files: [MediaFile]
     var preferredDestination: MediaDeliveryDestination? = nil
     var onDismiss: () -> Void
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
 
     var body: some View {
         GeometryReader { geo in
-            let cap = min(
-                MediaDeliveryChrome.maxCardHeight, max(240, geo.size.height - 80))
+            let safeArea = OperatorPanelMetrics.resolvedDeviceSafeArea(
+                geo.safeAreaInsets, window: windowGeometry.safeArea)
+            let cap = max(
+                0,
+                min(
+                    geo.size.height * 0.86,
+                    geo.size.height - safeArea.top - safeArea.bottom - 20))
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.18)
+                Color.black.opacity(0.42)
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
                 MediaDeliveryPopup(
@@ -20,8 +27,9 @@ struct MediaDeliveryPopupOverlay: View {
                     maxCardHeight: cap,
                     onClose: onDismiss
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 28)
+                .padding(.leading, safeArea.leading + 12)
+                .padding(.trailing, safeArea.trailing + 12)
+                .padding(.bottom, safeArea.bottom + 10)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -130,7 +138,7 @@ struct MediaDeliveryPopup: View {
             card(scrolling: true)
                 .frame(maxHeight: maxCardHeight)
         }
-        .frame(maxWidth: 420)
+        .frame(maxWidth: UIDevice.current.userInterfaceIdiom == .pad ? 620 : 460)
         .frame(maxHeight: maxCardHeight, alignment: .bottom)
         .onAppear {
             if let firstLog = files.filter({ $0.kind == .video })
@@ -146,6 +154,7 @@ struct MediaDeliveryPopup: View {
             }
             onCameraAP = model.isOnCameraAccessPoint
         }
+        .onDisappear { finishPopupHop() }
         .alert("New Frame.io project", isPresented: $showCreateProjectAlert) {
             TextField("Project name", text: $newProjectName)
             Button("Cancel", role: .cancel) { newProjectName = "" }
@@ -177,6 +186,7 @@ struct MediaDeliveryPopup: View {
                 ScrollView {
                     mainColumn
                 }
+                .accessibilityIdentifier("monitor.share.optionsScroll")
             } else {
                 mainColumn
             }
@@ -185,10 +195,7 @@ struct MediaDeliveryPopup: View {
             }
         }
         .padding(16)
-        .liquidGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous),
-            interactive: false
-        )
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 16), density: .delivery)
     }
 
     private var mainColumn: some View {
@@ -225,6 +232,7 @@ struct MediaDeliveryPopup: View {
                     .foregroundStyle(LiveDesign.text)
                     Spacer(minLength: 0)
                     CloseButton(action: closePopup, size: 30)
+                        .accessibilityIdentifier("monitor.share.close")
                 }
             case .options:
                 HStack(spacing: 10) {
@@ -241,15 +249,19 @@ struct MediaDeliveryPopup: View {
                         .foregroundStyle(LiveDesign.accent)
                     }
                     .buttonStyle(.zcTapTarget)
+                    .accessibilityIdentifier("monitor.share.back")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(destination?.title ?? "Share")
-                            .font(LiveType.ui(size: 15, weight: .semibold))
+                            .font(MonitorTheme.font(9, weight: .bold)).tracking(1.8)
+                            .textCase(.uppercase)
                             .foregroundStyle(LiveDesign.text)
                         Text("Options")
                             .font(LiveType.ui(size: 11, weight: .medium))
                             .foregroundStyle(LiveDesign.muted)
                     }
                     Spacer(minLength: 0)
+                    CloseButton(action: closePopup, size: 30)
+                        .accessibilityIdentifier("monitor.share.close")
                 }
             }
         }
@@ -287,8 +299,14 @@ struct MediaDeliveryPopup: View {
     private var destinations: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("DESTINATION")
-            ForEach(MediaDeliveryDestination.allCases) { candidate in
-                destinationRow(candidate)
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: 7),
+                    count: UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1), spacing: 7
+            ) {
+                ForEach(MediaDeliveryDestination.allCases) { candidate in
+                    destinationRow(candidate)
+                }
             }
         }
     }
@@ -332,6 +350,7 @@ struct MediaDeliveryPopup: View {
         }
         .buttonStyle(.zcTapTarget)
         .disabled(!enabled)
+        .accessibilityIdentifier("monitor.share.destination.\(candidate.rawValue)")
     }
 
     @ViewBuilder
@@ -546,7 +565,7 @@ struct MediaDeliveryPopup: View {
                         MediaDelivery.filename(
                             for: file, configuration: configuration, transform: previewTransform)
                     )
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(MonitorTheme.font(13)).monospacedDigit()
                     .foregroundStyle(LiveDesign.text)
                 }
                 .padding(12)
@@ -567,15 +586,12 @@ struct MediaDeliveryPopup: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(MediaDeliveryCopy.convertLogDestination)
                         .font(LiveType.ui(size: 14, weight: .semibold))
-                    Picker(
-                        MediaDeliveryCopy.convertLogDestination,
-                        selection: $configuration.logTransform
-                    ) {
-                        ForEach(LogColorTransform.allCases) { transform in
-                            Text(transform.destination.label).tag(transform)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    MonitorSegmentedControl(
+                        options: LogColorTransform.allCases,
+                        selection: $configuration.logTransform, stacked: true,
+                        title: { $0.destination.label }
+                    )
+                    .buttonStyle(.zcTapTarget)
                 }
             }
             toggleRow(
@@ -596,19 +612,16 @@ struct MediaDeliveryPopup: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 4) {
                         Text("Format")
-                            .font(LiveType.ui(size: 14, weight: .semibold))
+                            .font(MonitorTheme.font(12.5, weight: .semibold))
                             .foregroundStyle(LiveDesign.text)
-                        HelpBadge(
-                            text:
-                                "Export container — MOV preserves quality; MP4 is more widely compatible."
-                        )
                     }
-                    Picker("Format", selection: $configuration.exportFormat) {
-                        ForEach(MediaExportFormat.allCases) { format in
-                            Text(format.label).tag(format)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    Text("MOV preserves quality; MP4 is more widely compatible.")
+                        .font(MonitorTheme.font(10.5)).foregroundStyle(LiveDesign.muted)
+                    MonitorSegmentedControl(
+                        options: MediaExportFormat.allCases,
+                        selection: $configuration.exportFormat, stacked: true, title: { $0.label }
+                    )
+                    .buttonStyle(.zcTapTarget)
                 }
                 .padding(12)
                 .background(
@@ -633,12 +646,18 @@ struct MediaDeliveryPopup: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
+            Text(exportSummary)
+                .accessibilityIdentifier("monitor.share.summary")
+                .font(MonitorTheme.font(9.5)).monospacedDigit()
+                .foregroundStyle(LiveDesign.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if destination == .nativeShare {
-                Picker("Delivery action", selection: $shareAction) {
-                    Text("Share").tag(MediaDeliveryPostExportAction.systemShare)
-                    Text("Save to Photos").tag(MediaDeliveryPostExportAction.saveToPhotos)
-                }
-                .pickerStyle(.segmented)
+                MonitorSegmentedControl(
+                    options: [MediaDeliveryPostExportAction.systemShare, .saveToPhotos],
+                    selection: $shareAction, stacked: true,
+                    title: { $0 == .systemShare ? "Share" : "Save to Photos" }
+                )
+                .buttonStyle(.zcTapTarget)
             }
             Button {
                 beginDelivery()
@@ -666,7 +685,26 @@ struct MediaDeliveryPopup: View {
             }
             .buttonStyle(.zcTapTarget)
             .disabled(!canContinue)
+            .accessibilityIdentifier("monitor.share.begin")
         }
+    }
+
+    private var exportSummary: String {
+        let known = files.filter { $0.sizeBytes > 0 }
+        let bytes = known.reduce(UInt64(0)) { total, file in
+            let sum = total.addingReportingOverflow(file.sizeBytes)
+            return sum.overflow ? UInt64.max : sum.partialValue
+        }
+        let size = ByteCountFormatter.string(
+            fromByteCount: Int64(clamping: bytes), countStyle: .file)
+        let sizeLabel =
+            known.isEmpty
+            ? "Size unavailable" : known.count == files.count ? size : "At least \(size)"
+        let mode =
+            configuration.convertLog
+            ? configuration.logTransform.destination.label
+            : configuration.bakeLUT ? "LUT baked" : "Camera original"
+        return "\(files.count) \(files.count == 1 ? "clip" : "clips") · \(sizeLabel) · \(mode)"
     }
 
     private var actionTitle: String {
@@ -682,7 +720,7 @@ struct MediaDeliveryPopup: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .font(MonitorTheme.font(11, weight: .bold)).monospacedDigit()
             .kerning(0.6)
             .foregroundStyle(LiveDesign.faint)
     }
@@ -692,17 +730,19 @@ struct MediaDeliveryPopup: View {
     ) -> some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(title)
-                        .font(LiveType.ui(size: 14, weight: .semibold))
-                        .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.faint)
-                    HelpBadge(text: help)
-                }
+                Text(title)
+                    .font(MonitorTheme.font(12.5, weight: .semibold))
+                    .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.faint)
+                Text(help)
+                    .font(MonitorTheme.font(10.5)).foregroundStyle(LiveDesign.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Toggle("", isOn: isOn)
                 .labelsHidden()
+                .accessibilityLabel(title)
                 .tint(LiveDesign.accent)
+                .scaleEffect(0.75).frame(width: 38, height: 44)
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
@@ -717,7 +757,12 @@ struct MediaDeliveryPopup: View {
 
     private func beginDelivery() {
         guard let destination else { return }
-        popupStartedHop = false
+        if destination == .frameio {
+            // The accepted upload owns restoration, including preflight failure.
+            popupStartedHop = false
+        } else {
+            finishPopupHop()
+        }
         let request = MediaDeliveryBeginRequest(
             files: files,
             destination: destination,
@@ -728,8 +773,14 @@ struct MediaDeliveryPopup: View {
     }
 
     private func closePopup() {
-        if popupStartedHop { model.endInternetHop() }
+        finishPopupHop()
         onClose()
+    }
+
+    private func finishPopupHop() {
+        guard popupStartedHop else { return }
+        popupStartedHop = false
+        model.endInternetHop()
     }
 
     private func startFrameioHop() {

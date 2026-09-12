@@ -47,118 +47,36 @@ import com.opencapture.openpocketcine.session.FoundCamera
 
 @Composable
 fun SavedCamerasExperience(model: AppModel) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val twoColumn = maxWidth >= 640.dp || maxWidth > maxHeight
-        val tight = maxHeight < 300.dp
-        val introWidth = maxOf(if (maxWidth >= 640.dp) 288.dp else 240.dp, maxWidth * 0.36f)
-        if (twoColumn) {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                IntroCard(model, hugsContent = false, tight = tight, Modifier.width(introWidth).fillMaxHeight())
-                CameraListCard(model, tight, Modifier.weight(1f).fillMaxHeight())
-            }
-        } else {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                IntroCard(model, hugsContent = true, tight = tight, Modifier.fillMaxWidth())
-                CameraListCard(model, tight, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun IntroCard(model: AppModel, hugsContent: Boolean, tight: Boolean, modifier: Modifier) {
-    val phase by model.session.phaseFlow.collectAsState()
-    val reconnecting by model.session.isReconnecting.collectAsState()
-    val busy = phase.isBusy() || reconnecting
-    Column(modifier.startupCard().padding(if (tight) 16.dp else 20.dp)) {
-        Text(
-            "Your cameras.",
-            color = StartupColors.ink,
-            style = LiveType.ui(24f, FontWeight.Bold, LiveTypeDesign.Rounded),
-            maxLines = 1,
-        )
-        Text(
-            "Tap a saved camera to reconnect.",
-            color = StartupColors.muted,
-            style = LiveType.ui(13f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
-            modifier = Modifier.padding(top = if (tight) 6.dp else 10.dp),
-        )
-        if (hugsContent) Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(1f))
-        Column(verticalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 10.dp)) {
-            StartupFilledButton(
-                "Pair new camera",
-                enabled = !busy,
-                onClick = model::pairNewCamera,
-                modifier = Modifier.fillMaxWidth(),
-                large = true,
-            )
-            StartupQuietButton(
-                "Media library",
-                onClick = { model.homePanel = AppPanel.MEDIA },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            StartupQuietButton(
-                "Settings",
-                onClick = { model.homePanel = AppPanel.SETTINGS },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun CameraListCard(model: AppModel, tight: Boolean, modifier: Modifier) {
     val found by model.session.found.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
     val reconnecting by model.session.isReconnecting.collectAsState()
-    val busy = phase.isBusy() || reconnecting
     val targetId by model.session.connectionTargetId.collectAsState()
+    val busy = phase.isBusy() || reconnecting
     val connectingLabel = if (reconnecting && phase == ConnectionPhase.SCANNING) {
         "Looking for camera…"
-    } else {
-        StartupConnectionCopy.phaseLabel(phase, null)
+    } else StartupConnectionCopy.phaseLabel(phase, null)
+    val sections = listOf(true, false).map { nearby ->
+        val cameras = model.savedCameras.filter { saved -> found.any { it.id == saved.id } == nearby }
+        com.opencapture.monitorui.MonitorCameraSection(
+            (if (nearby) "NEARBY" else "SAVED") + " · ${cameras.size}", cameras)
     }
-    val scroll = rememberScrollState()
-    Column(modifier.startupCard().padding(if (tight) 16.dp else 22.dp)) {
-        Text(
-            "CAMERA LIST",
-            color = StartupColors.muted,
-            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
-        )
-        if (!tight) {
-            Text(
-                "Tap a camera to connect",
-                color = StartupColors.ink,
-                style = LiveType.ui(20f, FontWeight.Bold, LiveTypeDesign.Rounded),
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-        Column(
-            Modifier.weight(1f).padding(top = 16.dp).fadeOverflowBottom(scroll).verticalScroll(scroll),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            model.savedCameras.forEach { camera ->
-                SavedCameraRow(
-                    camera = camera,
-                    nearby = found.firstOrNull { it.id == camera.id },
-                    phase = phase,
-                    isBusy = busy,
-                    connectionLabel = connectingLabel.takeIf { busy && targetId == camera.id },
-                    onCancel = model::cancelPairing,
-                    onConnect = { model.reconnect(camera) },
-                    onRename = { model.rename(camera, it) },
-                    onRemove = { model.forget(camera) },
-                )
-            }
-            if (model.savedCameras.isEmpty()) {
-                Text(
-                    "No cameras saved yet — Pair new camera walks you through it.",
-                    color = StartupColors.muted,
-                    style = LiveType.ui(12f, design = LiveTypeDesign.Rounded),
-                )
-            }
-        }
-    }
+    com.opencapture.monitorui.MonitorCameraPage(
+        brand = "OPENPOCKETCINE", sections = sections, key = { it.id },
+        emptyMessage = "Pair a camera to start monitoring.",
+        actions = {
+            if (phase == ConnectionPhase.SCANNING) StartupStatusPill("Scanning", StartupColors.accent)
+            com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.FILM, "Media library",
+                onClick = { model.homePanel = AppPanel.MEDIA })
+            com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.SETTINGS, "Settings",
+                onClick = { model.homePanel = AppPanel.SETTINGS })
+        }, camera = { camera ->
+            SavedCameraRow(camera, found.firstOrNull { it.id == camera.id }, phase, busy,
+                connectingLabel.takeIf { busy && targetId == camera.id }, model::cancelPairing,
+                { model.reconnect(camera) }, { model.rename(camera, it) }, { model.forget(camera) })
+        }, footer = {
+            StartupQuietButton("+  Pair a new camera", enabled = !busy,
+                onClick = model::pairNewCamera, modifier = Modifier.fillMaxWidth().height(46.dp))
+        })
 }
 
 @Composable
@@ -183,31 +101,13 @@ private fun SavedCameraRow(
         phase == ConnectionPhase.JOINING_WIFI ||
             phase == ConnectionPhase.OPENING_DATALINK ||
             phase == ConnectionPhase.LIVE
-    Column(
-        Modifier.fillMaxWidth()
-            .startupTile(borderColor = availability.copy(alpha = 0.28f))
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(
-                Modifier.weight(1f).clickable(enabled = !isBusy && !connectLocked, onClick = onConnect),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    camera.displayName,
-                    color = StartupColors.ink,
-                    style = LiveType.ui(16f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
-                    color = StartupColors.muted,
-                    style = LiveType.ui(13f, design = LiveTypeDesign.Rounded),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+    com.opencapture.monitorui.MonitorCameraCard(
+        title = camera.displayName,
+        detail = camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
+        enabled = !isBusy && !connectLocked, onOpen = onConnect,
+        glyph = { OpcIcon(OpcIcon.CAMERA, contentDescription = null, tint = availability,
+            modifier = Modifier.size(19.dp)) },
+        options = {
             Box {
                 OpcIcon(
                     icon = OpcIcon.ELLIPSIS,
@@ -243,17 +143,12 @@ private fun SavedCameraRow(
                     )
                 }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        }, status = {
             if (connectionLabel != null) {
                 Box(Modifier.weight(1f)) { StartupConnectionProgress(connectionLabel) }
                 StartupQuietButton("Cancel", onClick = onCancel, modifier = Modifier.height(44.dp))
             } else {
-                StartupStatusPill(if (online) "Online" else "Offline", availability)
+                StartupStatusPill(if (online) "Nearby" else "Saved", availability)
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier.heightIn(min = 44.dp)
@@ -267,8 +162,7 @@ private fun SavedCameraRow(
                     )
                 }
             }
-        }
-    }
+        })
     if (rename) {
         AlertDialog(
             onDismissRequest = { rename = false },

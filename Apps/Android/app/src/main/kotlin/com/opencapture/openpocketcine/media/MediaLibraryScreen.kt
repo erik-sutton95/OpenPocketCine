@@ -224,54 +224,35 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val portrait = maxHeight > maxWidth
-            val contentPad =
-                PaddingValues(
-                    top = 16.dp,
-                    start = if (portrait) 16.dp else 64.dp,
-                    end = 20.dp,
-                    bottom = 14.dp,
-                )
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(contentPad),
-            ) {
-                if (portrait && !isSelecting) {
-                    CategoryStrip(category) { category = it }
-                    Spacer(Modifier.height(8.dp))
-                }
-                Row(Modifier.fillMaxSize()) {
-                    if (!portrait) {
-                        CategorySidebar(category, layout, thumbnailSize, { category = it }, { layout = it }, { thumbnailSize = it })
-                        Spacer(Modifier.width(16.dp))
-                    }
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        if (isSelecting) {
-                            SelectionHeader(
-                                selectedCount = selectedIDs.size,
-                                deleteEnabled = isLive && selectedFiles.any { controller.canDelete(it) },
-                                shareEnabled = selectedIDs.isNotEmpty(),
-                                onExit = ::exitSelection,
-                                onDelete = { confirmBatchDelete = true },
-                                onShare = { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles },
-                            )
+            com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
+                modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
+                navigation = { compact ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        com.opencapture.openpocketcine.monitor.MonitorPageHeader("Media",
+                            if (isLive) "CAMERA LIBRARY" else "LOCAL LIBRARY", ::dismiss)
+                        if (compact) {
+                            CategoryStrip(category) { category = it }
                         } else {
-                            HeaderRow(
-                                headerTitle = headerTitle,
-                                headerCount = headerCount,
-                                fetchInProgress = controller.fetchInProgress,
-                                isLive = isLive,
-                                sortOrder = sortOrder,
-                                filterOpen = filterOpen,
-                                activeFilterCount = activeFilterCount,
-                                compact = MediaLibraryHeaderMetrics.stacksCountUnderTitle(portrait),
-                                onRefresh = { controller.refresh() },
-                                onFilter = { filterOpen = !filterOpen },
-                                onSort = { sortOrder = sortOrder.next },
-                            )
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                MediaLibraryTab.entries.forEach { tab ->
+                                    CategoryTab(tab, active = tab == category, fill = true) { category = tab }
+                                }
+                            }
                         }
+                    }
+                },
+            ) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HeaderRow(
+                            headerTitle = headerTitle, headerCount = headerCount,
+                            fetchInProgress = controller.fetchInProgress, isLive = isLive,
+                            sortOrder = sortOrder, filterOpen = filterOpen, activeFilterCount = activeFilterCount,
+                            compact = portrait, onRefresh = { controller.refresh() },
+                            onFilter = { filterOpen = !filterOpen }, onSort = { sortOrder = sortOrder.next },
+                            layout = layout, thumbnailSize = thumbnailSize,
+                            onLayout = { layout = it }, onSize = { thumbnailSize = it },
+                        )
                         controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
                             val name = displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')
                             CacheBar(name, progress)
@@ -299,31 +280,31 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                     }
                                 }
                                 else -> {
-                                    LazyVerticalGrid(
-                                        columns = GridCells.Adaptive(minSize = thumbnailSize.gridMinimumDp.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        contentPadding = PaddingValues(bottom = 24.dp),
-                                    ) {
-                                        items(displayed, key = { it.id }) { file ->
-                                            MediaClipCell(
-                                                file = file,
-                                                controller = controller,
-                                                onOpen = { open(file) },
-                                                isSelecting = isSelecting,
-                                                isSelected = selectedIDs.contains(file.id),
-                                                onBeginSelection = { beginSelection(file) },
-                                                onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) },
-                                            )
-                                        }
+                                    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                                    val columns = com.opencapture.monitorui.monitorCatalogColumns(
+                                        com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
+                                        minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600,
+                                    )
+                                    com.opencapture.monitorui.MonitorCatalogGrid(displayed, columns, key = { it.id }) { file ->
+                                        MediaClipCell(file, controller, onOpen = { open(file) }, isSelecting = isSelecting,
+                                            isSelected = selectedIDs.contains(file.id), onBeginSelection = { beginSelection(file) },
+                                            onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) })
                                     }
                                 }
                             }
                         }
-                        if (portrait) {
-                            LayoutBand(layout, thumbnailSize, { layout = it }, { thumbnailSize = it })
-                        }
-                    }
+                    if (isSelecting) SelectionTray(selectedFiles.size,
+                        cacheEnabled = isLive && selectedFiles.isNotEmpty(),
+                        deleteEnabled = selectedFiles.any(controller::canDelete),
+                        onAll = { selectedIDs = displayed.map { it.id }.toSet() }, onClear = ::exitSelection,
+                        onCache = { scope.launch { selectedFiles.forEach { controller.download(it) } } },
+                        onStar = {
+                            val makeFavorite = selectedFiles.any { !controller.isFavorite(it) }
+                            selectedFiles.filter { controller.isFavorite(it) != makeFavorite }.forEach(controller::toggleFavorite)
+                        },
+                        onDelete = { confirmBatchDelete = true },
+                        onShare = { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles },
+                    )
                 }
             }
         }
@@ -345,17 +326,6 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                     dateKeyFilter = null
                 },
                 onClose = { filterOpen = false },
-            )
-        }
-
-        if (!isSelecting) {
-            MediaCloseButton(
-                onClick = ::dismiss,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(start = 16.dp, top = 16.dp),
             )
         }
 
@@ -407,7 +377,6 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
 private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab) -> Unit) {
     Row(
         Modifier
-            .padding(start = 45.dp)
             .clip(MediaCornerShape)
             .panelGlass(MediaCornerShape)
             .horizontalScroll(rememberScrollState())
@@ -489,143 +458,35 @@ internal object MediaLibraryHeaderMetrics {
 
 @Composable
 private fun HeaderRow(
-    headerTitle: String,
-    headerCount: String,
-    fetchInProgress: Boolean,
-    isLive: Boolean,
-    sortOrder: MediaLibrarySort,
-    filterOpen: Boolean,
-    activeFilterCount: Int,
-    onRefresh: () -> Unit,
-    onFilter: () -> Unit,
-    onSort: () -> Unit,
-    compact: Boolean = false,
+    headerTitle: String, headerCount: String, fetchInProgress: Boolean, isLive: Boolean,
+    sortOrder: MediaLibrarySort, filterOpen: Boolean, activeFilterCount: Int,
+    onRefresh: () -> Unit, onFilter: () -> Unit, onSort: () -> Unit, compact: Boolean,
+    layout: MediaBrowserLayout, thumbnailSize: MediaThumbnailSize,
+    onLayout: (MediaBrowserLayout) -> Unit, onSize: (MediaThumbnailSize) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "MULTIMEDIA",
-                color = LiveDesign.muted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.8.sp,
-            )
-            if (compact) {
-                Text(
-                    headerTitle,
-                    color = LiveDesign.text,
-                    style = LiveType.ui(26f, FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (fetchInProgress) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            color = LiveDesign.muted,
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                    Text(
-                        headerCount,
-                        color = LiveDesign.muted,
-                        style = LiveType.ui(14f, FontWeight.Medium),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(headerTitle, color = LiveDesign.text, style = LiveType.ui(26f, FontWeight.SemiBold))
-                    Text("·", color = LiveDesign.faint, style = LiveType.ui(18f, FontWeight.Medium))
-                    if (fetchInProgress) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            color = LiveDesign.muted,
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                    Text(headerCount, color = LiveDesign.muted, style = LiveType.ui(14f, FontWeight.Medium))
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (isLive) {
-                LucideActionPill(
-                    icon = OpcIcon.REFRESH_CW,
-                    title = "REFRESH",
-                    active = false,
-                    enabled = !fetchInProgress,
-                    onClick = onRefresh,
-                )
-            }
-            LucideActionPill(
-                icon = OpcIcon.LIST_FILTER,
-                title = "FILTER",
-                active = filterOpen || activeFilterCount > 0,
-                badge = activeFilterCount.takeIf { it > 0 },
-                onClick = onFilter,
-            )
-            LucideActionPill(
-                icon = OpcIcon.CHEVRONS_UP_DOWN,
-                title = "SORT",
-                active = false,
-                onClick = onSort,
-                contentDescription = "Sort ${sortOrder.menuLabel}",
-            )
-        }
-    }
+    com.opencapture.monitorui.MonitorCatalogHeader(
+        title = "$headerTitle · $headerCount",
+        subtitle = if (fetchInProgress) "Reading camera media…" else if (isLive) "Tap to review · Hold to select" else "Available offline",
+        compact = compact, sort = sortOrder.menuLabel, list = layout == MediaBrowserLayout.LIST,
+        thumbnailSize = com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
+        filterActive = filterOpen || activeFilterCount > 0, refreshAvailable = isLive, refreshing = fetchInProgress,
+        onSort = onSort, onList = { onLayout(if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID) },
+        onThumbnailSize = { onSize(MediaThumbnailSize.valueOf(it.name)) }, onFilter = onFilter, onRefresh = onRefresh)
 }
 
 @Composable
-private fun SelectionHeader(
-    selectedCount: Int,
-    deleteEnabled: Boolean,
-    shareEnabled: Boolean,
-    onExit: () -> Unit,
-    onDelete: () -> Unit,
-    onShare: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        MediaCloseButton(onClick = onExit, size = 37.dp)
-        Text(
-            "$selectedCount selected",
-            modifier = Modifier.weight(1f),
-            style = LiveType.ui(20f, FontWeight.SemiBold),
-            color = LiveDesign.text,
-            maxLines = 1,
-        )
-        Text(
-            "Delete",
-            style = LiveType.ui(14f, FontWeight.SemiBold),
-            color = if (deleteEnabled) Color(0xFFFF5A54) else LiveDesign.faint,
-            modifier =
-                Modifier
-                    .clip(MediaCapsuleShape)
-                    .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
-                    .chromeClickable(enabled = deleteEnabled, onClick = onDelete)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-        )
-        Text(
-            "Share",
-            style = LiveType.ui(14f, FontWeight.SemiBold),
-            color = if (shareEnabled) LiveDesign.accent else LiveDesign.faint,
-            modifier =
-                Modifier
-                    .clip(MediaCapsuleShape)
-                    .background(if (shareEnabled) LiveDesign.accentDim else Color.Transparent, MediaCapsuleShape)
-                    .border(1.dp, LiveDesign.hairline, MediaCapsuleShape)
-                    .chromeClickable(enabled = shareEnabled, onClick = onShare)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-        )
+private fun SelectionTray(count: Int, cacheEnabled: Boolean, deleteEnabled: Boolean,
+    onAll: () -> Unit, onClear: () -> Unit, onCache: () -> Unit, onStar: () -> Unit,
+    onDelete: () -> Unit, onShare: () -> Unit) {
+    com.opencapture.monitorui.MonitorSelectionTray(count) {
+        Text("All", color = LiveDesign.accent, style = LiveType.ui(11f, FontWeight.SemiBold),
+            modifier = Modifier.height(34.dp).chromeClickable(onClick = onAll).padding(horizontal = 7.dp, vertical = 10.dp))
+        Text("Clear", color = LiveDesign.muted, style = LiveType.ui(11f, FontWeight.SemiBold),
+            modifier = Modifier.height(34.dp).chromeClickable(onClick = onClear).padding(horizontal = 7.dp, vertical = 10.dp))
+        MediaCircleIconButton(OpcIcon.DOWNLOAD, "Cache selected clips", onCache, enabled = cacheEnabled, size = 34.dp)
+        MediaCircleIconButton(OpcIcon.STAR, "Favorite selected clips", onStar, enabled = count > 0, size = 34.dp)
+        MediaCircleIconButton(OpcIcon.TRASH, "Delete selected clips", onDelete, enabled = deleteEnabled, size = 34.dp)
+        MediaCircleIconButton(OpcIcon.SHARE, "Share selected clips", onShare, enabled = count > 0, size = 34.dp)
     }
 }
 
@@ -646,7 +507,7 @@ private fun CacheBar(filename: String, progress: Double) {
             "CACHING $filename ${(progress * 100).toInt()}%",
             color = LiveDesign.muted,
             fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
         )
@@ -733,49 +594,28 @@ private fun LayoutControls(
     onSize: (MediaThumbnailSize) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier
-            .clip(MediaCapsuleShape)
-            .panelGlass(MediaCapsuleShape)
-            .padding(horizontal = 6.dp, vertical = 6.dp)
-            .semantics { contentDescription = "Media layout and thumbnail size" },
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(37.dp)
-                .clip(MediaCornerShape)
-                .background(LiveDesign.glassBright)
-                .chromeClickable {
-                    onLayout(if (layout == MediaBrowserLayout.GRID) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID)
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            OpcIcon(
-                icon = if (layout == MediaBrowserLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID,
-                contentDescription = if (layout == MediaBrowserLayout.GRID) "List view" else "Grid view",
-                tint = LiveDesign.muted,
-                modifier = Modifier.size(14.dp),
-            )
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.background(Color.Black.copy(alpha = .35f), androidx.compose.foundation.shape.RoundedCornerShape(9.dp)).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            MediaBrowserLayout.entries.forEach { choice ->
+                Box(Modifier.size(32.dp, 28.dp).background(if (choice == layout) LiveDesign.tile else Color.Transparent,
+                    androidx.compose.foundation.shape.RoundedCornerShape(7.dp)).chromeClickable { onLayout(choice) }, contentAlignment = Alignment.Center) {
+                    OpcIcon(if (choice == MediaBrowserLayout.GRID) OpcIcon.LAYOUT_GRID else OpcIcon.LAYOUT_LIST,
+                        "${choice.name.lowercase().replaceFirstChar { it.uppercase() }} view", Modifier.size(13.dp),
+                        if (choice == layout) LiveDesign.text else LiveDesign.faint)
+                }
+            }
         }
-        MediaThumbnailSize.entries.forEach { size ->
-            val active = thumbnailSize == size
-            Box(
-                Modifier
-                    .size(37.dp)
-                    .clip(MediaCornerShape)
-                    .background(if (active) LiveDesign.accentDim else Color.Transparent)
-                    .chromeClickable { onSize(size) }
-                    .semantics { contentDescription = size.accessibilityLabel },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    Modifier
-                        .size(size.gridIconSizeDp.dp)
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
-                        .background(if (active) LiveDesign.accent else LiveDesign.muted),
-                )
+        Row(Modifier.background(Color.Black.copy(alpha = .35f), androidx.compose.foundation.shape.RoundedCornerShape(9.dp)).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            MediaThumbnailSize.entries.forEach { size ->
+                val active = thumbnailSize == size
+                Box(Modifier.size(28.dp).background(if (active) LiveDesign.tile else Color.Transparent,
+                    androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
+                    .chromeClickable { onSize(size) }.semantics { contentDescription = size.accessibilityLabel }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(size.gridIconSizeDp.dp).background(if (active) LiveDesign.text else LiveDesign.faint,
+                        androidx.compose.foundation.shape.RoundedCornerShape(3.dp)))
+                }
             }
         }
     }
@@ -814,7 +654,7 @@ private fun LucideActionPill(
             color = if (active) LiveDesign.accent else LiveDesign.muted,
             fontSize = 9.5.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
         )
         if (badge != null) {
             Text(
@@ -822,7 +662,7 @@ private fun LucideActionPill(
                 color = LiveDesign.background,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                 modifier =
                     Modifier
                         .clip(MediaCapsuleShape)
@@ -871,7 +711,7 @@ private fun FilterPopup(
                     color = LiveDesign.muted,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                     letterSpacing = 0.8.sp,
                 )
                 Spacer(Modifier.weight(1f))
@@ -908,7 +748,7 @@ private fun FilterPopup(
                     color = LiveDesign.accent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                     modifier = Modifier.padding(top = 8.dp).chromeClickable(onClick = onClear),
                 )
             }
@@ -919,7 +759,7 @@ private fun FilterPopup(
 @Composable
 private fun FilterSection(title: String, content: @Composable () -> Unit) {
     Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(title, color = LiveDesign.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text(title, color = LiveDesign.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora)
         content()
     }
 }

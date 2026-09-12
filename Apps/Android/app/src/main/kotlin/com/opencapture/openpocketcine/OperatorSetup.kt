@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
@@ -463,81 +464,43 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                 bottom = with(density) { bar.bottom.toDp() },
             ),
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val portrait = maxHeight > maxWidth
-            val stackedTop = portrait || maxWidth < 560.dp
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (portrait) {
-                    SettingsTabStrip(model, hapticsEnabled, view, Modifier.padding(start = 45.dp))
-                    SettingsTopBar(
-                        stacked = true,
-                        isLive = isLive,
-                        phaseLabel = phaseLabel,
-                        bars = bars,
-                        cameraName = liveCameraName(model),
-                        fpsLabel = fpsLabel,
-                        hasVideoFormat = model.session.hasVideoFormat,
-                        onDisconnect = model::disconnect,
-                    )
-                    SettingsContentPane(
-                        model = model,
-                        isLive = isLive,
-                        phaseLabel = phaseLabel,
-                        bars = bars,
-                        statusColorMode = status.colorMode,
-                        expandedDisp = expandedDisp,
-                        onExpandDisp = { expandedDisp = it },
-                        onLegal = { legalKind = it },
-                        onClearCache = { confirmClearCache = true },
-                        onOpenLut = { showLutPicker = true },
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    SettingsTopBar(
-                        stacked = stackedTop,
-                        isLive = isLive,
-                        phaseLabel = phaseLabel,
-                        bars = bars,
-                        cameraName = liveCameraName(model),
-                        fpsLabel = fpsLabel,
-                        hasVideoFormat = model.session.hasVideoFormat,
-                        onDisconnect = model::disconnect,
-                        modifier = Modifier.padding(start = 45.dp),
-                    )
-                    Row(
-                        Modifier.weight(1f).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SettingsTabRail(model, hapticsEnabled, view)
-                        SettingsContentPane(
-                            model = model,
-                            isLive = isLive,
-                            phaseLabel = phaseLabel,
-                            bars = bars,
-                            statusColorMode = status.colorMode,
-                            expandedDisp = expandedDisp,
-                            onExpandDisp = { expandedDisp = it },
-                            onLegal = { legalKind = it },
-                            onClearCache = { confirmClearCache = true },
-                            onOpenLut = { showLutPicker = true },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
+        com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            navigation = { portrait ->
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    com.opencapture.openpocketcine.monitor.MonitorPageHeader("Settings", "OPERATOR SETUP", onClose)
+                    if (portrait) {
+                        SettingsTabStrip(model, hapticsEnabled, view)
+                        if (isLive) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(liveCameraName(model), modifier = Modifier.weight(1f), style = LiveType.ui(10f),
+                                    color = LiveDesign.muted, maxLines = 1)
+                                SettingsActionPill("Disconnect", OpcIcon.UNPLUG, LiveDesign.rec,
+                                    LiveDesign.rec.copy(alpha = .12f), onClick = model::disconnect)
+                            }
+                        }
+                    } else {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            OperatorSettingsTab.entries.forEach { tab ->
+                                SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth())
+                            }
+                        }
+                        Text(if (isLive) liveCameraName(model) else "No camera connected",
+                            style = LiveType.ui(10f), color = LiveDesign.muted, maxLines = 2)
+                        if (isLive) {
+                            SettingsActionPill("Disconnect", OpcIcon.UNPLUG, LiveDesign.rec,
+                                LiveDesign.rec.copy(alpha = .12f), onClick = model::disconnect)
+                        }
                     }
                 }
-            }
+            },
+        ) {
+            SettingsContentPane(model = model, isLive = isLive, phaseLabel = phaseLabel,
+                bars = bars, statusColorMode = status.colorMode, expandedDisp = expandedDisp,
+                onExpandDisp = { expandedDisp = it }, onLegal = { legalKind = it },
+                onClearCache = { confirmClearCache = true }, onOpenLut = { showLutPicker = true })
         }
-        OperatorCloseButton(
-            onClose = onClose,
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 22.dp),
-        )
         legalKind?.let { kind ->
             LegalDocumentScreen(kind = kind, onClose = { legalKind = null })
         }
@@ -613,7 +576,7 @@ private fun SettingsTopBar(
                     color = LiveDesign.accent,
                 )
                 Text(
-                    "Operator Setup",
+                    "Settings",
                     style = LiveType.title(24f, FontWeight.SemiBold),
                     color = LiveDesign.text,
                     maxLines = 1,
@@ -693,7 +656,7 @@ private fun SettingsTabStrip(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
-            SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.widthIn(min = 128.dp))
+            SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.widthIn(min = 96.dp))
         }
     }
 }
@@ -709,8 +672,8 @@ private fun SettingsTabButton(
     val selected = model.operatorSettingsTab == tab
     Row(
         modifier
-            .height(43.dp)
-            .background(if (selected) LiveDesign.surface else LiveDesign.surface.copy(alpha = 0f), ChromeShape)
+            .height(44.dp)
+            .background(if (selected) LiveDesign.accentDim else Color.Transparent, ChromeShape)
             .settingsClickable(role = Role.Tab) {
                 if (tab != model.operatorSettingsTab) operatorHaptic(view, hapticsEnabled)
                 model.operatorSettingsTab = tab
@@ -721,8 +684,8 @@ private fun SettingsTabButton(
     ) {
         Box(
             Modifier
-                .width(6.dp)
-                .height(26.dp)
+                .width(4.dp)
+                .height(20.dp)
                 .background(
                     if (selected) LiveDesign.accent else LiveDesign.accent.copy(alpha = 0f),
                     CircleShape,
@@ -763,15 +726,12 @@ private fun SettingsContentPane(
     Column(
         modifier
             .fillMaxSize()
-            .background(LiveDesign.surface, ChromeShape)
-            .clip(ChromeShape)
-            .border(1.dp, LiveDesign.hairline, ChromeShape)
-            .padding(12.dp),
+            .padding(horizontal = 4.dp, vertical = 3.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(tab.title, style = LiveType.title(24f, FontWeight.SemiBold), color = LiveDesign.text)
-                Text(tab.subtitle, style = LiveType.ui(12.5f), color = LiveDesign.muted, maxLines = 2)
+                Text(tab.title, style = LiveType.title(17f, FontWeight.SemiBold), color = LiveDesign.text)
+                Text(tab.subtitle, style = LiveType.ui(10.5f), color = LiveDesign.muted, maxLines = 2)
             }
             Text(
                 tab.pill.uppercase(),
@@ -1289,6 +1249,7 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
             operatorHaptic(view, model.hapticsEnabled)
             model.updateHapticsEnabled(next)
         }
+        if (model.session.hasGimbal) {
         SettingsInlineRow(
             title = "Joystick Sensitivity",
             help = SettingsHelpCopy.JOYSTICK_SENSITIVITY,
@@ -1317,6 +1278,7 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
                     modifier = Modifier.width(24.dp),
                 )
             }
+        }
         }
         SettingsInlineRow("Gamepad", SettingsHelpCopy.GAMEPAD) {
             SettingsValueText(if (model.gamepadConnected) "Connected" else "Not connected")
@@ -1349,11 +1311,7 @@ private fun DisplayRows(
                 resetDispChrome(model, mode)
             },
             captionMaxLines = Int.MAX_VALUE,
-            expanded = expandedDisp == mode,
-            onExpandToggle = {
-                operatorHaptic(view, model.hapticsEnabled)
-                onExpandDisp(if (expandedDisp == mode) null else mode)
-            },
+            expanded = true,
         ) {
             DispSectionBody(model, mode, isLive, view)
         }
@@ -1379,8 +1337,8 @@ private fun DispSectionBody(model: AppModel, mode: PocketDispMode, isLive: Boole
             color = LiveDesign.muted,
             modifier = Modifier.padding(vertical = 6.dp),
         )
-        DispToggles(model, mode, view)
     }
+    DispToggles(model, mode, view)
     if (mode == PocketDispMode.CLEAN) {
         Text(
             "View assists that stay on in clean view",
@@ -1430,7 +1388,7 @@ private val dispToggleSpecs =
 @Composable
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
-    dispToggleSpecs.forEach { spec ->
+    dispToggleSpecs.filter { it.section != PocketDispSection.GIMBAL_STICK || model.session.hasGimbal }.forEach { spec ->
         SettingsSwitchInlineRow(
             title = spec.title,
             help = spec.help,

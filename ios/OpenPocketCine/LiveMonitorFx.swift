@@ -44,6 +44,9 @@ struct LiveImageEffects: Equatable, Sendable {
     var trafficThreshold: Double = ScopeTrafficLights.defaultThreshold
     /// AF-C face box. Starts VT so Vision can see a `CVPixelBuffer`.
     var faceAF = false
+    /// An open inspector requests the existing decoded-source tap. It never
+    /// enables a main-picture effect or an additional decoder/display sink.
+    var inspectorSample = false
 
     /// Peaking / false colour / zebra / LUT / display transforms — painted on the video frame.
     var needsGPUFeed: Bool {
@@ -89,7 +92,7 @@ struct LiveImageEffects: Equatable, Sendable {
 
     /// GPU feed, CPU scopes, or AF-C face detect. Any one starts VT for a pixel buffer.
     var needsSample: Bool {
-        needsGPUFeed || needsScopes || faceAF
+        needsGPUFeed || needsScopes || faceAF || inspectorSample
     }
 
     var needsProcessedFeed: Bool { needsSample }

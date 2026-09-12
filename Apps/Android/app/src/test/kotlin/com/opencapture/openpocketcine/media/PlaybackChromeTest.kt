@@ -210,7 +210,7 @@ class PlaybackChromeTest {
         assertTrue(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FLAT))
         assertFalse(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FULL))
         assertEquals(0.72f, LiveDesign.playbackScrim.alpha, 0.01f)
-        assertTrue(LiveDesign.playbackScrim.alpha > LiveDesign.chromePlate.alpha)
+        assertTrue(LiveDesign.playbackScrim.alpha < LiveDesign.chromePlate.alpha)
         assertEquals(120f, PlaybackChromeMetrics.topScrimDp, 0.01f)
         assertEquals(200f, PlaybackChromeMetrics.bottomScrimDp, 0.01f)
     }
@@ -254,9 +254,9 @@ class PlaybackChromeTest {
 
     @Test
     fun playbackPanelIsDenseEnoughToRead() {
-        assertEquals(0.82f, LiveDesign.playbackPanel.alpha, 0.01f)
+        assertEquals(1f, LiveDesign.playbackPanel.alpha, 0.01f)
         assertTrue(LiveDesign.playbackPanel.alpha > LiveDesign.scopePlate.alpha)
-        assertTrue(LiveDesign.playbackPanel.alpha < LiveDesign.sheetPlate.alpha)
+        assertEquals(LiveDesign.playbackPanel.alpha, LiveDesign.sheetPlate.alpha)
     }
 
     @Test

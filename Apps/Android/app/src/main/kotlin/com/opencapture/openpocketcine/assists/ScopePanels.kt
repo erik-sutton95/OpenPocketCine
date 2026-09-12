@@ -339,9 +339,10 @@ internal fun MovableAssistPanel(
 }
 
 @Composable
-internal fun WaveformPanel(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
+internal fun WaveformPanel(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier,
+    previewBundle: com.opencapture.openpocketcine.feed.ScopeAssistBundle? = null) {
     val measurer = rememberTextMeasurer()
-    val bundle = state.scopeBundle
+    val bundle = previewBundle ?: state.scopeBundle
     val transfer = bundle.resolvedTransfer(colorMode)
     val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
     val intensity = WaveformAssist.intensity(state.waveBrightness)
@@ -365,9 +366,10 @@ internal fun WaveformPanel(state: LiveAssistState, colorMode: Int, modifier: Mod
 }
 
 @Composable
-internal fun ParadePanel(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
+internal fun ParadePanel(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier,
+    previewBundle: com.opencapture.openpocketcine.feed.ScopeAssistBundle? = null) {
     val measurer = rememberTextMeasurer()
-    val bundle = state.scopeBundle
+    val bundle = previewBundle ?: state.scopeBundle
     val transfer = bundle.resolvedTransfer(colorMode)
     val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
     val intensity = ParadeAssist.intensity(state.paradeBrightness)
@@ -392,9 +394,10 @@ internal fun ParadePanel(state: LiveAssistState, colorMode: Int, modifier: Modif
 }
 
 @Composable
-internal fun HistogramPanel(state: LiveAssistState, modifier: Modifier = Modifier) {
+internal fun HistogramPanel(state: LiveAssistState, modifier: Modifier = Modifier,
+    previewBundle: com.opencapture.openpocketcine.feed.ScopeAssistBundle? = null) {
     val measurer = rememberTextMeasurer()
-    val bundle = state.scopeBundle
+    val bundle = previewBundle ?: state.scopeBundle
     val display = bundle.histogramDisplay
     val traffic = bundle.traffic
     Canvas(modifier.fillMaxSize()) {
@@ -442,9 +445,10 @@ internal fun HistogramPanel(state: LiveAssistState, modifier: Modifier = Modifie
 }
 
 @Composable
-internal fun VectorscopePanel(state: LiveAssistState, modifier: Modifier = Modifier) {
+internal fun VectorscopePanel(state: LiveAssistState, modifier: Modifier = Modifier,
+    previewBundle: com.opencapture.openpocketcine.feed.ScopeAssistBundle? = null) {
     val measurer = rememberTextMeasurer()
-    val bundle = state.scopeBundle
+    val bundle = previewBundle ?: state.scopeBundle
     val intensity = VectorscopeAssist.intensity(state.vectorBrightness)
     val gain = state.vectorZoom.gain
     var trace by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -495,7 +499,7 @@ internal fun VectorscopePanel(state: LiveAssistState, modifier: Modifier = Modif
                 measurer,
                 target.label,
                 Offset(pt.x + dx / len * push - 4f * d, pt.y + dy / len * push - 4f * d),
-                TextStyle(color = VectorRing, fontSize = 6.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+                TextStyle(color = VectorRing, fontSize = 6.5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
             )
         }
         drawScopeTitle(measurer, "VECTOR", VectorscopeAssist.chip(state.vectorZoom))
@@ -503,9 +507,10 @@ internal fun VectorscopePanel(state: LiveAssistState, modifier: Modifier = Modif
 }
 
 @Composable
-internal fun TrafficLightsPanel(state: LiveAssistState, modifier: Modifier = Modifier) {
+internal fun TrafficLightsPanel(state: LiveAssistState, modifier: Modifier = Modifier,
+    previewBundle: com.opencapture.openpocketcine.feed.ScopeAssistBundle? = null) {
     val measurer = rememberTextMeasurer()
-    val reading = state.scopeBundle.traffic
+    val reading = (previewBundle ?: state.scopeBundle).traffic
     Canvas(modifier.fillMaxSize()) {
         val ui = minOf(this.size.width / ScopePanelSize.trafficLights.width, this.size.height / ScopePanelSize.trafficLights.height)
         val pad = TrafficLightsAssist.PANEL_PAD * ui
@@ -516,7 +521,7 @@ internal fun TrafficLightsPanel(state: LiveAssistState, modifier: Modifier = Mod
             TextStyle(
                 color = LiveDesign.text.copy(alpha = 0.58f),
                 fontSize = 8.5.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                 fontWeight = FontWeight.Bold,
             ),
         )
@@ -546,7 +551,7 @@ internal fun AudioMetersPanel(
             measurer,
             "AUDIO",
             Offset(2f, 4f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 6.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+            TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 6.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
         )
         val labelReserve = 22f
         val bars = AssistRect(0f, 16f, this.size.width, this.size.height - labelReserve - 16f)
@@ -590,20 +595,20 @@ internal fun AudioMetersPanel(
                 measurer,
                 pair.first,
                 Offset(track.midX - 3f, this.size.height - 18f),
-                TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 7.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+                TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 7.5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
             )
         }
         drawText(
             measurer,
             "SENS",
             Offset(2f, this.size.height - 12f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.42f), fontSize = 5.sp, fontFamily = FontFamily.Monospace),
+            TextStyle(color = LiveDesign.text.copy(alpha = 0.42f), fontSize = 5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora),
         )
         drawText(
             measurer,
             AudioAssist.displayedSensitivity(sensitivity),
             Offset(this.size.width / 2f - 6f, this.size.height - 12f),
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.72f), fontSize = 8.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+            TextStyle(color = LiveDesign.text.copy(alpha = 0.72f), fontSize = 8.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
         )
     }
 }
@@ -677,12 +682,12 @@ private fun DrawScope.drawScopeTitle(measurer: TextMeasurer, title: String, chip
         measurer,
         title,
         Offset(padX, padY),
-        TextStyle(color = LiveDesign.text.copy(alpha = 0.66f), fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+        TextStyle(color = LiveDesign.text.copy(alpha = 0.66f), fontSize = 10.5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
     )
     val chipLayout =
         measurer.measure(
             chip,
-            TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+            TextStyle(color = LiveDesign.text.copy(alpha = 0.58f), fontSize = 9.5.sp, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora, fontWeight = FontWeight.Bold),
         )
     drawText(chipLayout, topLeft = Offset(size.width - chipLayout.size.width - padX, 5.dp.toPx()))
 }

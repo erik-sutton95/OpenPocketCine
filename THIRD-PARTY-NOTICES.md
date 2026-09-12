@@ -13,14 +13,14 @@ references that are **not** distributed.
 ## Sora
 
 - **Homepage:** <https://github.com/sora-xor/sora-font>
-- **Used for:** iOS UI type
-- **License:** SIL Open Font License 1.1 (full text in `ios/OpenPocketCine/Resources/Fonts/OFL-Sora.txt`)
+- **Used for:** shared native iOS and Android UI type
+- **License:** SIL Open Font License 1.1 (full text in `Sources/MonitorUI/Resources/Fonts/OFL-Sora.txt`)
 - **Copyright:** 2019 The Sora Project Authors
 
 ## IBM Plex Sans
 
 - **Homepage:** <https://github.com/IBM/plex>
-- **Used for:** iOS UI type
+- **Used for:** public website typography (web font); native UI uses Sora
 - **License:** SIL Open Font License 1.1 (full text in `ios/OpenPocketCine/Resources/Fonts/OFL-IBMPlexSans.txt`)
 - **Copyright:** 2017 IBM Corp. with Reserved Font Name "Plex"
 
@@ -40,9 +40,9 @@ project (see [NOTICE](NOTICE), the
 
 - **Homepage:** <https://github.com/lucide-icons/lucide>
 - **Used for:** HUD and chrome glyphs on iOS and Android (`OpcIcon`). Vendored SVGs live in
-  `ios/OpenPocketCine/Resources/Icons/lucide/` and
-  `Apps/Android/app/src/main/assets/icons/lucide/`; Android also ships VectorDrawables under
-  `Apps/Android/app/src/main/res/drawable/opc_lucide_*.xml`.
+  `Sources/MonitorUI/Resources/Icons/lucide/` and
+  `Apps/Android/monitor-ui/src/main/assets/icons/lucide/`; Android also ships VectorDrawables under
+  `Apps/Android/monitor-ui/src/main/res/drawable/opc_lucide_*.xml`.
 - **License:** ISC (full text in those `LICENSE.txt` files). Some glyphs in this set are derived
   from [Feather](https://github.com/feathericons/feather) and are additionally MIT
   (`aperture`, `check`, `chevron-down`, `chevron-left`, `chevron-right`, `chevron-up`, `circle`,
@@ -94,3 +94,13 @@ SOFTWARE.
 Bundled under `ios/OpenPocketCine/Resources/` for in-app monitoring looks (D-Log / D-Log2 / D-Log M
 → Rec.709). Redistributed for identification of the camera color science; not affiliated with DJI.
 Unofficial copies and vivid variants are not committed.
+
+## Field Monitor View Assist icons
+
+- **Used for:** the exact 14 tool glyphs extracted from the approved Field Monitor
+  design, including Tabler-derived path artwork.
+- **Homepage:** <https://github.com/tabler/tabler-icons>
+- **License:** MIT. The full license accompanies the SVGs in
+  `Sources/MonitorUI/Resources/Icons/assist/LICENSE-Tabler.txt` and
+  `Apps/Android/monitor-ui/src/main/assets/icons/assist/LICENSE-Tabler.txt`.
+- **Copyright:** 2020-2026 Paweł Kuna.

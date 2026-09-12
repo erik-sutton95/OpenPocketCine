@@ -5,11 +5,13 @@ import android.view.ScaleGestureDetector
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +28,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -86,7 +89,23 @@ fun LiveZoomChip(
     pinching: Boolean = false,
     dimmed: Boolean = false,
     onCycle: () -> Unit,
+    maximum: Double = 1.0,
+    onDial: ((Double) -> Unit)? = null,
+    onDialEnd: () -> Unit = {},
+    dialForeground: @Composable BoxScope.() -> Unit = {},
+    opticalStops: List<Double> = listOf(1.0),
 ) {
+    var dialOpen by remember { mutableStateOf(false) }
+    var dialBase by remember { mutableStateOf(factor) }
+    if (dialOpen && !locked && onDial != null) {
+        val end by rememberUpdatedState(onDialEnd)
+        DisposableEffect(Unit) { onDispose { end() } }
+        com.opencapture.openpocketcine.monitor.MonitorZoomDial(dialBase, maximum,
+            onChange = { onDial(it / dialBase.coerceAtLeast(1.0)) },
+            onDismiss = { dialOpen = false }, foreground = dialForeground, opticalStops = opticalStops)
+    }
+    val orientation = LocalConfiguration.current.orientation
+    LaunchedEffect(locked, orientation) { dialOpen = false }
     var held by remember { mutableStateOf(factor) }
     LaunchedEffect(factor, pinching) {
         if (LiveZoomLabelHold.shouldReplace(held, factor, pinching)) {
@@ -96,17 +115,17 @@ fun LiveZoomChip(
     Box(
         modifier
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
-            .monitorGlass(CircleShape)
-            .chromeClickable(enabled = !locked, onClick = onCycle)
+            .chromeClickable(enabled = !locked && !dimmed, onClick = onCycle,
+                onLongClick = if (onDial != null && maximum > 1.0) { { dialBase = factor; dialOpen = true } } else null)
             .semantics {
-                contentDescription = "Zoom ${LiveZoom.label(held)}. Cycles 1×, 3×, 6×, and 12×"
+                contentDescription = "Zoom ${LiveZoom.label(held)}. Tap to cycle; hold to adjust"
             },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             LiveZoom.label(held),
             color = LiveDesign.text.copy(alpha = if (locked || dimmed) 0.4f else 1f),
-            style = LiveType.ui(13f, FontWeight.Bold),
+            style = LiveType.ui(18f, FontWeight.Medium),
             maxLines = 1,
         )
     }

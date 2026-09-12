@@ -81,49 +81,26 @@ internal fun AssistScrollChevron(leading: Boolean, visible: Boolean, modifier: M
     )
 }
 
-/** Lucide twins for Pocket tools. ZEBRA keeps the custom stripe canvas. */
-private val LiveAssistTool.opcIcon: OpcIcon?
-    get() =
-        when (this) {
-            LiveAssistTool.LUT -> OpcIcon.BLEND
-            LiveAssistTool.PEAK -> OpcIcon.MOUNTAIN
-            LiveAssistTool.FALSE -> OpcIcon.CONTRAST
-            LiveAssistTool.ZEBRA -> null
-            LiveAssistTool.WAVE -> OpcIcon.AUDIO_WAVEFORM
-            LiveAssistTool.PARADE -> OpcIcon.CHART_COLUMN
-            LiveAssistTool.HISTO -> OpcIcon.AUDIO_LINES
-            LiveAssistTool.VECTOR -> OpcIcon.CROSSHAIR
-            LiveAssistTool.LIGHTS -> OpcIcon.SUN
-            LiveAssistTool.ND -> OpcIcon.APERTURE
-            LiveAssistTool.AUDIO -> OpcIcon.SLIDERS_VERTICAL
-            LiveAssistTool.GUIDES -> OpcIcon.SQUARE_DASHED
-            LiveAssistTool.GRID -> OpcIcon.GRID_3X3
-            LiveAssistTool.CROSS -> OpcIcon.PLUS
-            LiveAssistTool.MIRROR -> OpcIcon.FLIP_HORIZONTAL_2
-        }
-
+/** The supplied design owns assist glyphs; the existing ND extension uses Lucide. */
 @Composable
 internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier) {
-    val icon = tool.opcIcon
-    if (icon != null) {
-        OpcIcon(icon = icon, contentDescription = null, tint = tint, modifier = modifier)
-        return
+    val icon = when (tool) {
+        LiveAssistTool.LUT -> com.opencapture.monitorui.MonitorAssistIcon.LUT
+        LiveAssistTool.PEAK -> com.opencapture.monitorui.MonitorAssistIcon.PEAKING
+        LiveAssistTool.FALSE -> com.opencapture.monitorui.MonitorAssistIcon.FALSE_COLOR
+        LiveAssistTool.ZEBRA -> com.opencapture.monitorui.MonitorAssistIcon.ZEBRA
+        LiveAssistTool.WAVE -> com.opencapture.monitorui.MonitorAssistIcon.WAVEFORM
+        LiveAssistTool.PARADE -> com.opencapture.monitorui.MonitorAssistIcon.RGB_PARADE
+        LiveAssistTool.HISTO -> com.opencapture.monitorui.MonitorAssistIcon.HISTOGRAM
+        LiveAssistTool.VECTOR -> com.opencapture.monitorui.MonitorAssistIcon.VECTORSCOPE
+        LiveAssistTool.LIGHTS -> com.opencapture.monitorui.MonitorAssistIcon.TRAFFIC_LIGHTS
+        LiveAssistTool.GUIDES -> com.opencapture.monitorui.MonitorAssistIcon.FRAME_GUIDE
+        LiveAssistTool.GRID -> com.opencapture.monitorui.MonitorAssistIcon.GRID
+        LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistIcon.CROSSHAIR
+        LiveAssistTool.MIRROR -> com.opencapture.monitorui.MonitorAssistIcon.MIRROR
+        LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAssistIcon.AUDIO_METERS
+        LiveAssistTool.ND -> null
     }
-    Canvas(modifier) {
-        val diag = 0.7071f
-        val halfLen = size.minDimension * 0.40f / 2
-        val step = size.minDimension * 0.27f
-        for (index in 0 until 3) {
-            val offset = index - 1f
-            val cx = size.width / 2 + offset * step * diag
-            val cy = size.height / 2 + offset * step * diag
-            drawLine(
-                tint,
-                Offset(cx - halfLen * 2 * diag, cy + halfLen * 2 * diag),
-                Offset(cx + halfLen * 2 * diag, cy - halfLen * 2 * diag),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-    }
+    if (icon == null) OpcIcon(OpcIcon.APERTURE, null, modifier, tint)
+    else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
 }

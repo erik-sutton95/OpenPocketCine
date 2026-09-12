@@ -1,3 +1,4 @@
+import MonitorPresentation
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -147,6 +148,8 @@ enum HistogramAssist {
         var trafficLights: Bool
         var crushClipCompensation: CrushClipCompensation
         var scale: Double
+        /// False only for a fresh automatic size; legacy saved scales stay explicit.
+        var hasCustomScale: Bool
         var storedCenter: StoredCenter?
         var storedCenterPortrait: StoredCenter?
 
@@ -161,18 +164,21 @@ enum HistogramAssist {
             trafficLights: Bool = true,
             crushClipCompensation: CrushClipCompensation = .zero,
             scale: Double = defaultScale,
+            hasCustomScale: Bool = false,
             storedCenter: StoredCenter? = nil,
             storedCenterPortrait: StoredCenter? = nil
         ) {
             self.trafficLights = trafficLights
             self.crushClipCompensation = crushClipCompensation
             self.scale = Self.clampedScale(scale)
+            self.hasCustomScale = hasCustomScale || scale != defaultScale
             self.storedCenter = storedCenter
             self.storedCenterPortrait = storedCenterPortrait
         }
 
         enum CodingKeys: String, CodingKey {
-            case trafficLights, crushClipCompensation, scale, storedCenter, storedCenterPortrait
+            case trafficLights, crushClipCompensation, scale, hasCustomScale, storedCenter,
+                storedCenterPortrait
         }
 
         init(from decoder: any Decoder) throws {
@@ -183,6 +189,11 @@ enum HistogramAssist {
                 ?? .zero
             scale = Self.clampedScale(
                 try c.decodeIfPresent(Double.self, forKey: .scale) ?? defaultScale)
+            // Old JSON cannot distinguish an untouched 1.0 from a manual 1.0.
+            // Preserve it rather than rewriting an operator's layout on upgrade.
+            hasCustomScale =
+                try c.decodeIfPresent(Bool.self, forKey: .hasCustomScale)
+                ?? true
             storedCenter = try c.decodeIfPresent(StoredCenter.self, forKey: .storedCenter)
             storedCenterPortrait = try c.decodeIfPresent(
                 StoredCenter.self, forKey: .storedCenterPortrait)
@@ -345,7 +356,21 @@ final class HistogramAssistStore {
     }
 
     func setScale(_ scale: Double) {
-        options.scale = HistogramAssist.Options.clampedScale(scale)
+        var next = options
+        next.scale = HistogramAssist.Options.clampedScale(scale)
+        next.hasCustomScale = true
+        options = next
+    }
+
+    /// Plot, hit frame and resize origin all consume the same effective size.
+    func presentationScale(
+        in bounds: CGRect, tablet: Bool? = nil
+    ) -> Double {
+        guard bounds.width > 1, bounds.height > 1 else { return options.scale }
+        return MonitorScopeSizing.scale(
+            portrait: bounds.height > bounds.width,
+            tablet: tablet ?? (UIDevice.current.userInterfaceIdiom == .pad),
+            preferred: options.hasCustomScale ? options.scale : nil)
     }
 
     func sessionCenter(in bounds: CGRect) -> CGPoint? {
@@ -480,9 +505,9 @@ struct HistogramMovablePanel<Content: View>: View {
     }
 
     var body: some View {
-        let options = store.options
         let size = ScopePanelPlacement.fittedSize(
-            HistogramAssist.panelSize(scale: options.scale), in: movementBounds)
+            HistogramAssist.panelSize(scale: store.presentationScale(in: canvas)),
+            in: movementBounds)
         let fallback = HistogramAssist.defaultCenter(
             feed: feed, size: size, bounds: canvas, chromeClearance: chromeClearance)
         let rawCenter = HistogramAssist.resolvedCenter(
@@ -538,7 +563,8 @@ struct HistogramMovablePanel<Content: View>: View {
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
                 let size = ScopePanelPlacement.fittedSize(
-                    HistogramAssist.panelSize(scale: store.options.scale), in: movementBounds)
+                    HistogramAssist.panelSize(scale: store.presentationScale(in: canvas)),
+                    in: movementBounds)
                 let snapped = ScopePanelPlacement.clamp(
                     HistogramAssist.snap(proposed), size: size, in: movementBounds)
                 let cell = HistogramAssist.hapticCell(snapped)
@@ -575,7 +601,7 @@ struct HistogramMovablePanel<Content: View>: View {
             .onChanged { drag in
                 if !isResizing {
                     isResizing = true
-                    resizeStartScale = store.options.scale
+                    resizeStartScale = store.presentationScale(in: canvas)
                 }
                 let reach = HistogramAssist.baseSize.width + HistogramAssist.baseSize.height
                 let delta = (drag.translation.width + drag.translation.height) / reach

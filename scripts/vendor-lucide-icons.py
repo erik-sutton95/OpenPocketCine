@@ -19,10 +19,12 @@ ICON_COMMIT = "33a44aa8b0b43d9b0ed14eb08860a1b5550a1573"
 # at ICON_COMMIT rather than inventing aliases.
 ICON_NAMES = [
     "aperture",
+    "arrow-up-down",
     "audio-lines",
     "audio-waveform",
     "blend",
     "camera",
+    "card-sim",
     "chart-column",
     "check",
     "chevron-down",
@@ -32,6 +34,7 @@ ICON_NAMES = [
     "chevrons-up-down",
     "circle",
     "circle-check",
+    "circle-question-mark",
     "circle-play",
     "circle-plus",
     "contrast",
@@ -52,6 +55,7 @@ ICON_NAMES = [
     "layers",
     "layout-grid",
     "layout-list",
+    "link-2-off",
     "list-filter",
     "lock",
     "maximize",
@@ -65,6 +69,7 @@ ICON_NAMES = [
     "plus",
     "radio",
     "refresh-cw",
+    "repeat",
     "rotate-cw",
     "scan",
     "settings",
@@ -81,6 +86,7 @@ ICON_NAMES = [
     "sun",
     "thermometer",
     "timer",
+    "triangle-alert",
     "trash",
     "unplug",
     "upload",
@@ -110,9 +116,9 @@ LICENSE_URL = (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-IOS_DIR = ROOT / "ios/OpenPocketCine/Resources/Icons/lucide"
-ANDROID_SVG_DIR = ROOT / "Apps/Android/app/src/main/assets/icons/lucide"
-ANDROID_DRAWABLE_DIR = ROOT / "Apps/Android/app/src/main/res/drawable"
+IOS_DIR = ROOT / "Sources/MonitorUI/Resources/Icons/lucide"
+ANDROID_SVG_DIR = ROOT / "Apps/Android/monitor-ui/src/main/assets/icons/lucide"
+ANDROID_DRAWABLE_DIR = ROOT / "Apps/Android/monitor-ui/src/main/res/drawable"
 
 
 def fmt(value: float) -> str:

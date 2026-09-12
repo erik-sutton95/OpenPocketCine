@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -85,52 +86,14 @@ struct SettingsRootView: View {
     @State private var legalKind: LegalDocumentView.Kind?
     @State private var showLUTPicker = false
     @State private var showWatcherWiFiCode = false
-    @State private var expandedDisp: PocketDispMode?
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            LiveDesign.background
-            GeometryReader { proxy in
-                let portrait = proxy.size.height > proxy.size.width
-
-                Group {
-                    if portrait {
-                        VStack(alignment: .leading, spacing: 8) {
-                            settingsTabStrip
-                            settingsTop(stacked: true)
-                            settingsContent
-                        }
-                    } else {
-                        VStack(spacing: 8) {
-                            settingsTop(
-                                stacked: proxy.size.width < OperatorPanelMetrics.topStackWidth
-                            )
-                            .padding(
-                                .leading,
-                                OperatorPanelMetrics.closeButtonClearance(safeArea: safeArea))
-                            HStack(alignment: .top, spacing: 8) {
-                                settingsRail
-                                settingsContent
-                                    .layoutPriority(1)
-                                    .frame(minWidth: 0, maxWidth: .infinity)
-                            }
-                        }
-                    }
-                }
-                // Fill the physical screen; inset only enough to clear the island (passed
-                // safeArea.leading / .trailing) and the 16pt floor on the clean edge.
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.top, OperatorPanelMetrics.settingsTopPadding(safeArea: safeArea))
-                .padding(.leading, OperatorPanelMetrics.leadingPadding(safeArea: safeArea))
-                .padding(.trailing, OperatorPanelMetrics.trailingPadding(safeArea: safeArea))
-                .padding(.bottom, OperatorPanelMetrics.bottomPadding(safeArea: safeArea))
-            }
-
-            CloseButton(action: dismiss, size: OperatorPanelMetrics.closeSize)
-                .padding(.leading, OperatorPanelMetrics.closeLeading)
-                .padding(.top, OperatorPanelMetrics.closeTopPadding(safeArea: safeArea))
+        MonitorPage(safeArea: safeArea) { portrait in
+            settingsNavigation(portrait: portrait)
+        } detail: { _ in
+            settingsContent
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
@@ -158,113 +121,67 @@ struct SettingsRootView: View {
         }
     }
 
-    private func settingsTop(stacked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("OpenPocketCine")
-                        .font(LiveType.ui(size: 9.5, weight: .bold))
-                        .kerning(0.8)
-                        .foregroundStyle(LiveDesign.accent)
-                        .textCase(.uppercase)
-                    Text("Operator Setup")
-                        .font(LiveType.ui(size: 24, weight: .semibold))
-                        .foregroundStyle(LiveDesign.text)
+    private func settingsNavigation(portrait: Bool) -> some View {
+        VStack(alignment: .leading, spacing: portrait ? 9 : 8) {
+            MonitorPageHeading(
+                brand: "OpenPocketCine", title: "Operator Setup",
+                backLabel: model.isLive ? "Back to live" : "Your cameras", back: dismiss
+            )
+            ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
+                let layout =
+                    portrait
+                    ? AnyLayout(HStackLayout(spacing: 3))
+                    : AnyLayout(VStackLayout(spacing: 3))
+                layout {
+                    ForEach(OperatorSettingsTab.allCases) { tab in
+                        MonitorNavigationItem(
+                            tab.rawValue, subtitle: tabSubtitle(tab),
+                            selected: model.operatorSettingsTab == tab
+                        ) {
+                            if tab != model.operatorSettingsTab {
+                                OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
+                            }
+                            model.operatorSettingsTab = tab
+                        }
+                        .fixedSize(horizontal: portrait, vertical: false)
+                        .accessibilityIdentifier("monitor.settings.tab.\(tab.id)")
+                    }
+                }
+            }
+            .frame(height: portrait ? 44 : nil)
+            .accessibilityIdentifier("monitor.settings.tabs")
+            sessionControls(portrait: portrait)
+        }
+    }
+
+    private func sessionControls(portrait: Bool) -> some View {
+        let layout =
+            portrait
+            ? AnyLayout(HStackLayout(spacing: 8))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+        return layout {
+            HStack(spacing: 8) {
+                Circle().fill(model.isLive ? Color.green : MonitorTheme.faint)
+                    .frame(width: 7, height: 7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.isLive ? "Active link" : "No camera connected")
+                        .font(MonitorTheme.font(11.5, weight: .semibold))
+                        .foregroundStyle(MonitorTheme.text)
+                    Text(model.session.phase.label)
+                        .font(MonitorTheme.font(9)).foregroundStyle(MonitorTheme.muted)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                 }
-                Spacer()
-                if !stacked { sessionControls }
-            }
-            if stacked { sessionControls }
-        }
-    }
-
-    @ViewBuilder private var sessionControls: some View {
-        if model.isLive {
-            HStack(spacing: 10) {
-                SettingsActionPill(
-                    title: "Disconnect",
-                    systemImage: "link",
-                    slashesIcon: true,
-                    tint: LiveDesign.rec,
-                    background: LiveDesign.rec.opacity(0.16),
-                    fillsHeight: true
-                ) { model.disconnect() }
-                SettingsLiveTile()
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-            SettingsLiveTile()
-        }
-    }
-
-    private var settingsRail: some View {
-        VStack(spacing: 5) {
-            ForEach(OperatorSettingsTab.allCases) { tab in
-                settingsTabButton(tab)
-            }
-        }
-        .padding(6)
-        .frame(width: 146)
-        .fixedSize(horizontal: true, vertical: false)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .liquidGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
-    }
-
-    private var settingsTabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 5) {
-                ForEach(OperatorSettingsTab.allCases) { tab in
-                    settingsTabButton(tab)
-                }
-            }
-            .padding(6)
-        }
-        .liquidGlass(
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-        )
-        .padding(.leading, 45)
-    }
-
-    private func settingsTabButton(_ tab: OperatorSettingsTab) -> some View {
-        Button {
-            if tab != model.operatorSettingsTab {
-                OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
-            }
-            model.operatorSettingsTab = tab
-        } label: {
-            HStack(spacing: 9) {
-                Capsule()
-                    .fill(model.operatorSettingsTab == tab ? LiveDesign.accent : Color.clear)
-                    .frame(width: 6, height: 26)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(tab.rawValue)
-                        .font(LiveType.ui(size: 13, weight: .semibold))
-                        .foregroundStyle(
-                            model.operatorSettingsTab == tab ? LiveDesign.text : LiveDesign.muted
-                        )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                    Text(tabSubtitle(tab))
-                        .font(LiveType.ui(size: 10.5, weight: .regular))
-                        .foregroundStyle(LiveDesign.faint)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 43)
-            .background(
-                model.operatorSettingsTab == tab ? LiveDesign.surface : Color.clear,
-                in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-            )
+            .padding(9)
+            .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+            if model.isLive {
+                SettingsActionPill(
+                    title: "Disconnect", icon: .link2Off,
+                    tint: LiveDesign.rec, background: LiveDesign.rec.opacity(0.12)
+                ) { model.disconnect() }
+            }
         }
-        .buttonStyle(.zcTapTarget)
     }
 
     private var settingsContent: some View {
@@ -272,16 +189,16 @@ struct SettingsRootView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(model.operatorSettingsTab.rawValue)
-                        .font(LiveType.ui(size: 24, weight: .semibold))
+                        .font(MonitorTheme.font(17, weight: .semibold))
                         .foregroundStyle(LiveDesign.text)
                     Text(subtitle)
-                        .font(LiveType.ui(size: 12.5, weight: .regular))
+                        .font(MonitorTheme.font(10.5))
                         .foregroundStyle(LiveDesign.muted)
                         .lineLimit(2)
                 }
                 Spacer()
                 Text(pillText.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(MonitorTheme.font(10, weight: .bold)).monospacedDigit()
                     .kerning(0.6)
                     .foregroundStyle(LiveDesign.accent)
                     .padding(.horizontal, 10)
@@ -289,8 +206,10 @@ struct SettingsRootView: View {
                     .overlay(Capsule().stroke(LiveDesign.accentDim, lineWidth: 1))
             }
             SettingsTabScrollArea(tabID: model.operatorSettingsTab.id) {
-                settingsRows
-                    .padding(.bottom, keyboardInset)
+                MonitorCardColumns {
+                    settingsRows
+                }
+                .padding(.bottom, keyboardInset)
             }
         }
         .onReceive(
@@ -307,17 +226,7 @@ struct SettingsRootView: View {
         ) { _ in
             withAnimation(.easeOut(duration: 0.2)) { keyboardInset = 0 }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            LiveDesign.surface,
-            in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-                .stroke(LiveDesign.hairline, lineWidth: 1)
-        )
     }
 
     private var subtitle: String {
@@ -371,7 +280,7 @@ struct SettingsRootView: View {
     // MARK: - Link
 
     @ViewBuilder private var linkRows: some View {
-        SettingsLinkHealthCard()
+        SettingsLinkHealthCard().monitorFullWidthCard()
 
         SettingsRowCard(title: "Connection") {
             SettingsInlineRow(
@@ -448,7 +357,8 @@ struct SettingsRootView: View {
             SettingsRowCard {
                 SettingsInlineRow(
                     title: "Sharing unavailable in Multiview",
-                    help: "Connect to one camera from Your cameras to share its feed with watchers.",
+                    help:
+                        "Connect to one camera from Your cameras to share its feed with watchers.",
                     showTopDivider: false
                 ) {
                     EmptyView()
@@ -651,42 +561,42 @@ struct SettingsRootView: View {
     // MARK: - Controls
 
     @ViewBuilder private var controlsRows: some View {
-        SettingsRowCard {
+        SettingsRowCard(title: "Touch & safety") {
             SettingsSwitchInlineRow(
-                title: "Record Confirmation",
-                help: SettingsHelpCopy.recordConfirmation,
-                showTopDivider: false,
-                isOn: model.recordConfirmationEnabled
+                title: "Record confirmation", help: SettingsHelpCopy.recordConfirmation,
+                showTopDivider: false, isOn: model.recordConfirmationEnabled
             ) { model.recordConfirmationEnabled.toggle() }
             SettingsSwitchInlineRow(
-                title: "Haptics",
-                help: SettingsHelpCopy.haptics,
-                isOn: model.hapticsEnabled
+                title: "Haptics", help: SettingsHelpCopy.haptics, isOn: model.hapticsEnabled
             ) { model.hapticsEnabled.toggle() }
             SettingsSwitchInlineRow(
-                title: "Head Tracking (Experimental)",
-                help: SettingsHelpCopy.headTracking,
-                isOn: model.headTrackingEnabled
-            ) { model.headTrackingEnabled.toggle() }
-            SettingsInlineRow(
-                title: "Joystick Sensitivity",
-                help: SettingsHelpCopy.joystickSensitivity,
-                stacked: true
-            ) {
-                GimbalStickSensitivitySlider(
-                    value: Bindable(model).gimbalStickSensitivity)
+                title: "Keep screen awake", help: SettingsHelpCopy.keepScreenAwake,
+                isOn: model.keepScreenAwake
+            ) { model.keepScreenAwake.toggle() }
+        }
+        let capabilities = OsmoMonitorPresentation.capabilities(model.session)
+        if capabilities.gimbal {
+            SettingsRowCard(title: "Gimbal") {
+                SettingsInlineRow(
+                    title: "Joystick sensitivity", help: SettingsHelpCopy.joystickSensitivity,
+                    showTopDivider: false, stacked: true
+                ) {
+                    GimbalStickSensitivitySlider(value: Bindable(model).gimbalStickSensitivity)
+                }
+                if capabilities.headTracking {
+                    SettingsSwitchInlineRow(
+                        title: "Head Tracking (Experimental)", help: SettingsHelpCopy.headTracking,
+                        isOn: model.headTrackingEnabled
+                    ) { model.headTrackingEnabled.toggle() }
+                }
             }
+        }
+        SettingsRowCard(title: "Controller") {
             SettingsInlineRow(
-                title: "Gamepad",
-                help: SettingsHelpCopy.gamepad
+                title: "Gamepad", help: SettingsHelpCopy.gamepad, showTopDivider: false
             ) {
                 SettingsValueText(value: model.gamepadConnected ? "Connected" : "Not connected")
             }
-            SettingsSwitchInlineRow(
-                title: "Keep Screen Awake",
-                help: SettingsHelpCopy.keepScreenAwake,
-                isOn: model.keepScreenAwake
-            ) { model.keepScreenAwake.toggle() }
         }
     }
 
@@ -704,8 +614,6 @@ struct SettingsRootView: View {
             )
         }
         .onAppear {
-            guard let returning = model.chromeEditorReturnMode else { return }
-            expandedDisp = returning
             model.chromeEditorReturnMode = nil
         }
     }
@@ -716,32 +624,10 @@ struct SettingsRootView: View {
         reset: @escaping () -> Void
     ) -> some View {
         SettingsRowCard(title: section.settingsTitle, onReset: reset) {
-            Button {
-                OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
-                expandedDisp = expandedDisp == section ? nil : section
-            } label: {
-                HStack {
-                    Text(section.settingsCaption)
-                        .font(LiveType.ui(size: 11, weight: .semibold))
-                        .foregroundStyle(LiveDesign.muted)
-                        .multilineTextAlignment(.leading)
-                    Spacer(minLength: 8)
-                    Group {
-                        if expandedDisp == section {
-                            OpcIcon.chevronUp
-                        } else {
-                            OpcIcon.chevronDown
-                        }
-                    }
-                    .foregroundStyle(LiveDesign.faint)
-                    .frame(width: 11, height: 11)
-                }
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.zcTapTarget)
-            if expandedDisp == section {
-                dispSectionBody(section)
-            }
+            Text(section.settingsCaption)
+                .font(MonitorTheme.font(10.5)).foregroundStyle(MonitorTheme.muted)
+                .padding(.vertical, 5)
+            dispSectionBody(section)
         }
     }
 
@@ -758,8 +644,8 @@ struct SettingsRootView: View {
                 .font(LiveType.ui(size: 11, weight: .semibold))
                 .foregroundStyle(LiveDesign.muted)
                 .padding(.vertical, 6)
-            dispToggles(section == .clean ? Bindable(model).dispClean : Bindable(model).dispLive)
         }
+        dispToggles(section == .clean ? Bindable(model).dispClean : Bindable(model).dispLive)
         if section == .clean {
             cleanViewPinBlock
         }

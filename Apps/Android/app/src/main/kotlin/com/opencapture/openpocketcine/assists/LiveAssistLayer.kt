@@ -389,7 +389,7 @@ private fun GuidesOverlay(state: LiveAssistState, feed: AssistRect) {
             aspect.label,
             color = LiveDesign.accent,
             fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.2.sp,
             modifier =
@@ -484,7 +484,7 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
             "False Color",
             color = LiveDesign.text,
             fontSize = 8.5.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.TopStart),
         )
@@ -492,7 +492,7 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
             "${state.falseColorScale.menuLabel} · $curve",
             color = LiveDesign.muted,
             fontSize = 7.5.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             modifier = Modifier.align(Alignment.TopEnd),
         )
         if (markers.isNotEmpty()) {
@@ -502,7 +502,7 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
                         marker.label,
                         color = LiveDesign.muted,
                         fontSize = 5.5.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                         modifier =
                             Modifier.offset(
                                 x = (ScopePanelSize.falseColorReference.width * marker.fraction.toFloat() - 10f).dp,
@@ -521,7 +521,7 @@ private fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mod
                         label,
                         color = LiveDesign.muted,
                         fontSize = 5.5.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
                     )
                 }
             }
