@@ -42,6 +42,75 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.math.abs
 import kotlin.math.hypot
 
+/** Main-thread admission closes before negotiation is dispatched to the IO worker. */
+internal class EndpointCommandAdmission {
+    private var owner: Any? = null
+
+    fun begin(): Any = Any().also { owner = it }
+
+    fun finish(token: Any) {
+        if (owner === token) owner = null
+    }
+
+    fun allows(isClosed: Boolean, isRebuilding: Boolean): Boolean =
+        owner == null && !isClosed && !isRebuilding
+}
+
+/** Keep blocking negotiation and its post-handshake enable owned by the same live link. */
+internal suspend fun <T : Any> repairDatalinkEndpoint(
+    link: T,
+    isCurrent: (T) -> Boolean,
+    reopen: (T) -> Unit,
+    pictureTimeoutMs: Long = 2 * LiveViewEnablePolicy.FOREGROUND_PICTURE_GRACE_MS,
+    waitForPicture: suspend () -> Unit = {},
+    recoverSession: () -> Unit = {},
+    commandAdmission: EndpointCommandAdmission = EndpointCommandAdmission(),
+    prepare: () -> Unit = {},
+    enable: () -> Unit,
+) {
+    val commandOwner = commandAdmission.begin()
+    try {
+        prepare()
+        interruptibleDatalinkOpen { reopen(link) }
+        coroutineContext.ensureActive()
+        if (!isCurrent(link)) return
+        commandAdmission.finish(commandOwner)
+        enable()
+        val presented = kotlinx.coroutines.withTimeoutOrNull(pictureTimeoutMs) {
+            waitForPicture()
+            true
+        } ?: false
+        coroutineContext.ensureActive()
+        if (!presented && isCurrent(link)) recoverSession()
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        coroutineContext.ensureActive()
+        if (isCurrent(link)) recoverSession()
+    } finally {
+        commandAdmission.finish(commandOwner)
+    }
+}
+
+internal fun acceptsGimbalConfiguration(
+    hasGimbal: Boolean, live: Boolean, sceneActive: Boolean, warming: Boolean,
+    recovering: Boolean, videoStale: Boolean, hasDatalink: Boolean,
+): Boolean = hasGimbal && live && sceneActive && !warming && !recovering && !videoStale && hasDatalink
+
+/** A serialized command chain keeps its original endpoint epoch across every suspension. */
+internal class EndpointCommandEpoch(val generation: Long) :
+    kotlin.coroutines.AbstractCoroutineContextElement(Key) {
+    companion object Key : kotlin.coroutines.CoroutineContext.Key<EndpointCommandEpoch>
+}
+
+internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
+    coroutineContext.ensureActive()
+    val epoch = coroutineContext[EndpointCommandEpoch]
+    if (epoch != null && epoch.generation != currentGeneration) {
+        throw kotlinx.coroutines.CancellationException("camera command endpoint changed")
+    }
+}
+
 /**
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
  * Mirrors iOS `CameraSession` recovery, feed watchdog, and operator commands.
@@ -52,6 +121,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
     private val cadence = LivePipelineCadence()
+    private val videoHistory = LiveSessionVideoHistory()
     val decoder = HevcDecoder(cadence).also { dec ->
         dec.onParameterSetsChanged = {
             scope.launch {
@@ -116,6 +186,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         get() = isBrowsingMedia
     private var audioDspBlob: ByteArray? = null
     private var audioTail: Job? = null
+    private var audioGeneration = 0L
     private var audioPin: AudioPin? = null
     @Volatile private var pendingGimbalAxes: Pair<Int, Int> =
         CameraCommands.GIMBAL_STICK_CENTER to CameraCommands.GIMBAL_STICK_CENTER
@@ -231,6 +302,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val _connectionTargetId = MutableStateFlow<String?>(null)
     val connectionTargetId: StateFlow<String?> = _connectionTargetId.asStateFlow()
     private var feedRecoveryJob: Job? = null
+    private val endpointCommandAdmission = EndpointCommandAdmission()
     private var lastFirstPictureLogAt = 0L
     private var lastFirstPictureSignature = ""
     private var lastRecoverSkipAt = 0L
@@ -318,14 +390,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             Log.i(TAG, "wifi: SoftAP reassociated — rebuild UDP, keep LIVE")
             endGimbalStick()
             startFeedRecovery {
-                withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                if (!coroutineContext.isActive) return@startFeedRecovery
-                val videoAge = datalink?.lastVideoPacketAt?.let { SystemClock.elapsedRealtime() - it }
-                val hadVideo =
-                    LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
-                if (LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)) {
-                    sendRecoverEnable(force = true, reason = "wifi reassociated")
-                }
+                rebuildDatalinkKeepingPicture("wifi reassociated")
             }
         }
     }
@@ -438,6 +503,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         disposeDatalink()
         ble.disconnect()
         decoder.reset()
+        videoHistory.reset()
         joiner.release()
         wifiLock.release()
         connectedCamera = null
@@ -524,8 +590,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         streamStartedAt = null
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
-        if (!holdsMonitor) decoder.reset()
-        else decoder.beginIDRHold()
+        if (!holdsMonitor) {
+            decoder.reset()
+            videoHistory.reset()
+        } else decoder.beginIDRHold()
         publishPhase(ConnectionPhase.CONNECTING_GATT)
         startFrameRouter()
         ble.connect(camera)
@@ -638,6 +706,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
      * turn. SoftAP still up after a miss → retry, do not pop pairing.
      */
     private suspend fun openDatalinkKeepingLive(camera: FoundCamera, warmRejoin: Boolean = false) {
+        val commandOwner = endpointCommandAdmission.begin()
+        try {
+            negotiateDatalinkKeepingLive(camera, warmRejoin)
+        } finally {
+            endpointCommandAdmission.finish(commandOwner)
+        }
+    }
+
+    private suspend fun negotiateDatalinkKeepingLive(camera: FoundCamera, warmRejoin: Boolean) {
         val existing = datalink
         val dl =
             existing?.takeIf { LiveViewEnablePolicy.shouldReuseDatalink(it.isClosed) }
@@ -647,6 +724,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     camera.model.tcpPoke,
                     camera.model.pairingToken,
                     cadence,
+                    videoHistory,
                 ).also { created ->
                     created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
                     created.onAccessUnit = { au ->
@@ -789,28 +867,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         if (!isBrowsingMedia && shouldStartUDPRebuild) {
                             endGimbalStick()
                             startFeedRecovery {
-                                withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                                if (!coroutineContext.isActive) return@startFeedRecovery
-                                val videoAge =
-                                    datalink?.lastVideoPacketAt?.let {
-                                        SystemClock.elapsedRealtime() - it
-                                    }
-                                val hadVideo =
-                                    LiveViewEnablePolicy.hadVideo(
-                                        datalink?.videoPackets ?: 0, videoAge,
-                                    )
-                                val force =
-                                    LiveViewEnablePolicy.shouldForceEnableAfterUDPRebuild(hadVideo)
-                                if (liveViewEnableSends > 0 && force) {
-                                    Log.i(
-                                        TAG,
-                                        "live: first-picture enable after UDP rebuild (neverGotVideo)",
-                                    )
-                                    sendRecoverEnable(
-                                        force = true,
-                                        reason = "first-picture after UDP rebuild",
-                                    )
-                                }
+                                rebuildDatalinkKeepingPicture("keepalive UDP repair")
                             }
                         }
                         withContext(Dispatchers.IO) { datalink?.keepalive() }
@@ -1016,8 +1073,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (elapsed < min) delay(min - elapsed)
     }
 
-    private fun recoverFirstPictureIfNeeded(now: Long, packets: Int) {
-        if (datalink?.isRebuilding == true || feedRecoveryJob != null) return
+    private fun recoverFirstPictureIfNeeded(
+        now: Long, packets: Int, currentRepairOwnsPicture: Boolean = false,
+    ) {
+        if (datalink?.isRebuilding == true || (feedRecoveryJob != null && !currentRepairOwnsPicture)) return
         val sinceEnable = if (lastIdrRequest == 0L) 0L else now - lastIdrRequest
         val step =
             LiveViewEnablePolicy.firstPictureStep(
@@ -1056,6 +1115,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 )
             }
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
+                if (currentRepairOwnsPicture) return
                 val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
                 val noPicture = decoder.lastPresentedAt == null && !decoder.hasFormat
                 if (LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
@@ -1074,12 +1134,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
                 Log.i(TAG, "live: first-picture rebuild UDP (receive died pkts=$packets)")
                 startFeedRecovery {
-                    withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                    if (!coroutineContext.isActive) return@startFeedRecovery
-                    sendCapturedLiveView("first-picture after UDP rebuild")
+                    rebuildDatalinkKeepingPicture("first-picture after UDP rebuild")
                 }
             }
             LiveViewEnablePolicy.FirstPictureStep.REJOIN -> {
+                if (currentRepairOwnsPicture) return
                 Log.i(TAG, "live: first-picture full rejoin (SoftAP bind kept)")
                 startFeedRecovery { rejoinDatalinkKeepingLive() }
             }
@@ -1105,6 +1164,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 decoderErrors = decoderErrors,
                 live = _phase.value == ConnectionPhase.LIVE,
                 sawPicture = decoder.lastPresentedAt != null,
+                hadVideo = videoHistory.hadVideo(packets, videoAgeMs),
                 lastFocusTrackAt = lastFocusTrackAt,
                 lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
                 lastGimbalThrowAt = lastGimbalThrowAt,
@@ -1129,7 +1189,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     append(",\"live\":${_phase.value == ConnectionPhase.LIVE}")
                     append(",\"sawPicture\":${decoder.lastPresentedAt != null}")
                     append(",\"tcpPokeReady\":${datalink?.isTcpPokeReady == true}")
-                    append(",\"hadVideo\":${LiveViewEnablePolicy.hadVideo(packets, videoAgeMs)}")
+                    append(",\"hadVideo\":${videoHistory.hadVideo(packets, videoAgeMs)}")
                     age(decoder.lastPresentedAt)?.let { append(",\"lastDecodedFrameAge\":$it") }
                     age(datalink?.lastVideoPacketAt)?.let { append(",\"lastVideoPacketAge\":$it") }
                     age(datalink?.lastAccessUnitAt)?.let { append(",\"lastAccessUnitAge\":$it") }
@@ -1153,13 +1213,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 -> {
                     endGimbalStick()
                     startFeedRecovery {
-                        withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                        if (!coroutineContext.isActive) return@startFeedRecovery
-                        sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
+                        rebuildDatalinkKeepingPicture("feed watchdog UDP rebuild")
                     }
                 }
-                // Last rung: the session-preserving rebuild did not bring 9004
-                // back. New handshake on the same SoftAP, last frame held.
+                // Last rung: endpoint negotiation did not restore picture.
+                // Replace the whole driver on the same SoftAP, last frame held.
                 "fullSessionRejoin" -> {
                     endGimbalStick()
                     Log.i(TAG, "feed: watchdog full datalink rejoin")
@@ -1178,9 +1236,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.Action.REBUILD_UDP -> {
                 endGimbalStick()
                 startFeedRecovery {
-                    withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-                    if (!coroutineContext.isActive) return@startFeedRecovery
-                    sendRecoverEnable(force = true, reason = "feed watchdog UDP rebuild")
+                    rebuildDatalinkKeepingPicture("feed watchdog UDP rebuild")
                 }
             }
         }
@@ -1287,6 +1343,60 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         sendCapturedLiveView(reason)
     }
 
+    /** Keep the held picture; the fresh endpoint receives one enable from this repair owner. */
+    private suspend fun rebuildDatalinkKeepingPicture(reason: String) {
+        val link = datalink ?: return
+        var startedAt = 0L
+        repairDatalinkEndpoint(
+            link = link,
+            isCurrent = { datalink === it && !it.isClosed },
+            commandAdmission = endpointCommandAdmission,
+            prepare = {
+                retireEndpointCommands()
+                liveViewEnableSends = 0
+                resetFirstPictureFormatPoke()
+                idrHoldEnableCount = 0
+                firstPictureSettled = false
+                focusTrackPending = true
+            },
+            reopen = {
+                decoder.prepareAfterForeground()
+                decoder.flushForRecovery()
+                it.rebuildUdp()
+            },
+            waitForPicture = {
+                while (datalink === link && !link.isClosed && !hasRecoveryPicture(startedAt)) {
+                    recoverFirstPictureIfNeeded(SystemClock.elapsedRealtime(), link.videoPackets,
+                        currentRepairOwnsPicture = true)
+                    delay(100)
+                }
+            },
+            recoverSession = {
+                DiagnosticCenter.log("notice", "recovery", "endpoint",
+                    "feed: endpoint repair did not restore picture ($reason)")
+                beginSessionRecovery("camera endpoint did not recover", SessionRecoveryTrigger.DATALINK_LOST)
+            },
+        ) {
+            // Reject every queued pre-negotiation image, including one decoded
+            // while open was awaiting its handshake. The next IDR owns picture.
+            startedAt = decoder.beginPresentationProbe()
+            sendCapturedLiveView(reason)
+            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            feedWatchdog.reset()
+        }
+    }
+
+    private fun retireEndpointCommands() {
+        audioGeneration += 1
+        audioTail?.cancel()
+        audioTail = null
+        failAllWaiters(kotlinx.coroutines.CancellationException("camera endpoint changed"))
+        pairingHold.clear()
+        inflight.clear()
+        inflightPending.clear()
+        commandTimeoutsAt.clear()
+    }
+
     private fun startFeedRecovery(work: suspend () -> Unit) {
         cancelProgrammedMove()
         val inFlight = datalink?.isRebuilding == true || feedRecoveryJob != null
@@ -1378,6 +1488,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private suspend fun rejoinDatalinkKeepingLive() {
         val camera = connectedCamera ?: return
         Log.i(TAG, "feed: full datalink rejoin (SoftAP bind kept)")
+        retireEndpointCommands()
         disposeDatalink()
         withContext(Dispatchers.IO) { decoder.prepareAfterForeground() }
         liveViewEnableSends = 0
@@ -1514,9 +1625,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         keepaliveJob?.cancel()
         keepaliveJob = null
         endGimbalStick()
-        failAllWaiters(IllegalStateException("the camera disconnected"))
+        retireEndpointCommands()
         disposeDatalink()
-        if (preserveDecoder) decoder.flushForRecovery() else decoder.reset()
+        if (preserveDecoder) decoder.flushForRecovery() else {
+            decoder.reset()
+            videoHistory.reset()
+        }
         if (!preserveSoftAP) {
             joiner.release()
         }
@@ -3008,7 +3122,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setGimbalMode(mode: GimbalMode) {
-        if (!hasGimbal) return
+        if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
         _gimbalMode.value = mode
         when (mode) {
@@ -3044,7 +3158,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setGimbalSpeed(speed: GimbalSpeed) {
-        if (!hasGimbal) return
+        if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
         _gimbalSpeed.value = speed
         datalink?.sendDuml(
@@ -3272,11 +3386,24 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun isLiveVideoStale(): Boolean {
         val now = SystemClock.elapsedRealtime()
-        val recovering = feedRecoveryJob != null || datalink?.isRebuilding == true
+        val recovering = _phase.value != ConnectionPhase.LIVE || holdsMonitor ||
+            feedRecoveryJob != null || datalink?.isRebuilding == true
         val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
-        val had = LiveViewEnablePolicy.hadVideo(datalink?.videoPackets ?: 0, videoAge)
+        val had = videoHistory.hadVideo(datalink?.videoPackets ?: 0, videoAge)
         return LiveViewEnablePolicy.shouldTreatLiveVideoAsStale(videoAge, had, recovering)
     }
+
+    private fun canChangeGimbalSettings(): Boolean = acceptsGimbalConfiguration(
+        hasGimbal = hasGimbal,
+        live = _phase.value == ConnectionPhase.LIVE,
+        sceneActive = !needsForegroundRecover && !isBrowsingMedia,
+        warming = !firstPictureSettled || decoder.lastPresentedAt?.let {
+            SystemClock.elapsedRealtime() - it in 0 until LiveViewEnablePolicy.STALL_MS
+        } != true,
+        recovering = holdsMonitor || recoveryJob != null || feedRecoveryJob != null,
+        videoStale = isLiveVideoStale(),
+        hasDatalink = datalink?.isClosed == false,
+    )
 
     /** Prefer the Swift `GimbalStick.encode` wire; Kotlin copies the same gain/deadzone. */
     private fun encodedGimbalAxes(
@@ -3578,9 +3705,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun enqueueAudio(work: suspend () -> Unit) {
         val previous = audioTail
+        val generation = audioGeneration
         audioTail =
-            scope.launch {
+            scope.launch(EndpointCommandEpoch(generation)) {
                 previous?.join()
+                if (generation != audioGeneration) return@launch
                 work()
             }
     }
@@ -3593,8 +3722,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         receiver: Int = CameraCommands.RX_CAMERA,
         flags: Int = CameraCommands.FLAG_REQUEST,
     ): Boolean {
+        ensureEndpointCommandCurrent(audioGeneration)
         val dl = datalink
-        if (dl == null) {
+        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             return false
         }
@@ -3618,6 +3748,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     Log.i(TAG, "control: timeout $name — waiter saw no ACK")
                     return false
                 }
+            ensureEndpointCommandCurrent(audioGeneration)
             val parsed = CameraReply.parse(reply.payload)
             if (!parsed.isSuccess) {
                 _controlNote.value = "$name: ${parsed.message}"
@@ -3645,7 +3776,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         onSettle: ((Boolean) -> Unit)? = null,
     ) {
         val dl = datalink
-        if (dl == null) {
+        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             onFail?.invoke()
             onSettle?.invoke(false)
@@ -3799,11 +3930,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         Log.i(TAG, "control: SET timeouts with video stale — rebuild UDP")
         endGimbalStick()
         startFeedRecovery {
-            withContext(Dispatchers.IO) { datalink?.rebuildUdpKeepingSession() }
-            if (!coroutineContext.isActive) return@startFeedRecovery
-            if (liveViewEnableSends > 0) {
-                sendRecoverEnable(force = false, reason = "command timeouts")
-            }
+            rebuildDatalinkKeepingPicture("command timeouts")
         }
     }
 
@@ -3817,8 +3944,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         name: String,
         timeoutMs: Long = 3_000,
     ): Boolean {
+        ensureEndpointCommandCurrent(audioGeneration)
         val dl = datalink
-        if (dl == null) {
+        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             return false
         }
@@ -3842,6 +3970,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     Log.i(TAG, "control: timeout $name — waiter saw no ACK")
                     return false
                 }
+            ensureEndpointCommandCurrent(audioGeneration)
             val parsed = CameraReply.parse(reply.payload)
             if (!parsed.isSuccess) {
                 _controlNote.value = "$name: ${parsed.message}"
@@ -4019,6 +4148,7 @@ internal object LiveViewEnablePolicy {
         val lastFocusTrackAt: Long? = null,
         val lastZoomAt: Long? = null,
         val lastGimbalThrowAt: Long? = null,
+        val hadVideo: Boolean? = null,
     )
 
     fun age(now: Long, at: Long?): Long? = at?.let { now - it }
@@ -4498,7 +4628,7 @@ internal object LiveViewEnablePolicy {
             return Action.NONE
         }
 
-        val had = hadVideo(snap.videoPackets, videoAge)
+        val had = snap.hadVideo ?: hadVideo(snap.videoPackets, videoAge)
         if (!had) {
             if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
                 return Action.NONE

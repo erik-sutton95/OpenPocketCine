@@ -16,9 +16,26 @@ import os
 final class DatalinkDriver {
     private let stationHost: String?
     private let stationHotspot: Bool
-    private var remoteHost: String { stationHost ?? CameraSoftAP.host }
+    #if DEBUG
+        private var usesLoopbackForTesting = false
+        /// Runs the real UDP handshake/recovery against a deterministic local peer.
+        static func loopbackForTesting(port: UInt16) -> DatalinkDriver {
+            let driver = DatalinkDriver(port: port, tcpPoke: false, pairingToken: "")
+            driver.usesLoopbackForTesting = true
+            return driver
+        }
+    #endif
+    private var remoteHost: String {
+        #if DEBUG
+            if usesLoopbackForTesting { return "127.0.0.1" }
+        #endif
+        return stationHost ?? CameraSoftAP.host
+    }
     private var pathReady: Bool {
-        stationHost == nil
+        #if DEBUG
+            if usesLoopbackForTesting { return true }
+        #endif
+        return stationHost == nil
             ? WiFiJoiner.isCameraPathReady()
             : SharedWiFiPath.address(hotspot: stationHotspot) != nil
     }
@@ -384,7 +401,7 @@ final class DatalinkDriver {
 
     /// Re-assert app-presence + ack; call ~1 Hz to hold the session (and playback) open.
     func keepalive() {
-        if closed { return }
+        if closed || rebuilding || !handshakeAcked { return }
         sendDuml(Commands.appPresenceFrame(seq: 0))
         sendAck()
     }
@@ -423,7 +440,10 @@ final class DatalinkDriver {
     /// Returns the `dumlSeq` stamped on the wire (the builder's `seq` is a placeholder).
     @discardableResult
     func send(_ frame: Duml.Frame) -> UInt16 {
-        if closed { return 0 }
+        guard !closed, !rebuilding, handshakeAcked else {
+            lastCommandWriteLanded = false
+            return 0
+        }
         lastCommandWriteLanded = nil
         lastCommandSendAt = Date()
         return sendDuml(frame, trackCommand: true)
@@ -432,7 +452,7 @@ final class DatalinkDriver {
     /// GET polls (Selfie Flip). Must not latch command-write health or SET timeouts.
     @discardableResult
     func sendUntracked(_ frame: Duml.Frame) -> UInt16 {
-        if closed { return 0 }
+        guard !closed, !rebuilding, handshakeAcked else { return 0 }
         return sendDuml(frame, trackCommand: false)
     }
 
@@ -797,41 +817,30 @@ final class DatalinkDriver {
         if closed || Task.isCancelled { throw CancellationError() }
     }
 
-    /// Tear down a dead `en0` channel-flow and open a new UDP socket on the
-    /// interface that owns `192.168.2.x`. Keeps session/seq so the camera
-    /// still recognizes us; live-view enable is the caller's job if video dies.
-    /// Does not touch TCP 7001 — canceling the poke is the `tcp_output RST`.
+    /// A replacement ephemeral endpoint must negotiate a new camera session.
+    /// Keeping only session/seq left the camera sending to the retired port.
+    /// Reuse the normal handshake/register/subscribe chain and a ready TCP poke;
+    /// the caller owns exactly one live enable after this succeeds.
     func rebuildUDP(reason: String) async throws {
         if closed || rebuilding { return }
         rebuilding = true
         lastRebuildAt = Date()
         defer { rebuilding = false }
-        log.info("datalink: rebuilding UDP (\(reason, privacy: .public))")
-        ControlLiveLog.line("datalink: rebuilding UDP (\(reason))")
-        let wasAccepting = wire.withLock { $0.liveAccepting }
+        ControlLiveLog.line("datalink: renegotiating UDP endpoint (\(reason))")
+        // Do not send old-session ACKs while open resets its handshake state.
+        ackTimer?.cancel()
+        ackTimer = nil
         discardUDP()
-        writeHealthy = true
-        lastCommandWriteLanded = nil
-        videoAssembler.noteRebuild()
-        // Pre-rebuild lastStatus is the old 5-tuple. Leaving it young looks
-        // like encoder-pause on the new bind and GOP-cuts immediately.
-        lastStatusDate = nil
-        try await waitForCameraPath(timeout: 5)
-        if closed { return }
-        try await refreshCameraPath()
-        if closed { return }
-        try await openUDP()
-        if closed {
+        do {
+            try await open()
+            try throwIfClosed()
+        } catch {
+            ackTimer?.cancel()
+            ackTimer = nil
             discardUDP()
-            return
+            throw error
         }
-        writeHealthy = true
-        syncWire()
-        if CameraSoftAP.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: wasAccepting) {
-            armLiveVideo()
-        }
-        sendAck()
-        sendDuml(Commands.appPresenceFrame(seq: 0), trackCommand: false)
+        ControlLiveLog.line("datalink: UDP endpoint negotiated (\(reason))")
     }
 
     /// Drop the live UDP socket only. TCP 7001 stays up for the session.
@@ -1590,6 +1599,9 @@ final class DatalinkDriver {
     }
 
     private func waitForCameraPath(timeout: TimeInterval = 15) async throws {
+        #if DEBUG
+            if usesLoopbackForTesting { return }
+        #endif
         if stationHost == nil {
             try await WiFiJoiner.waitUntilCameraPathReady(timeout: timeout)
         } else if !pathReady {
@@ -1598,6 +1610,9 @@ final class DatalinkDriver {
     }
 
     private func refreshCameraPath() async throws {
+        #if DEBUG
+            if usesLoopbackForTesting { return }
+        #endif
         if stationHost != nil {
             cameraLocalIPv4 = SharedWiFiPath.address(hotspot: stationHotspot)
             cameraInterface = nil
@@ -1627,6 +1642,9 @@ final class DatalinkDriver {
     /// Bind to the SoftAP IPv4 / interface. `requiredInterfaceType = .wifi` alone
     /// scopes the flow to `en0` (home Wi-Fi) and later writes fail.
     private func cameraParameters(_ p: NWParameters) -> NWParameters {
+        #if DEBUG
+            if usesLoopbackForTesting { return p }
+        #endif
         p.prohibitedInterfaceTypes = [.cellular]
         p.allowLocalEndpointReuse = true
         var boundLocal = false

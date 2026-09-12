@@ -1184,7 +1184,8 @@ extension LiveViewScreen {
     private func scopeClearance(
         layout: LiveMonitorLayout, portrait: MonitorPortraitZones? = nil
     ) -> EdgeInsets {
-        // Scopes may sit under the joystick/zoom cluster; it draws above them.
+        // Scopes may sit under the joystick/zoom cluster and Head Lock button;
+        // those controls draw above them without shrinking the scope canvas.
         // The main record/media/settings rail still reserves space.
         var top = layout.safeArea.top
         var bottomY = layout.viewport.height
@@ -1193,16 +1194,6 @@ extension LiveViewScreen {
         if let zones = portrait {
             // The portrait record/media/settings row remains protected below the assist bar.
             bottomY = CGFloat(zones.systemBar.minY)
-            if model.headTrackingEnabled {
-                let floor = CGFloat(
-                    Self.portraitBelowFeedFloor(
-                        fill: Self.portraitChoice(model: model).fill, zones: zones))
-                bottomY = min(
-                    bottomY,
-                    LiveMonitorLayout.headTrackCalibrateFrame(
-                        canvasWidth: layout.viewport.width, barTopY: floor
-                    ).minY)
-            }
             if Self.portraitChoice(model: model).fill, model.chromeSectionMounts(.toolBar) {
                 // Reserve the expanded rail so opening it never covers a scope.
                 left = max(
@@ -1218,9 +1209,6 @@ extension LiveViewScreen {
             } else {
                 right = min(right, layout.rail.minX)
             }
-        }
-        if portrait == nil, model.headTrackingEnabled {
-            bottomY = min(bottomY, layout.gimbalCalibrate.minY)
         }
         if portrait == nil, model.session.isFocusResetAvailable {
             top = max(top, layout.focusReset.maxY)

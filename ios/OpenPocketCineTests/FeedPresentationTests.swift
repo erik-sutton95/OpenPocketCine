@@ -8,6 +8,58 @@ import os
 
 @MainActor
 final class FeedPresentationTests: XCTestCase {
+    func testRecoveryKeepsHeldPictureButOldGPUCompletionCannotProveNewSourcePresented() async throws
+    {
+        let feed = try makeFeed()
+        let decoder = HevcDecoder()
+        decoder.effects.desqueezeFactor = 1.33
+        decoder.processedFeed = feed
+        let session = CameraSession(borrowing: decoder)
+        defer { decoder.reset() }
+        let drawable = try TestFeedDrawable(layer: feed.layer as! CAMetalLayer)
+        feed.presentOperations.acquire = { _ in drawable }
+        feed.presentOperations.submit = { _, _, completed in completed(true) }
+        XCTAssertTrue(feed.display(picture, timeNs: 10))
+        let heldDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !feed.hasPresentedFrame, ContinuousClock.now < heldDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let heldAt = try XCTUnwrap(feed.lastPresentedAt)
+
+        let submitted = expectation(description: "Pre-recovery GPU work is pending")
+        let completion = OSAllocatedUnfairLock<(@Sendable (Bool) -> Void)?>(initialState: nil)
+        feed.presentOperations.submit = { _, _, done in
+            completion.withLock { $0 = done }
+            submitted.fulfill()
+        }
+        XCTAssertTrue(feed.display(picture, timeNs: 20))
+        await fulfillment(of: [submitted], timeout: 3)
+        let oldCompletion = try XCTUnwrap(completion.withLock { $0 })
+        let started = Date()
+        decoder.flushForRecovery()
+        XCTAssertTrue(feed.hasPresentedFrame, "Recovery retains the operator's held image")
+        XCTAssertEqual(feed.lastPresentedAt, heldAt)
+        let replacement = OSAllocatedUnfairLock<(@Sendable (Bool) -> Void)?>(initialState: nil)
+        feed.presentOperations.submit = { _, _, done in replacement.withLock { $0 = done } }
+        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer(), timeNs: 30)
+        let sourceDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while decoder.lastSourceFrameAt.map({ $0 > started }) != true,
+            ContinuousClock.now < sourceDeadline
+        {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertGreaterThan(try XCTUnwrap(decoder.lastSourceFrameAt), started)
+        oldCompletion(true)
+        try await Task.sleep(for: .milliseconds(40))
+        XCTAssertEqual(
+            feed.lastPresentedTimeNs, 10, "An old GPU flight cannot replace the held image")
+        XCTAssertEqual(feed.lastPresentedAt, heldAt)
+        XCTAssertFalse(
+            session.hasFreshRecoveryPicture(since: started),
+            "New decode plus an old frame completion is not a newly presented picture")
+        replacement.withLock { $0 }?(false)
+    }
+
     func testPresentationJournalReportsSilenceAfterAWindowOfPicture() throws {
         var metrics = FeedPresentationMetrics(startedAt: 0)
         for tick in 1...25 { metrics.notePresented(at: Double(tick) / 25) }

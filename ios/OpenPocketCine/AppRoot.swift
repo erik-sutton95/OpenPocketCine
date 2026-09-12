@@ -53,7 +53,7 @@ final class AppModel {
     }
     /// A manual mode selection takes control back from the AirPods stream.
     func setGimbalMode(_ mode: GimbalMode) {
-        guard session.hasGimbal, !session.isLocked else { return }
+        guard session.canSetGimbalConfiguration else { return }
         headTrackingEnabled = false
         session.setGimbalMode(mode)
     }

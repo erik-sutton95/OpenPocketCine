@@ -6,12 +6,12 @@ New and changed
 Fixes
 
 - App return checks camera Wi-Fi and reconnects when needed. Recovery waits for a new picture and stops automatic retries after a bounded interval.
-- Canceled connection work cannot keep opening the old link. Gimbal input waits for the live picture; stalled rendering no longer counts as a successful recovery.
+- Reconnect starts a fresh camera session; old control requests cannot carry over. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
 - Live rendering now synchronizes the completed frame with presentation. Please check motion smoothness on your phone.
 - Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
 
 What to test
 
 - On Pocket 4 Pro, compare static shots and slow pans with LUT/scopes off and on, especially on Redmi and Samsung. Share diagnostics with the time of any stutter.
-- Try joystick immediately after first picture. Leave the app for 15 and 60 seconds; check recovery after a camera Wi-Fi change or camera power cycle.
+- Try joystick and gimbal modes immediately after first picture. Leave the app for 15 and 60 seconds; check recovery after a camera Wi-Fi change or camera power cycle.
 - Try Retry, Cancel and reconnect repeatedly. Check portrait 3K on Pocket 3 and the gimbal menu. Motion Control remains experimental.

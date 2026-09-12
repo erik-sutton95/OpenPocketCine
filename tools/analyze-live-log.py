@@ -14,6 +14,10 @@ def summarize(lines):
         if "feed: delivery " in line:
             for name, value in re.findall(r"(\w+)=([0-9.]+)", line):
                 samples[name].append(float(value))
+        if "feed: decode " in line and "vtActive=1" in line:
+            for name, value in re.findall(r"(\w+)=([0-9.]+)", line):
+                if name != "vtActive":
+                    samples[name].append(float(value))
         if "feed: cadence " in line:
             for stage, rate, gap, age in re.findall(
                 r"(\w+)=([0-9.]+)/s gap=([0-9.]+)ms age=(-?[0-9.]+)ms", line
@@ -38,6 +42,7 @@ def summarize(lines):
             ("session: recovery exhausted", "exhausted recovery budgets"),
             ("session: recovery episode exhausted", "exhausted recovery budgets"),
             ("datalink: rebuilding UDP", "UDP rebuilds"),
+            ("datalink: renegotiating UDP endpoint", "UDP rebuilds"),
             ("feed: recover 0x09/0xa8", "recovery enables"),
             ("feed: freeze", "presentation freezes"),
             ("qualification: unexpected", "qualification failures"),

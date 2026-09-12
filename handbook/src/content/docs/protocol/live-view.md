@@ -24,6 +24,13 @@ The video is on the [DUML datalink](../duml-transport/) itself — **UDP port 90
 
 In the available single-client captures, that media is **unicast** to one client 5-tuple: camera `192.168.2.1:9004` → the phone's camera DHCP IPv4 and an ephemeral local port. No camera multicast or broadcast HEVC/AVC was observed. Simply joining the SoftAP does not duplicate that flow; a second client's handshake behavior remains untested. The app keeps one camera client. A second screen is a **phone-side relay**: the operator iPhone re-encodes the live picture and advertises Bonjour `_opc-mon._tcp` (Operator Setup → Sharing). Other OpenPocketCine iPhones and iPads join the same camera Wi-Fi and receive the relay from the host. Only the host opens the camera datalink. Peer-to-peer discovery and streaming are disabled to avoid radio contention.
 
+A replacement UDP socket can select a different local port. The September 12
+Pocket 4 Pro capture showed camera traffic remaining addressed to the retired
+port while the phone submitted ACKs from its replacement. A fresh handshake,
+registration and subscription restored traffic on the current endpoint. Repair
+must negotiate that endpoint, then enable once; local socket readiness and ACK
+writes do not establish camera acceptance.
+
 ## Enable
 
 Pocket live-entry also sends DUML **`0x02/0x68`** payload `08` (AE Lock Status Set, same bytes as the tap-focus hint) **immediately before** `0x09/0xa8`. Mimo `mimo-disconnect-20260822-105228`: first live after gallery is `0x68` then an `0xa8` burst then a 137 B VPS (NAL 32/33/34). Return-from-gallery on the same 5-tuple can skip `0x68` and still start on VPS. There is **no** live-stop command — Disconnect leaves the last GOP running, which is why handshake can see leftover TRAIL P-frames (`nals=1,35,40`) before enable. Nano has no captured `0x68` pair. Clients must keep ingesting pktType `0x02` while the library or settings cover the monitor — dropping those packets blacks the well on return (no periodic GOP). The live present surface must stay attached under that overlay too: Android API 34+ SurfaceView otherwise destroys the window when it is covered, and leftover GOP packets are not a replacement picture.
@@ -98,7 +105,7 @@ Pocket HEVC IRAP is often **BLA_W_LP (16)** (`0x20`) or **IDR_N_LP (20)** (`0x28
 
 ## Window ACK
 
-Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop. Seq `0` is a valid cursor once seen; telemetry must not rewind group 0 after the first `0x02`, or group 1 after the first `0x03`. A session-preserving UDP rebuild must re-arm `0x02` ingest even when it skips another `0x09/0xa8`.
+Mimo sends pktType `0x04` ~40 Hz. The 26-byte payload is three window groups: latest **video** (`0x02`) seq, latest **ackedData** (`0x03`) seq, and a third cursor from 34-byte `0x01` telemetry. 1 Hz is not enough once live view is flowing. Command replies (Selfie Flip GET `0x8E` pid `0x38` included) ride `0x03` — the ACK must echo that seq or those replies stop. Seq `0` is a valid cursor once seen; telemetry must not rewind group 0 after the first `0x02`, or group 1 after the first `0x03`. A negotiated UDP rebuild arms `0x02` ingest on the new handshake ACK and receives one enable from its repair owner.
 
 ## Depacketizer
 

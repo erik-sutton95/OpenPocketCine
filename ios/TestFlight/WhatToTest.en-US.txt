@@ -8,10 +8,11 @@ Fixes
 
 - App return checks camera Wi-Fi and reconnects when needed. Recovery waits for a new picture and stops automatic retries after a bounded interval.
 - Live rendering avoids waiting for a drawable on the main thread. Old decoder results cannot dismiss a new recovery; gimbal control waits for the live picture.
+- Reconnect starts a fresh camera session. AirPods startup offers clearer permission and retry guidance; scopes can sit beneath Head Lock.
 - Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
 
 What to test
 
 - On Pocket 4 Pro, compare static shots and slow pans with LUT/scopes off and on. Try LUT 50/50 and rotation; share diagnostics with the time of any stutter.
-- Try joystick immediately after first picture, then AirPods tracking separately. Leave the app for 15 and 60 seconds; check recovery after a camera Wi-Fi change.
+- Try joystick and gimbal modes after first picture, then AirPods calibration and scopes beneath Head Lock. Leave the app for 15 and 60 seconds; check recovery after a camera Wi-Fi change.
 - Check Retry, Cancel and reconnect after a camera power cycle. Try Watch preview and recording. AirPods and Motion Control remain experimental.

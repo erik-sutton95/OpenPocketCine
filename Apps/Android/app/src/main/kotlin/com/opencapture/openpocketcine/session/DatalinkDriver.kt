@@ -142,6 +142,15 @@ internal class DatalinkCloseSequence(
 /** iOS `DatalinkError.noHandshake` — recoverable, never `error()` / crash. */
 class DatalinkHandshakeException(message: String) : IOException(message)
 
+/** Session history survives replacement UDP counters and held-picture reconnects. */
+internal class LiveSessionVideoHistory {
+    private val receivedVideo = AtomicBoolean(false)
+    fun noteVideoPacket() { receivedVideo.set(true) }
+    fun reset() { receivedVideo.set(false) }
+    fun hadVideo(endpointPackets: Int, endpointVideoAgeMs: Long?): Boolean =
+        receivedVideo.get() || LiveViewEnablePolicy.hadVideo(endpointPackets, endpointVideoAgeMs)
+}
+
 /**
  * DUML-over-UDP datalink. Byte builders live in Swift; this owns the socket,
  * session/seq counters, 40 Hz ACK pump, and HEVC depacketizer handle.
@@ -152,6 +161,7 @@ class DatalinkDriver internal constructor(
     private val tcpPoke: Boolean,
     private val pairingToken: String,
     private val cadence: LivePipelineCadence = LivePipelineCadence(),
+    private val videoHistory: LiveSessionVideoHistory = LiveSessionVideoHistory(),
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
@@ -383,18 +393,20 @@ class DatalinkDriver internal constructor(
     }
 
     fun keepalive() {
-        sendCommand(SwiftCore.CMD_APP_PRESENCE)
-        sendAck()
+        enqueueTx {
+            // Check at emission, since a repair can begin after this tick queued.
+            // open() owns registration and ACKs until the endpoint is negotiated.
+            if (!rebuilding && handshakeAcked) {
+                sendCommandLocked(SwiftCore.CMD_APP_PRESENCE, null)
+                sendWindowAckOnTx()
+            }
+        }
     }
 
     private fun settleAfterSubscribe(timeoutMs: Long) {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (SystemClock.elapsedRealtime() < deadline) {
-            try {
-                Thread.sleep(10)
-            } catch (_: InterruptedException) {
-                break
-            }
+            Thread.sleep(10)
         }
         val status = if (lastStatusElapsed.get() > 0) 1 else 0
         Log.i(TAG, "datalink: subscribe settled ${timeoutMs}ms status=$status")
@@ -450,11 +462,31 @@ class DatalinkDriver internal constructor(
     }
 
     /**
-     * Tear down a dead UDP bind and open a new socket. Keeps session/seq, the
-     * depacketizer, and TCP 7001. Live-view enable is the caller's job.
+     * A new local UDP port must negotiate a new camera endpoint. Reuse the normal
+     * bounded handshake/register/subscribe path, retaining ready TCP 7001 and the
+     * caller's decoder. The caller owns one live enable after successful negotiation.
      */
-    fun rebuildUdpKeepingSession() {
-        onTxBlocking { rebuildUdpOnNetwork() }
+    fun rebuildUdp() {
+        synchronized(this) {
+            if (closed.get() || rebuilding) throw DatalinkHandshakeException("datalink repair unavailable")
+            if (!joiner.isProcessBound()) throw DatalinkHandshakeException("camera network unavailable")
+            rebuilding = true
+        }
+        lastRebuildElapsed.set(SystemClock.elapsedRealtime())
+        try {
+            Log.i(TAG, "datalink: rebuilding UDP with fresh handshake (keep TCP 7001)")
+            // open() first stops the old ACK/RX and discards the old endpoint,
+            // then resets session/window state. It must run off serial TX so
+            // handshake writes can progress while this caller waits for replies.
+            open()
+        } catch (error: Exception) {
+            // Cancellation may leave the IO thread interrupted. Queue cleanup
+            // without a blocking wait; epoch fencing keeps it off a newer bind.
+            enqueueTx { discardUdp(keepPoke = true) }
+            throw error
+        } finally {
+            rebuilding = false
+        }
     }
 
     private fun onTxBlocking(body: () -> Unit) {
@@ -462,34 +494,6 @@ class DatalinkDriver internal constructor(
         if (closed.get() || sendExecutor.isShutdown) return
         val epoch = nativeFeedbackEpoch.get()
         awaitDatalinkTx(sendExecutor, { !closed.get() && epoch == nativeFeedbackEpoch.get() }, work = body)
-    }
-
-    @Synchronized
-    private fun rebuildUdpOnNetwork() {
-        if (closed.get() || rebuilding) return
-        if (!joiner.isProcessBound()) return
-        rebuilding = true
-        socketHealth.noteWriteSucceeded()
-        lastRebuildElapsed.set(SystemClock.elapsedRealtime())
-        try {
-            Log.i(TAG, "datalink: rebuilding UDP (keep session, keep TCP 7001)")
-            val wasAccepting = liveViewEnabled
-            discardUdp(keepPoke = true)
-            // Pre-rebuild clocks are the old 5-tuple. Leaving lastStatus young
-            // looks like encoder-pause on the new bind (iOS noteRebuild).
-            lastVideoElapsed.set(0)
-            lastAccessUnitElapsed.set(0)
-            lastStatusElapsed.set(0)
-            startUdpReceiver()
-            startAckPump()
-            if (LiveViewEnablePolicy.shouldRearmLiveIngestAfterUDPRebuild(wasAccepting)) {
-                armLiveVideo()
-            }
-            sendAck()
-            sendCommand(SwiftCore.CMD_APP_PRESENCE)
-        } finally {
-            rebuilding = false
-        }
     }
 
     /**
@@ -1041,6 +1045,7 @@ class DatalinkDriver internal constructor(
             }
             cadence.note(LivePipelineCadence.Stage.VIDEO)
             lastVideoElapsed.set(SystemClock.elapsedRealtime())
+            videoHistory.noteVideoPacket()
             val n = rawVideoPackets.incrementAndGet()
             if (n <= 8) {
                 Log.i(TAG, "datalink: video pktType=0x02 #$n bytes=${datagram.size}")

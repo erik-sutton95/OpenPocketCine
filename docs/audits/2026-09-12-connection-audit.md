@@ -29,6 +29,52 @@ These are separate observations. Neither this log nor the Redmi report proves
 that one decoder bug causes every reported failure. Raw journals and any footage
 remain local, outside Git.
 
+### iPhone capture after the maintainer returned
+
+The maintainer tested commit `760a348` on a physical iPhone 16 Pro Max with a
+Pocket 4 Pro, first over the existing installation and then after deleting and
+reinstalling the app. USB journal snapshots, a camera-only RVI trace and a short
+Time Profiler recording were retained locally.
+
+- **Mode-change outage:** Direction Lock followed by Follow coincided with
+  video stopping. The maintainer identified the action. The journal measured a
+  21.862-second presentation gap; RVI measured 22.150 seconds between video
+  packets. Camera status continued while video was absent. This event precedes
+  decode; it is not evidence of decoder failure.
+- **Unconfirmed endpoint migration:** the first recovery rebind changed the
+  phone's UDP port while retaining the session. RVI showed camera packets still
+  addressed to the retired port and ACKs leaving from the new port. The next
+  handshake selected another endpoint; camera traffic and picture returned.
+  Successful local ACK writes and a ready socket did not prove peer migration.
+- **Motion stutter:** the earlier take contained receive/AU gaps up to 325 ms
+  and a 353 ms presentation gap. During steady portions of the fresh-install
+  take, presentation gaps reached 153–161 ms while GPU work remained at most
+  15 ms. Some hitches followed upstream bursts or main-thread delivery waits;
+  others need separate VT, assist and bake timing. No steady-state queue or
+  incomplete-frame drops were logged. Startup logged 15 queued-AU drops.
+- **AirPods startup:** permission was granted and Core Motion reported active,
+  but no accepted motion appeared for almost two minutes. Toggling tracking
+  preceded accepted samples and successful calibration. Repeated starts while
+  permission was pending can advance the app's callback generation. The trace
+  does not prove which Core Motion handler survived those repeated starts.
+  The old “in your ears” message inferred wear state from missing motion data.
+- **Active tracking:** after calibration, native target writes and roughly
+  25 FPS presentation coexisted in the captured segment. This short run does
+  not qualify all AirPods latency, takeover, recovery or thermal behavior.
+- **Later smooth baseline:** the maintainer could no longer reproduce stutter.
+  The final captured minute held a median 25 FPS, with a 60 ms maximum GPU
+  presentation gap, 52 ms maximum AU gap, and no queue/incomplete-frame drops
+  or failed presentations. No movement commands were sent in that minute.
+  Earlier hitches occurred in the same installed revision; reinstalling also
+  reset settings. This is useful baseline evidence, not causal attribution.
+
+The initial long “Waiting for live view” interval was already trimmed from the
+on-device journal before USB access returned. It is a reported reproduction,
+not an attributed failure. Subsequent snapshots preserve overlapping history;
+analysis must deduplicate it and exclude startup, intentional transitions and
+profiler attachment from steady-state comparisons. RVI can batch timestamps;
+short RVI gaps alone are not Wi-Fi airtime measurements.
+
 ## Corrected failure paths
 
 | Area | Defect and resulting change | Evidence / limit |
@@ -37,16 +83,21 @@ remain local, outside Git.
 | Android cancellation | `withContext(IO)` did not interrupt the blocking handshake; TCP setup also swallowed interruption and could publish a socket after close. | Blocking-open and TCP acquisition/settle regressions reproduced the lifetime failures. Interruptible waits, explicit interruption propagation and owned resource transfer now stop abandoned work. |
 | Repair ownership | An old canceled task could clear the new repair task and its recovery state. | iOS source harness reproduced the ownership loss; lifecycle regressions cover replacement and cancellation. Kotlin finalizers likewise check job ownership. |
 | Socket lifetime | Queued status/AU callbacks and queued writes could act after close or replacement. Old queued delivery suppressed the first new hop; reusing a driver could inherit an old socket or handshake ACK. | Callback epochs checked at execution. Retire and drain every retained socket before resetting handshake state. Assembler and actual-source stale-ACK probes failed before the fixes. |
+| Endpoint migration | Rebinding to another local UDP port could leave the camera sending to the retired endpoint. | Physical RVI confirmed the mismatch. Rebuild negotiates a fresh handshake/register/subscribe before one caller-owned enable. A real UDP peer regression failed before the change; hardware retest remains required. |
 | Android RX health | A permanent receive error could spin, then successful local sends could conceal a stopped receiver. | One current-epoch failure stops RX/ACK work; a separate receive-failure latch survives successful sends until a receiver is restarted. Failure → successful-send regression reproduced the misleading health. |
 | Android TX | Background callers bypassed the supposedly serial TX executor; ACK payloads could retain obsolete cursors while queued. | All ordinary writes share TX; ACK work coalesces and reads windows at emission. Queued bind work has deadline/cancellation/epoch regressions. |
 | iOS decoder lifetime | Successful old VT output and already queued assist results could repopulate a reset session and refresh source timestamps. | Two real iOS tests failed with seven stale-output assertions before generation fencing. Reset, rebuild and delayed-success paths now have regressions. |
 | Presentation health | Android treated decoder output release as displayed picture; cached or unseen pre-background images could supply misleading health. | Separate output and source-presentation clocks; duplicate, older, previous-decoder and pre-resume source timestamps are rejected. GPU acceptance is still distinct from physical scanout. |
+| Recovery presentation proof | An old in-flight GPU completion could combine with a newly decoded, not-yet-presented frame to claim recovery. | A real renderer/session regression reproduced all three incorrect observations. Recovery invalidates pending presentation ownership while retaining the held image and GPU resource reservation. |
 | iOS GPU scheduling | Drawable acquisition ran on MainActor; GPU submission was counted as completed presentation. Bake callbacks lacked coherent source identity. | Injected blocked-acquire and failed/pending-GPU tests reproduced the defects. Acquisition moves off main, one reservation covers acquire through completion, and source/bake identity accompanies successful completion. |
 | Foreground | Old subnet/socket state was trusted, fresh status could hide a frozen picture, and foreground could compete with keepalive rebuilding UDP. | Validate retained network; preserve healthy short returns; bounded presentation check, then saved-camera spine. No independent foreground enable loop. |
 | Full reconnect | A warm iOS retry disconnected BLE without restoring GATT; failed attempts could retain their transports before the next scan. Both shells could dismiss recovery after handshake alone. | Full reconnect restores BLE → Wi-Fi → UDP and waits for fresh source/presentation. Failed-attempt teardown regression reproduced the retained driver; the held image survives cleanup. |
 | Recovery budget | Stage deadlines could cut valid Wi-Fi/handshake waits, while increasing them alone would multiply into very long retries. | iOS per-stage limits and Android finite stage operations sit under a 180-second total full-session budget, including discovery and backoff. Advertisement scans have their own bound; they do not truncate the subsequent Wi-Fi wait. Eight attempts remains a second limit. Explicit Retry starts a fresh budget. |
 | Active path loss | iOS missing-path guards could suppress every repair while BLE remained connected. | Eight-second reassociation grace sampled on the existing 1 Hz loop; sustained absent path and stale video transfer to full recovery. Tests cover transient loss, reset, competing owner and one-shot action. |
 | Movement ownership | Manual control could start before first picture or survive scene inactivity; stale control owners could interfere with recovery. | Warmup/scene/recovery gates and teardown rest/cancellation in both shells. Wearer AirPods and physical movement qualification remain separate. |
+| Retired control work | Pending SET retries, GET waiters and queued or active audio work could cross a same-driver session reset; fresh UI requests could enter negotiation. | Real iOS endpoint tests reproduced stale retries, retained waiters and audio continuation. Generation checks, waiter retirement and command admission fence negotiation. Mode/speed changes also require fresh live control eligibility. |
+| AirPods startup | Repeated starts while permission was pending replaced the app callback generation; stopping only an active OS stream left pending requests alive. | Real bridge tests with a controlled Core Motion manager reproduced duplicate starts, rejected first-handler samples and a missing stop. One owned request spans permission, cancellation fences old callbacks, and a silent authorized stream offers explicit Calibrate retry. Physical capture established the symptom; exact OS handler ownership remains unknown. |
+| Scope placement | Enabling Head Lock added a bottom exclusion area that moved scopes away from the control. | Scopes may extend beneath the button in both iOS orientations; the button remains above them. Android has no Head Lock control. Physical layout verification remains required. |
 | Android radio ownership | Late GATT, Wi-Fi request, cancellation and timeout callbacks could clear a replacement connection. | Attempt/resource fences protect queued platform work; four regressions failed before the ownership check. Failed process binding rejects the join. Real radio callback ordering remains a hardware check. |
 | Operator recovery | Stages were opaque; terminal Android failure still displayed an activity indicator. | Stage-specific progress, truthful held-picture state and persistent Retry/menu actions. |
 | Diagnostics | Existing logs could not separate input cadence, compressed backlog, decoder delay and present delay. | Low-rate stage counters, timing gaps including silence, queue pressure and a local summary command. GPU logs retain maximum wait/completion delay across the journal window; no per-packet logging added. |
@@ -82,6 +133,7 @@ and Kotlin's [interruptible blocking work](https://kotlinlang.org/api/kotlinx.co
 | P1 | **Compressed backlog needs a codec-aware overload policy.** Android's AU executor can accumulate work, and iOS's queue cannot safely discard arbitrary inter frames. Record queue depth/wait and input misses first; test reference continuity and IDR recovery before changing overflow behavior. |
 | P2 | **Radio callback qualification.** Android attempt/resource fences have queue-level regressions, but real GATT and network cancellation timing still needs repeated Cancel/retry hardware runs. iOS CoreBluetooth callbacks identify a peripheral, not a connection attempt; same-body delayed-disconnect ordering remains unproven. |
 | P1 | **Mid-session decoder stalls with live transport require physical classification.** `LinkDiagnoser` remains observe-only. Do not wire a second PLI/rebuild owner from an ambiguous present hitch. |
+| P1 | **Initial picture completion needs a finite bound.** Initial handshake success can enter first-picture recovery, where fresh packets without a usable picture can keep the policy waiting after its second enable. Endpoint repair and warm rejoin now have fresh-picture deadlines, but they do not cover every initial entry. Test the actual initial lifecycle handoff before closing this gap. |
 | P1 | **GPU teardown under a hung vendor driver remains a limit.** Native resize/destruction still uses device-idle waits; freeing pending AHB/swapchain resources on a timeout would be unsafe. Validate Android driver failure and lifecycle with Vulkan validation and device traces. |
 | P2 | **Same-subnet camera identity while continuously foregrounded.** iOS checks interface loss continuously and SSID on foreground return; silently roaming to another camera on the same subnet is not continuously identity-verified. Android retains the camera-specific requested Network and validates process binding. |
 | P2 | **Watcher/Watch scheduling.** Concurrent wrist JPEG jobs can complete out of order, and wrist ACK occurs before main-thread ingestion. These are separate preview ordering/backlog concerns; no evidence currently attributes Pocket phone stutter to them. |
@@ -116,10 +168,11 @@ The audit reproduced specific failures before fixing them; pure tests and
 simulator checks do not replace camera qualification. Final check counts are
 recorded in the associated draft PR, alongside the remaining physical matrix.
 The repository quality gate, public handbook build, native simulator checks and
-development-signed iPhone build passed during integration. A temporary normal-app
-XCTest harness was also prepared locally. The paired iPhone became unavailable
-to development tools before installation of the revised app or a new hardware
-result could be collected. No new physical pass is claimed.
+development-signed iPhone build passed during integration. The maintainer then
+installed that build and performed the physical captures above. They establish
+specific failures and one successful automatic rejoin; they are not a complete
+hardware qualification or proof that issue #334 is resolved. Follow-up changes
+need a new physical run against the installed revision.
 
 The separate [merged-issue audit](2026-09-12-merged-issue-audit.md) covers the true
 last twenty merges and all fifty issues that were open at its start. Only #101

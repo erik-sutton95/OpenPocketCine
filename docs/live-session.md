@@ -20,6 +20,13 @@ Binding local `:9004` on Samsung accepted handshake + `0x01` telemetry and
 dropped every pktType `0x02` (`videoPkts=0`, WAITING FOR LIVE VIEW). Mimo
 live-entry uses an ephemeral client port.
 
+A replacement socket must negotiate that endpoint with a fresh session handshake,
+registration and subscription before its one recovery enable. Preserve a healthy
+TCP 7001 connection and the last picture. A ready local socket is not proof of
+peer migration: the September 12 Pocket 4 Pro RVI capture showed camera traffic
+continuing to the retired port while ACKs left from the replacement port. Only
+the later handshake moved camera traffic to the current endpoint.
+
 ## ACK pump
 
 Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
@@ -28,9 +35,9 @@ third cursor seeded from 34-byte `0x01` telemetry. After the first `0x02`,
 telemetry must not rewind group 0 — that closed HEVC while HUD stayed
 live. After the first `0x03`, telemetry must not rewind group 1 either
 (seq `0` is a valid 8-aligned cursor). Keep TCP 7001 poke
-across UDP rebuilds. Session-preserving UDP rebuild must re-arm `0x02`
-ingest even when it skips a second `0x09/0xa8` (keepalive / reassociate
-with `hadVideo`). Tracked SETs skip a not-ready socket without burning
+across UDP rebuilds. Rebuilds negotiate a fresh UDP session and arm `0x02`
+ingest on its handshake ACK. The repair caller sends one enable after successful
+negotiation; old `hadVideo` is not grounds to skip it. Tracked SETs skip a not-ready socket without burning
 seq; untracked enable still leaves on `.waiting`.
 
 Those are **separate** camera send windows. HEVC (`0x02`) can stay at 25 fps
@@ -68,8 +75,8 @@ most stall+3 s after the last video packet, even if throw is still
 refreshing. Two failed encoder-pause enables rebuild UDP
 once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
-the same encoder-pause — do not rebuild UDP. After a keepalive rebuild,
-do not `0x09/0xa8` if HEVC had already existed (watchdog owns enable).
+the same encoder-pause — do not rebuild UDP. A permitted keepalive rebuild
+negotiates the replacement endpoint, then sends one enable through the repair owner.
 Do not send a third `0x09/0xa8` because the decoder is still `awaitingIDR`
 — watchdog already ladders that stall. One feed-repair Task at a time:
 do not cancel a live rebuild; a cancelled body must not force-enable after

@@ -252,6 +252,13 @@ separate iOS and Android lists.
   episodes, canceled-work ownership, camera-network checks on app return, and
   fresh-picture proof before recovery clears. Gimbal input is gated during
   warmup/recovery; Retry and Operator menu remain available.
+- Replacement UDP ports now negotiate a fresh camera session before enabling
+  live view; repair requires a fresh picture within a bounded wait. Old control
+  requests cannot carry over into the new session. Physical Pocket 4 Pro logs
+  identified a camera continuing to send to the retired port.
+- iOS head tracking keeps one motion request while permission is pending and
+  offers an explicit retry when motion is silent. Scopes can move beneath the
+  Head Lock button in both orientations.
 - iOS drawable acquisition moves off the main thread and stale decoder/bake
   results cannot refresh a replacement session. Android Vulkan rendering now
   signals presentation explicitly and live frame waits are bounded. New local

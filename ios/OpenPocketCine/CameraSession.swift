@@ -11,6 +11,8 @@ import os
 @MainActor
 @Observable
 final class CameraSession {
+    @TaskLocal private static var audioControlGeneration: Int?
+
     var phase: ConnectionPhase = .idle {
         didSet {
             if oldValue != phase { onChromePublished?() }
@@ -403,6 +405,7 @@ final class CameraSession {
     @ObservationIgnored private var inflightPending: [UInt16: InflightSend] = [:]
     /// One coalesce timer per opcode so a 60 Hz pinch does not spawn 60 sleeps.
     @ObservationIgnored private var coalesceScheduled: Set<UInt16> = []
+    @ObservationIgnored private var controlGeneration = 0
     /// Timed-out SET still eligible for a late BLE ACK (matching seq).
     @ObservationIgnored private var lateWait: [UInt16: InflightSend] = [:]
     @ObservationIgnored private var setMailbox = CameraSetMailbox()
@@ -1158,6 +1161,7 @@ final class CameraSession {
         send: (() -> Void)? = nil
     ) async throws -> Duml.Frame {
         let keys = Set(cmds.map { Duml.opcodeKey(set: $0.0, cmd: $0.1) })
+        let generation = controlGeneration
         if consumeHold {
             for (set, cmd) in cmds {
                 let key = Duml.opcodeKey(set: set, cmd: cmd)
@@ -1195,7 +1199,7 @@ final class CameraSession {
             }
         } onCancel: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.controlGeneration == generation else { return }
                 guard let stuck = keys.lazy.compactMap({ self.waiters[$0] }).first else { return }
                 for k in stuck.keys { self.waiters.removeValue(forKey: k) }
                 stuck.resume(throwing: CancellationError())
@@ -1204,6 +1208,7 @@ final class CameraSession {
     }
 
     private func failAllWaiters(_ error: Error) {
+        controlGeneration += 1
         let pending = waiters
         waiters.removeAll()
         var seen = Set<ObjectIdentifier>()
@@ -2140,9 +2145,11 @@ final class CameraSession {
 
     private func enqueueAudio(_ work: @escaping @MainActor () async -> Void) {
         let previous = audioTail
+        let generation = controlGeneration
         audioTail = Task { @MainActor in
             await previous?.value
-            await work()
+            guard !Task.isCancelled, self.controlGeneration == generation else { return }
+            await Self.$audioControlGeneration.withValue(generation) { await work() }
         }
     }
 
@@ -2380,8 +2387,14 @@ final class CameraSession {
         datalink?.restGimbalStick()
     }
 
+    var canSetGimbalConfiguration: Bool {
+        hasGimbal && !isLocked && phase == .live && gimbalControlSceneActive
+            && !isFeedWarming && !holdsMonitor && !sessionRecovery.isRecovering
+            && !isLiveVideoStale && datalink != nil && datalink?.isClosed != true
+    }
+
     func setGimbalMode(_ mode: GimbalMode) {
-        guard hasGimbal, !isLocked else { return }
+        guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
         gimbalMode = mode
         for frame in GimbalControl.setModeFrames(mode) {
@@ -2393,7 +2406,7 @@ final class CameraSession {
     }
 
     func setGimbalSpeed(_ speed: GimbalSpeed) {
-        guard hasGimbal, !isLocked else { return }
+        guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
         gimbalSpeed = speed
         let frame = Commands.setGimbalSpeed(speed)
@@ -3163,7 +3176,7 @@ final class CameraSession {
         onFail: (@MainActor () -> Void)? = nil,
         onSettle: (@MainActor (Bool) -> Void)? = nil
     ) {
-        guard datalink != nil else {
+        guard !Task.isCancelled, datalink != nil, datalink?.isRebuilding != true else {
             controlNote = "not live"
             onFail?()
             onSettle?(false)
@@ -3309,6 +3322,7 @@ final class CameraSession {
 
     private func scheduleCoalesceLaunch(_ key: UInt16) {
         guard coalesceScheduled.insert(key).inserted else { return }
+        let generation = controlGeneration
         let remain = setMailbox.holdRemaining(key: key, now: CFAbsoluteTimeGetCurrent())
         let delay: Duration =
             remain > 0
@@ -3317,7 +3331,7 @@ final class CameraSession {
         Task.detached { [weak self] in
             try? await Task.sleep(for: delay)
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, self.controlGeneration == generation else { return }
                 self.coalesceScheduled.remove(key)
                 let blocked =
                     self.inflight[key] != nil
@@ -3343,7 +3357,11 @@ final class CameraSession {
         _ frame: Duml.Frame, name: String, timeout: Duration = .seconds(3),
         logSend: Bool = true
     ) async -> Bool {
-        guard datalink != nil else {
+        let generation = controlGeneration
+        guard !Task.isCancelled,
+            Self.audioControlGeneration.map({ $0 == generation }) ?? true
+        else { return false }
+        guard datalink != nil, datalink?.isRebuilding != true else {
             controlNote = "not live"
             return false
         }
@@ -3366,9 +3384,11 @@ final class CameraSession {
                     )
                 }
             }
+            guard !Task.isCancelled, controlGeneration == generation else { return false }
             return finishControlReply(
                 reply, name: name, opcode: opcode, expect: nil, announce: false)
         } catch {
+            guard !Task.isCancelled, controlGeneration == generation else { return false }
             if logSend {
                 if let note = ControlHud.timeoutNote(name: name, announce: false) {
                     controlNote = note
@@ -3435,25 +3455,7 @@ final class CameraSession {
                     if !isBrowsingMedia, shouldStartUDPRebuild {
                         endGimbalStick(cancelMove: true)
                         startFeedRecovery { [weak self] in
-                            guard let self else { return }
-                            try? await self.datalink?.rebuildUDP(reason: "keepalive")
-                            guard !Task.isCancelled else { return }
-                            if self.liveViewEnableSent {
-                                let hadVideo = FeedWatchdog.hadVideo(
-                                    videoPackets: self.datalink?.videoPackets ?? 0,
-                                    lastVideoPacketAge: self.datalink?.lastVideoPacketAt.map {
-                                        Date().timeIntervalSince($0)
-                                    })
-                                let force = CameraSoftAP.shouldForceEnableAfterUDPRebuild(
-                                    hadVideo: hadVideo)
-                                if force {
-                                    self.log.info(
-                                        "live: first-picture enable after UDP rebuild (neverGotVideo)"
-                                    )
-                                    self.sendRecoverEnable(
-                                        force: true, reason: "first-picture after UDP rebuild")
-                                }
-                            }
+                            await self?.repairDatalink(reason: "keepalive")
                         }
                     }
                     datalink?.keepalive()
@@ -3507,6 +3509,7 @@ final class CameraSession {
     }
 
     private func publishPipelineStats() {
+        ControlLiveLog.line(decoder.takePipelineTimingLine())
         videoPackets = datalink?.videoPackets ?? 0
         accessUnits = rawAccessUnits
         framesEnqueued = rawFramesEnqueued
@@ -3709,14 +3712,7 @@ final class CameraSession {
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
         endGimbalStick(cancelMove: true)
         startFeedRecovery { [weak self] in
-            guard let self else { return }
-            try? await self.datalink?.rebuildUDP(reason: "command timeouts")
-            guard !Task.isCancelled else { return }
-            // Re-fire nothing — state reconciles via subscribe pushes. Video may
-            // need a fresh enable on the new socket; the gate below rate-limits it.
-            if self.liveViewEnableSent {
-                self.sendRecoverEnable(force: false, reason: "command timeouts")
-            }
+            await self?.repairDatalink(reason: "command timeouts")
         }
     }
 
@@ -3917,8 +3913,14 @@ final class CameraSession {
         ControlLiveLog.line(line)
     }
 
-    private func recoverFirstPictureIfNeeded(allowTransportRecovery: Bool = true) {
-        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
+    private func recoverFirstPictureIfNeeded(
+        allowTransportRecovery: Bool = true, currentRepairOwnsFirstPicture: Bool = false
+    ) {
+        if datalink?.isRebuilding == true
+            || (feedRecoveryTask != nil && !currentRepairOwnsFirstPicture)
+        {
+            return
+        }
         let packets = datalink?.videoPackets ?? 0
         let since = Date().timeIntervalSince(lastIdrRequest)
         let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
@@ -3978,12 +3980,7 @@ final class CameraSession {
                 "live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)"
             )
             startFeedRecovery { [weak self] in
-                guard let self else { return }
-                try? await self.datalink?.rebuildUDP(reason: "first picture")
-                guard !Task.isCancelled else { return }
-                _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
-                guard !Task.isCancelled else { return }
-                self.sendRecoverEnable(force: true, reason: "first-picture after UDP rebuild")
+                await self?.repairDatalink(reason: "first picture")
             }
             return
         case .rejoin:
@@ -4419,18 +4416,94 @@ final class CameraSession {
         }
     }
 
-    /// Half-dead UDP: rebuild the socket, keep VT and the last picture, keep SoftAP.
+    /// A replacement endpoint needs a handshake; retain the held picture and SoftAP.
     private func rebuildUDPKeepingVT() {
         startFeedRecovery { [weak self] in
-            guard let self else { return }
-            self.endGimbalStick(cancelMove: true)
-            try? await self.datalink?.rebuildUDP(reason: "feed watchdog")
-            guard !Task.isCancelled else { return }
-            _ = await self.decoder.waitUntilDisplayReady(timeout: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            self.liveViewEnableSent = true
-            self.sendRecoverEnable(force: true, reason: "feed watchdog UDP rebuild")
+            await self?.repairDatalink(reason: "feed watchdog")
         }
+    }
+
+    /// One shell owner around endpoint negotiation, one initial enable, and a
+    /// fresh picture. Socket readiness alone cannot complete a live repair.
+    func repairDatalink(
+        reason: String,
+        pictureDeadline: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace)
+    ) async {
+        guard let driver = datalink else { return }
+        endGimbalStick(cancelMove: true)
+        let started = prepareForDatalinkRecovery()
+        do {
+            try await driver.rebuildUDP(reason: reason)
+            guard shouldCommitLiveHandshake(driver) else { return }
+            sendInitialLiveViewEnable(displayAttached: decoder.isDisplayReady, pathProven: true)
+            feedWatchdog = FeedWatchdog()
+            await finishDatalinkRecoveryPicture(
+                driver: driver, since: started, timeout: pictureDeadline)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, datalink === driver else { return }
+            ControlLiveLog.line("feed: endpoint negotiation failed (\(reason))")
+            beginSessionRecovery(reason: "endpoint negotiation failed", trigger: .datalinkLost)
+        }
+    }
+
+    private func prepareForDatalinkRecovery() -> Date {
+        // The new handshake restarts DUML sequence numbering. Old retries,
+        // pending sliders, and GET continuations belong to the retired session.
+        let retired =
+            Array(inflight.values) + Array(inflightPending.values) + Array(lateWait.values)
+        inflight.removeAll()
+        inflightPending.removeAll()
+        coalesceScheduled.removeAll()
+        lateWait.removeAll()
+        setMailbox.reset()
+        pairingHold.removeAll()
+        commandTimeoutsAt.removeAll()
+        audioTail?.cancel()
+        audioTail = nil
+        tapFocusTask?.cancel()
+        tapFocusTask = nil
+        stopTrackingPoll()
+        failAllWaiters(CancellationError())
+        var seen = Set<ObjectIdentifier>()
+        for send in retired where seen.insert(ObjectIdentifier(send)).inserted {
+            send.onFail?()
+            send.onSettle?(false)
+        }
+        decoder.flushForRecovery()
+        liveViewEnableSent = false
+        liveViewEnableSends = 0
+        resetFirstPictureFormatPoke()
+        idrHoldEnableCount = 0
+        firstPictureSettled = false
+        audioRefreshPending = true
+        glamourClearPending = true
+        focusTrackPending = true
+        return Date()
+    }
+
+    private func finishDatalinkRecoveryPicture(
+        driver: DatalinkDriver, since started: Date,
+        timeout: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace)
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !Task.isCancelled, datalink === driver, !driver.isClosed {
+            if hasFreshRecoveryPicture(since: started) {
+                ControlLiveLog.line("feed: endpoint recovery has fresh picture")
+                return
+            }
+            guard ContinuousClock.now < deadline else { break }
+            // This task owns the transport. Let the existing first-picture
+            // policy request its bounded PLI/poke, without another socket repair.
+            recoverFirstPictureIfNeeded(
+                allowTransportRecovery: false, currentRepairOwnsFirstPicture: true)
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+        }
+        guard !Task.isCancelled, datalink === driver, !driver.isClosed else { return }
+        ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
+        beginSessionRecovery(
+            reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
     }
 
     func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
@@ -4713,15 +4786,7 @@ final class CameraSession {
         guard let camera = connectedCamera else { return }
         log.info("feed: full datalink rejoin (SoftAP bind kept)")
         disposeDatalink()
-        decoder.flushForRecovery()
-        liveViewEnableSent = false
-        liveViewEnableSends = 0
-        resetFirstPictureFormatPoke()
-        idrHoldEnableCount = 0
-        firstPictureSettled = false
-        audioRefreshPending = true
-        glamourClearPending = true
-        focusTrackPending = true
+        let started = prepareForDatalinkRecovery()
         var attemptedDatalink: DatalinkDriver?
         do {
             try Task.checkCancellation()
@@ -4747,6 +4812,7 @@ final class CameraSession {
             // the new driver until a rolling picture; then a fresh watchdog.
             feedWatchdog = FeedWatchdog()
             startKeepalive(ssid: joinedSSID)
+            await finishDatalinkRecoveryPicture(driver: dl, since: started)
         } catch is CancellationError {
             return
         } catch {

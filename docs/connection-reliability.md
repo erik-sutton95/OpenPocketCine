@@ -50,15 +50,16 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 
 | Owner | Production? | What it does |
 | --- | --- | --- |
-| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video → enable ×2 (status young) → one UDP rebuild → `fullSessionRejoin` (new handshake, same SoftAP, last frame held). Never tears VT. Holds 4 s after any tracked SET. |
+| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video → enable ×2 (status young) → one UDP rebuild with fresh handshake/registration/subscription. The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery. Holds 4 s after any tracked SET. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | Can rejoin (new handshake) after a few failed enables. |
-| Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. Watchdog UDP rebuild still force-enables; keepalive does not if HEVC had already existed. `still holding for IDR` is not a repair owner. |
-| `SessionRecovery` | **Yes**, separate | BLE loss, confirmed camera-network loss, foreground picture failure, or a failed watchdog rejoin starts the full saved-camera spine. Handshake success alone cannot finish it. Eight attempts / 180 s total, then the operator. |
+| Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. A successful replacement-endpoint negotiation receives one enable from its repair caller, including keepalive. `still holding for IDR` is not a repair owner. |
+| `SessionRecovery` | **Yes**, separate | BLE loss, confirmed camera-network loss, foreground picture failure, or failed endpoint/watchdog repair starts the full saved-camera spine. Handshake success alone cannot finish it. Eight attempts / 180 s total, then the operator. |
 
 `rebuildVTSession` is **never emitted** by `tick`; both shells map it to UDP
-rebuild. `fullSessionRejoin` is the last rung after a UDP rebuild proved
-nothing in `escalateAfter`; both shells map it to `rejoinDatalinkKeepingLive`.
+rebuild. `fullSessionRejoin` remains the policy's last rung; both shells map it
+to `rejoinDatalinkKeepingLive`. Endpoint repair owns its negotiation and picture
+deadline without releasing the slot to a competing watchdog task.
 `decoderFailed` is on the snapshot and unused.
 
 The [2026-09-12 audit](audits/2026-09-12-connection-audit.md) distinguishes corrected
@@ -67,6 +68,12 @@ Foreground no longer starts a competing UDP rebuild/enable. A full reconnect
 restores BLE as well as Wi-Fi and UDP; reopening UDP after disconnecting BLE was
 an incomplete recovery. Old socket/decoder callbacks cannot supply fresh-picture
 proof for a new lifetime.
+
+Endpoint replacement retires pending SETs, retries, GET waiters and queued audio
+work before restarting sequence numbers. Active audio work also checks its
+original generation between requests. Mode and speed changes require an active,
+fresh live picture, and ordinary driver commands cannot enter an unnegotiated
+session. Retired requests and new control taps cannot write into negotiation.
 
 Chrome is three flags:
 
@@ -114,11 +121,13 @@ Repairs (this branch): skip parameter-set enable while UDP video is alive
 UDP rebuild (22:16 brought HEVC back; #148 was a 2 s-too-fast reopen).
 Keepalive must not flap that socket while status is young. SET ACK
 timeout with young status is the same — do not rebuild UDP. After a
-keepalive rebuild, do not enable if HEVC had already existed. Sitting in
+keepalive rebuild, negotiate the replacement endpoint and enable once. The old
+rule skipping enable when HEVC had already existed assumed an unverified
+session-preserving endpoint migration. Sitting in
 cooldown forever with a frozen frame *was* the operator drop. Arm `0x02`
 ingest on UDP handshake ack (Mimo HEVC at join+17 ms; `0x09/0xa8` at +3 s
-is PLI, not the start gate). Re-arm ingest after a session-preserving
-UDP rebuild. All UDP writes serialize on the datalink queue. Android JNI
+is PLI, not the start gate). Re-arm ingest when the replacement UDP handshake
+is acknowledged. All UDP writes serialize on the datalink queue. Android JNI
 watchdog JSON includes gimbal-throw grace. Head-track lifts the stick on
 rest and does not re-grab from live-yaw wiggle after a 1:1 close.
 

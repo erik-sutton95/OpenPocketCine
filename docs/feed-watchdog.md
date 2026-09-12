@@ -46,9 +46,31 @@ Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s a
 
 If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop.
 
-**The ladder ends in a new handshake.** `rebuildUDP` keeps session id / seq. A camera that dropped the session (or a wedged send window) never answers that bind, and the old ladder sat in Reconnecting on 60 s rebuild cycles until the operator force-quit (#218). After picture the mid-session ladder is now bounded: enable ×2 (encoder pause only) → one UDP rebuild → `escalateAfter` → `fullSessionRejoin` (`rejoinDatalinkKeepingLive`: new driver, new handshake, same SoftAP, VT and the last frame kept — the Disconnect + Connect sequence that always worked). A rebuild that keepalive / SET-timeout / foreground already did inside `rebuildBackoff` (60 s) counts as that rung: give it `escalateAfter`, then rejoin — never a second bind on the 2 s cadence. A rejoin that handshakes resets the watchdog and hands the new driver to first-picture recovery. A rejoin that misses (SoftAP up, six opens, or path gone) starts bounded `SessionRecovery` (`.datalinkLost`: warm rehandshake, then BLE reconnect, then the operator) — a nil datalink under a live phase had no repair owner.
+**A replacement UDP endpoint requires a handshake.** The former `rebuildUDP`
+kept session/sequence state while allocating another local port. A September 12
+Pocket 4 Pro RVI capture proved the camera kept sending to the retired port;
+ACK submission from the new port did not migrate the peer. Rebuild now reuses
+the bounded connection negotiation: fresh handshake, registration and
+subscription, retaining healthy TCP 7001 and the last displayed frame. The
+repair caller sends one enable after success. A cancelled or failed negotiation
+cannot enable or report success. That same repair owner waits up to 16 seconds
+for fresh source and presentation after negotiation; otherwise it transfers to
+bounded full `SessionRecovery`. The retained image cannot satisfy that check.
 
-If both video and status are silent, rebuild UDP only (keep VT and SoftAP), then the same rejoin rung. Never a 1 Hz `0x09/0xa8` loop. One enable rides with the new socket. Arm pktType `0x02` ingest on that write (re-arm after rebuild). Keepalive / SoftAP reassociate that skip enable (HEVC already existed) must still raise ingest — discard lowers the gate so leftover GOP cannot mix, and leaving it down drops every `0x02` as leftover.
+After picture, the ladder remains enable ×2 for encoder pause, then one
+negotiated UDP rebuild. A rebuild already performed by another gated caller
+counts as that rung. The existing `fullSessionRejoin`
+(`rejoinDatalinkKeepingLive`) rung can replace the whole driver on the same
+SoftAP. Endpoint negotiation failure or its picture deadline hands off to full
+`SessionRecovery`; a live phase with a nil
+datalink must not be left without a repair owner. A new handshake alone is not
+proof of a usable picture.
+
+If both video and status are silent, negotiate a replacement UDP session while
+keeping the last picture and SoftAP, then use the same escalation if picture remains absent.
+Never add a 1 Hz `0x09/0xa8` loop. Arm pktType `0x02` ingest on handshake ACK;
+one enable belongs to the successful repair caller. Old video counters cannot
+justify skipping that enable after endpoint replacement.
 
 A single SET write reject while HEVC is still arriving is **not** a dead socket — keepalive must not tear UDP. Inbound packets restore write health.
 
