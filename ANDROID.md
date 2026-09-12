@@ -26,6 +26,19 @@ Source: the public [OpenZCine](https://github.com/erik-sutton95/OpenZCine) repos
 
 iOS links the core via Swift Package Manager. Android does **not** consume that SPM product at runtime — only the cross-compiled `.so`.
 
+### Android SDK
+
+The app and `:monitor-ui` use the shared `androidCompileSdk` version in
+`Apps/Android/gradle/libs.versions.toml` (API 37). Install the stable SDK platform
+with `sdkmanager "platforms;android-37.0"`, or let Gradle install it after accepting
+the Android SDK licenses. `minSdk` remains 29 and the app's `targetSdk` remains 36.
+The newer compile SDK satisfies the Compose dependencies' declared requirements;
+it does not opt the app into Android 17 target-SDK behavior changes.
+
+AAR metadata checks stay enabled in both Android modules. The library's AAR
+packaging task consumes their output, so disabling them can fail on a clean
+checkout even when an incremental build passes with old outputs present.
+
 ## Pocket mapping
 
 | Piece | OpenPocketCine |
@@ -139,7 +152,6 @@ Not Nikon PTP/USB/Wear/OCR:
 - Keystore AES/GCM Wi-Fi password store (`CameraWifiCredentialStore`)
 - `WIFI_MODE_FULL_LOW_LATENCY` lock while live
 - In-app-gated operator haptics
-- AAR `compileSdk` 37 metadata gate disabled so the project stays on SDK 36
 - Shared `CubeLUT` packer (`LUTLibraryWire`) for GLES-ready RGBA cubes
 - GLES ES2 feed-effect shaders under `assets/shaders/`
 - Media cache complete-at-exact-length + `noBackupFilesDir`

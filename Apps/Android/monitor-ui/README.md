@@ -59,6 +59,11 @@ the picture; no screenshot or full-frame readback is used to synthesize blur.
 
 ## Validation and review fixture
 
+The app and library share the compile SDK version in the Gradle version catalog.
+API 37 satisfies the Compose AAR requirements; metadata validation remains
+enabled so clean library packaging does not depend on stale task outputs. See
+[`ANDROID.md`](../../../ANDROID.md#android-sdk) for SDK installation.
+
 Run `ANDROID_HOME="$HOME/Library/Android/sdk" just android-check` from the repo
 root. The gate assembles the app and module, runs their unit tests and Android
 lint, and checks Vulkan presentation synchronization.
