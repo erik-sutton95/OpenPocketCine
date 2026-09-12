@@ -28,6 +28,31 @@ One-time App Store Connect / Xcode setup is the wizard:
 That walkthrough reuses the App Store Connect record for `com.opencapture.openpocketcine`,
 connects this GitHub repo, and defines the `main` Archive workflow.
 
+## Watch companion signing
+
+Register both explicit bundle IDs in **Certificates, Identifiers & Profiles** on
+the Apple Developer team used by the workflow:
+
+- iPhone app: `com.opencapture.openpocketcine`
+- Watch companion: `com.opencapture.openpocketcine.watch`
+
+Xcode Cloud cannot register a new Watch bundle ID during export. A successful
+simulator build or unsigned archive does not prove this prerequisite is met.
+Local Xcode automatic signing can register the identifier and create its
+provisioning profile when the signed-in account has permission. See Apple's
+[Xcode Cloud setup guidance](https://developer.apple.com/documentation/xcode/configuring-your-first-xcode-cloud-workflow).
+
+If all distribution exports fail after adding a target, download the build's
+**Logs** artifact from Xcode Cloud → Archive → **Artifacts**. Read
+`app-store-export-archive-logs/xcodebuild-export-archive.log`; the summary's exit
+code 70 and `IDEDistribution.critical.log` may omit the actionable provisioning
+error. For `Automatic signing cannot register bundle identifier` followed by
+`No profiles ... were found`, verify the named identifier is registered on the
+workflow's team; register it if missing. If it already exists, check that the
+target and workflow use the same team and that Cloud can access the required
+provisioning profiles, then rebuild. Keep downloaded logs and provisioning
+profiles outside git.
+
 ## After the workflow exists
 
 - **Merges to `main`** that touch `Sources/`, `Tests/`, `ios/`, `Package.swift`, `scripts/`, or
@@ -101,6 +126,7 @@ prompt (the app only uses Apple ATS/HTTPS).
 | Symptom | Likely cause |
 | --- | --- |
 | Cloud build cannot open `OpenPocketCine.xcodeproj` | `ci_post_clone.sh` did not run or `xcodegen` failed |
+| Export cannot register the Watch bundle ID and finds no profiles | Check identifier registration, team alignment and provisioning access; see [Watch companion signing](#watch-companion-signing) |
 | Frame.io login missing in the build | Add the three `FRAMEIO_*` environment variables on the workflow |
 | “Build number already used” | Raise the workflow's next build number above the App Store Connect high-water mark |
 | Archive succeeds but testers see nothing | Wait for processing; first external build of a version sits in TestFlight App Review |
