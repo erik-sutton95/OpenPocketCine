@@ -110,6 +110,10 @@ dismissal and remount. Cancelling invalidates adoption without releasing a still
 job. Admission precedes LUT preparation and scales the latest source to 320 pixels
 before processing. Owner, source and option epochs reject stale results; there is
 no second decoder or change to the native picture host.
+The live sample bus retains the latest raw decoded buffer independently of scope
+bundle publication. Image inspectors therefore receive picture with every scope
+off. This is a reference assignment at the existing completion boundary, not a
+copy, extra decoder, scope calculation or frame-rate observable publication.
 Inspector demand belongs to the visible live or playback source. Inactive scenes
 cancel image work, including UIKit inactivity notifications, and playback
 inspectors cannot activate sampling on the retained live monitor.

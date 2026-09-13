@@ -29,6 +29,13 @@ the same PR.
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
 | Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
 
+Motion Control window dragging keeps transient placement in the floating widget and
+commits its center to the shared model once on release. Android marker prediction
+observes its 25 Hz timeline in a separate drawing leaf, so marker refresh does not
+recompose the editor. This changes presentation invalidation only, not command
+cadence or take scheduling. Native snapshot tests distinguish local drag updates
+from shared-model writes; they are not physical frame-time measurements.
+
 Programmed takes run on the background transport scheduler, using complete-frame
 attitude receipts before the UI hop. Smoothed paths write 20 Hz native targets
 directly at monotonic deadlines under exclusive ownership; UI progress is 5 Hz. Marker/curve projection uses the existing 25 Hz overlay timeline;

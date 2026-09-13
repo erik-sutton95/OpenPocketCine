@@ -17,6 +17,7 @@
         private let onClose: () -> Void
         @Binding private var value: Double
         @State private var drag = MonitorZoomDrag()
+        @State private var radial: MonitorZoomRadialGesture?
         @GestureState private var pointerActive = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.scenePhase) private var scenePhase
@@ -42,16 +43,13 @@
             self.onClose = onClose
         }
 
-        private var radius: CGFloat {
-            min(
-                min(viewport.width, viewport.height) >= 600 ? 330 : 260,
-                max(120, (viewport.height - 24) / 2))
+        private var geometry: MonitorZoomGeometry {
+            MonitorZoomGeometry(
+                width: viewport.width, height: viewport.height,
+                trailingInset: safeArea.trailing > 0 ? safeArea.trailing + 6 : 0)
         }
 
-        private var trailingInset: CGFloat {
-            viewport.width > viewport.height && safeArea.trailing > 0
-                ? safeArea.trailing + 6 : 0
-        }
+        private var radius: CGFloat { geometry.radius }
 
         private var ink: Color {
             opticalStops.contains { abs($0 - value) < 0.05 }
@@ -73,6 +71,7 @@
 
                 dial
                     .frame(width: radius, height: radius * 2)
+                    .frame(width: geometry.width, alignment: .leading)
                     .monitorGlass(in: MonitorZoomHalfDisc(), density: .zoom)
                     .clipShape(MonitorZoomHalfDisc())
                     .contentShape(MonitorZoomHalfDisc())
@@ -85,12 +84,23 @@
                                     cancelPointer()
                                     return
                                 }
-                                if drag.begin(at: value) { onEditing(true) }
+                                guard
+                                    geometry.canStartZoom(
+                                        x: gesture.startLocation.x, y: gesture.startLocation.y)
+                                else { return }
+                                if drag.begin(at: value) {
+                                    radial = MonitorZoomRadialGesture(
+                                        geometry: geometry,
+                                        startX: gesture.startLocation.x,
+                                        startY: gesture.startLocation.y)
+                                    onEditing(true)
+                                }
                                 guard let origin = drag.anchor else { return }
-                                value = scale.dragged(
-                                    from: origin,
-                                    angleDelta: angle(gesture.location)
-                                        - angle(gesture.startLocation))
+                                guard
+                                    let delta = radial?.angleDelta(
+                                        x: gesture.location.x, y: gesture.location.y)
+                                else { return }
+                                value = scale.dragged(from: origin, angleDelta: delta)
                             }
                             .onEnded { _ in finishEditing() }
                     )
@@ -121,7 +131,6 @@
                             : MonitorMotion.discOut(reduceMotion),
                         value: visible
                     )
-                    .padding(.trailing, trailingInset)
             }
             .frame(width: viewport.width, height: viewport.height)
             .allowsHitTesting(acceptsInput)
@@ -139,16 +148,14 @@
         }
 
         private func finishEditing() {
+            radial = nil
             if drag.end() { onEditing(false) }
         }
 
         private func cancelPointer() {
             guard pointerActive || drag.anchor != nil else { return }
+            radial = nil
             if drag.cancel() { onEditing(false) }
-        }
-
-        private func angle(_ point: CGPoint) -> Double {
-            atan2(radius - point.x, point.y - radius)
         }
 
         /// Freeze native value/label projections before SwiftUI dispatches the
@@ -268,17 +275,20 @@
     private struct MonitorZoomHalfDisc: Shape {
         func path(in rect: CGRect) -> Path {
             let radius = rect.height / 2
+            let flatEdge = rect.minX + radius
             let control = radius * 0.5522847498
             var path = Path()
             path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: flatEdge, y: rect.minY))
             path.addCurve(
                 to: CGPoint(x: rect.minX, y: rect.midY),
-                control1: CGPoint(x: rect.maxX - control, y: rect.minY),
+                control1: CGPoint(x: flatEdge - control, y: rect.minY),
                 control2: CGPoint(x: rect.minX, y: rect.midY - control))
             path.addCurve(
-                to: CGPoint(x: rect.maxX, y: rect.maxY),
+                to: CGPoint(x: flatEdge, y: rect.maxY),
                 control1: CGPoint(x: rect.minX, y: rect.midY + control),
-                control2: CGPoint(x: rect.maxX - control, y: rect.maxY))
+                control2: CGPoint(x: flatEdge - control, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
             path.closeSubpath()
             return path
         }

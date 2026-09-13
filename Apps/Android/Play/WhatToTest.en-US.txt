@@ -1,12 +1,12 @@
 New and changed
 
 - UI 2.0 adds Sora and Lucide. Tap a value for details; hold or drag for a compact 128 dp dial. FORMAT hangs from the top without landscape category tabs. Gimbal Mode, Speed and Ramp have separate tabs.
-- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the lens dial.
+- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the larger lens dial extending to the screen edge above camera controls.
 - New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
 
 Fixes
 
-- Lock matches and aligns with Settings. Top readouts align inside the feed; battery shows the Osmo percentage. Panels are blurred, audio is slim and assist tabs keep their size.
+- Lock aligns with Settings. Portrait Fit centers the picture; STBY, timecode and REC SETUP sit below the cutout. Motion Control dragging stays local; its editor leaves the joystick usable.
 - App return checks camera Wi-Fi. Recovery waits for a new picture, shows its current stage and bounds automatic retries; old control requests cannot cross reconnects.
 - Live rendering synchronizes completed frames with presentation. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
 - Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
@@ -15,4 +15,4 @@ What to test
 
 - Check blur over bright/dark footage. Rotate pages; tap versus hold drums; open FORMAT in both orientations. Try assist tabs, audio, zoom, lock, media, playback and TalkBack.
 - On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
-- Check joystick after first picture, app return, Wi-Fi changes, Retry/Cancel and reconnects. Test Pocket 3 portrait 3K. Motion Control remains experimental.
+- Drag Motion Control and use the joystick with its editor open. Check Wi-Fi changes, Retry/Cancel, reconnects and Pocket 3 portrait 3K. Motion Control remains experimental.

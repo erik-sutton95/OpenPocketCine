@@ -139,21 +139,68 @@ struct FieldMonitorLayoutTests {
         #expect(windowed.stick == fullscreen.stick)
     }
 
-    @Test func portraitWindowControlsLeaveTheBottomSystemRowAndFeedUnchanged() {
+    @Test func portraitWindowControlsLeaveTheBottomSystemRowUnchanged() {
         for (width, height) in [(744.0, 1133.0), (500, 744)] {
             let fullscreen = FieldMonitorLayout(width: width, height: height)
             let windowed = FieldMonitorLayout(
                 width: width, height: height, topControlInset: 36)
-            #expect(windowed.status.y >= 36)
+            #expect(windowed.status.y == fullscreen.status.y + 36)
             #expect(windowed.gauges.y == fullscreen.gauges.y + 36)
             #expect(windowed.lock == fullscreen.lock)
             #expect(windowed.settings == fullscreen.settings)
             #expect(windowed.media == fullscreen.media)
             #expect(windowed.record == fullscreen.record)
             #expect(windowed.display == fullscreen.display)
-            #expect(windowed.picture == fullscreen.picture)
             #expect(windowed.values == fullscreen.values)
+            #expect(
+                windowed.picture.maxY <= windowed.values.y + 0.05 || windowed.values.height == 0)
         }
+    }
+
+    @Test func tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {
+        for (width, height, safeTop, aspect, fill) in [
+            (375.0, 667.0, 20.0, 9.0 / 16, false),
+            (375, 667, 20, 16.0 / 9, true),
+            (393, 852, 59, 9.0 / 16, false),
+            (320, 600, 20, 16.0 / 9, true),
+        ] {
+            let layout = FieldMonitorLayout(
+                width: width, height: height,
+                safeArea: .init(top: safeTop), sourceAspect: aspect, fill: fill)
+            #expect(layout.picture.height <= height)
+            #expect(layout.picture.y >= 0)
+            #expect(layout.picture.maxY <= height + 0.001)
+            #expect(abs(layout.picture.midY - height / 2) < 0.001)
+        }
+    }
+
+    @Test func portraitStatusRowSitsBelowTheSafeTopAndTheFeedCentersOnTheCanvas() {
+        let notched = FieldMonitorLayout(
+            width: 393, height: 852, safeArea: .init(top: 59, bottom: 34))
+        #expect(abs(notched.status.y - 51) < 0.05)
+        #expect(notched.status.height == 44)
+        #expect(notched.status.maxY <= notched.picture.y + 0.05)
+        #expect(abs(notched.picture.midY - notched.viewport.height / 2) < 0.5)
+        #expect(notched.picture.maxY < notched.values.y)
+
+        let classic = FieldMonitorLayout(
+            width: 375, height: 667, safeArea: .init(top: 20, bottom: 0))
+        #expect(abs(classic.status.y - 12) < 0.05)
+        #expect(classic.status.maxY <= classic.picture.y + 0.05)
+
+        let maxPhone = FieldMonitorLayout(
+            width: 440, height: 956, safeArea: .init(top: 62, bottom: 34))
+        #expect(abs(maxPhone.status.y - 54) < 0.05)
+        #expect(maxPhone.status.maxY <= maxPhone.picture.y + 0.05)
+        #expect(abs(maxPhone.picture.midY - maxPhone.viewport.height / 2) < 0.5)
+        #expect(maxPhone.picture.maxY < maxPhone.values.y)
+
+        let tablet = FieldMonitorLayout(
+            width: 744, height: 1133, safeArea: .init(bottom: 34), sourceAspect: 9 / 16, fill: true)
+        #expect(tablet.status.y == 0)
+        #expect(tablet.status.height == 52)
+        #expect(tablet.picture.y >= tablet.status.maxY - 0.05)
+        #expect(tablet.picture.maxY <= tablet.values.y + 0.05)
     }
 
     @Test func absentOrInvalidCornerExclusionPreservesTheReferenceLayout() {

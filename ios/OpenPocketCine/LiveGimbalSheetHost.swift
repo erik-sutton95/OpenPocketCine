@@ -28,10 +28,15 @@ struct LiveGimbalSheetHost: View {
         let enabled: Bool
     }
 
-    private var canApply: Bool {
+    /// Opening the floating editor is presentation only. Mode / speed / ramp
+    /// drums still require a SET-capable live datalink, matching Android's sheet.
+    private var canPresentEditor: Bool {
         appeared && scenePhase == .active && model.liveGimbalPanel == .sheet
             && !interfaceLocked && !model.isEditingChrome && model.liveChromeInteractive
-            && model.session.canSetGimbalConfiguration
+    }
+
+    private var canApply: Bool {
+        canPresentEditor && model.session.canSetGimbalConfiguration
     }
 
     private var interactionContext: Context {
@@ -81,7 +86,7 @@ struct LiveGimbalSheetHost: View {
             }
         } footer: {
             Button {
-                guard canApply else { return }
+                guard canPresentEditor else { return }
                 model.liveGimbalPanel = .editor
             } label: {
                 HStack {

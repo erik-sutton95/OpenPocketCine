@@ -1,5 +1,10 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorFloatingDrag
+import com.opencapture.monitorui.MonitorMotionDismissBackdrop
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
@@ -224,6 +229,7 @@ fun LiveGimbalOverlay(
     layout: LiveMonitorLayout,
     feed: ChromeRect,
     uiLocked: Boolean,
+    joystickBounds: ChromeRect = ChromeRect(0f, 0f, 0f, 0f),
 ) {
     if (uiLocked) return
     val panel = model.liveGimbalPanel
@@ -231,18 +237,6 @@ fun LiveGimbalOverlay(
     val running by model.session.gimbalMoveRunning.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
     val cameraId = model.session.connectedCamera?.id
-    var frameTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(panel, running) {
-        if (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running) {
-            while (true) {
-                delay(40)
-                frameTick += 1
-            }
-        }
-    }
-    val live = if (frameTick >= 0) {
-        model.session.predictedGimbalWaypoint(android.os.SystemClock.elapsedRealtime() / 1000.0)
-    } else null
     val bounds =
         ChromeRect(
             max(8f, layout.safeLeading),
@@ -259,59 +253,16 @@ fun LiveGimbalOverlay(
     val defaultTopCenter = Offset(layout.viewportWidth / 2f,
         max(16f, (layout.viewportHeight - 430f) / 2f))
     Box(Modifier.fillMaxSize().zIndex(if (panel == LiveGimbalPanel.EDITOR) 1f else 0f)) {
-        if (live != null &&
-            (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running)
-        ) {
-            val aspect = (feed.width / feed.height.coerceAtLeast(1f)).toDouble()
-            val preview = remember(program) { GimbalProgramCurve.create(program)?.samples() }
-            if (preview != null) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val path = Path()
-                    var connected = false
-                    for (sample in preview) {
-                        val (nx, ny, onScreen) = GimbalMoveEngine.project(sample, live, aspect)
-                        if (!onScreen) { connected = false; continue }
-                        val x = (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width).dp.toPx()
-                        val y = (feed.minY + ny.toFloat() * feed.height).dp.toPx()
-                        if (connected) path.lineTo(x, y) else path.moveTo(x, y)
-                        connected = true
-                    }
-                    drawPath(path, LiveDesign.text.copy(alpha = 0.3f), style = Stroke(
-                        width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))))
-                }
-            }
-            for (slot in GimbalWaypointSlot.entries) {
-                val point = program.point(slot) ?: continue
-                val (nx, ny, onScreen) = GimbalMoveEngine.project(point, live, aspect)
-                Box(
-                    Modifier
-                        .offset(
-                            (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width - 13f).dp,
-                            (feed.minY + ny.toFloat() * feed.height - 13f).dp,
-                        )
-                        .size(26.dp)
-                        .background(
-                            LiveDesign.accent.copy(alpha = if (onScreen) 0.92f else 0.45f),
-                            CircleShape,
-                        )
-                        .alpha(if (onScreen) 1f else 0.7f)
-                        .zIndex(0f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        slot.letter,
-                        color = LiveDesign.text,
-                        style = LiveType.ui(13f, FontWeight.Bold),
-                    )
-                }
-            }
+        if (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running) {
+            LiveGimbalWaypointMarks(model, feed, program)
         }
         if (panel == LiveGimbalPanel.EDITOR) {
-            // The full editor owns outside taps: minimizing must not also
-            // trigger Record, focus, or a gimbal gesture beneath the window.
-            Box(Modifier.fillMaxSize().chromeClickable {
-                model.liveGimbalPanel = LiveGimbalPanel.RUN_PILL
-            }.semantics { contentDescription = "Minimize Motion Control" })
+            MonitorMotionDismissBackdrop(
+                viewport = Rect(0f, 0f, layout.viewportWidth, layout.viewportHeight),
+                excluding = Rect(joystickBounds.minX, joystickBounds.minY,
+                    joystickBounds.minX + joystickBounds.width, joystickBounds.minY + joystickBounds.height),
+                onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.RUN_PILL },
+            )
             GimbalFloatMove(
                 model = model,
                 sizeHintW = EDITOR_WIDTH_DP,
@@ -339,8 +290,65 @@ fun LiveGimbalOverlay(
     }
 }
 
+/** The existing 25 Hz display prediction invalidates only marker content. */
 @Composable
-private fun GimbalFloatMove(
+private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: GimbalProgram) {
+    var frameTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) { delay(40); frameTick += 1 }
+    }
+    val live = if (frameTick >= 0) {
+        model.session.predictedGimbalWaypoint(android.os.SystemClock.elapsedRealtime() / 1000.0)
+    } else null
+    if (live != null) {
+        val aspect = (feed.width / feed.height.coerceAtLeast(1f)).toDouble()
+        val preview = remember(program) { GimbalProgramCurve.create(program)?.samples() }
+        if (preview != null) {
+            Canvas(Modifier.fillMaxSize()) {
+                val path = Path()
+                var connected = false
+                for (sample in preview) {
+                    val (nx, ny, onScreen) = GimbalMoveEngine.project(sample, live, aspect)
+                    if (!onScreen) { connected = false; continue }
+                    val x = (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width).dp.toPx()
+                    val y = (feed.minY + ny.toFloat() * feed.height).dp.toPx()
+                    if (connected) path.lineTo(x, y) else path.moveTo(x, y)
+                    connected = true
+                }
+                drawPath(path, LiveDesign.text.copy(alpha = 0.3f), style = Stroke(
+                    width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))))
+            }
+        }
+        for (slot in GimbalWaypointSlot.entries) {
+            val point = program.point(slot) ?: continue
+            val (nx, ny, onScreen) = GimbalMoveEngine.project(point, live, aspect)
+            Box(
+                Modifier
+                    .offset(
+                        (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width - 13f).dp,
+                        (feed.minY + ny.toFloat() * feed.height - 13f).dp,
+                    )
+                    .size(26.dp)
+                    .background(
+                        LiveDesign.accent.copy(alpha = if (onScreen) 0.92f else 0.45f),
+                        CircleShape,
+                    )
+                    .alpha(if (onScreen) 1f else 0.7f)
+                    .zIndex(0f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    slot.letter,
+                    color = LiveDesign.text,
+                    style = LiveType.ui(13f, FontWeight.Bold),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun GimbalFloatMove(
     model: AppModel,
     sizeHintW: Float,
     sizeHintH: Float,
@@ -354,8 +362,7 @@ private fun GimbalFloatMove(
     val haptics = LocalOperatorHaptics.current
     var measuredW by remember { mutableFloatStateOf(sizeHintW) }
     var measuredH by remember { mutableFloatStateOf(sizeHintH) }
-    var origin by remember { mutableStateOf<Offset?>(null) }
-    var moved by remember { mutableStateOf(false) }
+    val placement = remember { MonitorFloatingDrag<Offset>() }
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     // Opening, minimizing and rotating do not turn a default into a manual
     // position. Only a real drag stores a center; defaults follow the viewport.
@@ -363,7 +370,7 @@ private fun GimbalFloatMove(
     val center = clampCenter(raw, measuredW, measuredH, bounds)
     val currentCenter by rememberUpdatedState(center)
     DisposableEffect(identity) {
-        onDispose { origin = null; moved = false }
+        onDispose { placement.cancel() }
     }
     val dragModifier = Modifier
             .pointerInput(bounds, measuredW, measuredH, immediateDrag, identity) {
@@ -371,14 +378,12 @@ private fun GimbalFloatMove(
                     holdMs = HOLD_MS,
                     immediate = immediateDrag,
                     onHold = {
-                        origin = currentCenter
-                        moved = false
+                        placement.begin(currentCenter)
                         haptics.confirm()
                     },
                     onDrag = drag@{ translation ->
-                        if (!moved && translation == Offset.Zero) return@drag
-                        moved = true
-                        val start = origin ?: currentCenter
+                        if (placement.preview == null && translation == Offset.Zero) return@drag
+                        val start = placement.origin ?: currentCenter
                         val dx = translation.x / density.density
                         val dy = translation.y / density.density
                         val next =
@@ -388,16 +393,21 @@ private fun GimbalFloatMove(
                                 measuredH,
                                 bounds,
                             )
-                        model.gimbalFloatCenter = next
+                        placement.move(next)
                     },
-                    onEnd = { origin = null; moved = false },
+                    onEnd = { placement.end { model.gimbalFloatCenter = it } },
+                    onCancel = { placement.cancel() },
                     toRoot = { local -> coords?.localToRoot(local) ?: local },
                 )
             }
 
     Box(
         Modifier
-            .offset((center.x - measuredW / 2f).dp, (center.y - measuredH / 2f).dp)
+            .offset {
+                val shown = clampCenter(placement.preview ?: center, measuredW, measuredH, bounds)
+                IntOffset(((shown.x - measuredW / 2f) * density.density).roundToInt(),
+                    ((shown.y - measuredH / 2f) * density.density).roundToInt())
+            }
             .onSizeChanged {
                 measuredW = it.width / density.density
                 measuredH = it.height / density.density
@@ -735,6 +745,7 @@ private suspend fun PointerInputScope.detectHoldThenDragAllowClicks(
     onHold: () -> Unit,
     onDrag: (Offset) -> Unit,
     onEnd: () -> Unit,
+    onCancel: () -> Unit,
     toRoot: (Offset) -> Offset,
 ) {
     awaitEachGesture {
@@ -744,34 +755,38 @@ private suspend fun PointerInputScope.detectHoldThenDragAllowClicks(
         val gesture = MotionControlDragGesture(immediate, if (immediate) 8.dp.toPx() else viewConfiguration.touchSlop, holdMs)
         var elapsed = 0L
         var started = false
-        while (true) {
-            val event = if (gesture.ownership == MotionControlDragGesture.Ownership.TRACKING) {
-                withTimeoutOrNull((holdMs - elapsed).coerceAtLeast(1)) { awaitPointerEvent(PointerEventPass.Initial) }
-            } else awaitPointerEvent(PointerEventPass.Initial)
-            if (event == null) {
-                gesture.update(holdMs, 0f)
-                if (!started) { started = true; onHold() }
-                continue
-            }
-            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-            elapsed = change.uptimeMillis - down.uptimeMillis
-            val translation = toRoot(change.position) - downRoot
-            when (gesture.update(elapsed, translation.getDistance())) {
-                MotionControlDragGesture.Ownership.YIELDED -> break
-                MotionControlDragGesture.Ownership.DRAGGING -> {
+        var released = false
+        try {
+            while (true) {
+                val event = if (gesture.ownership == MotionControlDragGesture.Ownership.TRACKING) {
+                    withTimeoutOrNull((holdMs - elapsed).coerceAtLeast(1)) { awaitPointerEvent(PointerEventPass.Initial) }
+                } else awaitPointerEvent(PointerEventPass.Initial)
+                if (event == null) {
+                    gesture.update(holdMs, 0f)
                     if (!started) { started = true; onHold() }
-                    // Includes the UP event: a completed drag never becomes a child click.
-                    event.changes.forEach { it.consume() }
-                    if (change.pressed) onDrag(translation)
+                    continue
                 }
-                MotionControlDragGesture.Ownership.TRACKING -> Unit
+                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                elapsed = change.uptimeMillis - down.uptimeMillis
+                val translation = toRoot(change.position) - downRoot
+                when (gesture.update(elapsed, translation.getDistance())) {
+                    MotionControlDragGesture.Ownership.YIELDED -> break
+                    MotionControlDragGesture.Ownership.DRAGGING -> {
+                        if (!started) { started = true; onHold() }
+                        // Includes the UP event: a completed drag never becomes a child click.
+                        event.changes.forEach { it.consume() }
+                        if (change.pressed) onDrag(translation)
+                    }
+                    MotionControlDragGesture.Ownership.TRACKING -> Unit
+                }
+                if (!change.pressed) { released = true; break }
+                if (!started) {
+                    val final = awaitPointerEvent(PointerEventPass.Final)
+                    if (final.changes.any { it.isConsumed }) break
+                }
             }
-            if (!change.pressed) break
-            if (!started) {
-                val final = awaitPointerEvent(PointerEventPass.Final)
-                if (final.changes.any { it.isConsumed }) break
-            }
+        } finally {
+            if (started && released) onEnd() else onCancel()
         }
-        if (started) onEnd()
     }
 }

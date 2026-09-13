@@ -39,7 +39,7 @@ class MonitorLayoutPolicyTest {
         val layout = MonitorLayoutPolicy.portrait(744f, 1133f, 0f, 34f, true, true, 9f / 16f)
         assertTrue(layout.picture.x > 0f)
         assertEquals(9f / 16f, layout.picture.width / layout.picture.height, .001f)
-        assertEquals(8f, layout.picture.y)
+        assertEquals(layout.status.maxY, layout.picture.y, .01f)
         assertEquals(layout.controlsFloor, layout.picture.maxY, .01f)
     }
 
@@ -74,4 +74,38 @@ class MonitorLayoutPolicyTest {
             assertEquals(16f / 9f, layout.picture.width / layout.picture.height, .001f)
         }
     }
+
+    @Test
+    fun portraitStatusRowSitsBelowTheSafeTopAndTheFeedCentersOnTheCanvas() {
+        val notched = MonitorLayoutPolicy.portrait(393f, 852f, 59f, 34f, false, true, 16f / 9f)
+        assertEquals(51f, notched.status.y, .05f)
+        assertEquals(44f, notched.status.height, .05f)
+        assertTrue(notched.status.maxY <= notched.picture.y + .05f)
+        assertEquals(852f / 2f, notched.picture.y + notched.picture.height / 2f, .5f)
+        assertTrue(notched.picture.maxY < notched.values.y)
+
+        val classic = MonitorLayoutPolicy.portrait(375f, 667f, 20f, 0f, false, true, 16f / 9f)
+        assertEquals(12f, classic.status.y, .05f)
+        assertTrue(classic.status.maxY <= classic.picture.y + .05f)
+
+        val maxPhone = MonitorLayoutPolicy.portrait(440f, 956f, 62f, 34f, false, true, 16f / 9f)
+        assertEquals(54f, maxPhone.status.y, .05f)
+        assertTrue(maxPhone.status.maxY <= maxPhone.picture.y + .05f)
+        assertEquals(956f / 2f, maxPhone.picture.y + maxPhone.picture.height / 2f, .5f)
+        assertTrue(maxPhone.picture.maxY < maxPhone.values.y)
+    }
+    @Test fun tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {
+        listOf(Triple(375f, 667f, 20f), Triple(393f, 852f, 59f), Triple(320f, 600f, 20f))
+            .forEach { (width, height, safeTop) ->
+                listOf(9f / 16f to false, 16f / 9f to true).forEach { (aspect, fill) ->
+                    val layout = MonitorLayoutPolicy.portrait(width, height, safeTop, 0f,
+                        fill, true, aspect)
+                    assertTrue(layout.picture.height <= height)
+                    assertTrue(layout.picture.y >= 0f)
+                    assertTrue(layout.picture.maxY <= height + .001f)
+                    assertEquals(height / 2f, layout.picture.y + layout.picture.height / 2f, .001f)
+                }
+            }
+    }
+
 }

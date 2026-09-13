@@ -81,4 +81,47 @@ final class MotionUIFlowTests: XCTestCase {
         minimize.tap()
         XCTAssertTrue(expand.waitForExistence(timeout: 5))
     }
+
+    func testFloatingEditorDragCommitsLocationAfterRelease() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        if let clip = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"] {
+            app.launchEnvironment["OPV_SIM_FEED_CLIP"] = clip
+        }
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = .portrait
+        }
+
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let open = app.buttons["motion.openEditor"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+        let title = app.staticTexts["motion.editor.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+
+        let origin = title.frame
+        let start = title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(
+            forDuration: 0.55,
+            thenDragTo: start.withOffset(CGVector(dx: 80, dy: 120)))
+        let moved = NSPredicate { _, _ in
+            hypot(title.frame.minX - origin.minX, title.frame.minY - origin.minY) > 40
+        }
+        expectation(for: moved, evaluatedWith: title)
+        waitForExpectations(timeout: 4)
+        XCTAssertGreaterThan(
+            hypot(title.frame.minX - origin.minX, title.frame.minY - origin.minY), 40,
+            "Release must keep the dragged editor location")
+        XCTAssertTrue(app.buttons["motion.minimize"].exists)
+        XCTAssertTrue(app.buttons["motion.close"].exists)
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "motion-control-after-drag-release"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }

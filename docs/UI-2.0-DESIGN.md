@@ -74,6 +74,15 @@ the tally/timecode group moves left by at least 8 points and stays 12 points ins
 the picture's right edge. Osmo camera battery gauges show the reported percentage;
 unknown readings show a dash, with bars reserved for level-only inputs.
 
+The portrait layout follow-up centers the fitted feed on the canvas vertical
+mid-line, clamped only when the available space requires it. STBY, timecode and
+REC SETUP use an independent row below the cutout. Feed controls move with the
+picture; the camera-value and system-button strips remain at the bottom. The
+zoom-disc follow-up increases its preferred radius by 10%, subject to viewport
+bounds. Its material extends continuously from the flat edge to the screen edge
+and draws above underlying system controls. These are operator-approved changes
+to the original reference, not new camera behavior.
+
 ### Blurred surfaces
 
 UI 2.0 uses heavily blurred translucent surfaces. The operator explicitly

@@ -1395,13 +1395,6 @@ internal fun LandscapeChrome(
                 opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
                 onDial = model.session::updateZoomPinch,
                 onDialEnd = model.session::endZoomPinch,
-                dialForeground = {
-                    if (showsRecord) Box(Modifier.liveModuleFrame(layout.record)) {
-                        RecordButton(status.isRecording, !controlBusy, Modifier.size(layout.record.width.dp),
-                            confirm = model.recordConfirmationEnabled,
-                            photo = CameraCommands.isPhotoMode(status.shootingMode), onClick = model::pressShutter)
-                    }
-                },
             )
         }
         if (!captureOpen && capabilities.gimbal &&
@@ -1442,6 +1435,7 @@ internal fun LandscapeChrome(
                 model = model,
                 layout = layout,
                 feed = layout.onFeed,
+                joystickBounds = stick,
                 uiLocked = uiLocked,
             )
         }

@@ -17,11 +17,10 @@ New and changed
 
 Fixes
 
-- Lock matches Settings and Media, with Lock and Settings aligned. Top capture settings, STBY and timecode align; readouts sit inside the feed. Camera battery shows the Osmo percentage.
-
-- iPhone corner controls clear rounded edges. Panels are blurred and translucent, text shadows are tighter, and audio meters are slim. Rapid View Assist tab changes keep preview work bounded.
+- Lock matches Settings and Media. Portrait Fit centers the picture; STBY, timecode and REC SETUP sit below the cutout. Camera battery shows the Osmo percentage.
+- Blurred panels clear iPhone corners; shadows are tighter and audio meters slim. View Assist image previews use the raw picture with scopes off.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
-- Pocket 3 improvements cover live view, reconnects, camera settings and access to newly recorded clips, including files on its memory card.
+- Pocket 3 fixes cover live view, reconnects, settings and newly recorded clips on its memory card.
 - Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.
 - Normal-color Auto ISO starts at 50 on Pocket 3 and Pocket 4, and 100 on Pocket 4 Pro.
 - Nano COLOR matches Normal 8-bit, Normal 10-bit and D-Log M. Live view handles larger Nano frames more reliably.
@@ -33,6 +32,6 @@ What to test
 
 - Compare panel blur over bright/dark footage. Rotate pages and drawers; tap versus hold drums; open FORMAT in both orientations. Try View Assist, zoom, lock, media and playback.
 - On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
-- Try Direction Lock and Motion Control, then take over manually. Move scopes to every edge; compare false-color scales and ND units.
+- Drag Motion Control, move the joystick with it open, then set points. Check the larger zoom dial covers controls and reaches the screen edge. Try Direction Lock, false-color scales and ND units.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.
 - Check Multiview, feed sharing, Apple Watch and Convert log. Motion Control, Multiview and AirPods head tracking remain experimental.

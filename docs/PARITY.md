@@ -104,6 +104,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   and landscape placements. Silent channels keep the meter visible at its floor.
   The meter stays slim: 28 × 168 pt/dp vertically, 168 × 28 horizontally;
   enabling dB readings does not enlarge the plate.
+- In portrait, the fitted feed centers on the canvas vertical mid-line; STBY,
+  timecode and REC SETUP occupy an independent row below the safe top. Feed
+  controls follow the picture, while value/system strips keep their bottom slots.
+  Tall pictures stay canvas-centered when chrome cannot fit around them. The zoom disc has a
+  10% larger preferred radius, bounded by viewport, and one continuous material
+  to the physical edge. Underlying controls cannot receive input while it is open.
+- The expanded Motion Control editor passes joystick touches to the original
+  control so positions can be set without minimizing the window. Other outside
+  taps minimize without activating covered controls. Window dragging uses local
+  transient placement and one shared-model commit on release.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
   the active mode supports digital zoom. Other cameras retain their supported
   single-tap stops. Holding the chip still opens the continuous dial.
@@ -437,6 +447,12 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   iPhone and are part of the WDA chrome pass above. Matching Android corrections
   pass build, unit tests and lint; physical Android visual review remains an
   outstanding exception.
+- The subsequent portrait-centering, zoom-extension, Motion Control drag/input
+  and raw-inspector fixes have automated coverage described in their tests.
+  These follow-up changes are not covered by the earlier iPhone pass above:
+  phone automation works, but the camera network was unavailable for this pass.
+  Live-camera joystick placement, inspector refresh and physical drag smoothness
+  remain pending; Android has no attached physical device.
 - Both shells use the reference's fixed heavy blur, saturation and tint when a
   passive displayed-look source is available. These surfaces have no Liquid Glass
   lens or refraction effects. Foreground controls stay sharp. Low-resolution source
@@ -454,6 +470,9 @@ this document apply to those earlier builds; they do not qualify the new chrome.
 - Android scope inspectors reuse the existing sampled
   scope products. LUT, peaking, false-color and zebra previews reuse the existing raw
   tap and production shaders in a bounded, isolated EGL worker with no second feed tap.
+- iOS retains raw main-feed pixels independently of scope bundles, so image
+  inspectors work with all scopes off. Android already admits image-only raw taps
+  without enabling a scope. No second decoder or scope work is introduced.
 - iOS inspector previews use the existing sampled source and scope products with
   bounded, cancellable work while open. One retained renderer preserves its occupied
   slot and 200 ms admission floor across tabs and remounts; stale source/option

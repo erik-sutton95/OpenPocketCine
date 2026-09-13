@@ -87,20 +87,24 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             floor = values.y - (showsValues ? 8 : 0)
             fillsPicture = fill || aspect < 1
             let ratio = fillsPicture ? min(aspect, 9 / 16) : aspect
-            let ceiling = top + (tablet ? 52 : 44)
-            let wideCeiling = safeArea.top > 24 ? ceiling : 8
-            let pillarbox = tablet && w / ratio > max(0, floor - wideCeiling)
-            let pictureH = pillarbox ? max(1, floor - wideCeiling) : w / ratio
+            // STBY / clock / REC SETUP sit just below the notch, independent of the feed.
+            let statusH = tablet ? 52.0 : 44.0
+            status = .init(
+                x: edge, y: max(0, safeArea.top - 8) + controlInset, width: w - 28, height: statusH)
+            let ceiling = status.maxY
+            let pillarbox = tablet && w / ratio > max(0, floor - ceiling)
+            let pictureH = pillarbox ? max(1, floor - ceiling) : w / ratio
             let pictureW = pillarbox ? pictureH * ratio : w
-            let tall = !pillarbox && pictureH > floor - ceiling
-            let low = safeArea.top > 24 ? max(0, safeArea.top - 5) : top
             let pictureY: Double
-            if pictureH > h {
+            if pictureH > h || pictureH > floor - ceiling {
+                // When chrome cannot fit around the picture, keep the picture
+                // on the canvas midline instead of using an inverted interval.
                 pictureY = (h - pictureH) / 2
-            } else if tall {
-                pictureY = min(max(low, systemY - pictureH), max(0, h - pictureH))
             } else {
-                pictureY = max(pillarbox ? wideCeiling : ceiling, floor - pictureH)
+                // Canvas mid-line, clamped only so the well clears the status
+                // row and the camera-value / system strip.
+                let ideal = (h - pictureH) / 2
+                pictureY = max(ceiling, min(ideal, floor - pictureH))
             }
             picture = .init(x: (w - pictureW) / 2, y: pictureY, width: pictureW, height: pictureH)
             let cy = systemY + systemH / 2
@@ -113,21 +117,17 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             gauges = .init(
                 x: tablet ? edge : w - edge - 104, y: gaugeTop,
                 width: tablet ? 49 : 104, height: tablet ? 58 : 28)
-            status = .init(
-                x: edge,
-                y: tablet
-                    ? 12 + controlInset : max(max(50 + controlInset, gaugeTop + 36), picture.y + 8),
-                width: w - 28, height: 30)
+            let feedFloor = min(floor, picture.maxY)
             assists = .init(
-                x: pillarbox ? edge : picture.x + edge, y: floor - 94,
+                x: pillarbox ? edge : picture.x + edge, y: feedFloor - 94,
                 width: 52, height: 78)
             stick = .init(
                 x: pillarbox ? w - 104 : picture.maxX - 104,
-                y: floor - 104, width: 88, height: 88)
+                y: feedFloor - 104, width: 88, height: 88)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             aspectToggle = .init(
-                x: picture.midX - 24, y: max(ceiling, floor - 56), width: 48, height: 48)
+                x: picture.midX - 24, y: max(picture.y, feedFloor - 56), width: 48, height: 48)
         } else {
             fillsPicture = false
             // The physical cutout is smaller than the full safe inset. The

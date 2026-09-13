@@ -39,16 +39,16 @@ object MonitorLayoutPolicy {
         val valuesY = max(0f, systemY - 8f - valuesH)
         val floor = max(0f, valuesY - if (valuesVisible) 8f else 0f)
         val frameRatio = if (fill) min(ratio, 9f / 16f) else ratio
-        val ceiling = if (tablet && safeTop < 20f) 8f else status.maxY
+        val ceiling = status.maxY
         val wide = tablet && vw / frameRatio > max(0f, floor - ceiling)
         val h = if (wide) max(0f, floor - ceiling) else vw / frameRatio
         val w = if (wide) h * frameRatio else vw
-        val tall = !wide && h > floor - status.maxY
-        val lowBound = if (safeTop > 20f) safeTop + 10f else top
-        val y = when {
-            h > vh -> (vh - h) / 2f
-            tall -> min(max(lowBound, systemY - h), max(0f, vh - h))
-            else -> max(ceiling, floor - h)
+        val y = if (h > vh || h > floor - ceiling) {
+            // Impossible chrome clearance yields to canvas-centered picture placement.
+            (vh - h) / 2f
+        } else {
+            val ideal = (vh - h) / 2f
+            max(ceiling, min(ideal, floor - h))
         }
         return MonitorPortraitLayout(status, MonitorRect((vw - w) / 2f, y, w, h),
             MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
@@ -61,9 +61,8 @@ object MonitorLayoutPolicy {
     const val CUTOUT_CORNER_INSET = 0.025f
 
     fun portraitReadoutTop(tablet: Boolean, safeTop: Float, statusTop: Float, pictureTop: Float): Float {
-        if (tablet) return 12f
-        val gaugeTop = if (safeTop > 20f) max(4f, statusTop - 16f) else 4f
-        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f)
+        // STBY / clock / REC SETUP follow the independent status row, not the feed.
+        return statusTop
     }
 
     fun cutoutPhoneCornerInset(viewportHeight: Float, tablet: Boolean, hasDisplayCutout: Boolean): Float =

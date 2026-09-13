@@ -889,13 +889,14 @@ final class HevcDecoder {
     private func applyAssistResult(
         _ result: LiveAssistEngine.Result, isNewSourceFrame: Bool = true
     ) -> Bool {
-        if let bundle = result.bundle {
-            sampleBus?.publish(
-                source: result.source,
-                transfer: result.transfer,
-                colorMode: result.colorMode,
-                bundle: bundle)
-        }
+        // The inspector borrows raw main-feed pixels even when no scope is
+        // enabled. Retaining the buffer performs no copy or scope calculation;
+        // only an actual scope bundle advances the bus's observable generation.
+        sampleBus?.publish(
+            source: result.source,
+            transfer: result.transfer,
+            colorMode: result.colorMode,
+            bundle: result.bundle)
         if result.shouldPresent {
             lastDecodedBuffer = result.source
             lastDecodedTimeNs = result.timeNs

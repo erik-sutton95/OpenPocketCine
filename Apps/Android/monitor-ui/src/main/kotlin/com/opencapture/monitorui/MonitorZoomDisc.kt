@@ -3,11 +3,9 @@ package com.opencapture.monitorui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.waterfall
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -55,13 +55,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.ln
@@ -101,7 +101,6 @@ private fun physicalZoomInsets(view: android.view.View, observed: IntRect): IntR
 @Composable
 fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     onChange: (Double) -> Unit, onDismiss: () -> Unit,
-    foreground: @Composable BoxScope.() -> Unit = {},
     opticalStops: List<Double> = listOf(1.0), caption: (Double) -> String = { "ZOOM" },
     trailingInset: Float = 0f) {
     val maxZoom = maximum.takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
@@ -139,9 +138,12 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         LaunchedEffect(geometry) { dismiss() }
         return
     }
-    val tablet = minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
-    val radius = minOf(if (tablet) 330f else 260f,
-        (configuration.screenHeightDp - 24f) / 2).coerceAtLeast(120f)
+    val physicalTrailingInset = geometry.safeInsets.right / density.density
+    val disc = MonitorZoomGeometry.layout(configuration.screenWidthDp.toFloat(),
+        configuration.screenHeightDp.toFloat(), maxOf(trailingInset,
+            if (physicalTrailingInset > 0f) physicalTrailingInset + 6f else 0f))
+    val radius = disc.radius
+    val pixelDisc = MonitorZoomGeometry(radius * density.density, disc.edgeExtension * density.density)
     val factor = exp(position * logMax).coerceIn(1.0, maxZoom)
     val optical = opticalStops.any { abs(it - factor) < .05 }
     val accent = if (optical) MonitorPalette.accent else Color(0xFFF0B23C)
@@ -158,35 +160,41 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     } }
     Popup(popupPositionProvider = provider, onDismissRequest = { closing = true },
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true, clippingEnabled = false)) {
-        // The app can keep critical foreground controls above the scale. The
-        // popup's focused accessibility window contains those same actions.
+        // A focused modal window owns input above every underlying control.
         Box(Modifier.size(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
             .pointerInput(Unit) { detectTapGestures { closing = true } }) {
-            Box(Modifier.align(Alignment.CenterEnd).padding(end = trailingInset.dp).size(radius.dp, (radius * 2).dp)
+            Box(Modifier.align(Alignment.CenterEnd).size(disc.width.dp, disc.height.dp)
                 .graphicsLayer { translationX = size.width * .26f * (1f - motion)
                     val restScale = if (closing) .90f else .88f
                     scaleX = restScale + (1f - restScale) * motion
                     scaleY = scaleX
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
                     alpha = motion }
-                .monitorMaterial(MonitorMaterial.Zoom,
-                    RoundedCornerShape(topStart = radius.dp, bottomStart = radius.dp))) {
+                .monitorMaterial(MonitorMaterial.Zoom, MonitorZoomDiscShape)) {
                 Canvas(Modifier.fillMaxSize().semantics {
                     contentDescription = "Zoom ${label(factor)}"
                     progressBarRangeInfo = ProgressBarRangeInfo(position, 0f..1f)
                     setProgress { update(it); true }
                     customActions = listOf(CustomAccessibilityAction("Close zoom") { closing = true; true })
-                }.pointerInput(Unit) { detectTapGestures { } }.pointerInput(geometry, closing) {
+                }.pointerInput(pixelDisc) {
+                    detectTapGestures { if (!pixelDisc.contains(it.x, it.y)) closing = true }
+                }.pointerInput(geometry, closing) {
                     if (closing) return@pointerInput
-                    var startAngle = 0.0
+                    var radial: MonitorZoomRadialGesture? = null
                     var startPosition = 0f
-                    fun angle(point: Offset) = atan2((size.width - point.x).toDouble(),
-                        (point.y - size.height / 2f).toDouble())
                     var dragging = false
                     try {
                         detectDragGestures(
-                            onDragStart = { dragging = true; startAngle = angle(it); startPosition = position },
-                            onDragEnd = { dragging = false },
+                            orientationLock = null,
+                            onDragStart = { down, slopTrigger, _ ->
+                                // Admission belongs to the original down, not a
+                                // later slop event that may have entered the disc.
+                                radial = MonitorZoomRadialGesture(pixelDisc, down.position.x, down.position.y)
+                                radial?.rebase(slopTrigger.position.x, slopTrigger.position.y)
+                                dragging = radial?.isArmed == true
+                                startPosition = position
+                            },
+                            onDragEnd = { _ -> dragging = false; radial = null },
                             onDragCancel = {
                                 // A tap recognizer may consume an unarmed
                                 // pointer, including the hold that opened us.
@@ -194,7 +202,9 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                             },
                         ) { change, _ ->
                             change.consume()
-                            update(startPosition - ((angle(change.position) - startAngle) / (210 * PI / 180)).toFloat())
+                            if (dragging) radial?.angleDelta(change.position.x, change.position.y)?.let { delta ->
+                                update(startPosition - (delta / (210 * PI / 180)).toFloat())
+                            }
                         }
                     } finally {
                         // Disposal and geometry cancellation can interrupt the
@@ -203,8 +213,8 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                         if (dragging) dismiss()
                     }
                 }) {
-                    val scale = size.width / 190f
-                    val center = Offset(size.width, size.height / 2)
+                    val scale = pixelDisc.radius / 190f
+                    val center = Offset(pixelDisc.radius, pixelDisc.radius)
                     fun point(angle: Double, r: Float) = Offset(center.x - r * scale * sin(angle).toFloat(),
                         center.y + r * scale * cos(angle).toFloat())
                     val arcRadius = 186f * scale
@@ -234,13 +244,29 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                         3f * scale, StrokeCap.Round)
                     drawCircle(accent, 3.5f * scale, Offset(52f * scale, center.y))
                 }
-                Column(Modifier.align(Alignment.CenterEnd).padding(start = (radius * .42f).dp, end = (radius * .04f).dp),
+                Column(Modifier.align(Alignment.CenterEnd).padding(start = (radius * .42f).dp,
+                    end = (radius * .04f + disc.edgeExtension).dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label(factor), style = MonitorTypography.readout(radius * .19f, FontWeight.Bold))
                     Text(caption(factor), style = MonitorTypography.text(10f, FontWeight.Medium), color = accent)
                 }
             }
-            foreground()
         }
+    }
+}
+
+/** One closed outline, so the scale and cutout extension share one material pass. */
+private object MonitorZoomDiscShape : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val radius = size.height / 2f
+        val control = radius * .5522847498f
+        return Outline.Generic(Path().apply {
+            moveTo(size.width, 0f)
+            lineTo(radius, 0f)
+            cubicTo(radius - control, 0f, 0f, radius - control, 0f, radius)
+            cubicTo(0f, radius + control, radius - control, size.height, radius, size.height)
+            lineTo(size.width, size.height)
+            close()
+        })
     }
 }

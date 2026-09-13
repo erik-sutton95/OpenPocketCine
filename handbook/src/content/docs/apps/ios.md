@@ -20,7 +20,8 @@ visible while a top picker is open. Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value.
 Hold Record to open shooting mode.
 In portrait, Settings and Media remain usable with a picker open; returning to
-the monitor restores that picker.
+the monitor restores that picker. The fitted feed is centered vertically; STBY,
+timecode and REC SETUP sit in a separate row below the notch or status area.
 
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;
@@ -32,11 +33,13 @@ blur treatment until decoded picture samples are available.
 
 The View Assist palette collapses into the picture corner. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
+Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions
-remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
-experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
+remain camera-specific. The larger disc extends to the screen edge and covers
+the controls beneath it until closed. Gimbal cameras expose Mode, Speed, Ramp and
+the existing experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
 Ramp each have a tab with their own dial; the Motion Control action stays visible.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
@@ -202,9 +205,10 @@ Tap Layout to switch Grid/Center stage; hold Layout for Shared Wi-Fi. Clean
 hides the upper session controls and assist palette; DISP restores them.
 
 Motion Control shows A, B and C with their reported pan, tilt and zoom, or
-**Not set**. Tap outside the editor to minimize it without activating the
-controls behind it. Durations use half-second dials up to 120 seconds. Swipe left
-to increase duration and right to decrease it. Move the expanded
+**Not set**. The joystick remains usable while the editor is open, so you can
+position the camera before saving a point. Other outside taps minimize the editor
+without activating the controls behind it. Durations use half-second dials up to
+120 seconds. Swipe left to increase duration and right to decrease it. Move the expanded
 window by holding anywhere, or drag the minimized pill directly. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second
 countdown before preparation and approach to A. Pause holds the move; Resume

@@ -1,6 +1,37 @@
 #if os(iOS)
     import SwiftUI
 
+    /// Keep the original pointer sequence available to a control beneath a
+    /// floating editor. The editor remains a sibling above this backdrop.
+    public struct MonitorMotionDismissBackdrop: View {
+        private var exclusion: CGRect
+        private var dismiss: () -> Void
+
+        public init(excluding exclusion: CGRect, onDismiss: @escaping () -> Void) {
+            self.exclusion = exclusion
+            self.dismiss = onDismiss
+        }
+
+        public var body: some View {
+            Color.clear
+                .contentShape(MotionDismissShape(exclusion: exclusion), eoFill: true)
+                .onTapGesture(perform: dismiss)
+                .accessibilityAddTraits(.isButton)
+        }
+    }
+
+    private struct MotionDismissShape: Shape {
+        var exclusion: CGRect
+
+        func path(in rect: CGRect) -> Path {
+            Path { path in
+                path.addRect(rect)
+                let hole = exclusion.intersection(rect)
+                if !hole.isNull, !hole.isEmpty { path.addRect(hole) }
+            }
+        }
+    }
+
     /// Field Monitor motion literals from the in-device HUD (CSS keyframes and
     /// `animateToolsWidth` / `morphAssist` / `morphSide` / `zoomDiscIn-Out`).
     /// Hosts should reuse these instead of one-off durations or curves.

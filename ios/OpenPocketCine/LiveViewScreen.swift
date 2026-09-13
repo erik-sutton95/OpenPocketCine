@@ -56,7 +56,7 @@ struct LiveViewScreen: View {
                 && model.assist.configureTool != nil)
             || (showsGimbalButton && model.liveGimbalPanel == .sheet)
             || model.captureSheet != nil
-            || zoomDialVisible
+            || zoomDialMounted
     }
 
     private func gimbalCluster(_ layout: LiveMonitorLayout) -> GimbalCluster {
@@ -258,32 +258,37 @@ struct LiveViewScreen: View {
                 .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
                 .monitorPresentationVisibility(liveChromeVisible)
                 .allowsHitTesting(
-                    chromeInteractive && model.liveChromeInteractive && !zoomDialVisible
+                    chromeInteractive && model.liveChromeInteractive && !zoomDialMounted
                         && liveChromeVisible
                 )
 
-            // Keep these controls mounted above the zoom disc. Their identity
-            // and recording-confirmation state survive opening and closing it.
+            // Keep controls mounted beneath zoom so their identity and
+            // recording-confirmation state survive opening and closing it.
             ZStack(alignment: .topLeading) {
                 if model.chromeSectionMounts(.railRecord) || model.session.status.isRecording {
                     LiveRecordButton(diameter: layout.record.width)
                         // Record explicitly exposes its decorative lamp to AX.
                         // Override that opt-in at the bounded control, before
                         // viewport positioning, so coverage hides it as well.
-                        .accessibilityHidden(!liveChromeVisible)
+                        .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
                         .chromeEditable(.railRecord, editing: editingMode)
                         .liveModuleFrame(layout.record)
                 }
                 LiveDispToggle(size: layout.disp.size)
+                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
                     .liveModuleFrame(layout.disp)
             }
             .frame(
                 width: layout.viewport.width, height: layout.viewport.height, alignment: .topLeading
             )
             .environment(\.interfaceLocked, interfaceLocked)
+            .opacity(zoomDialVisible ? 0.16 : 1)
+            .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
             .monitorPresentationVisibility(liveChromeVisible)
-            .allowsHitTesting(chromeInteractive && model.liveChromeInteractive && liveChromeVisible)
-            .zIndex(zoomDialVisible || captureControlsPresented ? 11 : 0)
+            .allowsHitTesting(
+                chromeInteractive && model.liveChromeInteractive && liveChromeVisible
+                    && !zoomDialMounted)
+            .zIndex(captureControlsPresented ? 11 : 0)
 
             // After chrome so the bezel stroke sits on the physical screen, not the feed well.
             LiveRecordingTallyGate()
@@ -309,9 +314,13 @@ struct LiveViewScreen: View {
             if showsGimbalButton, chromeInteractive, !interfaceLocked,
                 model.liveOperatorPanel == nil
             {
-                LiveGimbalOverlay(layout: layout, feed: layout.onFeed)
+                LiveGimbalOverlay(
+                    layout: layout, feed: layout.onFeed,
+                    joystickBounds: model.chromeSectionMounts(.gimbalStick)
+                        && !captureControlsPresented
+                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero)
                     .environment(\.interfaceLocked, interfaceLocked)
-                    .allowsHitTesting(model.liveChromeInteractive && !zoomDialVisible)
+                    .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
                     .zIndex(15)
             }
 
@@ -444,6 +453,7 @@ struct LiveViewScreen: View {
 
             if showsStatusBar {
                 FieldMonitorStatusChrome(menu: $topMenu, layout: layout)
+                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
                     .chromeEditable(.statusBar, editing: editingMode)
                     .frame(maxWidth: layout.topDeck.width)
                     .position(x: layout.topDeck.midX, y: layout.topDeck.midY)
@@ -454,6 +464,7 @@ struct LiveViewScreen: View {
                     .position(x: p.system.midX, y: p.system.midY).allowsHitTesting(false)
                 if !model.session.decoder.isVerticalPicture, editingMode == nil {
                     LivePortraitAspectToggle(aspect: Bindable(model).portraitFeedAspect)
+                        .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
                         .liveModuleFrame(p.aspectToggle.cgRect)
                         .allowsHitTesting(!interfaceLocked)
                 }
@@ -464,9 +475,12 @@ struct LiveViewScreen: View {
                     OpcIcon.layoutGrid.frame(width: 22, height: 22).frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Return to Multiview").liveModuleFrame(layout.lock)
+                .accessibilityLabel("Return to Multiview")
+                .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+                .liveModuleFrame(layout.lock)
             } else if showsLock {
                 LiveLockButton(locked: $interfaceLocked, size: layout.lock.width)
+                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
                     .chromeEditable(.lockButton, editing: editingMode)
                     .liveModuleFrame(layout.lock)
             }
@@ -492,7 +506,7 @@ struct LiveViewScreen: View {
                 .liveModuleFrame(layout.settings)
                 .opacity(captureHidesNavigation ? 0 : 1)
                 .allowsHitTesting(!captureHidesNavigation)
-                .accessibilityHidden(captureHidesNavigation || !liveChromeVisible)
+                .accessibilityHidden(captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
             }
             if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton(size: layout.media.width) { model.liveOperatorPanel = .media }
@@ -500,7 +514,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(layout.media)
                     .opacity(captureHidesNavigation ? 0 : 1)
                     .allowsHitTesting(!captureHidesNavigation)
-                    .accessibilityHidden(captureHidesNavigation || !liveChromeVisible)
+                    .accessibilityHidden(captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
             }
 
             // After the scope well — that well covers this chip and used to eat the tap.
@@ -512,7 +526,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
+                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
                     .zIndex(2)
             }
 
@@ -521,7 +535,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
+                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
                     .zIndex(2)
             }
 
@@ -535,7 +549,7 @@ struct LiveViewScreen: View {
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .opacity(captureControlsPresented ? 0 : 1)
-                .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
+                .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
                 .zIndex(3)
             }
 
@@ -597,7 +611,7 @@ struct LiveViewScreen: View {
                             && (model.captureSheet == nil
                                 || model.captureSheet?.isTopAnchored == true)
                     )
-                    .accessibilityHidden(hidesCaptureValues || !liveChromeVisible)
+                    .accessibilityHidden(hidesCaptureValues || !liveChromeVisible || zoomDialMounted)
             }
         }
         .frame(width: layout.viewport.width, height: layout.viewport.height)

@@ -22,6 +22,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testMonitorControlsAcrossBothLandscapeOrientationsAndPortrait() {
+        app.launchEnvironment["OPV_UI_REVIEW_FIT"] = "1"
         app.launch()
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
             rotate(orientation)
@@ -196,16 +197,21 @@ final class MonitorUIFlowTests: XCTestCase {
         app.buttons["monitor.system.zoom"].press(forDuration: 0.55)
         let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
-        XCTAssertTrue(
-            app.buttons["monitor.system.record"].isHittable,
-            "Record remains reachable above the zoom disc")
-        XCTAssertTrue(app.buttons["monitor.system.display"].isHittable)
+        for control in ["record", "display", "settings", "media"] {
+            XCTAssertFalse(app.buttons["monitor.system.\(control)"].isHittable,
+                "The zoom modal must cover underlying \(control) controls")
+        }
         capture("zoom-dial-landscape")
         rotate(.portrait)
         XCTAssertTrue(dial.isHittable)
+        for control in ["record", "display", "settings", "media"] {
+            XCTAssertFalse(app.buttons["monitor.system.\(control)"].isHittable)
+        }
         capture("zoom-dial-portrait")
         app.buttons["Close zoom dial"].tap()
         XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
+        XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+        XCTAssertTrue(app.buttons["monitor.system.display"].isHittable)
     }
 
     func testAssistInspectorTabsSurviveRotation() {

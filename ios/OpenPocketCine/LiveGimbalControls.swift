@@ -76,6 +76,7 @@ struct LiveGimbalOverlay: View {
     @Environment(AppModel.self) private var model
     var layout: LiveMonitorLayout
     var feed: CGRect
+    var joystickBounds: CGRect = .zero
 
     private var bounds: CGRect {
         CGRect(
@@ -103,12 +104,9 @@ struct LiveGimbalOverlay: View {
                     .zIndex(0)
             }
             if model.liveGimbalPanel == .editor {
-                Button {
+                MonitorMotionDismissBackdrop(excluding: joystickBounds) {
                     model.liveGimbalPanel = .runPill
-                } label: {
-                    Color.clear.contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("Minimize motion control")
                 .accessibilityIdentifier("motion.minimizeBackdrop")
                 .zIndex(0.5)
@@ -160,7 +158,8 @@ private struct LiveGimbalFloatMove: ViewModifier {
     @State private var measured = CGSize.zero
     @State private var dragging = false
     @State private var blockedUntil: TimeInterval = 0
-    @State private var origin: CGPoint?
+    @State private var placement = MonitorFloatingDrag<CGPoint>()
+    @GestureState private var pointerActive = false
 
     private var size: CGSize {
         CGSize(
@@ -170,7 +169,9 @@ private struct LiveGimbalFloatMove: ViewModifier {
 
     private var center: CGPoint {
         let resolved = MonitorMotionPlacement.center(
-            preferred: stored.map { .init(x: Double($0.x), y: Double($0.y)) },
+            preferred: (placement.preview ?? stored).map {
+                .init(x: Double($0.x), y: Double($0.y))
+            },
             size: placementSize,
             viewport: .init(width: Double(viewport.width), height: Double(viewport.height)),
             bounds: placementBounds)
@@ -209,6 +210,12 @@ private struct LiveGimbalFloatMove: ViewModifier {
                 }
             )
             .position(center)
+            .onChange(of: bounds) { _, _ in cancelDrag() }
+            .onChange(of: viewport) { _, _ in cancelDrag() }
+            .onDisappear { cancelDrag() }
+            .onChange(of: pointerActive) { _, active in
+                if !active { cancelDrag() }
+            }
             .simultaneousGesture(drag, including: immediateDrag ? .none : .all)
             .highPriorityGesture(pillDrag, including: immediateDrag ? .all : .none)
             .sensoryFeedback(trigger: dragging) { _, isDragging in
@@ -216,24 +223,31 @@ private struct LiveGimbalFloatMove: ViewModifier {
             }
     }
 
+    private func cancelDrag() {
+        placement.cancel()
+        dragging = false
+    }
+
     private var pillDrag: some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .updating($pointerActive) { _, active, _ in active = true }
             .onChanged { value in
                 if !dragging {
                     dragging = true
-                    origin = center
+                    placement.begin(at: center)
                 }
-                guard let origin else { return }
-                stored = clampedCenter(
-                    CGPoint(
-                        x: origin.x + value.translation.width,
-                        y: origin.y + value.translation.height)
-                )
+                guard let origin = placement.origin else { return }
+                placement.move(
+                    to: clampedCenter(
+                        CGPoint(
+                            x: origin.x + value.translation.width,
+                            y: origin.y + value.translation.height)
+                    ))
             }
             .onEnded { _ in
                 blockedUntil = ProcessInfo.processInfo.systemUptime + 0.15
                 dragging = false
-                origin = nil
+                placement.end { stored = $0 }
             }
             .map { _ in () }
     }
@@ -241,23 +255,24 @@ private struct LiveGimbalFloatMove: ViewModifier {
     private var drag: some Gesture {
         LongPressGesture(minimumDuration: LiveGimbalCopy.holdDuration)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .updating($pointerActive) { _, active, _ in active = true }
             .onChanged { value in
                 guard case .second(true, let drag) = value else { return }
                 if !dragging {
                     dragging = true
-                    origin = center
+                    placement.begin(at: center)
                 }
-                guard let drag, let origin else { return }
-                guard drag.translation != .zero else { return }
+                guard let drag, let origin = placement.origin else { return }
+                guard drag.translation != .zero || placement.preview != nil else { return }
                 let proposed = CGPoint(
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
-                stored = clampedCenter(proposed)
+                placement.move(to: clampedCenter(proposed))
             }
             .onEnded { _ in
                 blockedUntil = ProcessInfo.processInfo.systemUptime + 0.15
                 dragging = false
-                origin = nil
+                placement.end { stored = $0 }
             }
             .map { _ in () }
     }

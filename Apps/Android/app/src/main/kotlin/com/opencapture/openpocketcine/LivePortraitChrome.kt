@@ -132,9 +132,7 @@ fun portraitZones(
 
 /** Actual visible status row, shared by tap and hold presentation routes. */
 fun livePortraitReadoutFrame(layout: LiveMonitorLayout, zones: PortraitZones): ChromeRect =
-    ChromeRect(0f, com.opencapture.monitorui.MonitorLayoutPolicy.portraitReadoutTop(
-        min(layout.viewportWidth, layout.viewportHeight) >= 600f, layout.safeTop,
-        zones.topBar.minY, zones.feed.minY), layout.viewportWidth, 28f)
+    ChromeRect(zones.topBar.minX, zones.topBar.minY, layout.viewportWidth, zones.topBar.height)
 
 /**
  * iOS `LiveViewScreen` fillCrop: landscape fill over-widens a 16:9 picture to
@@ -165,7 +163,7 @@ fun fillAssistRail(
 
 fun portraitAspectToggle(picture: ChromeRect, floorY: Float): ChromeRect {
     val size = 48f
-    val y = max(picture.minY, floorY - 8f - size)
+    val y = max(picture.minY, min(floorY, picture.maxY) - 8f - size)
     return ChromeRect(picture.midX - size / 2, y, size, size)
 }
 
@@ -176,10 +174,9 @@ fun portraitOnFeedControls(
     floorY: Float,
     showGimbalButton: Boolean = false,
 ): GimbalCluster {
-    // The floor belongs to the camera-values strip, independent of fit/fill.
-    val floor = max(picture.minY + 156f, floorY)
-    val well = ChromeRect(picture.minX, picture.minY, picture.width, max(0f, floor - picture.minY))
-    return GimbalCluster.inTrailingBottom(well, floor - 16f, floor,
+    val feedFloor = min(max(picture.minY + 156f, picture.maxY), max(picture.minY, floorY))
+    val well = ChromeRect(picture.minX, picture.minY, picture.width, max(0f, feedFloor - picture.minY))
+    return GimbalCluster.inTrailingBottom(well, feedFloor - 16f, feedFloor,
         showGimbalButton = showGimbalButton)
 }
 
@@ -234,7 +231,8 @@ fun LivePortraitChrome(
     val zoom = cluster.zoom
     val gimbalButton = cluster.controls
     val toggle = portraitAspectToggle(layout.onFeed, floorY)
-    val rail = ChromeRect(if (tablet) 14f else zones.feed.minX + 10f, floorY - if (tablet) 102f else 94f,
+    val feedFloor = min(floorY, layout.onFeed.maxY)
+    val rail = ChromeRect(if (tablet) 14f else zones.feed.minX + 10f, feedFloor - if (tablet) 102f else 94f,
         if (tablet) 60f else 52f, if (tablet) 86f else 78f)
 
     Box(Modifier.fillMaxSize()) {
@@ -372,17 +370,6 @@ fun LivePortraitChrome(
                 opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
                 onDial = model.session::updateZoomPinch,
                 onDialEnd = model.session::endZoomPinch,
-                dialForeground = {
-                    if (showsRecord) {
-                        val diameter = if (tablet) 84f else LiveChromeMetrics.RECORD
-                        Box(Modifier.liveModuleFrame(ChromeRect(layout.viewportWidth / 2f - diameter / 2f,
-                            zones.systemBar.midY - diameter / 2f, diameter, diameter))) {
-                            RecordButton(status.isRecording, !controlBusy, Modifier.fillMaxSize(),
-                                confirm = model.recordConfirmationEnabled,
-                                photo = CameraCommands.isPhotoMode(status.shootingMode), onClick = model::pressShutter)
-                        }
-                    }
-                },
             )
         }
 
@@ -416,6 +403,7 @@ fun LivePortraitChrome(
                 model = model,
                 layout = layout,
                 feed = layout.onFeed,
+                joystickBounds = stick,
                 uiLocked = uiLocked,
             )
         }

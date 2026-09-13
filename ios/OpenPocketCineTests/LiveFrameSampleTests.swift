@@ -11,6 +11,30 @@ import XCTest
 /// tests pin the plumbing, throttle, layer handoff, and effect compositing.
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
+    func testImageInspectorReceivesLatestRawPictureWithAllScopesOff() async throws {
+        let bus = LiveFrameSampleBus()
+        let decoder = HevcDecoder()
+        let effects = LiveImageEffects().withInspectorDemand(.peaking)
+        decoder.attach(sampleBus: bus, effects: { effects }, transfer: { .dlog2 })
+        XCTAssertFalse(effects.needsScopes)
+        XCTAssertFalse(effects.needsGPUFeed)
+
+        for _ in 0..<2 {
+            let source = ScopeTestBuffers.makeEdgeBuffer()
+            decoder.handleDecodedFrame(source, effects: effects, transfer: .dlog2)
+            let deadline = Date().addingTimeInterval(1)
+            while bus.inspectorSource?.buffer !== source, Date() < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertTrue(
+                bus.inspectorSource?.buffer === source,
+                "The inspector must borrow the newest raw main-feed buffer without a scope")
+            XCTAssertEqual(bus.inspectorSource?.transfer, .dlog2)
+        }
+        XCTAssertEqual(bus.generation, 0, "Raw picture retention must not invalidate scope views")
+        XCTAssertEqual(bus.publishedScopes, 0, "Image previews must not perform scope work")
+    }
+
     func testFailedPresentationDoesNotEmitPictureHeartbeat() async throws {
         let bus = LiveFrameSampleBus()
         let decoder = HevcDecoder()

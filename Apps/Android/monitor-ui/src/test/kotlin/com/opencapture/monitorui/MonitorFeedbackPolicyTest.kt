@@ -78,11 +78,11 @@ class MonitorFeedbackPolicyTest {
         }
     }
 
-    @Test fun portraitTimecodeAnswersToCutoutAndPictureWithoutAnExtraHeaderLift() {
-        assertEquals(71f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 10f))
-        assertEquals(40f, MonitorLayoutPolicy.portraitReadoutTop(false, 0f, 0f, 10f))
-        assertEquals(208f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
-        assertEquals(12f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
+    @Test fun portraitTimecodeFollowsTheIndependentStatusRow() {
+        assertEquals(51f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 10f))
+        assertEquals(0f, MonitorLayoutPolicy.portraitReadoutTop(false, 0f, 0f, 10f))
+        assertEquals(51f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
+        assertEquals(16f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
     }
 
     @Test fun readoutTypeMatchesApprovedPhoneAndTabletValues() {

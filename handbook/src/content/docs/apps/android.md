@@ -167,9 +167,15 @@ camera file — LUT bake, Bake exposure, and Convert log are iOS only.
 Multiview and Sharing are unavailable on Android. The
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes the experimental
 iPhone/iPad feature and its validation limits.
-Exceptions (Frame.io, MetalFX, iOS 26 Liquid Glass, …) are listed in
+Platform differences, including Frame.io and MetalFX, are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
+The fitted portrait feed is centered vertically, with STBY, timecode and REC SETUP in
+a separate row below the status area. The larger zoom disc extends to the screen
+edge and covers the controls beneath it until closed.
+
+The joystick remains usable while the Motion Control editor is open, so you can
+position the camera before saving a point. Other outside taps minimize the editor.
 Motion Control durations use half-second dials up to 120 seconds. Swipe left
 to increase duration and right to decrease it. Move the expanded
 window by holding anywhere, or drag the minimized pill directly. Dragging

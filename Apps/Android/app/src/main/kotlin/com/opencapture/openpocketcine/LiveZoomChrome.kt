@@ -7,7 +7,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -94,7 +93,6 @@ fun LiveZoomChip(
     maximum: Double = 1.0,
     onDial: ((Double) -> Unit)? = null,
     onDialEnd: () -> Unit = {},
-    dialForeground: @Composable BoxScope.() -> Unit = {},
     opticalStops: List<Double> = listOf(1.0),
     onDigitalCycle: (() -> Unit)? = null,
 ) {
@@ -107,7 +105,7 @@ fun LiveZoomChip(
         DisposableEffect(Unit) { onDispose { end() } }
         com.opencapture.openpocketcine.monitor.MonitorZoomDial(dialBase, maximum,
             onChange = { onDial(it / dialBase.coerceAtLeast(1.0)) },
-            onDismiss = { dialOpen = false }, foreground = dialForeground, opticalStops = opticalStops)
+            onDismiss = { dialOpen = false }, opticalStops = opticalStops)
     }
     val orientation = LocalConfiguration.current.orientation
     LaunchedEffect(locked, orientation) { dialOpen = false }
