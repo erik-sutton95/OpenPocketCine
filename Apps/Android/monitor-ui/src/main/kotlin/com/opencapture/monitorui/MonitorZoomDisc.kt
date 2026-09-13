@@ -76,6 +76,8 @@ private data class ZoomGestureGeometry(
     val layoutDirection: LayoutDirection,
     val safeInsets: IntRect,
     val trailingInset: Float,
+    val attachment: MonitorZoomAttachment,
+    val bottomClearance: Float,
     val maximum: Double,
 )
 
@@ -102,7 +104,8 @@ private fun physicalZoomInsets(view: android.view.View, observed: IntRect): IntR
 fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     onChange: (Double) -> Unit, onDismiss: () -> Unit,
     opticalStops: List<Double> = listOf(1.0), caption: (Double) -> String = { "ZOOM" },
-    trailingInset: Float = 0f) {
+    trailingInset: Float = 0f, attachment: MonitorZoomAttachment = MonitorZoomAttachment.Trailing,
+    bottomClearance: Float = 0f) {
     val maxZoom = maximum.takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
     val logMax = ln(maxZoom).coerceAtLeast(.001)
     val initialValue = initial.takeIf { it.isFinite() }?.coerceIn(1.0, maxZoom) ?: 1.0
@@ -129,7 +132,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         physicalZoomInsets(LocalView.current,
             IntRect(safeInsets.getLeft(density, layoutDirection), safeInsets.getTop(density),
                 safeInsets.getRight(density, layoutDirection), safeInsets.getBottom(density))),
-        trailingInset, maxZoom)
+        trailingInset, attachment, bottomClearance, maxZoom)
     val openingGeometry = remember { geometry }
     if (geometry != openingGeometry) {
         // A pointer belongs to the geometry where it began. Remove the window
@@ -139,11 +142,18 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         return
     }
     val physicalTrailingInset = geometry.safeInsets.right / density.density
-    val disc = MonitorZoomGeometry.layout(configuration.screenWidthDp.toFloat(),
-        configuration.screenHeightDp.toFloat(), maxOf(trailingInset,
-            if (physicalTrailingInset > 0f) physicalTrailingInset + 6f else 0f))
+    val availableHeight = configuration.screenHeightDp.toFloat() -
+        if (attachment == MonitorZoomAttachment.Bottom) bottomClearance.coerceAtLeast(0f) else 0f
+    val disc = MonitorZoomGeometry.layout(
+        configuration.screenWidthDp.toFloat(),
+        availableHeight,
+        trailingInset = maxOf(trailingInset,
+            if (physicalTrailingInset > 0f) physicalTrailingInset + 6f else 0f),
+        attachment = attachment,
+    )
     val radius = disc.radius
-    val pixelDisc = MonitorZoomGeometry(radius * density.density, disc.edgeExtension * density.density)
+    val pixelDisc = MonitorZoomGeometry(
+        radius * density.density, disc.edgeExtension * density.density, disc.attachment)
     val factor = exp(position * logMax).coerceIn(1.0, maxZoom)
     val optical = opticalStops.any { abs(it - factor) < .05 }
     val accent = if (optical) MonitorPalette.accent else Color(0xFFF0B23C)
@@ -163,14 +173,24 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         // A focused modal window owns input above every underlying control.
         Box(Modifier.size(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
             .pointerInput(Unit) { detectTapGestures { closing = true } }) {
-            Box(Modifier.align(Alignment.CenterEnd).size(disc.width.dp, disc.height.dp)
-                .graphicsLayer { translationX = size.width * .26f * (1f - motion)
+            Box(Modifier.align(
+                if (attachment == MonitorZoomAttachment.Bottom) Alignment.BottomCenter
+                else Alignment.CenterEnd
+            ).padding(bottom = if (attachment == MonitorZoomAttachment.Bottom) bottomClearance.dp else 0.dp)
+                .size(disc.width.dp, disc.height.dp)
+                .graphicsLayer {
                     val restScale = if (closing) .90f else .88f
                     scaleX = restScale + (1f - restScale) * motion
                     scaleY = scaleX
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
+                    if (attachment == MonitorZoomAttachment.Bottom) {
+                        translationY = size.height * .26f * (1f - motion)
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(.5f, 1f)
+                    } else {
+                        translationX = size.width * .26f * (1f - motion)
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
+                    }
                     alpha = motion }
-                .monitorMaterial(MonitorMaterial.Zoom, MonitorZoomDiscShape)) {
+                .monitorMaterial(MonitorMaterial.Zoom, MonitorZoomDiscShape(attachment))) {
                 Canvas(Modifier.fillMaxSize().semantics {
                     contentDescription = "Zoom ${label(factor)}"
                     progressBarRangeInfo = ProgressBarRangeInfo(position, 0f..1f)
@@ -215,10 +235,14 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                 }) {
                     val scale = pixelDisc.radius / 190f
                     val center = Offset(pixelDisc.radius, pixelDisc.radius)
-                    fun point(angle: Double, r: Float) = Offset(center.x - r * scale * sin(angle).toFloat(),
+                    val bottom = pixelDisc.attachment == MonitorZoomAttachment.Bottom
+                    fun point(angle: Double, r: Float) = if (bottom) Offset(
+                        center.x - r * scale * cos(angle).toFloat(),
+                        center.y - r * scale * sin(angle).toFloat(),
+                    ) else Offset(center.x - r * scale * sin(angle).toFloat(),
                         center.y + r * scale * cos(angle).toFloat())
                     val arcRadius = 186f * scale
-                    drawArc(Color.White.copy(alpha = .07f), 90f, 180f, false,
+                    drawArc(Color.White.copy(alpha = .07f), if (bottom) 180f else 90f, 180f, false,
                         Offset(center.x - arcRadius, center.y - arcRadius), Size(arcRadius * 2, arcRadius * 2),
                         style = Stroke(1.5f * scale))
                     val window = .36 * PI
@@ -240,12 +264,25 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                                 topLeft = point(a, 124f) - Offset(measured.size.width / 2f, measured.size.height / 2f))
                         }
                     }
-                    drawLine(accent, Offset(14f * scale, center.y), Offset(46f * scale, center.y),
-                        3f * scale, StrokeCap.Round)
-                    drawCircle(accent, 3.5f * scale, Offset(52f * scale, center.y))
+                    if (bottom) {
+                        drawLine(accent, Offset(center.x, 14f * scale), Offset(center.x, 46f * scale),
+                            3f * scale, StrokeCap.Round)
+                        drawCircle(accent, 3.5f * scale, Offset(center.x, 52f * scale))
+                    } else {
+                        drawLine(accent, Offset(14f * scale, center.y), Offset(46f * scale, center.y),
+                            3f * scale, StrokeCap.Round)
+                        drawCircle(accent, 3.5f * scale, Offset(52f * scale, center.y))
+                    }
                 }
-                Column(Modifier.align(Alignment.CenterEnd).padding(start = (radius * .42f).dp,
-                    end = (radius * .04f + disc.edgeExtension).dp),
+                Column(Modifier.align(
+                    if (attachment == MonitorZoomAttachment.Bottom) Alignment.TopCenter
+                    else Alignment.CenterEnd
+                ).padding(
+                    start = if (attachment == MonitorZoomAttachment.Bottom) 0.dp else (radius * .42f).dp,
+                    top = if (attachment == MonitorZoomAttachment.Bottom) (radius * .42f).dp else 0.dp,
+                    end = if (attachment == MonitorZoomAttachment.Bottom) 0.dp
+                    else (radius * .04f + disc.edgeExtension).dp,
+                ),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label(factor), style = MonitorTypography.readout(radius * .19f, FontWeight.Bold))
                     Text(caption(factor), style = MonitorTypography.text(10f, FontWeight.Medium), color = accent)
@@ -256,17 +293,32 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
 }
 
 /** One closed outline, so the scale and cutout extension share one material pass. */
-private object MonitorZoomDiscShape : Shape {
+private class MonitorZoomDiscShape(
+    private val attachment: MonitorZoomAttachment,
+) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val radius = size.height / 2f
-        val control = radius * .5522847498f
+        val controlFactor = .5522847498f
         return Outline.Generic(Path().apply {
-            moveTo(size.width, 0f)
-            lineTo(radius, 0f)
-            cubicTo(radius - control, 0f, 0f, radius - control, 0f, radius)
-            cubicTo(0f, radius + control, radius - control, size.height, radius, size.height)
-            lineTo(size.width, size.height)
-            close()
+            if (attachment == MonitorZoomAttachment.Bottom) {
+                val radius = size.width / 2f
+                val control = radius * controlFactor
+                val flat = radius
+                moveTo(0f, size.height)
+                lineTo(0f, flat)
+                cubicTo(0f, flat - control, radius - control, 0f, radius, 0f)
+                cubicTo(radius + control, 0f, size.width, flat - control, size.width, flat)
+                lineTo(size.width, size.height)
+                close()
+            } else {
+                val radius = size.height / 2f
+                val control = radius * controlFactor
+                moveTo(size.width, 0f)
+                lineTo(radius, 0f)
+                cubicTo(radius - control, 0f, 0f, radius - control, 0f, radius)
+                cubicTo(0f, radius + control, radius - control, size.height, radius, size.height)
+                lineTo(size.width, size.height)
+                close()
+            }
         })
     }
 }

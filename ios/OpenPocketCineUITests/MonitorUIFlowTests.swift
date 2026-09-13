@@ -244,9 +244,14 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("zoom-dial-landscape")
         rotate(.portrait)
         XCTAssertTrue(dial.isHittable)
-        for control in ["record", "display", "settings", "media"] {
-            XCTAssertFalse(app.buttons["monitor.system.\(control)"].isHittable)
-        }
+        XCTAssertGreaterThan(
+            dial.frame.width, dial.frame.height,
+            "Portrait zoom disc must be a bottom half-circle so the feed stays visible")
+        let record = app.buttons["monitor.system.record"]
+        XCTAssertTrue(record.exists)
+        XCTAssertLessThanOrEqual(
+            dial.frame.maxY, record.frame.minY + 8,
+            "Portrait zoom disc must sit above the bottom system controls")
         capture("zoom-dial-portrait")
         app.buttons["Close zoom dial"].tap()
         XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)

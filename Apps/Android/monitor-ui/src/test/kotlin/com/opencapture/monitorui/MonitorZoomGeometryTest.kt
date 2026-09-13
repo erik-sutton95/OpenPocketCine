@@ -79,4 +79,30 @@ class MonitorZoomGeometryTest {
         assertTrue(kotlin.math.abs((after - before) / (210 * Math.PI / 180)) < .01)
     }
 
+    @Test fun portraitBottomDiscSitsInTheWidthAndLeavesBottomChrome() {
+        val disc = MonitorZoomGeometry.layout(393f, 650f, attachment = MonitorZoomAttachment.Bottom)
+        assertEquals(196.5f, disc.radius, .001f)
+        assertEquals(disc.radius * 2f, disc.width, .001f)
+        assertEquals(disc.radius, disc.height, .001f)
+        assertFalse(disc.canStartZoom(disc.radius, disc.radius + 1f))
+        assertTrue(disc.canStartZoom(disc.radius, disc.radius * .4f))
+        assertFalse(disc.contains(1f, 1f))
+        assertTrue(disc.contains(disc.radius, 1f))
+    }
+
+    @Test fun bottomExtensionCannotArmAndReentryDoesNotJump() {
+        val disc = MonitorZoomGeometry.layout(
+            393f, 650f, bottomInset = 80f, attachment = MonitorZoomAttachment.Bottom)
+        assertEquals(disc.radius + 80f, disc.height, .001f)
+        val pointer = MonitorZoomRadialGesture(disc, disc.radius, disc.radius * .4f)
+        assertTrue(pointer.isArmed)
+        val before = checkNotNull(pointer.angleDelta(disc.radius + 8f, disc.radius * .4f))
+        assertNull(pointer.angleDelta(disc.radius, disc.radius + 20f))
+        assertNull(pointer.angleDelta(disc.radius + 8f, disc.radius * .4f))
+        val after = checkNotNull(pointer.angleDelta(disc.radius + 8f, disc.radius * .41f))
+        val expected = disc.angle(disc.radius + 8f, disc.radius * .41f) -
+            disc.angle(disc.radius + 8f, disc.radius * .4f)
+        assertEquals(expected, after - before, 1e-9)
+    }
+
 }

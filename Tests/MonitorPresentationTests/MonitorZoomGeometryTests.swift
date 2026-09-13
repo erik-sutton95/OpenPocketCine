@@ -79,4 +79,35 @@ struct MonitorZoomGeometryTests {
         #expect(abs((after - before) / MonitorZoomScale.angularSpan) < 0.01)
     }
 
+    @Test func portraitBottomDiscSitsInTheWidthAndLeavesBottomChrome() {
+        let disc = MonitorZoomGeometry(
+            width: 393, height: 650, attachment: .bottom)
+        #expect(abs(disc.radius - 196.5) < 0.000001)
+        #expect(disc.width == disc.radius * 2)
+        #expect(disc.height == disc.radius)
+        #expect(disc.height <= 650)
+        #expect(!disc.canStartZoom(x: disc.radius, y: disc.radius + 1))
+        #expect(disc.canStartZoom(x: disc.radius, y: disc.radius * 0.4))
+        #expect(!disc.contains(x: 1, y: 1))
+        #expect(disc.contains(x: disc.radius, y: 1))
+    }
+
+    @Test func bottomExtensionCannotArmAndReentryDoesNotJump() {
+        let disc = MonitorZoomGeometry(
+            width: 393, height: 650, bottomInset: 80, attachment: .bottom)
+        #expect(disc.height == disc.radius + 80)
+        var pointer = MonitorZoomRadialGesture(
+            geometry: disc, startX: disc.radius, startY: disc.radius * 0.4)
+        #expect(pointer.isArmed)
+        let before = pointer.angleDelta(x: disc.radius + 8, y: disc.radius * 0.4)!
+        #expect(
+            pointer.angleDelta(x: disc.radius, y: disc.radius + 20) == nil)
+        #expect(pointer.angleDelta(x: disc.radius + 8, y: disc.radius * 0.4) == nil)
+        let after = pointer.angleDelta(x: disc.radius + 8, y: disc.radius * 0.41)!
+        let expected =
+            disc.angle(x: disc.radius + 8, y: disc.radius * 0.41)
+            - disc.angle(x: disc.radius + 8, y: disc.radius * 0.4)
+        #expect(abs(after - before - expected) < 1e-9)
+    }
+
 }

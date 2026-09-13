@@ -701,6 +701,14 @@ struct LiveViewScreen: View {
         if zoomDialMounted, chromeInteractive, !interfaceLocked {
             MonitorZoomDial(
                 viewport: layout.viewport, safeArea: layout.safeArea,
+                attachment: (layout.presentation?.portrait
+                    ?? (layout.viewport.height > layout.viewport.width)) ? .bottom : .trailing,
+                bottomClearance: {
+                    guard let presentation = layout.presentation, presentation.portrait else {
+                        return 0
+                    }
+                    return max(0, layout.viewport.height - CGFloat(presentation.values.y))
+                }(),
                 isPresented: zoomDialVisible,
                 scale: MonitorZoomScale(minimum: 1, maximum: model.session.zoomMax),
                 marks: Array(Set([1, 1.5, 2, 4, 6, 9] + model.session.zoomStops)).sorted(),

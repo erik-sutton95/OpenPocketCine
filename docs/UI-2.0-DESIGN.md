@@ -81,9 +81,10 @@ the joystick cluster occupy fixed positions above the camera-value strip,
 independent of FIT/FILL and source aspect. The camera-value and system-button
 strips remain at the bottom. The
 zoom-disc follow-up increases its preferred radius by 10%, subject to viewport
-bounds. Its material extends continuously from the flat edge to the screen edge
-and draws above underlying system controls. These are operator-approved changes
-to the original reference, not new camera behavior.
+bounds. Landscape material extends continuously from the flat edge to the
+trailing screen edge. Portrait uses a bottom half-circle above the camera-value
+and system-button rows so more of the feed stays visible. These are
+operator-approved changes to the original reference, not new camera behavior.
 
 ### Blurred surfaces
 
@@ -152,7 +153,7 @@ clearance. References: 6610–6645, 7270–7300, 7384–7414.
 | Monitor DISP 1 / DISP 2 | Video, signal/phone/camera gauges, storage, timecode, tally, capture controls, assist palette, gimbal cluster, record, setup/media, UI lock. | 1115–1645, 5610–5990, 6549–7820 |
 | Capture drum | Tap a value for persistent picker; hold/drag for temporary direct-setting drum. Tabs/toggles appear in persistent mode. Top categories Format/Colour/Mode; bottom ISO/Shutter-or-EV/Exposure/WB/Focus/Audio. | 1330–1375, 5163–5273, 5446–5548 |
 | Assist options | Leading glass drawer, 11-tool navigation rail, live preview of selected tool, option cards, help toggle, close. | 1480–1630, 3774–4086, 6830–6877 |
-| Zoom dial | Hold zoom: trailing half-disc, logarithmic scale, optical/digital readout, scrim dismissal. | 1410–1446, 5297–5376, 6797–6990 |
+| Zoom dial | Hold zoom: landscape trailing half-disc; portrait bottom half-circle above camera values. Logarithmic scale, optical/digital readout, scrim dismissal. | 1410–1446, 5297–5376, 6797–6990 |
 | Gimbal drawer | Trailing glass drawer; inline Mode and Speed drums; Motion Control footer. | 1448–1479, 7000–7043 |
 | Motion Control | Movable full editor or minimized controller; A/B/C point rows, SET/RESET, Go, leg duration, loop, clear, run/stop, minimize/expand/close. | 1540–1643, 4201–4237, 7043–7128 |
 | Multi-view | Center-stage plus thumbnail strip or 2×2; empty add-camera slots; per-tile telemetry/tally; shared assist palette; layout/display/close/record-all controls; close confirmation. Selected monitor returns to grid via lock-slot button. | 811–954, 5378–5437, 5990–6348 |
@@ -362,8 +363,11 @@ Zoom chip is 44 square, numeric 18/20. Prototype tap toggles optical lenses,
 double-tap selects digital crops, hold 380 ms opens logarithmic dial. Its
 double-tap window is 240 ms. Dial spans 210°, shows ±0.36π, uses 48 minor ticks
 and labels 1/1.5/2/3/4/6/9/12; selected label fades as it reaches fixed center
-marker. Optical labels are cyan/white; crop warning amber. Radius clamps 120…260
-phone or 330 tablet and half viewport height−12. Other chrome fades to 0.16.
+marker. Optical labels are cyan/white; crop warning amber. Landscape is a trailing
+half-disc (radius clamps 120…260 phone or 330 tablet and half viewport height−12)
+with material to the physical edge. Portrait is a later operator correction: the
+same logarithmic scale as a bottom half-circle that sits above the camera-value
+and system-button rows so the feed stays visible. Other chrome fades to 0.16.
 Map this gesture shell onto existing model-specific zoom stops/limits and D-Log2
 safety; never hardcode two lenses on bodies without them. Source 5290–5376,
 6797–6990.

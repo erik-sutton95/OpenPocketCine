@@ -131,9 +131,12 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - In portrait, the fitted feed centers on the canvas vertical mid-line; STBY,
   timecode and REC SETUP occupy an independent row below the safe top. Feed
   controls follow the picture, while value/system strips keep their bottom slots.
-  Tall pictures stay canvas-centered when chrome cannot fit around them. The zoom disc has a
-  10% larger preferred radius, bounded by viewport, and one continuous material
-  to the physical edge. Underlying controls cannot receive input while it is open.
+  Tall pictures stay canvas-centered when chrome cannot fit around them. Landscape
+  zoom uses the trailing half-disc: 10% larger preferred radius, bounded by
+  viewport, and one continuous material to the physical edge. In portrait the disc
+  is a bottom half-circle that sits above the camera-value and system-button rows
+  so more of the feed stays visible; a full-screen dismiss plane still owns
+  underlying control input while it is open.
 - The expanded Motion Control editor passes joystick touches to the original
   control so positions can be set without minimizing the window. Other outside
   taps minimize without activating covered controls. Window dragging uses local
