@@ -57,7 +57,7 @@ Operator Setup and Media use a navigation rail in landscape and scrolling tabs
 in portrait. Settings and Media place Back outside the full-height sidebar in
 landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
-holds one row with the grid/list toggle and Small/Medium/Large sizes; in portrait,
+holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
 these controls stay at the bottom of the page. Pull down on the library to refresh.
 Hold a clip to begin selecting, then drag across clips to select a range. In
 selection mode, swipe up or down to scroll without changing the selection, or

@@ -54,6 +54,7 @@ enum class MonitorIcon(
     LIST_FILTER("list-filter", R.drawable.opc_lucide_list_filter),
     LOCK("lock", R.drawable.opc_lucide_lock),
     MAXIMIZE("maximize", R.drawable.opc_lucide_maximize),
+    MENU("menu", R.drawable.opc_lucide_menu),
     MINIMIZE("minimize", R.drawable.opc_lucide_minimize),
     MONITOR("monitor", R.drawable.opc_lucide_monitor),
     MOUNTAIN("mountain", R.drawable.opc_lucide_mountain),

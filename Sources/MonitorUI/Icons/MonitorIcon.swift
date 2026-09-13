@@ -46,6 +46,7 @@
         case listFilter = "list-filter"
         case lock
         case maximize
+        case menu
         case minimize
         case monitor
         case mountain

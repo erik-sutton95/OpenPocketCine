@@ -389,12 +389,14 @@ Operator-requested follow-up: Settings and Media place Back outside the navigati
 card at the upper-left in landscape. The sidebar retains its full height with
 brand and title at its top. Portrait keeps Back in its original header position,
 beside the brand and title. Back uses the shared live-system button material,
-shape, size and press feedback; landscape uses the same corner clearance. Media has one grid/list toggle:
-its icon names the destination view and its accessibility value names the current
-view. The toggle and all three thumbnail sizes share one horizontal row at the
+shape, size and press feedback; landscape uses the same corner clearance. Media shows
+grid and list as two always-visible 32×28 cells in a 9-radius capsule (four-square
+grid and three-line list, matching the mockup), and S/M/L
+as 7/10/13 rounded-square dots in 28×28 cells in a matching capsule. Selected
+cells use white at 14% with a white glyph; unselected layout icons are `#8D9293`
+and unselected size dots are `#5E6262`. Those two groups share one horizontal row at the
 bottom of the landscape sidebar, below the library status; portrait pins that
-same row to the page bottom, beneath the gallery and any selection tray. Media uses a 206-wide sidebar to retain
-44-point/dp buttons without wrapping.
+same row to the page bottom, beneath the gallery and any selection tray. Media uses a 206-wide sidebar.
 Sizes remain visible in list view and preserve the next grid size. Switching
 preserves the current category, sorting and selection. Pull-to-refresh replaces
 the toolbar Refresh button and also works with an empty or short catalog.

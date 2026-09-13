@@ -115,31 +115,62 @@
 
         private var displayControls: some View {
             HStack(spacing: 6) {
-                chip(
-                    layout == .grid ? "Switch to list view" : "Switch to grid view",
-                    icon: layout == .grid ? .layoutList : .layoutGrid
-                ) {
-                    action(.layout(layout == .grid ? .list : .grid))
+                HStack(spacing: 2) {
+                    layoutButton(.grid, icon: .layoutGrid, label: "Grid view")
+                    layoutButton(.list, icon: .menu, label: "List view")
                 }
-                .accessibilityValue(layout == .grid ? "Grid view" : "List view")
-                .accessibilityIdentifier("monitor.media.layout")
+                .padding(3)
+                .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 9))
                 HStack(spacing: 2) {
                     ForEach(MonitorThumbnailSize.allCases, id: \.self) { size in
-                        chip(
-                            "\(size.rawValue.capitalized) thumbnails",
-                            icon: .square, filled: true,
-                            active: size == thumbnailSize,
-                            iconSize: size == .small ? 7 : size == .medium ? 10 : 13
-                        ) {
-                            action(.thumbnailSize(size))
-                        }
-                        .accessibilityAddTraits(size == thumbnailSize ? .isSelected : [])
+                        sizeButton(size)
                     }
                 }
-                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
+                .padding(3)
+                .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 9))
             }
+            .fixedSize()
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("monitor.media.displayControls")
+        }
+
+        private func layoutButton(
+            _ mode: MonitorMediaLayout, icon: MonitorIcon, label: String
+        ) -> some View {
+            let on = layout == mode
+            return Button {
+                action(.layout(mode))
+            } label: {
+                icon.view().frame(width: 13, height: 13)
+                    .foregroundStyle(on ? Color.white : MonitorTheme.muted)
+                    .frame(width: 32, height: 28)
+                    .background(
+                        on ? Color.white.opacity(0.14) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(MonitorButtonStyle())
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(on ? .isSelected : [])
+            .accessibilityIdentifier("monitor.media.layout.\(mode.rawValue)")
+        }
+
+        private func sizeButton(_ size: MonitorThumbnailSize) -> some View {
+            let on = size == thumbnailSize
+            let dot: CGFloat = size == .small ? 7 : size == .medium ? 10 : 13
+            return Button {
+                action(.thumbnailSize(size))
+            } label: {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(on ? Color.white : MonitorTheme.faint)
+                    .frame(width: dot, height: dot)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        on ? Color.white.opacity(0.14) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(MonitorButtonStyle())
+            .accessibilityLabel("\(size.rawValue.capitalized) thumbnails")
+            .accessibilityAddTraits(on ? .isSelected : [])
         }
 
         @ViewBuilder private func header(portrait: Bool) -> some View {

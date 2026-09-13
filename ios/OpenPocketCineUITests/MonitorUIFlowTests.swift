@@ -477,7 +477,6 @@ final class MonitorUIFlowTests: XCTestCase {
                 }
                 XCTAssertTrue(back.isHittable)
                 if control == "media" {
-                    let toggle = app.buttons["monitor.media.layout"]
                     let displayControls = app.otherElements["monitor.media.displayControls"]
                     if orientation == .portrait {
                         XCTAssertGreaterThan(displayControls.frame.minY, app.frame.height * 0.8)
@@ -488,23 +487,32 @@ final class MonitorUIFlowTests: XCTestCase {
                             displayControls.frame.maxY, navigation.frame.maxY - 10, accuracy: 1)
                     }
                     XCTAssertFalse(app.buttons["Refresh camera media"].exists)
+                    let grid = app.buttons["monitor.media.layout.grid"]
+                    let list = app.buttons["monitor.media.layout.list"]
+                    XCTAssertTrue(grid.isHittable)
+                    XCTAssertTrue(list.isHittable)
+                    XCTAssertEqual(grid.frame.midY, list.frame.midY, accuracy: 1)
+                    XCTAssertEqual(grid.frame.width, 32, accuracy: 1)
+                    XCTAssertEqual(grid.frame.height, 28, accuracy: 1)
+                    XCTAssertEqual(displayControls.frame.width, 172, accuracy: 2)
+                    XCTAssertEqual(displayControls.frame.height, 34, accuracy: 2)
                     for size in ["Small", "Medium", "Large"] {
                         let button = app.buttons["\(size) thumbnails"]
                         XCTAssertTrue(button.isHittable)
                         XCTAssertTrue(displayControls.frame.contains(button.frame))
-                        XCTAssertEqual(button.frame.midY, toggle.frame.midY, accuracy: 1)
+                        XCTAssertEqual(button.frame.midY, grid.frame.midY, accuracy: 1)
+                        XCTAssertEqual(button.frame.width, 28, accuracy: 1)
+                        XCTAssertEqual(button.frame.height, 28, accuracy: 1)
                     }
-                    XCTAssertEqual(
-                        app.buttons.matching(identifier: "monitor.media.layout").count, 1)
-                    XCTAssertTrue(toggle.isHittable)
-                    let originalValue = toggle.value as? String
-                    let originalFrame = toggle.frame
-                    toggle.tap()
-                    XCTAssertNotEqual(toggle.value as? String, originalValue)
-                    XCTAssertEqual(toggle.frame.minX, originalFrame.minX, accuracy: 1)
-                    XCTAssertEqual(toggle.frame.width, originalFrame.width, accuracy: 1)
-                    toggle.tap()
-                    XCTAssertEqual(toggle.value as? String, originalValue)
+                    let originalGrid = grid.frame
+                    XCTAssertTrue((grid.value as? String)?.contains("Selected") == true
+                        || grid.isSelected)
+                    list.tap()
+                    XCTAssertTrue(list.isSelected || (list.value as? String)?.contains("Selected") == true)
+                    XCTAssertEqual(grid.frame.minX, originalGrid.minX, accuracy: 1)
+                    XCTAssertEqual(grid.frame.width, originalGrid.width, accuracy: 1)
+                    grid.tap()
+                    XCTAssertTrue(grid.isSelected || (grid.value as? String)?.contains("Selected") == true)
                 }
                 capture("\(control)-page-header-\(orientation.rawValue)")
                 back.tap()

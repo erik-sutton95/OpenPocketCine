@@ -39,6 +39,7 @@ link-2-off
 list-filter
 lock
 maximize
+menu
 minimize
 monitor
 mountain

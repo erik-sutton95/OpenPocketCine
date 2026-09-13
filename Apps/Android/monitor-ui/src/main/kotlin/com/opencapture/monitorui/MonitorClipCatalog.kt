@@ -148,7 +148,7 @@ private fun ClipBadge(text: String, modifier: Modifier = Modifier) {
         color = MonitorPalette.text, style = MonitorTypography.text(7.5f, FontWeight.SemiBold), maxLines = 1)
 }
 
-/** Toggle 44 + gap 6 + three 44 chips with gaps 2 = 186. */
+/** Mockup: 3+32+2+32+3 and 3+28×3+2×2+3 capsules, 6 dp apart. */
 @Composable
 fun MonitorCatalogDisplayControls(
     list: Boolean,
@@ -159,31 +159,50 @@ fun MonitorCatalogDisplayControls(
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        CatalogTool(
-            if (list) MonitorIcon.LAYOUT_GRID else MonitorIcon.LAYOUT_LIST,
-            if (list) "Switch to grid view" else "Switch to list view",
-            false,
-            { onList(!list) },
-            stateDescription = if (list) "List view" else "Grid view",
-            modifier = Modifier.size(44.dp).background(MonitorPalette.tile, RoundedCornerShape(8.dp)),
-        )
-        Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MonitorPalette.tile),
+        Row(
+            Modifier.clip(RoundedCornerShape(9.dp)).background(Color.Black.copy(alpha = .35f)).padding(3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            CatalogLayoutCell(
+                MonitorIcon.LAYOUT_GRID, "Grid view", selected = !list, onClick = { onList(false) })
+            CatalogLayoutCell(
+                MonitorIcon.MENU, "List view", selected = list, onClick = { onList(true) })
+        }
+        Row(
+            Modifier.clip(RoundedCornerShape(9.dp)).background(Color.Black.copy(alpha = .35f)).padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             MonitorThumbnailSize.entries.forEach { size ->
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
-                    .background(if (size == thumbnailSize) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
+                val selected = size == thumbnailSize
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))
+                    .background(if (selected) Color.White.copy(alpha = .14f) else Color.Transparent)
                     .combinedClickable(role = Role.Button, onClick = { onThumbnailSize(size) })
                     .semantics {
                         contentDescription = "${size.name.lowercase().replaceFirstChar { it.uppercase() }} thumbnails"
-                        selected = size == thumbnailSize
+                        this.selected = selected
                     },
                     contentAlignment = Alignment.Center) {
-                    Box(Modifier.size((6 + size.ordinal * 3).dp).clip(RoundedCornerShape(2.dp))
-                        .background(if (size == thumbnailSize) MonitorPalette.accent else MonitorPalette.muted))
+                    Box(Modifier.size((7 + size.ordinal * 3).dp).clip(RoundedCornerShape(3.dp))
+                        .background(if (selected) Color.White else MonitorPalette.faint))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CatalogLayoutCell(icon: MonitorIcon, label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(Modifier.size(32.dp, 28.dp).clip(RoundedCornerShape(7.dp))
+        .background(if (selected) Color.White.copy(alpha = .14f) else Color.Transparent)
+        .combinedClickable(role = Role.Button, onClick = onClick)
+        .semantics {
+            contentDescription = label
+            this.selected = selected
+        },
+        contentAlignment = Alignment.Center) {
+        MonitorIcon(icon, null, Modifier.size(13.dp), if (selected) Color.White else MonitorPalette.muted)
     }
 }
 

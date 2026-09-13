@@ -49,6 +49,7 @@ class OpcIconCatalogTest {
                 "list-filter",
                 "lock",
                 "maximize",
+                "menu",
                 "minimize",
                 "monitor",
                 "mountain",

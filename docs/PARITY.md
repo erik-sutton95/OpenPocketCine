@@ -102,9 +102,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Settings and Media keep full-height landscape navigation with brand/title at
   its top and Back outside to the left. Portrait retains Back beside the title.
   Back uses the live control's material, shape, size and press response. iOS shares
-  the live corner geometry; Android uses native safe insets. Media's grid/list
-  toggle and all three thumbnail sizes share one horizontal row at the bottom of
-  the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Pull-to-refresh replaces the Refresh toolbar button and
+  the live corner geometry; Android uses native safe insets. Media's grid and list
+  buttons and all three thumbnail sizes share one horizontal row at the bottom of
+  the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Grid/list
+  is two 32×28 cells; sizes are 28×28 cells with 7/10/13 rounded-square dots. Pull-to-refresh replaces the Refresh toolbar button and
   works with grid, list and empty catalogs. Sorting, filters and selection persist
   when changing display mode. The live signal indicator and Link Health use the
   same red/orange/green bands: below 50, 50–79, and 80+. Existing signal measurements
@@ -462,6 +463,12 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   and Settings showed the same green Stable band. Matching Android build, tests
   and lint run in this change; physical Android qualification remains an exception
   because no device was attached.
+- Media display restyle: iPhone 16 Pro simulator measured the Media display row
+  at 172 × 34 — two 32×28 grid/list cells and three 28×28 size cells in matching
+  9-radius black-35% capsules, selected white 14% (not cyan). Grid → List → Grid
+  stayed in place. iPhone 16 Pro Max Release install launched. Matching Android
+  compile, icon catalog test and monitor-ui lint; physical Android qualification
+  remains an exception because no device was attached.
 - Media selection: browsing hides per-clip circles. Hold enters selection; a
   vertical swipe keeps the selected IDs and selection mode while the gallery
   scrolls natively; a sideways-dominant drag starts a range; a hold then drag

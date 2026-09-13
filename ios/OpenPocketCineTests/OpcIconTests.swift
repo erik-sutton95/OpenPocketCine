@@ -49,6 +49,7 @@ final class OpcIconTests: XCTestCase {
                 "list-filter",
                 "lock",
                 "maximize",
+                "menu",
                 "minimize",
                 "monitor",
                 "mountain",

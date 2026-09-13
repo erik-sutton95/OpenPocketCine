@@ -59,6 +59,7 @@ ICON_NAMES = [
     "list-filter",
     "lock",
     "maximize",
+    "menu",
     "minimize",
     "monitor",
     "mountain",
