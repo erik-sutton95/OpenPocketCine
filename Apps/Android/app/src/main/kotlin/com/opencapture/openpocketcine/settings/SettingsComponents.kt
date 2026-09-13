@@ -49,6 +49,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -353,7 +355,10 @@ fun SettingsSwitchRow(
         showTopDivider = showTopDivider,
         stacked = stacked,
     ) {
-        Box(Modifier.settingsClickable(role = Role.Switch, onClick = onToggle)) {
+        Box(Modifier.settingsClickable(role = Role.Switch, onClick = onToggle).semantics {
+            contentDescription = title
+            toggleableState = if (isOn) ToggleableState.On else ToggleableState.Off
+        }) {
             SettingsSwitchGraphic(isOn = isOn)
         }
     }

@@ -28,6 +28,7 @@ separate iOS and Android lists.
   share the full bottom-center drawer, with reference ruler animations,
   translucent glass, tighter dark readout shadows and corrected corner spacing.
   Assist previews retain their admission limit across rapid tabs and remounts.
+  Android settings switches announce their labels and on/off states.
   Pocket 4 Pro zoom separates 1×/3× taps from 6×/12× double taps.
   Physical camera-session qualification and the Android rendering exceptions are
   tracked in [parity](docs/PARITY.md#ui-20-qualification).
