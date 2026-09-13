@@ -283,7 +283,10 @@ struct MediaLibraryView: View {
     @State private var isFilterPopupPresented = false
     @State private var formatFilters: Set<String> = []
     @State private var resolutionFilters: Set<String> = []
-    @State private var dateKeyFilter: String?
+    @State private var dateStartKey: String?
+    @State private var dateEndKey: String?
+    @State private var colorFilters: Set<UInt8> = []
+    @State private var pickingDate: FilterDateBound?
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var isBatchDeleteConfirmPresented = false
@@ -316,7 +319,10 @@ struct MediaLibraryView: View {
             tab: category.libraryTab,
             formats: formatFilters,
             resolutions: resolutionFilters,
-            dateKey: dateKeyFilter,
+            dateStart: dateStartKey,
+            dateEnd: dateEndKey,
+            colors: colorFilters,
+            shotColors: shotColorCodes,
             localFavorites: localFavorites
         )
         if category == .favorites {
@@ -357,12 +363,27 @@ struct MediaLibraryView: View {
         Array(Set(filterSourceFiles.compactMap(\.resolution)).filter { !$0.isEmpty }).sorted()
     }
 
-    private var dateOptions: [String] {
-        Array(Set(filterSourceFiles.map(\.dateKey)).filter { !$0.isEmpty }).sorted().reversed()
+    private var shotColorCodes: [String: UInt8] {
+        Dictionary(
+            uniqueKeysWithValues: filterSourceFiles.compactMap { file in
+                session.shotColor(for: file).map { (file.path, $0.rawValue) }
+            })
+    }
+
+    private var colorOptions: [ColorMode] {
+        let present = Set(shotColorCodes.values)
+        return ColorMode.allCases.filter { present.contains($0.rawValue) }
+    }
+
+    private var dateBounds: ClosedRange<Date>? {
+        let dates = filterSourceFiles.compactMap { MediaLibraryQuery.date(fromKey: $0.dateKey) }
+        guard let first = dates.min(), let last = dates.max() else { return nil }
+        return first...last
     }
 
     private var activeFilterCount: Int {
-        formatFilters.count + resolutionFilters.count + (dateKeyFilter == nil ? 0 : 1)
+        formatFilters.count + resolutionFilters.count + colorFilters.count
+            + (dateStartKey == nil && dateEndKey == nil ? 0 : 1)
     }
 
     private var hasActiveFilters: Bool { activeFilterCount > 0 }
@@ -501,6 +522,19 @@ struct MediaLibraryView: View {
                 model.delivery.clearSharePresentation()
             }
         }
+        .sheet(item: $pickingDate) { bound in
+            FilterCalendarSheet(
+                title: bound.title,
+                range: dateBounds ?? Date.distantPast...Date.distantFuture,
+                key: bound == .start ? $dateStartKey : $dateEndKey
+            )
+        }
+        .onChange(of: dateStartKey) { _, start in
+            if let start, let end = dateEndKey, start > end { dateEndKey = start }
+        }
+        .onChange(of: dateEndKey) { _, end in
+            if let end, let start = dateStartKey, end < start { dateStartKey = end }
+        }
     }
 
     private func dismiss() {
@@ -562,34 +596,30 @@ struct MediaLibraryView: View {
     }
 
     private var filterButton: some View {
-        Button {
+        let on = isFilterPopupPresented || hasActiveFilters
+        return Button {
             isFilterPopupPresented.toggle()
         } label: {
-            HStack(spacing: 6) {
-                OpcIcon.listFilter
-                    .frame(width: 10, height: 10)
-                Text("FILTER")
-                    .font(MonitorTheme.font(9.5, weight: .bold)).monospacedDigit()
+            HStack(spacing: 7) {
+                MonitorIcon.listFilter.view().frame(width: 13, height: 13)
+                Text("Filter").font(MonitorTheme.font(10.5, weight: .semibold)).lineLimit(1)
                 if activeFilterCount > 0 {
                     Text("\(activeFilterCount)")
-                        .font(MonitorTheme.font(9, weight: .bold)).monospacedDigit()
-                        .foregroundStyle(LiveDesign.background)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(LiveDesign.accent, in: Capsule())
+                        .font(MonitorTheme.font(10.5, weight: .semibold))
                 }
             }
-            .foregroundStyle(activeFilterCount > 0 ? LiveDesign.accent : LiveDesign.muted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .foregroundStyle(on ? MonitorTheme.text : MonitorTheme.secondary)
+            .padding(.horizontal, 11).frame(minWidth: 44, minHeight: 44)
             .background(
-                (isFilterPopupPresented || activeFilterCount > 0)
-                    ? LiveDesign.accentDim : Color.clear,
-                in: Capsule()
-            )
-            .overlay(Capsule().stroke(LiveDesign.hairline, lineWidth: 1))
+                on ? MonitorTheme.accent.opacity(0.18) : Color.white.opacity(0.04),
+                in: RoundedRectangle(cornerRadius: 9))
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(MonitorButtonStyle())
+        .accessibilityLabel("Filter library")
+        .accessibilityValue(
+            activeFilterCount == 0 ? "Off" : "\(activeFilterCount) active")
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier("monitor.media.filter")
     }
 
     private var filterPopup: some View {
@@ -627,24 +657,35 @@ struct MediaLibraryView: View {
                             }
                         }
 
-                        if !dateOptions.isEmpty {
+                        if dateBounds != nil {
                             filterSection(title: "DATE") {
-                                let columns = [GridItem(.adaptive(minimum: 150), spacing: 5)]
-                                LazyVGrid(columns: columns, spacing: 5) {
-                                    ForEach(dateOptions, id: \.self) { key in
-                                        MediaFilterChip(
-                                            title: MediaClipPresentation.dateLabel(key),
-                                            expands: true,
-                                            isActive: dateKeyFilter == key
-                                        ) {
-                                            dateKeyFilter = dateKeyFilter == key ? nil : key
-                                        }
+                                HStack(spacing: 6) {
+                                    filterDateField("Start", key: dateStartKey) {
+                                        pickingDate = .start
+                                    }
+                                    Text("–")
+                                        .font(MonitorTheme.font(10.5, weight: .semibold))
+                                        .foregroundStyle(MonitorTheme.muted)
+                                    filterDateField("End", key: dateEndKey) {
+                                        pickingDate = .end
                                     }
                                 }
                             }
                         }
 
-                        if formatOptions.isEmpty, resolutionOptions.isEmpty, dateOptions.isEmpty {
+                        if !colorOptions.isEmpty {
+                            filterSection(title: "COLOUR") {
+                                filterChipGrid(colorOptions.map(\.label), active: Set(colorOptions.filter { colorFilters.contains($0.rawValue) }.map(\.label))) { title in
+                                    if let mode = colorOptions.first(where: { $0.label == title }) {
+                                        toggle(mode.rawValue, in: &colorFilters)
+                                    }
+                                }
+                            }
+                        }
+
+                        if formatOptions.isEmpty, resolutionOptions.isEmpty, dateBounds == nil,
+                            colorOptions.isEmpty
+                        {
                             Text("Nothing in this tab to filter by.")
                                 .font(LiveType.ui(size: 11))
                                 .foregroundStyle(LiveDesign.faint)
@@ -655,7 +696,9 @@ struct MediaLibraryView: View {
                             Button("Clear all filters") {
                                 formatFilters.removeAll()
                                 resolutionFilters.removeAll()
-                                dateKeyFilter = nil
+                                colorFilters.removeAll()
+                                dateStartKey = nil
+                                dateEndKey = nil
                             }
                             .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(LiveDesign.accent)
@@ -705,12 +748,29 @@ struct MediaLibraryView: View {
         }
     }
 
-    private func toggle(_ value: String, in set: inout Set<String>) {
+    private func toggle<Value: Hashable>(_ value: Value, in set: inout Set<Value>) {
         if set.contains(value) {
             set.remove(value)
         } else {
             set.insert(value)
         }
+    }
+
+    private func filterDateField(_ title: String, key: String?, action: @escaping () -> Void)
+        -> some View
+    {
+        Button(action: action) {
+            Text(key.map(MediaClipPresentation.dateLabel) ?? title)
+                .font(MonitorTheme.font(10.5, weight: .semibold))
+                .foregroundStyle(key == nil ? MonitorTheme.muted : MonitorTheme.text)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(
+                    Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(MonitorButtonStyle())
+        .accessibilityLabel(title)
+        .accessibilityValue(key.map(MediaClipPresentation.dateLabel) ?? "Any")
+        .accessibilityIdentifier("monitor.media.filter.\(title.lowercased())")
     }
 
     private var emptyState: some View {
@@ -811,6 +871,59 @@ struct MediaLibraryView: View {
 
     // MARK: - Layout chrome
 
+}
+
+private enum FilterDateBound: String, Identifiable {
+    case start, end
+    var id: String { rawValue }
+    var title: String { rawValue == "start" ? "Start date" : "End date" }
+}
+
+private struct FilterCalendarSheet: View {
+    let title: String
+    let range: ClosedRange<Date>
+    @Binding var key: String?
+    @Environment(\.dismiss) private var dismiss
+    @State private var date: Date
+
+    init(title: String, range: ClosedRange<Date>, key: Binding<String?>) {
+        self.title = title
+        self.range = range
+        self._key = key
+        let initial =
+            key.wrappedValue.flatMap { MediaLibraryQuery.date(fromKey: $0) }
+            ?? min(max(Date(), range.lowerBound), range.upperBound)
+        _date = State(initialValue: initial)
+    }
+
+    var body: some View {
+        NavigationStack {
+            DatePicker(
+                title, selection: $date, in: range, displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .tint(MonitorTheme.accent)
+            .padding(.horizontal, 8)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") {
+                        key = nil
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        key = MediaLibraryQuery.dateKey(from: date)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
+    }
 }
 
 private struct MediaFilterChip: View {

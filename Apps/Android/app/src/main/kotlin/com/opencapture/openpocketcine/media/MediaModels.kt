@@ -378,7 +378,10 @@ object MediaLibraryQuery {
         tab: MediaLibraryTab,
         formats: Set<String> = emptySet(),
         resolutions: Set<String> = emptySet(),
-        dateKey: String? = null,
+        dateStart: String? = null,
+        dateEnd: String? = null,
+        colors: Set<Int> = emptySet(),
+        shotColors: Map<String, Int> = emptyMap(),
         storage: Int? = null,
         localFavorites: Set<String> = emptySet(),
     ): List<MediaFile> =
@@ -391,9 +394,37 @@ object MediaLibraryQuery {
             } &&
                 (formats.isEmpty() || formats.contains(file.fileExtension)) &&
                 (resolutions.isEmpty() || resolutions.contains(file.resolution.orEmpty())) &&
-                (dateKey == null || file.dateKey == dateKey) &&
+                dateMatches(file.dateKey, dateStart, dateEnd) &&
+                (colors.isEmpty() || shotColors[file.path]?.let(colors::contains) == true) &&
                 (storage == null || file.storage == storage)
         }
+
+    private fun dateMatches(key: String, start: String?, end: String?): Boolean {
+        if (start == null && end == null) return true
+        if (key.isEmpty()) return false
+        if (start != null && key < start) return false
+        if (end != null && key > end) return false
+        return true
+    }
+
+    /** Filename `YYYYMMDD` as UTC calendar year-month-day. Not an instant. */
+    fun dateKeyFromMillis(millis: Long): String {
+        val date = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        return "%04d%02d%02d".format(date.year, date.monthValue, date.dayOfMonth)
+    }
+
+    fun millisFromDateKey(key: String): Long? {
+        if (key.length != 8) return null
+        val year = key.substring(0, 4).toIntOrNull() ?: return null
+        val month = key.substring(4, 6).toIntOrNull() ?: return null
+        val day = key.substring(6, 8).toIntOrNull() ?: return null
+        return runCatching {
+            java.time.LocalDate.of(year, month, day)
+                .atStartOfDay(java.time.ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli()
+        }.getOrNull()
+    }
 
     /** Offline library: keep only files the phone can play without the camera. */
     fun cachedOnly(files: List<MediaFile>, cachedPaths: Set<String>): List<MediaFile> =

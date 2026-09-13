@@ -190,6 +190,16 @@ import Testing
         #expect(photos.isEmpty)
         let oldest = MediaLibraryQuery.sorted(files, by: .oldest)
         #expect(oldest.first?.filename.contains("20260404") == true)
+        let august = MediaLibraryQuery.filtered(files, tab: .all, dateStart: "20260801")
+        #expect(august.allSatisfy { $0.dateKey >= "20260801" })
+        let april = MediaLibraryQuery.filtered(files, tab: .all, dateEnd: "20260430")
+        #expect(april.allSatisfy { $0.dateKey <= "20260430" })
+        #expect(
+            MediaLibraryQuery.filtered(
+                files, tab: .all, colors: [0x41],
+                shotColors: [files[0].path: UInt8(0x41)]
+            ).map(\.path) == [files[0].path])
+        #expect(MediaLibraryQuery.dateKey(from: MediaLibraryQuery.date(fromKey: "20260814")!) == "20260814")
         #expect(MediaClipFormatting.durationLabel(seconds: 209) == "3:29")
     }
 

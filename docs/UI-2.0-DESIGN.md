@@ -415,7 +415,10 @@ automatically; lifting or cancelling stops it.
 Media page shares Setup's frame with its wider 206-point/dp landscape rail; portrait full-width
 header with horizontally scrolling All/Video/Photo/Favourites. Capacity/cache
 card shows only landscape. Content toolbar includes item count/hint, sort and
-filters. Display controls live at the sidebar bottom in landscape and page bottom
+filters. Filter matches Sort: 9-radius chip, icon plus label, accent fill when
+open or active. Date is a start–end range via the native calendar, not a list of
+days. Colour offers known shot profiles (D-Log / D-Log2 / D-Log M / Normal / HDR)
+from cached `color.json`. Display controls live at the sidebar bottom in landscape and page bottom
 in portrait. Phone grid columns 3/2/1; tablet 5/4/2. Cards keep 16:9
 thumb, favorite top-trailing, state/color bottom-leading,
 duration bottom-trailing, caching progress along bottom. Small cards move color

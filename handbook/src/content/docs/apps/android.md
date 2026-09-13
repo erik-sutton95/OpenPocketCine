@@ -58,7 +58,9 @@ in portrait. Settings and Media place Back outside the full-height sidebar in
 landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
-these controls stay at the bottom of the page. Pull down on the library to refresh.
+these controls stay at the bottom of the page. Filter uses the same chip as Sort.
+Set a start and end date with the calendar, and filter by log/colour profile when
+that profile is known for a clip. Pull down on the library to refresh.
 Hold a clip to begin selecting, then drag across clips to select a range. In
 selection mode, swipe up or down to scroll without changing the selection, or
 drag sideways to select a range. Hold a clip to sweep in any direction, including

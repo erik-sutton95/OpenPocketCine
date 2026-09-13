@@ -140,6 +140,8 @@ class MediaLibraryController(
 
     fun cacheGrade(file: MediaFile): MediaCacheGrade = cache.cacheGrade(file, cameraId)
 
+    fun cachedShotColor(file: MediaFile): Int = cache.shotColor(file.path, cameraId, appContext)
+
     /** Shot color for Auto LUT. Never the LRF/XRF sidecar (Rec.709 even on D-Log2). */
     fun fetchShotColor(file: MediaFile): Int {
         localFile(file)?.let { original ->

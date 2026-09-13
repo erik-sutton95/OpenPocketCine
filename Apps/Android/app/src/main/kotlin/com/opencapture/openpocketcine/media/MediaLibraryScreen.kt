@@ -29,7 +29,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -83,7 +87,9 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     var filterOpen by remember { mutableStateOf(false) }
     var formatFilters by remember { mutableStateOf(setOf<String>()) }
     var resolutionFilters by remember { mutableStateOf(setOf<String>()) }
-    var dateKeyFilter by remember { mutableStateOf<String?>(null) }
+    var dateStartKey by remember { mutableStateOf<String?>(null) }
+    var dateEndKey by remember { mutableStateOf<String?>(null) }
+    var colorFilters by remember { mutableStateOf(setOf<Int>()) }
     var playing by remember { mutableStateOf<MediaFile?>(null) }
     var viewingPhoto by remember { mutableStateOf<MediaFile?>(null) }
     var isSelecting by remember { mutableStateOf(false) }
@@ -102,13 +108,36 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 controller.files.filter { controller.isAvailableOffline(it) }.map { it.path }.toSet(),
             )
         }
+    val filterSource =
+        run {
+            var files =
+                MediaLibraryQuery.filtered(libraryFiles, tab = category, localFavorites = localFavorites)
+            if (category == MediaLibraryTab.FAVORITES) files = files.filter { controller.isFavorite(it) }
+            files
+        }
+    val shotColors =
+        filterSource.mapNotNull { file ->
+            val mode = controller.cachedShotColor(file)
+            if (mode >= 0) file.path to mode else null
+        }.toMap()
+    val formatOptions = filterSource.map { it.fileExtension }.filter { it.isNotEmpty() }.toSet().sorted()
+    val resolutionOptions = filterSource.mapNotNull { it.resolution }.filter { it.isNotEmpty() }.toSet().sorted()
+    val colorOptions =
+        shotColors.values.toSet().sorted().mapNotNull { mode ->
+            val label = com.opencapture.openpocketcine.session.CameraCommands.colorLabel(mode)
+            if (label == "—") null else mode to label
+        }
+    val hasDates = filterSource.any { it.dateKey.isNotEmpty() }
     var displayed =
         MediaLibraryQuery.filtered(
             libraryFiles,
             tab = category,
             formats = formatFilters,
             resolutions = resolutionFilters,
-            dateKey = dateKeyFilter,
+            dateStart = dateStartKey,
+            dateEnd = dateEndKey,
+            colors = colorFilters,
+            shotColors = shotColors,
             localFavorites = localFavorites,
         )
     if (category == MediaLibraryTab.FAVORITES) {
@@ -129,18 +158,9 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
     val displayedVideos = displayed.filter { it.kind == MediaKind.VIDEO }
     val selectedFiles = displayed.filter { selectedIDs.contains(it.id) }
-
-    val filterSource =
-        run {
-            var files =
-                MediaLibraryQuery.filtered(libraryFiles, tab = category, localFavorites = localFavorites)
-            if (category == MediaLibraryTab.FAVORITES) files = files.filter { controller.isFavorite(it) }
-            files
-        }
-    val formatOptions = filterSource.map { it.fileExtension }.filter { it.isNotEmpty() }.toSet().sorted()
-    val resolutionOptions = filterSource.mapNotNull { it.resolution }.filter { it.isNotEmpty() }.toSet().sorted()
-    val dateOptions = filterSource.map { it.dateKey }.filter { it.isNotEmpty() }.toSet().sortedDescending()
-    val activeFilterCount = formatFilters.size + resolutionFilters.size + if (dateKeyFilter == null) 0 else 1
+    val activeFilterCount =
+        formatFilters.size + resolutionFilters.size + colorFilters.size +
+            if (dateStartKey == null && dateEndKey == null) 0 else 1
 
     val headerCount =
         when {
@@ -308,17 +328,32 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             FilterPopup(
                 formatOptions = formatOptions,
                 resolutionOptions = resolutionOptions,
-                dateOptions = dateOptions,
+                colorOptions = colorOptions,
+                hasDates = hasDates,
                 formatFilters = formatFilters,
                 resolutionFilters = resolutionFilters,
-                dateKeyFilter = dateKeyFilter,
+                colorFilters = colorFilters,
+                dateStartKey = dateStartKey,
+                dateEndKey = dateEndKey,
                 onToggleFormat = { formatFilters = formatFilters.toggle(it) },
                 onToggleResolution = { resolutionFilters = resolutionFilters.toggle(it) },
-                onToggleDate = { dateKeyFilter = if (dateKeyFilter == it) null else it },
+                onToggleColor = { colorFilters = colorFilters.toggle(it) },
+                onDateStart = { next ->
+                    dateStartKey = next
+                    val end = dateEndKey
+                    if (next != null && end != null && next > end) dateEndKey = next
+                },
+                onDateEnd = { next ->
+                    dateEndKey = next
+                    val start = dateStartKey
+                    if (next != null && start != null && next < start) dateStartKey = next
+                },
                 onClear = {
                     formatFilters = emptySet()
                     resolutionFilters = emptySet()
-                    dateKeyFilter = null
+                    colorFilters = emptySet()
+                    dateStartKey = null
+                    dateEndKey = null
                 },
                 onClose = { filterOpen = false },
             )
@@ -560,6 +595,7 @@ private fun HeaderRow(
         },
         compact = compact, sort = sortOrder.menuLabel,
         filterActive = filterOpen || activeFilterCount > 0,
+        filterCount = activeFilterCount,
         onSort = onSort, onFilter = onFilter)
 }
 
@@ -716,20 +752,27 @@ private fun LucideActionPill(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterPopup(
     formatOptions: List<String>,
     resolutionOptions: List<String>,
-    dateOptions: List<String>,
+    colorOptions: List<Pair<Int, String>>,
+    hasDates: Boolean,
     formatFilters: Set<String>,
     resolutionFilters: Set<String>,
-    dateKeyFilter: String?,
+    colorFilters: Set<Int>,
+    dateStartKey: String?,
+    dateEndKey: String?,
     onToggleFormat: (String) -> Unit,
     onToggleResolution: (String) -> Unit,
-    onToggleDate: (String) -> Unit,
+    onToggleColor: (Int) -> Unit,
+    onDateStart: (String?) -> Unit,
+    onDateEnd: (String?) -> Unit,
     onClear: () -> Unit,
     onClose: () -> Unit,
 ) {
+    var pickingBound by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -775,17 +818,31 @@ private fun FilterPopup(
                     }
                 }
             }
-            if (dateOptions.isNotEmpty()) {
+            if (hasDates) {
                 FilterSection("DATE") {
-                    dateOptions.forEach { key ->
-                        MediaFilterChip(MediaClipPresentation.dateLabel(key), dateKeyFilter == key) { onToggleDate(key) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FilterDateField("Start", dateStartKey, Modifier.weight(1f)) { pickingBound = "start" }
+                        Text("–", color = LiveDesign.muted, style = LiveType.ui(10.5f, FontWeight.SemiBold))
+                        FilterDateField("End", dateEndKey, Modifier.weight(1f)) { pickingBound = "end" }
                     }
                 }
             }
-            if (formatOptions.isEmpty() && resolutionOptions.isEmpty() && dateOptions.isEmpty()) {
+            if (colorOptions.isNotEmpty()) {
+                FilterSection("COLOUR") {
+                    colorOptions.forEach { (mode, label) ->
+                        MediaFilterChip(label, colorFilters.contains(mode)) { onToggleColor(mode) }
+                    }
+                }
+            }
+            if (formatOptions.isEmpty() && resolutionOptions.isEmpty() && !hasDates && colorOptions.isEmpty()) {
                 Text("Nothing in this tab to filter by.", color = LiveDesign.faint, style = LiveType.ui(11f))
             }
-            if (formatFilters.isNotEmpty() || resolutionFilters.isNotEmpty() || dateKeyFilter != null) {
+            if (formatFilters.isNotEmpty() || resolutionFilters.isNotEmpty() || colorFilters.isNotEmpty()
+                || dateStartKey != null || dateEndKey != null
+            ) {
                 Text(
                     "Clear all filters",
                     color = LiveDesign.accent,
@@ -796,7 +853,51 @@ private fun FilterPopup(
                 )
             }
         }
+        if (pickingBound != null) {
+            val isStart = pickingBound == "start"
+            val current = if (isStart) dateStartKey else dateEndKey
+            val pickerState = rememberDatePickerState(
+                initialSelectedDateMillis = current?.let { MediaLibraryQuery.millisFromDateKey(it) },
+            )
+            DatePickerDialog(
+                onDismissRequest = { pickingBound = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            val key = MediaLibraryQuery.dateKeyFromMillis(millis)
+                            if (isStart) onDateStart(key) else onDateEnd(key)
+                        }
+                        pickingBound = null
+                    }) { Text("Done") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        if (isStart) onDateStart(null) else onDateEnd(null)
+                        pickingBound = null
+                    }) { Text("Clear") }
+                },
+            ) {
+                DatePicker(pickerState)
+            }
+        }
     }
+}
+
+@Composable
+private fun FilterDateField(title: String, key: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Text(
+        key?.let { MediaClipPresentation.dateLabel(it) } ?: title,
+        color = if (key == null) LiveDesign.muted else LiveDesign.text,
+        fontSize = 10.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
+        modifier = modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp))
+            .background(Color.White.copy(alpha = 0.04f))
+            .chromeClickable(onClick = onClick)
+            .semantics { contentDescription = title }
+            .padding(horizontal = 11.dp, vertical = 8.dp),
+    )
 }
 
 @Composable
@@ -807,5 +908,5 @@ private fun FilterSection(title: String, content: @Composable () -> Unit) {
     }
 }
 
-private fun Set<String>.toggle(value: String): Set<String> =
+private fun <T> Set<T>.toggle(value: T): Set<T> =
     if (contains(value)) this - value else this + value

@@ -49,6 +49,25 @@ class MediaLibraryTest {
     }
 
     @Test
+    fun queryFiltersDateRangeAndColour() {
+        val files = MediaManifest.decode(fixture())
+        val august = MediaLibraryQuery.filtered(files, MediaLibraryTab.ALL, dateStart = "20260801")
+        assertTrue(august.all { it.dateKey >= "20260801" })
+        val april = MediaLibraryQuery.filtered(files, MediaLibraryTab.ALL, dateEnd = "20260430")
+        assertTrue(april.all { it.dateKey <= "20260430" })
+        val colored =
+            MediaLibraryQuery.filtered(
+                files,
+                MediaLibraryTab.ALL,
+                colors = setOf(0x41),
+                shotColors = mapOf(files[0].path to 0x41),
+            )
+        assertEquals(listOf(files[0].path), colored.map { it.path })
+        val key = "20260814"
+        assertEquals(key, MediaLibraryQuery.dateKeyFromMillis(MediaLibraryQuery.millisFromDateKey(key)!!))
+    }
+
+    @Test
     fun decodesNanoManifestCountAndNames() {
         val files = MediaManifest.decode(fixture())
         assertEquals(34, files.size)

@@ -487,6 +487,12 @@ final class MonitorUIFlowTests: XCTestCase {
                             displayControls.frame.maxY, navigation.frame.maxY - 10, accuracy: 1)
                     }
                     XCTAssertFalse(app.buttons["Refresh camera media"].exists)
+                    let filter = app.buttons["monitor.media.filter"]
+                    let sort = app.buttons["Sort"]
+                    XCTAssertTrue(filter.isHittable)
+                    XCTAssertTrue(sort.isHittable)
+                    XCTAssertEqual(filter.frame.height, sort.frame.height, accuracy: 1)
+                    XCTAssertEqual(filter.frame.midY, sort.frame.midY, accuracy: 1)
                     let grid = app.buttons["monitor.media.layout.grid"]
                     let list = app.buttons["monitor.media.layout.list"]
                     XCTAssertTrue(grid.isHittable)

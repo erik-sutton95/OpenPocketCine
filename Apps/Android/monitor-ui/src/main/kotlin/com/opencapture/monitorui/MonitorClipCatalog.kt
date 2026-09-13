@@ -34,7 +34,6 @@ import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -208,7 +207,8 @@ private fun CatalogLayoutCell(icon: MonitorIcon, label: String, selected: Boolea
 
 @Composable
 fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort: String,
-    filterActive: Boolean, onSort: () -> Unit, onFilter: () -> Unit, modifier: Modifier = Modifier) {
+    filterActive: Boolean, onSort: () -> Unit, onFilter: () -> Unit, modifier: Modifier = Modifier,
+    filterCount: Int = 0) {
     val identity: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MonitorTypography.text(10.5f, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -224,27 +224,43 @@ fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort
                 MonitorIcon(MonitorIcon.ARROW_UP_DOWN, "Sort clips", Modifier.size(12.dp), MonitorPalette.muted)
                 Text(sort, style = MonitorTypography.text(10.5f, FontWeight.Medium), color = MonitorPalette.muted)
             }
-            CatalogTool(MonitorIcon.LIST_FILTER, "Filter library", filterActive, onFilter)
+            Row(
+                Modifier.height(34.dp).clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (filterActive) MonitorPalette.accent.copy(alpha = .18f)
+                        else MonitorPalette.tile,
+                    )
+                    .combinedClickable(role = Role.Button, onClick = onFilter)
+                    .semantics {
+                        contentDescription = "Filter library"
+                        selected = filterActive
+                    }
+                    .padding(horizontal = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                MonitorIcon(
+                    MonitorIcon.LIST_FILTER, null, Modifier.size(12.dp),
+                    if (filterActive) MonitorPalette.text else MonitorPalette.muted,
+                )
+                Text(
+                    "Filter",
+                    style = MonitorTypography.text(10.5f, FontWeight.Medium),
+                    color = if (filterActive) MonitorPalette.text else MonitorPalette.muted,
+                )
+                if (filterCount > 0) {
+                    Text(
+                        "$filterCount",
+                        style = MonitorTypography.text(10.5f, FontWeight.Medium),
+                        color = MonitorPalette.text,
+                    )
+                }
+            }
         }
     }
     if (compact) Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) { identity(); controls() }
     else Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.weight(1f)) { identity() }; controls()
-    }
-}
-
-@Composable
-private fun CatalogTool(icon: MonitorIcon, label: String, active: Boolean, onClick: () -> Unit,
-    enabled: Boolean = true, stateDescription: String? = null,
-    modifier: Modifier = Modifier.size(32.dp, 28.dp)) {
-    Box(modifier.clip(RoundedCornerShape(6.dp))
-        .background(if (active) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
-        .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .semantics {
-            contentDescription = label
-            if (stateDescription != null) this.stateDescription = stateDescription
-        }, contentAlignment = Alignment.Center) {
-        MonitorIcon(icon, null, Modifier.size(15.dp), if (active) MonitorPalette.accent else MonitorPalette.muted)
     }
 }

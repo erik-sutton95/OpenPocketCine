@@ -106,7 +106,11 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   buttons and all three thumbnail sizes share one horizontal row at the bottom of
   the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Grid/list
   is two 32×28 cells; sizes are 28×28 cells with 7/10/13 rounded-square dots. Pull-to-refresh replaces the Refresh toolbar button and
-  works with grid, list and empty catalogs. Sorting, filters and selection persist
+  works with grid, list and empty catalogs. Filter uses the same chip chrome as
+  Sort (icon plus Filter label). Date is a start–end range through the native
+  calendar (iOS graphical DatePicker sheet, Android DatePickerDialog), not a
+  per-day chip list. Colour filters known log/display profiles from cached shot
+  colour. Sorting, filters and selection persist
   when changing display mode. The live signal indicator and Link Health use the
   same red/orange/green bands: below 50, 50–79, and 80+. Existing signal measurements
   and bar mapping remain unchanged.
@@ -463,6 +467,12 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   and Settings showed the same green Stable band. Matching Android build, tests
   and lint run in this change; physical Android qualification remains an exception
   because no device was attached.
+- Media filter restyle: Filter uses the same chip as Sort (icon plus Filter).
+  Start and End open the native calendar; colour chips list cached shot
+  profiles. iPhone 16 Pro simulator: Filter matched Sort height and vertical
+  center in both orientations. iPhone 16 Pro Max Release install launched.
+  Physical Android qualification remains an exception because no device was
+  attached.
 - Media display restyle: iPhone 16 Pro simulator measured the Media display row
   at 172 × 34 — two 32×28 grid/list cells and three 28×28 size cells in matching
   9-radius black-35% capsules, selected white 14% (not cyan). Grid → List → Grid
