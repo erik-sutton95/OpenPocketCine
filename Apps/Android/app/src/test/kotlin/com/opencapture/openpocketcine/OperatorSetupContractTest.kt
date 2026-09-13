@@ -123,8 +123,14 @@ class OperatorSetupContractTest {
         assertEquals(2, OperatorLinkHealth.bars(isLive = true, videoPackets = 40, hasVideoFormat = false))
         assertEquals(3, OperatorLinkHealth.bars(isLive = true, videoPackets = 120, hasVideoFormat = false))
         assertEquals(4, OperatorLinkHealth.bars(isLive = true, videoPackets = 10, hasVideoFormat = true))
+        assertEquals(0, OperatorLinkHealth.score(0))
+        assertEquals(75, OperatorLinkHealth.score(3))
         assertEquals(100, OperatorLinkHealth.score(4))
         assertEquals("No live path.", OperatorLinkHealth.caption(isLive = false, bars = 0))
+        assertEquals("Waiting for the link.", OperatorLinkHealth.caption(isLive = true, bars = 0))
+        assertEquals("Link is weak. · Poor", OperatorLinkHealth.caption(isLive = true, bars = 1))
+        assertEquals("Some loss on the link. · Watch", OperatorLinkHealth.caption(isLive = true, bars = 2))
+        assertEquals("Some loss on the link. · Watch", OperatorLinkHealth.caption(isLive = true, bars = 3))
         assertEquals("Link is clean. · Stable", OperatorLinkHealth.caption(isLive = true, bars = 4))
     }
 

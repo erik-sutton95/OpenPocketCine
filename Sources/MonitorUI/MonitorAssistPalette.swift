@@ -168,9 +168,13 @@
                     ? (open ? MonitorIcon.chevronUp : MonitorIcon.chevronDown)
                     : (open ? MonitorIcon.chevronRight : MonitorIcon.chevronLeft)
                 glyph.frame(width: 14, height: 14).foregroundStyle(MonitorTheme.muted)
+                    .frame(width: contentLayout.portrait ? nil : 15)
                     .frame(
-                        width: contentLayout.portrait ? max(0, contentLayout.width - 8) : 15,
-                        height: contentLayout.portrait ? 24 : max(0, contentLayout.height - 8)
+                        width: contentLayout.portrait
+                            ? max(0, contentLayout.width - 8)
+                            : MonitorAssistPaletteLayout.expansionButtonWidth,
+                        height: contentLayout.portrait ? 24 : max(0, contentLayout.height - 8),
+                        alignment: contentLayout.portrait ? .center : .leading
                     )
                     .contentShape(Rectangle())
             }
@@ -181,9 +185,7 @@
 
         private func toolButton(_ tool: MonitorToolItem, labels: Bool) -> some View {
             let label = VStack(spacing: 2) {
-                icon(tool.id).frame(
-                    width: contentLayout.cellHeight == 52 ? 24 : 20,
-                    height: contentLayout.cellHeight == 52 ? 24 : 20)
+                icon(tool.id).frame(width: contentLayout.iconSide, height: contentLayout.iconSide)
                 if labels {
                     Text(tool.title).font(MonitorTheme.font(7.5, weight: .semibold))
                         .tracking(0.75).lineLimit(1)

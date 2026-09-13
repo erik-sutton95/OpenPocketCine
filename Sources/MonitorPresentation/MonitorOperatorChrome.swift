@@ -1,5 +1,11 @@
 import Foundation
 
+/// Shared side length for live system controls and View Assist cells.
+public enum MonitorSystemButtonMetrics: Sendable {
+    public static func side(tablet: Bool) -> Double { tablet ? 48 : 54 }
+    public static func iconSide(tablet: Bool) -> Double { side(tablet: tablet) * 29 / 54 }
+}
+
 /// Camera-value type: iPhone 16/9 is operator-approved; tablet uses the 18 pt value.
 public enum MonitorReadoutTypography: Sendable {
     public static let phoneValueSize: Double = 16
@@ -28,7 +34,9 @@ public enum MonitorSettingsCardMetrics: Sendable {
     }
 
     public static func titleClearance(titleLineHeight: Double = 17) -> Double {
-        max(0, contentOriginY(titleLineHeight: titleLineHeight) - (titleTopPadding + titleLineHeight))
+        max(
+            0,
+            contentOriginY(titleLineHeight: titleLineHeight) - (titleTopPadding + titleLineHeight))
     }
 }
 

@@ -991,7 +991,7 @@ data class LiveMonitorLayout(
                 )
             if (vw >= vh) {
                 val tablet = min(vw, vh) >= 600f
-                val btn = if (tablet) 48f else 54f
+                val btn = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(tablet)
                 val record = if (tablet) 84f else 70f
                 val edge = 14f
                 val recordX = vw - 10f - record
@@ -1017,8 +1017,9 @@ data class LiveMonitorLayout(
                     disp = ChromeRect(recordButtonX, recordY - 8f - btn, btn, btn),
                     rail = ChromeRect(recordX, 0f, record, vh),
                     capture = ChromeRect(valuesInset, vh - 52f, max(0f, vw - 2 * valuesInset), 44f),
-                    assist = ChromeRect(edge, vh - 14f - (if (tablet) 115f else 99f),
-                        if (tablet) 78f else 72f, if (tablet) 115f else 99f),
+                    assist = com.opencapture.monitorui.MonitorLayoutPolicy.landscapeAssists(vh, tablet, edge).let {
+                        ChromeRect(it.x, it.y, it.width, it.height)
+                    },
                 )
             }
             return layout
@@ -1343,21 +1344,16 @@ fun DispButton(
 
 @Composable
 fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
-    Box(
+    val tablet = minOf(LocalConfiguration.current.screenWidthDp, LocalConfiguration.current.screenHeightDp) >= 600
+    val side = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(tablet)
+    com.opencapture.monitorui.MonitorAuxCircleButton(
         modifier
-            .size(LiveChromeMetrics.AUX.dp)
+            .size(side.dp)
             .monitorGlass(RoundedCornerShape(14.dp))
             .chromeClickable(onClick = onClick)
             .semantics { role = Role.Button },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier.fillMaxSize(.54f),
-            contentAlignment = Alignment.Center,
-        ) {
-            glyph(LiveDesign.text.copy(alpha = 0.86f))
-        }
-    }
+        glyph = glyph,
+    )
 }
 
 @Composable

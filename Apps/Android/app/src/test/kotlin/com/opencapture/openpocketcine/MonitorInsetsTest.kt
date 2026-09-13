@@ -305,7 +305,10 @@ class LiveMonitorLayoutTest {
         assertEquals(layout.capture.minX, layout.viewportWidth - layout.capture.maxX, 0.05f)
         assertTrue(layout.capture.minX > layout.assist.maxX)
         assertEquals(44f, layout.capture.height, 0.05f)
-        assertEquals(99f, layout.assist.height, 0.05f)
+        val phoneSide = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(false)
+        assertEquals(phoneSide * 2f + 11f, layout.assist.height, 0.05f)
+        assertEquals(phoneSide + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS,
+            layout.assist.width, 0.05f)
 
     }
 
@@ -427,7 +430,10 @@ private fun assertGimbalStickOnCanvas(layout: LiveMonitorLayout) {
         assertFalse(layout.topDeck.intersects(layout.media), "readouts stay clear of media")
         assertTrue(layout.assist.maxY <= layout.viewportHeight - 13.5f)
         if (minOf(layout.viewportWidth, layout.viewportHeight) >= 600f) {
-            assertTrue(layout.assist.height >= 115f, "both 52dp tablet assist buttons fit")
+            val tabletSide = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(true)
+            assertEquals(tabletSide * 2f + 11f, layout.assist.height, 0.05f)
+            assertEquals(tabletSide + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS,
+                layout.assist.width, 0.05f)
             assertEquals(84f, layout.record.width, .05f)
         }
     }

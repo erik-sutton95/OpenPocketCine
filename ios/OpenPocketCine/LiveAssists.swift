@@ -1839,7 +1839,8 @@ struct AssistToolChip: View {
 
 struct AssistToolIcon: View {
     let tool: LiveAssistTool
-    var size: CGFloat = 19
+    /// Shared palettes supply their own size; legacy standalone chips keep 19 points.
+    var size: CGFloat? = 19
 
     var body: some View {
         if let icon = tool.monitorIcon {

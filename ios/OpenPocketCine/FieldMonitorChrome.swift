@@ -311,7 +311,7 @@ struct FieldMonitorAssistPalette: View {
             },
             icon: { id in
                 if let tool = LiveAssistTool(rawValue: id) {
-                    AssistToolIcon(tool: tool, size: tablet ? 24 : 20)
+                    AssistToolIcon(tool: tool, size: nil)
                 }
             }
         )
@@ -341,11 +341,12 @@ struct FieldMonitorGauges: View {
         axis {
             gauge(
                 icon: .signal, value: nil, bars: model.session.liveSignalBars,
-                color: MonitorTheme.accent
+                color: MonitorTheme.linkHealthColor(.init(bars: model.session.liveSignalBars))
             )
             .accessibilityLabel(
                 "Live link \(model.session.liveSignalBars) of 4 bars, \(model.session.liveFPS) frames per second"
             )
+            .accessibilityIdentifier("monitor.telemetry.signal")
             gauge(
                 icon: .smartphone, value: phonePercent < 0 ? "—" : String(phonePercent),
                 bars: 0, color: .mint

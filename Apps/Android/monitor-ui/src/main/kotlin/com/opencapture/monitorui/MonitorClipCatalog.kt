@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -121,12 +123,48 @@ private fun ClipBadge(text: String, modifier: Modifier = Modifier) {
         color = MonitorPalette.text, style = MonitorTypography.text(7.5f, FontWeight.SemiBold), maxLines = 1)
 }
 
+/** Toggle 44 + gap 6 + three 44 chips with gaps 2 = 186. */
+@Composable
+fun MonitorCatalogDisplayControls(
+    list: Boolean,
+    thumbnailSize: MonitorThumbnailSize,
+    onList: (Boolean) -> Unit,
+    onThumbnailSize: (MonitorThumbnailSize) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        CatalogTool(
+            if (list) MonitorIcon.LAYOUT_GRID else MonitorIcon.LAYOUT_LIST,
+            if (list) "Switch to grid view" else "Switch to list view",
+            false,
+            { onList(!list) },
+            stateDescription = if (list) "List view" else "Grid view",
+            modifier = Modifier.size(44.dp).background(MonitorPalette.tile, RoundedCornerShape(8.dp)),
+        )
+        Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MonitorPalette.tile),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            MonitorThumbnailSize.entries.forEach { size ->
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
+                    .background(if (size == thumbnailSize) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
+                    .combinedClickable(role = Role.Button, onClick = { onThumbnailSize(size) })
+                    .semantics {
+                        contentDescription = "${size.name.lowercase().replaceFirstChar { it.uppercase() }} thumbnails"
+                        selected = size == thumbnailSize
+                    },
+                    contentAlignment = Alignment.Center) {
+                    Box(Modifier.size((6 + size.ordinal * 3).dp).clip(RoundedCornerShape(2.dp))
+                        .background(if (size == thumbnailSize) MonitorPalette.accent else MonitorPalette.muted))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort: String,
-    list: Boolean, thumbnailSize: MonitorThumbnailSize, filterActive: Boolean,
-    refreshAvailable: Boolean, refreshing: Boolean, onSort: () -> Unit,
-    onList: (Boolean) -> Unit, onThumbnailSize: (MonitorThumbnailSize) -> Unit,
-    onFilter: () -> Unit, onRefresh: () -> Unit, modifier: Modifier = Modifier) {
+    filterActive: Boolean, onSort: () -> Unit, onFilter: () -> Unit, modifier: Modifier = Modifier) {
     val identity: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MonitorTypography.text(10.5f, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -142,23 +180,6 @@ fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort
                 MonitorIcon(MonitorIcon.ARROW_UP_DOWN, "Sort clips", Modifier.size(12.dp), MonitorPalette.muted)
                 Text(sort, style = MonitorTypography.text(10.5f, FontWeight.Medium), color = MonitorPalette.muted)
             }
-            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MonitorPalette.tile).padding(3.dp)) {
-                CatalogTool(MonitorIcon.LAYOUT_GRID, "Grid view", !list, { onList(false) })
-                CatalogTool(MonitorIcon.LAYOUT_LIST, "List view", list, { onList(true) })
-            }
-            if (!list) Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MonitorPalette.tile).padding(3.dp)) {
-                MonitorThumbnailSize.entries.forEach { size ->
-                    Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp))
-                        .background(if (size == thumbnailSize) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
-                        .combinedClickable(role = Role.Button, onClick = { onThumbnailSize(size) })
-                        .semantics { contentDescription = "${size.name.lowercase().replaceFirstChar { it.uppercase() }} thumbnails" },
-                        contentAlignment = Alignment.Center) {
-                        Box(Modifier.size((6 + size.ordinal * 3).dp).clip(RoundedCornerShape(2.dp))
-                            .background(if (size == thumbnailSize) MonitorPalette.accent else MonitorPalette.muted))
-                    }
-                }
-            }
-            if (refreshAvailable) CatalogTool(MonitorIcon.REFRESH_CW, "Refresh library", false, onRefresh, !refreshing)
             CatalogTool(MonitorIcon.LIST_FILTER, "Filter library", filterActive, onFilter)
         }
     }
@@ -170,10 +191,16 @@ fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort
 }
 
 @Composable
-private fun CatalogTool(icon: MonitorIcon, label: String, active: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
-    Box(Modifier.size(32.dp, 28.dp).clip(RoundedCornerShape(6.dp))
+private fun CatalogTool(icon: MonitorIcon, label: String, active: Boolean, onClick: () -> Unit,
+    enabled: Boolean = true, stateDescription: String? = null,
+    modifier: Modifier = Modifier.size(32.dp, 28.dp)) {
+    Box(modifier.clip(RoundedCornerShape(6.dp))
         .background(if (active) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
-        .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        MonitorIcon(icon, label, Modifier.size(15.dp), if (active) MonitorPalette.accent else MonitorPalette.muted)
+        .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick)
+        .semantics {
+            contentDescription = label
+            if (stateDescription != null) this.stateDescription = stateDescription
+        }, contentAlignment = Alignment.Center) {
+        MonitorIcon(icon, null, Modifier.size(15.dp), if (active) MonitorPalette.accent else MonitorPalette.muted)
     }
 }

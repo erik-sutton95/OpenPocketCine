@@ -65,9 +65,18 @@ final class MonitorUIFlowTests: XCTestCase {
 
     func testAssistPaletteAndValueDrumRemainReachable() {
         app.launch()
+        rotate(.landscapeLeft)
         let expand = app.buttons["monitor.assists.expand"]
         XCTAssertTrue(expand.waitForExistence(timeout: 10))
-        expand.tap()
+        let systemFrame = app.buttons["monitor.system.settings"].frame
+        for tool in ["PEAK", "FALSE"] {
+            let frame = app.buttons["monitor.assist.\(tool)"].frame
+            XCTAssertEqual(frame.width, systemFrame.width, accuracy: 1)
+            XCTAssertEqual(frame.height, systemFrame.height, accuracy: 1)
+        }
+        XCTAssertEqual(expand.frame.width, 27, accuracy: 1)
+        capture("assist-favorites")
+        expand.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         let wave = app.buttons["monitor.assist.WAVE"]
         XCTAssertTrue(wave.waitForExistence(timeout: 5))
         wave.tap()
@@ -228,7 +237,8 @@ final class MonitorUIFlowTests: XCTestCase {
         let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
         for control in ["record", "display", "settings", "media"] {
-            XCTAssertFalse(app.buttons["monitor.system.\(control)"].isHittable,
+            XCTAssertFalse(
+                app.buttons["monitor.system.\(control)"].isHittable,
                 "The zoom modal must cover underlying \(control) controls")
         }
         capture("zoom-dial-landscape")
@@ -436,6 +446,66 @@ final class MonitorUIFlowTests: XCTestCase {
         XCTAssertLessThan(
             navigation.frame.maxX, app.frame.midX,
             "Landscape navigation must leave room for the media detail")
+    }
+
+    func testBackButtonsStayOutsideFullHeightSidebarsAndMediaLayoutTogglesInPlace() {
+        app.launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            for (control, backLabel) in [("settings", "Back to live"), ("media", "Back")] {
+                let systemButtonFrame = app.buttons["monitor.system.settings"].frame
+                app.buttons["monitor.system.\(control)"].tap()
+                let back = app.buttons[backLabel].firstMatch
+                XCTAssertTrue(back.waitForExistence(timeout: 5))
+                let heading = app.otherElements["monitor.page.heading"]
+                let navigation = app.otherElements["monitor.page.navigation"]
+                XCTAssertTrue(navigation.frame.contains(heading.frame))
+                XCTAssertEqual(back.frame.width, systemButtonFrame.width, accuracy: 1)
+                XCTAssertEqual(back.frame.height, systemButtonFrame.height, accuracy: 1)
+                if orientation == .portrait {
+                    XCTAssertTrue(navigation.frame.contains(back.frame))
+                    XCTAssertLessThan(back.frame.maxX, heading.frame.minX)
+                } else {
+                    XCTAssertLessThan(back.frame.maxX, navigation.frame.minX)
+                    XCTAssertEqual(back.frame.minY, systemButtonFrame.minY, accuracy: 1)
+                    XCTAssertGreaterThan(navigation.frame.height, app.frame.height * 0.8)
+                }
+                XCTAssertTrue(back.isHittable)
+                if control == "media" {
+                    let toggle = app.buttons["monitor.media.layout"]
+                    let displayControls = app.otherElements["monitor.media.displayControls"]
+                    if orientation == .portrait {
+                        XCTAssertGreaterThan(displayControls.frame.minY, app.frame.height * 0.8)
+                        XCTAssertGreaterThan(displayControls.frame.minY, navigation.frame.maxY)
+                    } else {
+                        XCTAssertTrue(navigation.frame.contains(displayControls.frame))
+                        XCTAssertEqual(
+                            displayControls.frame.maxY, navigation.frame.maxY - 10, accuracy: 1)
+                    }
+                    XCTAssertFalse(app.buttons["Refresh camera media"].exists)
+                    for size in ["Small", "Medium", "Large"] {
+                        let button = app.buttons["\(size) thumbnails"]
+                        XCTAssertTrue(button.isHittable)
+                        XCTAssertTrue(displayControls.frame.contains(button.frame))
+                        XCTAssertEqual(button.frame.midY, toggle.frame.midY, accuracy: 1)
+                    }
+                    XCTAssertEqual(
+                        app.buttons.matching(identifier: "monitor.media.layout").count, 1)
+                    XCTAssertTrue(toggle.isHittable)
+                    let originalValue = toggle.value as? String
+                    let originalFrame = toggle.frame
+                    toggle.tap()
+                    XCTAssertNotEqual(toggle.value as? String, originalValue)
+                    XCTAssertEqual(toggle.frame.minX, originalFrame.minX, accuracy: 1)
+                    XCTAssertEqual(toggle.frame.width, originalFrame.width, accuracy: 1)
+                    toggle.tap()
+                    XCTAssertEqual(toggle.value as? String, originalValue)
+                }
+                capture("\(control)-page-header-\(orientation.rawValue)")
+                back.tap()
+                XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+            }
+        }
     }
 
     func testPopulatedMediaLayoutsAndPlayback() {

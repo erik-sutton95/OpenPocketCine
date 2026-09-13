@@ -14,20 +14,22 @@ struct MonitorAssistPaletteLayoutTests {
         #expect(layout.scrollHeight + 35 == frame.height)
         // PEAK is the second row; its centre is hundreds of points above the
         // collapsed rail but must still be inside the expanded native view.
-        let peakY = frame.y + 4 + 24 + 3 + 47 + 22
+        let peakY = frame.y + 4 + 24 + 3 + layout.cellHeight + 3 + layout.cellHeight / 2
         #expect(peakY > frame.y && peakY < frame.maxY)
-        #expect(layout.scrollHeight < 15 * 47, "Excess tools belong to the scroller")
+        #expect(
+            layout.scrollHeight < 15 * (layout.cellHeight + 3),
+            "Excess tools belong to the scroller")
     }
 
     @Test func landscapeExpansionKeepsTwoRowsAndScrollsNarrowScreens() {
         let layout = MonitorAssistPaletteLayout(
             portrait: false, tablet: false, expanded: true, toolCount: 15,
             maximumWidth: 530, maximumHeight: 300)
-        #expect(layout.height == 99)
+        #expect(layout.height == 119)
         #expect(layout.width == 530)
         #expect(layout.columns == 8)
-        #expect(layout.scrollHeight == 91)
-        #expect(layout.scrollWidth + 26 == layout.width)
+        #expect(layout.scrollHeight == 111)
+        #expect(layout.scrollWidth + 38 == layout.width)
         #expect(Double(layout.columns) * (layout.cellWidth + 3) - 3 > layout.scrollWidth)
         #expect(layout.anchored(leading: 18, bottom: 361).maxY == 361)
     }
@@ -54,6 +56,12 @@ struct MonitorAssistPaletteLayoutTests {
                     #expect(frame.x >= 0 && frame.maxX <= width)
                     #expect(frame.y >= 59 && frame.maxY <= height)
                     #expect(frame.maxY == geometry.assists.maxY)
+                    #expect(layout.cellHeight == geometry.settings.height)
+                    if !expanded {
+                        #expect(layout.cellWidth == geometry.settings.width)
+                        #expect(frame == geometry.assists)
+                        if !portrait { #expect(frame.maxX < geometry.values.x) }
+                    }
                     if portrait { #expect(frame.maxY < geometry.values.y) }
                 }
             }

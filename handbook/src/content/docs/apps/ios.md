@@ -28,6 +28,8 @@ fixed positions when switching FIT/FILL.
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;
 Lock matches the Settings and Media button size.
+The live signal indicator uses the Link Health colors from Settings: red for
+Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 
 Floating controls use blurred translucent panels with sharp labels and icons.
 Reduce Transparency uses solid panels. Some live-video paths use the system's
@@ -45,12 +47,20 @@ the existing experimental Motion Control editor in a wider trailing drawer. Mode
 Ramp each have a tab with their own dial; the Motion Control action stays visible.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
-in portrait. Media retains grid/list views, selection, favorites, cache state,
+in portrait. Settings and Media place Back outside the full-height sidebar in
+landscape; portrait keeps it beside the brand and title in the header. Back uses
+the same button styling as the live-view controls. The bottom of the Media sidebar
+holds one row with the grid/list toggle and Small/Medium/Large sizes; in portrait,
+these controls stay at the bottom of the page. Pull down on the library to refresh.
+Media retains selection, favorites, cache state,
 playback assists and the existing delivery actions.
 
 On iPad, the interface reflows as you resize the app window. System window buttons
 stay clear of the monitor controls. Camera-connected use while resizing is still
 under physical iPad validation.
+
+View Assist favorites match the live system-button size. The landscape expand
+arrow accepts taps farther to its right, with the toolbar anchored in place.
 
 ## Moving scopes
 

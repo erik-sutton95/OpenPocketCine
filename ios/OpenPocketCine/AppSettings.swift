@@ -791,17 +791,10 @@ struct SettingsDashScale: View {
     let caption: String
     let score: Int
 
-    private enum Band { case poor, watch, stable }
-    private var band: Band { score >= 80 ? .stable : (score >= 50 ? .watch : .poor) }
-    /// Watch band — orange, not the DJI sky-blue accent.
-    private static let watch = Color(red: 0.96, green: 0.52, blue: 0.12)
+    private var band: MonitorLinkHealthBand { .init(score: score) }
 
     private var bandColor: Color {
-        switch band {
-        case .poor: LiveDesign.rec
-        case .watch: Self.watch
-        case .stable: LiveDesign.good
-        }
+        MonitorTheme.linkHealthColor(band)
     }
     private var bandName: String {
         switch band {
@@ -874,9 +867,9 @@ struct SettingsDashScale: View {
 
     private func dashColor(_ index: Int) -> Color {
         guard index < litCount else { return LiveDesign.hairlineStrong }
-        if index < 4 { return LiveDesign.rec.opacity(0.8) }
-        if index < 8 { return Self.watch.opacity(0.85) }
-        return LiveDesign.good.opacity(0.9)
+        if index < 4 { return MonitorTheme.linkHealthColor(.poor).opacity(0.8) }
+        if index < 8 { return MonitorTheme.linkHealthColor(.watch).opacity(0.85) }
+        return MonitorTheme.linkHealthColor(.stable).opacity(0.9)
     }
 
     private func legend(_ name: String, _ sub: String) -> some View {
@@ -896,17 +889,18 @@ struct SettingsLinkHealthCard: View {
 
     var body: some View {
         let bars = model.session.liveSignalBars
-        let score = min(100, max(0, bars * 25))
+        let score = min(4, max(0, bars)) * 25
         SettingsDashScale(title: "Link Health", caption: caption, score: score)
     }
 
     private var caption: String {
         if !model.isLive { return "No live path." }
-        switch model.session.liveSignalBars {
-        case 3...: return "Link is clean. · Stable"
-        case 2: return "Some loss on the link. · Watch"
-        case 1: return "Link is weak. · Poor"
-        default: return "Waiting for the link."
+        let bars = model.session.liveSignalBars
+        guard bars > 0 else { return "Waiting for the link." }
+        switch MonitorLinkHealthBand(bars: bars) {
+        case .stable: return "Link is clean. · Stable"
+        case .watch: return "Some loss on the link. · Watch"
+        case .poor: return "Link is weak. · Poor"
         }
     }
 }

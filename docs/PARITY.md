@@ -95,6 +95,20 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Osmo camera batteries show the reported percentage, including 0%; missing
   readings show a dash. Only level-based inputs use battery bars.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
+- View Assist favorites use the live system-button side: 54 pt/dp phone, 48 tablet,
+  with proportional 29/54 icons. Palette rows use that same height. The landscape
+  expand lane adds 12 pt/dp of hit area to the right of its original 15 pt/dp lane;
+  the glyph and the palette's bottom-leading anchor stay in place.
+- Settings and Media keep full-height landscape navigation with brand/title at
+  its top and Back outside to the left. Portrait retains Back beside the title.
+  Back uses the live control's material, shape, size and press response. iOS shares
+  the live corner geometry; Android uses native safe insets. Media's grid/list
+  toggle and all three thumbnail sizes share one horizontal row at the bottom of
+  the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Pull-to-refresh replaces the Refresh toolbar button and
+  works with grid, list and empty catalogs. Sorting, filters and selection persist
+  when changing display mode. The live signal indicator and Link Health use the
+  same red/orange/green bands: below 50, 50–79, and 80+. Existing signal measurements
+  and bar mapping remain unchanged.
 - Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
   floating false-color reference key open at
   the canvas center. Existing saved centers remain unchanged. AUDIO first opens
@@ -420,6 +434,19 @@ The transport, signal-health mapping, camera SET arbitration, watchdog, and main
 feed ownership remain the existing implementations. Earlier physical results in
 this document apply to those earlier builds; they do not qualify the new chrome.
 
+- The page-controls follow-up was verified on iPhone 16 Pro Max with a live
+  camera and an 85-item catalog. Settings/Media Back controls measured 54 × 54
+  in both orientations; landscape Back matched the live Settings height and sat
+  outside the full-height sidebar. Grid → List → Grid returned to its initial
+  state. The final Media display row measured 186 × 44, stayed fixed at the
+  portrait page bottom while scrolling, and sat inside the 206-wide landscape
+  sidebar bottom. All three thumbnail sizes responded and the original size was
+  restored. Pulling an empty Favorites category started a new camera catalog
+  listing. Both favorite assist buttons measured 54 × 54; a native tap at the
+  expanded right edge of the 27-wide arrow target opened the palette. Live signal
+  and Settings showed the same green Stable band. Matching Android build, tests
+  and lint run in this change; physical Android qualification remains an exception
+  because no device was attached.
 - iOS: WDA on iPhone 16 Pro Max exercised all nine camera full-details pickers,
   all nine assist tabs, Operator Setup sections, media grid / list / player /
   info / share, zoom tap/double-tap, gimbal tabs, lock/unlock and audio orientation,

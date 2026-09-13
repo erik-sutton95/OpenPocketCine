@@ -237,7 +237,12 @@ Palette order: LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS,
 GUIDES, GRID, CROSS, MIRROR, AUDIO. Collapsed mode uses most-used two tools in
 landscape and one in portrait. Initial counts are PEAK 6, FALSE 5, LUT 4 and
 ZEBRA 4; equal counts retain catalog order, so LUT precedes ZEBRA. Toggles and
-options visits increase usage for that palette lifetime.
+options visits increase usage for that palette lifetime. The operator sizing follow-up
+uses the live system-button side for assist rows: 54 pt/dp on phone and 48 on
+tablet. Collapsed favorites are square with the same 29/54 glyph proportion as
+Settings and Media. The landscape expand lane adds 12 pt/dp to its right-hand hit
+area while the arrow stays in its original 15 pt/dp lane. The palette retains its
+bottom-leading anchor and stays clear of the camera-value strip.
 Expanded landscape has two rows of seven; columns are at least 44 wide and
 overflow scrolls horizontally. Portrait is one vertical column, max 62% screen
 height, with top collapse chevron and scroll fade. Drag-scroll must suppress tap.
@@ -375,10 +380,24 @@ pause/resume/countdown behavior behind the visual shell. Source
 
 ## Media and sharing
 
-Media page shares Setup's frame: 172-wide landscape rail; portrait full-width
+Operator-requested follow-up: Settings and Media place Back outside the navigation
+card at the upper-left in landscape. The sidebar retains its full height with
+brand and title at its top. Portrait keeps Back in its original header position,
+beside the brand and title. Back uses the shared live-system button material,
+shape, size and press feedback; landscape uses the same corner clearance. Media has one grid/list toggle:
+its icon names the destination view and its accessibility value names the current
+view. The toggle and all three thumbnail sizes share one horizontal row at the
+bottom of the landscape sidebar, below the library status; portrait pins that
+same row to the page bottom, beneath the gallery and any selection tray. Media uses a 206-wide sidebar to retain
+44-point/dp buttons without wrapping.
+Sizes remain visible in list view and preserve the next grid size. Switching
+preserves the current category, sorting and selection. Pull-to-refresh replaces
+the toolbar Refresh button and also works with an empty or short catalog.
+
+Media page shares Setup's frame with its wider 206-point/dp landscape rail; portrait full-width
 header with horizontally scrolling All/Video/Photo/Favourites. Capacity/cache
-card shows only landscape. Content toolbar includes item count/hint, sort,
-grid/list, S/M/L, refresh. Phone grid columns 3/2/1; tablet 5/4/2. Cards keep 16:9
+card shows only landscape. Content toolbar includes item count/hint, sort and
+filters. Display controls live in the navigation footer. Phone grid columns 3/2/1; tablet 5/4/2. Cards keep 16:9
 thumb, selection top-leading, favorite top-trailing, state/color bottom-leading,
 duration bottom-trailing, caching progress along bottom. Small cards move color
 into caption to avoid collision. Caption holds filename and metadata. States:
@@ -413,6 +432,12 @@ exposure/container; metadata; cloud re-upload; local keep-after-handoff. Preserv
 production Convert log and existing export semantics absent from mockup.
 
 ## Operator Setup
+
+The live signal gauge shares the Link Health scale's presentation colors:
+Poor is red below 50, Watch is orange at 50–79, Stable is green at 80+.
+The existing 0–4 signal bars map to that display scale at 25 points per bar;
+three bars therefore display Watch in both places. Signal measurement and
+transport policy are unchanged.
 
 Landscape rail 168 wide; portrait header/navigation stack. Tabs have a cyan
 leading marker, title and hint. Content becomes two balanced card columns at

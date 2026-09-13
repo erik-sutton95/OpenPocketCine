@@ -1004,8 +1004,7 @@ struct MediaPlayerView: View {
             },
             icon: { id in
                 if let tool = LiveAssistTool(rawValue: id) {
-                    AssistToolIcon(
-                        tool: tool, size: UIDevice.current.userInterfaceIdiom == .pad ? 24 : 20)
+                    AssistToolIcon(tool: tool, size: nil)
                 }
             }
         )

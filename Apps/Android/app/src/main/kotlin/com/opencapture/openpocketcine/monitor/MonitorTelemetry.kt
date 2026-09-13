@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
@@ -34,8 +35,9 @@ fun MonitorTelemetry(
     modifier: Modifier = Modifier,
 ) {
     val gauges: @Composable () -> Unit = {
-        TelemetryGauge(OpcIcon.SIGNAL, LiveDesign.accent, signalBars.coerceIn(0, 4) / 4f,
-            "Live view $fps frames per second, $signalBars of 4 delivery bars", horizontal)
+        val bars = signalBars.coerceIn(0, 4)
+        TelemetryGauge(OpcIcon.SIGNAL, MonitorLinkHealth.color(MonitorLinkHealth.score(bars)),
+            bars / 4f, "Live view $fps frames per second, $signalBars of 4 delivery bars", horizontal)
         TelemetryGauge(OpcIcon.SMARTPHONE, Color(0xFF3FE0C7), phonePercent / 100f,
             if (phonePercent >= 0) "Phone battery $phonePercent percent" else "Phone battery unavailable",
             horizontal, phonePercent.takeIf { it in 0..100 }?.toString() ?: "—")

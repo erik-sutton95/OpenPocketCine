@@ -1,6 +1,6 @@
 New and changed
 
-- UI 2.0 adds Sora and Lucide. Tap a value for details; hold or drag for a compact 128 dp dial. FORMAT hangs from the top without landscape category tabs. Gimbal Mode, Speed and Ramp have separate tabs.
+- UI 2.0: Sora/Lucide, consistent Back and assist buttons, easier expand arrow, and Media sidebar display controls. Pull down to refresh. Signal colors match Settings.
 - Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the larger lens dial extending to the screen edge above camera controls.
 - New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
 

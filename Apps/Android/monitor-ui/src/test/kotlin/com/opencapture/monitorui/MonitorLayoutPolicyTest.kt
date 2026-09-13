@@ -65,6 +65,46 @@ class MonitorLayoutPolicyTest {
         assertEquals(MonitorPageLayoutPolicy.LANDSCAPE_NAV_WIDTH + MonitorPageLayoutPolicy.GAP, landscape.bodyX)
         assertEquals(390f, landscape.bodyH)
         assertTrue(landscape.bodyW > 0f)
+        // 530×500 landscape minus a 54dp Back + 10dp gap leaves 466×500 for regions.
+        assertTrue(MonitorPageLayoutPolicy.portrait(466f, 500f))
+        val nearSquare = MonitorPageLayoutPolicy.slots(466f, 500f, portrait = false)
+        assertEquals(170f, nearSquare.navW, .01f)
+        assertEquals(500f, nearSquare.navH, .01f)
+        assertEquals(180f, nearSquare.bodyX, .01f)
+        assertEquals(0f, nearSquare.bodyY, .01f)
+        val media = MonitorPageLayoutPolicy.slots(844f, 390f, 56f, navigationWidth = 206f)
+        assertEquals(206f, media.navW, .01f)
+        assertEquals(216f, media.bodyX, .01f)
+        assertEquals(844f - 206f - MonitorPageLayoutPolicy.GAP, media.bodyW, .01f)
+        val mediaNear = MonitorPageLayoutPolicy.slots(466f, 500f, portrait = false, navigationWidth = 206f)
+        assertEquals(206f, mediaNear.navW, .01f)
+        assertEquals(216f, mediaNear.bodyX, .01f)
+        assertEquals(0f, mediaNear.bodyY, .01f)
+    }
+
+    @Test
+    fun assistHostsUseSharedSystemButtonSide() {
+        val phoneSide = MonitorLayoutPolicy.systemButtonSize(false)
+        val tabletSide = MonitorLayoutPolicy.systemButtonSize(true)
+        val phone = MonitorLayoutPolicy.portraitAssists(800f, false)
+        assertEquals(10f, phone.x)
+        assertEquals(phoneSide + 8f, phone.width)
+        assertEquals(phoneSide + 35f, phone.height)
+        assertEquals(800f - 16f, phone.maxY, .01f)
+        val tablet = MonitorLayoutPolicy.portraitAssists(800f, true)
+        assertEquals(14f, tablet.x)
+        assertEquals(tabletSide + 8f, tablet.width)
+        assertEquals(tabletSide + 35f, tablet.height)
+        assertEquals(800f - 16f, tablet.maxY, .01f)
+        val landPhone = MonitorLayoutPolicy.landscapeAssists(390f, false)
+        assertEquals(14f, landPhone.x)
+        assertEquals(phoneSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landPhone.width)
+        assertEquals(phoneSide * 2f + 11f, landPhone.height)
+        assertEquals(390f - 14f, landPhone.maxY, .01f)
+        val landTablet = MonitorLayoutPolicy.landscapeAssists(744f, true)
+        assertEquals(tabletSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landTablet.width)
+        assertEquals(tabletSide * 2f + 11f, landTablet.height)
+        assertEquals(744f - 14f, landTablet.maxY, .01f)
     }
 
     @Test

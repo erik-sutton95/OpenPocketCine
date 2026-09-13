@@ -54,26 +54,26 @@
         }
 
         public var body: some View {
-            MonitorPage(safeArea: safeArea, navigationWidth: 172) { portrait in
+            MonitorPage(
+                safeArea: safeArea, navigationWidth: 206,
+                heading: MonitorPageHeading(brand: brand, title: "Media"), backLabel: "Back",
+                back: dismiss
+            ) { portrait in
                 navigation(portrait: portrait)
             } detail: { portrait in
                 VStack(alignment: .leading, spacing: 8) {
                     header(portrait: portrait)
-                    if items.isEmpty {
-                        empty.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        gallery
-                    }
+                    gallery
                     if selecting { selectionTray }
+                    if portrait { displayControls }
                 }
             }
         }
 
+        private func dismiss() { action(.back) }
+
         private func navigation(portrait: Bool) -> some View {
             VStack(alignment: .leading, spacing: 9) {
-                MonitorPageHeading(brand: brand, title: "Media", backLabel: "Back") {
-                    action(.back)
-                }
                 ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
                     let arrangement =
                         portrait
@@ -103,7 +103,37 @@
                     .padding(9).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                 }
+                if !portrait { displayControls }
             }
+        }
+
+        private var displayControls: some View {
+            HStack(spacing: 6) {
+                chip(
+                    layout == .grid ? "Switch to list view" : "Switch to grid view",
+                    icon: layout == .grid ? .layoutList : .layoutGrid
+                ) {
+                    action(.layout(layout == .grid ? .list : .grid))
+                }
+                .accessibilityValue(layout == .grid ? "Grid view" : "List view")
+                .accessibilityIdentifier("monitor.media.layout")
+                HStack(spacing: 2) {
+                    ForEach(MonitorThumbnailSize.allCases, id: \.self) { size in
+                        chip(
+                            "\(size.rawValue.capitalized) thumbnails",
+                            icon: .square, filled: true,
+                            active: size == thumbnailSize,
+                            iconSize: size == .small ? 7 : size == .medium ? 10 : 13
+                        ) {
+                            action(.thumbnailSize(size))
+                        }
+                        .accessibilityAddTraits(size == thumbnailSize ? .isSelected : [])
+                    }
+                }
+                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("monitor.media.displayControls")
         }
 
         @ViewBuilder private func header(portrait: Bool) -> some View {
@@ -153,59 +183,38 @@
                 chip("Sort", icon: .arrowUpDown, text: sortTitle) {
                     action(.cycleSort)
                 }
-                HStack(spacing: 2) {
-                    chip("Grid", icon: .layoutGrid, active: layout == .grid) {
-                        action(.layout(.grid))
-                    }
-                    chip("List", icon: .layoutList, active: layout == .list) {
-                        action(.layout(.list))
-                    }
-                }
-                .background(
-                    Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
-                HStack(spacing: 2) {
-                    ForEach(MonitorThumbnailSize.allCases, id: \.self) { size in
-                        chip(
-                            "\(size.rawValue.capitalized) thumbnails",
-                            icon: .square, filled: true,
-                            active: size == thumbnailSize,
-                            iconSize: size == .small ? 7 : size == .medium ? 10 : 13
-                        ) {
-                            action(.thumbnailSize(size))
-                        }
-                    }
-                }
-                .background(
-                    Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
                 filters
-                if canRefresh {
-                    chip("Refresh camera media", icon: .refreshCw) {
-                        action(.refresh)
-                    }
-                    .disabled(refreshing)
-                }
             }
         }
 
         private var gallery: some View {
-            ScrollView(.vertical, showsIndicators: false) {
-                if layout == .grid {
-                    LazyVGrid(
-                        columns: Array(
-                            repeating: GridItem(.flexible(), spacing: 10),
-                            count: thumbnailSize.columns(tablet: tablet)), spacing: 10
-                    ) {
-                        ForEach(items) { item in gridCard(item) }
+            GeometryReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    if items.isEmpty {
+                        empty.frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                    } else if layout == .grid {
+                        LazyVGrid(
+                            columns: Array(
+                                repeating: GridItem(.flexible(), spacing: 10),
+                                count: thumbnailSize.columns(tablet: tablet)), spacing: 10
+                        ) {
+                            ForEach(items) { item in gridCard(item) }
+                        }
+                    } else {
+                        LazyVStack(spacing: 1) {
+                            ForEach(items) { item in listRow(item) }
+                        }
+                        .background(MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                     }
-                } else {
-                    LazyVStack(spacing: 1) {
-                        ForEach(items) { item in listRow(item) }
-                    }
-                    .background(MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                 }
+                .scrollBounceBehavior(.always)
+                .refreshable { refresh() }
+                .accessibilityIdentifier("monitor.media.gallery")
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .refreshable { if canRefresh { action(.refresh) } }
+        }
+
+        private func refresh() {
+            if canRefresh && !refreshing { action(.refresh) }
         }
 
         private func gridCard(_ item: MonitorMediaItem) -> some View {

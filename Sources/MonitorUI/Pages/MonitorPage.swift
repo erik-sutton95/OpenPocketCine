@@ -1,4 +1,5 @@
 #if os(iOS)
+    import MonitorPresentation
     import SwiftUI
 
     /// A camera-independent page frame. The host supplies already-resolved physical
@@ -6,17 +7,24 @@
     public struct MonitorPage<Navigation: View, Detail: View>: View {
         private let safeArea: EdgeInsets
         private let navigationWidth: CGFloat
+        private let heading: MonitorPageHeading
+        private let backLabel: String
+        private let back: () -> Void
         private let navigation: (Bool) -> Navigation
         private let detail: (Bool) -> Detail
         @Environment(\.monitorWindowGeometry) private var windowGeometry
 
         public init(
-            safeArea: EdgeInsets, navigationWidth: CGFloat = 168,
+            safeArea: EdgeInsets, navigationWidth: CGFloat = 168, heading: MonitorPageHeading,
+            backLabel: String, back: @escaping () -> Void,
             @ViewBuilder navigation: @escaping (Bool) -> Navigation,
             @ViewBuilder detail: @escaping (Bool) -> Detail
         ) {
             self.safeArea = safeArea
             self.navigationWidth = navigationWidth
+            self.heading = heading
+            self.backLabel = backLabel
+            self.back = back
             self.navigation = navigation
             self.detail = detail
         }
@@ -24,29 +32,66 @@
         public var body: some View {
             GeometryReader { proxy in
                 let portrait = proxy.size.height > proxy.size.width
-                MonitorPageRegions(portrait: portrait, navigationWidth: navigationWidth) {
-                    navigation(portrait)
+                let pageTop = safeArea.top + windowGeometry.topControlInset + 10
+                // Share live-monitor button dimensions and physical corner clearance.
+                let control = FieldMonitorLayout(
+                    width: proxy.size.width, height: proxy.size.height,
+                    safeArea: MonitorSafeArea(
+                        top: safeArea.top, leading: safeArea.leading,
+                        bottom: safeArea.bottom, trailing: safeArea.trailing),
+                    topControlInset: windowGeometry.topControlInset
+                ).lock
+                let buttonSide = CGFloat(control.width)
+                HStack(alignment: .top, spacing: 10) {
+                    if !portrait {
+                        backButton(size: buttonSide)
+                            .padding(.top, max(0, CGFloat(control.y) - pageTop))
+                    }
+                    MonitorPageRegions(portrait: portrait, navigationWidth: navigationWidth) {
+                        VStack(alignment: .leading, spacing: 9) {
+                            HStack(spacing: 9) {
+                                if portrait { backButton(size: buttonSide) }
+                                heading
+                            }
+                            navigation(portrait)
+                        }
                         .padding(10)
-                        .background(MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .background(
+                            MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12)
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12).strokeBorder(MonitorTheme.border)
                         )
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("monitor.page.navigation")
-                    detail(portrait)
-                        .frame(
-                            minWidth: 0, maxWidth: .infinity, minHeight: 0,
-                            maxHeight: .infinity, alignment: .topLeading)
+                        detail(portrait)
+                            .frame(
+                                minWidth: 0, maxWidth: .infinity, minHeight: 0,
+                                maxHeight: .infinity, alignment: .topLeading)
+                    }
                 }
-                .padding(.top, safeArea.top + windowGeometry.topControlInset + 10)
+                .padding(.top, pageTop)
                 .padding(.bottom, safeArea.bottom + 10)
-                .padding(.leading, (portrait ? safeArea.leading : max(14, safeArea.leading)) + 12)
+                // Use the existing landscape margin for Back before taking width
+                // from the page. The corner button sits above the side cutout.
+                .padding(
+                    .leading,
+                    portrait
+                        ? safeArea.leading + 12
+                        : max(CGFloat(control.x), max(14, safeArea.leading) + 12 - buttonSide - 10)
+                )
                 .padding(
                     .trailing, (portrait ? safeArea.trailing : max(14, safeArea.trailing)) + 12
                 )
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             }
             .background(MonitorTheme.background)
+        }
+
+        private func backButton(size: CGFloat) -> some View {
+            MonitorChromeButton(backLabel, size: CGSize(width: size, height: size), action: back) {
+                MonitorIcon.chevronLeft.frame(width: size * 29 / 54, height: size * 29 / 54)
+            }
         }
     }
 
@@ -90,41 +135,25 @@
     public struct MonitorPageHeading: View {
         private let brand: String
         private let title: String
-        private let backLabel: String
-        private let back: () -> Void
 
-        public init(brand: String, title: String, backLabel: String, back: @escaping () -> Void) {
+        public init(brand: String, title: String) {
             self.brand = brand
             self.title = title
-            self.backLabel = backLabel
-            self.back = back
         }
 
         public var body: some View {
-            HStack(spacing: 9) {
-                Button(action: back) {
-                    MonitorIcon.chevronLeft.frame(width: 13, height: 13)
-                        .frame(width: 34, height: 34)
-                        .background(Color.white.opacity(0.07), in: Circle())
-                        .padding(5)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(MonitorButtonStyle())
-                .accessibilityLabel(backLabel)
-                // Keep the styled button's 44pt hit shape while reporting the
-                // reference's 34pt footprint to the surrounding heading.
-                .padding(-5)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(brand.uppercased())
-                        .font(MonitorTheme.font(8, weight: .bold)).tracking(1.4)
-                        .foregroundStyle(MonitorTheme.accent)
-                        .lineLimit(1).minimumScaleFactor(0.9)
-                    Text(title).font(MonitorTheme.font(13, weight: .semibold))
-                        .lineLimit(1).minimumScaleFactor(0.9)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(brand.uppercased())
+                    .font(MonitorTheme.font(8, weight: .bold)).tracking(1.4)
+                    .foregroundStyle(MonitorTheme.accent)
+                    .lineLimit(1).minimumScaleFactor(0.9)
+                Text(title).font(MonitorTheme.font(13, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.9)
             }
+            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
             .foregroundStyle(MonitorTheme.text)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("monitor.page.heading")
         }
     }
 

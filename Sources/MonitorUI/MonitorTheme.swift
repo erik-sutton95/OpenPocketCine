@@ -1,5 +1,6 @@
 #if os(iOS)
     import CoreText
+    import MonitorPresentation
     import SwiftUI
 
     /// The Field Monitor visual language, shared by every native brand storefront.
@@ -17,6 +18,14 @@
         public static let border = Color.white.opacity(0.08)
         public static let recording = color(0xD13034)
         public static let radius: CGFloat = 12
+
+        public static func linkHealthColor(_ band: MonitorLinkHealthBand) -> Color {
+            switch band {
+            case .poor: recording
+            case .watch: Color(red: 0.96, green: 0.52, blue: 0.12)
+            case .stable: Color(red: 0.18, green: 0.78, blue: 0.42)
+            }
+        }
 
         public static func color(_ hex: UInt32) -> Color {
             Color(

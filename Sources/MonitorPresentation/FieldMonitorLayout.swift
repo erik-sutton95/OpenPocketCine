@@ -73,7 +73,7 @@ public struct FieldMonitorLayout: Equatable, Sendable {
         portrait = h > w
         tablet = min(w, h) >= 600
         let rec = tablet ? 84.0 : 70.0
-        let button = tablet ? 48.0 : 54.0
+        let button = MonitorSystemButtonMetrics.side(tablet: tablet)
         let hasHome = safeArea.bottom > 0
         let edge = 14.0
         let floor: Double
@@ -120,8 +120,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             // Portrait tools belong to the lower control area. Picture crop,
             // aspect and FIT/FILL must not move their touch targets.
             assists = .init(
-                x: edge, y: floor - 94,
-                width: 52, height: 78)
+                x: edge, y: floor - 16 - (button + 35),
+                width: button + 8, height: button + 35)
             stick = .init(
                 x: w - 104,
                 y: floor - 104, width: 88, height: 88)
@@ -177,7 +177,10 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: side, y: h - (hasHome ? 14 : 8) - valuesH,
                 width: w - side * 2, height: valuesH)
             floor = values.y - 8
-            assists = .init(x: 18, y: h - (hasHome ? 14 : 8) - 99, width: 73, height: 99)
+            let assistHeight = button * 2 + 11
+            assists = .init(
+                x: 18, y: h - (hasHome ? 14 : 8) - assistHeight,
+                width: button + MonitorAssistPaletteLayout.horizontalInsets, height: assistHeight)
             stick = .init(
                 x: w - max(16 + rec + 12, safeArea.trailing + 6) - 88,
                 y: floor - 88, width: 88, height: 88)

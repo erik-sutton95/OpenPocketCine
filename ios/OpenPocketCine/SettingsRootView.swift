@@ -90,7 +90,11 @@ struct SettingsRootView: View {
     @State private var diagnosticsShare: DiagnosticSharePayload?
 
     var body: some View {
-        MonitorPage(safeArea: safeArea) { portrait in
+        MonitorPage(
+            safeArea: safeArea,
+            heading: MonitorPageHeading(brand: "OpenPocketCine", title: "Operator Setup"),
+            backLabel: model.isLive ? "Back to live" : "Your cameras", back: dismiss
+        ) { portrait in
             settingsNavigation(portrait: portrait)
         } detail: { _ in
             settingsContent
@@ -123,10 +127,6 @@ struct SettingsRootView: View {
 
     private func settingsNavigation(portrait: Bool) -> some View {
         VStack(alignment: .leading, spacing: portrait ? 9 : 8) {
-            MonitorPageHeading(
-                brand: "OpenPocketCine", title: "Operator Setup",
-                backLabel: model.isLive ? "Back to live" : "Your cameras", back: dismiss
-            )
             ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
                 let layout =
                     portrait

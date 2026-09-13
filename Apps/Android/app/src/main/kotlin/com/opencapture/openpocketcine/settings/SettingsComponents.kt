@@ -63,15 +63,13 @@ import androidx.compose.ui.window.Popup
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.roundToInt
 
 private fun chromeStyle(size: Float, weight: FontWeight, mono: Boolean = false): TextStyle =
     if (mono) LiveType.mono(size, weight) else LiveType.ui(size, weight)
-
-/** Watch band — orange, matching iOS `SettingsDashScale` (not the cyan accent). */
-private val WatchOrange = Color(0.96f, 0.52f, 0.12f)
 
 // Compose ports of the iOS operator-settings primitives (SettingsRootView /
 // AppSettings: SettingsRowCard, SettingsInlineRow, SettingsSwitchInlineRow,
@@ -174,29 +172,25 @@ fun SettingsActionPill(
  */
 @Composable
 fun SettingsDashScale(title: String, caption: String, score: Int) {
-    val band =
-        when {
-            score >= 80 -> LinkHealthBand.STABLE
-            score >= 50 -> LinkHealthBand.WATCH
-            else -> LinkHealthBand.POOR
-        }
-    val bandColor =
-        when (band) {
-            LinkHealthBand.POOR -> LiveDesign.rec
-            LinkHealthBand.WATCH -> WatchOrange
-            LinkHealthBand.STABLE -> LiveDesign.good
-        }
+    val band = MonitorLinkHealth.band(score)
+    val bandColor = MonitorLinkHealth.color(score)
     val litCount =
         when (band) {
-            LinkHealthBand.POOR -> 4
-            LinkHealthBand.WATCH -> 8
-            LinkHealthBand.STABLE -> 12
+            MonitorLinkHealth.Band.POOR -> 4
+            MonitorLinkHealth.Band.WATCH -> 8
+            MonitorLinkHealth.Band.STABLE -> 12
         }
     val bandSlot =
         when (band) {
-            LinkHealthBand.POOR -> 0
-            LinkHealthBand.WATCH -> 1
-            LinkHealthBand.STABLE -> 2
+            MonitorLinkHealth.Band.POOR -> 0
+            MonitorLinkHealth.Band.WATCH -> 1
+            MonitorLinkHealth.Band.STABLE -> 2
+        }
+    val bandLabel =
+        when (band) {
+            MonitorLinkHealth.Band.POOR -> "POOR"
+            MonitorLinkHealth.Band.WATCH -> "WATCH"
+            MonitorLinkHealth.Band.STABLE -> "STABLE"
         }
     Column(
         Modifier.fillMaxWidth()
@@ -215,7 +209,7 @@ fun SettingsDashScale(title: String, caption: String, score: Int) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     if (slot == bandSlot) {
                         Text(
-                            band.label,
+                            bandLabel,
                             style = chromeStyle(9.5f, FontWeight.Bold, mono = true),
                             color = bandColor,
                             letterSpacing = 0.5.sp,
@@ -237,9 +231,9 @@ fun SettingsDashScale(title: String, caption: String, score: Int) {
                 val fill =
                     when {
                         index >= litCount -> LiveDesign.hairlineStrong
-                        index < 4 -> LiveDesign.rec.copy(alpha = 0.8f)
-                        index < 8 -> WatchOrange.copy(alpha = 0.85f)
-                        else -> LiveDesign.good.copy(alpha = 0.9f)
+                        index < 4 -> MonitorLinkHealth.poor.copy(alpha = 0.8f)
+                        index < 8 -> MonitorLinkHealth.watch.copy(alpha = 0.85f)
+                        else -> MonitorLinkHealth.stable.copy(alpha = 0.9f)
                     }
                 Box(
                     Modifier.weight(1f)
@@ -254,12 +248,6 @@ fun SettingsDashScale(title: String, caption: String, score: Int) {
             DashLegend("Stable", "80+", Modifier.weight(1f), Alignment.End)
         }
     }
-}
-
-private enum class LinkHealthBand(val label: String) {
-    POOR("POOR"),
-    WATCH("WATCH"),
-    STABLE("STABLE"),
 }
 
 @Composable

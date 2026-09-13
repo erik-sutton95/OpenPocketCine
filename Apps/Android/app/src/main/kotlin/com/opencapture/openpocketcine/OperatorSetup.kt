@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.assists.FalseColorScale
 import com.opencapture.openpocketcine.assists.HistogramAssist
@@ -216,15 +217,15 @@ internal object OperatorLinkHealth {
         }
     }
 
-    fun score(bars: Int): Int = (bars * 25).coerceIn(0, 100)
+    fun score(bars: Int): Int = MonitorLinkHealth.score(bars)
 
     fun caption(isLive: Boolean, bars: Int): String {
         if (!isLive) return "No live path."
-        return when (bars) {
-            in 3..Int.MAX_VALUE -> "Link is clean. · Stable"
-            2 -> "Some loss on the link. · Watch"
-            1 -> "Link is weak. · Poor"
-            else -> "Waiting for the link."
+        if (bars <= 0) return "Waiting for the link."
+        return when (MonitorLinkHealth.band(score(bars))) {
+            MonitorLinkHealth.Band.STABLE -> "Link is clean. · Stable"
+            MonitorLinkHealth.Band.WATCH -> "Some loss on the link. · Watch"
+            MonitorLinkHealth.Band.POOR -> "Link is weak. · Poor"
         }
     }
 
@@ -466,9 +467,13 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = onClose) },
+            heading = { com.opencapture.openpocketcine.monitor.MonitorPageHeading("Settings", "OPERATOR SETUP") },
             navigation = { portrait ->
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    com.opencapture.openpocketcine.monitor.MonitorPageHeader("Settings", "OPERATOR SETUP", onClose)
+                Column(
+                    if (portrait) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     if (portrait) {
                         SettingsTabStrip(model, hapticsEnabled, view)
                         if (isLive) {

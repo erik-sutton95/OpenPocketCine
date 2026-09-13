@@ -69,7 +69,11 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val tablet = minOf(config.screenWidthDp, config.screenHeightDp) >= 600
     val buttonSize = MonitorLayoutPolicy.assistButtonSize(tablet).dp
     val iconSize = MonitorLayoutPolicy.assistIconSize(tablet).dp
+    val compactIconSize = MonitorLayoutPolicy.assistCompactIconSize(tablet).dp
     val cellW = MonitorLayoutPolicy.assistCellWidth(config.screenWidthDp.toFloat(), portrait, tablet).dp
+    val expansionLane = MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH.dp
+    val glyphLane = MonitorLayoutPolicy.ASSIST_EXPANSION_GLYPH_LANE.dp
+    val horizontalInsets = MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS.dp
     val expand by animateFloatAsState(if (revealed) 1f else 0f,
         tween(MonitorMotion.PALETTE_MS, easing = MonitorMotion.EaseOutCubic), label = "assist-palette")
     LaunchedEffect(requestExpand) { if (requestExpand) { expanded = true; onExpansionHandled() } }
@@ -85,7 +89,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             fullMounted = false
         }
     }
-    val compactW = buttonSize + if (portrait) 8.dp else 26.dp
+    val compactW = buttonSize + if (portrait) 8.dp else horizontalInsets
     val compactH = if (portrait) buttonSize + 35.dp else buttonSize * 2 + 11.dp
     val fullW = if (portrait) cellW + 8.dp else
         MonitorLayoutPolicy.assistAvailableWidth(config.screenWidthDp.toFloat(), portrait, tablet).dp
@@ -109,17 +113,20 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             .semantics { contentDescription = "${title(tool)}, ${if (active) "on" else "off"}" },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
-            glyph(tool, tint, Modifier.size(iconSize))
+            glyph(tool, tint, Modifier.size(if (withLabel) iconSize else compactIconSize))
             if (withLabel) Text(label(tool), color = tint,
                 style = MonitorTypography.text(7.5f, FontWeight.SemiBold).copy(letterSpacing = .75.sp), maxLines = 1)
         }
     }
     val expandHit: @Composable (Boolean) -> Unit = { open ->
-        Box(Modifier.size(if (portrait) buttonSize else 15.dp, if (portrait) 24.dp else buttonSize * 2 + 3.dp)
+        Box(Modifier.size(if (portrait) buttonSize else expansionLane, if (portrait) 24.dp else buttonSize * 2 + 3.dp)
             .combinedClickable(enabled = !locked && (!fullMounted || expanded), onClick = { expanded = !open })
             .semantics { contentDescription = if (open) "Collapse view assists" else "Show view assists" },
-            contentAlignment = Alignment.Center) {
-            chevron(open, portrait)
+            contentAlignment = if (portrait) Alignment.Center else Alignment.CenterStart) {
+            Box(Modifier.size(if (portrait) buttonSize else glyphLane,
+                if (portrait) 24.dp else buttonSize * 2 + 3.dp), contentAlignment = Alignment.Center) {
+                chevron(open, portrait)
+            }
         }
     }
     Box(modifier, contentAlignment = Alignment.BottomStart) {
@@ -155,7 +162,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
                     }
                 } else Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(Modifier.width(fullW - 26.dp).height(fullH - 8.dp).horizontalScroll(scrollState),
+                    Row(Modifier.width(fullW - horizontalInsets).height(fullH - 8.dp).horizontalScroll(scrollState),
                         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         repeat(columns) { column ->
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -226,10 +225,17 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             val portrait = maxHeight > maxWidth
             com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
                 modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
+                navigationWidth = 206f,
+                back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = ::dismiss) },
+                heading = {
+                    com.opencapture.openpocketcine.monitor.MonitorPageHeading(
+                        "Media", if (isLive) "CAMERA LIBRARY" else "LOCAL LIBRARY")
+                },
                 navigation = { compact ->
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        com.opencapture.openpocketcine.monitor.MonitorPageHeader("Media",
-                            if (isLive) "CAMERA LIBRARY" else "LOCAL LIBRARY", ::dismiss)
+                    Column(
+                        if (compact) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         if (compact) {
                             CategoryStrip(category) { category = it }
                         } else {
@@ -239,6 +245,12 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                     CategoryTab(tab, active = tab == category, fill = true) { category = tab }
                                 }
                             }
+                            MediaCatalogDisplayControls(
+                                list = layout == MediaBrowserLayout.LIST,
+                                thumbnailSize = thumbnailSize,
+                                onList = { layout = if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID },
+                                onThumbnailSize = { thumbnailSize = it },
+                            )
                         }
                     }
                 },
@@ -248,50 +260,27 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                             headerTitle = headerTitle, headerCount = headerCount,
                             fetchInProgress = controller.fetchInProgress, isLive = isLive,
                             sortOrder = sortOrder, filterOpen = filterOpen, activeFilterCount = activeFilterCount,
-                            compact = portrait, onRefresh = { controller.refresh() },
+                            compact = portrait,
                             onFilter = { filterOpen = !filterOpen }, onSort = { sortOrder = sortOrder.next },
-                            layout = layout, thumbnailSize = thumbnailSize,
-                            onLayout = { layout = it }, onSize = { thumbnailSize = it },
                         )
                         controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
                             val name = displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')
                             CacheBar(name, progress)
                         }
                         Box(Modifier.weight(1f).fillMaxWidth()) {
-                            when {
-                                displayed.isEmpty() && controller.fetchInProgress -> ListingState(controller.listedCount)
-                                displayed.isEmpty() -> EmptyState(controller.fetchInProgress, controller.note ?: emptySubtitle)
-                                layout == MediaBrowserLayout.LIST -> {
-                                    LazyColumn(
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        contentPadding = PaddingValues(bottom = 24.dp),
-                                    ) {
-                                        items(displayed, key = { it.id }) { file ->
-                                            MediaClipListRow(
-                                                file = file,
-                                                controller = controller,
-                                                onOpen = { open(file) },
-                                                isSelecting = isSelecting,
-                                                isSelected = selectedIDs.contains(file.id),
-                                                onBeginSelection = { beginSelection(file) },
-                                                onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) },
-                                            )
-                                        }
-                                    }
-                                }
-                                else -> {
-                                    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                                    val columns = com.opencapture.monitorui.monitorCatalogColumns(
-                                        com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
-                                        minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600,
-                                    )
-                                    com.opencapture.monitorui.MonitorCatalogGrid(displayed, columns, key = { it.id }) { file ->
-                                        MediaClipCell(file, controller, onOpen = { open(file) }, isSelecting = isSelecting,
-                                            isSelected = selectedIDs.contains(file.id), onBeginSelection = { beginSelection(file) },
-                                            onToggleSelection = { selectedIDs = selectedIDs.toggle(file.id) })
-                                    }
-                                }
-                            }
+                            MediaGalleryPane(
+                                displayed = displayed,
+                                layout = layout,
+                                thumbnailSize = thumbnailSize,
+                                controller = controller,
+                                isSelecting = isSelecting,
+                                selectedIDs = selectedIDs,
+                                emptySubtitle = emptySubtitle,
+                                connected = isLive,
+                                onOpen = ::open,
+                                onBeginSelection = ::beginSelection,
+                                onToggleSelection = { selectedIDs = selectedIDs.toggle(it) },
+                            )
                         }
                     if (isSelecting) SelectionTray(selectedFiles.size,
                         cacheEnabled = isLive && selectedFiles.isNotEmpty(),
@@ -305,6 +294,14 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         onDelete = { confirmBatchDelete = true },
                         onShare = { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles },
                     )
+                    if (portrait) {
+                        MediaCatalogDisplayControls(
+                            list = layout == MediaBrowserLayout.LIST,
+                            thumbnailSize = thumbnailSize,
+                            onList = { layout = if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID },
+                            onThumbnailSize = { thumbnailSize = it },
+                        )
+                    }
                 }
             }
         }
@@ -374,6 +371,21 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
 }
 
 @Composable
+private fun MediaCatalogDisplayControls(
+    list: Boolean,
+    thumbnailSize: MediaThumbnailSize,
+    onList: (Boolean) -> Unit,
+    onThumbnailSize: (MediaThumbnailSize) -> Unit,
+) {
+    com.opencapture.monitorui.MonitorCatalogDisplayControls(
+        list = list,
+        thumbnailSize = com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
+        onList = onList,
+        onThumbnailSize = { onThumbnailSize(MediaThumbnailSize.valueOf(it.name)) },
+    )
+}
+
+@Composable
 private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab) -> Unit) {
     Row(
         Modifier
@@ -386,32 +398,6 @@ private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab)
         MediaLibraryTab.entries.forEach { tab ->
             CategoryTab(tab, active = tab == category) { onSelect(tab) }
         }
-    }
-}
-
-@Composable
-private fun CategorySidebar(
-    category: MediaLibraryTab,
-    layout: MediaBrowserLayout,
-    thumbnailSize: MediaThumbnailSize,
-    onSelect: (MediaLibraryTab) -> Unit,
-    onLayout: (MediaBrowserLayout) -> Unit,
-    onSize: (MediaThumbnailSize) -> Unit,
-) {
-    Column(Modifier.width(172.dp).fillMaxHeight()) {
-        Column(
-            Modifier
-                .clip(MediaCornerShape)
-                .panelGlass(MediaCornerShape)
-                .padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            MediaLibraryTab.entries.forEach { tab ->
-                CategoryTab(tab, active = tab == category, fill = true) { onSelect(tab) }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        LayoutControls(layout, thumbnailSize, onLayout, onSize)
     }
 }
 
@@ -456,22 +442,87 @@ internal object MediaLibraryHeaderMetrics {
     fun stacksCountUnderTitle(portrait: Boolean): Boolean = portrait
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MediaGalleryPane(
+    displayed: List<MediaFile>,
+    layout: MediaBrowserLayout,
+    thumbnailSize: MediaThumbnailSize,
+    controller: MediaLibraryController,
+    isSelecting: Boolean,
+    selectedIDs: Set<String>,
+    emptySubtitle: String,
+    connected: Boolean,
+    onOpen: (MediaFile) -> Unit,
+    onBeginSelection: (MediaFile) -> Unit,
+    onToggleSelection: (String) -> Unit,
+) {
+    val gallery: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize()) {
+            when {
+                displayed.isEmpty() && controller.fetchInProgress ->
+                    ScrollableGalleryPlaceholder { ListingState(controller.listedCount) }
+                displayed.isEmpty() ->
+                    ScrollableGalleryPlaceholder {
+                        EmptyState(controller.fetchInProgress, controller.note ?: emptySubtitle)
+                    }
+                layout == MediaBrowserLayout.LIST -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                    ) {
+                        items(displayed, key = { it.id }) { file ->
+                            MediaClipListRow(
+                                file = file,
+                                controller = controller,
+                                onOpen = { onOpen(file) },
+                                isSelecting = isSelecting,
+                                isSelected = selectedIDs.contains(file.id),
+                                onBeginSelection = { onBeginSelection(file) },
+                                onToggleSelection = { onToggleSelection(file.id) },
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                    val columns = com.opencapture.monitorui.monitorCatalogColumns(
+                        com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
+                        minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600,
+                    )
+                    com.opencapture.monitorui.MonitorCatalogGrid(
+                        displayed, columns, key = { it.id }, modifier = Modifier.fillMaxSize(),
+                    ) { file ->
+                        MediaClipCell(file, controller, onOpen = { onOpen(file) }, isSelecting = isSelecting,
+                            isSelected = selectedIDs.contains(file.id), onBeginSelection = { onBeginSelection(file) },
+                            onToggleSelection = { onToggleSelection(file.id) })
+                    }
+                }
+            }
+        }
+    }
+    if (connected) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = controller.fetchInProgress,
+            onRefresh = { if (!controller.fetchInProgress) controller.refresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) { gallery() }
+    } else gallery()
+}
+
 @Composable
 private fun HeaderRow(
     headerTitle: String, headerCount: String, fetchInProgress: Boolean, isLive: Boolean,
     sortOrder: MediaLibrarySort, filterOpen: Boolean, activeFilterCount: Int,
-    onRefresh: () -> Unit, onFilter: () -> Unit, onSort: () -> Unit, compact: Boolean,
-    layout: MediaBrowserLayout, thumbnailSize: MediaThumbnailSize,
-    onLayout: (MediaBrowserLayout) -> Unit, onSize: (MediaThumbnailSize) -> Unit,
+    onFilter: () -> Unit, onSort: () -> Unit, compact: Boolean,
 ) {
     com.opencapture.monitorui.MonitorCatalogHeader(
         title = "$headerTitle · $headerCount",
         subtitle = if (fetchInProgress) "Reading camera media…" else if (isLive) "Tap to review · Hold to select" else "Available offline",
-        compact = compact, sort = sortOrder.menuLabel, list = layout == MediaBrowserLayout.LIST,
-        thumbnailSize = com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
-        filterActive = filterOpen || activeFilterCount > 0, refreshAvailable = isLive, refreshing = fetchInProgress,
-        onSort = onSort, onList = { onLayout(if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID) },
-        onThumbnailSize = { onSize(MediaThumbnailSize.valueOf(it.name)) }, onFilter = onFilter, onRefresh = onRefresh)
+        compact = compact, sort = sortOrder.menuLabel,
+        filterActive = filterOpen || activeFilterCount > 0,
+        onSort = onSort, onFilter = onFilter)
 }
 
 @Composable
@@ -515,9 +566,20 @@ private fun CacheBar(filename: String, progress: Double) {
 }
 
 @Composable
+private fun ScrollableGalleryPlaceholder(content: @Composable () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = maxHeight).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) { content() }
+    }
+}
+
+@Composable
 private fun EmptyState(listing: Boolean, subtitle: String) {
     Column(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -549,7 +611,7 @@ private fun EmptyState(listing: Boolean, subtitle: String) {
 @Composable
 private fun ListingState(listed: Int) {
     Column(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -561,63 +623,6 @@ private fun ListingState(listed: Int) {
             color = LiveDesign.faint,
             style = LiveType.ui(12f),
         )
-    }
-}
-
-@Composable
-private fun LayoutBand(
-    layout: MediaBrowserLayout,
-    thumbnailSize: MediaThumbnailSize,
-    onLayout: (MediaBrowserLayout) -> Unit,
-    onSize: (MediaThumbnailSize) -> Unit,
-) {
-    Box(Modifier.fillMaxWidth().height(84.dp), contentAlignment = Alignment.BottomCenter) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(84.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(LiveDesign.background.copy(alpha = 0f), LiveDesign.background.copy(alpha = 0.94f)),
-                    ),
-                ),
-        )
-        LayoutControls(layout, thumbnailSize, onLayout, onSize, modifier = Modifier.padding(bottom = 4.dp))
-    }
-}
-
-@Composable
-private fun LayoutControls(
-    layout: MediaBrowserLayout,
-    thumbnailSize: MediaThumbnailSize,
-    onLayout: (MediaBrowserLayout) -> Unit,
-    onSize: (MediaThumbnailSize) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.background(Color.Black.copy(alpha = .35f), androidx.compose.foundation.shape.RoundedCornerShape(9.dp)).padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            MediaBrowserLayout.entries.forEach { choice ->
-                Box(Modifier.size(32.dp, 28.dp).background(if (choice == layout) LiveDesign.tile else Color.Transparent,
-                    androidx.compose.foundation.shape.RoundedCornerShape(7.dp)).chromeClickable { onLayout(choice) }, contentAlignment = Alignment.Center) {
-                    OpcIcon(if (choice == MediaBrowserLayout.GRID) OpcIcon.LAYOUT_GRID else OpcIcon.LAYOUT_LIST,
-                        "${choice.name.lowercase().replaceFirstChar { it.uppercase() }} view", Modifier.size(13.dp),
-                        if (choice == layout) LiveDesign.text else LiveDesign.faint)
-                }
-            }
-        }
-        Row(Modifier.background(Color.Black.copy(alpha = .35f), androidx.compose.foundation.shape.RoundedCornerShape(9.dp)).padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            MediaThumbnailSize.entries.forEach { size ->
-                val active = thumbnailSize == size
-                Box(Modifier.size(28.dp).background(if (active) LiveDesign.tile else Color.Transparent,
-                    androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
-                    .chromeClickable { onSize(size) }.semantics { contentDescription = size.accessibilityLabel }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(size.gridIconSizeDp.dp).background(if (active) LiveDesign.text else LiveDesign.faint,
-                        androidx.compose.foundation.shape.RoundedCornerShape(3.dp)))
-                }
-            }
-        }
     }
 }
 

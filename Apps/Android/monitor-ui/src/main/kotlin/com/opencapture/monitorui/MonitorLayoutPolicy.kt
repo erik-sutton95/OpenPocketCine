@@ -55,12 +55,28 @@ object MonitorLayoutPolicy {
     }
 
     /** Portrait tools follow the lower controls floor, independently of picture crop. */
-    fun portraitAssists(floor: Float, tablet: Boolean): MonitorRect = MonitorRect(
-        if (tablet) 14f else 10f,
-        max(0f, floor - if (tablet) 102f else 94f),
-        if (tablet) 60f else 52f,
-        if (tablet) 86f else 78f,
-    )
+    fun portraitAssists(floor: Float, tablet: Boolean): MonitorRect {
+        val side = systemButtonSize(tablet)
+        val height = side + 35f
+        return MonitorRect(
+            if (tablet) 14f else 10f,
+            max(0f, floor - 16f - height),
+            side + 8f,
+            height,
+        )
+    }
+
+    /** Two stacked system buttons with 38 total horizontal insets, including the 27-wide expansion lane. */
+    fun landscapeAssists(viewportHeight: Float, tablet: Boolean, leading: Float = 14f): MonitorRect {
+        val side = systemButtonSize(tablet)
+        val height = side * 2f + 11f
+        return MonitorRect(
+            leading,
+            max(0f, viewportHeight - 14f - height),
+            side + ASSIST_HORIZONTAL_INSETS,
+            height,
+        )
+    }
 
     fun portraitAspect(width: Float, floor: Float): MonitorRect =
         MonitorRect(max(0f, width) / 2f - 24f, max(0f, floor - 56f), 48f, 48f)
@@ -79,14 +95,22 @@ object MonitorLayoutPolicy {
     fun cutoutPhoneCornerInset(viewportHeight: Float, tablet: Boolean, hasDisplayCutout: Boolean): Float =
         if (!tablet && hasDisplayCutout) CUTOUT_CORNER_INSET * max(0f, viewportHeight) else 0f
 
-    fun assistButtonSize(tablet: Boolean): Float = if (tablet) 52f else 44f
+    fun systemButtonSize(tablet: Boolean): Float = if (tablet) 48f else 54f
+
+    fun assistButtonSize(tablet: Boolean): Float = systemButtonSize(tablet)
 
     fun assistIconSize(tablet: Boolean): Float = if (tablet) 24f else 20f
+
+    fun assistCompactIconSize(tablet: Boolean): Float = systemButtonSize(tablet) * 29f / 54f
+
+    const val ASSIST_EXPANSION_GLYPH_LANE = 15f
+    const val ASSIST_EXPANSION_BUTTON_WIDTH = 27f
+    const val ASSIST_HORIZONTAL_INSETS = 38f
 
     fun assistAvailableWidth(screenWidth: Float, portrait: Boolean, tablet: Boolean, cornerRadius: Float = 42f): Float {
         val inset = if (portrait) 14f else max(14f, (cornerRadius * 0.42f).roundToInt().toFloat())
         val recW = (if (tablet) 84f else 70f) + 16f + 12f
-        val clusterW = assistButtonSize(tablet) + 15f + 14f
+        val clusterW = assistButtonSize(tablet) + ASSIST_EXPANSION_BUTTON_WIDTH + 14f
         val pad = if (portrait) 14f + recW else max(inset + clusterW + 12f, 14f + recW)
         return max(1f, screenWidth - pad - inset)
     }
