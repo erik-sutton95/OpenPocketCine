@@ -394,18 +394,31 @@ Sizes remain visible in list view and preserve the next grid size. Switching
 preserves the current category, sorting and selection. Pull-to-refresh replaces
 the toolbar Refresh button and also works with an empty or short catalog.
 
+Selection circles are hidden while browsing. Hold a clip to enter selection and
+continue dragging across the grid or list in any direction. In selection mode, an
+ordinary vertical swipe scrolls the catalog natively and keeps the selected set;
+a sideways-dominant drag starts a range sweep and may then move freely, including
+vertically. A touch that began as a vertical scroll cannot become a sweep later.
+Dragging from an unselected clip selects a contiguous range; dragging from a
+selected clip removes that range. Reversing restores each clip’s original
+selection state. Selection indicators appear only in selection mode. Near the
+gallery’s top or bottom edge, a held selection finger scrolls the catalog
+automatically; lifting or cancelling stops it.
+
 Media page shares Setup's frame with its wider 206-point/dp landscape rail; portrait full-width
 header with horizontally scrolling All/Video/Photo/Favourites. Capacity/cache
 card shows only landscape. Content toolbar includes item count/hint, sort and
-filters. Display controls live in the navigation footer. Phone grid columns 3/2/1; tablet 5/4/2. Cards keep 16:9
-thumb, selection top-leading, favorite top-trailing, state/color bottom-leading,
+filters. Display controls live at the sidebar bottom in landscape and page bottom
+in portrait. Phone grid columns 3/2/1; tablet 5/4/2. Cards keep 16:9
+thumb, favorite top-trailing, state/color bottom-leading,
 duration bottom-trailing, caching progress along bottom. Small cards move color
 into caption to avoid collision. Caption holds filename and metadata. States:
 ON PHONE green, ON CAMERA gray, CACHING cyan; selected overlay cyan at 0.14 plus
 2 edge. List row uses thumb/file/format/colour/state/favorite; tablet also duration.
 
 Hold 280 ms starts selection; movement ≥5 cancels hold. Once selecting, plain
-tap toggles selection rather than opening playback. Select all applies to visible
+tap toggles selection rather than opening playback; vertical swipes keep
+scrolling natively. Select all applies to visible
 filter; clear exits selection. Bulk tray is separate from scrolling cards and
 contains count/bytes, Share, Cache, Favourite, Delete. Sort choices are Newest,
 Oldest, Name, Largest; these must actually sort production items (prototype only

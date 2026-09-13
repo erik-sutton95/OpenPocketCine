@@ -101,6 +101,7 @@
         @State private var size: MonitorThumbnailSize = .medium
         @State private var category = "All"
         @State private var selected: Set<String> = []
+        @State private var selectionMode = false
         @State private var favorites: Set<String> = [MonitorMediaReview.file(1).id]
         @State private var hidden: Set<String> = []
         @State private var ascending = false
@@ -147,7 +148,8 @@
                     ],
                     category: category, layout: layout, thumbnailSize: size,
                     sortTitle: ascending ? "Oldest" : "Newest", status: "Camera + local cache",
-                    selectedIDs: selected, selecting: !selected.isEmpty, refreshing: false,
+                    selectedIDs: selected, selecting: selectionMode || !selected.isEmpty,
+                    refreshing: false,
                     canRefresh: false, tablet: UIDevice.current.userInterfaceIdiom == .pad,
                     action: handle
                 ) { item in
@@ -211,9 +213,14 @@
             case .open(let id):
                 playing = (0..<12).map(MonitorMediaReview.file).first { $0.id == id }
             case .select(let id): if !selected.insert(id).inserted { selected.remove(id) }
+            case .selection(let ids):
+                selectionMode = true
+                selected = ids
             case .favorite(let id): if !favorites.insert(id).inserted { favorites.remove(id) }
             case .selectAll: selected = Set(items.map(\.id))
-            case .clearSelection: selected = []
+            case .clearSelection:
+                selected = []
+                selectionMode = false
             case .shareSelection:
                 delivery = (0..<12).map(MonitorMediaReview.file).filter { selected.contains($0.id) }
             case .favoriteSelection: favorites.formUnion(selected)

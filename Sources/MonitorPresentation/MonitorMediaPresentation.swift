@@ -80,6 +80,7 @@ public enum MonitorMediaAction: Equatable, Sendable {
     case category(String)
     case open(String)
     case select(String)
+    case selection(Set<String>)
     case favorite(String)
     case layout(MonitorMediaLayout)
     case thumbnailSize(MonitorThumbnailSize)

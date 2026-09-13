@@ -530,6 +530,10 @@ struct MediaLibraryView: View {
             if let file = displayedFiles.first(where: { $0.id == id }) {
                 if isSelecting { toggleSelection(file) } else { beginSelection(with: file) }
             }
+        case .selection(let ids):
+            if !isSelecting { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            isSelecting = true
+            selectedIDs = ids
         case .favorite(let id):
             if let file = displayedFiles.first(where: { $0.id == id }) {
                 session.toggleFavorite(file)

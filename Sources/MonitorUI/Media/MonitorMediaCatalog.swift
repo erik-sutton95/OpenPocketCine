@@ -23,6 +23,8 @@
         private let empty: Empty
         private let filters: Filters
         private let tablet: Bool
+        @State private var selectionInteraction = MonitorMediaSelectionInteraction()
+        @Environment(\.scenePhase) private var scenePhase
 
         public init(
             brand: String, safeArea: EdgeInsets, items: [MonitorMediaItem],
@@ -68,6 +70,10 @@
                     if portrait { displayControls }
                 }
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { selectionInteraction.cancel() }
+            }
+            .onDisappear { selectionInteraction.detach() }
         }
 
         private func dismiss() { action(.back) }
@@ -170,8 +176,8 @@
                 }
                 Text(
                     selecting
-                        ? "Tap to add or remove · Clear to leave selection"
-                        : "Tap to open · hold to select"
+                        ? "Swipe to scroll · Hold or drag sideways to select"
+                        : "Tap to open · Hold, then drag to select"
                 )
                 .font(MonitorTheme.font(9)).foregroundStyle(MonitorTheme.faint).lineLimit(2)
             }
@@ -190,22 +196,32 @@
         private var gallery: some View {
             GeometryReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    if items.isEmpty {
-                        empty.frame(maxWidth: .infinity, minHeight: proxy.size.height)
-                    } else if layout == .grid {
-                        LazyVGrid(
-                            columns: Array(
-                                repeating: GridItem(.flexible(), spacing: 10),
-                                count: thumbnailSize.columns(tablet: tablet)), spacing: 10
-                        ) {
-                            ForEach(items) { item in gridCard(item) }
+                    VStack(spacing: 0) {
+                        if items.isEmpty {
+                            empty.frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                        } else if layout == .grid {
+                            LazyVGrid(
+                                columns: Array(
+                                    repeating: GridItem(.flexible(), spacing: 10),
+                                    count: thumbnailSize.columns(tablet: tablet)), spacing: 10
+                            ) {
+                                ForEach(items) { item in gridCard(item) }
+                            }
+                        } else {
+                            LazyVStack(spacing: 1) {
+                                ForEach(items) { item in listRow(item) }
+                            }
+                            .background(
+                                MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
-                    } else {
-                        LazyVStack(spacing: 1) {
-                            ForEach(items) { item in listRow(item) }
-                        }
-                        .background(MonitorTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                     }
+                    .background(
+                        MonitorMediaSelectionBridge(
+                            interaction: selectionInteraction, ids: items.map(\.id),
+                            selected: selectedIDs, selecting: selecting,
+                            context:
+                                "\(category)/\(layout.rawValue)/\(thumbnailSize.rawValue)/\(sortTitle)"
+                        ) { [action] selection in action(.selection(selection)) })
                 }
                 .scrollBounceBehavior(.always)
                 .refreshable { refresh() }
@@ -221,16 +237,15 @@
             VStack(alignment: .leading, spacing: 0) {
                 thumbnail(item)
                     .aspectRatio(16.0 / 9.0, contentMode: .fit).clipped()
-                    .overlay(alignment: .topLeading) { selectButton(item).padding(2) }
+                    .overlay(alignment: .topLeading) {
+                        if selecting { selectButton(item).padding(2) }
+                    }
                     .overlay(alignment: .topTrailing) { favoriteButton(item).padding(2) }
                     .overlay(alignment: .bottomLeading) { stateTag(item).padding(6) }
                     .overlay(alignment: .bottomTrailing) { durationTag(item).padding(6) }
                     .overlay(alignment: .bottom) { progressBar(item) }
                     .contentShape(Rectangle())
                     .onTapGesture { action(selecting ? .select(item.id) : .open(item.id)) }
-                    .onLongPressGesture(minimumDuration: 0.28, maximumDistance: 5) {
-                        if !selecting { action(.select(item.id)) }
-                    }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.filename).font(MonitorTheme.font(10.5, weight: .semibold))
                         .foregroundStyle(MonitorTheme.text)
@@ -241,11 +256,17 @@
             }
             .background(MonitorTheme.surface).clipShape(RoundedRectangle(cornerRadius: 11))
             .overlay { selectedOverlay(item, radius: 11) }
+            .background(MonitorMediaSelectionAnchor(id: item.id, interaction: selectionInteraction))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("monitor.media.clip.\(item.id)")
+            .accessibilityAction(named: selecting ? "Toggle selection" : "Select clip") {
+                action(.select(item.id))
+            }
         }
 
         private func listRow(_ item: MonitorMediaItem) -> some View {
             HStack(spacing: 10) {
-                selectButton(item)
+                if selecting { selectButton(item) }
                 thumbnail(item).frame(width: tablet ? 96 : 76, height: tablet ? 54 : 43)
                     .clipped().clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(alignment: .bottomTrailing) { durationTag(item) }
@@ -268,10 +289,13 @@
             .foregroundStyle(MonitorTheme.secondary)
             .contentShape(Rectangle())
             .onTapGesture { action(selecting ? .select(item.id) : .open(item.id)) }
-            .onLongPressGesture(minimumDuration: 0.28, maximumDistance: 5) {
-                if !selecting { action(.select(item.id)) }
-            }
             .overlay { selectedOverlay(item, radius: 0) }
+            .background(MonitorMediaSelectionAnchor(id: item.id, interaction: selectionInteraction))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("monitor.media.clip.\(item.id)")
+            .accessibilityAction(named: selecting ? "Toggle selection" : "Select clip") {
+                action(.select(item.id))
+            }
         }
 
         private var selectedItems: [MonitorMediaItem] {

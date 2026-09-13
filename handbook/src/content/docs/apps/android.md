@@ -59,7 +59,13 @@ landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
 holds one row with the grid/list toggle and Small/Medium/Large sizes; in portrait,
 these controls stay at the bottom of the page. Pull down on the library to refresh.
-Media retains selection, favorites, cache state,
+Hold a clip to begin selecting, then drag across clips to select a range. In
+selection mode, swipe up or down to scroll without changing the selection, or
+drag sideways to select a range. Hold a clip to sweep in any direction, including
+near the top or bottom of the gallery to autoscroll; lift your finger to stop.
+Selection circles appear only while selecting.
+
+Media retains favorites, cache state,
 playback assists and the existing delivery actions.
 
 View Assist favorites match the live system-button size. The landscape expand

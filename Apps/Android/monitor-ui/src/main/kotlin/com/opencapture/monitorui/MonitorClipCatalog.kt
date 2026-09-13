@@ -29,6 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -45,14 +48,31 @@ data class MonitorClipValue(val id: String, val title: String, val detail: Strin
 @Composable
 fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, selected: Boolean,
     onOpen: () -> Unit, onSelect: () -> Unit, onFavorite: (() -> Unit)? = null,
-    modifier: Modifier = Modifier, thumbnail: @Composable BoxScope.() -> Unit) {
+    modifier: Modifier = Modifier, clicks: Boolean = true, thumbnail: @Composable BoxScope.() -> Unit) {
     val shape = RoundedCornerShape(11.dp)
     val surface = modifier.fillMaxWidth().clip(shape)
         .background(if (selected) MonitorPalette.accent.copy(alpha = .12f) else MonitorPalette.surface)
         .border(if (selected) 2.dp else 1.dp,
             if (selected) MonitorPalette.accent else Color.White.copy(alpha = .06f), shape)
-        .combinedClickable(role = Role.Button, onClick = { if (selecting) onSelect() else onOpen() }, onLongClick = onSelect)
-        .semantics { contentDescription = clip.title }
+        .then(
+            if (clicks) Modifier.combinedClickable(
+                role = Role.Button,
+                onClick = { if (selecting) onSelect() else onOpen() },
+                onLongClick = onSelect,
+            ).semantics { contentDescription = clip.title }
+            else Modifier.semantics {
+                role = Role.Button
+                contentDescription = clip.title
+                onClick(label = if (selecting) "Toggle selection" else "Open") {
+                    if (selecting) onSelect() else onOpen()
+                    true
+                }
+                onLongClick(label = if (selecting) "Toggle selection" else "Select clip") {
+                    onSelect()
+                    true
+                }
+            },
+        )
     val favoriteAction = onFavorite
     val image: @Composable BoxScope.() -> Unit = {
         thumbnail()
@@ -64,7 +84,7 @@ fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, s
     }
     if (list) Row(surface.padding(start = 4.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MonitorClipSelection(selected, onSelect)
+        if (selecting) MonitorClipSelection(selected, if (clicks) onSelect else null)
         Box(Modifier.width(64.dp).height(40.dp).clip(RoundedCornerShape(6.dp)).background(MonitorPalette.backgroundDeep), content = image)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(clip.title, style = MonitorTypography.text(10.5f, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -80,7 +100,11 @@ fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, s
     } else Column(surface, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape).background(MonitorPalette.backgroundDeep)) {
             image()
-            Box(Modifier.align(Alignment.TopStart)) { MonitorClipSelection(selected, onSelect) }
+            if (selecting) {
+                Box(Modifier.align(Alignment.TopStart)) {
+                    MonitorClipSelection(selected, if (clicks) onSelect else null)
+                }
+            }
             if (favoriteAction != null) {
                 Box(Modifier.align(Alignment.TopEnd)) {
                     MonitorClipFavorite(clip.favorite, favoriteAction)
@@ -106,9 +130,10 @@ fun MonitorClipFavorite(favorite: Boolean, onClick: () -> Unit,
 }
 
 @Composable
-fun MonitorClipSelection(selected: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).combinedClickable(role = Role.Checkbox, onClick = onClick)
-        .semantics { contentDescription = if (selected) "Deselect clip" else "Select clip" }, contentAlignment = Alignment.Center) {
+fun MonitorClipSelection(selected: Boolean, onClick: (() -> Unit)? = null) {
+    Box(Modifier.size(44.dp).then(
+        if (onClick != null) Modifier.combinedClickable(role = Role.Checkbox, onClick = onClick) else Modifier,
+    ).semantics { contentDescription = if (selected) "Deselect clip" else "Select clip" }, contentAlignment = Alignment.Center) {
         Box(Modifier.size(20.dp).background(if (selected) MonitorPalette.accent else Color.Black.copy(alpha = .56f), CircleShape),
             contentAlignment = Alignment.Center) {
             MonitorIcon(if (selected) MonitorIcon.CHECK else MonitorIcon.CIRCLE, null, Modifier.size(13.dp),

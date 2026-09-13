@@ -109,6 +109,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   when changing display mode. The live signal indicator and Link Health use the
   same red/orange/green bands: below 50, 50–79, and 80+. Existing signal measurements
   and bar mapping remain unchanged.
+- Media selection indicators are hidden while browsing. Hold enters selection;
+  a continuous sweep follows displayed order in grid and list. While selecting,
+  a vertical swipe scrolls natively and keeps the selected IDs; a sideways-dominant
+  start claims a range, then may move freely. A hold then drag still sweeps in any
+  direction, including into the edge autoscroll band. An unselected origin selects,
+  a selected origin deselects, and reversal restores prior state. A touch that
+  began as a vertical scroll cannot become a sweep later. Both shells use an eased
+  56 pt/dp edge band with a maximum 720 pt/dp per second scroll rate. Lift,
+  cancellation, catalog reordering, layout changes and selection exit stop the
+  gesture; normal browsing retains scrolling and pull-to-refresh.
 - Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
   floating false-color reference key open at
   the canvas center. Existing saved centers remain unchanged. AUDIO first opens
@@ -447,6 +457,19 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   and Settings showed the same green Stable band. Matching Android build, tests
   and lint run in this change; physical Android qualification remains an exception
   because no device was attached.
+- Media selection: browsing hides per-clip circles. Hold enters selection; a
+  vertical swipe keeps the selected IDs and selection mode while the gallery
+  scrolls natively; a sideways-dominant drag starts a range; a hold then drag
+  still sweeps in any direction, including the edge autoscroll band. iPhone 16
+  Pro Max WDA on a 3-clip offline catalog: grid hold selected 1, a vertical swipe
+  moved the gallery without changing that count, then a sideways drag expanded
+  the range to 2; list kept 1 selected through a vertical swipe; a later hold
+  still entered selection. Shared range/edge policy tests and iOS UI tests cover
+  reversal, both edges, native-scroll regression and horizontal-start range.
+  Android unit tests cover `scrollLocked`; the host no longer aborts a live sweep
+  when the selection tray shortens the gallery, and it clears nested-scroll theft
+  when catalog identity changes cancel a gesture. Physical Android remains an
+  exception because no device was attached.
 - iOS: WDA on iPhone 16 Pro Max exercised all nine camera full-details pickers,
   all nine assist tabs, Operator Setup sections, media grid / list / player /
   info / share, zoom tap/double-tap, gimbal tabs, lock/unlock and audio orientation,

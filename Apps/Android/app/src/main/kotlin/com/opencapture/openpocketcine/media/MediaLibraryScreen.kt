@@ -23,10 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -180,13 +179,6 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         if (file.kind == MediaKind.PHOTO) viewingPhoto = file else playing = file
     }
 
-    fun beginSelection(file: MediaFile) {
-        if (isSelecting) return
-        isSelecting = true
-        selectedIDs = setOf(file.id)
-        filterOpen = false
-    }
-
     fun exitSelection() {
         isSelecting = false
         selectedIDs = emptySet()
@@ -259,6 +251,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         HeaderRow(
                             headerTitle = headerTitle, headerCount = headerCount,
                             fetchInProgress = controller.fetchInProgress, isLive = isLive,
+                            isSelecting = isSelecting,
                             sortOrder = sortOrder, filterOpen = filterOpen, activeFilterCount = activeFilterCount,
                             compact = portrait,
                             onFilter = { filterOpen = !filterOpen }, onSort = { sortOrder = sortOrder.next },
@@ -272,14 +265,19 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                 displayed = displayed,
                                 layout = layout,
                                 thumbnailSize = thumbnailSize,
+                                category = category,
+                                sortOrder = sortOrder,
                                 controller = controller,
                                 isSelecting = isSelecting,
                                 selectedIDs = selectedIDs,
                                 emptySubtitle = emptySubtitle,
                                 connected = isLive,
                                 onOpen = ::open,
-                                onBeginSelection = ::beginSelection,
-                                onToggleSelection = { selectedIDs = selectedIDs.toggle(it) },
+                                onSelectionChange = { nextSelecting, nextIds ->
+                                    if (nextSelecting) filterOpen = false
+                                    isSelecting = nextSelecting
+                                    selectedIDs = nextIds
+                                },
                             )
                         }
                     if (isSelecting) SelectionTray(selectedFiles.size,
@@ -448,16 +446,29 @@ private fun MediaGalleryPane(
     displayed: List<MediaFile>,
     layout: MediaBrowserLayout,
     thumbnailSize: MediaThumbnailSize,
+    category: MediaLibraryTab,
+    sortOrder: MediaLibrarySort,
     controller: MediaLibraryController,
     isSelecting: Boolean,
     selectedIDs: Set<String>,
     emptySubtitle: String,
     connected: Boolean,
     onOpen: (MediaFile) -> Unit,
-    onBeginSelection: (MediaFile) -> Unit,
-    onToggleSelection: (String) -> Unit,
+    onSelectionChange: (Boolean, Set<String>) -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    val ids = displayed.map { it.id }
     val gallery: @Composable () -> Unit = {
+        com.opencapture.monitorui.MonitorMediaSelectionHost(
+            ids = ids,
+            selecting = isSelecting,
+            selected = selectedIDs,
+            scroll = if (layout == MediaBrowserLayout.LIST) listState else gridState,
+            onOpen = { id -> displayed.firstOrNull { it.id == id }?.let(onOpen) },
+            onSelectionChange = onSelectionChange,
+            sessionKey = "${category.name}/${layout.name}/${thumbnailSize.name}/${sortOrder.name}",
+        ) { registry ->
         Box(Modifier.fillMaxSize()) {
             when {
                 displayed.isEmpty() && controller.fetchInProgress ->
@@ -469,19 +480,28 @@ private fun MediaGalleryPane(
                 layout == MediaBrowserLayout.LIST -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         items(displayed, key = { it.id }) { file ->
-                            MediaClipListRow(
-                                file = file,
-                                controller = controller,
-                                onOpen = { onOpen(file) },
-                                isSelecting = isSelecting,
-                                isSelected = selectedIDs.contains(file.id),
-                                onBeginSelection = { onBeginSelection(file) },
-                                onToggleSelection = { onToggleSelection(file.id) },
-                            )
+                            com.opencapture.monitorui.MonitorMediaHitTarget(registry, file.id) {
+                                MediaClipListRow(
+                                    file = file,
+                                    controller = controller,
+                                    onOpen = { onOpen(file) },
+                                    isSelecting = isSelecting,
+                                    isSelected = selectedIDs.contains(file.id),
+                                    onBeginSelection = {
+                                        if (!isSelecting) onSelectionChange(true, setOf(file.id))
+                                    },
+                                    onToggleSelection = {
+                                        val next = if (selectedIDs.contains(file.id)) selectedIDs - file.id
+                                            else selectedIDs + file.id
+                                        onSelectionChange(true, next)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -493,13 +513,26 @@ private fun MediaGalleryPane(
                     )
                     com.opencapture.monitorui.MonitorCatalogGrid(
                         displayed, columns, key = { it.id }, modifier = Modifier.fillMaxSize(),
+                        state = gridState,
                     ) { file ->
-                        MediaClipCell(file, controller, onOpen = { onOpen(file) }, isSelecting = isSelecting,
-                            isSelected = selectedIDs.contains(file.id), onBeginSelection = { onBeginSelection(file) },
-                            onToggleSelection = { onToggleSelection(file.id) })
+                        com.opencapture.monitorui.MonitorMediaHitTarget(registry, file.id) {
+                            MediaClipCell(
+                                file, controller, onOpen = { onOpen(file) },
+                                isSelecting = isSelecting, isSelected = selectedIDs.contains(file.id),
+                                onBeginSelection = {
+                                    if (!isSelecting) onSelectionChange(true, setOf(file.id))
+                                },
+                                onToggleSelection = {
+                                    val next = if (selectedIDs.contains(file.id)) selectedIDs - file.id
+                                        else selectedIDs + file.id
+                                    onSelectionChange(true, next)
+                                },
+                            )
+                        }
                     }
                 }
             }
+        }
         }
     }
     if (connected) {
@@ -514,12 +547,17 @@ private fun MediaGalleryPane(
 @Composable
 private fun HeaderRow(
     headerTitle: String, headerCount: String, fetchInProgress: Boolean, isLive: Boolean,
-    sortOrder: MediaLibrarySort, filterOpen: Boolean, activeFilterCount: Int,
+    isSelecting: Boolean, sortOrder: MediaLibrarySort, filterOpen: Boolean, activeFilterCount: Int,
     onFilter: () -> Unit, onSort: () -> Unit, compact: Boolean,
 ) {
     com.opencapture.monitorui.MonitorCatalogHeader(
         title = "$headerTitle · $headerCount",
-        subtitle = if (fetchInProgress) "Reading camera media…" else if (isLive) "Tap to review · Hold to select" else "Available offline",
+        subtitle = when {
+            fetchInProgress -> "Reading camera media…"
+            isSelecting -> "Swipe to scroll · Hold or drag sideways to select"
+            isLive -> "Tap to open · Hold, then drag to select"
+            else -> "Available offline"
+        },
         compact = compact, sort = sortOrder.menuLabel,
         filterActive = filterOpen || activeFilterCount > 0,
         onSort = onSort, onFilter = onFilter)

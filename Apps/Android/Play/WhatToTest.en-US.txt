@@ -1,6 +1,6 @@
 New and changed
 
-- UI 2.0: Sora/Lucide, consistent Back and assist buttons, easier expand arrow, and Media sidebar display controls. Pull down to refresh. Signal colors match Settings.
+- UI 2.0: Sora/Lucide, consistent buttons and signal colors. Media footer controls, pull-refresh, and hold/sideways selection with native vertical scrolling.
 - Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the larger lens dial extending to the screen edge above camera controls.
 - New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
 
@@ -13,6 +13,6 @@ Fixes
 
 What to test
 
-- Check blur over bright/dark footage. Rotate pages; tap versus hold drums; open FORMAT in both orientations. Try assist tabs, audio, zoom, lock, media, playback and TalkBack.
+- Check blur over bright/dark footage. Rotate pages; tap versus hold drums; open FORMAT in both orientations. Try assist tabs, audio, zoom, lock, Media swipe-vs-select, playback and TalkBack.
 - On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
 - Drag Motion Control and use the joystick with its editor open. Check Wi-Fi changes, Retry/Cancel, reconnects and Pocket 3 portrait 3K. Motion Control remains experimental.

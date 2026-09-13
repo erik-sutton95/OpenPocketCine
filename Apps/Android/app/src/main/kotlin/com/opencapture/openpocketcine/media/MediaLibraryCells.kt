@@ -80,7 +80,8 @@ private fun MediaCatalogClip(file: MediaFile, controller: MediaLibraryController
     com.opencapture.monitorui.MonitorClipCard(clip, list, isSelecting, isSelected,
         onOpen = onOpen,
         onSelect = { if (isSelecting) onToggleSelection?.invoke() else onBeginSelection?.invoke() },
-        onFavorite = { controller.toggleFavorite(file) }) {
+        onFavorite = { controller.toggleFavorite(file) },
+        clicks = false) {
         val bitmap = thumbnail
         if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = null,
             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

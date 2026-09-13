@@ -524,6 +524,118 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
+    func testMediaDragSelectionEntersFromHoldAndDeselectsFromSelectedClip() {
+        for screen in ["media-fixture", "media-list"] {
+            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
+            app.launch()
+            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
+            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
+            let first = mediaClipCenter("Review_001.MP4")
+            let fourth = mediaClipCenter("Review_004.MP4")
+            first.press(
+                forDuration: 0.4, thenDragTo: fourth, withVelocity: .slow, thenHoldForDuration: 0)
+            XCTAssertTrue(app.staticTexts["4 selected"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["Deselect Review_001.MP4"].exists)
+            capture("media-drag-selected")
+            first.press(
+                forDuration: 0.4, thenDragTo: fourth, withVelocity: .slow, thenHoldForDuration: 0)
+            XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["Clear selection"].exists)
+            XCTAssertFalse(app.buttons["Back to media"].exists)
+            app.buttons["Clear selection"].tap()
+            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
+            app.terminate()
+        }
+    }
+
+    func testMediaDragSelectionAutoScrollsAtBothEdgesAndStopsOnRelease() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "media-fixture"
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
+        app.buttons["Large thumbnails"].tap()
+        let gallery = app.scrollViews["monitor.media.gallery"]
+        let first = app.staticTexts["Review_001.MP4"].coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: -2))
+        let bottom = gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(
+            CGVector(dx: 0, dy: -10))
+        first.press(
+            forDuration: 0.4, thenDragTo: bottom, withVelocity: .fast, thenHoldForDuration: 6)
+        XCTAssertTrue(app.buttons["Deselect Review_012.MP4"].isHittable)
+        XCTAssertTrue(app.staticTexts["12 selected"].exists)
+        let last = app.buttons["Deselect Review_012.MP4"]
+        let stoppedFrame = last.frame
+        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertEqual(last.frame.minY, stoppedFrame.minY, accuracy: 1)
+        let top = gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(
+            CGVector(dx: 0, dy: 5))
+        mediaClipCenter("Review_012.MP4").press(
+            forDuration: 0.4, thenDragTo: top, withVelocity: .fast, thenHoldForDuration: 6)
+        XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Select Review_001.MP4"].isHittable)
+        capture("media-drag-returned-to-top")
+    }
+
+    func testMediaDragSelectionPreservesNativeScrollingAndSidewaysRange() {
+        for screen in ["media-fixture", "media-list"] {
+            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
+            app.launch()
+            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
+            let gallery = app.scrollViews["monitor.media.gallery"]
+            XCTAssertTrue(gallery.waitForExistence(timeout: 5))
+            mediaClipCenter("Review_001.MP4").press(
+                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_002.MP4"), withVelocity: .slow,
+                thenHoldForDuration: 0)
+            XCTAssertTrue(app.staticTexts["2 selected"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["Clear selection"].exists)
+
+            if screen == "media-list" {
+                mediaClipCenter("Review_003.MP4").press(
+                    forDuration: 0.05,
+                    thenDragTo: mediaClipCenter("Review_003.MP4").withOffset(
+                        CGVector(dx: 80, dy: 4)),
+                    withVelocity: .slow, thenHoldForDuration: 0)
+                XCTAssertTrue(app.staticTexts["3 selected"].waitForExistence(timeout: 5))
+            } else {
+                mediaClipCenter("Review_003.MP4").press(
+                    forDuration: 0.05, thenDragTo: mediaClipCenter("Review_004.MP4"),
+                    withVelocity: .slow, thenHoldForDuration: 0)
+                XCTAssertTrue(app.staticTexts["4 selected"].waitForExistence(timeout: 5))
+            }
+            let selected = screen == "media-list" ? "3 selected" : "4 selected"
+            let before = visibleReviewClips()
+            gallery.swipeUp(velocity: .fast)
+            var after = visibleReviewClips()
+            if after == before {
+                gallery.swipeUp(velocity: .fast)
+                after = visibleReviewClips()
+            }
+            XCTAssertTrue(app.staticTexts[selected].exists)
+            XCTAssertTrue(app.buttons["Clear selection"].exists)
+            XCTAssertFalse(app.buttons["Back to media"].exists)
+            XCTAssertNotEqual(
+                before, after, "\(screen) must scroll natively while selection stays active")
+            gallery.swipeDown(velocity: .fast)
+            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts[selected].exists)
+
+            let origin = mediaClipCenter("Review_001.MP4")
+            origin.press(
+                forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 4, dy: 220)),
+                withVelocity: .fast, thenHoldForDuration: 0)
+            XCTAssertTrue(app.staticTexts[selected].exists)
+            XCTAssertFalse(app.buttons["Back to media"].exists)
+
+            origin.press(
+                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_004.MP4"), withVelocity: .slow,
+                thenHoldForDuration: 0)
+            XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["Clear selection"].exists)
+            app.buttons["Clear selection"].tap()
+            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
+            app.terminate()
+        }
+    }
+
     func testHomePairAndOperatorPages() {
         for screen in ["cameras", "pair", "settings", "media"] {
             app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
@@ -649,5 +761,18 @@ final class MonitorUIFlowTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func mediaClipCenter(_ filename: String) -> XCUICoordinate {
+        app.otherElements["monitor.media.clip.UI-REVIEW/\(filename)"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    }
+
+    private func visibleReviewClips() -> [String] {
+        (1...12).compactMap { index in
+            let name = String(format: "Review_%03d.MP4", index)
+            let clip = app.staticTexts[name]
+            return clip.exists && clip.isHittable ? name : nil
+        }
     }
 }

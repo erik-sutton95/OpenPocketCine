@@ -2,7 +2,7 @@ Since open beta build 63
 
 New and changed
 
-- UI 2.0: Sora/Lucide, Back/assist sizing, easier expand taps, Media sidebar controls and pull-to-refresh. Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the dial.
+- UI 2.0: Sora/Lucide, consistent buttons, Media footer, pull-refresh and hold/sideways selection. Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×; hold for dial.
 - Tap a camera value for the full details drawer; hold or drag for a compact 128-point dial. FORMAT, COLOR and shooting mode hang from the top; landscape has no extra category tabs.
 - Gimbal Mode, Speed and Ramp each have a tab in the wider panel. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
 - Direction Lock holds the camera's pointing direction as its body rotates. Select another mode to release it.
@@ -30,7 +30,7 @@ Fixes
 
 What to test
 
-- Compare panel blur over bright/dark footage. Rotate pages and drawers; tap versus hold drums; open FORMAT in both orientations. Try View Assist, zoom, lock, media and playback.
+- Compare panel blur over bright/dark footage. Rotate pages and drawers; tap versus hold drums; open FORMAT in both orientations. Try View Assist, zoom, lock, Media selection, and playback.
 - On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
 - Drag Motion Control, move the joystick with it open, then set points. Check the larger zoom dial covers controls and reaches the screen edge. Try Direction Lock, false-color scales and ND units.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.

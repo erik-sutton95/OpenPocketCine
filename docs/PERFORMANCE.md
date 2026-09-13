@@ -42,6 +42,16 @@ directly at monotonic deadlines under exclusive ownership; UI progress is 5 Hz. 
 measured motion prediction is display-only. No new ACK timer or video enable
 is introduced. Native stream targets are not logged individually at 20 Hz.
 
+Media drag selection uses the native display clock only while a held selection
+gesture requests edge scrolling. Ordinary vertical scrolling while selecting uses
+the catalog scroller and does not start that clock. Scroll velocity eases through
+a 56 pt/dp band, caps at 720 pt/dp per second, and integrates at most 50 ms after
+a delayed frame. The center, scroll bounds, release and cancellation stop the
+clock. Native lazy cell geometry supplies hit targets; pointer and offset updates
+do not publish whole-page geometry. Selection changes publish only when the range
+endpoint changes. This is a scheduling constraint, not a measured
+sustained-frame-rate claim, and it does not change live feed, scope or HUD budgets.
+
 ## Image anchoring experiment
 
 A temporary iPhone 16 Pro Max benchmark of Vision homography registration at
