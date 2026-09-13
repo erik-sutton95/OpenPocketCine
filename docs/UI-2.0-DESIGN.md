@@ -76,8 +76,10 @@ unknown readings show a dash, with bars reserved for level-only inputs.
 
 The portrait layout follow-up centers the fitted feed on the canvas vertical
 mid-line, clamped only when the available space requires it. STBY, timecode and
-REC SETUP use an independent row below the cutout. Feed controls move with the
-picture; the camera-value and system-button strips remain at the bottom. The
+REC SETUP use an independent row below the cutout. View Assist, FIT/FILL and
+the joystick cluster occupy fixed positions above the camera-value strip,
+independent of FIT/FILL and source aspect. The camera-value and system-button
+strips remain at the bottom. The
 zoom-disc follow-up increases its preferred radius by 10%, subject to viewport
 bounds. Its material extends continuously from the flat edge to the screen edge
 and draws above underlying system controls. These are operator-approved changes

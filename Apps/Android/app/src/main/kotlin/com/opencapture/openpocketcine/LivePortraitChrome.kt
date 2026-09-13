@@ -161,23 +161,23 @@ fun fillAssistRail(
     return ChromeRect(feed.minX + edge, y, width, height)
 }
 
-fun portraitAspectToggle(picture: ChromeRect, floorY: Float): ChromeRect {
-    val size = 48f
-    val y = max(picture.minY, min(floorY, picture.maxY) - 8f - size)
-    return ChromeRect(picture.midX - size / 2, y, size, size)
+fun portraitAspectToggle(viewportWidth: Float, floorY: Float): ChromeRect {
+    val frame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitAspect(viewportWidth, floorY)
+    return ChromeRect(frame.x, frame.y, frame.width, frame.height)
+}
+
+fun portraitAssistToolbar(floorY: Float, tablet: Boolean): ChromeRect {
+    val frame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitAssists(floorY, tablet)
+    return ChromeRect(frame.x, frame.y, frame.width, frame.height)
 }
 
 fun portraitOnFeedControls(
-    picture: ChromeRect,
-    fill: Boolean,
-    bottomClearance: Float,
+    viewportWidth: Float,
     floorY: Float,
     showGimbalButton: Boolean = false,
 ): GimbalCluster {
-    val feedFloor = min(max(picture.minY + 156f, picture.maxY), max(picture.minY, floorY))
-    val well = ChromeRect(picture.minX, picture.minY, picture.width, max(0f, feedFloor - picture.minY))
-    return GimbalCluster.inTrailingBottom(well, feedFloor - 16f, feedFloor,
-        showGimbalButton = showGimbalButton)
+    val well = ChromeRect(0f, 0f, max(0f, viewportWidth), max(floorY, 1f))
+    return GimbalCluster.inTrailingBottom(well, floorY, floorY, showGimbalButton = showGimbalButton)
 }
 
 @Composable
@@ -215,25 +215,20 @@ fun LivePortraitChrome(
     val showsSettings = !topQuick && !stripQuick && (model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS) || status.isRecording)
     val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR)
     val showsCapture = model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES)
-    val captureH = if (showsCapture) zones.controls.height else 0f
-    val floorY = zones.controls.minY - 8f
+    val floorY = zones.assistToolbar.minY
     val showGimbalButton =
         capabilities.gimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
     val cluster =
         portraitOnFeedControls(
-            picture = if (tablet) ChromeRect(0f, layout.onFeed.minY, layout.viewportWidth, layout.onFeed.height) else layout.onFeed,
-            fill = fill,
-            bottomClearance = captureH + 10f,
+            viewportWidth = layout.viewportWidth,
             floorY = floorY,
             showGimbalButton = showGimbalButton,
         )
     val stick = cluster.stick
     val zoom = cluster.zoom
     val gimbalButton = cluster.controls
-    val toggle = portraitAspectToggle(layout.onFeed, floorY)
-    val feedFloor = min(floorY, layout.onFeed.maxY)
-    val rail = ChromeRect(if (tablet) 14f else zones.feed.minX + 10f, feedFloor - if (tablet) 102f else 94f,
-        if (tablet) 60f else 52f, if (tablet) 86f else 78f)
+    val toggle = portraitAspectToggle(layout.viewportWidth, floorY)
+    val rail = portraitAssistToolbar(floorY, tablet)
 
     Box(Modifier.fillMaxSize()) {
         if (showsStatus) {

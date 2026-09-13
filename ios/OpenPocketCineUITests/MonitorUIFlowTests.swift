@@ -79,6 +79,36 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("iso-drum")
     }
 
+    func testPortraitToolsStayInPlaceWhenFitFillChanges() {
+        app.launchEnvironment["OPV_UI_REVIEW_FIT"] = "1"
+        app.launch()
+        let aspect = app.buttons.matching(
+            NSPredicate(format: "label IN %@", ["Fill frame with feed", "Fit feed in frame"])
+        ).firstMatch
+        XCTAssertTrue(aspect.waitForExistence(timeout: 10))
+        let tools = [
+            app.buttons["monitor.assists.expand"],
+            app.buttons["monitor.system.zoom"],
+            app.buttons["monitor.system.gimbalControls"],
+            app.descendants(matching: .any)["monitor.system.gimbal"].firstMatch,
+            aspect,
+        ]
+        let frames = tools.map(\.frame)
+        for value in ["Fill", "Fit"] {
+            aspect.tap()
+            expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: aspect)
+            waitForExpectations(timeout: 5)
+            for (tool, frame) in zip(tools, frames) {
+                XCTAssertEqual(tool.frame.minX, frame.minX, accuracy: 0.5)
+                XCTAssertEqual(tool.frame.minY, frame.minY, accuracy: 0.5)
+                XCTAssertEqual(tool.frame.width, frame.width, accuracy: 0.5)
+                XCTAssertEqual(tool.frame.height, frame.height, accuracy: 0.5)
+                XCTAssertLessThan(tool.frame.maxY, app.buttons["monitor.capture.iso"].frame.minY)
+            }
+            capture("portrait-fixed-tools-\(value.lowercased())")
+        }
+    }
+
     func testSettingsCoverageAndCardTitleSpacing() throws {
         app.launch()
         rotate(.landscapeLeft)

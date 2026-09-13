@@ -17,7 +17,7 @@ New and changed
 
 Fixes
 
-- Lock matches Settings and Media. Portrait Fit centers the picture; STBY, timecode and REC SETUP sit below the cutout. Camera battery shows the Osmo percentage.
+- Lock matches Settings/Media; Osmo battery uses %. Portrait feed centers with STBY/timecode/REC SETUP below the cutout. View Assist, FIT/FILL and joystick stay fixed above camera values.
 - Blurred panels clear iPhone corners; shadows are tighter and audio meters slim. View Assist image previews use the raw picture with scopes off.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
 - Pocket 3 fixes cover live view, reconnects, settings and newly recorded clips on its memory card.

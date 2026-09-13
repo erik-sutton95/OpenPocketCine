@@ -126,9 +126,8 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
         val fitted = LiveMonitorLayout.fit(width, height, 0f, 0f, safeTop, safeBottom,
             !model.assistClean, pictureAspect = sourceAspect)
         val layout = if (zones != null) fitted.copy(feed = zones.feed, picture = zones.feed, topDeck = zones.topBar, capture = zones.controls) else fitted
-        val cluster = if (zones != null) portraitOnFeedControls(layout.onFeed,
-            model.portraitFeedAspect == PortraitFeedAspect.FILL, zones.controls.height + 10f,
-            zones.controls.minY - 8f, capabilities.gimbal) else layout.gimbalCluster(capabilities.gimbal)
+        val cluster = if (zones != null) portraitOnFeedControls(width, zones.assistToolbar.minY,
+            capabilities.gimbal) else layout.gimbalCluster(capabilities.gimbal)
         // Optional pattern exercises the production widgets against a passive sampled source.
         if (image != null) Image(image.asImageBitmap(), null,
             Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop), contentScale = ContentScale.FillBounds)

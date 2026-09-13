@@ -54,6 +54,17 @@ object MonitorLayoutPolicy {
             MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
     }
 
+    /** Portrait tools follow the lower controls floor, independently of picture crop. */
+    fun portraitAssists(floor: Float, tablet: Boolean): MonitorRect = MonitorRect(
+        if (tablet) 14f else 10f,
+        max(0f, floor - if (tablet) 102f else 94f),
+        if (tablet) 60f else 52f,
+        if (tablet) 86f else 78f,
+    )
+
+    fun portraitAspect(width: Float, floor: Float): MonitorRect =
+        MonitorRect(max(0f, width) / 2f - 24f, max(0f, floor - 56f), 48f, 48f)
+
     /** Landscape readouts share the format row's center and stay inside the picture. */
     fun recordingReadoutTrailingInset(statusRight: Float, pictureRight: Float): Float =
         max(8f, statusRight - pictureRight + 12f)

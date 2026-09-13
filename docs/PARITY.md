@@ -453,6 +453,13 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   phone automation works, but the camera network was unavailable for this pass.
   Live-camera joystick placement, inspector refresh and physical drag smoothness
   remain pending; Android has no attached physical device.
+- Portrait View Assist, FIT/FILL and the joystick cluster now anchor above the
+  camera-value strip, independently of picture crop and source aspect. Matching
+  shared-layout regressions cover phone/tablet FIT/FILL and source aspect changes;
+  a rendered iOS test compares the actual control frames across both modes.
+  WDA on iPhone 16 Pro Max verified identical toolbar, fit button, joystick, zoom
+  and gimbal-button frames through FIT → FILL → FIT with the live camera connected.
+  Physical Android verification remains an outstanding exception.
 - Both shells use the reference's fixed heavy blur, saturation and tint when a
   passive displayed-look source is available. These surfaces have no Liquid Glass
   lens or refraction effects. Foreground controls stay sharp. Low-resolution source

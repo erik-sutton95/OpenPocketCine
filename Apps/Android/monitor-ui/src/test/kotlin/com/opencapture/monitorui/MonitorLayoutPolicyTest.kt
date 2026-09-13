@@ -94,6 +94,41 @@ class MonitorLayoutPolicyTest {
         assertEquals(956f / 2f, maxPhone.picture.y + maxPhone.picture.height / 2f, .5f)
         assertTrue(maxPhone.picture.maxY < maxPhone.values.y)
     }
+    @Test
+    fun portraitToolsStayAnchoredAcrossFitFillAndSourceAspects() {
+        for ((width, height, safeTop) in listOf(Triple(393f, 852f, 59f), Triple(744f, 1133f, 0f))) {
+            val tablet = minOf(width, height) >= 600f
+            for (valuesVisible in listOf(false, true)) {
+                val reference = MonitorLayoutPolicy.portrait(width, height, safeTop, 34f,
+                    false, valuesVisible, 16f / 9f)
+                val assists = MonitorLayoutPolicy.portraitAssists(reference.controlsFloor, tablet)
+                val toggle = MonitorLayoutPolicy.portraitAspect(width, reference.controlsFloor)
+                for (aspect in listOf(16f / 9f, 1f, 9f / 16f)) {
+                    for (fill in listOf(false, true)) {
+                        val layout = MonitorLayoutPolicy.portrait(width, height, safeTop, 34f,
+                            fill, valuesVisible, aspect)
+                        assertEquals(reference.controlsFloor, layout.controlsFloor, .01f)
+                        assertEquals(assists, MonitorLayoutPolicy.portraitAssists(layout.controlsFloor, tablet))
+                        assertEquals(toggle, MonitorLayoutPolicy.portraitAspect(width, layout.controlsFloor))
+                        assertTrue(assists.maxY < layout.values.y)
+                        assertTrue(toggle.maxY < layout.values.y)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun fitMaxPhonePlacesToolsBelowThePicture() {
+        val layout = MonitorLayoutPolicy.portrait(440f, 956f, 62f, 34f, false, true, 16f / 9f)
+        val assists = MonitorLayoutPolicy.portraitAssists(layout.controlsFloor, false)
+        val toggle = MonitorLayoutPolicy.portraitAspect(440f, layout.controlsFloor)
+        assertTrue(layout.picture.maxY < assists.y)
+        assertTrue(layout.picture.maxY < toggle.y)
+        assertEquals(layout.values.y - 8f, layout.controlsFloor, .01f)
+        assertEquals(220f, toggle.midX, .01f)
+    }
+
     @Test fun tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {
         listOf(Triple(375f, 667f, 20f), Triple(393f, 852f, 59f), Triple(320f, 600f, 20f))
             .forEach { (width, height, safeTop) ->

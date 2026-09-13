@@ -432,25 +432,9 @@ fun LiveViewScreen(model: AppModel) {
             model.session.hasGimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
         val cluster =
             if (portrait && zones != null) {
-                val showsCapture = model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES)
-                val portraitFill = model.portraitFeedAspect == PortraitFeedAspect.FILL
-                val captureH =
-                    if (portraitFill && showsCapture && zones.controls.height > 1f) {
-                        zones.controls.height
-                    } else {
-                        0f
-                    }
-                val floorY =
-                    when {
-                        zones.controls.height > 1f -> zones.controls.minY - 8f
-                        zones.assistToolbar.height > 1f -> zones.assistToolbar.minY
-                        else -> zones.systemBar.minY
-                    }
                 portraitOnFeedControls(
-                    picture = layout.onFeed,
-                    fill = portraitFill,
-                    bottomClearance = captureH + 10f,
-                    floorY = floorY,
+                    viewportWidth = layout.viewportWidth,
+                    floorY = zones.assistToolbar.minY,
                     showGimbalButton = showGimbalButton,
                 )
             } else {
@@ -892,22 +876,14 @@ fun LiveViewScreen(model: AppModel) {
                         uiLocked = uiLocked,
                         zoom = if (portrait && zones != null) {
                             portraitOnFeedControls(
-                                layout.onFeed,
-                                fill,
-                                if (fill) zones.controls.height + 10f else 0f,
-                                if (zones.controls.height > 1f) zones.controls.minY - 8f
-                                else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
-                                else zones.systemBar.minY,
+                                layout.viewportWidth,
+                                zones.assistToolbar.minY,
                             ).zoom
                         } else zoom,
                         stick = if (portrait && zones != null) {
                             portraitOnFeedControls(
-                                layout.onFeed,
-                                fill,
-                                if (fill) zones.controls.height + 10f else 0f,
-                                if (zones.controls.height > 1f) zones.controls.minY - 8f
-                                else if (zones.assistToolbar.height > 1f) zones.assistToolbar.minY
-                                else zones.systemBar.minY,
+                                layout.viewportWidth,
+                                zones.assistToolbar.minY,
                             ).stick
                         } else stick,
                         statusChips = statusChipFrames.toMap(),

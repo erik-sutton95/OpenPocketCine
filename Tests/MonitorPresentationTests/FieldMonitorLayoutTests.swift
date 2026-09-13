@@ -117,6 +117,43 @@ struct FieldMonitorLayoutTests {
         #expect(fit.picture.height < fill.picture.height)
     }
 
+    @Test func portraitToolPositionsDoNotFollowFitFillOrSourceAspect() {
+        for (width, height) in [(375.0, 667.0), (393, 852), (440, 956), (744, 1133)] {
+            for showsValues in [false, true] {
+                let safeArea = MonitorSafeArea(top: 59, bottom: 34)
+                let reference = FieldMonitorLayout(
+                    width: width, height: height, safeArea: safeArea, showsValues: showsValues)
+                for aspect in [16.0 / 9, 1, 9.0 / 16] {
+                    for fill in [false, true] {
+                        let layout = FieldMonitorLayout(
+                            width: width, height: height, safeArea: safeArea,
+                            sourceAspect: aspect, fill: fill, showsValues: showsValues)
+                        #expect(layout.assists == reference.assists)
+                        #expect(layout.stick == reference.stick)
+                        #expect(layout.zoom == reference.zoom)
+                        #expect(layout.gimbal == reference.gimbal)
+                        #expect(layout.aspectToggle == reference.aspectToggle)
+                        #expect(layout.focusReset == reference.focusReset)
+                        #expect(layout.stick.maxY < layout.values.y)
+                        #expect(layout.assists.maxY < layout.values.y)
+                        #expect(layout.aspectToggle.maxY < layout.values.y)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func portraitMaxPhoneToolsUseTheLowerAreaAboveCameraValues() {
+        let layout = FieldMonitorLayout(
+            width: 440, height: 956, safeArea: .init(top: 62, bottom: 34))
+        #expect(layout.assists.y > layout.picture.maxY)
+        #expect(layout.stick.y > layout.picture.maxY)
+        #expect(layout.aspectToggle.y > layout.picture.maxY)
+        #expect(layout.aspectToggle.midX == layout.viewport.midX)
+        #expect(layout.assists.maxY == layout.stick.maxY)
+        #expect(layout.zoom.maxY < layout.stick.y)
+    }
+
     @Test func windowControlsMoveLandscapeChromeWithoutMovingThePictureOrBottomControls() {
         // Captured native iPad window: ordinary top 10, vertically adapted 53,
         // horizontally adapted leading 66. Compatibility scaling omitted this.

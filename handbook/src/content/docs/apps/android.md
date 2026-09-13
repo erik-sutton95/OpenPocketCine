@@ -39,7 +39,7 @@ Hold Record to open shooting mode. In portrait, Settings and Media remain usable
 with a picker open; returning to the monitor restores that picker. Physical Android proof of this Field
 Monitor chrome remains outstanding.
 
-The View Assist palette collapses into the picture corner. Expand it for the
+The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
@@ -171,7 +171,9 @@ Platform differences, including Frame.io and MetalFX, are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 
 The fitted portrait feed is centered vertically, with STBY, timecode and REC SETUP in
-a separate row below the status area. The larger zoom disc extends to the screen
+a separate row below the status area. View Assist, FIT/FILL and the joystick
+cluster stay above the camera values in fixed positions when switching FIT/FILL.
+The larger zoom disc extends to the screen
 edge and covers the controls beneath it until closed.
 
 The joystick remains usable while the Motion Control editor is open, so you can

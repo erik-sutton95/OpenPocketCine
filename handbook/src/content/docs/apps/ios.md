@@ -22,6 +22,8 @@ Hold Record to open shooting mode.
 In portrait, Settings and Media remain usable with a picker open; returning to
 the monitor restores that picker. The fitted feed is centered vertically; STBY,
 timecode and REC SETUP sit in a separate row below the notch or status area.
+View Assist, FIT/FILL and the joystick cluster stay above the camera values in
+fixed positions when switching FIT/FILL.
 
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;
@@ -31,7 +33,7 @@ Floating controls use blurred translucent panels with sharp labels and icons.
 Reduce Transparency uses solid panels. Some live-video paths use the system's
 blur treatment until decoded picture samples are available.
 
-The View Assist palette collapses into the picture corner. Expand it for the
+The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
 Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
@@ -105,8 +107,8 @@ space after rotation or resizing, including saved positions. Long-press a View A
   ND32, or ND 0.3. It meters against middle gray and suggests a screw-on
   ND to balance the frame. The app cannot set a filter.
   The gimbal stick
-  and zoom chip sit together as a cluster in the trailing-bottom of the
-  picture — the same on iPhone and iPad, portrait and landscape. A
+  and zoom chip sit together as a cluster at the lower right: above the camera
+  values in portrait and over the picture in landscape, on iPhone and iPad. A
   gimbal-controls button sits beside zoom (Pocket only). Its trailing drawer
   has Mode, Speed and Ramp tabs, each with its own dial: Follow / Tilt locked / FPV / Direction Lock,
   Slow / Default / Fast, and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take

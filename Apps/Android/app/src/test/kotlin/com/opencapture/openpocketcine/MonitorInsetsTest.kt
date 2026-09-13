@@ -80,6 +80,42 @@ class MonitorInsetsTest {
 /** Golden pins from iOS `LiveMonitorLayoutTests.testAuditorPhonePinsLeadingIsland`. */
 class LiveMonitorLayoutTest {
     @Test
+    fun portraitOnFeedChromeMatchesSharedFloorAcrossFitAndFill() {
+        LiveChromeMetrics.scale = 1f
+        for ((w, h, top) in listOf(Triple(393f, 852f, 59f), Triple(744f, 1133f, 0f))) {
+            val isTablet = minOf(w, h) >= 600f
+            val fitZones = portraitZones(w, h, top, 34f, clean = false, fill = false,
+                assistToolbarHeight = 0f, feedAspectRatio = 16f / 9f)
+            val fillZones = portraitZones(w, h, top, 34f, clean = false, fill = true,
+                assistToolbarHeight = 0f, feedAspectRatio = 16f / 9f)
+            val floor = fitZones.assistToolbar.minY
+            assertEquals(fillZones.assistToolbar.minY, floor, 0.01f)
+            val fitCluster = portraitOnFeedControls(w, floor, showGimbalButton = true)
+            val fillCluster = portraitOnFeedControls(w, fillZones.assistToolbar.minY, showGimbalButton = true)
+            assertEquals(fitCluster.stick.minX, fillCluster.stick.minX, 0.05f)
+            assertEquals(fitCluster.stick.minY, fillCluster.stick.minY, 0.05f)
+            assertEquals(fitCluster, fillCluster)
+            assertTrue(fitCluster.zoom.maxX < fitCluster.controls.minX)
+            assertEquals(fitCluster.zoom.minY, fitCluster.controls.minY, 0.05f)
+            assertEquals(portraitAspectToggle(w, floor), portraitAspectToggle(w, fillZones.assistToolbar.minY))
+            assertEquals(portraitAssistToolbar(floor, isTablet),
+                portraitAssistToolbar(fillZones.assistToolbar.minY, isTablet))
+            assertEquals(floor - 104f, fitCluster.stick.minY, 0.05f)
+            assertEquals(w - 16f, fitCluster.stick.maxX, 0.05f)
+            assertEquals(w / 2f, portraitAspectToggle(w, floor).midX, 0.05f)
+        }
+        val fit = portraitZones(440f, 956f, 62f, 34f, clean = false, fill = false,
+            assistToolbarHeight = 0f, feedAspectRatio = 16f / 9f)
+        val cluster = portraitOnFeedControls(440f, fit.assistToolbar.minY, showGimbalButton = true)
+        val toggle = portraitAspectToggle(440f, fit.assistToolbar.minY)
+        val rail = portraitAssistToolbar(fit.assistToolbar.minY, false)
+        assertTrue(fit.feed.maxY <= cluster.stick.minY + 0.05f)
+        assertTrue(fit.feed.maxY <= toggle.minY + 0.05f)
+        assertTrue(fit.feed.maxY <= rail.minY + 0.05f)
+        LiveChromeMetrics.scale = 1f
+    }
+
+    @Test
     fun portraitFillCropsSixteenNineToTheWellCenter() {
         val well = ChromeRect(0f, 95f, 390f, 390f * 16f / 9f)
         val content = portraitFillCropContent(well)

@@ -117,17 +117,18 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             gauges = .init(
                 x: tablet ? edge : w - edge - 104, y: gaugeTop,
                 width: tablet ? 49 : 104, height: tablet ? 58 : 28)
-            let feedFloor = min(floor, picture.maxY)
+            // Portrait tools belong to the lower control area. Picture crop,
+            // aspect and FIT/FILL must not move their touch targets.
             assists = .init(
-                x: pillarbox ? edge : picture.x + edge, y: feedFloor - 94,
+                x: edge, y: floor - 94,
                 width: 52, height: 78)
             stick = .init(
-                x: pillarbox ? w - 104 : picture.maxX - 104,
-                y: feedFloor - 104, width: 88, height: 88)
+                x: w - 104,
+                y: floor - 104, width: 88, height: 88)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             aspectToggle = .init(
-                x: picture.midX - 24, y: max(picture.y, feedFloor - 56), width: 48, height: 48)
+                x: w / 2 - 24, y: floor - 56, width: 48, height: 48)
         } else {
             fillsPicture = false
             // The physical cutout is smaller than the full safe inset. The

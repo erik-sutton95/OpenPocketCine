@@ -29,7 +29,8 @@ separate iOS and Android lists.
   and shooting mode open from the top; other camera values open from the bottom.
   Top pickers leave the lower camera values available. Pocket 4 Pro zoom uses
   single taps for 1×/3× and double taps for 6×/12×.
-  Portrait centers the fitted feed below an independent status row. The larger
+  Portrait centers the fitted feed below an independent status row; View Assist,
+  FIT/FILL and the joystick cluster stay fixed above the camera values. The larger
   zoom disc reaches the screen edge above system controls. Motion Control keeps
   the joystick usable while editing and reduces shared updates during window
   dragging. iOS image previews receive raw pictures even with every scope off.
