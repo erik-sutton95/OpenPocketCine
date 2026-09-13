@@ -156,6 +156,7 @@
                 if scanning {
                     HStack(spacing: 7) {
                         Circle().fill(MonitorTheme.accent).frame(width: 6, height: 6)
+                            .monitorPulse(period: MonitorMotion.scanPulseDuration)
                         if fullLabels {
                             Text("SCANNING").font(MonitorTheme.font(9.5, weight: .bold)).tracking(
                                 1.1)

@@ -27,6 +27,8 @@ phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
 format, color and shooting options. Drag a value drum to select a supported
 camera value; lift to apply it. All camera pickers open from bottom-center.
+Holding or dragging a camera readout opens the same full drawer and details;
+releasing that original touch applies the selected value.
 Hold Record to open shooting mode.
 
 The View Assist palette collapses into the picture corner. Expand it for the
@@ -35,7 +37,8 @@ On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions
 remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
-experimental Motion Control editor in a trailing drawer. All three waypoint rows show the
+experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
+Ramp each have a tab with their own dial; the Motion Control action stays visible. All three waypoint rows show the
 reported pan, tilt and zoom, or **Not set**. Tap outside to minimize the editor
 without activating the controls behind it. Until dragged, the editor stays centered
 when the screen rotates; a manually placed editor keeps its chosen position.
@@ -100,8 +103,8 @@ on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
-beside zoom (Pocket only). Its trailing drawer has inline Mode, Speed and Ramp
-drums showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
+beside zoom (Pocket only). Its trailing drawer has Mode, Speed and Ramp
+tabs, each with its own dial, showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
 and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take (set A and B, choose each
 leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total

@@ -3,6 +3,7 @@ package com.opencapture.monitorui
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -15,6 +16,22 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 enum class MonitorAudioOrientation(val label: String) { VERTICAL("Vertical"), HORIZONTAL("Horizontal") }
+
+/** Mockup `SCOPE_SIZE.AUDIO` 28×168. dB overlays the bars; the plate does not grow. */
+object MonitorAudioMetrics {
+    const val CROSS_AXIS = 28f
+    const val LONG_AXIS = 168f
+    const val GAP = 2f
+    const val INSET = 1f
+    const val LABEL_RESERVE = 12f
+    const val BARS_TOP = 2f
+
+    fun panelWidth(orientation: MonitorAudioOrientation): Float =
+        if (orientation == MonitorAudioOrientation.VERTICAL) CROSS_AXIS else LONG_AXIS
+
+    fun panelHeight(orientation: MonitorAudioOrientation): Float =
+        if (orientation == MonitorAudioOrientation.VERTICAL) LONG_AXIS else CROSS_AXIS
+}
 
 object MonitorAudioReadout {
     fun fraction(db: Double): Float = if (db.isFinite()) ((db + 60.0) / 60.0).coerceIn(0.0, 1.0).toFloat() else 0f
@@ -34,54 +51,76 @@ fun MonitorAudioMeter(left: Double, leftPeak: Double, right: Double, rightPeak: 
         contentDescription = "Audio, left ${MonitorAudioReadout.label(left)} dBFS, right ${MonitorAudioReadout.label(right)} dBFS"
     }) {
         val horizontal = orientation == MonitorAudioOrientation.HORIZONTAL
-        val pad = 9.dp.toPx()
-        val labelH = 14.dp.toPx()
-        val numberH = if (showDB) 14.dp.toPx() else 0f
         val green = Color(0xFF56EB84)
         val yellow = Color(0xFFF5D052)
         val red = Color(0xFFFF5C52)
-        fun text(label: String, at: Offset, center: Boolean = false, muted: Boolean = false) {
-            val layout = measurer.measure(label, MonitorTypography.readout(8f, FontWeight.Medium), maxLines = 1)
-            drawText(layout, color = if (muted) MonitorPalette.muted else MonitorPalette.text,
-                topLeft = Offset(at.x - if (center) layout.size.width / 2f else 0f, at.y))
+        val ink = Color.White
+        fun zone(db: Double): Color = when {
+            db >= -6.0 -> red.copy(alpha = .95f)
+            db >= -18.0 -> yellow.copy(alpha = .95f)
+            else -> green.copy(alpha = .9f)
         }
-        text("AUDIO", Offset(pad, 6.dp.toPx()), muted = true)
-        if (showDB) text("dBFS", Offset(size.width - 33.dp.toPx(), 6.dp.toPx()), muted = true)
-        listOf(Triple("L", left, leftPeak), Triple("R", right, rightPeak)).forEachIndexed { index, channel ->
-            val origin: Offset
-            val track: Size
-            if (horizontal) {
-                origin = Offset(pad + 15.dp.toPx(), 27.dp.toPx() + index * 23.dp.toPx())
-                track = Size((size.width - origin.x - pad - if (showDB) 31.dp.toPx() else 0f).coerceAtLeast(1f), 10.dp.toPx())
-                text(channel.first, Offset(pad, origin.y - 2.dp.toPx()), muted = true)
-                if (showDB) text(MonitorAudioReadout.label(channel.second), Offset(origin.x + track.width + 6.dp.toPx(), origin.y - 2.dp.toPx()))
-            } else {
-                val column = (size.width - pad * 2f) / 2f
-                val centerX = pad + column * (index + .5f)
-                origin = Offset(centerX - 8.dp.toPx(), 26.dp.toPx())
-                track = Size(16.dp.toPx(), (size.height - origin.y - pad - labelH - numberH).coerceAtLeast(1f))
-                text(channel.first, Offset(centerX, origin.y + track.height + 3.dp.toPx()), center = true, muted = true)
-                if (showDB) text(MonitorAudioReadout.label(channel.second), Offset(centerX, origin.y + track.height + labelH), center = true)
-            }
-            drawRect(Color.White.copy(alpha = .07f), origin, track)
-            val value = MonitorAudioReadout.fraction(channel.second)
-            listOf(Triple(0f, .7f, green), Triple(.7f, .9f, yellow), Triple(.9f, 1f, red)).forEach { (low, high, color) ->
-                val end = minOf(value, high)
-                if (end > low) {
-                    val at = if (horizontal) Offset(origin.x + track.width * low, origin.y)
-                        else Offset(origin.x, origin.y + track.height * (1f - end))
-                    val segment = if (horizontal) Size(track.width * (end - low), track.height)
-                        else Size(track.width, track.height * (end - low))
-                    drawRect(color, at, segment)
+        fun text(label: String, at: Offset, center: Boolean = false) {
+            val layout = measurer.measure(label, MonitorTypography.readout(7.5f, FontWeight.Bold), maxLines = 1)
+            drawText(layout, color = ink.copy(alpha = .58f),
+                topLeft = Offset(at.x - if (center) layout.size.width / 2f else 0f,
+                    at.y - layout.size.height / 2f))
+        }
+        val channels = listOf(Triple("L", left, leftPeak), Triple("R", right, rightPeak))
+        if (horizontal) {
+            val barsL = MonitorAudioMetrics.LABEL_RESERVE.dp.toPx()
+            val gap = MonitorAudioMetrics.GAP.dp.toPx()
+            val inset = MonitorAudioMetrics.INSET.dp.toPx()
+            val trackH = (size.height - gap - inset * 2f) / 2f
+            val trackW = (size.width - barsL - inset).coerceAtLeast(1f)
+            channels.forEachIndexed { index, channel ->
+                val y = inset + index * (trackH + gap)
+                val origin = Offset(barsL, y)
+                val track = Size(trackW, trackH)
+                drawRoundRect(ink.copy(alpha = .08f), origin, track, CornerRadius(2.dp.toPx()))
+                val value = MonitorAudioReadout.fraction(channel.second)
+                if (value > 0f) {
+                    val filled = trackW * value
+                    drawRoundRect(zone(channel.second), origin, Size(filled, trackH), CornerRadius(2.dp.toPx()))
                 }
+                val peak = MonitorAudioReadout.fraction(channel.third)
+                if (peak > 0f) {
+                    val px = origin.x + trackW * peak
+                    drawLine(zone(channel.third), Offset(px, origin.y), Offset(px, origin.y + trackH), 1.5.dp.toPx())
+                }
+                text(channel.first, Offset(barsL / 2f, origin.y + trackH / 2f), center = true)
+                if (showDB) text(MonitorAudioReadout.label(channel.second),
+                    Offset(origin.x + trackW - 10.dp.toPx(), origin.y + trackH / 2f), center = true)
             }
-            val peak = MonitorAudioReadout.fraction(channel.third)
-            if (peak > 0f) {
-                val color = if (peak >= .9f) red else if (peak >= .7f) yellow else green
-                if (horizontal) drawLine(color, Offset(origin.x + track.width * peak, origin.y),
-                    Offset(origin.x + track.width * peak, origin.y + track.height), 1.5.dp.toPx())
-                else drawLine(color, Offset(origin.x, origin.y + track.height * (1f - peak)),
-                    Offset(origin.x + track.width, origin.y + track.height * (1f - peak)), 1.5.dp.toPx())
+        } else {
+            val gap = MonitorAudioMetrics.GAP.dp.toPx()
+            val inset = MonitorAudioMetrics.INSET.dp.toPx()
+            val barsT = MonitorAudioMetrics.BARS_TOP.dp.toPx()
+            val barsH = (size.height - MonitorAudioMetrics.LABEL_RESERVE.dp.toPx()).coerceAtLeast(1f)
+            val bw = (size.width - gap - inset * 2f) / 2f
+            listOf(0.0, -6.0, -18.0, -36.0).forEach { mark ->
+                val gy = barsT + barsH * (1f - MonitorAudioReadout.fraction(mark))
+                drawLine(ink.copy(alpha = .10f), Offset(0f, gy), Offset(size.width, gy), 1.dp.toPx())
+            }
+            channels.forEachIndexed { index, channel ->
+                val x = inset + index * (bw + gap)
+                val origin = Offset(x, barsT)
+                val track = Size(bw, barsH)
+                drawRoundRect(ink.copy(alpha = .08f), origin, track, CornerRadius(2.dp.toPx()))
+                val value = MonitorAudioReadout.fraction(channel.second)
+                if (value > 0f) {
+                    val filled = barsH * value
+                    drawRoundRect(zone(channel.second), Offset(x, barsT + barsH - filled), Size(bw, filled),
+                        CornerRadius(2.dp.toPx()))
+                }
+                val peak = MonitorAudioReadout.fraction(channel.third)
+                if (peak > 0f) {
+                    val py = barsT + barsH * (1f - peak)
+                    drawLine(zone(channel.third), Offset(x, py), Offset(x + bw, py), 1.5.dp.toPx())
+                }
+                text(channel.first, Offset(x + bw / 2f, size.height - 5.dp.toPx()), center = true)
+                if (showDB) text(MonitorAudioReadout.label(channel.second),
+                    Offset(x + bw / 2f, barsT + 8.dp.toPx()), center = true)
             }
         }
     }

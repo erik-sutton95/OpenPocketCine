@@ -390,16 +390,22 @@ fun StartupEmptyDiscoveryCard(
 }
 
 @Composable
-fun StartupStatusPill(text: String, color: Color) {
-    Text(
-        text,
-        color = color,
-        style = startupType(11f, FontWeight.SemiBold),
-        maxLines = 1,
-        modifier =
-            Modifier.border(1.dp, color.copy(alpha = 0.50f), CircleShape)
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
+fun StartupStatusPill(text: String, color: Color, pulsing: Boolean = false) {
+    val phase = com.opencapture.monitorui.monitorPulsePhase(1400, enabled = pulsing)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (pulsing) {
+            Box(Modifier.size(6.dp).background(color.copy(alpha = 1f - .75f * phase), CircleShape))
+        }
+        Text(
+            text,
+            color = color,
+            style = startupType(11f, FontWeight.SemiBold),
+            maxLines = 1,
+            modifier =
+                Modifier.border(1.dp, color.copy(alpha = 0.50f), CircleShape)
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+        )
+    }
 }
 
 /** Spinner + optional glyph tile + phase copy — inline connection-progress chrome. */

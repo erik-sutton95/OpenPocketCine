@@ -109,19 +109,21 @@ fun AssistOptionsPopup(
             .then(if (embedded) Modifier else Modifier.pickerPanelGlass(CardShape).padding(panelPad)),
         verticalArrangement = Arrangement.spacedBy(panelGap),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AssistToolGlyph(tool, LiveDesign.text, Modifier.size(15.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                tool.title.uppercase(),
-                style = LiveType.ui(if (embedded) 11f else 15f, FontWeight.SemiBold).copy(letterSpacing = .8.sp),
-                color = LiveDesign.text,
-            )
-            Spacer(Modifier.weight(1f))
-            LivePopupCloseButton(
-                onClick = onDismiss,
-                size = AssistLongPress.CLOSE_DP.dp,
-            )
+        if (!embedded) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AssistToolGlyph(tool, LiveDesign.text, Modifier.size(15.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    tool.title.uppercase(),
+                    style = LiveType.ui(15f, FontWeight.SemiBold).copy(letterSpacing = .8.sp),
+                    color = LiveDesign.text,
+                )
+                Spacer(Modifier.weight(1f))
+                LivePopupCloseButton(
+                    onClick = onDismiss,
+                    size = AssistLongPress.CLOSE_DP.dp,
+                )
+            }
         }
         if (embedded) {
             AssistInspectorScopePreview(tool, state, colorMode, playback)

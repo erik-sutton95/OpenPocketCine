@@ -81,10 +81,36 @@ final class AssistInspectorPreviewTests: XCTestCase {
 
     func testPreviewImageIsBoundedBeforeRendering() async throws {
         let renderer = AssistInspectorImageRenderer()
+        let owner = UUID()
+        renderer.activate(owner: owner)
         let buffer = try Self.buffer(width: 640, height: 360)
-        let image = await renderer.render(source: buffer, effects: LiveImageEffects())
-        XCTAssertEqual(image?.width, 320)
-        XCTAssertEqual(image?.height, 180)
+        let result = await renderer.render(
+            owner: owner, source: buffer, effects: { LiveImageEffects() })
+        XCTAssertEqual(result?.image.width, 320)
+        XCTAssertEqual(result?.image.height, 180)
+    }
+
+    func testObservedPreviewOptionsIncludeDisabledPictureToolSettings() {
+        let assist = LiveAssistState()
+        assist.lutEnabled = false
+        assist.splitComparison = false
+        let beforeSplit = AssistInspectorPreviewPolicy.imageOptions(
+            assist: assist, tool: .lut, transfer: .rec709)
+        assist.splitComparison = true
+        let afterSplit = AssistInspectorPreviewPolicy.imageOptions(
+            assist: assist, tool: .lut, transfer: .rec709)
+        XCTAssertNotEqual(beforeSplit, afterSplit)
+        XCTAssertTrue(afterSplit.splitComparison)
+        XCTAssertEqual(afterSplit.lutDimension, 0, "Observation must not prepare a preview LUT")
+
+        assist.desqueezeFactor = 1.33
+        let beforeStretch = AssistInspectorPreviewPolicy.imageOptions(
+            assist: assist, tool: .desqueeze, transfer: .rec709)
+        assist.desqueezeFactor = 2
+        let afterStretch = AssistInspectorPreviewPolicy.imageOptions(
+            assist: assist, tool: .desqueeze, transfer: .rec709)
+        XCTAssertNotEqual(beforeStretch, afterStretch)
+        XCTAssertEqual(afterStretch.desqueezeFactor, 2)
     }
 
     func testLUTPreviewResolvesTheSelectedLookWhileMainLUTRemainsOff() {
@@ -108,32 +134,134 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let started = expectation(description: "First image work started")
         let release = DispatchSemaphore(value: 0)
         let invocations = InspectorRenderInvocationCounter()
+        let clock = InspectorPreviewTestClock()
         let reference = try XCTUnwrap(
             CIContext().createCGImage(
                 CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1)),
                 from: CGRect(x: 0, y: 0, width: 1, height: 1)))
-        let renderer = AssistInspectorImageRenderer { _, _ in
-            if invocations.increment() == 1 { started.fulfill() }
-            _ = release.wait(timeout: .now() + 3)
-            return reference
-        }
+        let renderer = AssistInspectorImageRenderer(
+            now: { clock.now },
+            operation: { _, _ in
+                if invocations.increment() == 1 { started.fulfill() }
+                _ = release.wait(timeout: .now() + 3)
+                return reference
+            })
+        let owner = UUID()
+        let remountedOwner = UUID()
+        renderer.activate(owner: owner)
         let buffer = try Self.buffer(width: 8, height: 8)
-        let first = Task { await renderer.render(source: buffer, effects: LiveImageEffects()) }
+        let first = Task {
+            await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
+        }
         await fulfillment(of: [started], timeout: 2)
-        let dropped = await renderer.render(source: buffer, effects: LiveImageEffects())
+        let dropped = await renderer.render(
+            owner: owner, source: buffer, effects: { LiveImageEffects() })
         XCTAssertNil(dropped, "A busy preview must not retain a queued second source")
         XCTAssertEqual(invocations.value, 1, "Dropped work must never enter the renderer")
         first.cancel()
+        renderer.deactivate(owner: owner)
+        renderer.activate(owner: remountedOwner)
+        clock.now = 200_000_000
+        let remounted = await renderer.render(
+            owner: remountedOwner, source: buffer, effects: { LiveImageEffects() })
+        XCTAssertNil(remounted, "Cancellation/remount must not release the running operation")
+        XCTAssertEqual(invocations.value, 1)
         release.signal()
         let cancelled = await first.value
         XCTAssertNil(cancelled, "Dismissed inspectors must never adopt completed stale work")
         XCTAssertEqual(invocations.value, 1, "Cancellation must not drain queued work")
 
         release.signal()
-        let resumed = await renderer.render(source: buffer, effects: LiveImageEffects())
+        let resumed = await renderer.render(
+            owner: remountedOwner, source: buffer, effects: { LiveImageEffects() })
         XCTAssertNotNil(resumed, "Cancellation must release admission for the next inspector")
         XCTAssertEqual(
             invocations.value, 2, "Exactly one fresh request is admitted after cancellation")
+    }
+
+    func testRapidInspectorSwitchesKeepTheOriginalAdmissionClock() async throws {
+        let clock = InspectorPreviewTestClock()
+        let invocations = InspectorRenderInvocationCounter()
+        var preparations = 0
+        let prepare: @MainActor () -> LiveImageEffects = {
+            preparations += 1
+            return LiveImageEffects()
+        }
+        let reference = try Self.referenceImage()
+        let renderer = AssistInspectorImageRenderer(
+            now: { clock.now },
+            operation: { _, _ in
+                _ = invocations.increment()
+                return reference
+            })
+        let buffer = try Self.buffer(width: 8, height: 8)
+        let firstOwner = UUID()
+        renderer.activate(owner: firstOwner)
+        let first = await renderer.render(
+            owner: firstOwner, source: buffer, effects: prepare)
+        XCTAssertNotNil(first)
+        renderer.deactivate(owner: firstOwner)
+        let earlyTimes: [UInt64] = [20_000_000, 80_000_000, 120_000_000, 199_999_999]
+        for time in earlyTimes {
+            clock.now = time
+            let owner = UUID()
+            renderer.activate(owner: owner)
+            let result = await renderer.render(
+                owner: owner, source: buffer, effects: prepare)
+            XCTAssertNil(result, "Tab changes must not restart the 200 ms budget")
+            renderer.deactivate(owner: owner)
+        }
+        XCTAssertEqual(invocations.value, 1)
+        XCTAssertEqual(preparations, 1, "Rejected tabs must not prepare a preview LUT either")
+        clock.now = 200_000_000
+        let owner = UUID()
+        renderer.activate(owner: owner)
+        let next = await renderer.render(owner: owner, source: buffer, effects: prepare)
+        XCTAssertNotNil(next)
+        XCTAssertEqual(invocations.value, 2)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertFalse(renderer.isCurrent(try XCTUnwrap(first)))
+    }
+
+    func testSourceAndOptionChangesDiscardWorkAlreadyInsideTheRenderer() async throws {
+        let clock = InspectorPreviewTestClock()
+        let release = DispatchSemaphore(value: 0)
+        let optionStarted = expectation(description: "Option render started")
+        let sourceStarted = expectation(description: "Source render started")
+        let invocations = InspectorRenderInvocationCounter()
+        let reference = try Self.referenceImage()
+        let renderer = AssistInspectorImageRenderer(
+            now: { clock.now },
+            operation: { _, _ in
+                if invocations.increment() == 1 {
+                    optionStarted.fulfill()
+                } else {
+                    sourceStarted.fulfill()
+                }
+                _ = release.wait(timeout: .now() + 3)
+                return reference
+            })
+        let buffer = try Self.buffer(width: 8, height: 8)
+        let owner = UUID()
+        renderer.activate(owner: owner)
+        let optionTask = Task {
+            await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
+        }
+        await fulfillment(of: [optionStarted], timeout: 2)
+        renderer.invalidate(owner: owner)
+        release.signal()
+        let optionResult = await optionTask.value
+        XCTAssertNil(optionResult, "Old option epochs must not publish")
+
+        clock.now = 200_000_000
+        let sourceTask = Task {
+            await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
+        }
+        await fulfillment(of: [sourceStarted], timeout: 2)
+        renderer.invalidate(owner: owner)
+        release.signal()
+        let sourceResult = await sourceTask.value
+        XCTAssertNil(sourceResult, "Old source epochs must not publish")
     }
 
     func testPlaybackPreviewWaitsForTheClipAndNeverFallsBackToCameraSource() throws {
@@ -155,6 +283,13 @@ final class AssistInspectorPreviewTests: XCTestCase {
         XCTAssertNil(bus.inspectorSource)
     }
 
+    private static func referenceImage() throws -> CGImage {
+        try XCTUnwrap(
+            CIContext().createCGImage(
+                CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1)),
+                from: CGRect(x: 0, y: 0, width: 1, height: 1)))
+    }
+
     private static func buffer(width: Int, height: Int) throws -> CVPixelBuffer {
         var buffer: CVPixelBuffer?
         let result = CVPixelBufferCreate(
@@ -168,6 +303,25 @@ final class AssistInspectorPreviewTests: XCTestCase {
         }
         CVPixelBufferUnlockBaseAddress(source, [])
         return source
+    }
+}
+
+/// Deterministic monotonic time for both worker and real inspector mount tests.
+final class InspectorPreviewTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var time: UInt64 = 0
+
+    var now: UInt64 {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return time
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            time = newValue
+        }
     }
 }
 

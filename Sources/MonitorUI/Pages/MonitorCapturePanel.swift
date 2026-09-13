@@ -11,6 +11,8 @@
         private let close: () -> Void
         private let content: Content
         @State private var contentHeight: CGFloat = 86
+        @State private var revealed = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         public init(
             title: String, subtitle: String, maximumHeight: CGFloat = .infinity,
@@ -74,7 +76,17 @@
             .monitorGlass(
                 in: UnevenRoundedRectangle(
                     topLeadingRadius: 16, bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0, topTrailingRadius: 16), density: .expanded)
+                    bottomTrailingRadius: 0, topTrailingRadius: 16), density: .expanded
+            )
+            .scaleEffect(x: 1, y: revealed || reduceMotion ? 1 : 0.22, anchor: .bottom)
+            .opacity(revealed || reduceMotion ? 1 : 0.5)
+            .onAppear {
+                withAnimation(
+                    MonitorMotion.curve(
+                        MonitorMotion.easeOutCubic, duration: MonitorMotion.morphDuration,
+                        reduceMotion: reduceMotion)
+                ) { revealed = true }
+            }
         }
     }
 

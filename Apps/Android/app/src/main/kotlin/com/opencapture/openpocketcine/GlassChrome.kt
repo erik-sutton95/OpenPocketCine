@@ -110,8 +110,7 @@ fun Modifier.playbackBarGlass(shape: Shape = ChromeShape): Modifier = liveChrome
 
 @Composable
 fun Modifier.pickerPanelGlass(shape: Shape = ChromeShape): Modifier =
-    background(com.opencapture.monitorui.MonitorPalette.overlayPanel, shape)
-        .border(1.dp, LiveDesign.hairline, shape)
+    background(com.opencapture.monitorui.MonitorPalette.expandedGlass, shape)
 
 fun Modifier.chipGlass(shape: Shape = ChromeShape): Modifier =
     background(LiveDesign.tile, shape)

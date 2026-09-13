@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +42,7 @@ data class MonitorClipValue(val id: String, val title: String, val detail: Strin
 /** Grid and list share one presentation value and one thumbnail-loader slot. */
 @Composable
 fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, selected: Boolean,
-    onOpen: () -> Unit, onSelect: () -> Unit, onFavorite: () -> Unit,
+    onOpen: () -> Unit, onSelect: () -> Unit, onFavorite: (() -> Unit)? = null,
     modifier: Modifier = Modifier, thumbnail: @Composable BoxScope.() -> Unit) {
     val shape = RoundedCornerShape(11.dp)
     val surface = modifier.fillMaxWidth().clip(shape)
@@ -52,6 +51,7 @@ fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, s
             if (selected) MonitorPalette.accent else Color.White.copy(alpha = .06f), shape)
         .combinedClickable(role = Role.Button, onClick = { if (selecting) onSelect() else onOpen() }, onLongClick = onSelect)
         .semantics { contentDescription = clip.title }
+    val favoriteAction = onFavorite
     val image: @Composable BoxScope.() -> Unit = {
         thumbnail()
         clip.progress?.let { progress ->
@@ -72,12 +72,18 @@ fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, s
             Text(clip.duration.orEmpty(), style = MonitorTypography.readout(9.5f))
             Text(clip.source, color = MonitorPalette.muted, style = MonitorTypography.text(7.5f, FontWeight.SemiBold))
         }
-        MonitorClipFavorite(clip.favorite, onFavorite)
+        if (favoriteAction != null) {
+            MonitorClipFavorite(clip.favorite, favoriteAction)
+        }
     } else Column(surface, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape).background(MonitorPalette.backgroundDeep)) {
             image()
             Box(Modifier.align(Alignment.TopStart)) { MonitorClipSelection(selected, onSelect) }
-            Box(Modifier.align(Alignment.TopEnd)) { MonitorClipFavorite(clip.favorite, onFavorite) }
+            if (favoriteAction != null) {
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    MonitorClipFavorite(clip.favorite, favoriteAction)
+                }
+            }
             ClipBadge(clip.source, Modifier.align(Alignment.BottomStart).padding(6.dp))
             clip.duration?.let { ClipBadge(it, Modifier.align(Alignment.BottomEnd).padding(6.dp)) }
         }
@@ -89,9 +95,10 @@ fun MonitorClipCard(clip: MonitorClipValue, list: Boolean, selecting: Boolean, s
 }
 
 @Composable
-fun MonitorClipFavorite(favorite: Boolean, onClick: () -> Unit) {
+fun MonitorClipFavorite(favorite: Boolean, onClick: () -> Unit,
+    label: String = if (favorite) "Remove from favorites" else "Add to favorites") {
     Box(Modifier.size(44.dp).combinedClickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        MonitorIcon(MonitorIcon.STAR, if (favorite) "Remove from favorites" else "Add to favorites",
+        MonitorIcon(MonitorIcon.STAR, label,
             Modifier.size(13.dp), if (favorite) Color(0xFFE9C35A) else MonitorPalette.muted, favorite)
     }
 }

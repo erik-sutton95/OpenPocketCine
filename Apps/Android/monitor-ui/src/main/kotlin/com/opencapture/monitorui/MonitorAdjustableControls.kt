@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 /** Compact visual; the owning row supplies its toggle action and 44dp hit target. */
 @Composable
 fun MonitorSwitchGraphic(isOn: Boolean) {
-    val position by animateFloatAsState(if (isOn) 18f else 2f, tween(150), label = "switch-thumb")
+    val position by animateFloatAsState(if (isOn) 18f else 2f, tween(MonitorMotion.TOGGLE_MS), label = "switch-thumb")
     Box(Modifier.size(38.dp, 22.dp).background(
         if (isOn) MonitorPalette.accent else Color.White.copy(alpha = .12f), CircleShape)) {
         Box(Modifier.offset(position.dp, 2.dp).size(18.dp).background(Color.White, CircleShape))

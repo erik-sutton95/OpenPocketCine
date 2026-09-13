@@ -46,12 +46,15 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   a cyan center mark and fading edges.
   Camera-derived options remain authoritative; settle commits through existing
   command handlers. Width caps: 480 phone / 620 tablet, also bounded by viewport.
-- Every persistent camera picker grows from bottom-center, including FORMAT /
+- Every camera picker grows from bottom-center, including FORMAT /
   COLOR / MODE. REC SETUP groups Format / Color / Mode. Portrait pickers end above
   the system row; landscape pickers meet the screen bottom. Headers and the bottom
   grabber remain visible while long option lists scroll. Only camera-supported
   focus and white-balance choices are offered; the prototype's independent Face
   tracking switch has no corresponding backend operation.
+  Holding or dragging a readout uses that same complete drawer and details;
+  the original touch alone commits on lift. A held preview cannot send camera
+  GETs or SETs. Focus offers the same five native choices through either gesture.
 - LUT 50/50 stays pinned. LUT exposure slider is −3…+3 at ½ stop,
   input-referred before the cube (ETTR pull). Not camera EV. Playback Auto
   uses clip Keys `com.dji.camera.ColorGammaSxS` on the **original** take
@@ -64,12 +67,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   iOS Share Bake LUT nests Bake exposure (on by default). Share **Convert
   log** is exclusive with Bake LUT (off by default; D-Log ↔ D-Log2 only).
   Share card hugs; max height 520 dp so portrait Back stays off the status bar.
-- Floating chrome uses black tint: 0.78 compact, 0.84 expanded;
-  info 0.90 and delivery 0.92. Text and icons use stronger local black shadows.
+- Floating chrome follows the reference tint RGB `(20,22,24)`: 0.52 compact,
+  0.62 expanded, 0.82 info and 0.86 delivery. Text and icons use tighter,
+  darker local black shadows, independently of the plate tint.
   iOS honors Reduce Transparency with a solid near-black plate.
   Android uses translucent compositing to avoid copying the live picture for blur;
-  large drawers and editors use a denser 0.96 tint to keep underlying text from
-  competing with their controls.
+  it does not approximate blur by adding a more opaque drawer.
+- Lock, Settings and Media share their visible size and 14 pt/dp corners.
+  On cutout phones in landscape, their top positions move down by 2.5% of
+  viewport height to clear rounded screen corners. The tally/timecode sit
+  another 8 pt/dp into the picture; format actions retain their touch targets.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
 - Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
   floating false-color reference key open at
@@ -78,6 +85,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   orientation plus optional per-channel dBFS readings. Its position and options
   persist independently of camera audio configuration, with separate portrait
   and landscape placements. Silent channels keep the meter visible at its floor.
+  The meter stays slim: 28 × 168 pt/dp vertically, 168 × 28 horizontally;
+  enabling dB readings does not enlarge the plate.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
   the active mode supports digital zoom. Other cameras retain their supported
   single-tap stops. Holding the chip still opens the continuous dial.
@@ -125,8 +134,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   on the canvas floor: the cluster stays on the right edge and lifts above
   the record button. The stick does not move when the button appears.
   Nano hides stick, button, and the gimbal sheet (`hasGimbal`).
-  The gimbal inspector opens from the trailing edge: width min(312, 0.66×viewport),
+  The gimbal inspector opens from the trailing edge: width min(460, 0.92×viewport),
   full landscape height, at most 52% portrait height, with independently scrolling options.
+  Mode / Speed / Ramp tabs each present their dial in the same shared inspector;
+  the Motion Control footer remains available in every tab.
   Motion Control editor is 340 dp wide and moves by holding anywhere (0.3 s); the minimized pill
   drags immediately after touch slop and suppresses its buttons during the drag.
   Duration dials are 180 × 44 dp, with moving ticks, a fixed index, and a
@@ -385,9 +396,10 @@ this document apply to those earlier builds; they do not qualify the new chrome.
 - iOS: automated navigation, both landscape orientations, portrait, input and
   geometry checks. The feedback round passed native tests and targeted UI checks
   on pre-notch, notch and pill iPhones plus iPad on 2026-09-13. A signed feedback
-  build was installed on the physical iPhone; its navigation tests could not
+  build from the first feedback pass was installed on the physical iPhone; its navigation tests could not
   launch because the device was locked. The earlier 2026-09-12 physical navigation
-  result applies to the initial UI build. Current physical camera-connected touch,
+  result applies to the initial UI build. The subsequent glass, full held-drawer,
+  motion and gimbal-tab revision is simulator-qualified only. Current physical camera-connected touch,
   thermal and long-session proof remains pending.
 - Android: build, unit tests and lint plus emulator layout review. Physical Android
   hardware and camera-session proof pending.
@@ -396,7 +408,9 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   scope products. LUT, peaking, false-color and zebra previews reuse the existing raw
   tap and production shaders in a bounded, isolated EGL worker with no second feed tap.
 - iOS inspector previews use the existing sampled source and scope products with
-  bounded, cancellable work while open; camera-connected budget proof is pending.
+  bounded, cancellable work while open. One retained renderer preserves its occupied
+  slot and 200 ms admission floor across tabs and remounts; stale source/option
+  results cannot publish. Camera-connected budget proof is pending.
 - iPad supports native window resizing across supported iPadOS versions. On iPadOS
   26, system-reported window-control exclusions keep the top controls reachable.
   Physical iPad resizing and camera-connected session qualification remain pending.

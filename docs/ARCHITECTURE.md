@@ -98,9 +98,12 @@ Geometry and chrome changes do not replace their decoder, Metal host, frame bus,
 or connection owner. The existing `CameraSession.status` publication budget
 still bounds observable telemetry; presentation adds no packet-driven updates
 or live-enable writes. On iOS, an open assist inspector reuses the existing scope
-tap or owns one cancellable image-preview task capped at 5 Hz. That task admits one
-latest source buffer, scales to 320 pixels before processing and drops stale
-work; it never attaches a second decoder or changes the native picture host.
+tap or borrows the session-retained image renderer. Shared `MonitorPreviewAdmission`
+retains one occupied work slot and a monotonic 200 ms admission floor across tabs,
+dismissal and remount. Cancelling invalidates adoption without releasing a still-running
+job. Admission precedes LUT preparation and scales the latest source to 320 pixels
+before processing. Owner, source and option epochs reject stale results; there is
+no second decoder or change to the native picture host.
 Inspector demand belongs to the visible live or playback source. Inactive scenes
 cancel image work, including UIKit inactivity notifications, and playback
 inspectors cannot activate sampling on the retained live monitor.
@@ -120,6 +123,32 @@ center; existing saved positions survive. The audio meter uses the same movement
 bounds with a left/vertical-center initial position and separate persisted bar
 orientation, dB display and portrait/landscape position preferences. Live and
 playback inject their existing level measurements without another audio sampler.
+The slim meter plate does not grow when its channel labels are enabled.
+
+Floating system buttons share `MonitorChromeButton` for visible shape, glass,
+active/disabled appearance and press feedback. Camera taps and held previews
+use one capture drawer renderer and geometry; the held presentation is read-only
+and cannot refresh camera settings. The Osmo adapter retains option mapping,
+release authorization and delayed command settlement. Gimbal Mode / Speed /
+Ramp use tabs within the shared inspector, with the same value drum used by
+capture controls. `MonitorMotion` owns reference timing and easing so shells do
+not tune independent versions of a widget's animation.
+
+Compose page navigation keeps the content slot in one composition position as
+the rail becomes a portrait tab row; rotation does not remount the page owner.
+Assist and gimbal panes share `MonitorInspector`, and the Motion Control duration
+ruler lives in `MonitorDurationDial` with injected range, labels and actions.
+Clip cards accept an optional favorite action; its absence removes the action
+from both grid and list layouts without importing a camera capability enum.
+The shared camera readout owns the original pointer and a display-only preview
+slot. The Osmo shell injects its full drawer and revalidates source, lifecycle,
+lock state and current options immediately before dispatching a release action.
+
+Shared editing widgets pair each begin event with exactly one normal or
+cancelled completion. Playback scrub cancellation clears the host's editing
+state without inventing a final seek; the player adapter decides whether an
+interrupted current clip resumes. Source changes and disappearance cannot
+restart a dismissed player.
 
 The migration is intentionally incomplete: media/playback orchestration, scope
 implementations and delivery coordinators still live in the Osmo shell, and

@@ -111,11 +111,12 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     var entering by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     val motion by animateFloatAsState(if (entering && !closing) 1f else 0f,
-        tween(if (closing) 180 else 260), label = "zoom-disc")
+        tween(if (closing) MonitorMotion.ZOOM_OUT_MS else MonitorMotion.ZOOM_IN_MS,
+            easing = if (closing) MonitorMotion.ZoomOut else MonitorMotion.Soft), label = "zoom-disc")
     val send by rememberUpdatedState(onChange)
     val dismiss by rememberUpdatedState(onDismiss)
     LaunchedEffect(Unit) { entering = true }
-    LaunchedEffect(closing) { if (closing) { delay(180); dismiss() } }
+    LaunchedEffect(closing) { if (closing) { delay(MonitorMotion.ZOOM_HOST_MS.toLong()); dismiss() } }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
@@ -162,7 +163,12 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         Box(Modifier.size(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
             .pointerInput(Unit) { detectTapGestures { closing = true } }) {
             Box(Modifier.align(Alignment.CenterEnd).padding(end = trailingInset.dp).size(radius.dp, (radius * 2).dp)
-                .graphicsLayer { translationX = size.width * (1f - motion); alpha = motion }
+                .graphicsLayer { translationX = size.width * .26f * (1f - motion)
+                    val restScale = if (closing) .90f else .88f
+                    scaleX = restScale + (1f - restScale) * motion
+                    scaleY = scaleX
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
+                    alpha = motion }
                 .background(Color(0xFF121416).copy(alpha = .72f),
                     RoundedCornerShape(topStart = radius.dp, bottomStart = radius.dp))) {
                 Canvas(Modifier.fillMaxSize().semantics {
@@ -170,7 +176,8 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                     progressBarRangeInfo = ProgressBarRangeInfo(position, 0f..1f)
                     setProgress { update(it); true }
                     customActions = listOf(CustomAccessibilityAction("Close zoom") { closing = true; true })
-                }.pointerInput(Unit) { detectTapGestures { } }.pointerInput(geometry) {
+                }.pointerInput(Unit) { detectTapGestures { } }.pointerInput(geometry, closing) {
+                    if (closing) return@pointerInput
                     var startAngle = 0.0
                     var startPosition = 0f
                     fun angle(point: Offset) = atan2((size.width - point.x).toDouble(),

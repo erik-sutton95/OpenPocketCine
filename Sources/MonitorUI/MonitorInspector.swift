@@ -1,6 +1,25 @@
 #if os(iOS)
     import SwiftUI
 
+    /// Preferred inspector width. Assist and a wide gimbal pane share `.assist`;
+    /// a compact trailing drawer keeps `.trailing` so other hosts do not widen.
+    public struct MonitorInspectorWidth: Equatable, Sendable {
+        public var preferred: CGFloat
+        public var fraction: CGFloat
+
+        public static let assist = MonitorInspectorWidth(preferred: 460, fraction: 0.92)
+        public static let trailing = MonitorInspectorWidth(preferred: 312, fraction: 0.66)
+
+        public init(preferred: CGFloat, fraction: CGFloat) {
+            self.preferred = preferred
+            self.fraction = min(1, max(0.1, fraction))
+        }
+
+        public func resolved(viewportWidth: CGFloat) -> CGFloat {
+            min(preferred, viewportWidth * fraction)
+        }
+    }
+
     /// A viewport-bounded inspector. Native apps own its selection, content and
     /// actions; this shell owns only layout, scrolling and the reveal animation.
     public struct MonitorInspector<Navigation: View, Content: View, Footer: View>: View {
@@ -9,6 +28,7 @@
         private let safeArea: EdgeInsets
         private let trailing: Bool
         private let hasNavigation: Bool
+        private let preferredWidth: MonitorInspectorWidth
         private let onClose: () -> Void
         private let helpVisible: Binding<Bool>?
         private let navigation: Navigation
@@ -20,6 +40,7 @@
         public init(
             title: String, viewport: CGSize, safeArea: EdgeInsets = EdgeInsets(),
             trailing: Bool = false, hasNavigation: Bool = true,
+            preferredWidth: MonitorInspectorWidth? = nil,
             helpVisible: Binding<Bool>? = nil,
             onClose: @escaping () -> Void,
             @ViewBuilder navigation: () -> Navigation,
@@ -30,6 +51,7 @@
             self.safeArea = safeArea
             self.trailing = trailing
             self.hasNavigation = hasNavigation
+            self.preferredWidth = preferredWidth ?? (trailing ? .trailing : .assist)
             self.onClose = onClose
             self.helpVisible = helpVisible
             self.navigation = navigation()
@@ -38,9 +60,7 @@
         }
 
         private var portrait: Bool { viewport.height > viewport.width }
-        private var width: CGFloat {
-            min(trailing ? 312 : 460, viewport.width * (trailing ? 0.66 : 0.92))
-        }
+        private var width: CGFloat { preferredWidth.resolved(viewportWidth: viewport.width) }
         private var height: CGFloat {
             portrait && trailing ? min(viewport.height * 0.52, 620) : viewport.height
         }
@@ -89,6 +109,10 @@
                     portrait ? 0 : min(44, trailing ? safeArea.trailing : safeArea.leading)
                 )
                 .frame(width: width, height: max(1, height))
+                .frame(
+                    width: revealed ? width : MonitorMotion.drawerCollapsedWidth,
+                    alignment: trailing ? .trailing : .leading
+                )
                 .monitorGlass(
                     in: UnevenRoundedRectangle(
                         topLeadingRadius: trailing ? 16 : 0, bottomLeadingRadius: trailing ? 16 : 0,
@@ -97,14 +121,15 @@
                     density: .expanded
                 )
                 .clipped()
-                .offset(x: revealed ? 0 : (trailing ? width : -width))
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("monitor.inspector")
             }
             .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
             .onAppear {
-                withAnimation(reduceMotion ? nil : .timingCurve(0.16, 1, 0.3, 1, duration: 0.18)) {
+                if reduceMotion {
                     revealed = true
+                } else if let animation = MonitorMotion.drawerReveal(false) {
+                    withAnimation(animation) { revealed = true }
                 }
             }
         }

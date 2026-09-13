@@ -1,64 +1,107 @@
 import CoreImage
 import CoreVideo
 import Foundation
+import MonitorPresentation
 
 /// Inspector-only image work: at most one admitted source buffer, no pending
 /// queue, and no display/decoder attachment. A busy job drops a request; the
 /// view's next bounded tick reads the newest source instead of catching up.
 final class AssistInspectorImageRenderer: @unchecked Sendable {
     typealias RenderOperation = @Sendable (CVPixelBuffer, LiveImageEffects) -> CGImage?
+    typealias Clock = @Sendable () -> UInt64
+
+    struct Result {
+        let image: CGImage
+        fileprivate let ticket: MonitorPreviewAdmission.Ticket
+    }
 
     private let queue = DispatchQueue(label: "opv.assist-inspector", qos: .utility)
-    private let admission = NSLock()
-    private var busy = false
+    private let lock = NSLock()
+    private var admission = MonitorPreviewAdmission()
+    private let now: Clock
     private let operation: RenderOperation?
     // These contexts are used only on queue, never by the live present worker.
     private var displayContext: CIContext?
     private var cubeContext: CIContext?
 
-    init(operation: RenderOperation? = nil) {
+    init(
+        now: @escaping Clock = { DispatchTime.now().uptimeNanoseconds },
+        operation: RenderOperation? = nil
+    ) {
+        self.now = now
         self.operation = operation
     }
 
-    func render(source: CVPixelBuffer, effects: LiveImageEffects) async -> CGImage? {
+    func activate(owner: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        admission.activate(owner: owner)
+    }
+
+    func invalidate(owner: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        admission.invalidate(owner: owner)
+    }
+
+    func deactivate(owner: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        admission.deactivate(owner: owner)
+    }
+
+    func isCurrent(_ result: Result) -> Bool { isCurrent(result.ticket) }
+
+    /// Admission remains occupied through native work and main-actor delivery.
+    /// Cancelling an owner invalidates adoption but cannot free running CI work.
+    @MainActor
+    func render(
+        owner: UUID, source: CVPixelBuffer, effects: @MainActor () -> LiveImageEffects
+    ) async -> Result? {
+        guard !Task.isCancelled, let ticket = reserve(owner: owner) else { return nil }
+        defer { complete(ticket) }
+        // LUT preview preparation belongs to the same admission as image work.
+        // Rejected tab/option changes must not repeatedly build a color cube.
+        let effects = effects()
         let work = InspectorImageWork()
-        return await withTaskCancellationHandler {
-            guard !Task.isCancelled else { return nil }
+        let image: CGImage? = await withTaskCancellationHandler {
             return await withCheckedContinuation { continuation in
-                guard reserve() else {
-                    continuation.resume(returning: nil)
-                    return
-                }
                 queue.async { [self] in
                     let image: CGImage?
-                    if work.isCancelled {
+                    if work.isCancelled || !isCurrent(ticket) {
                         image = nil
                     } else if let operation {
                         image = operation(source, effects)
                     } else {
                         image = renderImage(source: source, effects: effects)
                     }
-                    release()
                     continuation.resume(returning: work.isCancelled ? nil : image)
                 }
             }
         } onCancel: {
             work.cancel()
+            self.deactivate(owner: owner)
         }
+        guard !Task.isCancelled, isCurrent(ticket), let image else { return nil }
+        return Result(image: image, ticket: ticket)
     }
 
-    private func reserve() -> Bool {
-        admission.lock()
-        defer { admission.unlock() }
-        guard !busy else { return false }
-        busy = true
-        return true
+    private func reserve(owner: UUID) -> MonitorPreviewAdmission.Ticket? {
+        lock.lock()
+        defer { lock.unlock() }
+        return admission.acquire(owner: owner, nowNanoseconds: now())
     }
 
-    private func release() {
-        admission.lock()
-        busy = false
-        admission.unlock()
+    private func isCurrent(_ ticket: MonitorPreviewAdmission.Ticket) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return admission.isCurrent(ticket)
+    }
+
+    private func complete(_ ticket: MonitorPreviewAdmission.Ticket) {
+        lock.lock()
+        defer { lock.unlock() }
+        admission.complete(ticket)
     }
 
     private func renderImage(source: CVPixelBuffer, effects: LiveImageEffects) -> CGImage? {

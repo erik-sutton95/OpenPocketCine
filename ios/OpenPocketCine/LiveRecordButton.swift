@@ -111,6 +111,7 @@ struct LiveRecordingTally: View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .strokeBorder(LiveDesign.rec, lineWidth: Self.lineWidth)
             .shadow(color: LiveDesign.rec.opacity(0.55), radius: 14)
+            .monitorPulse(period: MonitorMotion.recPulseDuration)
             .allowsHitTesting(false)
     }
 

@@ -6,9 +6,13 @@ import XCTest
 final class AudioAssistTests: XCTestCase {
     func testAudioOptionsAffectPresentationOnly() {
         XCTAssertEqual(AudioAssist.longPressPanelWidth, 400)
-        XCTAssertEqual(AudioAssist.panelSize, CGSize(width: 84, height: 184))
+        XCTAssertEqual(AudioAssist.panelSize, CGSize(width: 28, height: 168))
+        XCTAssertEqual(AudioAssist.barCrossAxis, 10)
         XCTAssertEqual(
-            AudioAssist.panelSize(orientation: .horizontal), CGSize(width: 236, height: 84))
+            AudioAssist.panelSize(orientation: .horizontal), CGSize(width: 168, height: 28))
+        XCTAssertEqual(
+            AudioAssist.panelSize(orientation: .vertical).width,
+            AudioAssist.panelSize(orientation: .horizontal).height)
         XCTAssertEqual(
             AudioAssist.helpCopy,
             "Meters the camera's audio. Available while live view is up.")

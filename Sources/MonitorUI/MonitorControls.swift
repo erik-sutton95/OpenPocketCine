@@ -5,8 +5,41 @@
         /// Local text/icon shadows keep bright footage legible without copying
         /// or darkening the camera picture beneath an entire HUD row.
         public func monitorReadoutShadow() -> some View {
-            shadow(color: .black, radius: 2, y: 1)
-                .shadow(color: .black.opacity(0.95), radius: 6)
+            shadow(color: .black, radius: 1.5)
+                .shadow(color: .black.opacity(0.92), radius: 3)
+                .shadow(color: .black.opacity(0.85), radius: 1, y: 1)
+        }
+
+        /// A complete bright/dim/bright cycle, suspended offscreen or when the
+        /// scene or accessibility settings disable motion.
+        public func monitorPulse(period: TimeInterval) -> some View {
+            modifier(MonitorOpacityPulse(period: period))
+        }
+    }
+
+    private struct MonitorOpacityPulse: ViewModifier {
+        let period: TimeInterval
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.scenePhase) private var scenePhase
+        @State private var appeared = false
+        @State private var pulse = false
+
+        func body(content: Content) -> some View {
+            let active = appeared && scenePhase == .active && !reduceMotion
+            content
+                .opacity(pulse ? MonitorMotion.recPulseFloor : 1)
+                .onAppear { appeared = true }
+                .onDisappear { appeared = false }
+                .onChange(of: active, initial: true) { _, active in
+                    pulse = false
+                    if active {
+                        withAnimation(
+                            .easeInOut(duration: period / 2).repeatForever(autoreverses: true)
+                        ) {
+                            pulse = true
+                        }
+                    }
+                }
         }
     }
 
@@ -92,34 +125,47 @@
         public var recording: Bool
         public var photo: Bool
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.scenePhase) private var scenePhase
         @State private var pulse = false
+        @State private var appeared = false
         public init(diameter: CGFloat, recording: Bool, photo: Bool = false) {
             self.diameter = diameter
             self.recording = recording
             self.photo = photo
         }
         public var body: some View {
+            let coreSize = recording ? ((diameter - 10) * 0.52).rounded() : 0
+            let glow = recording && appeared && scenePhase == .active && !reduceMotion
             ZStack {
-                Circle().fill(MonitorTheme.raised)
-                Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                 Circle().strokeBorder(photo ? Color.white : MonitorTheme.recording, lineWidth: 4.5)
                     .padding(5)
-                if recording {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(MonitorTheme.recording)
-                        .frame(width: diameter * 0.32, height: diameter * 0.32)
-                        .opacity(reduceMotion ? 1 : (pulse ? 0.68 : 1))
-                } else if photo {
+                RoundedRectangle(cornerRadius: (coreSize * 0.24).rounded())
+                    .fill(MonitorTheme.recording)
+                    .frame(width: coreSize, height: coreSize)
+                    .animation(MonitorMotion.recShape(reduceMotion), value: recording)
+                    // Half-radius native approximation of the CSS bloom.
+                    // `coreglow` changes the shadows, never the core opacity.
+                    .shadow(
+                        color: pulse
+                            ? MonitorTheme.recording.opacity(0.3)
+                            : MonitorTheme.color(0xE85A5E).opacity(0.9),
+                        radius: pulse ? 2 : 6
+                    )
+                    .shadow(
+                        color: MonitorTheme.recording.opacity(pulse ? 0.14 : 0.5),
+                        radius: pulse ? 4.5 : 13)
+                if photo && !recording {
                     Circle().fill(Color.white).padding(12)
                 }
             }
             .frame(width: diameter, height: diameter)
-            .onChange(of: recording, initial: true) { _, active in
+            .monitorGlass(in: Circle(), density: .recording)
+            .onAppear { appeared = true }
+            .onDisappear { appeared = false }
+            .onChange(of: glow, initial: true) { _, active in
                 pulse = false
-                if active && !reduceMotion {
-                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                        pulse = true
-                    }
+                if active, let animation = MonitorMotion.recPulse(reduceMotion) {
+                    withAnimation(animation) { pulse = true }
                 }
             }
             .accessibilityHidden(true)
@@ -140,7 +186,6 @@
             (Text(head).foregroundColor(.white) + Text(tail).foregroundColor(MonitorTheme.accent))
                 .font(MonitorTheme.font(fontSize, weight: .medium)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.65)
-                .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
                 .accessibilityLabel("Timecode \(clock)")
         }
     }

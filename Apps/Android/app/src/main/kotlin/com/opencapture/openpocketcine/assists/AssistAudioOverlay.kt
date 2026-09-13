@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import com.opencapture.monitorui.MonitorAudioMeter
+import com.opencapture.monitorui.MonitorAudioMetrics
 import com.opencapture.monitorui.MonitorAudioOrientation
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -21,8 +22,11 @@ internal fun AssistAudioOverlay(state: LiveAssistState, left: AudioMeterReading,
     canvas: AssistRect, placement: AssistRect, locked: Boolean = false,
     onOpenOptions: ((ChromeRect) -> Unit)? = null) {
     val density = LocalDensity.current.density
-    val base = if (state.audioOrientation == MonitorAudioOrientation.VERTICAL)
-        AssistSize(84f, 184f) else AssistSize(236f, 84f)
+    val orientation = state.audioOrientation
+    val base = AssistSize(
+        MonitorAudioMetrics.panelWidth(orientation),
+        MonitorAudioMetrics.panelHeight(orientation),
+    )
     val portrait = canvas.height > canvas.width
     MovableAssistPanel(LiveAssistTool.AUDIO, base, 1.0, state.audioCenterFor(portrait),
         canvas, placement, AssistPoint(placement.minX + base.width * density / 2f, canvas.midY),

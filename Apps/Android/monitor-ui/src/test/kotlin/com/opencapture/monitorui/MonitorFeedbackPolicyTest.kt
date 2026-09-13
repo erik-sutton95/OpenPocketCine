@@ -58,7 +58,7 @@ class MonitorFeedbackPolicyTest {
     @Test fun portraitTimecodeAnswersToCutoutAndPictureWithoutAnExtraHeaderLift() {
         assertEquals(71f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 10f))
         assertEquals(40f, MonitorLayoutPolicy.portraitReadoutTop(false, 0f, 0f, 10f))
-        assertEquals(208f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
+        assertEquals(216f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
         assertEquals(12f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
     }
 
@@ -79,5 +79,48 @@ class MonitorFeedbackPolicyTest {
         assertEquals(0f, MonitorAudioReadout.fraction(Double.NaN))
         assertEquals(1f, MonitorAudioReadout.fraction(10.0))
         assertEquals(0f, MonitorAudioReadout.fraction(-99.0))
+    }
+
+    @Test fun audioPlateKeepsTheMockupCrossAxis() {
+        assertEquals(28f, MonitorAudioMetrics.CROSS_AXIS)
+        assertEquals(168f, MonitorAudioMetrics.LONG_AXIS)
+        assertEquals(28f, MonitorAudioMetrics.panelWidth(MonitorAudioOrientation.VERTICAL))
+        assertEquals(168f, MonitorAudioMetrics.panelHeight(MonitorAudioOrientation.VERTICAL))
+        assertEquals(168f, MonitorAudioMetrics.panelWidth(MonitorAudioOrientation.HORIZONTAL))
+        assertEquals(28f, MonitorAudioMetrics.panelHeight(MonitorAudioOrientation.HORIZONTAL))
+    }
+
+    @Test fun cutoutPhoneCornerDropIsTwoAndAHalfPercentOfHudHeight() {
+        assertEquals(0f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = true, hasDisplayCutout = true))
+        assertEquals(0f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = false, hasDisplayCutout = false))
+        assertEquals(9.825f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = false, hasDisplayCutout = true), .001f)
+    }
+
+    @Test fun assistCellsMatchTheMockupSquareAndSevenColumnMath() {
+        assertEquals(44f, MonitorLayoutPolicy.assistButtonSize(false))
+        assertEquals(52f, MonitorLayoutPolicy.assistButtonSize(true))
+        assertEquals(20f, MonitorLayoutPolicy.assistIconSize(false))
+        assertTrue(MonitorLayoutPolicy.assistCellWidth(874f, false, false) >= 44f)
+        assertEquals(44f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
+    }
+
+    @Test fun glassPlatesUseMockupRgbAndAlphas() {
+        assertEquals(20 / 255f, MonitorPalette.panel.red, .002f)
+        assertEquals(22 / 255f, MonitorPalette.panel.green, .002f)
+        assertEquals(24 / 255f, MonitorPalette.panel.blue, .002f)
+        assertEquals(.52f, MonitorPalette.compactGlass.alpha, .01f)
+        assertEquals(.62f, MonitorPalette.expandedGlass.alpha, .01f)
+        assertEquals(.86f, MonitorPalette.overlayPanel.alpha, .01f)
+    }
+
+    @Test fun motionTokensMatchTheMockupMorphs() {
+        assertEquals(150, MonitorMotion.PALETTE_MS)
+        assertEquals(150, MonitorMotion.INSPECTOR_MS)
+        assertEquals(85, MonitorMotion.PICKER_MORPH_MS)
+        assertEquals(220, MonitorMotion.DRUM_SETTLE_MS)
+        assertEquals(220, MonitorMotion.REC_MORPH_MS)
+        assertEquals(260, MonitorMotion.ZOOM_IN_MS)
+        assertEquals(180, MonitorMotion.ZOOM_OUT_MS)
+        assertEquals(28f, MonitorMotion.INSPECTOR_FROM_PX)
     }
 }

@@ -72,72 +72,6 @@ struct LiveGimbalButton: View {
     }
 }
 
-/// The shared trailing inspector wraps the existing camera actions. Opening or
-/// rotating it never restarts the joystick driver or changes its update cadence.
-struct LiveGimbalSheetHost: View {
-    @Environment(AppModel.self) private var model
-    var layout: LiveMonitorLayout
-    var cluster: GimbalCluster
-
-    var body: some View {
-        MonitorInspector(
-            title: LiveGimbalCopy.title, viewport: layout.viewport,
-            safeArea: layout.safeArea, trailing: true, hasNavigation: false
-        ) {
-            model.liveGimbalPanel = .none
-        } navigation: {
-            EmptyView()
-        } content: {
-            VStack(alignment: .leading, spacing: 12) {
-                drum(
-                    "Mode", GimbalMode.pickerOrder, selected: model.session.gimbalMode,
-                    title: { $0.label }, select: model.setGimbalMode)
-                drum(
-                    "Speed", GimbalSpeed.pickerOrder, selected: model.session.gimbalSpeed,
-                    title: { $0.label }, select: model.session.setGimbalSpeed)
-                drum(
-                    "Ramp", GimbalRamp.pickerOrder, selected: model.gimbalRamp,
-                    title: { $0.label }, select: { model.gimbalRamp = $0 })
-            }
-        } footer: {
-            Button {
-                model.liveGimbalPanel = .editor
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(LiveGimbalCopy.programmedMove).font(
-                            MonitorTheme.font(11, weight: .semibold))
-                        Text("Experimental").font(MonitorTheme.font(9)).foregroundStyle(
-                            MonitorTheme.muted)
-                    }
-                    Spacer(minLength: 2)
-                    OpcIcon.chevronRight.frame(width: 11, height: 11)
-                }
-                .foregroundStyle(MonitorTheme.secondary).padding(12)
-                .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-            }.buttonStyle(MonitorButtonStyle())
-                .accessibilityIdentifier("motion.openEditor")
-        }
-    }
-
-    private func drum<T: Equatable>(
-        _ label: String, _ options: [T], selected: T,
-        title: @escaping (T) -> String, select: @escaping (T) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MonitorSectionHeader(label).padding(.horizontal, 10).padding(.top, 10)
-            MonitorValueDrum(
-                options: options.map(title),
-                selection: Binding(
-                    get: { title(selected) },
-                    set: { value in
-                        if let item = options.first(where: { title($0) == value }) { select(item) }
-                    }),
-                haptics: model.hapticsEnabled)
-        }.background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
 struct LiveGimbalOverlay: View {
     @Environment(AppModel.self) private var model
     var layout: LiveMonitorLayout
@@ -515,11 +449,7 @@ private struct LiveGimbalMoveEditor: View {
                         .font(MonitorTheme.font(8.5)).tracking(0.7)
                         .foregroundStyle(LiveDesign.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    LiveMotionDurationDial(
-                        value: duration, floor: floor, leg: slot == .b ? "A to B" : "B to C",
-                        onDuration: onDuration
-                    )
-                    .accessibilityIdentifier("motion.duration.\(slot.letter)")
+                    durationDial(duration, floor: floor, slot: slot, onChange: onDuration)
                 }
                 .padding(.top, 6)
                 .overlay(alignment: .top) {
@@ -536,103 +466,44 @@ private struct LiveGimbalMoveEditor: View {
         .foregroundStyle(LiveDesign.text)
     }
 
+    private func durationDial(
+        _ value: TimeInterval, floor: TimeInterval, slot: GimbalWaypointSlot,
+        onChange: @escaping (TimeInterval) -> Void
+    ) -> some View {
+        let cameraID = model.session.connectedCamera?.id
+        let phase = model.session.phase.label
+        return MonitorDurationDial(
+            value: value, range: floor...GimbalProgram.maxDuration, step: 0.5,
+            format: GimbalProgram.durationLabel,
+            enabled: {
+                canInteract() && model.liveGimbalPanel == .editor
+                    && model.session.canSetGimbalConfiguration
+                    && model.session.connectedCamera?.id == cameraID
+                    && model.session.phase.label == phase
+            },
+            haptics: model.hapticsEnabled,
+            interactionIdentity: {
+                AnyHashable(model.session.connectedCamera?.id)
+            },
+            onChange: { next in
+                guard canInteract(), model.liveGimbalPanel == .editor,
+                    model.session.canSetGimbalConfiguration,
+                    model.session.connectedCamera?.id == cameraID,
+                    model.session.phase.label == phase
+                else { return }
+                onChange(next)
+            }
+        )
+        .accessibilityLabel(slot == .b ? "A to B duration" : "B to C duration")
+        .accessibilityIdentifier("motion.duration.\(slot.letter)")
+    }
+
     private func readout(_ point: GimbalWaypoint?) -> String {
         guard let point else { return "Not set" }
         return String(
             format: "PAN %+.0f°  TILT %+.0f°  %.1f×", point.yawDeg, point.pitchDeg, point.zoom)
     }
 
-}
-
-private struct LiveMotionDurationDial: View {
-    var value: TimeInterval
-    var floor: TimeInterval
-    var leg: String
-    var onDuration: (TimeInterval) -> Void
-    @State private var origin: TimeInterval?
-    @State private var scrubValue: Double?
-
-    @Environment(\.motionControlCanInteract) private var canInteract
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Text(GimbalProgram.durationLabel(value))
-                .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .contentTransition(.numericText(value: value))
-                .animation(.snappy(duration: 0.16), value: value)
-            ZStack(alignment: .top) {
-                MotionDurationTicks(position: (scrubValue ?? value) / 0.5)
-                    .mask(
-                        LinearGradient(
-                            colors: [.clear, .white, .white, .clear],
-                            startPoint: .leading, endPoint: .trailing))
-                Rectangle().fill(LiveDesign.accent).frame(width: 1.5, height: 11)
-            }
-            .frame(height: 11)
-            .clipped()
-        }
-        .foregroundStyle(LiveDesign.text)
-        .frame(width: 180, height: 44)
-        .background(LiveDesign.glassBright, in: RoundedRectangle(cornerRadius: 10))
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { drag in
-                    guard canInteract() else { return }
-                    if origin == nil { origin = value }
-                    let raw = min(
-                        GimbalProgram.maxDuration,
-                        max(
-                            floor,
-                            (origin ?? value) - Double(drag.translation.width) / 12 * 0.5))
-                    scrubValue = raw
-                    let next = GimbalProgram.steppedDuration(raw, delta: 0, floor: floor)
-                    if next != value { onDuration(next) }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
-                        origin = nil
-                        scrubValue = nil
-                    }
-                }
-        )
-        .sensoryFeedback(.selection, trigger: value)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(leg) duration")
-        .accessibilityValue(GimbalProgram.durationLabel(value))
-        .accessibilityHint("Swipe horizontally to adjust")
-        .accessibilityAdjustableAction { direction in
-            let delta = direction == .increment ? 0.5 : -0.5
-            onDuration(GimbalProgram.steppedDuration(value, delta: delta, floor: floor))
-        }
-    }
-}
-
-/// Animates only during a drag or detent settle; no permanent display timer.
-private struct MotionDurationTicks: View, Animatable {
-    var position: Double
-    var animatableData: Double {
-        get { position }
-        set { position = newValue }
-    }
-
-    var body: some View {
-        Canvas { context, size in
-            let radius = Int(ceil(size.width / 24)) + 1
-            let center = Int(position.rounded())
-            for tick in max(
-                1, center - radius)...min(Int(GimbalProgram.maxDuration * 2), center + radius)
-            {
-                let x = size.width / 2 + CGFloat(Double(tick) - position) * 12
-                guard x >= 0, x <= size.width else { continue }
-                let height: CGFloat = tick.isMultiple(of: 2) ? 9 : 5
-                context.fill(
-                    Path(CGRect(x: x, y: 0, width: 1, height: height)),
-                    with: .color(LiveDesign.muted.opacity(0.7)))
-            }
-        }
-    }
 }
 
 private struct LiveGimbalRunPill: View {

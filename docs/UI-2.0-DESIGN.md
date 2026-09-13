@@ -239,14 +239,27 @@ These accepted refinements supersede the corresponding prototype defaults:
   optional per-channel dBFS display preferences.
 - Assist inspectors keep one stable viewport-bounded size across tool changes,
   with more horizontal space for options.
-- Floating plates and local readout shadows are darker, near black.
-- Every persistent camera picker rises from bottom-center, including the three
+- Restore the reference translucent plate tints. The request for darker glows
+  applies to tight local text/icon shadows, not panel opacity.
+- Audio keeps the reference slim 28 × 168 plate (168 × 28 horizontally),
+  including when optional dBFS labels are visible.
+- Every camera picker rises from bottom-center, including the three
   recording categories. Use the reference ruler, horizontal value movement,
   selected type scaling, inline toggle details, header and bottom grabber.
+  Tap and hold/drag use the same complete drawer. Held previews remain
+  noninteractive; only releasing the original readout gesture applies a value.
 - Pocket 4 Pro separates 1×/3× single taps from 6×/12× double taps when supported.
   Other camera limits and command mapping remain authoritative.
 - iPhone top controls do not receive iPad window-control exclusions. Landscape
   camera values use intrinsic widths and bounded gaps; portrait retains 3×2.
+  Cutout-phone corner buttons move down 2.5% of landscape viewport height;
+  the tally/timecode move 8 points into the picture. Lock, Settings and Media
+  use the same visible size and corner shape.
+- Gimbal uses a wider min(460, 0.92×viewport) inspector with Mode / Speed /
+  Ramp tabs, one dial per tab, and the existing Motion Control footer.
+- Use the actual reference motion, including the 85 ms camera reveal and
+  150 ms inspector/palette reveal. The polynomial cubic ease-out is
+  `cubic-bezier(1/3,1,2/3,1)`. A 1.6-second pulse is a full out-and-back cycle.
 
 ## Capture drums, zoom and gimbal
 

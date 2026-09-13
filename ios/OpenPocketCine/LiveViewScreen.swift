@@ -9,6 +9,7 @@ import SwiftUI
 struct LiveViewScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.monitorWindowGeometry) private var windowGeometry
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var interfaceLocked = false
     @State private var gamepad = GimbalGamepadBridge()
     @State private var headphones = HeadphoneMotionBridge()
@@ -18,6 +19,8 @@ struct LiveViewScreen: View {
     @State private var captureTileFrames: [CaptureSheet: CGRect] = [:]
     @State private var assistIconFrames: [LiveAssistTool: CGRect] = [:]
     @State private var zoomDialVisible = false
+    @State private var zoomDialMounted = false
+    @State private var zoomDismissTask: Task<Void, Never>?
     @State private var assistsExpanded = false
     @State private var zoomGestureAnchor = 1.0
 
@@ -93,7 +96,6 @@ struct LiveViewScreen: View {
         .environment(\.colorScheme, .dark)
         .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
         .animation(.easeInOut(duration: 0.18), value: model.assist.clean)
-        .animation(.easeOut(duration: 0.10), value: model.liveOperatorPanel)
         .animation(.easeOut(duration: 0.16), value: model.chromeEditorMode)
         .animation(.easeOut(duration: 0.20), value: model.session.isFocusResetAvailable)
         .animation(.easeOut(duration: 0.22), value: model.session.isFeedWarming)
@@ -124,6 +126,9 @@ struct LiveViewScreen: View {
             model.captureDrum = nil
             orientationObserver.stop()
             closeZoomDial()
+            zoomDismissTask?.cancel()
+            zoomDismissTask = nil
+            zoomDialMounted = false
             headphones.detach()
             gamepad.detach()
             model.session.decoder.stopSimulatorSample()
@@ -242,6 +247,7 @@ struct LiveViewScreen: View {
             chrome(layout)
                 .environment(\.interfaceLocked, interfaceLocked)
                 .opacity(zoomDialVisible ? 0.16 : 1)
+                .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
                 .allowsHitTesting(
                     chromeInteractive && model.liveChromeInteractive && !zoomDialVisible)
 
@@ -286,7 +292,7 @@ struct LiveViewScreen: View {
 
             if let panel = model.liveOperatorPanel, !model.isEditingChrome {
                 operatorPanelCover(panel, layout: layout)
-                    .transition(.opacity)
+                    .transition(.identity)
                     .zIndex(20)
             }
 
@@ -579,9 +585,6 @@ struct LiveViewScreen: View {
                 ceilingY: ceilingY,
                 onDismiss: { model.assist.configureTool = nil }
             )
-            .transition(.opacity)
-            .animation(AssistLongPressChrome.revealCurve, value: tool)
-            .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
         }
 
         if chromeInteractive, showsGimbalButton, model.liveGimbalPanel == .sheet, !interfaceLocked {
@@ -609,13 +612,19 @@ struct LiveViewScreen: View {
 
         if chromeInteractive, model.captureDrum != nil, !interfaceLocked {
             LiveCaptureDrumHost(
-                frames: captureTileFrames, bar: layout.capture,
-                viewport: layout.viewport, safeArea: layout.safeArea)
+                viewport: layout.viewport, safeArea: layout.safeArea,
+                ceilingY: max(
+                    layout.safeArea.top + LivePopupPlacement.assistTopInset,
+                    LivePopupPlacement.edgeMargin
+                ),
+                bottomY: layout.presentation?.portrait == true
+                    ? layout.rail.minY - 12 : layout.viewport.height)
         }
 
-        if zoomDialVisible, chromeInteractive, !interfaceLocked {
+        if zoomDialMounted, chromeInteractive, !interfaceLocked {
             MonitorZoomDial(
                 viewport: layout.viewport, safeArea: layout.safeArea,
+                isPresented: zoomDialVisible,
                 scale: MonitorZoomScale(minimum: 1, maximum: model.session.zoomMax),
                 marks: Array(Set([1, 1.5, 2, 4, 6, 9] + model.session.zoomStops)).sorted(),
                 opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
@@ -642,7 +651,10 @@ struct LiveViewScreen: View {
         guard !interfaceLocked else { return }
         assistsExpanded = false
         selectOverlay(.zoom)
-        withAnimation(.easeOut(duration: 0.18)) { zoomDialVisible = true }
+        zoomDismissTask?.cancel()
+        zoomDismissTask = nil
+        zoomDialMounted = true
+        zoomDialVisible = true
     }
 
     /// Presentation arbitration only. The existing model fields remain the
@@ -670,7 +682,19 @@ struct LiveViewScreen: View {
     private func closeZoomDial() {
         guard zoomDialVisible else { return }
         model.session.endZoomPinch()
-        withAnimation(.easeOut(duration: 0.18)) { zoomDialVisible = false }
+        zoomDialVisible = false
+        zoomDismissTask?.cancel()
+        guard !reduceMotion else {
+            zoomDialMounted = false
+            zoomDismissTask = nil
+            return
+        }
+        zoomDismissTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(190)) } catch { return }
+            guard !Task.isCancelled, !zoomDialVisible else { return }
+            zoomDialMounted = false
+            zoomDismissTask = nil
+        }
     }
 
     /// Live icon frame while the popup is open — a snapshot at long-press

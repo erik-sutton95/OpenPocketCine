@@ -26,6 +26,9 @@
         private let icon: (String) -> Icon
         @Binding private var expanded: Bool
         @State private var usage = MonitorToolUsage()
+        @State private var fullPaletteMounted = false
+        @State private var revealed = false
+        @State private var collapseTask: Task<Void, Never>?
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         public init(
@@ -44,64 +47,104 @@
             self.icon = icon
         }
 
+        private var contentLayout: MonitorAssistPaletteLayout {
+            layout.resolving(expanded: expanded || fullPaletteMounted)
+        }
+
         public var body: some View {
+            let compact = layout.resolving(expanded: false)
+            let full = layout.resolving(expanded: true)
+            let visible = revealed ? full : compact
+            let shape = PaletteRevealShape(width: visible.width, height: visible.height)
             Group {
-                if expanded { fullPalette } else { collapsedPalette }
+                if expanded || fullPaletteMounted { fullPalette } else { collapsedPalette }
             }
             .padding(MonitorAssistPaletteLayout.padding)
-            .frame(width: layout.width, height: layout.height, alignment: .bottomLeading)
+            .frame(
+                width: contentLayout.width, height: contentLayout.height, alignment: .bottomLeading
+            )
+            // Only the clip changes. Labels, glyphs and cells retain their final
+            // size throughout the reference's 150 ms width reveal.
+            .transaction { $0.animation = nil }
             .monitorGlass(
                 in: RoundedRectangle(cornerRadius: 14),
-                density: expanded ? .expanded : .compact
+                density: expanded || fullPaletteMounted ? .expanded : .compact
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
+            .clipShape(shape)
+            .contentShape(shape)
+            .frame(width: layout.width, height: layout.height, alignment: .bottomLeading)
+            .onAppear {
+                fullPaletteMounted = expanded
+                revealed = expanded
+            }
+            .onChange(of: expanded) { _, open in
+                collapseTask?.cancel()
+                if open { fullPaletteMounted = true }
+                withAnimation(MonitorMotion.drawerReveal(reduceMotion)) { revealed = open }
+                if !open {
+                    if reduceMotion {
+                        fullPaletteMounted = false
+                    } else {
+                        collapseTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(180))
+                            guard !Task.isCancelled, !expanded else { return }
+                            fullPaletteMounted = false
+                            collapseTask = nil
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                collapseTask?.cancel()
+                collapseTask = nil
+            }
         }
 
         private var quickTools: [MonitorToolItem] {
             usage.rankedIDs(in: tools.map(\.id), seed: usageSeed)
-                .prefix(layout.portrait ? 1 : 2)
+                .prefix(contentLayout.portrait ? 1 : 2)
                 .compactMap { id in tools.first { $0.id == id } }
         }
 
         private var collapsedPalette: some View {
             let axis =
-                layout.portrait
+                contentLayout.portrait
                 ? AnyLayout(VStackLayout(spacing: MonitorAssistPaletteLayout.spacing))
                 : AnyLayout(HStackLayout(spacing: MonitorAssistPaletteLayout.spacing))
             return axis {
-                if layout.portrait { expansionButton(open: true) }
+                if contentLayout.portrait { expansionButton(open: true) }
                 VStack(spacing: MonitorAssistPaletteLayout.spacing) {
                     ForEach(quickTools) { toolButton($0, labels: false) }
                 }
-                if !layout.portrait { expansionButton(open: true) }
+                if !contentLayout.portrait { expansionButton(open: true) }
             }
         }
 
         private var fullPalette: some View {
             let axis =
-                layout.portrait
+                contentLayout.portrait
                 ? AnyLayout(VStackLayout(spacing: MonitorAssistPaletteLayout.spacing))
                 : AnyLayout(HStackLayout(spacing: MonitorAssistPaletteLayout.spacing))
             return axis {
-                if layout.portrait { expansionButton(open: false) }
-                ScrollView(layout.portrait ? .vertical : .horizontal, showsIndicators: false) {
-                    if layout.portrait {
+                if contentLayout.portrait { expansionButton(open: false) }
+                ScrollView(contentLayout.portrait ? .vertical : .horizontal, showsIndicators: false)
+                {
+                    if contentLayout.portrait {
                         LazyVStack(spacing: MonitorAssistPaletteLayout.spacing) {
                             ForEach(tools) { toolButton($0, labels: true) }
                         }
                     } else {
                         LazyHStack(spacing: MonitorAssistPaletteLayout.spacing) {
-                            ForEach(0..<layout.columns, id: \.self) { column in
+                            ForEach(0..<contentLayout.columns, id: \.self) { column in
                                 VStack(spacing: MonitorAssistPaletteLayout.spacing) {
                                     ForEach(0..<2, id: \.self) { row in
-                                        let index = row * layout.columns + column
+                                        let index = row * contentLayout.columns + column
                                         if tools.indices.contains(index) {
                                             toolButton(tools[index], labels: true)
                                         } else {
                                             Color.clear.frame(
-                                                width: layout.cellWidth,
-                                                height: layout.cellHeight)
+                                                width: contentLayout.cellWidth,
+                                                height: contentLayout.cellHeight)
                                         }
                                     }
                                 }
@@ -109,10 +152,10 @@
                         }
                     }
                 }
-                .frame(width: layout.scrollWidth, height: layout.scrollHeight)
+                .frame(width: contentLayout.scrollWidth, height: contentLayout.scrollHeight)
                 .scrollBounceBehavior(.basedOnSize)
                 .clipped()
-                if !layout.portrait { expansionButton(open: false) }
+                if !contentLayout.portrait { expansionButton(open: false) }
             }
         }
 
@@ -121,13 +164,13 @@
                 expanded = open
             } label: {
                 let glyph =
-                    layout.portrait
+                    contentLayout.portrait
                     ? (open ? MonitorIcon.chevronUp : MonitorIcon.chevronDown)
                     : (open ? MonitorIcon.chevronRight : MonitorIcon.chevronLeft)
                 glyph.frame(width: 14, height: 14).foregroundStyle(MonitorTheme.muted)
                     .frame(
-                        width: layout.portrait ? max(0, layout.width - 8) : 15,
-                        height: layout.portrait ? 24 : max(0, layout.height - 8)
+                        width: contentLayout.portrait ? max(0, contentLayout.width - 8) : 15,
+                        height: contentLayout.portrait ? 24 : max(0, contentLayout.height - 8)
                     )
                     .contentShape(Rectangle())
             }
@@ -139,14 +182,15 @@
         private func toolButton(_ tool: MonitorToolItem, labels: Bool) -> some View {
             let label = VStack(spacing: 2) {
                 icon(tool.id).frame(
-                    width: layout.cellHeight == 52 ? 24 : 20,
-                    height: layout.cellHeight == 52 ? 24 : 20)
+                    width: contentLayout.cellHeight == 52 ? 24 : 20,
+                    height: contentLayout.cellHeight == 52 ? 24 : 20)
                 if labels {
-                    Text(tool.title).font(MonitorTheme.font(7.5, weight: .semibold)).lineLimit(1)
+                    Text(tool.title).font(MonitorTheme.font(7.5, weight: .semibold))
+                        .tracking(0.75).lineLimit(1)
                 }
             }
             .foregroundStyle(tool.enabled ? MonitorTheme.accent : MonitorTheme.secondary)
-            .frame(width: layout.cellWidth, height: layout.cellHeight)
+            .frame(width: contentLayout.cellWidth, height: contentLayout.cellHeight)
             .background(
                 tool.enabled ? MonitorTheme.accent.opacity(0.13) : .clear,
                 in: RoundedRectangle(cornerRadius: 9)
@@ -197,6 +241,24 @@
             usage.recordUse(of: tool.id, seed: usageSeed)
             expanded = false
             onOptions(tool.id)
+        }
+    }
+
+    private struct PaletteRevealShape: Shape {
+        var width: CGFloat
+        var height: CGFloat
+        var animatableData: AnimatablePair<CGFloat, CGFloat> {
+            get { AnimatablePair(width, height) }
+            set {
+                width = newValue.first
+                height = newValue.second
+            }
+        }
+        func path(in rect: CGRect) -> Path {
+            Path(
+                roundedRect: CGRect(
+                    x: rect.minX, y: rect.maxY - height,
+                    width: width, height: height), cornerRadius: 14)
         }
     }
 #endif

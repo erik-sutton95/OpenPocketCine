@@ -116,8 +116,11 @@
                         active
                             ? (appearance == .inspector
                                 ? MonitorTheme.accent : MonitorTheme.surface) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
+                    )
+                    .animation(.easeOut(duration: MonitorMotion.colorDuration), value: active)
             }
+            .buttonStyle(MonitorButtonStyle())
             .accessibilityLabel(title)
             .accessibilityAddTraits(active ? [.isSelected] : [])
         }

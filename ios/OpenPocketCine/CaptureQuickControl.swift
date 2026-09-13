@@ -2,12 +2,11 @@ import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
-import UIKit
 
 /// A snapshot of the same primary choices used by CapturePickerPanel. It holds
 /// presentation values only; camera status stays authoritative throughout a drag.
-struct CaptureQuickSnapshot: Hashable {
-    enum Kind: Hashable {
+struct CaptureQuickSnapshot: Hashable, Sendable {
+    enum Kind: Hashable, Sendable {
         case iso, isoLimit, ev, shutter, angle, whiteBalanceMode, kelvin, focus, exposure, audio
     }
     let kind: Kind
@@ -33,6 +32,17 @@ struct CaptureQuickSnapshot: Hashable {
         }
     }
     var delayed: Bool { [.iso, .isoLimit, .ev, .shutter, .angle].contains(kind) }
+
+    var display: MonitorReadoutSnapshot {
+        MonitorReadoutSnapshot(
+            title: title, options: options, selection: selection, marked: marked,
+            fallbackIndex: index)
+    }
+
+    func changedValue(translation: Double, current: Self?) -> String? {
+        guard self == current, enabled else { return nil }
+        return display.changedValue(at: display.position(translation: translation))
+    }
 
     @MainActor static func primary(_ sheet: CaptureSheet, model: AppModel) -> Self? {
         primary(
@@ -102,8 +112,8 @@ struct CaptureQuickSnapshot: Hashable {
         case .focus:
             guard supportsFocusMode else { return nil }
             return Self(
-                kind: .focus, title: "FOCUS", options: ["AF-S", "AF-C"],
-                selection: status.focusMode.map { $0 == .continuous ? "AF-C" : "AF-S" } ?? "",
+                kind: .focus, title: "FOCUS", options: FocusOption.allCases.map(\.chip),
+                selection: CaptureLists.focusOption(from: status)?.chip ?? "",
                 context: String(describing: status.focusTrack))
         case .exposure:
             return Self(
@@ -170,7 +180,10 @@ struct CaptureQuickSnapshot: Hashable {
                 model.session.setWhiteBalanceCustom(
                     kelvin: kelvin, tint: min(100, max(-100, status.whiteBalanceTint ?? 0)))
             }
-        case .focus: model.session.setFocusMode(value == "AF-C" ? .continuous : .single)
+        case .focus:
+            if let option = FocusOption.allCases.first(where: { $0.chip == value }) {
+                model.session.setFocusOption(option)
+            }
         case .exposure:
             if let mode = ExpoMode.allCases.first(where: { $0.label == value }) {
                 model.session.setExpoMode(mode)
@@ -188,10 +201,14 @@ struct CaptureDrumPresentation: Equatable {
     let sheet: CaptureSheet
     let snapshot: CaptureQuickSnapshot
     var position: Double
+
+    /// The origin is only a visual anchor when native state is unknown. A
+    /// stationary hold (or a drag back to that origin) must keep it unselected.
+    var selection: String { snapshot.display.selection(at: position) }
 }
 
-/// The gesture stays attached to the readout while its noninteractive overlay
-/// appears. One recognizer owns tap/hold/drag, so opening a drum cannot also tap.
+/// Osmo adapter for the shared readout gesture. It derives native options and
+/// owns delayed SET admission; pointer timing, ownership and lifecycle live in MonitorUI.
 struct CaptureReadoutGesture: ViewModifier {
     let sheet: CaptureSheet
     let locked: Bool
@@ -199,205 +216,78 @@ struct CaptureReadoutGesture: ViewModifier {
     let onTap: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var interaction = MonitorReadoutInteraction()
-    @State private var snapshot: CaptureQuickSnapshot?
-    @State private var identity = UUID()
-    @State private var admissionRevision: UInt64?
-    @State private var holdTask: Task<Void, Never>?
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
     @State private var commitTask: Task<Void, Never>?
-    @GestureState private var touching = false
 
-    private var current: CaptureQuickSnapshot? { CaptureQuickSnapshot.primary(sheet, model: model) }
+    private struct Source: Hashable, Sendable {
+        let cameraID: UUID?
+        let phase: String
+        let controlID: String
+        let snapshot: CaptureQuickSnapshot?
+    }
+
+    private var source: Source {
+        Source(
+            cameraID: model.session.connectedCamera?.id, phase: model.session.phase.label,
+            controlID: sheet.rawValue, snapshot: CaptureQuickSnapshot.primary(sheet, model: model))
+    }
+
     private var canInteract: Bool {
         !locked && !model.session.isLocked && scenePhase == .active
             && model.liveOperatorPanel == nil && model.captureSheet == nil
     }
-    private var ownsPointer: Bool {
-        ownership.owns(identity)
-            && (model.captureDrum == nil || model.captureDrum?.id == identity)
-    }
 
     func body(content: Content) -> some View {
-        let interactive = interactiveContent(content)
-        let lifecycle = observeLifecycle(interactive)
-        let source = observeSource(lifecycle)
-        return observePresentation(source)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(.default, accessibilityTap)
+        let current = source
+        return content.modifier(
+            MonitorReadoutGesture(
+                snapshot: current.snapshot.flatMap { $0.enabled ? $0.display : nil },
+                sourceIdentity: current, isEnabled: canInteract, ownership: $ownership,
+                presentationOwner: { model.captureDrum?.id }, onEvent: handleEvent))
     }
 
-    private func interactiveContent(_ content: Content) -> some View {
-        content.accessibilityElement(children: .ignore)
-            .contentShape(Rectangle())
-            .gesture(readoutGesture)
-            .onChange(of: touching) { _, active in
-                if !active, interaction.phase != .idle {
-                    cancel(cancelCommit: false)
-                    interaction = .init()
-                }
+    private func handleEvent(_ event: MonitorReadoutEvent<Source>) {
+        switch event {
+        case .open(let admittedSource):
+            if canInteract, admittedSource == source,
+                ownership.owner == nil, model.captureDrum == nil
+            {
+                onTap()
             }
-    }
-
-    private func observeLifecycle<V: View>(_ content: V) -> some View {
-        content
-            .onChange(of: locked) { _, value in if value { cancel() } }
-            .onChange(of: scenePhase) { _, value in if value != .active { cancel() } }
-            .onReceive(
-                NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)
-            ) { _ in cancel() }
-            .onDisappear { cancel() }
-    }
-
-    private func observeSource<V: View>(_ content: V) -> some View {
-        content
-            .onChange(of: current) { _, _ in cancel() }
-            .onChange(of: model.session.connectedCamera?.id) { _, _ in cancel() }
-            .onChange(of: model.session.phase.label) { _, _ in cancel() }
-    }
-
-    private func observePresentation<V: View>(_ content: V) -> some View {
-        content
-            .onChange(of: model.captureDrum?.id, drumPresentationChanged)
-            .onChange(of: model.captureSheet) { _, value in
-                if value != nil { cancel() }
-            }
-            .onChange(of: model.liveOperatorPanel) { _, value in if value != nil { cancel() } }
-            .onChange(of: ownership.owner, pointerOwnershipChanged)
-    }
-
-    private func drumPresentationChanged(_ previous: UUID?, _ next: UUID?) {
-        if interaction.phase == .drumming, next != identity { cancel() }
-        if interaction.phase == .pressing, let next, next != identity { cancel() }
-    }
-
-    private func pointerOwnershipChanged(_ previous: UUID?, _ next: UUID?) {
-        if interaction.phase != .idle, next != identity { cancel() }
-    }
-
-    private func accessibilityTap() {
-        if canInteract, ownership.owner == nil, model.captureDrum == nil { onTap() }
-    }
-
-    private var readoutGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .updating($touching) { _, active, _ in active = true }
-            .onChanged(handleChanged)
-            .onEnded(handleEnded)
-    }
-
-    private func handleChanged(_ value: DragGesture.Value) {
-        guard canInteract else {
-            cancel()
-            return
-        }
-        if interaction.phase == .idle, !begin() { return }
-        guard ownsPointer else {
-            cancel()
-            return
-        }
-        let armed = interaction.move(x: value.translation.width, y: value.translation.height)
-        if armed {
-            holdTask?.cancel()
-            publish()
-        } else if interaction.phase == .drumming {
-            publish()
+        case .preview(let preview):
+            guard canInteract, ownership.owns(preview.id), preview.sourceIdentity == source,
+                let snapshot = preview.sourceIdentity.snapshot, snapshot.enabled,
+                model.captureDrum == nil || model.captureDrum?.id == preview.id
+            else { return }
+            model.captureDrum = CaptureDrumPresentation(
+                id: preview.id, sheet: sheet, snapshot: snapshot, position: preview.position)
+        case .commit(let release, let revision):
+            guard model.captureDrum?.id == release.id else { return }
+            model.captureDrum = nil
+            scheduleCommit(release, revision: revision)
+        case .cancel(let identity):
+            commitTask?.cancel()
+            commitTask = nil
+            if model.captureDrum?.id == identity { model.captureDrum = nil }
         }
     }
 
-    private func handleEnded(_ value: DragGesture.Value) {
-        holdTask?.cancel()
-        guard canInteract, ownsPointer, let revision = admissionRevision else {
-            cancel()
-            _ = interaction.end()
-            return
-        }
-        _ = interaction.move(x: value.translation.width, y: value.translation.height)
-        let owned = model.captureDrum?.id == identity
-        let outcome = interaction.end()
-        ownership.release(identity)
-        admissionRevision = nil
-        if owned { model.captureDrum = nil }
-        switch outcome {
-        case .tap: onTap()
-        case .commit(let translation):
-            if owned { scheduleCommit(translation: translation, revision: revision) }
-        case .cancelled: break
-        }
-    }
-
-    private func scheduleCommit(translation: Double, revision: UInt64) {
-        guard let snapshot, snapshot == current, snapshot.enabled,
-            let index = MonitorDrumSelection.changedIndex(
-                origin: snapshot.index, translation: translation, count: snapshot.options.count)
+    private func scheduleCommit(_ release: MonitorReadoutValue<Source>, revision: UInt64) {
+        let admittedSource = release.sourceIdentity
+        let admittedWindow = windowGeometry
+        guard canInteract, admittedSource == source,
+            let snapshot = admittedSource.snapshot, snapshot.enabled,
+            let value = release.changedValue
         else { return }
-        let value = snapshot.options[index]
-        guard value != snapshot.selection else { return }
         commitTask?.cancel()
         commitTask = Task { @MainActor in
             if snapshot.delayed { try? await Task.sleep(for: .milliseconds(80)) }
-            guard !Task.isCancelled, canInteract,
-                ownership.permitsDeferredCommit(revision), model.captureDrum == nil,
-                snapshot == CaptureQuickSnapshot.primary(sheet, model: model)
+            guard !Task.isCancelled, canInteract, admittedSource == source,
+                admittedWindow == windowGeometry, ownership.permitsDeferredCommit(revision),
+                model.captureDrum == nil
             else { return }
             commitTask = nil
             snapshot.apply(value, model: model)
         }
-    }
-
-    private func begin() -> Bool {
-        guard canInteract, model.captureDrum == nil else {
-            interaction.cancel()
-            return false
-        }
-        let nextIdentity = UUID()
-        guard let revision = ownership.acquire(nextIdentity) else {
-            interaction.cancel()
-            return false
-        }
-        commitTask?.cancel()
-        commitTask = nil
-        identity = nextIdentity
-        admissionRevision = revision
-        snapshot = current
-        interaction.begin()
-        holdTask?.cancel()
-        holdTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(MonitorReadoutInteraction.holdMilliseconds))
-            guard !Task.isCancelled, canInteract, ownsPointer,
-                snapshot == current, interaction.hold()
-            else {
-                return
-            }
-            publish()
-        }
-        return true
-    }
-
-    private func publish() {
-        guard canInteract, ownsPointer, let snapshot, snapshot == current,
-            snapshot.enabled, !snapshot.options.isEmpty
-        else {
-            cancel()
-            return
-        }
-        model.captureSheet = nil
-        model.captureDrum = CaptureDrumPresentation(
-            id: identity, sheet: sheet, snapshot: snapshot,
-            position: MonitorDrumSelection.position(
-                origin: snapshot.index,
-                translation: interaction.translation, count: snapshot.options.count))
-    }
-
-    private func cancel(cancelCommit: Bool = true) {
-        holdTask?.cancel()
-        if cancelCommit {
-            commitTask?.cancel()
-            commitTask = nil
-        }
-        interaction.cancel()
-        if !touching { interaction = .init() }
-        ownership.release(identity)
-        admissionRevision = nil
-        if model.captureDrum?.id == identity { model.captureDrum = nil }
     }
 }

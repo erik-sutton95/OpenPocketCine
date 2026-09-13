@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.opencapture.monitorui.monitorReadoutGlow
 import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
@@ -240,7 +241,7 @@ fun LivePortraitChrome(
                 if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
                     Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp)) { RecChip(status.isRecording, status.recordElapsedSec) }
                 }
-                Text("REC SETUP", style = LiveType.ui(13f, FontWeight.Medium),
+                Text("REC SETUP", style = LiveType.ui(13f, FontWeight.Medium).monitorReadoutGlow(),
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp)
                         .chromeClickable(enabled = !uiLocked && chromeInteractive) { onSheet(LiveSheet.FORMAT) })
             }
@@ -595,15 +596,25 @@ fun LiveCaptureStrip(
         add(value(LiveSheet.AUDIO, "AUDIO", status.audioLabel))
     }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val quickLifetime = rememberCaptureQuickLifetime(model)
     com.opencapture.openpocketcine.monitor.MonitorCameraValues(
         values = values,
-        enabled = enabled,
+        enabled = enabled && quickLifetime.active,
         portrait = configuration.screenHeightDp > configuration.screenWidthDp,
         modifier = modifier,
-        quickControl = { id -> model?.let { captureQuickControl(LiveSheet.valueOf(id), status, it, context) } },
+        quickControl = { id -> model?.let { captureQuickControl(LiveSheet.valueOf(id), status, it, context, quickLifetime) } },
+        quickPreview = { id, preview, maxHeight ->
+            model?.let {
+                LiveControlSheet(LiveSheet.valueOf(id), it, status, locked = false,
+                    onDismiss = {}, maxHeightDp = maxHeight, preview = preview)
+            }
+        },
         onQuickActiveChange = onQuickActiveChange,
         quickBottomClearanceDp = quickBottomClearanceDp,
-        onQuickCommit = { id, value -> if (enabled) model?.let { applyCaptureQuickControl(LiveSheet.valueOf(id), value, status, it, context) } },
+        onQuickCommit = { id, source, value -> model?.let {
+            releaseCaptureQuickControl(LiveSheet.valueOf(id), source, value, it, context, quickLifetime,
+                enabled && active == null)
+        } },
         onOpen = { onOpen(LiveSheet.valueOf(it)) },
         onFrame = { id, rect -> onTileFrame(LiveSheet.valueOf(id), rect) },
     )

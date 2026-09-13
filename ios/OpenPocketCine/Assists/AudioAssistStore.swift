@@ -33,7 +33,7 @@ extension AudioAssist {
 
     static func panelSize(orientation: Orientation) -> CGSize {
         orientation == .vertical
-            ? CGSize(width: 84, height: 184) : CGSize(width: 236, height: 84)
+            ? panelSize : CGSize(width: panelSize.height, height: panelSize.width)
     }
 
     static func levelFraction(_ db: Double) -> Double {

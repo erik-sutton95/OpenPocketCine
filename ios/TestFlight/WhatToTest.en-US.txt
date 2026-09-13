@@ -3,8 +3,8 @@ Since open beta build 63
 New and changed
 
 - UI 2.0 brings Sora type, Lucide icons, adaptive camera/settings/media pages, and new monitor controls for iPhone and iPad.
-- Camera pickers open bottom-center with animated ruler drums. Pocket 4 Pro zoom: tap for 1×/3×, double tap for 6×/12×, hold for the dial. View Assist has a wider options panel.
-- Gimbal Mode, Speed and Ramp use inline drums. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
+- Tap or drag camera values to see the same full bottom-center drawer. Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the dial.
+- Gimbal Mode, Speed and Ramp each have a tab in the wider panel. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
 - Direction Lock holds the camera's pointing direction as its body rotates. Select another mode to release it.
 - Experimental AirPods head tracking follows calibrated head direction. Manual input wins; changing gimbal mode turns tracking off.
 - Fresh scopes, LIGHTS and ND open centered; drag to place and use a corner to resize. AUDIO adds movable vertical/horizontal meters and optional channel dB readings. Saved placements stay yours.
@@ -17,7 +17,7 @@ New and changed
 
 Fixes
 
-- iPhone top controls sit higher, panels are darker, and rapid View Assist tab changes no longer trigger an iOS rendering-thread assertion. Record and DISP remain reachable above Zoom.
+- iPhone corner controls clear rounded edges. Glass is translucent with tighter dark text shadows; audio meters are slim again. Rapid View Assist tab changes keep preview work bounded.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
 - Pocket 3 improvements cover live view, reconnects, camera settings and access to newly recorded clips, including files on its memory card.
 - Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.

@@ -1,7 +1,6 @@
 package com.opencapture.monitorui
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -75,7 +74,7 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
             send(value)
         }
     }
-    val rendered by animateFloatAsState(displayPosition ?: cursor, animationSpec = if (dragging || displayPosition != null) snap() else tween(220, easing = CubicBezierEasing(.22f, 1.2f, .36f, 1f)), label = "drum detent")
+    val rendered by animateFloatAsState(displayPosition ?: cursor, animationSpec = if (dragging || displayPosition != null) snap() else tween(MonitorMotion.DRUM_SETTLE_MS, easing = MonitorMotion.DrumSettle), label = "drum detent")
     Canvas(modifier.fillMaxWidth().height(86.dp).alpha(if (interactive || !dimDisabled) 1f else .45f)
         .semantics {
             contentDescription = selection.ifBlank { "Choose value" }

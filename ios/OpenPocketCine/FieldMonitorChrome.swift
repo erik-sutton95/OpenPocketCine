@@ -20,10 +20,12 @@ struct FieldMonitorStatusChrome: View {
                     if model.chromeSectionMounts(.timecode) {
                         MonitorClock(
                             model.session.status.timecodeClock,
-                            fontSize: layout.presentation?.tablet == true ? 25 : 23)
+                            fontSize: layout.presentation?.tablet == true ? 25 : 23
+                        )
+                        .offset(y: layout.presentation?.recordingReadoutInset ?? 0)
                     }
                     HStack {
-                        tally
+                        tally.offset(y: layout.presentation?.recordingReadoutInset ?? 0)
                         Spacer(minLength: 4)
                         Button("REC SETUP") { if !locked { model.captureSheet = .resolution } }
                             .font(MonitorTheme.font(12, weight: .semibold))
@@ -67,6 +69,7 @@ struct FieldMonitorStatusChrome: View {
                                 fontSize: layout.presentation?.tablet == true ? 25 : 23)
                         }
                     }
+                    .offset(y: layout.presentation?.recordingReadoutInset ?? 0)
                 }
             }
         }

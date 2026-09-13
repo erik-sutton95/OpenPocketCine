@@ -40,9 +40,15 @@ final class MonitorUIFlowTests: XCTestCase {
                 app.frame.width > 700
             {
                 XCTAssertEqual(
-                    app.buttons["monitor.system.settings"].frame.minY, 8, accuracy: 1,
-                    "Rounded iPhone corners must not add the iPad window-control top exclusion")
+                    app.buttons["monitor.system.settings"].frame.minY,
+                    8 + app.frame.height * 0.025, accuracy: 1,
+                    "Phone corner clearance must stay small and separate from iPad window exclusions"
+                )
             }
+            let lockFrame = app.buttons["monitor.system.lock"].frame
+            let settingsFrame = app.buttons["monitor.system.settings"].frame
+            XCTAssertEqual(lockFrame.width, settingsFrame.width, accuracy: 0.5)
+            XCTAssertEqual(lockFrame.height, settingsFrame.height, accuracy: 0.5)
             capture("monitor-\(orientation.rawValue)")
         }
     }
@@ -105,6 +111,16 @@ final class MonitorUIFlowTests: XCTestCase {
         rotate(.landscapeLeft)
         XCTAssertTrue(app.buttons["Close Gimbal"].isHittable)
         capture("gimbal-landscape")
+        let gimbalPanel = app.otherElements["monitor.inspector"]
+        let panelFrame = gimbalPanel.frame
+        XCTAssertEqual(panelFrame.width, min(460, app.frame.width * 0.92), accuracy: 1)
+        for tab in ["Speed", "Ramp", "Mode"] {
+            app.buttons[tab].firstMatch.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["Value"].firstMatch.exists)
+            XCTAssertEqual(gimbalPanel.frame.width, panelFrame.width, accuracy: 1)
+            XCTAssertEqual(gimbalPanel.frame.height, panelFrame.height, accuracy: 1)
+            capture("gimbal-tab-\(tab)")
+        }
         app.buttons["Close Gimbal"].tap()
         app.buttons["monitor.system.zoom"].press(forDuration: 0.55)
         let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
@@ -215,6 +231,8 @@ final class MonitorUIFlowTests: XCTestCase {
         let meter = app.descendants(matching: .any)["monitor.audio.meter"].firstMatch
         XCTAssertTrue(meter.waitForExistence(timeout: 5))
         let original = meter.frame
+        XCTAssertEqual(original.width, 28, accuracy: 1)
+        XCTAssertEqual(original.height, 168, accuracy: 1)
         XCTAssertLessThan(original.midX, app.frame.midX)
         XCTAssertEqual(original.midY, app.frame.midY, accuracy: 1)
         let start = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -227,7 +245,8 @@ final class MonitorUIFlowTests: XCTestCase {
         app.switches["Show dB values"].tap()
         capture("audio-options-horizontal-db")
         app.buttons["Close Audio Levels"].tap()
-        XCTAssertGreaterThan(meter.frame.width, meter.frame.height)
+        XCTAssertEqual(meter.frame.width, 168, accuracy: 1)
+        XCTAssertEqual(meter.frame.height, 28, accuracy: 1)
         capture("audio-meter-moved-horizontal")
     }
 

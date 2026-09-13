@@ -48,10 +48,14 @@
                     primary ? MonitorTheme.accent : Color.white.opacity(0.06),
                     in: RoundedRectangle(cornerRadius: 11)
                 )
-                .opacity(enabled ? (configuration.isPressed ? 0.65 : 1) : 0.38)
-                .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-                .animation(
-                    reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+                .opacity(
+                    enabled
+                        ? (configuration.isPressed ? MonitorMotion.pressOpacity : 1) : 0.38
+                )
+                .scaleEffect(
+                    configuration.isPressed && !reduceMotion ? MonitorMotion.pressScale : 1
+                )
+                .animation(MonitorMotion.press(reduceMotion), value: configuration.isPressed)
         }
     }
 
@@ -73,7 +77,8 @@
         let title: String
         var body: some View {
             HStack(spacing: 8) {
-                ProgressView().controlSize(.mini).tint(MonitorTheme.accent)
+                Circle().fill(MonitorTheme.accent).frame(width: 6, height: 6)
+                    .monitorPulse(period: MonitorMotion.scanPulseDuration)
                 Text(title).font(MonitorTheme.font(10, weight: .semibold))
                     .foregroundStyle(MonitorTheme.accent)
             }

@@ -321,6 +321,44 @@ class LiveMonitorLayoutTest {
     }
 
     @Test
+    fun cutoutPhoneDropsLockSettingsAndMediaByTwoAndAHalfPercentHudHeight() {
+        LiveChromeMetrics.scale = 1f
+        val se =
+            LiveMonitorLayout.fit(
+                viewportWidth = 667f,
+                viewportHeight = 375f,
+                safeLeading = 0f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+                hasDisplayCutout = false,
+            )
+        val cutout =
+            LiveMonitorLayout.fit(
+                viewportWidth = 852f,
+                viewportHeight = 393f,
+                safeLeading = 59f,
+                safeTrailing = 0f,
+                safeTop = 0f,
+                safeBottom = 0f,
+                showsBottomBars = true,
+                hasDisplayCutout = true,
+            )
+        val drop = 393f * 0.025f
+        assertEquals(12f, se.lock.minY, 0.05f)
+        assertEquals(52f, se.settings.minY, 0.05f)
+        assertEquals(12f + drop, cutout.lock.minY, 0.05f)
+        assertEquals(8f + drop, cutout.settings.minY, 0.05f)
+        assertEquals(cutout.settings.minY, cutout.media.minY - 54f - 8f, 0.05f)
+        assertEquals(cutout.lock.width, cutout.settings.width, 0.05f)
+        assertEquals(cutout.lock.width, cutout.media.width, 0.05f)
+        assertEquals(54f, cutout.lock.width, 0.05f)
+        assertEquals(20f, cutout.topDeck.minY, 0.05f)
+        LiveChromeMetrics.scale = 1f
+    }
+
+    @Test
     fun bottomBandKeepsTheThirdsSplitWhenCaptureFits() {
         val split = bottomBarSplit(barsWidth = 600f, gap = 12f, captureHug = 800f)
         assertEquals((600f - 12f) / 3f, split.assistWidth, 0.05f)

@@ -12,7 +12,6 @@
         public var onBack: () -> Void
         public var onDiagnostics: () -> Void
         public var onWatchFeed: (() -> Void)?
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         public init(
             presentation: CameraPairingPresentation, safeArea: EdgeInsets = EdgeInsets(),
@@ -55,8 +54,6 @@
                 .frame(width: proxy.size.width, height: proxy.size.height)
             }
             .background(MonitorTheme.background).foregroundStyle(.white)
-            .animation(
-                reduceMotion ? nil : .easeOut(duration: 0.16), value: presentation.currentStep)
         }
 
         private func rail(portrait: Bool) -> some View {

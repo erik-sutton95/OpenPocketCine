@@ -64,7 +64,7 @@ fun SavedCamerasExperience(model: AppModel) {
         brand = "OPENPOCKETCINE", sections = sections, key = { it.id },
         emptyMessage = "Pair a camera to start monitoring.",
         actions = {
-            if (phase == ConnectionPhase.SCANNING) StartupStatusPill("Scanning", StartupColors.accent)
+            if (phase == ConnectionPhase.SCANNING) StartupStatusPill("Scanning", StartupColors.accent, pulsing = true)
             com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.FILM, "Media library",
                 onClick = { model.homePanel = AppPanel.MEDIA })
             com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.SETTINGS, "Settings",

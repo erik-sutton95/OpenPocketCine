@@ -1,7 +1,9 @@
 package com.opencapture.monitorui
 
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Logical platform points; no display density, camera, or OS state is retained. */
 data class MonitorRect(val x: Float, val y: Float, val width: Float, val height: Float) {
@@ -52,11 +54,34 @@ object MonitorLayoutPolicy {
             MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
     }
 
+    /** Extra STBY/timecode push into the picture, past the mockup's pictureTop+8. */
+    const val FEED_READOUT_INSET = 8f
+    /** Landscape cutout-phone lock/settings/media drop, as a fraction of HUD height. */
+    const val CUTOUT_CORNER_INSET = 0.025f
+
     fun portraitReadoutTop(tablet: Boolean, safeTop: Float, statusTop: Float, pictureTop: Float): Float {
         if (tablet) return 12f
         val gaugeTop = if (safeTop > 20f) max(4f, statusTop - 16f) else 4f
-        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f)
+        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f + FEED_READOUT_INSET)
     }
+
+    fun cutoutPhoneCornerInset(viewportHeight: Float, tablet: Boolean, hasDisplayCutout: Boolean): Float =
+        if (!tablet && hasDisplayCutout) CUTOUT_CORNER_INSET * max(0f, viewportHeight) else 0f
+
+    fun assistButtonSize(tablet: Boolean): Float = if (tablet) 52f else 44f
+
+    fun assistIconSize(tablet: Boolean): Float = if (tablet) 24f else 20f
+
+    fun assistAvailableWidth(screenWidth: Float, portrait: Boolean, tablet: Boolean, cornerRadius: Float = 42f): Float {
+        val inset = if (portrait) 14f else max(14f, (cornerRadius * 0.42f).roundToInt().toFloat())
+        val recW = (if (tablet) 84f else 70f) + 16f + 12f
+        val clusterW = assistButtonSize(tablet) + 15f + 14f
+        val pad = if (portrait) 14f + recW else max(inset + clusterW + 12f, 14f + recW)
+        return max(1f, screenWidth - pad - inset)
+    }
+
+    fun assistCellWidth(screenWidth: Float, portrait: Boolean, tablet: Boolean, cornerRadius: Float = 42f): Float =
+        max(44f, floor((assistAvailableWidth(screenWidth, portrait, tablet, cornerRadius) - 44f) / 7f))
 
     data class Panel(val x: Float, val y: Float, val width: Float, val maxHeight: Float)
 

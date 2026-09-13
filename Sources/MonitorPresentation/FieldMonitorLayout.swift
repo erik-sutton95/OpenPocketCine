@@ -37,6 +37,9 @@ public struct FieldMonitorLayout: Equatable, Sendable {
     public let viewport: MonitorRect
     public let picture: MonitorRect
     public let status: MonitorRect
+    /// The tally and clock sit a little farther into the picture than the
+    /// tappable format row. Keeping this separate preserves its 44pt targets.
+    public let recordingReadoutInset: Double = 8
     public let values: MonitorRect
     public let system: MonitorRect
     public let lock: MonitorRect
@@ -144,14 +147,20 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             display = .init(
                 x: record.midX - button / 2, y: record.y - 8 - dispH, width: button, height: dispH)
             let hasCutout = max(safeArea.leading, safeArea.trailing) > 0
-            let cornerTop = (tablet ? 12.0 : (hasCutout ? 8.0 : 52.0)) + controlInset
+            // Physical phone corners clip controls authored flush to the edge.
+            // Move their cluster down without applying iPad window exclusions
+            // or shifting the picture, status actions or bottom camera values.
+            let cornerClearance = hasCutout && !tablet ? h * 0.025 : 0
+            let cornerTop =
+                (tablet ? 12.0 : (hasCutout ? 8.0 : 52.0)) + controlInset + cornerClearance
             settings = .init(
                 x: tablet ? w - 14 - button * 2 - 8 : record.midX - button / 2,
                 y: cornerTop, width: button, height: button)
             media = .init(
                 x: tablet ? settings.maxX + 8 : settings.x,
                 y: tablet ? cornerTop : settings.maxY + 8, width: button, height: button)
-            lock = .init(x: 18, y: 12 + controlInset, width: button, height: button)
+            lock = .init(
+                x: 18, y: 12 + controlInset + cornerClearance, width: button, height: button)
             gauges = .init(x: 18, y: lock.maxY + 6, width: 49, height: 52)
             // Keep the full 44pt touch target inside the screen. A 35pt band
             // centred at 21.5pt put its accessibility bounds above the window,

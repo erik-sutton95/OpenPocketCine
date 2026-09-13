@@ -14,6 +14,10 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
     public let scrollWidth: Double
     public let scrollHeight: Double
     public let columns: Int
+    private let tablet: Bool
+    private let toolCount: Int
+    private let maximumWidth: Double
+    private let maximumHeight: Double
 
     public init(
         portrait: Bool, tablet: Bool, expanded: Bool, toolCount: Int,
@@ -21,6 +25,10 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
     ) {
         self.portrait = portrait
         self.expanded = expanded
+        self.tablet = tablet
+        self.toolCount = toolCount
+        self.maximumWidth = maximumWidth
+        self.maximumHeight = maximumHeight
         let limitW = max(1, maximumWidth.isFinite ? maximumWidth : 1)
         let limitH = max(1, maximumHeight.isFinite ? maximumHeight : 1)
         let count = max(0, toolCount)
@@ -50,5 +58,12 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
 
     public func anchored(leading: Double, bottom: Double) -> MonitorRect {
         MonitorRect(x: leading, y: bottom - height, width: width, height: height)
+    }
+
+    /// Both states use the same viewport limits during a clipped reveal.
+    public func resolving(expanded: Bool) -> Self {
+        Self(
+            portrait: portrait, tablet: tablet, expanded: expanded, toolCount: toolCount,
+            maximumWidth: maximumWidth, maximumHeight: maximumHeight)
     }
 }

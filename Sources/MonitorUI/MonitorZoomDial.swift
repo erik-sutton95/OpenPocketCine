@@ -7,6 +7,7 @@
     public struct MonitorZoomDial: View {
         private let viewport: CGSize
         private let safeArea: EdgeInsets
+        private let isPresented: Bool
         private let scale: MonitorZoomScale
         private let marks: [Double]
         private let opticalStops: [Double]
@@ -17,15 +18,20 @@
         @Binding private var value: Double
         @State private var drag = MonitorZoomDrag()
         @GestureState private var pointerActive = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.scenePhase) private var scenePhase
+        @State private var appeared = false
 
         public init(
-            viewport: CGSize, safeArea: EdgeInsets = EdgeInsets(), scale: MonitorZoomScale,
+            viewport: CGSize, safeArea: EdgeInsets = EdgeInsets(), isPresented: Bool = true,
+            scale: MonitorZoomScale,
             marks: [Double], opticalStops: [Double] = [1], caption: String = "",
             value: Binding<Double>, label: @escaping (Double) -> String,
             onEditing: @escaping (Bool) -> Void, onClose: @escaping () -> Void
         ) {
             self.viewport = viewport
             self.safeArea = safeArea
+            self.isPresented = isPresented
             self.scale = scale
             self.marks = marks
             self.opticalStops = opticalStops
@@ -52,23 +58,33 @@
                 ? MonitorTheme.accent : MonitorTheme.color(0xF0B23C)
         }
 
+        private var visible: Bool { appeared && isPresented }
+        private var acceptsInput: Bool { visible && scenePhase == .active }
+
         public var body: some View {
             ZStack(alignment: .trailing) {
                 Button(action: onClose) {
-                    Color.black.opacity(0.08).contentShape(Rectangle())
+                    Color.clear.contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close zoom dial")
+                .opacity(visible ? 1 : 0)
+                .animation(MonitorMotion.dim(reduceMotion), value: visible)
 
                 dial
                     .frame(width: radius, height: radius * 2)
-                    .monitorGlass(in: MonitorZoomHalfDisc(), density: .expanded)
+                    .monitorGlass(in: MonitorZoomHalfDisc(), density: .zoom)
                     .clipShape(MonitorZoomHalfDisc())
                     .contentShape(MonitorZoomHalfDisc())
+                    .shadow(color: .black.opacity(0.5), radius: 22, y: 10)
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .updating($pointerActive) { _, active, _ in active = true }
                             .onChanged { gesture in
+                                guard acceptsInput else {
+                                    cancelPointer()
+                                    return
+                                }
                                 if drag.begin(at: value) { onEditing(true) }
                                 guard let origin = drag.anchor else { return }
                                 value = scale.dragged(
@@ -84,21 +100,42 @@
                         [label(value), caption].filter { !$0.isEmpty }.joined(separator: ", ")
                     )
                     .accessibilityAdjustableAction { direction in
+                        guard acceptsInput else { return }
                         onEditing(true)
                         value = scale.value(
                             at: scale.position(value) + (direction == .increment ? 0.02 : -0.02))
                         onEditing(false)
                     }
                     .accessibilityIdentifier("monitor.zoom.dial")
+                    .scaleEffect(
+                        visible || reduceMotion
+                            ? 1
+                            : (isPresented
+                                ? MonitorMotion.zoomDiscInScale : MonitorMotion.zoomDiscOutScale)
+                    )
+                    .offset(x: visible || reduceMotion ? 0 : radius * MonitorMotion.zoomDiscSlide)
+                    .opacity(visible ? 1 : 0)
+                    .animation(
+                        visible
+                            ? MonitorMotion.discIn(reduceMotion)
+                            : MonitorMotion.discOut(reduceMotion),
+                        value: visible
+                    )
                     .padding(.trailing, trailingInset)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
             .frame(width: viewport.width, height: viewport.height)
+            .allowsHitTesting(acceptsInput)
+            .accessibilityHidden(!acceptsInput)
+            .onAppear { appeared = true }
+            .onChange(of: acceptsInput) { _, active in if !active { cancelPointer() } }
             .onChange(of: viewport) { _, _ in cancelPointer() }
             .onChange(of: safeArea) { _, _ in cancelPointer() }
             .onChange(of: scale) { _, _ in cancelPointer() }
             .onChange(of: pointerActive) { _, active in if !active { finishEditing() } }
-            .onDisappear(perform: finishEditing)
+            .onDisappear {
+                cancelPointer()
+                appeared = false
+            }
         }
 
         private func finishEditing() {

@@ -1,13 +1,5 @@
 package com.opencapture.openpocketcine
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,6 +33,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import com.opencapture.monitorui.MonitorQuickPreview
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -62,7 +57,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -118,15 +112,38 @@ fun LiveControlSheet(
     locked: Boolean,
     onDismiss: () -> Unit,
     maxHeightDp: Float? = null,
+    preview: MonitorQuickPreview? = null,
 ) {
     val formats = VideoFormat.pickerFormats(
         status.availableVideoFormats, model.session.connectedCamera?.model, status.shootingMode,
     )
     val availableStatus = status.copy(availableVideoFormats = formats)
-    if (sheet.isRecordingSetup) {
-        RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
-    } else {
-        LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+    CompositionLocalProvider(LocalCapturePreview provides preview) {
+        if (sheet.isRecordingSetup) {
+            RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+        } else {
+            LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+        }
+    }
+}
+
+private val LocalCapturePreview = staticCompositionLocalOf<MonitorQuickPreview?> { null }
+
+/** Mount/reseat work has no authority to write while showing a held preview. */
+internal class CapturePanelEffects(private val preview: Boolean) {
+    fun run(action: () -> Unit) { if (!preview) action() }
+
+    suspend fun mount(sheet: LiveSheet, status: CameraStatus, supportsFocus: Boolean,
+        refreshAudio: () -> Unit, refreshFocus: () -> Unit, refreshIso: suspend () -> Unit,
+        seed: () -> Unit, reseatIso: () -> Unit) {
+        if (preview) return
+        if (CaptureLists.shouldRefreshAudio(sheet)) refreshAudio()
+        if (sheet == LiveSheet.FOCUS && CaptureLists.shouldRefreshFocusTrack(status, supportsFocus)) refreshFocus()
+        seed()
+        if (sheet == LiveSheet.ISO && CaptureLists.shouldGetIsoLimit(status)) {
+            refreshIso()
+            reseatIso()
+        }
     }
 }
 
@@ -136,9 +153,11 @@ private fun RecordingSetupPanel(
     initial: LiveSheet, model: AppModel, status: CameraStatus, locked: Boolean,
     onDismiss: () -> Unit, maxHeightDp: Float?,
 ) {
+    val preview = LocalCapturePreview.current
+    val enabled = !locked && preview == null
     var tab by remember(initial) { mutableStateOf(if (initial == LiveSheet.COLOR) "Color" else "Format") }
     val categories: @Composable () -> Unit = {
-        ModeBar(listOf("Format", "Color", "Mode"), listOf("Format", "Color", "Mode").indexOf(tab), !locked) {
+        ModeBar(listOf("Format", "Color", "Mode"), listOf("Format", "Color", "Mode").indexOf(tab), enabled) {
             tab = listOf("Format", "Color", "Mode")[it]
         }
     }
@@ -146,12 +165,13 @@ private fun RecordingSetupPanel(
         if (tab == "Mode") {
             val modes = CameraCommands.shootingModeCarousel(model.session.connectedCamera?.model?.name)
             Column(Modifier.fillMaxWidth().then(if (maxHeightDp != null) Modifier.heightIn(max = maxHeightDp.dp) else Modifier)
-                .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).verticalScroll(rememberScrollState()).padding(14.dp),
+                .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .verticalScroll(rememberScrollState(), enabled = preview == null).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetHeader("SHOOTING MODE", "Capture mode", onDismiss)
                 val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
                 CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode).orEmpty(),
-                    interactive = !locked && !status.isRecording) { label ->
+                    interactive = enabled && !status.isRecording) { label ->
                     modes.getOrNull(labels.indexOf(label))?.let(model::setShootingMode)
                 }
                 categories()
@@ -176,7 +196,9 @@ private fun LiveControlSheetContent(
     footer: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val enabled = !locked
+    val preview = LocalCapturePreview.current
+    val effects = CapturePanelEffects(preview != null)
+    val enabled = !locked && preview == null
     val isEvSheet = CaptureLists.isEvSheet(sheet, status.expoMode)
     val offersIsoAuto = CaptureLists.offersIsoAuto(status)
     var selectedMode by remember(sheet) {
@@ -213,8 +235,8 @@ private fun LiveControlSheetContent(
 
     fun applySeat(seat: CaptureLists.ShutterSeat) {
         preferredAngle = seat.preferredAngle
-        if (seat.persistAngle) {
-            OperatorPrefs.setShutterAngleDegrees(context, seat.preferredAngle)
+        effects.run {
+            if (seat.persistAngle) OperatorPrefs.setShutterAngleDegrees(context, seat.preferredAngle)
         }
         lastApplied = seat.selection
         drumSelection = seat.selection
@@ -390,47 +412,39 @@ private fun LiveControlSheetContent(
         }
     }
 
-    LaunchedEffect(sheet) {
-        if (CaptureLists.shouldRefreshAudio(sheet)) model.refreshAudio()
-        if (sheet == LiveSheet.FOCUS &&
-            CaptureLists.shouldRefreshFocusTrack(
-                status,
-                CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
-            )
-        ) {
-            model.refreshFocusTrack()
+    // Read-only preview mounts cannot seed preferences or issue any camera GET.
+    // Effects also guard reseating so a future caller cannot accidentally persist an angle.
+    if (preview == null) {
+        LaunchedEffect(sheet) {
+            effects.mount(sheet, status, CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
+                model::refreshAudio, model::refreshFocusTrack, { model.refreshIsoLimitNow() }, ::seed, ::reseatIso)
         }
-        seed()
-        if (sheet == LiveSheet.ISO && CaptureLists.shouldGetIsoLimit(status)) {
-            model.refreshIsoLimitNow()
-            reseatIso()
+        // Match iOS CaptureControlSheets onChange keys. Do not reseat ISO/shutter drums
+        // on every live isoIndex / shutterDenom tick — that snaps Manual back to Auto
+        // and parks the wheel on the first option.
+        LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode) {
+            if (sheet == LiveSheet.ISO) reseatIso()
         }
-    }
-    // Match iOS CaptureControlSheets onChange keys. Do not reseat ISO/shutter drums
-    // on every live isoIndex / shutterDenom tick — that snaps Manual back to Auto
-    // and parks the wheel on the first option.
-    LaunchedEffect(sheet, status.availableIsoIndices, status.colorMode) {
-        if (sheet == LiveSheet.ISO) reseatIso()
-    }
-    LaunchedEffect(sheet, status.availableShutterDenoms, status.fps) {
-        if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
-    }
-    LaunchedEffect(sheet, status.expoMode) {
-        if (sheet == LiveSheet.SHUTTER) {
+        LaunchedEffect(sheet, status.availableShutterDenoms, status.fps) {
+            if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
+        }
+        LaunchedEffect(sheet, status.expoMode) {
+            if (sheet == LiveSheet.SHUTTER) {
                 CaptureLists.shutterTabAfterExpoChange(status.expoMode, model.shutterUsesAngle)?.let {
-                selectedMode = it
+                    selectedMode = it
+                }
+                reseatShutterOrEv()
             }
-            reseatShutterOrEv()
         }
-    }
-    LaunchedEffect(sheet, status.evComp, model.facePriorityExposureEnabled) {
-        if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
-    }
-    LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.availableVideoFormats) {
-        if (sheet == LiveSheet.FORMAT && !model.session.isFormatPinActive) reseatResolution()
-    }
-    LaunchedEffect(sheet, status.colorMode) {
-        if (sheet == LiveSheet.COLOR) reseatColor()
+        LaunchedEffect(sheet, status.evComp, model.facePriorityExposureEnabled) {
+            if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
+        }
+        LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.availableVideoFormats) {
+            if (sheet == LiveSheet.FORMAT && !model.session.isFormatPinActive) reseatResolution()
+        }
+        LaunchedEffect(sheet, status.colorMode) {
+            if (sheet == LiveSheet.COLOR) reseatColor()
+        }
     }
 
     val cap = maxHeightDp?.dp
@@ -446,7 +460,7 @@ private fun LiveControlSheetContent(
                 },
             )
             .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), enabled = preview == null)
             .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
@@ -689,15 +703,6 @@ fun LivePickerHost(
     var panelHeight by remember(sheet) { mutableFloatStateOf(LiveChromeMetrics.DRUM_PICKER_HEIGHT) }
     val place = LivePopupPlacement.bottomCapturePanel(panelHeight, viewportWidth, viewportHeight,
         safeLeading, safeTrailing, safeTop, safeBottom, floorY)
-    var shown by remember(sheet) { mutableStateOf(false) }
-    LaunchedEffect(sheet) { shown = true }
-    val revealed by
-        animateFloatAsState(
-            if (shown) 1f else 0f,
-            tween(200, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-            label = "picker-reveal",
-        )
-    val slide = panelHeight + 20f
     Box(
         Modifier
             .fillMaxWidth()
@@ -706,23 +711,24 @@ fun LivePickerHost(
                 detectTapGestures { onSelect(null) }
             },
     ) {
-        Box(
-            Modifier
-                .offset(place.x.dp, (place.y + (1f - revealed) * slide).dp)
-                .width(place.width.dp)
-                .heightIn(max = place.maxHeight.dp)
-                .graphicsLayer { alpha = revealed }
-                .onSizeChanged { panelHeight = it.height / density.density },
-        ) {
-            androidx.compose.runtime.key(sheet) {
-                LiveControlSheet(
-                    sheet,
-                    model,
-                    status,
-                    locked,
-                    onDismiss = { onSelect(null) },
-                    maxHeightDp = place.maxHeight,
-                )
+        androidx.compose.runtime.key(sheet) {
+            com.opencapture.monitorui.MonitorCaptureReveal(
+                Modifier
+                    .offset(place.x.dp, place.y.dp)
+                    .width(place.width.dp)
+                    .heightIn(max = place.maxHeight.dp)
+                    .onSizeChanged { panelHeight = it.height / density.density },
+            ) {
+                androidx.compose.runtime.key(sheet) {
+                    LiveControlSheet(
+                        sheet,
+                        model,
+                        status,
+                        locked,
+                        onDismiss = { onSelect(null) },
+                        maxHeightDp = place.maxHeight,
+                    )
+                }
             }
         }
     }
@@ -730,6 +736,7 @@ fun LivePickerHost(
 
 @Composable
 private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
+    val interactive = LocalCapturePreview.current == null
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.weight(1f),
@@ -750,7 +757,7 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
                 modifier = Modifier.padding(bottom = 2.dp),
             )
         }
-        Box(Modifier.size(44.dp).chromeClickable(onClick = onClose)
+        Box(Modifier.size(44.dp).chromeClickable(enabled = interactive, onClick = { if (interactive) onClose() })
             .semantics { contentDescription = "Close camera control" }, contentAlignment = Alignment.Center) {
             OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
         }
@@ -770,7 +777,7 @@ private fun ModeBar(
             val active = index == selected
             val shape = RoundedCornerShape(9.dp)
             Box(Modifier.weight(1f).height(44.dp)
-                .chromeClickable(enabled = enabled, onClick = { onSelect(index) }), contentAlignment = Alignment.Center) {
+                .chromeClickable(enabled = enabled, onClick = { if (enabled) onSelect(index) }), contentAlignment = Alignment.Center) {
                 Box(Modifier.fillMaxWidth().height(30.dp).clip(shape)
                     .background(if (active) LiveDesign.accentDim else Color.White.copy(alpha = .05f))
                     .border(1.dp, if (active) LiveDesign.accent.copy(alpha = .55f) else LiveDesign.hairline, shape),
@@ -799,7 +806,7 @@ private fun CheckedRows(
 @Composable
 private fun FocusBody(status: CameraStatus, enabled: Boolean, onSelect: (String) -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        CaptureDrumWheel(CaptureFocusChoices.labels, status.focusLabel, interactive = enabled, onSelect = onSelect)
+        CaptureDrumWheel(CaptureFocusChoices.labels, CaptureFocusChoices.selection(status), interactive = enabled, onSelect = onSelect)
         Text("AF-S focuses once. AF-C follows focus continuously; Showcase, Lock and Priority use the camera's supported tracking modes.",
             style = LiveType.ui(9.5f).copy(lineHeight = 13.3.sp), color = LiveDesign.faint)
     }
@@ -847,9 +854,10 @@ private fun PrefToggle(
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val preview = LocalCapturePreview.current
     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp)
-        .chromeClickable(enabled = enabled) { onCheckedChange(!checked) }
-        .semantics { role = Role.Switch }.alpha(if (enabled) 1f else .45f),
+        .chromeClickable(enabled = enabled && preview == null) { if (enabled && preview == null) onCheckedChange(!checked) }
+        .semantics { role = Role.Switch }.alpha(if (enabled || preview != null) 1f else .45f),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = LiveType.ui(11.5f, FontWeight.SemiBold))
@@ -888,8 +896,14 @@ private fun CaptureDrumWheel(
     onSelect: (String) -> Unit,
 ) {
     val haptics = LocalOperatorHaptics.current
-    com.opencapture.monitorui.MonitorValueDrum(options, selection, markedValues = markedValues,
-        interactive = interactive, onSelect = { value -> haptics.selection(); onSelect(value) })
+    val preview = LocalCapturePreview.current
+    com.opencapture.monitorui.MonitorValueDrum(
+        preview?.control?.options ?: options, preview?.selection ?: selection,
+        markedValues = preview?.control?.marked ?: markedValues,
+        interactive = interactive && preview == null, displayPosition = preview?.position,
+        dimDisabled = preview == null,
+        onSelect = { value -> if (interactive && preview == null) { haptics.selection(); onSelect(value) } },
+    )
 }
 
 private fun initialSelectedMode(

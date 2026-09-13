@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.monitorui.monitorReadoutGlow
 import com.opencapture.openpocketcine.session.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -927,6 +928,7 @@ data class LiveMonitorLayout(
             showsBottomBars: Boolean,
             chromeScale: Float = 1f,
             pictureAspect: Float? = null,
+            hasDisplayCutout: Boolean = false,
         ): LiveMonitorLayout {
             LiveChromeMetrics.scale = chromeScale
             val vw = max(0f, viewportWidth)
@@ -988,15 +990,20 @@ data class LiveMonitorLayout(
                 val recordButtonX = recordX + (record - btn) / 2f
                 val buttonX = if (tablet) vw - 14f - btn else recordButtonX
                 val top = if (tablet) 12f else if (max(safeLeading, safeTrailing) < 20f) 52f else 8f
+                val cornerDrop = com.opencapture.monitorui.MonitorLayoutPolicy.cutoutPhoneCornerInset(
+                    vh, tablet, hasDisplayCutout)
+                val readoutY = 12f + com.opencapture.monitorui.MonitorLayoutPolicy.FEED_READOUT_INSET
+                val lockY = 12f + cornerDrop
+                val stackTop = top + cornerDrop
                 val valuesInset = if (tablet) 140f else 112f
                 layout = layout.copy(
-                    lock = ChromeRect(edge, 12f, btn, btn),
-                    battery = ChromeRect(edge, 12f + btn + 8f, 46f, 54f),
-                    topDeck = ChromeRect(max(72f, feed.minX + 12f), 12f,
+                    lock = ChromeRect(edge, lockY, btn, btn),
+                    battery = ChromeRect(edge, lockY + btn + 8f, 46f, 54f),
+                    topDeck = ChromeRect(max(72f, feed.minX + 12f), readoutY,
                         max(0f, (if (tablet) buttonX - btn - 8f else buttonX) - 12f -
                             max(72f, feed.minX + 12f)), if (vw < 760f) 46f else 35f),
-                    settings = ChromeRect(if (tablet) buttonX - btn - 8f else buttonX, top, btn, btn),
-                    media = ChromeRect(buttonX, if (tablet) top else top + btn + 8f, btn, btn),
+                    settings = ChromeRect(if (tablet) buttonX - btn - 8f else buttonX, stackTop, btn, btn),
+                    media = ChromeRect(buttonX, if (tablet) stackTop else stackTop + btn + 8f, btn, btn),
                     record = ChromeRect(recordX, recordY, record, record),
                     disp = ChromeRect(recordButtonX, recordY - 8f - btn, btn, btn),
                     rail = ChromeRect(recordX, 0f, record, vh),
@@ -1261,7 +1268,7 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
     Box(
         modifier
             .size(LiveChromeMetrics.LOCK.dp)
-            .monitorGlass()
+            .monitorGlass(RoundedCornerShape(14.dp))
             .then(
                 if (locked) Modifier.border(1.5.dp, LiveDesign.accent.copy(alpha = 0.75f), ChromeShape)
                 else Modifier,
@@ -1423,23 +1430,7 @@ fun RecordButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        RecordLamp(recording = recording)
-    }
-}
-
-@Composable
-private fun RecordLamp(recording: Boolean) {
-    val morph by animateFloatAsState(if (recording) 1f else 0f, tween(180), label = "record-shape")
-    Canvas(Modifier.fillMaxSize()) {
-        val d = size.minDimension
-        drawCircle(LiveDesign.tile, radius = d / 2f)
-        drawCircle(Color.White.copy(alpha = .14f), radius = d / 2f - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
-        drawCircle(LiveDesign.rec, radius = d * .40f, style = Stroke(d * .065f))
-        if (morph > 0f) {
-            val side = d * .33f * morph
-            drawRoundRect(LiveDesign.rec, topLeft = center - Offset(side / 2, side / 2),
-                size = Size(side, side), cornerRadius = CornerRadius(d * .04f))
-        }
+        com.opencapture.monitorui.MonitorRecordLamp(recording = recording)
     }
 }
 
@@ -1583,7 +1574,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
         Text(
             raw,
             color = LiveDesign.text,
-            style = LiveType.mono(15f, FontWeight.Normal),
+            style = LiveType.mono(15f, FontWeight.Normal).monitorReadoutGlow(),
             maxLines = 1,
             softWrap = false,
             modifier = modifier,
@@ -1595,7 +1586,8 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             withStyle(SpanStyle(color = LiveDesign.text)) { append(head) }
             withStyle(SpanStyle(color = LiveDesign.accent)) { append(tail) }
         },
-        style = LiveType.mono(if (tablet) 25f else 23f, FontWeight.Medium),
+        style = LiveType.mono(if (tablet) 25f else 23f, FontWeight.Medium)
+            .monitorReadoutGlow(),
         maxLines = 1,
         softWrap = false,
         modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
@@ -1607,15 +1599,18 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
 fun RecChip(recording: Boolean, elapsedSeconds: Int = 0) {
     val config = LocalConfiguration.current
     val size = if (min(config.screenWidthDp, config.screenHeightDp) >= 600) 11.5f else 10.5f
+    val pulse = com.opencapture.monitorui.monitorPulsePhase(1600, enabled = recording)
     val elapsed = elapsedSeconds.coerceAtLeast(0)
     val duration = "%02d:%02d".format(java.util.Locale.ROOT, elapsed / 60, elapsed % 60)
-    Row(Modifier.background(if (recording) LiveDesign.rec.copy(alpha = .9f) else Color(0xFF060708).copy(alpha = .78f), RoundedCornerShape(percent = 50))
+    Row(Modifier.graphicsLayer { alpha = 1f - .75f * pulse }
+        .background(if (recording) LiveDesign.rec.copy(alpha = .9f) else Color(0xFF060708).copy(alpha = .72f), RoundedCornerShape(percent = 50))
         .padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         if (recording) Box(Modifier.size(6.dp).background(Color.White, CircleShape))
         Text(if (recording) "REC" else "STBY", color = LiveDesign.text,
-            style = LiveType.ui(size, FontWeight.Medium).copy(letterSpacing = .6.sp), maxLines = 1)
-        Text(duration, color = Color.White.copy(alpha = .75f), style = LiveType.mono(size, FontWeight.Medium), maxLines = 1)
+            style = LiveType.ui(size, FontWeight.Medium).copy(letterSpacing = .6.sp).monitorReadoutGlow(), maxLines = 1)
+        Text(duration, color = Color.White.copy(alpha = .75f),
+            style = LiveType.mono(size, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1)
     }
 }
 

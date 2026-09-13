@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +34,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,6 +47,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 @Immutable
 data class MonitorValue(val id: String, val label: String, val value: String,
@@ -54,7 +57,9 @@ data class MonitorValue(val id: String, val label: String, val value: String,
 @Composable
 fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: Boolean,
     modifier: Modifier = Modifier, itemModifier: (String) -> Modifier = { Modifier },
-    quickControl: (String) -> MonitorQuickControl? = { null }, onQuickCommit: (String, String) -> Unit = { _, _ -> },
+    quickControl: (String) -> MonitorQuickControl? = { null },
+    onQuickCommit: (String, MonitorQuickControl, String) -> Unit = { _, _, _ -> },
+    quickPreview: (@Composable (String, MonitorQuickPreview, Float) -> Unit)? = null,
     onQuickActiveChange: (Boolean) -> Unit = {},
     quickBottomClearanceDp: Float = 0f,
     onOpen: (String) -> Unit) {
@@ -66,8 +71,10 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
     val configuration = LocalConfiguration.current
     val tablet = minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
     val measurer = rememberTextMeasurer()
-    val valueStyle = MonitorTypography.readout(if (tablet) 18f else 16f, FontWeight.Medium).copy(lineHeight = (if (tablet) 18 else 16).sp)
-    val labelStyle = MonitorTypography.text(8f, FontWeight.SemiBold).copy(lineHeight = 10.sp, letterSpacing = 1.12.sp)
+    val valueStyle = MonitorTypography.readout(if (tablet) 18f else 16f, FontWeight.Medium)
+        .copy(lineHeight = (if (tablet) 18 else 16).sp).monitorReadoutGlow()
+    val labelStyle = MonitorTypography.text(8f, FontWeight.SemiBold)
+        .copy(lineHeight = 10.sp, letterSpacing = 1.12.sp).monitorReadoutGlow()
     val intrinsic = values.map { item ->
         val valueWidth = measurer.measure(item.value, valueStyle, maxLines = 1).size.width
         val labelWidth = measurer.measure(item.label + item.annotation?.let { "  $it" }.orEmpty(), labelStyle, maxLines = 1).size.width
@@ -83,13 +90,16 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                 Row(Modifier.then(if (grid) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState()).widthIn(min = rowWidth)),
                     horizontalArrangement = Arrangement.spacedBy(gap.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.Bottom) {
                     row.forEachIndexed { column, item ->
+                        val renderPreview: (@Composable (MonitorQuickPreview, Float) -> Unit)? =
+                            if (quickPreview == null) null else { preview, maxHeight -> quickPreview(item.id, preview, maxHeight) }
                         Column(Modifier.then(if (grid) Modifier.weight(1f) else Modifier.width(intrinsic[rowIndex * columns + column].dp))
                             .heightIn(min = if (grid) 32.dp else 44.dp)
                             .then(itemModifier(item.id)).clip(RoundedCornerShape(8.dp))
                             .background(if (item.selected) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
                             .monitorReadoutGesture(quickControl(item.id), enabled && (gestureOwner.owner == null || gestureOwner.owner == item.id),
-                                { onOpen(item.id) }, { onQuickCommit(item.id, it) },
-                                quickBottomClearanceDp, gestureOwner, item.id)
+                                { onOpen(item.id) }, { source, value -> onQuickCommit(item.id, source, value) },
+                                quickBottomClearanceDp, gestureOwner, item.id,
+                                renderPreview)
                             .semantics { contentDescription = "${item.label} ${item.value}${item.annotation?.let { ", $it" }.orEmpty()}" }
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -123,22 +133,71 @@ fun MonitorActionButton(label: String, modifier: Modifier = Modifier, selected: 
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) { glyph(tint) }
 }
 
+/** Navigation and detail are composed once; rotation only remeasures the slots. */
+object MonitorPageLayoutPolicy {
+    const val NAV = "nav"
+    const val BODY = "body"
+    const val LANDSCAPE_NAV_WIDTH = 170f
+    const val GAP = 10f
+
+    data class Slots(
+        val navX: Float, val navY: Float, val navW: Float, val navH: Float,
+        val bodyX: Float, val bodyY: Float, val bodyW: Float, val bodyH: Float,
+    )
+
+    fun portrait(width: Float, height: Float): Boolean = height > width
+
+    /** Geometry only. Compose identity comes from the single Layout content slot. */
+    fun slots(width: Float, height: Float, portraitNavHeight: Float = 56f): Slots {
+        val w = width.coerceAtLeast(0f)
+        val h = height.coerceAtLeast(0f)
+        return if (portrait(w, h)) {
+            val navH = portraitNavHeight.coerceIn(0f, h)
+            val bodyH = (h - navH - GAP).coerceAtLeast(0f)
+            Slots(0f, 0f, w, navH, 0f, navH + GAP, w, bodyH)
+        } else {
+            val navW = LANDSCAPE_NAV_WIDTH.coerceAtMost(w)
+            val bodyW = (w - navW - GAP).coerceAtLeast(0f)
+            Slots(0f, 0f, navW, h, navW + GAP, 0f, bodyW, h)
+        }
+    }
+}
+
 @Composable
 fun MonitorPageScaffold(modifier: Modifier = Modifier,
     navigation: @Composable (portrait: Boolean) -> Unit, content: @Composable () -> Unit) {
     BoxWithConstraints(modifier.fillMaxSize()) {
-        if (maxHeight > maxWidth) {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.fillMaxWidth().background(MonitorPalette.surface, RoundedCornerShape(12.dp)).padding(10.dp)) {
-                    navigation(true)
-                }
-                Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-            }
-        } else {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.width(170.dp).fillMaxHeight().background(MonitorPalette.surface,
-                    RoundedCornerShape(12.dp)).padding(10.dp)) { navigation(false) }
-                Box(Modifier.weight(1f).fillMaxHeight()) { content() }
+        val portrait = MonitorPageLayoutPolicy.portrait(maxWidth.value, maxHeight.value)
+        val density = LocalDensity.current
+        val landscapeNav = with(density) { MonitorPageLayoutPolicy.LANDSCAPE_NAV_WIDTH.dp.toPx().roundToInt() }
+        Layout(
+            modifier = Modifier.fillMaxSize(),
+            content = {
+                Box(
+                    Modifier.layoutId(MonitorPageLayoutPolicy.NAV)
+                        .background(MonitorPalette.surface, RoundedCornerShape(12.dp)).padding(10.dp),
+                ) { navigation(portrait) }
+                Box(Modifier.layoutId(MonitorPageLayoutPolicy.BODY)) { content() }
+            },
+        ) { measurables, constraints ->
+            val nav = measurables.first { it.layoutId == MonitorPageLayoutPolicy.NAV }
+            val body = measurables.first { it.layoutId == MonitorPageLayoutPolicy.BODY }
+            val navWidth = if (portrait) constraints.maxWidth else landscapeNav.coerceAtMost(constraints.maxWidth)
+            val navPlaceable = nav.measure(Constraints(
+                minWidth = navWidth, maxWidth = navWidth,
+                minHeight = if (portrait) 0 else constraints.maxHeight,
+                maxHeight = constraints.maxHeight,
+            ))
+            val slots = MonitorPageLayoutPolicy.slots(
+                constraints.maxWidth / density.density,
+                constraints.maxHeight / density.density,
+                navPlaceable.height / density.density,
+            )
+            fun pixels(points: Float) = (points * density.density).roundToInt()
+            val bodyPlaceable = body.measure(Constraints.fixed(pixels(slots.bodyW), pixels(slots.bodyH)))
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                navPlaceable.place(pixels(slots.navX), pixels(slots.navY))
+                bodyPlaceable.place(pixels(slots.bodyX), pixels(slots.bodyY))
             }
         }
     }

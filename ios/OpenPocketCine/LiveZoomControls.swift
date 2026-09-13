@@ -292,6 +292,7 @@ struct LiveZoomChip: View {
     var onOpenDial: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var heldFactor: Double?
     @State private var snapTick = 0
 
@@ -335,53 +336,60 @@ struct LiveZoomChip: View {
     }
 
     var body: some View {
-        Text(title)
-            .font(LiveType.ui(size: 18, weight: .bold))
-            .foregroundStyle(LiveDesign.text)
-            .minimumScaleFactor(0.75)
-            .frame(
-                width: LiveChromeMetrics.zoomButtonSize, height: LiveChromeMetrics.zoomButtonSize
-            )
-            .monitorReadoutShadow()
-            .contentShape(Rectangle())
-            .gesture(
-                LongPressGesture(minimumDuration: 0.38).exclusively(before: tapGesture)
-                    .onEnded { gesture in
-                        guard !interfaceLocked else { return }
-                        switch gesture {
-                        case .first: onOpenDial?()
-                        case .second(let extended): cycle(extended: extended)
-                        }
+        KeyframeAnimator(initialValue: Double(1), trigger: snapTick) { progress in
+            Text(title)
+                .font(LiveType.ui(size: 18, weight: .bold))
+                .foregroundStyle(LiveDesign.text)
+                .minimumScaleFactor(0.75)
+                .scaleEffect(reduceMotion ? 1 : MonitorMotion.chipPopScale(at: progress))
+                .frame(
+                    width: 44,
+                    height: 44
+                )
+                .monitorReadoutShadow()
+                .contentShape(Rectangle())
+        } keyframes: { _ in
+            MoveKeyframe(0)
+            LinearKeyframe(1, duration: MonitorMotion.chipPopDuration)
+        }
+        .gesture(
+            LongPressGesture(minimumDuration: 0.38).exclusively(before: tapGesture)
+                .onEnded { gesture in
+                    guard !interfaceLocked else { return }
+                    switch gesture {
+                    case .first: onOpenDial?()
+                    case .second(let extended): cycle(extended: extended)
                     }
-            )
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { cycle() }
-            .accessibilityActions {
-                if !tapStops.doubleTap.isEmpty {
-                    Button("Extended zoom") { cycle(extended: true) }
                 }
-                Button("Continuous zoom") { if !interfaceLocked { onOpenDial?() } }
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { cycle() }
+        .accessibilityActions {
+            if !tapStops.doubleTap.isEmpty {
+                Button("Extended zoom") { cycle(extended: true) }
             }
-            .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
-            .allowsHitTesting(!interfaceLocked)
-            .disabled(interfaceLocked)
-            .accessibilityLabel("Zoom \(title)")
-            .accessibilityHint(
-                tapStops.doubleTap.isEmpty
-                    ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."
-                    : "Tap cycles 1 and 3 times. Double tap cycles 6 and 12 times. Hold opens the continuous zoom dial."
-            )
-            .accessibilityIdentifier("monitor.system.zoom")
-            .sensoryFeedback(.impact(weight: .medium), trigger: snapTick)
-            .onAppear { heldFactor = factor }
-            .onChange(of: factor) { _, next in
-                let pinching = model.session.zoomPinchPreview != nil
-                if let held = heldFactor,
-                    !LiveZoomLabelHold.shouldReplace(held: held, next: next, pinching: pinching)
-                {
-                    return
-                }
-                heldFactor = next
+            Button("Continuous zoom") { if !interfaceLocked { onOpenDial?() } }
+        }
+        .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
+        .allowsHitTesting(!interfaceLocked)
+        .disabled(interfaceLocked)
+        .accessibilityLabel("Zoom \(title)")
+        .accessibilityHint(
+            tapStops.doubleTap.isEmpty
+                ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."
+                : "Tap cycles 1 and 3 times. Double tap cycles 6 and 12 times. Hold opens the continuous zoom dial."
+        )
+        .accessibilityIdentifier("monitor.system.zoom")
+        .sensoryFeedback(.impact(weight: .medium), trigger: snapTick)
+        .onAppear { heldFactor = factor }
+        .onChange(of: factor) { _, next in
+            let pinching = model.session.zoomPinchPreview != nil
+            if let held = heldFactor,
+                !LiveZoomLabelHold.shouldReplace(held: held, next: next, pinching: pinching)
+            {
+                return
             }
+            heldFactor = next
+        }
     }
 }

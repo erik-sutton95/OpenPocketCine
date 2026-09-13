@@ -52,6 +52,22 @@ class MonitorLayoutPolicyTest {
     }
 
     @Test
+    fun pageSlotsStayTwoAcrossPortraitAndLandscape() {
+        assertTrue(MonitorPageLayoutPolicy.portrait(390f, 844f))
+        assertTrue(!MonitorPageLayoutPolicy.portrait(844f, 390f))
+        assertEquals("nav", MonitorPageLayoutPolicy.NAV)
+        assertEquals("body", MonitorPageLayoutPolicy.BODY)
+        assertEquals(170f, MonitorPageLayoutPolicy.LANDSCAPE_NAV_WIDTH)
+        val portrait = MonitorPageLayoutPolicy.slots(390f, 844f, 56f)
+        val landscape = MonitorPageLayoutPolicy.slots(844f, 390f, 56f)
+        assertEquals(0f, portrait.bodyX)
+        assertTrue(portrait.bodyH > 0f)
+        assertEquals(MonitorPageLayoutPolicy.LANDSCAPE_NAV_WIDTH + MonitorPageLayoutPolicy.GAP, landscape.bodyX)
+        assertEquals(390f, landscape.bodyH)
+        assertTrue(landscape.bodyW > 0f)
+    }
+
+    @Test
     fun invalidAspectFallsBackToCinemaWithoutInvalidGeometry() {
         for (aspect in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY)) {
             val layout = MonitorLayoutPolicy.portrait(393f, 852f, 44f, 34f, false, true, aspect)

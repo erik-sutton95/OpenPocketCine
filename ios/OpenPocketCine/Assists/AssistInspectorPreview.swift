@@ -1,4 +1,5 @@
 import CoreImage
+import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -24,7 +25,8 @@ extension LiveImageEffects {
 
 enum AssistInspectorPreviewPolicy {
     static let maximumImageDimension: CGFloat = 320
-    static let refreshInterval: Duration = .milliseconds(200)
+    static let refreshInterval: Duration = .nanoseconds(
+        Int64(MonitorPreviewAdmission.minimumIntervalNanoseconds))
 
     static func height(width: CGFloat, tool: LiveAssistTool) -> CGFloat {
         let ratio: CGFloat
@@ -52,6 +54,21 @@ enum AssistInspectorPreviewPolicy {
     static func imageEffects(
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer
     ) -> LiveImageEffects {
+        var result = imageOptions(assist: assist, tool: tool, transfer: transfer)
+        if tool == .lut {
+            let lut = assist.inspectorLUT(transfer: transfer)
+            result.lutDimension = lut.dimension
+            result.lutRGBA = lut.rgba
+        }
+        return result
+    }
+
+    /// Cheap option snapshot, including settings of a tool that is off on the
+    /// main picture. This must not resolve or prepare a preview-only LUT.
+    @MainActor
+    static func imageOptions(
+        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer
+    ) -> LiveImageEffects {
         var result = assist.effects
         result.peaking = tool == .peaking
         result.falseColor = tool == .falseColor
@@ -67,9 +84,6 @@ enum AssistInspectorPreviewPolicy {
         result.colorMode = transfer.colorMode
         result.mirror = tool == .mirror || assist.isVisible(.mirror)
         if tool == .lut {
-            let lut = assist.inspectorLUT(transfer: transfer)
-            result.lutDimension = lut.dimension
-            result.lutRGBA = lut.rgba
             result.splitComparison = assist.splitComparison
         }
         if tool == .desqueeze { result.desqueezeFactor = assist.desqueezeFactor }
@@ -77,21 +91,56 @@ enum AssistInspectorPreviewPolicy {
     }
 }
 
+/// Identifies image meaning without observing every retained source buffer.
+/// Cached picture effects and LUT inputs are cheap to compare. Resolving a
+/// preview-only LUT is deferred until the retained worker admits a job.
+private struct AssistInspectorImageConfiguration: Equatable {
+    let source: ObjectIdentifier
+    let sourceEpoch: UInt64
+    let playback: Bool
+    let tool: LiveAssistTool
+    let effects: LiveImageEffects
+    let transfer: MonitorTransfer
+    let lutSelection: LUTSelection
+    let lutExposureStops: Double
+    let customLUTName: String?
+    let lutColorMode: ColorMode?
+    let lutFamily: CameraBodyFamily
+    let lutCameraName: String?
+}
+
 /// A draw-only preview slot for the shared inspector. Scope plots reuse the
-/// existing bounded sample bundle. Image tools own one cancellable 5 Hz task
-/// while this view is mounted; closing or changing the inspector drops its work.
+/// existing bounded sample bundle. Image tasks borrow the session's retained
+/// worker, so tool changes and remounts cannot reset its one-job/5 Hz admission.
 struct AssistInspectorPreview: View {
     var tool: LiveAssistTool
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.audioInspectorLevels) private var audioInspectorLevels
-    @State private var renderer = AssistInspectorImageRenderer()
+    @State private var owner: UUID?
     @State private var image: CGImage?
     @State private var renderedTool: LiveAssistTool?
     @State private var availableWidth: CGFloat = 0
 
     private var isActive: Bool {
         scenePhase == .active && model.assist.inspectorSceneActive
+    }
+
+    private var imageConfiguration: AssistInspectorImageConfiguration? {
+        guard isActive, AssistInspectorPreviewPolicy.isImage(tool) else { return nil }
+        let samples = model.monitorSamples
+        guard let source = samples.inspectorSource else { return nil }
+        return AssistInspectorImageConfiguration(
+            source: ObjectIdentifier(samples), sourceEpoch: samples.inspectorSourceEpoch,
+            playback: samples.usesPlaybackSource, tool: tool,
+            effects: AssistInspectorPreviewPolicy.imageOptions(
+                assist: model.assist, tool: tool, transfer: source.transfer),
+            transfer: source.transfer,
+            lutSelection: model.assist.lutSelection,
+            lutExposureStops: model.assist.lutExposureStops,
+            customLUTName: OperatorPrefs.selectedCustomFileName,
+            lutColorMode: model.assist.monitorColorMode,
+            lutFamily: model.assist.monitorFamily, lutCameraName: model.assist.monitorCameraName)
     }
 
     var body: some View {
@@ -120,9 +169,13 @@ struct AssistInspectorPreview: View {
             guard isActive else { return }
             await updateImage()
         }
-        .onChange(of: model.monitorSamples.inspectorSourceEpoch) { _, _ in
-            image = nil
-            renderedTool = nil
+        .onChange(of: imageConfiguration) { _, _ in
+            if let owner { model.inspectorPreview.invalidate(owner: owner) }
+            clearImage()
+        }
+        .onDisappear {
+            if let owner { model.inspectorPreview.deactivate(owner: owner) }
+            clearImage()
         }
     }
 
@@ -233,16 +286,30 @@ struct AssistInspectorPreview: View {
 
     @MainActor
     private func updateImage() async {
-        guard AssistInspectorPreviewPolicy.isImage(tool) else { return }
+        guard !Task.isCancelled, AssistInspectorPreviewPolicy.isImage(tool) else { return }
+        let renderer = model.inspectorPreview
+        let identity = UUID()
+        owner = identity
+        renderer.activate(owner: identity)
+        defer {
+            renderer.deactivate(owner: identity)
+            if owner == identity { owner = nil }
+        }
         while !Task.isCancelled {
-            if let source = model.monitorSamples.inspectorSource {
-                let sourceEpoch = model.monitorSamples.inspectorSourceEpoch
-                let effects = AssistInspectorPreviewPolicy.imageEffects(
-                    assist: model.assist, tool: tool, transfer: source.transfer)
-                let rendered = await renderer.render(source: source.buffer, effects: effects)
+            if let configuration = imageConfiguration,
+                let source = model.monitorSamples.inspectorSource
+            {
+                let rendered = await renderer.render(
+                    owner: identity, source: source.buffer
+                ) {
+                    AssistInspectorPreviewPolicy.imageEffects(
+                        assist: model.assist, tool: tool, transfer: source.transfer)
+                }
                 guard !Task.isCancelled else { return }
-                if let rendered, sourceEpoch == model.monitorSamples.inspectorSourceEpoch {
-                    image = rendered
+                if let rendered, renderer.isCurrent(rendered),
+                    configuration == imageConfiguration
+                {
+                    image = rendered.image
                     renderedTool = tool
                 }
             }
@@ -254,5 +321,10 @@ struct AssistInspectorPreview: View {
                 return
             }
         }
+    }
+
+    private func clearImage() {
+        image = nil
+        renderedTool = nil
     }
 }

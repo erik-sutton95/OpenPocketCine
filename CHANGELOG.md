@@ -24,8 +24,10 @@ separate iOS and Android lists.
   the half-disc zoom control retain the existing camera actions and live pipeline.
   Fresh scope sizes adapt to device geometry without replacing saved manual sizes.
   New windowed tools start centered; audio is movable with vertical/horizontal
-  bars and optional channel dB readings. Camera pickers rise from bottom-center,
-  with animated ruler drums, darker panels and corrected iPhone top spacing.
+  slim bars and optional channel dB readings. Tapping and dragging camera values
+  share the full bottom-center drawer, with reference ruler animations,
+  translucent glass, tighter dark readout shadows and corrected corner spacing.
+  Assist previews retain their admission limit across rapid tabs and remounts.
   Pocket 4 Pro zoom separates 1×/3× taps from 6×/12× double taps.
   Physical camera-session qualification and the Android rendering exceptions are
   tracked in [parity](docs/PARITY.md#ui-20-qualification).
@@ -40,7 +42,7 @@ separate iOS and Android lists.
 - Saved-camera rows now show their own connection progress and Cancel action,
   with names above availability/actions. On iOS, Watch a feed is an eye button
   beside Multiview in the camera-list header.
-- Gimbal controls use inline Mode, Speed and Ramp drums in a trailing drawer.
+- Gimbal controls use Mode, Speed and Ramp tabs in a wider trailing drawer.
   Its Motion Control footer opens the experimental editor. Both shells.
 
 - Direction Lock replaces the unavailable Locked gimbal option on iOS and

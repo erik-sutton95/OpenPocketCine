@@ -629,11 +629,21 @@ class CaptureSheetTest {
             listOf("AF-S", "AF-C", "Showcase", "Lock", "Priority"),
             CaptureFocusChoices.labels,
         )
-        assertEquals(listOf("AF-S", "AF-C"), captureQuickFocusControl(afs).options)
+        assertEquals(CaptureFocusChoices.labels, captureQuickFocusControl(afs).options)
         assertEquals("AF-S", captureQuickFocusControl(afs).selection)
-        assertEquals("AF-C", captureQuickFocusControl(afc).selection)
-        assertEquals(listOf("AF-S", "AF-C"), captureQuickFocusControl(lock).options)
-        assertEquals("AF-C", captureQuickFocusControl(lock).selection)
+        assertEquals("", captureQuickFocusControl(afc).selection)
+        assertEquals(CaptureFocusChoices.labels, captureQuickFocusControl(lock).options)
+        assertEquals("Lock", captureQuickFocusControl(lock).selection)
+    }
+
+    @Test
+    fun holdDrawerChromeMatchesThePersistentPicker() {
+        val status = CameraStatus(expoMode = CameraCommands.EXPO_MANUAL)
+        assertEquals("ISO", CaptureLists.headerTitle(LiveSheet.ISO, status.expoMode))
+        assertEquals("Sensitivity", CaptureLists.headerSubtitle(LiveSheet.ISO, status.expoMode, 0, false))
+        assertEquals("AUDIO", CaptureLists.headerTitle(LiveSheet.AUDIO, status.expoMode))
+        assertEquals(listOf("Channel", "Wind", "Dir", "Vocal"), CaptureLists.modeTabs(LiveSheet.AUDIO, status, false))
+        assertEquals("FOCUS", CaptureLists.headerTitle(LiveSheet.FOCUS, status.expoMode))
     }
 
     @Test

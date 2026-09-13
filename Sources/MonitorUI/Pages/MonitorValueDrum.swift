@@ -4,6 +4,8 @@
 
     /// A cylindrical selector shared by capture, movement and preview controls.
     /// During a drag only the visual detent moves; the binding commits once on lift.
+    /// A supplied preview position is read-only and retains the enabled appearance;
+    /// its selection binding describes the displayed value, or empty for unknown.
     public struct MonitorValueDrum: View {
         public let options: [String]
         @Binding private var selection: String
@@ -40,14 +42,15 @@
                 origin: originIndex, translation: translation, count: options.count)
         }
         private var focusedIndex: Int { Int(position.rounded()) }
+        private var acceptsInput: Bool { isInteractive && previewPosition == nil }
         private var settleAnimation: Animation? {
-            reduceMotion ? nil : .timingCurve(0.22, 1.2, 0.36, 1, duration: 0.22)
+            MonitorMotion.settle(reduceMotion)
         }
 
         public var body: some View {
             let metrics = MonitorDrumMetrics(options: options)
             let currentPosition = position
-            let hasSelection = dragging || previewPosition != nil || options.contains(selection)
+            let hasSelection = dragging || options.contains(selection)
             let rows = options.enumerated().compactMap { index, option -> MonitorDrumRow? in
                 let distance = Double(index) - currentPosition
                 guard abs(distance) < 4 else { return nil }
@@ -63,14 +66,14 @@
                     DragGesture(minimumDistance: 3)
                         .updating($dragging) { _, active, _ in active = true }
                         .onChanged { value in
-                            guard isInteractive,
+                            guard acceptsInput,
                                 drag.begin(selection: selection, identity: interactionIdentity())
                             else { return }
                             translation = value.translation.width
                         }
                         .onEnded { value in
                             let origin = drag.end(identity: interactionIdentity())
-                            guard isInteractive, let origin,
+                            guard acceptsInput, let origin,
                                 let index = MonitorDrumSelection.changedIndex(
                                     origin: options.firstIndex(of: origin) ?? 0,
                                     translation: value.translation.width,
@@ -90,7 +93,7 @@
                 .onChange(of: options) { _, _ in cancelDrag() }
                 .onChange(of: selection) { _, _ in if drag.origin != nil { cancelDrag() } }
                 .onChange(of: interactionIdentity()) { _, _ in cancelDrag() }
-                .onChange(of: isInteractive) { _, active in if !active { cancelDrag() } }
+                .onChange(of: acceptsInput) { _, active in if !active { cancelDrag() } }
                 .onChange(of: dragging) { _, active in
                     if !active {
                         resetDrag()
@@ -103,7 +106,7 @@
                 .accessibilityLabel("Value")
                 .accessibilityValue(selection.isEmpty ? "Not set" : selection)
                 .accessibilityAdjustableAction { direction in
-                    guard isInteractive, !options.isEmpty else { return }
+                    guard acceptsInput, !options.isEmpty else { return }
                     let next =
                         options.firstIndex(of: selection).map {
                             direction == .increment ? $0 + 1 : $0 - 1
@@ -113,7 +116,7 @@
         }
 
         private func commit(_ option: String) {
-            guard isInteractive, options.contains(option) else { return }
+            guard acceptsInput, options.contains(option) else { return }
             withAnimation(settleAnimation) {
                 if selection != option { selection = option }
                 drag.cancel(pointerIsActive: dragging)
@@ -217,7 +220,7 @@
             .frame(width: row.metrics.cellWidth, height: 78)
             .contentShape(Rectangle())
             .animation(
-                reduceMotion ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.18),
+                MonitorMotion.curve(MonitorMotion.soft, duration: 0.18, reduceMotion: reduceMotion),
                 value: row.selected
             )
             .position(x: canvasWidth / 2 + row.distance * row.metrics.cellWidth, y: 39)

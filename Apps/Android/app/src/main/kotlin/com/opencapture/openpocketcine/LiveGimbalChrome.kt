@@ -1,17 +1,9 @@
 package com.opencapture.openpocketcine
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,9 +27,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -64,16 +56,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.setProgress
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.opencapture.monitorui.MonitorDrawerTabs
+import com.opencapture.monitorui.MonitorDurationDial
+import com.opencapture.monitorui.MonitorDurationDialMetrics
+import com.opencapture.monitorui.MonitorInspector
+import com.opencapture.monitorui.MonitorOptionGroup
+import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorValueDrum
+import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.GimbalHudCopy
 import com.opencapture.openpocketcine.session.GimbalMode
 import com.opencapture.openpocketcine.session.GimbalMoveEngine
@@ -92,7 +86,6 @@ enum class LiveGimbalPanel {
     RUN_PILL,
 }
 
-private const val SHEET_WIDTH_DP = 340f
 private const val EDITOR_WIDTH_DP = 340f
 private const val HOLD_MS = 300L
 
@@ -118,8 +111,9 @@ fun LiveGimbalButton(
     }
 }
 
-/** Same host as [LivePickerHost]: slide-up glass, 10dp above the capture bar. */
+/** Trailing gimbal inspector uses the shared monitor-ui frame. */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun LiveGimbalSheetHost(
     model: AppModel,
     layout: LiveMonitorLayout,
@@ -129,25 +123,95 @@ fun LiveGimbalSheetHost(
     safeTop: Float,
     safeBottom: Float,
 ) {
-    val portrait = layout.viewportHeight > layout.viewportWidth
-    val width = min(312f, layout.viewportWidth * .66f)
-    val height = if (portrait) min(layout.onFeed.height * .52f, layout.viewportHeight * .52f).coerceAtLeast(280f)
-        else layout.viewportHeight
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { shown = true }
-    val reveal by animateFloatAsState(if (shown) 1f else 0f,
-        tween(150, easing = CubicBezierEasing(.16f, 1f, .3f, 1f)), label = "gimbal-drawer")
-    Box(Modifier.fillMaxSize().pointerInput(Unit) {
-        detectTapGestures { model.liveGimbalPanel = LiveGimbalPanel.NONE }
-    }) {
-        Box(Modifier.align(Alignment.CenterEnd).width(width.dp).height(height.dp)
-            .graphicsLayer { translationX = (1f - reveal) * size.width; alpha = reveal }
-            .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
-            .padding(top = if (portrait) 8.dp else max(16f, safeTop + 10f).dp,
-                end = max(14f, safeTrailing + 10f).dp,
-                bottom = if (portrait) 8.dp else max(12f, safeBottom).dp)
-            .pointerInput(Unit) { detectTapGestures { } }) {
-            LiveGimbalSheet(model, maxHeightDp = height - 24f, embedded = true)
+    var selectedTab by remember { mutableStateOf(GimbalSettingsTab.MODE) }
+    val mode by model.session.gimbalMode.collectAsState()
+    val speed by model.session.gimbalSpeed.collectAsState()
+    val program by model.session.gimbalProgram.collectAsState()
+    val phase by model.session.phaseFlow.collectAsState()
+    val cameraId = model.session.connectedCamera?.id
+    var revision by remember { mutableIntStateOf(0) }
+    val canApply = !model.isEditingChrome && model.liveChromeInteractive &&
+        model.liveGimbalPanel == LiveGimbalPanel.SHEET
+    DisposableEffect(selectedTab, cameraId, phase, canApply) {
+        revision += 1
+        onDispose { revision += 1 }
+    }
+    val context = GimbalInteractionContext(cameraId, phase, selectedTab, revision, canApply)
+    fun applyIfCurrent(block: () -> Unit) {
+        if (!context.matches(model, selectedTab, revision)) return
+        block()
+    }
+    MonitorInspector(
+        title = "GIMBAL",
+        viewportWidth = layout.viewportWidth,
+        viewportHeight = layout.viewportHeight,
+        onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
+        trailing = true,
+        hasNavigation = false,
+        safeLeading = safeLeading,
+        safeTrailing = safeTrailing,
+        safeTop = safeTop,
+        safeBottom = safeBottom,
+        footer = {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
+                    .background(LiveDesign.accentDim, RoundedCornerShape(10.dp))
+                    .chromeClickable {
+                        applyIfCurrent { model.liveGimbalPanel = LiveGimbalPanel.EDITOR }
+                    }
+                    .padding(horizontal = 12.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Motion Control", style = LiveType.ui(11.5f, FontWeight.SemiBold))
+                    Text("${program.summary} · Experimental", color = LiveDesign.muted, style = LiveType.ui(9f))
+                }
+                OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(15.dp), LiveDesign.accent)
+            }
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            MonitorDrawerTabs(
+                tabs = GimbalSettingsTab.entries.map { tab -> tab.title },
+                selected = selectedTab.ordinal,
+                onSelect = { selectedTab = GimbalSettingsTab.entries[it] },
+            )
+            key(context) {
+                MonitorOptionGroup {
+                    when (selectedTab) {
+                        GimbalSettingsTab.MODE ->
+                            MonitorValueDrum(
+                                GimbalMode.pickerOrder.map { it.label }, mode.label,
+                                interactive = canApply,
+                            ) { label ->
+                                applyIfCurrent {
+                                    GimbalMode.pickerOrder.firstOrNull { it.label == label }
+                                        ?.let(model.session::setGimbalMode)
+                                }
+                            }
+                        GimbalSettingsTab.SPEED ->
+                            MonitorValueDrum(
+                                GimbalSpeed.pickerOrder.map { it.label }, speed.label,
+                                interactive = canApply,
+                            ) { label ->
+                                applyIfCurrent {
+                                    GimbalSpeed.pickerOrder.firstOrNull { it.label == label }
+                                        ?.let(model.session::setGimbalSpeed)
+                                }
+                            }
+                        GimbalSettingsTab.RAMP ->
+                            MonitorValueDrum(
+                                GimbalRamp.pickerOrder.map { it.label }, model.gimbalRamp.label,
+                                interactive = canApply,
+                            ) { label ->
+                                applyIfCurrent {
+                                    GimbalRamp.pickerOrder.firstOrNull { it.label == label }
+                                        ?.let(model::updateGimbalRamp)
+                                }
+                            }
+                    }
+                }
+            }
         }
     }
 }
@@ -163,6 +227,8 @@ fun LiveGimbalOverlay(
     val panel = model.liveGimbalPanel
     val program by model.session.gimbalProgram.collectAsState()
     val running by model.session.gimbalMoveRunning.collectAsState()
+    val phase by model.session.phaseFlow.collectAsState()
+    val cameraId = model.session.connectedCamera?.id
     var frameTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(panel, running) {
         if (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running) {
@@ -250,6 +316,7 @@ fun LiveGimbalOverlay(
                 sizeHintH = 280f,
                 bounds = bounds,
                 defaultTopCenter = defaultTopCenter,
+                identity = Triple(panel, cameraId, phase),
             ) {
                 LiveGimbalEditor(model, program, running, maxHeightDp = bounds.height)
             }
@@ -262,6 +329,7 @@ fun LiveGimbalOverlay(
                 bounds = bounds,
                 defaultTopCenter = defaultTopCenter,
                 immediateDrag = true,
+                identity = Triple(panel, cameraId, phase),
             ) {
                 LiveGimbalRunPill(model, program, running)
             }
@@ -277,6 +345,7 @@ private fun GimbalFloatMove(
     bounds: ChromeRect,
     defaultTopCenter: Offset,
     immediateDrag: Boolean = false,
+    identity: Any? = null,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -291,8 +360,11 @@ private fun GimbalFloatMove(
     val raw = model.gimbalFloatCenter ?: defaultTopCenter.copy(y = defaultTopCenter.y + measuredH / 2f)
     val center = clampCenter(raw, measuredW, measuredH, bounds)
     val currentCenter by rememberUpdatedState(center)
+    DisposableEffect(identity) {
+        onDispose { origin = null; moved = false }
+    }
     val dragModifier = Modifier
-            .pointerInput(bounds, measuredW, measuredH, immediateDrag) {
+            .pointerInput(bounds, measuredW, measuredH, immediateDrag, identity) {
                 detectHoldThenDragAllowClicks(
                     holdMs = HOLD_MS,
                     immediate = immediateDrag,
@@ -340,40 +412,20 @@ private enum class GimbalSettingsTab(val title: String) {
     MODE("Mode"), SPEED("Speed"), RAMP("Ramp")
 }
 
-@Composable
-private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float, embedded: Boolean = false) {
-    val mode by model.session.gimbalMode.collectAsState()
-    val speed by model.session.gimbalSpeed.collectAsState()
-    val program by model.session.gimbalProgram.collectAsState()
-    Column(Modifier.fillMaxWidth().heightIn(max = maxHeightDp.dp)
-        .then(if (embedded) Modifier else Modifier.pickerPanelGlass(RoundedCornerShape(16.dp)))
-        .verticalScroll(rememberScrollState()).padding(start = 14.dp, top = 8.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("GIMBAL", style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.6.sp))
-            Spacer(Modifier.weight(1f))
-            LivePopupCloseButton(onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE })
-        }
-        Text("MODE", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
-        com.opencapture.monitorui.MonitorValueDrum(GimbalMode.pickerOrder.map { it.label }, mode.label) { label ->
-            GimbalMode.pickerOrder.firstOrNull { it.label == label }?.let(model.session::setGimbalMode)
-        }
-        Text("SPEED", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
-        com.opencapture.monitorui.MonitorValueDrum(GimbalSpeed.pickerOrder.map { it.label }, speed.label) { label ->
-            GimbalSpeed.pickerOrder.firstOrNull { it.label == label }?.let(model.session::setGimbalSpeed)
-        }
-        Text("RAMP", color = LiveDesign.muted, style = LiveType.ui(8.5f, FontWeight.SemiBold))
-        chipRow(GimbalRamp.pickerOrder, model.gimbalRamp, { it.label }) { model.updateGimbalRamp(it) }
-        Row(Modifier.fillMaxWidth().padding(top = 7.dp)
-            .background(LiveDesign.accentDim, RoundedCornerShape(10.dp))
-            .chromeClickable { model.liveGimbalPanel = LiveGimbalPanel.EDITOR }
-            .padding(horizontal = 12.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Motion Control", style = LiveType.ui(11.5f, FontWeight.SemiBold))
-                Text("${program.summary} · Experimental", color = LiveDesign.muted, style = LiveType.ui(9f))
-            }
-            OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(15.dp), LiveDesign.accent)
-        }
+private data class GimbalInteractionContext(
+    val cameraId: String?,
+    val phase: ConnectionPhase,
+    val tab: GimbalSettingsTab?,
+    val revision: Int,
+    val enabled: Boolean,
+) {
+    fun matches(model: AppModel, liveTab: GimbalSettingsTab?, liveRevision: Int): Boolean {
+        if (!enabled || revision != liveRevision || model.liveGimbalPanel != LiveGimbalPanel.SHEET) return false
+        if (tab != null && tab != liveTab) return false
+        if (model.session.connectedCamera?.id != cameraId) return false
+        if (model.session.phase != phase) return false
+        if (model.isEditingChrome || !model.liveChromeInteractive) return false
+        return true
     }
 }
 
@@ -381,11 +433,13 @@ private fun LiveGimbalSheet(model: AppModel, maxHeightDp: Float, embedded: Boole
 private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: Boolean, maxHeightDp: Float) {
     val countdown by model.session.gimbalMoveCountdown.collectAsState()
     val paused by model.session.gimbalMovePaused.collectAsState()
+    val phase by model.session.phaseFlow.collectAsState()
+    val cameraId = model.session.connectedCamera?.id
     Column(
         Modifier
             .width(EDITOR_WIDTH_DP.dp)
             .heightIn(max = maxHeightDp.dp)
-            .background(com.opencapture.monitorui.MonitorPalette.overlayPanel, RoundedCornerShape(16.dp))
+            .background(MonitorPalette.expandedGlass, RoundedCornerShape(16.dp))
             .verticalScroll(rememberScrollState())
             .padding(top = 10.dp, start = 12.dp, end = 12.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
@@ -412,13 +466,14 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                 size = 30.dp,
             )
         }
-        waypointRow(model, program, GimbalWaypointSlot.A, duration = null, floor = null)
+        waypointRow(model, program, GimbalWaypointSlot.A, duration = null, floor = null, running, cameraId, phase)
         waypointRow(
             model,
             program,
             GimbalWaypointSlot.B,
             duration = program.durationAB,
             floor = GimbalProgram.minTravelDuration(program.a, program.b),
+            running, cameraId, phase,
         )
         waypointRow(
             model,
@@ -426,6 +481,7 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
             GimbalWaypointSlot.C,
             duration = program.durationBC,
             floor = GimbalProgram.minTravelDuration(program.b, program.c),
+            running, cameraId, phase,
         )
         if (program.b != null && program.c != null) {
             Text(String.format(java.util.Locale.US, "Smoothness %.2f", program.smoothness),
@@ -461,13 +517,16 @@ private fun waypointRow(
     slot: GimbalWaypointSlot,
     duration: Double?,
     floor: Double?,
+    running: Boolean,
+    cameraId: String?,
+    phase: ConnectionPhase,
 ) {
     val point = program.point(slot)
     val set = point != null
     val readout = point?.takeIf { it.yawDeg.isFinite() && it.pitchDeg.isFinite() && it.zoom.isFinite() }?.let {
         String.format(java.util.Locale.US, "PAN %+.0f°  TILT %+.0f°  %.1f×", it.yawDeg, it.pitchDeg, it.zoom)
     } ?: "Not set"
-    com.opencapture.monitorui.MonitorOptionGroup {
+    MonitorOptionGroup {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(22.dp).background(
                 if (set) LiveDesign.accentDim else LiveDesign.glassBright, CircleShape),
@@ -507,13 +566,26 @@ private fun waypointRow(
                 Text(if (slot == GimbalWaypointSlot.B) "A → B" else "B → C",
                     style = LiveType.ui(8.5f, FontWeight.SemiBold), color = LiveDesign.muted,
                     modifier = Modifier.weight(1f))
-                DurationDial(value = duration, floor = floor, label = slot.letter, onDuration = { next ->
-                    when (slot) {
-                        GimbalWaypointSlot.B -> model.session.setGimbalLegDuration(ab = next)
-                        GimbalWaypointSlot.C -> model.session.setGimbalLegDuration(bc = next)
-                        GimbalWaypointSlot.A -> Unit
-                    }
-                })
+                val haptics = LocalOperatorHaptics.current
+                MonitorDurationDial(
+                    value = duration,
+                    onChange = { next ->
+                        if (running) return@MonitorDurationDial
+                        if (model.liveGimbalPanel != LiveGimbalPanel.EDITOR) return@MonitorDurationDial
+                        if (model.session.connectedCamera?.id != cameraId) return@MonitorDurationDial
+                        if (model.session.phase != phase) return@MonitorDurationDial
+                        when (slot) {
+                            GimbalWaypointSlot.B -> model.session.setGimbalLegDuration(ab = next)
+                            GimbalWaypointSlot.C -> model.session.setGimbalLegDuration(bc = next)
+                            GimbalWaypointSlot.A -> Unit
+                        }
+                    },
+                    range = floor..MonitorDurationDialMetrics.MAX,
+                    modifier = Modifier.testTag("motion.duration.${slot.letter}"),
+                    source = listOf(slot, floor, running, cameraId, phase, LiveGimbalPanel.EDITOR),
+                    enabled = !running,
+                    onStep = { haptics.selection() },
+                )
             }
         }
     }
@@ -554,79 +626,6 @@ private fun LiveGimbalRunPill(model: AppModel, program: GimbalProgram, running: 
                 modifier = Modifier.size(16.dp),
                 tint = LiveDesign.text,
             )
-        }
-    }
-}
-
-@Composable
-private fun DurationDial(value: Double, floor: Double, label: String, onDuration: (Double) -> Unit) {
-    val density = LocalDensity.current
-    val currentValue by rememberUpdatedState(value)
-    val update by rememberUpdatedState(onDuration)
-    var dragStart by remember { mutableStateOf(value) }
-    var translation by remember { mutableFloatStateOf(0f) }
-    var dragging by remember { mutableStateOf(false) }
-    var lastEmitted by remember { mutableStateOf(value) }
-    val haptics = LocalOperatorHaptics.current
-    val rulerTarget = if (dragging) (dragStart / 0.5 - translation / 12f)
-        .coerceIn(floor / 0.5, GimbalProgram.MAX_DURATION / 0.5).toFloat() else (value / 0.5).toFloat()
-    val rulerPosition by animateFloatAsState(rulerTarget,
-        animationSpec = if (dragging) snap() else spring(dampingRatio = 0.8f, stiffness = 500f),
-        label = "motion-duration-settle")
-    Box(
-        Modifier.size(180.dp, 44.dp).testTag("motion.duration.$label")
-            .background(LiveDesign.glassBright, RoundedCornerShape(8.dp))
-            .semantics {
-                contentDescription = "Movement duration"
-                stateDescription = String.format(java.util.Locale.US, "%.1f seconds", value)
-                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), floor.toFloat()..GimbalProgram.MAX_DURATION.toFloat(),
-                    ((GimbalProgram.MAX_DURATION - floor) / 0.5).toInt() - 1)
-                setProgress { requested ->
-                    update(GimbalProgram.steppedDuration(requested.toDouble(), 0.0, floor)); true
-                }
-                customActions = listOf(
-                    CustomAccessibilityAction("Increase duration") {
-                        update(GimbalProgram.steppedDuration(currentValue, 0.5, floor)); true
-                    },
-                    CustomAccessibilityAction("Decrease duration") {
-                        update(GimbalProgram.steppedDuration(currentValue, -0.5, floor)); true
-                    },
-                )
-            }
-            .pointerInput(floor) {
-                detectHorizontalDragGestures(
-                    onDragStart = { dragStart = currentValue; lastEmitted = currentValue; translation = 0f; dragging = true },
-                    onDragEnd = { dragging = false },
-                    onDragCancel = { dragging = false },
-                ) { change, amount ->
-                    change.consume()
-                    translation += amount / density.density
-                    val next = motionDurationAfterDrag(dragStart, translation, floor)
-                    if (next != lastEmitted) { lastEmitted = next; haptics.selection(); update(next) }
-                }
-            },
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Crossfade(targetState = value, animationSpec = tween(100), label = "motion-duration-number",
-            modifier = Modifier.padding(top = 4.dp)) { shown ->
-            Text(GimbalProgram.durationLabel(shown), color = LiveDesign.text,
-                style = LiveType.ui(13f, FontWeight.SemiBold))
-        }
-        Canvas(Modifier.fillMaxSize()) {
-            val step = 12.dp.toPx()
-            val position = rulerPosition.coerceIn((floor / 0.5).toFloat(), (GimbalProgram.MAX_DURATION / 0.5).toFloat())
-            val index = kotlin.math.round(position).toInt()
-            for (offset in -8..8) {
-                val number = index + offset
-                if (number * 0.5 < floor || number * 0.5 > GimbalProgram.MAX_DURATION) continue
-                val x = size.width / 2 + (number - position).toFloat() * step
-                val tall = number % 2 == 0
-                drawLine(LiveDesign.text.copy(alpha = if (offset == 0) 0.85f else 0.3f),
-                    Offset(x, size.height - if (tall) 13.dp.toPx() else 8.dp.toPx()),
-                    Offset(x, size.height - 3.dp.toPx()), strokeWidth = 1.dp.toPx())
-            }
-            drawLine(LiveDesign.accent, Offset(size.width / 2, size.height - 15.dp.toPx()),
-                Offset(size.width / 2, size.height - 2.dp.toPx()), strokeWidth = 2.dp.toPx())
         }
     }
 }

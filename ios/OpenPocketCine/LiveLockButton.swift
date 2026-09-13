@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// OpenZCine `MonitorLiveViewModuleLayout` / `MonitorSideRailControlLayout` / chrome insets.
@@ -76,27 +77,15 @@ struct LiveLockButton: View {
     var size: CGFloat = LiveChromeMetrics.lockButtonSize
 
     var body: some View {
-        Button {
+        MonitorChromeButton(
+            locked ? "Unlock monitor controls" : "Lock monitor controls",
+            size: CGSize(width: size, height: size), active: locked
+        ) {
             locked.toggle()
         } label: {
             OpcIcon.lock
                 .frame(width: size * 29 / 54, height: size * 29 / 54)
-                .foregroundStyle(locked ? LiveDesign.accent : LiveDesign.text.opacity(0.86))
-                .frame(
-                    width: size,
-                    height: size
-                )
-                .liveChromeGlass(
-                    in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                )
-                .overlay {
-                    if locked {
-                        RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                            .stroke(LiveDesign.accent.opacity(0.75), lineWidth: 1.5)
-                    }
-                }
         }
-        .buttonStyle(.zcTapTarget)
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
         .accessibilityLabel(locked ? "Unlock monitor controls" : "Lock monitor controls")
         .accessibilityHint("Prevents accidental camera and View Assist changes")

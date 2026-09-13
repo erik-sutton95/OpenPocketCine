@@ -79,6 +79,28 @@ struct FieldMonitorLayoutTests {
         }
     }
 
+    @Test func cutoutCornerClearanceKeepsSystemButtonsConsistentInEitherLandscape() {
+        for (width, height, inset) in [(844.0, 390.0, 47.0), (874, 402, 62), (956, 440, 62)] {
+            for cutoutOnRight in [false, true] {
+                let layout = FieldMonitorLayout(
+                    width: width, height: height,
+                    safeArea: .init(
+                        leading: cutoutOnRight ? 0 : inset, bottom: 21,
+                        trailing: cutoutOnRight ? inset : 0))
+                #expect(layout.settings.y > 8 + height * 0.02)
+                #expect(layout.settings.y < 8 + height * 0.03)
+                #expect(layout.lock.y > 12 + height * 0.02)
+                #expect(layout.lock.width == layout.settings.width)
+                #expect(layout.lock.height == layout.settings.height)
+                #expect(layout.media.width == layout.settings.width)
+                #expect(layout.media.height == layout.settings.height)
+                #expect(layout.media.y == layout.settings.maxY + 8)
+                #expect(layout.gauges.y >= layout.lock.maxY + 6)
+                #expect(layout.status.midY + layout.recordingReadoutInset > layout.picture.y)
+            }
+        }
+    }
+
     @Test func sourceAspectChangesOnlyPresentation() {
         let vertical = FieldMonitorLayout(width: 744, height: 1133, sourceAspect: 9 / 16)
         #expect(vertical.fillsPicture)

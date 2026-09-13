@@ -75,6 +75,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import android.os.SystemClock
+import com.opencapture.monitorui.monitorReadoutGlow
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.SessionRecoveryCopy
 import androidx.compose.ui.text.font.FontWeight
@@ -376,6 +377,10 @@ fun LiveViewScreen(model: AppModel) {
                 null
             }
         val pictureAspect = model.session.decoder.pictureAspect.toFloat()
+        val hasDisplayCutout = with(density) {
+            cutout.getTop(this) > 0 || cutout.getBottom(this) > 0 ||
+                cutout.getLeft(this, layoutDir) > 0 || cutout.getRight(this, layoutDir) > 0
+        }
         val base =
             LiveMonitorLayout.fit(
                 viewportWidth = vw,
@@ -387,6 +392,7 @@ fun LiveViewScreen(model: AppModel) {
                 showsBottomBars = showsBottomBars,
                 chromeScale = chromeScale,
                 pictureAspect = pictureAspect,
+                hasDisplayCutout = hasDisplayCutout,
             )
         val layout =
             if (zones != null) {
@@ -1629,22 +1635,23 @@ private fun LiveTopDeck(
                 chipMod(PocketDispSection.STORAGE).chromeClickable(onClick = onToggleStorage),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 SdCardGlyph(LiveDesign.text)
-                Text(CaptureLists.storageLabel(status, showStorageDuration).substringBefore(" ·"), style = LiveType.mono(15f, FontWeight.SemiBold), maxLines = 1)
+                Text(CaptureLists.storageLabel(status, showStorageDuration).substringBefore(" ·"),
+                    style = LiveType.mono(15f, FontWeight.SemiBold).monitorReadoutGlow(), maxLines = 1)
             }
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
-            Text(CaptureLists.recFormatChipLabel(status), style = LiveType.mono(15f, FontWeight.Medium), maxLines = 1,
+            Text(CaptureLists.recFormatChipLabel(status), style = LiveType.mono(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT)
                     .chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
         }
         if (model.chromeSectionMounts(PocketDispSection.COLOR)) {
-            Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(15f, FontWeight.Medium), maxLines = 1,
+            Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR)
                     .chromeClickable(enabled = enabled) { onOpen(LiveSheet.COLOR) })
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
             Text(CameraCommands.shootingModeLabel(status.shootingMode) ?: "—",
-                color = LiveDesign.accent, style = LiveType.ui(15f, FontWeight.Medium), maxLines = 1,
+                color = LiveDesign.accent, style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = Modifier.chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
         }
         }

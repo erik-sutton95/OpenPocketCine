@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -1003,13 +1004,11 @@ struct TrafficLightsMeterMini: View {
             .padding(.vertical, TrafficLightsAssist.panelPad * uiScale)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .background(Color.black.opacity(0.84))
-        .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-                .stroke(LiveDesign.hairline, lineWidth: 1)
+        .monitorGlass(
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous), density: .scope
         )
-        .shadow(color: .black.opacity(0.34), radius: 16, x: 0, y: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.34), radius: 11, y: 8)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TrafficLightsAssist.accessibilityTitle)
         .accessibilityValue(TrafficLightsAssist.accessibilityValue(for: reading))
@@ -1116,34 +1115,31 @@ private struct ScopeMiniChrome<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            ScopePalette.panelFill
             content()
             HStack(spacing: 4) {
                 Text(title.uppercased())
-                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.66))
+                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(LiveDesign.text.opacity(0.6))
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 Spacer(minLength: 2)
                 Text(chip)
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.58))
+                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(MonitorTheme.accent.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-            .padding(.bottom, 3)
-            .background(Color.black.opacity(0.84))
+            .padding(.horizontal, 7)
+            .padding(.top, 5)
+            .padding(.bottom, 2)
         }
         .frame(width: size.width, height: size.height)
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
-                .stroke(LiveDesign.hairline, lineWidth: 1)
+        .monitorGlass(
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous), density: .scope
         )
-        .shadow(color: .black.opacity(0.34), radius: 16, x: 0, y: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.34), radius: 11, y: 8)
         .allowsHitTesting(false)
     }
 }

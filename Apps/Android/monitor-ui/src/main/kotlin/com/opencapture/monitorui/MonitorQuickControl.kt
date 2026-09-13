@@ -1,27 +1,25 @@
 package com.opencapture.monitorui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -33,87 +31,168 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
+/** Display values plus an opaque, immutable adapter identity used only for equality. */
 @Immutable
 data class MonitorQuickControl(val options: List<String>, val selection: String,
-    val marked: Set<String> = emptySet(), val enabled: Boolean = true, val context: String = "")
+    val marked: Set<String> = emptySet(), val enabled: Boolean = true, val context: String = "",
+    val identity: Any? = null)
+
+/** Read-only projection of the original pointer; this never owns an input recognizer. */
+@Immutable
+data class MonitorQuickPreview(val control: MonitorQuickControl, val position: Float) {
+    val selection: String get() = if (MonitorDrumSelection.changedDetent(
+        control.options.indexOf(control.selection).coerceAtLeast(0).toFloat(), position)) {
+        control.options.getOrNull(position.roundToInt()).orEmpty()
+    } else control.selection
+}
+
+/** Deterministic recognizer policy. Cancellation is terminal, including after re-enabling. */
+internal class MonitorQuickInteraction(private val control: MonitorQuickControl?) {
+    sealed interface Release {
+        data object Open : Release
+        data class Commit(val control: MonitorQuickControl, val value: String) : Release
+    }
+    private val origin = control?.options?.indexOf(control.selection)?.coerceAtLeast(0)?.toFloat() ?: 0f
+    private var startX = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private var ended = false
+    var preview: MonitorQuickPreview? = null
+        private set
+    val finished: Boolean get() = ended
+    private val canArm get() = control?.enabled == true && control.options.isNotEmpty()
+
+    fun hold(elapsedMillis: Long) {
+        if (!ended && preview == null && canArm && elapsedMillis >= MonitorDrumSelection.HOLD_MILLISECONDS) arm()
+    }
+
+    fun move(x: Float, y: Float, consumed: Boolean = false, pointerCount: Int = 1) {
+        if (ended) return
+        if (consumed || pointerCount > 1 || !x.isFinite() || !y.isFinite()) { cancel(); return }
+        lastX = x
+        lastY = y
+        if (preview == null) {
+            if (abs(y) > MonitorDrumSelection.DRAG_THRESHOLD && abs(y) > abs(x)) { cancel(); return }
+            if (canArm && abs(x) > MonitorDrumSelection.DRAG_THRESHOLD) arm()
+        }
+        if (preview != null) preview = MonitorQuickPreview(control!!,
+            MonitorDrumSelection.position(origin, x - startX, control.options.size))
+    }
+
+    private fun arm() {
+        startX = lastX
+        preview = MonitorQuickPreview(control!!, origin)
+    }
+
+    fun release(current: MonitorQuickControl?, enabled: Boolean): Release? {
+        if (ended) return null
+        val held = preview
+        cancel()
+        if (!enabled || current != control) return null
+        if (held == null) return if (hypot(lastX, lastY) <= 8f) Release.Open else null
+        if (!MonitorDrumSelection.changedDetent(origin, held.position)) return null
+        val value = control?.options?.getOrNull(held.position.roundToInt()) ?: return null
+        return if (value != control.selection) Release.Commit(control, value) else null
+    }
+
+    fun cancel() { ended = true; preview = null }
+}
 
 /** One recognizer owns tap, 280ms hold, and >14dp travel. Only release commits. */
 @Composable
 internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabled: Boolean,
-    onOpen: () -> Unit, onCommit: (String) -> Unit, bottomClearanceDp: Float,
-    owner: MonitorQuickGestureOwner, ownerId: String): Modifier {
-    var active by remember { mutableStateOf(false) }
-    var position by remember { mutableFloatStateOf(0f) }
+    onOpen: () -> Unit, onCommit: (MonitorQuickControl, String) -> Unit, bottomClearanceDp: Float,
+    owner: MonitorQuickGestureOwner, ownerId: String,
+    previewContent: (@Composable (MonitorQuickPreview, Float) -> Unit)? = null): Modifier {
+    var preview by remember { mutableStateOf<MonitorQuickPreview?>(null) }
     val open by rememberUpdatedState(onOpen)
     val commit by rememberUpdatedState(onCommit)
+    val currentControl by rememberUpdatedState(control)
+    val currentEnabled by rememberUpdatedState(enabled)
     val density = LocalDensity.current
     val config = LocalConfiguration.current
-    val margin = with(density) { 14.dp.roundToPx() }
-    val bottomClearance = with(density) { bottomClearanceDp.dp.roundToPx() }
-    val detent = with(density) { MonitorDrumSelection.POINTS_PER_VALUE.dp.toPx() }
-    val threshold = with(density) { MonitorDrumSelection.DRAG_THRESHOLD.dp.toPx() }
-    val origin = control?.options?.indexOf(control.selection)?.coerceAtLeast(0) ?: 0
-    if (active && control != null) Popup(
-        popupPositionProvider = remember(margin, bottomClearance) { object : PopupPositionProvider {
-            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
-                layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset = IntOffset(
-                (windowSize.width / 2 - popupContentSize.width / 2).coerceIn(margin,
-                    (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
-                (windowSize.height - popupContentSize.height - bottomClearance).coerceAtLeast(margin))
-        } }, properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
-        Box(Modifier.width(minOf(if (minOf(config.screenWidthDp, config.screenHeightDp) >= 600) 620 else 480,
-            config.screenWidthDp - 28).dp).background(MonitorPalette.expandedGlass, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).padding(8.dp)) {
-            MonitorValueDrum(control.options, control.selection, markedValues = control.marked,
-                interactive = false, displayPosition = position, dimDisabled = false, onSelect = {})
+    val direction = LocalLayoutDirection.current
+    val insets = WindowInsets.safeDrawing
+    val leading = insets.getLeft(density, direction) / density.density
+    val trailing = insets.getRight(density, direction) / density.density
+    val top = insets.getTop(density) / density.density
+    val bottom = insets.getBottom(density) / density.density
+    val layout = MonitorLayoutPolicy.bottomPanel(0f, config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat(),
+        leading, trailing, top, bottom,
+        if (bottomClearanceDp > 0f) config.screenHeightDp - bottomClearanceDp + 12f else null)
+    val heldPreview = preview
+    if (heldPreview != null && heldPreview.control == control && enabled && previewContent != null) Popup(
+        popupPositionProvider = remember(bottomClearanceDp, top, bottom, leading, trailing, density.density) {
+            object : PopupPositionProvider {
+                override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+                    layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                    val scale = density.density
+                    val place = MonitorLayoutPolicy.bottomPanel(popupContentSize.height / scale,
+                        windowSize.width / scale, windowSize.height / scale, leading, trailing, top, bottom,
+                        if (bottomClearanceDp > 0f) windowSize.height / scale - bottomClearanceDp + 12f else null)
+                    return IntOffset((place.x * scale).roundToInt(), (place.y * scale).roundToInt())
+                }
+            }
+        }, properties = PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
+        MonitorCaptureReveal(Modifier.width(layout.width.dp).heightIn(max = layout.maxHeight.dp)
+            .clearAndSetSemantics { }) {
+            previewContent(heldPreview, layout.maxHeight)
         }
     }
     return this.semantics { role = Role.Button; if (enabled) onClick { open(); true } }
-        .pointerInput(control, enabled, config.orientation, config.screenWidthDp, config.screenHeightDp, bottomClearanceDp, density.density, density.fontScale) {
-            if (!enabled) { active = false; return@pointerInput }
+        .pointerInput(control, enabled, config.orientation, config.screenWidthDp, config.screenHeightDp,
+            bottomClearanceDp, leading, trailing, top, bottom, density.density, density.fontScale) {
+            if (!enabled) { preview = null; return@pointerInput }
             var held: MonitorQuickGestureOwner.Lease? = null
             try {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = true)
                     val token = owner.acquire(ownerId) ?: return@awaitEachGesture
                     held = token
-                    down.consume()
+                    val interaction = MonitorQuickInteraction(if (previewContent != null) control else null)
+                    // Do not consume a pending down: the parent can still claim a scroll.
                     var elapsed = 0L
-                    var startX = down.position.x
-                    var armed = false
-                    var lastX = startX
                     try {
-                        while (true) {
-                            val event = if (!armed && control?.enabled == true && control.options.isNotEmpty()) {
+                        while (!interaction.finished) {
+                            val event = if (interaction.preview == null && control?.enabled == true &&
+                                control.options.isNotEmpty() && previewContent != null) {
                                 withTimeoutOrNull((MonitorDrumSelection.HOLD_MILLISECONDS - elapsed).coerceAtLeast(1L)) { awaitPointerEvent() }
                             } else awaitPointerEvent()
                             if (event == null) {
-                                armed = true; active = true; owner.setActive(token, true); startX = lastX; position = origin.toFloat()
+                                interaction.hold(MonitorDrumSelection.HOLD_MILLISECONDS)
+                                preview = interaction.preview
+                                owner.setActive(token, preview != null)
                                 continue
                             }
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.isConsumed || event.changes.count { it.pressed } > 1) break
-                            lastX = change.position.x
-                            elapsed = change.uptimeMillis - down.uptimeMillis
                             val delta = change.position - down.position
-                            if (!armed && kotlin.math.abs(delta.y) > threshold && kotlin.math.abs(delta.y) > kotlin.math.abs(delta.x)) break
-                            if (!armed && control?.enabled == true && control.options.isNotEmpty() && kotlin.math.abs(delta.x) > threshold) {
-                                armed = true; active = true; owner.setActive(token, true); startX = lastX
-                            }
-                            if (armed) position = MonitorDrumSelection.position(origin.toFloat(), (lastX - startX) / density.density, control!!.options.size)
-                            change.consume()
+                            elapsed = change.uptimeMillis - down.uptimeMillis
+                            interaction.move(delta.x / density.density, delta.y / density.density,
+                                change.isConsumed, event.changes.count { it.pressed })
+                            if (previewContent != null) interaction.hold(elapsed)
+                            preview = interaction.preview
+                            owner.setActive(token, preview != null)
+                            if (interaction.finished) break
+                            // Reserve horizontal motion for this readout while it approaches
+                            // 14dp; a parent row's smaller touch slop must not steal a slow drag.
+                            // Vertical intent and already-consumed scroll events still cancel.
+                            if (preview != null || (control?.enabled == true && previewContent != null &&
+                                abs(delta.x) > abs(delta.y))) change.consume()
                             if (!change.pressed) {
-                                active = false
-                                if (armed) {
-                                    val value = control!!.options[position.roundToInt()]
-                                    if (MonitorDrumSelection.changedDetent(origin.toFloat(), position) && value != control.selection) commit(value)
-                                } else if (delta.getDistance() <= with(density) { 8.dp.toPx() }) open()
+                                when (val release = interaction.release(if (previewContent != null) currentControl else null, currentEnabled)) {
+                                    MonitorQuickInteraction.Release.Open -> { change.consume(); open() }
+                                    is MonitorQuickInteraction.Release.Commit -> commit(release.control, release.value)
+                                    null -> Unit
+                                }
                                 break
                             }
                         }
-                    } finally { active = false; owner.release(token); held = null }
+                    } finally { interaction.cancel(); preview = null; owner.release(token); held = null }
                 }
-            } finally { active = false; held?.let(owner::release) }
+            } finally { preview = null; held?.let(owner::release) }
         }
 }

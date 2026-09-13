@@ -59,10 +59,11 @@
         public func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .contentShape(Rectangle())
-                .opacity(configuration.isPressed ? 0.65 : 1)
-                .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-                .animation(
-                    reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+                .opacity(configuration.isPressed ? MonitorMotion.pressOpacity : 1)
+                .scaleEffect(
+                    configuration.isPressed && !reduceMotion ? MonitorMotion.pressScale : 1
+                )
+                .animation(MonitorMotion.press(reduceMotion), value: configuration.isPressed)
         }
     }
 

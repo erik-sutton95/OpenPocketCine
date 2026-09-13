@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -52,8 +54,12 @@ class MonitorPreviewActivity : ComponentActivity() {
         setContent {
             OpenPocketCineTheme {
                 CompositionLocalProvider(LocalMonitorGlass provides remember { MonitorGlass(GlassTier.FLAT) }) {
-                    ReviewMonitor(model, capabilities, sourceAspect,
-                        intent.getFloatExtra("safeTop", 0f), intent.getFloatExtra("safeBottom", 0f))
+                    if (intent.getStringExtra("surface") == "catalog") {
+                        ReviewClipCapabilities(intent.getBooleanExtra("clipStar", false))
+                    } else {
+                        ReviewMonitor(model, capabilities, sourceAspect,
+                            intent.getFloatExtra("safeTop", 0f), intent.getFloatExtra("safeBottom", 0f))
+                    }
                     when (model.liveOperatorPanel) {
                         LiveOperatorPanel.SETTINGS -> OperatorSetupScreen(model) { model.liveOperatorPanel = null }
                         LiveOperatorPanel.MEDIA -> com.opencapture.openpocketcine.media.MediaLibraryScreen(model) {
@@ -129,6 +135,29 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
             MonitorAssistInspector(tool, model.assist, model, status.colorMode,
                 width, height, 0f, 0f, 0f, zones?.controls?.minY ?: height,
                 onDismiss = { model.assist.configureTool = null })
+        }
+    }
+}
+
+/** Real shared card layouts with identical data and different optional actions. */
+@Composable
+private fun ReviewClipCapabilities(canFavorite: Boolean) {
+    var favorite by remember { mutableStateOf(false) }
+    val clip = com.opencapture.monitorui.MonitorClipValue(
+        "fixture", "Fixture clip", "4K · 25p", "00:12", "LOCAL", favorite)
+    val toggle: (() -> Unit)? = if (canFavorite) ({ favorite = !favorite }) else null
+    androidx.compose.foundation.layout.Column(
+        Modifier.fillMaxSize().background(com.opencapture.monitorui.MonitorPalette.background)
+            .padding(16.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
+    ) {
+        androidx.compose.material3.Text("Camera capabilities",
+            style = com.opencapture.monitorui.MonitorTypography.text(20f))
+        for (list in listOf(false, true)) {
+            com.opencapture.monitorui.MonitorClipCard(clip, list, selecting = false, selected = false,
+                onOpen = {}, onSelect = {}, onFavorite = toggle) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF4A4C48)))
+            }
         }
     }
 }

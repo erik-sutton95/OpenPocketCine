@@ -297,6 +297,7 @@ struct MediaPlayerView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.monitorWindowGeometry) private var windowGeometry
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var player = AVPlayer()
     @State private var isPlaying = true
@@ -306,6 +307,9 @@ struct MediaPlayerView: View {
     @State private var isScrubbing = false
     @State private var scrubTime: Double = 0
     @State private var wasPlayingBeforeScrub = false
+    @State private var scrubOrigin: ScrubOrigin?
+    @State private var scrubResumeTask: Task<Void, Never>?
+    @State private var playerVisible = false
     @State private var lastScrubSeekTime: CFAbsoluteTime = 0
     @State private var isClipReady = false
     @State private var loadError: String?
@@ -344,6 +348,15 @@ struct MediaPlayerView: View {
 
     private let scrubSeekThrottle: CFAbsoluteTime = 0.075
     private let scrubSeekTolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
+
+    private struct ScrubOrigin: Hashable {
+        let clip: AnyHashable
+        let generation: Int
+    }
+
+    private var currentScrubOrigin: ScrubOrigin {
+        ScrubOrigin(clip: AnyHashable(active.id), generation: playerLoadGeneration)
+    }
 
     private enum FrameScrub {
         static let longPressDuration: Double = 0.35
@@ -512,9 +525,15 @@ struct MediaPlayerView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             model.assist.gradesClip = true
+            playerVisible = true
             appear()
         }
         .onDisappear {
+            playerVisible = false
+            scrubResumeTask?.cancel()
+            scrubResumeTask = nil
+            scrubOrigin = nil
+            isScrubbing = false
             model.assist.gradesClip = false
             disappear()
         }
@@ -621,7 +640,7 @@ struct MediaPlayerView: View {
         return arrangement {
             HStack(alignment: .top, spacing: 10) {
                 Button {
-                    dismiss()
+                    dismissPlayback()
                 } label: {
                     MediaCircleIconButton(icon: .chevronLeft, size: 34)
                 }
@@ -752,9 +771,13 @@ struct MediaPlayerView: View {
                 progress: isScrubbing ? scrubTime : currentTime,
                 duration: duration,
                 bufferedProgress: bufferedDuration,
+                interactionIdentity: { AnyHashable(currentScrubOrigin) },
                 onScrubbingChanged: { scrubbing in
                     if scrubbing {
                         if !isScrubbing {
+                            scrubResumeTask?.cancel()
+                            scrubResumeTask = nil
+                            scrubOrigin = currentScrubOrigin
                             wasPlayingBeforeScrub = isPlaying
                             scrubTime = currentTime
                             player.pause()
@@ -765,6 +788,7 @@ struct MediaPlayerView: View {
                     }
                 },
                 onProgressChange: { time in
+                    guard scrubOrigin == currentScrubOrigin, playerVisible else { return }
                     scrubTime = time
                     clearEndStateIfSeeking(to: time)
                     let now = CFAbsoluteTimeGetCurrent()
@@ -777,6 +801,7 @@ struct MediaPlayerView: View {
                     }
                 },
                 onSeek: { time in
+                    guard scrubOrigin == currentScrubOrigin, playerVisible else { return }
                     player.seek(
                         to: CMTime(seconds: time, preferredTimescale: 600),
                         toleranceBefore: .zero, toleranceAfter: .zero)
@@ -786,6 +811,30 @@ struct MediaPlayerView: View {
                     clearEndStateIfSeeking(to: time)
                     if wasPlayingBeforeScrub {
                         startPlayback()
+                    }
+                    scrubOrigin = nil
+                },
+                onCancelled: { reason in
+                    // Restore an interrupted interaction on the current clip.
+                    // Dismissal/source replacement must not restart old playback.
+                    let origin = scrubOrigin
+                    scrubOrigin = nil
+                    guard case .interrupted = reason, let origin,
+                        origin == currentScrubOrigin, playerVisible, scenePhase == .active
+                    else { return }
+                    let resume = wasPlayingBeforeScrub
+                    scrubResumeTask?.cancel()
+                    scrubResumeTask = Task { @MainActor in
+                        // Let source/disappearance handlers invalidate this edit
+                        // before applying the host's playback-resume policy.
+                        await Task.yield()
+                        guard !Task.isCancelled, playerVisible, scenePhase == .active,
+                            currentScrubOrigin == origin, !isScrubbing
+                        else { return }
+                        let elapsed = CMTimeGetSeconds(player.currentTime())
+                        if elapsed.isFinite { currentTime = max(0, elapsed) }
+                        if resume { startPlayback() }
+                        scrubResumeTask = nil
                     }
                 }
             )
@@ -1731,6 +1780,16 @@ struct MediaPlayerView: View {
             listedRate: listed)
     }
 
+    private func dismissPlayback() {
+        playerVisible = false
+        scrubResumeTask?.cancel()
+        scrubResumeTask = nil
+        scrubOrigin = nil
+        isScrubbing = false
+        player.pause()
+        dismiss()
+    }
+
     private func deleteActive() async {
         let dying = active
         await session.deleteMediaFiles([dying])
@@ -1739,7 +1798,7 @@ struct MediaPlayerView: View {
         } else if canGoPrevious {
             goToAdjacent(offset: -1)
         } else {
-            dismiss()
+            dismissPlayback()
         }
     }
 }

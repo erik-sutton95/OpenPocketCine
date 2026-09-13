@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -8,11 +9,12 @@ struct LiveSettingsButton: View {
     var onOpen: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            LiveRailCircle(icon: .settings, size: size)
+        MonitorChromeButton(
+            "Open Operator Setup", size: CGSize(width: size, height: size), action: onOpen
+        ) {
+            OpcIcon.settings.frame(width: size * 29 / 54, height: size * 29 / 54)
         }
-        .buttonStyle(.zcTapTarget)
-        .disabled(locked).opacity(locked ? 0.4 : 1)
+        .disabled(locked)
         .accessibilityLabel("Open Operator Setup")
         .accessibilityIdentifier("monitor.system.settings")
     }
@@ -25,11 +27,10 @@ struct LiveMediaButton: View {
     var onOpen: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            LiveRailCircle(icon: .film, size: size)
+        MonitorChromeButton("Open Media", size: CGSize(width: size, height: size), action: onOpen) {
+            OpcIcon.film.frame(width: size * 29 / 54, height: size * 29 / 54)
         }
-        .buttonStyle(.zcTapTarget)
-        .disabled(locked).opacity(locked ? 0.4 : 1)
+        .disabled(locked)
         .accessibilityLabel("Open Media")
         .accessibilityIdentifier("monitor.system.media")
     }
@@ -120,19 +121,5 @@ struct LiveHeadTrackCalibrateButton: View {
                 ? "Stops AirPods gimbal tracking" : "Sets the current heading as forward"
         )
         .accessibilityIdentifier("monitor.system.headTrackCalibrate")
-    }
-}
-
-/// Rail circle with a Lucide glyph (no copyrighted rail assets, no SF Symbols).
-private struct LiveRailCircle: View {
-    let icon: OpcIcon
-    var size: CGFloat
-
-    var body: some View {
-        icon
-            .frame(width: size * (29.0 / 54.0), height: size * (29.0 / 54.0))
-            .foregroundStyle(LiveDesign.text.opacity(0.86))
-            .frame(width: size, height: size)
-            .liveChromeGlass(in: RoundedRectangle(cornerRadius: 14))
     }
 }
