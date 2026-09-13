@@ -1,17 +1,24 @@
 #if os(iOS)
+    import MonitorPresentation
     import SwiftUI
+    import UIKit
 
     extension View {
         /// Local text/icon shadows keep bright footage legible without copying
         /// or darkening the camera picture beneath an entire HUD row.
         public func monitorReadoutShadow() -> some View {
-            shadow(color: .black, radius: 1.5)
+            compositingGroup()
+                .shadow(color: .black, radius: 1.5)
                 .shadow(color: .black.opacity(0.92), radius: 3)
                 .shadow(color: .black.opacity(0.85), radius: 1, y: 1)
+                // Resolve the complete glyph/shadow stack together. Otherwise
+                // Core Animation repeats its shadow passes on HUD redraws.
+                // This boundary contains only readouts, never native video.
+                .drawingGroup()
         }
 
-        /// A complete bright/dim/bright cycle, suspended offscreen or when the
-        /// scene or accessibility settings disable motion.
+        /// A complete bright/dim/bright cycle, suspended while covered, offscreen,
+        /// or when the scene or accessibility settings disable motion.
         public func monitorPulse(period: TimeInterval) -> some View {
             modifier(MonitorOpacityPulse(period: period))
         }
@@ -19,27 +26,16 @@
 
     private struct MonitorOpacityPulse: ViewModifier {
         let period: TimeInterval
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @Environment(\.scenePhase) private var scenePhase
-        @State private var appeared = false
         @State private var pulse = false
 
         func body(content: Content) -> some View {
-            let active = appeared && scenePhase == .active && !reduceMotion
             content
                 .opacity(pulse ? MonitorMotion.recPulseFloor : 1)
-                .onAppear { appeared = true }
-                .onDisappear { appeared = false }
-                .onChange(of: active, initial: true) { _, active in
-                    pulse = false
-                    if active {
-                        withAnimation(
-                            .easeInOut(duration: period / 2).repeatForever(autoreverses: true)
-                        ) {
-                            pulse = true
-                        }
-                    }
-                }
+                .modifier(
+                    MonitorDecorativePulse(
+                        pulse: $pulse,
+                        animation: .easeInOut(duration: period / 2).repeatForever(
+                            autoreverses: true)))
         }
     }
 
@@ -54,11 +50,16 @@
             self.value = value()
         }
         public var body: some View {
+            let tablet = UIDevice.current.userInterfaceIdiom == .pad
+            let valueSize = CGFloat(MonitorReadoutTypography.valueSize(tablet: tablet))
             VStack(spacing: 4) {
-                value.font(MonitorTheme.font(16, weight: .medium))
+                value.font(MonitorTheme.font(valueSize, weight: .medium))
                     .monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
                     .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.text)
-                Text(label).font(MonitorTheme.font(9, weight: .semibold)).tracking(1.26)
+                Text(label).font(
+                    MonitorTheme.font(
+                        CGFloat(MonitorReadoutTypography.labelSize), weight: .semibold)
+                ).tracking(CGFloat(MonitorReadoutTypography.labelTracking))
                     .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.muted)
                     .lineLimit(1)
             }
@@ -125,9 +126,7 @@
         public var recording: Bool
         public var photo: Bool
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @Environment(\.scenePhase) private var scenePhase
         @State private var pulse = false
-        @State private var appeared = false
         public init(diameter: CGFloat, recording: Bool, photo: Bool = false) {
             self.diameter = diameter
             self.recording = recording
@@ -135,7 +134,6 @@
         }
         public var body: some View {
             let coreSize = recording ? ((diameter - 10) * 0.52).rounded() : 0
-            let glow = recording && appeared && scenePhase == .active && !reduceMotion
             ZStack {
                 Circle().strokeBorder(photo ? Color.white : MonitorTheme.recording, lineWidth: 4.5)
                     .padding(5)
@@ -160,14 +158,11 @@
             }
             .frame(width: diameter, height: diameter)
             .monitorGlass(in: Circle(), density: .recording)
-            .onAppear { appeared = true }
-            .onDisappear { appeared = false }
-            .onChange(of: glow, initial: true) { _, active in
-                pulse = false
-                if active, let animation = MonitorMotion.recPulse(reduceMotion) {
-                    withAnimation(animation) { pulse = true }
-                }
-            }
+            .modifier(
+                MonitorDecorativePulse(
+                    pulse: $pulse, enabled: recording,
+                    animation: MonitorMotion.recPulse(reduceMotion))
+            )
             .accessibilityHidden(true)
         }
     }

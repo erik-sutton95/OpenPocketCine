@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -100,14 +101,19 @@ fun SettingsRowCard(
     content: @Composable () -> Unit,
 ) {
     com.opencapture.monitorui.MonitorSettingsCard {
-        if (title != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = chromeStyle(11.5f, FontWeight.SemiBold), color = LiveDesign.text)
-                Spacer(Modifier.weight(1f))
-                if (onReset != null) SettingsResetButton(onClick = onReset)
+        Column(verticalArrangement = Arrangement.spacedBy(com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP.dp)) {
+            if (title != null) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_MIN_HEIGHT.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(title, style = chromeStyle(13f, FontWeight.SemiBold), color = LiveDesign.text)
+                    Spacer(Modifier.weight(1f))
+                    if (onReset != null) SettingsResetButton(onClick = onReset)
+                }
             }
+            content()
         }
-        content()
     }
 }
 

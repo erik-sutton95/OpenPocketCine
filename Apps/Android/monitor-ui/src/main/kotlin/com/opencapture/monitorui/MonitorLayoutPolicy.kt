@@ -97,6 +97,56 @@ object MonitorLayoutPolicy {
         return Panel((width - panelWidth) / 2f, max(top, bottom - min(panelHeight, room)), panelWidth, room)
     }
 
+    /** Format / color / mode hang from the top edge. Portrait sits 6dp below the info bar. */
+    fun topPanel(panelHeight: Float, width: Float, height: Float, safeLeading: Float,
+        safeTrailing: Float, safeTop: Float, safeBottom: Float, portraitCeiling: Float? = null,
+        portraitFloor: Float? = null): Panel {
+        val edge = max(14f, max(safeLeading, safeTrailing) + 4f)
+        val panelWidth = min(if (min(width, height) >= 600f) 620f else 480f, max(0f, width - edge * 2f))
+        val portrait = height > width
+        val top = if (portrait && portraitCeiling != null) min(height, max(0f, portraitCeiling + 6f))
+            else 0f
+        val bottom = if (portrait && portraitFloor != null) min(height, portraitFloor - 12f)
+            else height - max(0f, safeBottom)
+        val room = max(0f, bottom - top)
+        return Panel((width - panelWidth) / 2f, top, panelWidth, room)
+    }
+
     fun valueColumns(width: Float, portrait: Boolean, count: Int): Int =
         if (portrait && width < 600f) 3 else count.coerceAtLeast(1)
+
+    fun readoutValueSize(tablet: Boolean): Float = if (tablet) 18f else 16f
+    const val READOUT_LABEL_SIZE = 9f
+    const val READOUT_LABEL_TRACKING = 1.26f
+
+    const val COMPACT_CAPTURE_HEIGHT = 128f
+    const val CAPTURE_DRUM_HEIGHT = 86f
+    const val CAPTURE_HEADER_HEIGHT = 22f
+    const val CAPTURE_STACK_GAP = 8f
+    fun captureTopPadding(fromTop: Boolean, portrait: Boolean, compact: Boolean): Float =
+        if (!fromTop) 11f else if (compact || portrait) 12f else 16f
+
+    fun compactCaptureBottomPadding(topPadding: Float): Float =
+        max(0f, COMPACT_CAPTURE_HEIGHT - topPadding - CAPTURE_HEADER_HEIGHT - CAPTURE_STACK_GAP - CAPTURE_DRUM_HEIGHT)
+
+    fun showsRecordingCategoryTabs(portrait: Boolean, compact: Boolean): Boolean =
+        portrait && !compact
+
+    fun showsCaptureGrabber(compact: Boolean, fromTop: Boolean): Boolean =
+        !compact && !fromTop
+
+    fun cameraPageTitleSize(tablet: Boolean): Float = if (tablet) 24f else 19f
+    const val CAMERA_CARD_CORNER = 13f
+    const val SETTINGS_TITLE_CONTENT_GAP = 8f
+    const val SETTINGS_TITLE_MIN_HEIGHT = 24f
+    const val DISP_SIZE = 12f
+    const val DISP_TRACKING = 0.48f
+    const val CAPTURE_PANEL_CORNER = 16f
+
+    /** Portrait floating popups round every corner; landscape attached edges stay square. */
+    fun capturePanelTopCorner(fromTop: Boolean, portrait: Boolean): Float =
+        if (!fromTop || portrait) CAPTURE_PANEL_CORNER else 0f
+
+    fun capturePanelBottomCorner(fromTop: Boolean, portrait: Boolean): Float =
+        if (fromTop || portrait) CAPTURE_PANEL_CORNER else 0f
 }

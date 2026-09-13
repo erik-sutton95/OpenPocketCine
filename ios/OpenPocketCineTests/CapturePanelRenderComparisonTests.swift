@@ -7,9 +7,9 @@ import XCTest
 
 @MainActor
 final class CapturePanelRenderComparisonTests: XCTestCase {
-    /// Renders both production hosts, including their shared bottom container,
-    /// native details and glass. Attachments persist even when the comparison passes.
-    func testTappedAndHeldISOWhiteBalanceAndFocusRenderTheSamePanel() async throws {
+    /// Renders both production hosts. Tap keeps the full details drawer; hold
+    /// is the compact dial at the same bottom-center well.
+    func testTappedISOWhiteBalanceAndFocusKeepFullDetailsWhileHoldIsCompact() async throws {
         let model = AppModel()
         model.session = CameraSession(borrowing: HevcDecoder())
         var status = CameraStatus()
@@ -55,16 +55,18 @@ final class CapturePanelRenderComparisonTests: XCTestCase {
             let tappedBounds = try XCTUnwrap(tappedPixels.changedBounds(from: background))
             let heldBounds = try XCTUnwrap(heldPixels.changedBounds(from: background))
             XCTAssertEqual(tappedBounds.minX, heldBounds.minX, accuracy: 1, sheet.rawValue)
-            XCTAssertEqual(tappedBounds.minY, heldBounds.minY, accuracy: 1, sheet.rawValue)
             XCTAssertEqual(tappedBounds.width, heldBounds.width, accuracy: 1, sheet.rawValue)
-            XCTAssertEqual(tappedBounds.height, heldBounds.height, accuracy: 1, sheet.rawValue)
+            XCTAssertEqual(tappedBounds.maxY, heldBounds.maxY, accuracy: 1, sheet.rawValue)
             XCTAssertEqual(heldBounds.midX, size.width / 2, accuracy: 1, sheet.rawValue)
             XCTAssertEqual(heldBounds.maxY, size.height, accuracy: 1, sheet.rawValue)
-            XCTAssertGreaterThan(heldBounds.height, 150, "The full details must be visible")
+            XCTAssertGreaterThan(
+                tappedBounds.height, heldBounds.height + 16,
+                "\(sheet.rawValue): tap keeps tabs and details above the shared dial")
+            XCTAssertGreaterThan(
+                heldBounds.height, 80, "\(sheet.rawValue): compact still shows the dial")
             XCTAssertLessThan(
-                tappedPixels.meanDifference(from: heldPixels, within: tappedBounds), 1.5,
-                "\(sheet.rawValue): headers, tabs, details and dial must match within raster tolerance"
-            )
+                heldBounds.height, tappedBounds.height,
+                "\(sheet.rawValue): hold must not open the full details drawer")
             XCTAssertEqual(model.session.status, status)
             attach(tapped, name: "capture-\(sheet.rawValue)-tap")
             attach(held, name: "capture-\(sheet.rawValue)-hold")

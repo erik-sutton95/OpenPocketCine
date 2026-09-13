@@ -89,7 +89,7 @@
                 .animation(
                     dragging || previewPosition != nil ? nil : settleAnimation, value: selection
                 )
-                .opacity(isInteractive ? 1 : 0.45)
+                .opacity(isInteractive || previewPosition != nil ? 1 : 0.45)
                 .onChange(of: options) { _, _ in cancelDrag() }
                 .onChange(of: selection) { _, _ in if drag.origin != nil { cancelDrag() } }
                 .onChange(of: interactionIdentity()) { _, _ in cancelDrag() }

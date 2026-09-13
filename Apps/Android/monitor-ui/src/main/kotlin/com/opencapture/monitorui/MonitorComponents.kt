@@ -71,10 +71,11 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
     val configuration = LocalConfiguration.current
     val tablet = minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
     val measurer = rememberTextMeasurer()
-    val valueStyle = MonitorTypography.readout(if (tablet) 18f else 16f, FontWeight.Medium)
-        .copy(lineHeight = (if (tablet) 18 else 16).sp).monitorReadoutGlow()
-    val labelStyle = MonitorTypography.text(8f, FontWeight.SemiBold)
-        .copy(lineHeight = 10.sp, letterSpacing = 1.12.sp).monitorReadoutGlow()
+    val valueSize = MonitorLayoutPolicy.readoutValueSize(tablet)
+    val valueStyle = MonitorTypography.readout(valueSize, FontWeight.Medium)
+        .copy(lineHeight = valueSize.sp).monitorReadoutGlow()
+    val labelStyle = MonitorTypography.text(MonitorLayoutPolicy.READOUT_LABEL_SIZE, FontWeight.SemiBold)
+        .copy(lineHeight = 10.sp, letterSpacing = MonitorLayoutPolicy.READOUT_LABEL_TRACKING.sp).monitorReadoutGlow()
     val intrinsic = values.map { item ->
         val valueWidth = measurer.measure(item.value, valueStyle, maxLines = 1).size.width
         val labelWidth = measurer.measure(item.label + item.annotation?.let { "  $it" }.orEmpty(), labelStyle, maxLines = 1).size.width
@@ -99,7 +100,7 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                             .monitorReadoutGesture(quickControl(item.id), enabled && (gestureOwner.owner == null || gestureOwner.owner == item.id),
                                 { onOpen(item.id) }, { source, value -> onQuickCommit(item.id, source, value) },
                                 quickBottomClearanceDp, gestureOwner, item.id,
-                                renderPreview)
+                                renderPreview, onPreviewBegin = { notifyQuickActive(true) })
                             .semantics { contentDescription = "${item.label} ${item.value}${item.annotation?.let { ", $it" }.orEmpty()}" }
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -225,7 +226,8 @@ fun monitorCatalogColumns(size: MonitorThumbnailSize, tablet: Boolean): Int = wh
 @Composable
 fun MonitorSettingsCard(title: String? = null, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MonitorPalette.surface)
-        .padding(horizontal = 13.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        .padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP.dp)) {
         if (!title.isNullOrBlank()) Text(title.uppercase(), color = MonitorPalette.muted,
             style = MonitorTypography.text(9f, FontWeight.SemiBold).copy(letterSpacing = 1.2.sp))
         content()

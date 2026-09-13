@@ -1,6 +1,6 @@
 New and changed
 
-- UI 2.0 adds Sora, Lucide and adaptive pages. Tap or drag camera values to see the same full bottom-center drawer; gimbal Mode, Speed and Ramp have separate tabs.
+- UI 2.0 adds Sora and Lucide. Tap a value for details; hold or drag for a compact 128 dp dial. FORMAT hangs from the top without landscape category tabs. Gimbal Mode, Speed and Ramp have separate tabs.
 - Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the lens dial.
 - New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
 
@@ -13,6 +13,6 @@ Fixes
 
 What to test
 
-- Check blur over bright/dark footage with LUT/scopes off/on. Rotate pages/drawers; try value drums, rapid assist tabs, audio placement, zoom, lock, media, playback and TalkBack.
+- Check blur over bright/dark footage. Rotate pages; tap versus hold drums; open FORMAT in both orientations. Try assist tabs, audio, zoom, lock, media, playback and TalkBack.
 - On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
 - Check joystick after first picture, app return, Wi-Fi changes, Retry/Cancel and reconnects. Test Pocket 3 portrait 3K. Motion Control remains experimental.

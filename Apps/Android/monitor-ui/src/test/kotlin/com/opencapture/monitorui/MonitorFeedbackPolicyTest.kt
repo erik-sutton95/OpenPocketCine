@@ -6,6 +6,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MonitorFeedbackPolicyTest {
+    @Test fun compactCaptureFits128WithTheFull86PointDrumInEveryPlacement() {
+        for (fromTop in listOf(false, true)) for (portrait in listOf(false, true)) {
+            val top = MonitorLayoutPolicy.captureTopPadding(fromTop, portrait, compact = true)
+            val bottom = MonitorLayoutPolicy.compactCaptureBottomPadding(top)
+            assertEquals(128f, top + MonitorLayoutPolicy.CAPTURE_HEADER_HEIGHT +
+                MonitorLayoutPolicy.CAPTURE_STACK_GAP + MonitorLayoutPolicy.CAPTURE_DRUM_HEIGHT + bottom)
+            assertTrue(bottom >= 0f)
+        }
+        assertEquals(16f, MonitorLayoutPolicy.captureTopPadding(true, false, compact = false),
+            "Landscape details retain their approved top padding")
+    }
+
     @Test fun quickPointerOwnershipRejectsOtherTilesAndLateReleases() {
         val owner = MonitorQuickGestureOwner()
         val iso = requireNotNull(owner.acquire("ISO"))
@@ -55,11 +67,52 @@ class MonitorFeedbackPolicyTest {
         }
     }
 
+    @Test fun topCapturePanelsShareCenterAndHangFromTheTopEdge() {
+        for ((w, h) in listOf(667f to 375f, 874f to 402f, 402f to 874f, 1366f to 1024f)) {
+            val floor = if (h > w) h - 116f else null
+            val ceiling = if (h > w) 80f else null
+            val panel = MonitorLayoutPolicy.topPanel(190f, w, h, 0f, 0f, 0f, 0f, ceiling, floor)
+            assertEquals(w / 2f, panel.x + panel.width / 2f, .001f)
+            assertEquals(if (h > w) 86f else 0f, panel.y, .001f)
+            assertTrue(panel.width <= if (minOf(w, h) >= 600f) 620f else 480f)
+        }
+    }
+
     @Test fun portraitTimecodeAnswersToCutoutAndPictureWithoutAnExtraHeaderLift() {
         assertEquals(71f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 10f))
         assertEquals(40f, MonitorLayoutPolicy.portraitReadoutTop(false, 0f, 0f, 10f))
         assertEquals(208f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
         assertEquals(12f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
+    }
+
+    @Test fun readoutTypeMatchesApprovedPhoneAndTabletValues() {
+        assertEquals(16f, MonitorLayoutPolicy.readoutValueSize(false))
+        assertEquals(18f, MonitorLayoutPolicy.readoutValueSize(true))
+        assertEquals(9f, MonitorLayoutPolicy.READOUT_LABEL_SIZE)
+        assertEquals(1.26f, MonitorLayoutPolicy.READOUT_LABEL_TRACKING)
+        assertEquals(19f, MonitorLayoutPolicy.cameraPageTitleSize(false))
+        assertEquals(24f, MonitorLayoutPolicy.cameraPageTitleSize(true))
+        assertEquals(13f, MonitorLayoutPolicy.CAMERA_CARD_CORNER)
+        assertEquals(12f, MonitorLayoutPolicy.DISP_SIZE)
+        assertEquals(0.48f, MonitorLayoutPolicy.DISP_TRACKING)
+        assertEquals(8f, MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP)
+        assertEquals(128f, MonitorLayoutPolicy.COMPACT_CAPTURE_HEIGHT)
+        assertEquals(1f, MonitorLayoutPolicy.compactCaptureBottomPadding(11f))
+        assertEquals(0f, MonitorLayoutPolicy.compactCaptureBottomPadding(16f))
+        assertTrue(MonitorLayoutPolicy.showsRecordingCategoryTabs(true, false))
+        assertTrue(!MonitorLayoutPolicy.showsRecordingCategoryTabs(false, false))
+        assertTrue(!MonitorLayoutPolicy.showsRecordingCategoryTabs(true, true))
+        assertTrue(MonitorLayoutPolicy.showsCaptureGrabber(false, false))
+        assertTrue(!MonitorLayoutPolicy.showsCaptureGrabber(false, true))
+        assertTrue(!MonitorLayoutPolicy.showsCaptureGrabber(true, false))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelTopCorner(false, true))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelBottomCorner(false, true))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelTopCorner(false, false))
+        assertEquals(0f, MonitorLayoutPolicy.capturePanelBottomCorner(false, false))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelTopCorner(true, true))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelBottomCorner(true, true))
+        assertEquals(0f, MonitorLayoutPolicy.capturePanelTopCorner(true, false))
+        assertEquals(16f, MonitorLayoutPolicy.capturePanelBottomCorner(true, false))
     }
 
     @Test fun drumCellsFitTheirLargestLabelWithoutChangingGestureTravel() {

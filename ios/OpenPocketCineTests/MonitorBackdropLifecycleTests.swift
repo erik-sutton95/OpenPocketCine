@@ -1,11 +1,366 @@
 import CoreImage
+import CoreVideo
 import MonitorPresentation
+import MonitorUI
 import XCTest
 
 @testable import OpenPocketCine
 
 @MainActor
 final class MonitorBackdropLifecycleTests: XCTestCase {
+    func testUnchangedInputSkipsNativeWorkAndPublicationWithoutResettingCadence() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let source = try makeSource()
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                calls.increment()
+                return snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        let first = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(first).isUnchanged)
+        clock.now = 100_000_000
+        let early = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertNil(early)
+        clock.now = 200_000_000
+        let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        let reused = try XCTUnwrap(repeated)
+        XCTAssertTrue(reused.isUnchanged, "The view must not republish a cached snapshot")
+        XCTAssertTrue(reused.snapshot?.image(for: .compact) === snapshot.image(for: .compact))
+        XCTAssertTrue(renderer.isCurrent(reused))
+        XCTAssertEqual(calls.value, 1)
+        clock.now = 399_999_999
+        var prepared = false
+        let afterHit = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            prepared = true
+            return [source]
+        }
+        XCTAssertNil(afterHit)
+        XCTAssertFalse(prepared, "A cache hit still consumes the existing admission interval")
+    }
+
+    func testEveryInputChangeInvalidatesTheSingleCachedResult() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let first = try makeSource()
+        let second = try makeSource()
+        let replacement = try makeSource()
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                calls.increment()
+                return snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        var sources = [first, second]
+        var canvas = snapshot.canvasSize
+        var surround: UInt32 = 0x08090A
+        var expectedCalls = 0
+        func checkChanged(_ label: String) async throws {
+            clock.now += 200_000_000
+            let changed = await renderer.render(
+                owner: owner, canvasSize: canvas, surroundRGB: surround
+            ) {
+                sources
+            }
+            XCTAssertFalse(try XCTUnwrap(changed).isUnchanged, label)
+            expectedCalls += 1
+            XCTAssertEqual(calls.value, expectedCalls, label)
+            clock.now += 200_000_000
+            let repeated = await renderer.render(
+                owner: owner, canvasSize: canvas, surroundRGB: surround
+            ) {
+                sources
+            }
+            XCTAssertTrue(try XCTUnwrap(repeated).isUnchanged, label)
+            XCTAssertEqual(calls.value, expectedCalls, label)
+        }
+        try await checkChanged("initial ordered inputs")
+        sources[1] = replacement
+        try await checkChanged("new buffer with identical dimensions and look")
+        sources[1].effects.mirror = true
+        try await checkChanged("look on a non-first layer")
+        sources[1].effects.lutRGBA = Data([1, 2, 3, 4])
+        try await checkChanged("LUT data, not just dimension")
+        sources[0].effects.zebraHighlightIRE += 1
+        try await checkChanged("effect parameter")
+        sources[0].frame.origin.x += 1
+        try await checkChanged("frame position")
+        sources[0].frame.size.width += 1
+        try await checkChanged("frame size")
+        sources[1].clip.origin.y += 1
+        try await checkChanged("clip position")
+        sources[1].clip.size.height += 1
+        try await checkChanged("clip size")
+        canvas.width += 1
+        try await checkChanged("canvas width")
+        canvas.height += 1
+        try await checkChanged("canvas height")
+        surround = 0
+        try await checkChanged("surround color")
+        sources.reverse()
+        try await checkChanged("ordered layers")
+        sources.removeLast()
+        try await checkChanged("layer count")
+        sources = [first, second]
+        canvas = snapshot.canvasSize
+        surround = 0x08090A
+        try await checkChanged("returning to an older input does not keep a second cache entry")
+    }
+
+    func testFailedRenderAndOwnerRestartCannotReuseAnOlderSnapshot() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let original = try makeSource()
+        var source = original
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                calls.increment() == 2 ? nil : snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        _ = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { [source] }
+        source.effects.peaking = true
+        clock.now += 200_000_000
+        let failure = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertNil(try XCTUnwrap(failure).snapshot)
+        clock.now += 200_000_000
+        let retry = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(retry).isUnchanged)
+        XCTAssertNotNil(retry?.snapshot, "A failed result must not be cached")
+        XCTAssertEqual(calls.value, 3)
+        source = original
+        clock.now += 200_000_000
+        let restored = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(restored).isUnchanged)
+        XCTAssertEqual(calls.value, 4, "Returning to an earlier input must rerender")
+        renderer.deactivate(owner)
+        renderer.activate(owner)
+        clock.now += 200_000_000
+        let restarted = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(restarted).isUnchanged)
+        let nextOwner = UUID()
+        renderer.activate(nextOwner)
+        clock.now += 200_000_000
+        let remounted = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(remounted).isUnchanged)
+        renderer.deactivate(owner)
+        clock.now += 200_000_000
+        let repeated = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertTrue(
+            try XCTUnwrap(repeated).isUnchanged, "Old-owner cleanup cannot clear the new cache")
+        XCTAssertEqual(calls.value, 6)
+    }
+
+    func testCancelledSuccessfulWorkCannotPopulateNextOwnersCache() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let source = try makeSource()
+        let started = expectation(description: "Native work started")
+        let release = DispatchSemaphore(value: 0)
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                if calls.increment() == 1 {
+                    started.fulfill()
+                    _ = release.wait(timeout: .now() + 3)
+                }
+                return snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        let pending = Task {
+            await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { [source] }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        pending.cancel()
+        let nextOwner = UUID()
+        renderer.activate(nextOwner)
+        clock.now += 200_000_000
+        let overlap = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertNil(overlap)
+        release.signal()
+        let stale = await pending.value
+        XCTAssertNil(stale)
+        let fresh = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(fresh).isUnchanged)
+        XCTAssertEqual(calls.value, 2, "Cancelled successful native output must not seed a cache")
+        clock.now += 200_000_000
+        let repeated = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertTrue(try XCTUnwrap(repeated).isUnchanged)
+    }
+
+    func testReusableWorkingRasterIdentityNeverSkipsNativeWork() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let large = try makeBuffer(width: 1600, height: 8)
+        let reusable = FeedWorkingRaster.prepared(large)
+        XCTAssertTrue(FeedWorkingRaster.isReusableOutput(reusable))
+        XCTAssertFalse(FeedWorkingRaster.isReusableOutput(large))
+        let source = try makeSource(buffer: reusable)
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                calls.increment()
+                return snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        _ = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { [source] }
+        // The real producer overwrites this output while our source retains it.
+        XCTAssertTrue(FeedWorkingRaster.prepared(large) === reusable)
+        clock.now += 200_000_000
+        let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [source]
+        }
+        XCTAssertFalse(try XCTUnwrap(repeated).isUnchanged)
+        XCTAssertEqual(calls.value, 2)
+    }
+
+    func testExternallyChangingLooksNeverReuseAnIdenticalInput() async throws {
+        let clock = InspectorPreviewTestClock()
+        let calls = BackdropTestCounter()
+        let snapshot = try makeSnapshot()
+        let stable = try makeSource()
+        var source = try makeSource()
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now },
+            operation: { _, _ in
+                calls.increment()
+                return snapshot
+            })
+        let owner = UUID()
+        renderer.activate(owner)
+        for falseColor in [true, false] {
+            source.effects.falseColor = falseColor
+            source.effects.zebra = !falseColor
+            for _ in 0..<2 {
+                clock.now += 200_000_000
+                let result = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+                    [stable, source]
+                }
+                XCTAssertNotNil(try XCTUnwrap(result).snapshot)
+                XCTAssertFalse(
+                    try XCTUnwrap(result).isUnchanged,
+                    "External exposure or asynchronous maps can change without a new source/effect value"
+                )
+            }
+        }
+        XCTAssertEqual(calls.value, 4)
+        source.effects.zebra = false
+        clock.now += 200_000_000
+        let restored = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [stable, source]
+        }
+        XCTAssertFalse(try XCTUnwrap(restored).isUnchanged)
+        clock.now += 200_000_000
+        let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+            [stable, source]
+        }
+        XCTAssertTrue(try XCTUnwrap(repeated).isUnchanged)
+        XCTAssertEqual(calls.value, 5, "Removing externally dependent looks restores caching")
+    }
+
+    func testCachedInputsRetainBuffersUntilInvalidated() async throws {
+        let clock = InspectorPreviewTestClock()
+        let snapshot = try makeSnapshot()
+        let releases = BackdropTestCounter()
+        let released = expectation(description: "Invalidation releases retained input identity")
+        let renderer = MonitorVideoBackdropRenderer(
+            clock: { clock.now }, operation: { _, _ in snapshot })
+        let owner = UUID()
+        renderer.activate(owner)
+        var sources = [
+            try makeSource(
+                buffer: makeBuffer(onRelease: {
+                    releases.increment()
+                    released.fulfill()
+                }))
+        ]
+        _ = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { sources }
+        sources = []
+        // Give the completed worker closure time to release its transient inputs;
+        // only the cache should retain the external backing bytes now.
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(releases.value, 0)
+        renderer.deactivate(owner)
+        await fulfillment(of: [released], timeout: 2)
+        XCTAssertEqual(releases.value, 1)
+    }
+
+    private func makeSource(buffer: CVPixelBuffer? = nil) throws -> MonitorVideoBackdropSource {
+        let rect = CGRect(x: 0, y: 0, width: 8, height: 8)
+        return MonitorVideoBackdropSource(
+            buffer: try buffer ?? makeBuffer(), effects: LiveImageEffects(), frame: rect, clip: rect
+        )
+    }
+
+    private func makeBuffer(
+        width: Int = 8, height: Int = 8, onRelease: @escaping @Sendable () -> Void = {}
+    ) throws -> CVPixelBuffer {
+        let bytes = UnsafeMutableRawPointer.allocate(byteCount: width * height * 4, alignment: 64)
+        bytes.initializeMemory(as: UInt8.self, repeating: 0, count: width * height * 4)
+        let lifetime = Unmanaged.passRetained(BackdropBufferLifetime(onRelease))
+        var buffer: CVPixelBuffer?
+        let status = CVPixelBufferCreateWithBytes(
+            kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, bytes, width * 4,
+            { refCon, address in
+                UnsafeMutableRawPointer(mutating: address)?.deallocate()
+                if let refCon {
+                    Unmanaged<BackdropBufferLifetime>.fromOpaque(refCon).takeRetainedValue()
+                        .release()
+                }
+            }, lifetime.toOpaque(), nil, &buffer)
+        guard status == kCVReturnSuccess else {
+            bytes.deallocate()
+            lifetime.release()
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+        return try XCTUnwrap(buffer)
+    }
+
+    private func makeSnapshot() throws -> MonitorBackdropSnapshot {
+        let rect = CGRect(x: 0, y: 0, width: 8, height: 8)
+        let image = try XCTUnwrap(CIContext().createCGImage(CIImage(color: .black), from: rect))
+        return try XCTUnwrap(
+            MonitorBackdropRenderer().render(
+                canvasSize: rect.size, layers: [.init(image: image, frame: rect, clip: rect)]))
+    }
+
     func testCancellationRemountAndThermalBackoffKeepOneOccupiedSlotAndRejectOldResults()
         async throws
     {
@@ -93,4 +448,29 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
             sourceAspect: 2, effects: effects, in: rect)
         XCTAssertEqual(unstretchedHost, CGRect(x: 100, y: 312.5, width: 300, height: 75))
     }
+}
+
+private final class BackdropTestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    @discardableResult
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
+    }
+}
+
+private final class BackdropBufferLifetime: @unchecked Sendable {
+    let release: @Sendable () -> Void
+
+    init(_ release: @escaping @Sendable () -> Void) { self.release = release }
 }

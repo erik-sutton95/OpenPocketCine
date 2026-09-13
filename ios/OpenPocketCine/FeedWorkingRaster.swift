@@ -38,6 +38,14 @@ enum FeedWorkingRaster {
         return scale(buffer, width: target.width, height: target.height) ?? buffer
     }
 
+    /// These outputs are overwritten in place, even while another consumer
+    /// retains them. They cannot be cached by pixel-buffer identity.
+    static func isReusableOutput(_ buffer: CVPixelBuffer) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return pool.values.contains { $0 === buffer }
+    }
+
     private static func scale(_ buffer: CVPixelBuffer, width: Int, height: Int) -> CVPixelBuffer? {
         lock.lock()
         let key = PoolKey(width: width, height: height)

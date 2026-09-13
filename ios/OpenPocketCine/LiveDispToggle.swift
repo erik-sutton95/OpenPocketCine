@@ -1,3 +1,4 @@
+import MonitorPresentation
 import MonitorUI
 import SwiftUI
 
@@ -19,7 +20,11 @@ struct LiveDispToggle: View {
         } label: {
             VStack(spacing: 3) {
                 Text("DISP")
-                    .font(LiveType.ui(size: 12, weight: .bold, design: .default))
+                    .font(
+                        LiveType.ui(
+                            size: CGFloat(MonitorCapturePopupChrome.dispSize), weight: .bold)
+                    )
+                    .tracking(CGFloat(MonitorCapturePopupChrome.dispTracking))
                 HStack(spacing: 3) {
                     Capsule()
                         .fill(model.assist.clean ? LiveDesign.hairlineStrong : LiveDesign.info)

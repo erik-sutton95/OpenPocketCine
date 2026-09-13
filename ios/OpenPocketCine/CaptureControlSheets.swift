@@ -9,6 +9,13 @@ enum CaptureSheet: String, Identifiable {
     case mode
     case resolution, color
     var id: String { rawValue }
+    /// Format, color and shooting mode open from the top edge in the mockup.
+    var isTopAnchored: Bool {
+        switch self {
+        case .resolution, .color, .mode: true
+        default: false
+        }
+    }
 }
 
 struct LiveCaptureTileFramesKey: PreferenceKey {
@@ -21,39 +28,58 @@ struct LiveCaptureTileFramesKey: PreferenceKey {
     }
 }
 
-/// All persistent camera drawers share a bottom-center anchor. The host may
-/// keep visible controls touchable; every other outside tap dismisses the drawer.
+/// Persistent camera drawers use the well of the control that opened them.
+/// The host may keep visible controls touchable; every other outside tap
+/// dismisses the drawer.
 struct LiveCapturePickerHost: View {
     @Binding var sheet: CaptureSheet?
+    @Environment(\.monitorPresentationIsVisible) private var presentationVisible
     var frames: [CaptureSheet: CGRect]
+    var passthroughFrames: [CGRect] = []
     var bar: CGRect
     var viewport: CGSize
     var safeArea: EdgeInsets = EdgeInsets()
     var ceilingY: CGFloat = 0
     var bottomY: CGFloat? = nil
+    var topDeckMaxY: CGFloat = 0
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        let current = sheet
+        let edge: MonitorCapturePopupEdge = current?.isTopAnchored == true ? .top : .bottom
+        let topY: CGFloat? =
+            edge == .top
+            ? (viewport.height > viewport.width ? topDeckMaxY + 6 : 0) : nil
+        return ZStack(alignment: .topLeading) {
             if sheet != nil {
                 Color.clear
-                    .contentShape(CapturePickerBackdrop(frames: frames), eoFill: true)
+                    .contentShape(
+                        CapturePickerBackdrop(frames: Array(frames.values) + passthroughFrames),
+                        eoFill: true
+                    )
                     .onTapGesture(coordinateSpace: .named(LiveCanvasSpace.name)) { location in
                         handleBackdrop(at: location)
                     }
             }
             CapturePopupContainer(
-                viewport: viewport, safeArea: safeArea, ceilingY: ceilingY, bottomY: bottomY
+                viewport: viewport, safeArea: safeArea, ceilingY: ceilingY, bottomY: bottomY,
+                edge: edge, topY: topY
             ) { place in
                 if let current = sheet {
                     CapturePickerPanel(
-                        sheet: current, maximumHeight: place.maximumHeight,
-                        bottomPadding: place.bottomPadding,
+                        sheet: current, maximumHeight: CGFloat(place.maximumHeight),
+                        bottomPadding: CGFloat(place.bottomPadding),
+                        topPadding: CGFloat(place.topPadding),
+                        topCornerRadius: CGFloat(place.topCornerRadius),
+                        bottomCornerRadius: CGFloat(place.bottomCornerRadius),
+                        edge: place.edge,
                         isPresented: { sheet == current },
                         onSelectRecordingCategory: [.resolution, .color, .mode].contains(current)
-                            ? { sheet = $0 } : nil
+                            ? { sheet = $0 } : nil,
+                        showsRecordingCategories: viewport.height > viewport.width
                     ) { sheet = nil }
                     .id(current)
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("monitor.capture.panel")
+                    .accessibilityHidden(!presentationVisible)
                     .transition(.identity)
                 }
             }
@@ -99,11 +125,16 @@ struct CapturePickerPanel: View {
     let sheet: CaptureSheet
     var maximumHeight: CGFloat = .infinity
     var bottomPadding: CGFloat = 12
+    var topPadding: CGFloat = 11
+    var topCornerRadius: CGFloat = 16
+    var bottomCornerRadius: CGFloat = 0
+    var edge: MonitorCapturePopupEdge = .bottom
     var isPresented: () -> Bool = { true }
     /// Visual state from the readout's existing gesture. The panel is read-only
     /// for its entire lifetime when this is present, including initial seeding.
     var preview: CaptureDrumPresentation? = nil
     var onSelectRecordingCategory: ((CaptureSheet) -> Void)? = nil
+    var showsRecordingCategories: Bool = false
     var onClose: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
@@ -162,26 +193,40 @@ struct CapturePickerPanel: View {
     }
 
     var body: some View {
+        let kind: MonitorCapturePopupKind = preview == nil ? .details : .compact
         MonitorCapturePanel(
-            title: headerTitle, subtitle: headerSubtitle,
-            maximumHeight: maximumHeight, bottomPadding: bottomPadding, close: onClose
+            title: headerTitle, subtitle: kind.subtitle ?? headerSubtitle,
+            maximumHeight: maximumHeight, bottomPadding: bottomPadding,
+            topPadding: topPadding, topCornerRadius: topCornerRadius,
+            bottomCornerRadius: bottomCornerRadius, kind: kind, edge: edge, close: onClose
         ) {
             VStack(alignment: .leading, spacing: 8) {
-                content
-                if sheet == .resolution, formatAspects.count > 1 { aspectBar }
-                if !modeTabs.isEmpty { modeBar }
-                if let onSelectRecordingCategory {
-                    MonitorCaptureTabs(
-                        options: [CaptureSheet.resolution, .color, .mode], selection: sheet,
-                        title: { $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode" }
-                    ) { category in
-                        guard canApplyDrum else { return }
-                        cancelDrumSend()
-                        onSelectRecordingCategory(category)
+                if let held = preview {
+                    CaptureDrumWheel(
+                        options: held.snapshot.options, selection: .constant(held.selection),
+                        markedValues: held.snapshot.marked, isInteractive: false)
+                } else {
+                    content
+                    if sheet == .resolution, formatAspects.count > 1 { aspectBar }
+                    if !modeTabs.isEmpty { modeBar }
+                    if let onSelectRecordingCategory,
+                        MonitorCapturePopupChrome.showsRecordingCategoryTabs(
+                            portrait: showsRecordingCategories, kind: .details)
+                    {
+                        MonitorCaptureTabs(
+                            options: [CaptureSheet.resolution, .color, .mode], selection: sheet,
+                            title: {
+                                $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
+                            }
+                        ) { category in
+                            guard canApplyDrum else { return }
+                            cancelDrumSend()
+                            onSelectRecordingCategory(category)
+                        }
                     }
+                    if sheet == .iso { nativeIsoHopToggle }
+                    if isEvSheet { facePriorityToggle }
                 }
-                if sheet == .iso { nativeIsoHopToggle }
-                if isEvSheet { facePriorityToggle }
             }
         }
         .environment(
@@ -331,8 +376,10 @@ struct CapturePickerPanel: View {
         case .mode:
             choiceDrum(
                 ShootingMode.allCases.map(\.label),
-                selected: model.session.currentShootingMode?.label
+                selected: model.session.currentShootingMode?.label,
+                isInteractive: !model.session.status.isRecording
             ) { label in
+                guard !model.session.status.isRecording else { return }
                 if let mode = ShootingMode.allCases.first(where: { $0.label == label }) {
                     model.session.setShootingMode(mode)
                 }
@@ -466,13 +513,15 @@ struct CapturePickerPanel: View {
     }
 
     private func choiceDrum(
-        _ options: [String], selected: String?, action: @escaping (String) -> Void
+        _ options: [String], selected: String?, isInteractive: Bool = true,
+        action: @escaping (String) -> Void
     ) -> some View {
         CaptureDrumWheel(
             options: options,
             selection: Binding(
                 get: { selected ?? "" },
-                set: { value in if canApplyDrum { action(value) } }))
+                set: { value in if canApplyDrum && isInteractive { action(value) } }),
+            isInteractive: isInteractive)
     }
 
     private var headerTitle: String {
@@ -1111,17 +1160,28 @@ struct LiveCaptureDrumHost: View {
     var safeArea: EdgeInsets = EdgeInsets()
     var ceilingY: CGFloat = 0
     var bottomY: CGFloat? = nil
+    var topDeckMaxY: CGFloat = 0
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        CapturePopupContainer(
-            viewport: viewport, safeArea: safeArea, ceilingY: ceilingY, bottomY: bottomY
+        let edge: MonitorCapturePopupEdge =
+            model.captureDrum?.sheet.isTopAnchored == true ? .top : .bottom
+        let topY: CGFloat? =
+            edge == .top
+            ? (viewport.height > viewport.width ? topDeckMaxY + 6 : 0) : nil
+        return CapturePopupContainer(
+            viewport: viewport, safeArea: safeArea, ceilingY: ceilingY, bottomY: bottomY,
+            edge: edge, topY: topY
         ) { place in
             if let drum = model.captureDrum {
                 CapturePickerPanel(
-                    sheet: drum.sheet, maximumHeight: place.maximumHeight,
-                    bottomPadding: place.bottomPadding, isPresented: { false }, preview: drum,
-                    onClose: {}
+                    sheet: drum.sheet, maximumHeight: CGFloat(place.maximumHeight),
+                    bottomPadding: CGFloat(place.bottomPadding),
+                    topPadding: CGFloat(place.topPadding),
+                    topCornerRadius: CGFloat(place.topCornerRadius),
+                    bottomCornerRadius: CGFloat(place.bottomCornerRadius),
+                    edge: place.edge,
+                    isPresented: { false }, preview: drum, onClose: {}
                 )
                 .id(drum.id)
                 .transition(.identity)
@@ -1133,6 +1193,7 @@ struct LiveCaptureDrumHost: View {
         .onChange(of: safeArea) { _, _ in model.captureDrum = nil }
         .onChange(of: bottomY) { _, _ in model.captureDrum = nil }
         .onChange(of: ceilingY) { _, _ in model.captureDrum = nil }
+        .onChange(of: topDeckMaxY) { _, _ in model.captureDrum = nil }
     }
 }
 
@@ -1143,6 +1204,8 @@ private struct CapturePopupContainer<Content: View>: View {
     let safeArea: EdgeInsets
     let ceilingY: CGFloat
     let bottomY: CGFloat?
+    var edge: MonitorCapturePopupEdge = .bottom
+    var topY: CGFloat? = nil
     @ViewBuilder var content: (MonitorCapturePopupLayout) -> Content
 
     var body: some View {
@@ -1152,13 +1215,33 @@ private struct CapturePopupContainer<Content: View>: View {
             safeArea: MonitorSafeArea(
                 top: safeArea.top, leading: safeArea.leading,
                 bottom: safeArea.bottom, trailing: safeArea.trailing),
-            bottomBoundary: bottomY.map(Double.init), ceiling: ceilingY)
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            content(place)
+            bottomBoundary: bottomY.map(Double.init), ceiling: ceilingY,
+            edge: edge, topBoundary: topY.map(Double.init))
+        Group {
+            if edge == .top {
+                VStack(spacing: 0) {
+                    content(place)
+                    Spacer(minLength: 0)
+                }
+                .frame(
+                    width: CGFloat(place.width),
+                    height: max(CGFloat(0), viewport.height - CGFloat(place.top)),
+                    alignment: .top
+                )
+                .offset(
+                    x: CGFloat(place.centerX - place.width / 2), y: CGFloat(place.top))
+            } else {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    content(place)
+                }
+                .frame(
+                    width: CGFloat(place.width), height: CGFloat(place.bottom),
+                    alignment: .bottom
+                )
+                .offset(x: CGFloat(place.centerX - place.width / 2))
+            }
         }
-        .frame(width: place.width, height: place.bottom, alignment: .bottom)
-        .offset(x: place.centerX - place.width / 2)
         .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
     }
 }
@@ -1166,10 +1249,10 @@ private struct CapturePopupContainer<Content: View>: View {
 /// Let the underlying readouts retain their recognizers while a persistent
 /// picker is open. The rest of the picture remains a dismiss target.
 private struct CapturePickerBackdrop: Shape {
-    let frames: [CaptureSheet: CGRect]
+    let frames: [CGRect]
     func path(in rect: CGRect) -> Path {
         var path = Path(rect)
-        for frame in frames.values where frame.width > 0 && frame.height > 0 {
+        for frame in frames where frame.width > 0 && frame.height > 0 {
             path.addRect(frame)
         }
         return path

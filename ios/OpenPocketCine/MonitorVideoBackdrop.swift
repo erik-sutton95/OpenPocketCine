@@ -12,11 +12,19 @@ struct MonitorVideoBackdropConfiguration: Equatable {
     var geometry: [CGFloat] = []
 }
 
-struct MonitorVideoBackdropSource: @unchecked Sendable {
+/// VT / AVPlayer source buffers stay immutable while retained. The working
+/// raster's shared mutable outputs are explicitly excluded from identity caching.
+/// Future producers must preserve this contract or also opt out of caching.
+struct MonitorVideoBackdropSource: Equatable, @unchecked Sendable {
     var buffer: CVPixelBuffer
     var effects: LiveImageEffects
     var frame: CGRect
     var clip: CGRect
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.buffer === rhs.buffer && lhs.effects == rhs.effects
+            && lhs.frame == rhs.frame && lhs.clip == rhs.clip
+    }
 }
 
 /// One admission includes source selection, low-resolution display-look work,
@@ -26,6 +34,21 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
     struct Result {
         let snapshot: MonitorBackdropSnapshot?
         let ticket: MonitorPreviewAdmission.Ticket
+        let isUnchanged: Bool
+    }
+
+    private struct Input: Equatable {
+        let canvasSize: CGSize
+        let surroundRGB: UInt32
+        // Retain the objects, not just their addresses: a released native
+        // buffer's identity may be recycled for a different frame.
+        let sources: [MonitorVideoBackdropSource]
+    }
+
+    private struct CachedResult {
+        let owner: UUID
+        let input: Input
+        let snapshot: MonitorBackdropSnapshot
     }
 
     typealias Operation =
@@ -34,6 +57,7 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
     private let lock = NSLock()
     private var admission = MonitorPreviewAdmission()
     private var nextAdmission: UInt64 = 0
+    private var cached: CachedResult?  // lock-protected, one successful input only
     private lazy var imageRenderer = AssistInspectorImageRenderer()
     private lazy var backdropRenderer = MonitorBackdropRenderer()
     private let operation: Operation?
@@ -58,12 +82,14 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         admission.activate(owner: owner)
+        cached = nil
     }
 
     func deactivate(_ owner: UUID) {
         lock.lock()
         defer { lock.unlock() }
         admission.deactivate(owner: owner)
+        if cached?.owner == owner { cached = nil }
     }
 
     func isCurrent(_ result: Result) -> Bool { isCurrent(result.ticket) }
@@ -92,6 +118,28 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         admission.complete(ticket)
     }
 
+    private func cachedSnapshot(
+        for input: Input, ticket: MonitorPreviewAdmission.Ticket
+    ) -> MonitorBackdropSnapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard admission.isCurrent(ticket) else { return nil }
+        if cached?.input == input { return cached?.snapshot }
+        // A different input must retire the old entry even if rendering fails.
+        cached = nil
+        return nil
+    }
+
+    private func cache(
+        _ snapshot: MonitorBackdropSnapshot, input: Input, owner: UUID,
+        ticket: MonitorPreviewAdmission.Ticket
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard admission.isCurrent(ticket) else { return }
+        cached = CachedResult(owner: owner, input: input, snapshot: snapshot)
+    }
+
     @MainActor
     func render(
         owner: UUID, canvasSize: CGSize, surroundRGB: UInt32 = 0x08090A,
@@ -100,33 +148,63 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         guard !Task.isCancelled, let ticket = reserve(owner) else { return nil }
         defer { complete(ticket) }
         let sources = prepare()
-        let snapshot: MonitorBackdropSnapshot? = await withTaskCancellationHandler {
+        let input = Input(canvasSize: canvasSize, surroundRGB: surroundRGB, sources: sources)
+        let result: Result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.async { [self] in
+                    var isUnchanged = false
                     let snapshot: MonitorBackdropSnapshot? = autoreleasepool {
                         guard isCurrent(ticket) else { return nil }
-                        if let operation { return operation(canvasSize, sources) }
-                        guard !sources.isEmpty else { return nil }
-                        let layers = sources.compactMap { source -> MonitorBackdropLayer? in
-                            guard isCurrent(ticket),
-                                let image = imageRenderer.renderImage(
-                                    source: source.buffer, effects: source.effects)
-                            else { return nil }
-                            return MonitorBackdropLayer(
-                                image: image, frame: source.frame, clip: source.clip)
+                        var canCache =
+                            !sources.isEmpty
+                            && sources.allSatisfy {
+                                // False-color maps warm asynchronously; both
+                                // FALSE and ZEBRA also read external exposure
+                                // state absent from LiveImageEffects.
+                                !$0.effects.falseColor && !$0.effects.zebra
+                                    && !FeedWorkingRaster.isReusableOutput($0.buffer)
+                            }
+                        if let previous = cachedSnapshot(for: input, ticket: ticket), canCache {
+                            isUnchanged = true
+                            return previous
                         }
                         guard isCurrent(ticket) else { return nil }
-                        return backdropRenderer.render(
-                            canvasSize: canvasSize, layers: layers, surroundRGB: surroundRGB)
+                        let snapshot: MonitorBackdropSnapshot?
+                        if let operation {
+                            snapshot = operation(canvasSize, sources)
+                        } else {
+                            guard !sources.isEmpty else { return nil }
+                            let layers = sources.compactMap { source -> MonitorBackdropLayer? in
+                                guard isCurrent(ticket),
+                                    let image = imageRenderer.renderImage(
+                                        source: source.buffer, effects: source.effects)
+                                else { return nil }
+                                return MonitorBackdropLayer(
+                                    image: image, frame: source.frame, clip: source.clip)
+                            }
+                            // Preserve partial-source fallback, but retry failed
+                            // source renders instead of caching an incomplete stage.
+                            canCache = canCache && layers.count == sources.count
+                            guard isCurrent(ticket) else { return nil }
+                            snapshot = backdropRenderer.render(
+                                canvasSize: canvasSize, layers: layers, surroundRGB: surroundRGB)
+                        }
+                        if let snapshot, canCache {
+                            cache(snapshot, input: input, owner: owner, ticket: ticket)
+                        }
+                        guard isCurrent(ticket) else { return nil }
+                        return snapshot
                     }
-                    continuation.resume(returning: snapshot)
+                    continuation.resume(
+                        returning: Result(
+                            snapshot: snapshot, ticket: ticket, isUnchanged: isUnchanged))
                 }
             }
         } onCancel: {
             self.deactivate(owner)
         }
         guard !Task.isCancelled, isCurrent(ticket) else { return nil }
-        return Result(snapshot: snapshot, ticket: ticket)
+        return result
     }
 }
 
@@ -148,12 +226,14 @@ private struct MonitorVideoBackdrop: ViewModifier {
         var configuration: [MonitorVideoBackdropConfiguration]
         var frame: CGRect
         var active: Bool
+        var surroundRGB: UInt32
     }
 
     private var key: WorkKey {
         WorkKey(
             configuration: configuration, frame: globalFrame,
-            active: enabled && scenePhase == .active && applicationActive && !reduceTransparency)
+            active: enabled && scenePhase == .active && applicationActive && !reduceTransparency,
+            surroundRGB: surroundRGB)
     }
 
     func body(content: Content) -> some View {
@@ -198,12 +278,14 @@ private struct MonitorVideoBackdrop: ViewModifier {
         while !Task.isCancelled {
             let thermal = ProcessInfo.processInfo.thermalState
             if let result = await renderer.render(
-                owner: identity, canvasSize: expected.frame.size, surroundRGB: surroundRGB,
+                owner: identity, canvasSize: expected.frame.size, surroundRGB: expected.surroundRGB,
                 prepare: { sources(expected.frame.size) }),
                 !Task.isCancelled, renderer.isCurrent(result)
             {
-                snapshot = result.snapshot
-                renderedKey = expected
+                if !result.isUnchanged {
+                    snapshot = result.snapshot
+                    renderedKey = expected
+                }
             }
             let interval = MonitorBackdropPolicy.interval(
                 serious: thermal == .serious, critical: thermal == .critical)

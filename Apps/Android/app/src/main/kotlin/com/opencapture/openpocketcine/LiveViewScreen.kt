@@ -75,6 +75,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import android.os.SystemClock
+import com.opencapture.monitorui.MonitorQuickGestureOwner
+import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorReadoutGlow
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.SessionRecoveryCopy
@@ -420,6 +422,7 @@ fun LiveViewScreen(model: AppModel) {
             } else {
                 base
             }
+        val topReadoutFrame = zones?.let { livePortraitReadoutFrame(layout, it) }
         // iOS fillCrop: landscape fill over-widens 16:9 to the well height
         // then clips (center crop). Vertical Pocket fill stays 9:16 pillars.
         val fillCrop = zones != null && fill && !verticalPicture
@@ -533,7 +536,9 @@ fun LiveViewScreen(model: AppModel) {
                 pictureMirrored = liveViewFlip,
             )
         }
+        val readoutRegions = remember { com.opencapture.monitorui.MonitorReadoutRegions() }
         CompositionLocalProvider(
+            com.opencapture.monitorui.LocalMonitorReadoutRegions provides readoutRegions,
             LocalDensity provides Density(density.density, density.fontScale * chromeScale),
             LocalLiveCanvasOrigin provides canvasOrigin,
             LocalGpuLive provides if (useVulkan) vulkanSession else null,
@@ -698,6 +703,7 @@ fun LiveViewScreen(model: AppModel) {
                     model = model,
                     layout = layout,
                     zones = zones,
+                    readoutFrame = checkNotNull(topReadoutFrame),
                     status = status,
                     uiLocked = uiLocked,
                     onLock = { setLocked(!uiLocked) },
@@ -803,6 +809,7 @@ fun LiveViewScreen(model: AppModel) {
                     status = status,
                     locked = uiLocked,
                     onSelect = { sheet = it },
+                    ceilingY = topReadoutFrame?.maxY,
                 )
             }
 
@@ -1262,8 +1269,10 @@ internal fun LandscapeChrome(
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
 ) {
-    var quickActive by remember { mutableStateOf(false) }
-    val captureOpen = sheet != null || quickActive
+    var stripQuick by remember { mutableStateOf(false) }
+    var topQuick by remember { mutableStateOf(false) }
+    val captureOpen = sheet != null || stripQuick || topQuick
+    val hidesCaptureValues = hidesLowerCaptureValues(sheet, stripQuick, topQuick)
     val editing = model.chromeEditorMode
     val showsStatus = model.chromeSectionMounts(PocketDispSection.STATUS_BAR)
     val showsLock = model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON) || uiLocked
@@ -1303,6 +1312,10 @@ internal fun LandscapeChrome(
                     editing = editing,
                     onChipFrame = onStatusChipFrame,
                     onPickerFrame = onTileFrame,
+                    onQuickActiveChange = {
+                        topQuick = it
+                        if (it) onSheet(null)
+                    },
                 )
             }
         }
@@ -1446,10 +1459,13 @@ internal fun LandscapeChrome(
             }
         }
         if (showsCapture) {
-            Box(Modifier.liveModuleFrame(layout.capture).alpha(if (captureOpen) 0f else if (uiLocked) .4f else 1f)
-                .then(if (captureOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
-                LiveCaptureStrip(status, sheet, !uiLocked && !controlBusy && hits && sheet == null, model = model,
-                    onQuickActiveChange = { quickActive = it },
+            Box(Modifier.liveModuleFrame(layout.capture).alpha(if (hidesCaptureValues) 0f else if (uiLocked) .4f else 1f)
+                .then(if (hidesCaptureValues) Modifier.clearAndSetSemantics { } else Modifier)) {
+                LiveCaptureStrip(status, sheet, !uiLocked && !controlBusy && hits && (sheet == null || sheet.isTopAnchored), model = model,
+                    onQuickActiveChange = {
+                        stripQuick = it
+                        if (it) onSheet(null)
+                    },
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
@@ -1476,8 +1492,34 @@ private fun LiveTopDeck(
     editing: PocketDispMode? = null,
     onChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     onPickerFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
+    onQuickActiveChange: (Boolean) -> Unit = {},
 ) {
     val family = model.session.connectedCamera?.model?.family ?: "pocket"
+    val context = LocalContext.current
+    val quickLifetime = rememberCaptureQuickLifetime(model)
+    val gestureOwner = remember { MonitorQuickGestureOwner() }
+    val interactive = enabled
+    val notifyQuick by rememberUpdatedState(onQuickActiveChange)
+    LaunchedEffect(gestureOwner.active) { notifyQuick(gestureOwner.active != null) }
+    DisposableEffect(Unit) { onDispose { notifyQuick(false) } }
+    @Composable
+    fun Modifier.topCapture(sheet: LiveSheet): Modifier = monitorReadoutGesture(
+        captureQuickControl(sheet, status, model, context, quickLifetime),
+        interactive && quickLifetime.active && (gestureOwner.owner == null || gestureOwner.owner == sheet.name),
+        { onOpen(sheet) },
+        { source, value ->
+            releaseCaptureQuickControl(sheet, source, value, model, context, quickLifetime, interactive)
+        },
+        0f,
+        gestureOwner,
+        sheet.name,
+        { preview, maxHeight ->
+            LiveControlSheet(sheet, model, status, locked = false,
+                onDismiss = {}, maxHeightDp = maxHeight, preview = preview)
+        },
+        fromTop = true,
+        onPreviewBegin = { notifyQuick(true) },
+    )
     fun chipMod(section: PocketDispSection, picker: LiveSheet? = null): Modifier {
         val visible = editing == null || model.chrome(editing).isVisible(section)
         return Modifier
@@ -1505,18 +1547,16 @@ private fun LiveTopDeck(
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
             Text(CaptureLists.recFormatChipLabel(status), style = LiveType.mono(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
-                modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT)
-                    .chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
+                modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT).topCapture(LiveSheet.FORMAT))
         }
         if (model.chromeSectionMounts(PocketDispSection.COLOR)) {
             Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
-                modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR)
-                    .chromeClickable(enabled = enabled) { onOpen(LiveSheet.COLOR) })
+                modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR).topCapture(LiveSheet.COLOR))
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
             Text(CameraCommands.shootingModeLabel(status.shootingMode) ?: "—",
                 color = LiveDesign.accent, style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
-                modifier = Modifier.chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
+                modifier = Modifier.reportChromeFrame { onPickerFrame(LiveSheet.MODE, it) }.topCapture(LiveSheet.MODE))
         }
         }
         androidx.compose.foundation.layout.Row(Modifier.padding(end = readoutTrailingInset.dp),

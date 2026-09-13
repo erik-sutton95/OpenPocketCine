@@ -11,6 +11,7 @@ struct FieldMonitorStatusChrome: View {
     @Binding var menu: LiveTopMenu?
     var layout: LiveMonitorLayout
     @State private var storagePercent = false
+    @State private var readoutOwnership = MonitorReadoutOwnership()
 
     var body: some View {
         let portrait = layout.presentation?.portrait == true
@@ -26,16 +27,11 @@ struct FieldMonitorStatusChrome: View {
                     HStack {
                         tally
                         Spacer(minLength: 4)
-                        Button("REC SETUP") { if !locked { model.captureSheet = .resolution } }
-                            .font(MonitorTheme.font(12, weight: .semibold))
-                            .foregroundStyle(.white).buttonStyle(.zcTapTarget)
-                            .accessibilityLabel("Recording options")
-                            .accessibilityIdentifier("monitor.capture.format")
-                    }
-                }
-                .overlay(alignment: .topLeading) {
-                    if model.chromeSectionMounts(.storage), let p = layout.presentation {
-                        storageButton.offset(y: (p.tablet ? 52 : p.gauges.y) - p.status.y)
+                        topReadout(
+                            .resolution, value: "REC SETUP",
+                            fontSize: 12, weight: .semibold, alwaysAccent: false
+                        )
+                        .accessibilityLabel("Recording options")
                     }
                 }
             } else {
@@ -49,15 +45,11 @@ struct FieldMonitorStatusChrome: View {
                         topButton(.color, value: model.session.status.colorMode?.label ?? "—")
                     }
                     if layout.viewport.width >= 800 {
-                        Button(model.session.currentShootingMode?.label ?? "Video") {
-                            if !locked { model.captureSheet = .mode }
-                        }
-                        .font(
-                            MonitorTheme.font(
-                                layout.presentation?.tablet == true ? 18 : 16, weight: .medium)
-                        )
-                        .foregroundStyle(MonitorTheme.accent).buttonStyle(.zcTapTarget)
-                        .accessibilityIdentifier("monitor.capture.mode")
+                        topReadout(
+                            .mode,
+                            value: model.session.currentShootingMode?.label ?? "Video",
+                            fontSize: layout.presentation?.tablet == true ? 18 : 16,
+                            alwaysAccent: true)
                     }
                     Spacer(minLength: 4)
                     HStack(spacing: 10) {
@@ -74,6 +66,19 @@ struct FieldMonitorStatusChrome: View {
         }
         .frame(height: layout.topDeck.height)
         .monitorReadoutShadow()
+        .overlay(alignment: .topLeading) {
+            if portrait, model.chromeSectionMounts(.storage), let p = layout.presentation {
+                storageButton
+                    .monitorReadoutShadow()
+                    .offset(y: (p.tablet ? 52 : p.gauges.y) - p.status.y)
+            }
+        }
+        .onChange(of: locked) { _, isLocked in
+            if isLocked {
+                model.captureSheet = nil
+                model.captureDrum = nil
+            }
+        }
     }
 
     @ViewBuilder private var tally: some View {
@@ -128,31 +133,130 @@ struct FieldMonitorStatusChrome: View {
     }
 
     private func topButton(_ item: LiveTopMenu, value: String) -> some View {
-        let sheet: CaptureSheet = item == .color ? .color : .resolution
-        return Button {
-            guard !locked else { return }
-            menu = nil
-            model.captureSheet = model.captureSheet == sheet ? nil : sheet
-        } label: {
-            Text(value).font(
-                MonitorTheme.font(layout.presentation?.tablet == true ? 18 : 16, weight: .medium)
-            ).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .foregroundStyle(model.captureSheet == sheet ? MonitorTheme.accent : .white)
-        }
-        .buttonStyle(.zcTapTarget)
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: LiveTopPickerFramesKey.self,
-                    value: [item: proxy.frame(in: .named(LiveCanvasSpace.name))])
-            }
-        }
-        .accessibilityLabel(item == .color ? "Color mode" : "Recording format")
-        .accessibilityIdentifier(
-            item == .color ? "monitor.capture.color" : "monitor.capture.format"
+        topReadout(
+            item == .color ? .color : .resolution, value: value,
+            fontSize: layout.presentation?.tablet == true ? 18 : 16
         )
-        .accessibilityValue(value)
+        .accessibilityLabel(item == .color ? "Color mode" : "Recording format")
+    }
+
+    private func topReadout(
+        _ sheet: CaptureSheet, value: String, fontSize: CGFloat, weight: Font.Weight = .medium,
+        alwaysAccent: Bool = false
+    ) -> some View {
+        let isActive = model.captureSheet == sheet || model.captureDrum?.sheet == sheet
+        let acceptsTouch =
+            !locked && (model.captureDrum == nil || model.captureDrum?.sheet == sheet)
+        return Text(value)
+            .font(MonitorTheme.font(fontSize, weight: weight)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .foregroundStyle(
+                alwaysAccent || isActive ? MonitorTheme.accent : .white
+            )
+            .modifier(
+                MonitorReadoutHitTargetModifier(
+                    sheet: sheet, locked: locked, acceptsTouch: acceptsTouch,
+                    ownership: $readoutOwnership
+                ) { open(sheet) }
+            )
+            .accessibilityIdentifier(topAccessibilityID(sheet))
+            .accessibilityValue(value)
+    }
+
+    private func open(_ sheet: CaptureSheet) {
+        guard !locked, model.captureDrum == nil, readoutOwnership.owner == nil else { return }
+        menu = nil
+        model.captureDrum = nil
+        model.captureSheet = CaptureReadoutAdmission.replacing(model.captureSheet, with: sheet)
+    }
+
+    private func topAccessibilityID(_ sheet: CaptureSheet) -> String {
+        switch sheet {
+        case .color: "monitor.capture.color"
+        case .mode: "monitor.capture.mode"
+        default: "monitor.capture.format"
+        }
+    }
+}
+
+/// Same 44×44pt pad/unpad hit region as `zcTapTarget`. Gesture and backdrop
+/// frames attach to the expanded region; negative padding restores layout.
+enum MonitorReadoutHitTarget {
+    static let minimumSize: CGFloat = 44
+
+    static func padding(for size: CGSize, minSize: CGFloat = minimumSize) -> CGSize {
+        CGSize(
+            width: size == .zero ? 0 : max(0, (minSize - size.width) / 2),
+            height: size == .zero ? 0 : max(0, (minSize - size.height) / 2)
+        )
+    }
+
+    static func frame(_ frame: CGRect, minSize: CGFloat = minimumSize) -> CGRect {
+        let width = max(frame.width, minSize)
+        let height = max(frame.height, minSize)
+        return CGRect(
+            x: frame.midX - width / 2, y: frame.midY - height / 2, width: width, height: height)
+    }
+}
+
+private struct MonitorReadoutHitTargetSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
+    }
+}
+
+private struct MonitorReadoutHitTargetModifier: ViewModifier {
+    var sheet: CaptureSheet
+    var locked: Bool
+    var acceptsTouch: Bool
+    @Binding var ownership: MonitorReadoutOwnership
+    var onOpen: () -> Void
+    @State private var measuredSize: CGSize = .zero
+
+    func body(content: Content) -> some View {
+        let pad = MonitorReadoutHitTarget.padding(for: measuredSize)
+        content
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: MonitorReadoutHitTargetSizeKey.self, value: proxy.size)
+                }
+            }
+            .onPreferenceChange(MonitorReadoutHitTargetSizeKey.self) { measuredSize = $0 }
+            .padding(.horizontal, pad.width)
+            .padding(.vertical, pad.height)
+            .contentShape(Rectangle())
+            .modifier(
+                CaptureReadoutGesture(
+                    sheet: sheet, locked: locked, ownership: $ownership, onTap: onOpen)
+            )
+            .disabled(locked)
+            .allowsHitTesting(acceptsTouch)
+            .background {
+                GeometryReader { proxy in
+                    let frame = proxy.frame(in: .named(LiveCanvasSpace.name))
+                    Color.clear
+                        .preference(key: LiveCaptureTileFramesKey.self, value: [sheet: frame])
+                        .preference(
+                            key: LiveTopPickerFramesKey.self,
+                            value: topMenuFrame(frame))
+                }
+            }
+            .padding(.horizontal, -pad.width)
+            .padding(.vertical, -pad.height)
+    }
+
+    private func topMenuFrame(_ frame: CGRect) -> [LiveTopMenu: CGRect] {
+        switch sheet {
+        case .color: [.color: frame]
+        case .resolution: [.recFormat: frame]
+        default: [:]
+        }
     }
 }
 

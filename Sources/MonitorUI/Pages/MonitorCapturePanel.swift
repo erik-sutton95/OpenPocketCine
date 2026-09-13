@@ -1,13 +1,19 @@
 #if os(iOS)
+    import MonitorPresentation
     import SwiftUI
 
-    /// The camera-independent capture drawer: a fixed header and grabber keep
-    /// dismissal reachable while an unusually long capability list can scroll.
+    /// The camera-independent capture drawer. Details keep a close control and
+    /// grabber; compact hold shows the same glass and dial without accessories.
     public struct MonitorCapturePanel<Content: View>: View {
         private let title: String
         private let subtitle: String
         private let maximumHeight: CGFloat
+        private let topPadding: CGFloat
         private let bottomPadding: CGFloat
+        private let topCornerRadius: CGFloat
+        private let bottomCornerRadius: CGFloat
+        private let kind: MonitorCapturePopupKind
+        private let edge: MonitorCapturePopupEdge
         private let close: () -> Void
         private let content: Content
         @State private var contentHeight: CGFloat = 86
@@ -16,21 +22,37 @@
 
         public init(
             title: String, subtitle: String, maximumHeight: CGFloat = .infinity,
-            bottomPadding: CGFloat = 12, close: @escaping () -> Void,
+            bottomPadding: CGFloat = 12, topPadding: CGFloat = 11,
+            topCornerRadius: CGFloat = 16, bottomCornerRadius: CGFloat = 0,
+            kind: MonitorCapturePopupKind = .details,
+            edge: MonitorCapturePopupEdge = .bottom, close: @escaping () -> Void,
             @ViewBuilder content: () -> Content
         ) {
             self.title = title
             self.subtitle = subtitle
             self.maximumHeight = maximumHeight
+            self.topPadding = topPadding
             self.bottomPadding = bottomPadding
+            self.topCornerRadius = topCornerRadius
+            self.bottomCornerRadius = bottomCornerRadius
+            self.kind = kind
+            self.edge = edge
             self.close = close
             self.content = content()
         }
 
         public var body: some View {
-            let footer = max(12, bottomPadding)
-            let available = max(0, maximumHeight - 11 - 22 - 8 - footer)
-            VStack(spacing: 8) {
+            let headerHeight = CGFloat(MonitorCapturePopupChrome.headerHeight)
+            let stackSpacing = CGFloat(MonitorCapturePopupChrome.stackSpacing)
+            let footer: CGFloat =
+                kind == .compact
+                ? CGFloat(
+                    MonitorCapturePopupChrome.compactBottomPadding(topPadding: Double(topPadding)))
+                : max(CGFloat(12), bottomPadding)
+            let available = max(
+                CGFloat(0), maximumHeight - topPadding - headerHeight - stackSpacing - footer)
+            let showsGrabber = MonitorCapturePopupChrome.showsGrabber(kind: kind, edge: edge)
+            VStack(spacing: stackSpacing) {
                 HStack(alignment: .center, spacing: 9) {
                     Text(title).font(MonitorTheme.font(9, weight: .semibold))
                         .tracking(1.8).foregroundStyle(MonitorTheme.text)
@@ -40,18 +62,20 @@
                         .lineLimit(1).minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityLabel(subtitle)
-                    Button(action: close) {
-                        MonitorIcon.x.frame(width: 13, height: 13)
-                            .foregroundStyle(MonitorTheme.muted)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                    if kind.showsClose {
+                        Button(action: close) {
+                            MonitorIcon.x.frame(width: 13, height: 13)
+                                .foregroundStyle(MonitorTheme.muted)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(MonitorButtonStyle())
+                        .padding(-11)
+                        .accessibilityLabel("Close")
+                        .accessibilityIdentifier("monitor.capture.close")
                     }
-                    .buttonStyle(MonitorButtonStyle())
-                    .padding(-11)
-                    .accessibilityLabel("Close")
-                    .accessibilityIdentifier("monitor.capture.close")
                 }
-                .frame(height: 22)
+                .frame(height: headerHeight)
                 ScrollView(.vertical, showsIndicators: false) {
                     content
                         .frame(maxWidth: .infinity)
@@ -67,18 +91,24 @@
                 .frame(height: min(contentHeight, available))
             }
             .padding(.horizontal, 14)
-            .padding(.top, 11)
+            .padding(.top, topPadding)
             .padding(.bottom, footer)
             .overlay(alignment: .bottom) {
-                Capsule().fill(Color.white.opacity(0.28)).frame(width: 36, height: 4)
-                    .padding(.bottom, 5).allowsHitTesting(false).accessibilityHidden(true)
+                if showsGrabber {
+                    Capsule().fill(Color.white.opacity(0.28)).frame(width: 36, height: 4)
+                        .padding(.bottom, 5).allowsHitTesting(false).accessibilityHidden(true)
+                }
             }
             .monitorGlass(
                 in: UnevenRoundedRectangle(
-                    topLeadingRadius: 16, bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0, topTrailingRadius: 16), density: .expanded
+                    topLeadingRadius: topCornerRadius, bottomLeadingRadius: bottomCornerRadius,
+                    bottomTrailingRadius: bottomCornerRadius, topTrailingRadius: topCornerRadius),
+                density: .expanded
             )
-            .scaleEffect(x: 1, y: revealed || reduceMotion ? 1 : 0.22, anchor: .bottom)
+            .scaleEffect(
+                x: 1, y: revealed || reduceMotion ? 1 : 0.22,
+                anchor: edge == .top ? .top : .bottom
+            )
             .opacity(revealed || reduceMotion ? 1 : 0.5)
             .onAppear {
                 withAnimation(

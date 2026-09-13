@@ -17,21 +17,24 @@ separate iOS and Android lists.
 
 ### Added
 
-- UI 2.0 for the native iOS and Android shells: shared camera, pairing, settings,
-  media and playback presentation; Sora typography, Lucide icons and the custom
-  View Assist glyphs from the design. Phones and tablets adapt across rotation.
-  Camera-value drums, a compact assist palette, leading/trailing inspectors and
-  the half-disc zoom control retain the existing camera actions and live pipeline.
-  Fresh scope sizes adapt to device geometry without replacing saved manual sizes.
-  New windowed tools start centered; audio is movable with vertical/horizontal
-  slim bars and optional channel dB readings. Tapping and dragging camera values
-  share the full bottom-center drawer, with reference ruler animations,
-  blurred translucent surfaces, tighter dark readout shadows and corrected corner spacing.
-  Assist previews retain their admission limit across rapid tabs and remounts.
-  Android settings switches announce their labels and on/off states.
-  Pocket 4 Pro zoom separates 1×/3× taps from 6×/12× double taps.
-  Physical camera-session qualification and the Android rendering exceptions are
-  tracked in [parity](docs/PARITY.md#ui-20-qualification).
+- UI 2.0 for the native iOS and Android shells: reusable camera, pairing,
+  settings, media and playback presentation with Sora typography, Lucide icons
+  and the custom View Assist glyphs. Phones and tablets adapt across rotation.
+  Blurred translucent surfaces replace the Liquid Glass treatment. Camera-value
+  drums, compact assist palettes, tabbed inspectors and the half-disc zoom
+  control retain the existing camera actions and live pipeline.
+  New windowed tools start centered; audio uses movable slim vertical/horizontal
+  bars with optional channel dB readings. Tap opens camera-control details;
+  hold/drag opens the compact dial and commits only on release. FORMAT, COLOR
+  and shooting mode open from the top; other camera values open from the bottom.
+  Top pickers leave the lower camera values available. Pocket 4 Pro zoom uses
+  single taps for 1×/3× and double taps for 6×/12×.
+  iOS reduces repeated shadow rendering and settings-card layout work while
+  preserving the approved HUD geometry. Assist previews retain their admission
+  limit across tabs and remounts. Android settings switches announce labels and
+  on/off states. Measured performance and device qualification, including the
+  outstanding physical Android exception, are recorded in
+  [performance](docs/PERFORMANCE.md) and [parity](docs/PARITY.md#ui-20-qualification).
 
 - Scopes, LIGHTS, and ND move with a direct drag on both shells; corner grips
   resize directly. Scopes can sit partly under the top and bottom bars while

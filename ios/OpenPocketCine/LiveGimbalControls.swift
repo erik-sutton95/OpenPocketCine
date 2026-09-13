@@ -169,8 +169,23 @@ private struct LiveGimbalFloatMove: ViewModifier {
     }
 
     private var center: CGPoint {
-        MonitorMotionPlacement.center(
-            preferred: stored, size: size, viewport: viewport, bounds: placementBounds)
+        let resolved = MonitorMotionPlacement.center(
+            preferred: stored.map { .init(x: Double($0.x), y: Double($0.y)) },
+            size: placementSize,
+            viewport: .init(width: Double(viewport.width), height: Double(viewport.height)),
+            bounds: placementBounds)
+        return CGPoint(x: CGFloat(resolved.x), y: CGFloat(resolved.y))
+    }
+
+    private var placementSize: MonitorMotionPlacement.Size {
+        .init(width: Double(size.width), height: Double(size.height))
+    }
+
+    private func clampedCenter(_ point: CGPoint) -> CGPoint {
+        let resolved = MonitorMotionPlacement.clamp(
+            .init(x: Double(point.x), y: Double(point.y)),
+            size: placementSize, bounds: placementBounds)
+        return CGPoint(x: CGFloat(resolved.x), y: CGFloat(resolved.y))
     }
 
     private var placementBounds: MonitorRect {
@@ -209,10 +224,10 @@ private struct LiveGimbalFloatMove: ViewModifier {
                     origin = center
                 }
                 guard let origin else { return }
-                stored = MonitorMotionPlacement.clamp(
+                stored = clampedCenter(
                     CGPoint(
                         x: origin.x + value.translation.width,
-                        y: origin.y + value.translation.height), size: size, bounds: placementBounds
+                        y: origin.y + value.translation.height)
                 )
             }
             .onEnded { _ in
@@ -237,7 +252,7 @@ private struct LiveGimbalFloatMove: ViewModifier {
                 let proposed = CGPoint(
                     x: origin.x + drag.translation.width,
                     y: origin.y + drag.translation.height)
-                stored = MonitorMotionPlacement.clamp(proposed, size: size, bounds: placementBounds)
+                stored = clampedCenter(proposed)
             }
             .onEnded { _ in
                 blockedUntil = ProcessInfo.processInfo.systemUptime + 0.15

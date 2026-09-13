@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -99,10 +100,26 @@ enum class LiveSheet {
     AUDIO,
     COLOR,
     FORMAT,
+    /** Top-deck shooting Video/Photo/… Not capture-bar EXPO Auto/Manual. */
+    MODE,
 }
 
 val LiveSheet.isRecordingSetup: Boolean
     get() = this == LiveSheet.FORMAT || this == LiveSheet.COLOR
+
+val LiveSheet.isTopAnchored: Boolean
+    get() = isRecordingSetup || this == LiveSheet.MODE
+
+/** Lower ISO/WB/… stay visible for top FORMAT/COLOR/MODE tap or hold. */
+internal fun hidesLowerCaptureValues(
+    sheet: LiveSheet?,
+    stripQuick: Boolean,
+    topQuick: Boolean,
+): Boolean {
+    if (topQuick) return false
+    if (sheet?.isTopAnchored == true) return false
+    return sheet != null || stripQuick
+}
 
 @Composable
 fun LiveControlSheet(
@@ -119,7 +136,7 @@ fun LiveControlSheet(
     )
     val availableStatus = status.copy(availableVideoFormats = formats)
     CompositionLocalProvider(LocalCapturePreview provides preview) {
-        if (sheet.isRecordingSetup) {
+        if (sheet.isRecordingSetup && viewportIsPortrait()) {
             RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
         } else {
             LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
@@ -155,7 +172,15 @@ private fun RecordingSetupPanel(
 ) {
     val preview = LocalCapturePreview.current
     val enabled = !locked && preview == null
-    var tab by remember(initial) { mutableStateOf(if (initial == LiveSheet.COLOR) "Color" else "Format") }
+    var tab by remember(initial) {
+        mutableStateOf(
+            when (initial) {
+                LiveSheet.COLOR -> "Color"
+                LiveSheet.MODE -> "Mode"
+                else -> "Format"
+            },
+        )
+    }
     val categories: @Composable () -> Unit = {
         ModeBar(listOf("Format", "Color", "Mode"), listOf("Format", "Color", "Mode").indexOf(tab), enabled) {
             tab = listOf("Format", "Color", "Mode")[it]
@@ -165,18 +190,23 @@ private fun RecordingSetupPanel(
         if (tab == "Mode") {
             val modes = CameraCommands.shootingModeCarousel(model.session.connectedCamera?.model?.name)
             Column(Modifier.fillMaxWidth().then(if (maxHeightDp != null) Modifier.heightIn(max = maxHeightDp.dp) else Modifier)
-                .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .pickerPanelGlass(capturePanelShape(fromTop = true, portrait = viewportIsPortrait()))
                 .verticalScroll(rememberScrollState(), enabled = preview == null).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetHeader("SHOOTING MODE", "Capture mode", onDismiss)
                 val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
                 CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode).orEmpty(),
                     interactive = enabled && !status.isRecording) { label ->
-                    modes.getOrNull(labels.indexOf(label))?.let(model::setShootingMode)
+                    applyCaptureShootingMode(label, model.session.status.value,
+                        model.session.connectedCamera?.model?.name, model::setShootingMode)
                 }
-                categories()
+                if (com.opencapture.monitorui.MonitorLayoutPolicy.showsRecordingCategoryTabs(viewportIsPortrait(), preview != null)) {
+                    categories()
+                }
                 if (status.isRecording) Text("Stop recording to change mode.", color = LiveDesign.muted, style = LiveType.text(11f))
-                com.opencapture.monitorui.MonitorPanelGrabber()
+                if (com.opencapture.monitorui.MonitorLayoutPolicy.showsCaptureGrabber(preview != null, fromTop = true)) {
+                    com.opencapture.monitorui.MonitorPanelGrabber()
+                }
             }
         } else {
             LiveControlSheetContent(if (tab == "Color") LiveSheet.COLOR else LiveSheet.FORMAT,
@@ -313,6 +343,12 @@ private fun LiveControlSheetContent(
             LiveSheet.AUDIO -> selectedMode = CaptureLists.audioInitialTab()
             LiveSheet.FORMAT -> reseatResolution()
             LiveSheet.COLOR -> reseatColor()
+            LiveSheet.MODE -> {
+                val live = CameraCommands.shootingModeLabel(status.shootingMode).orEmpty()
+                val labels = CaptureLists.shootingModeLabels(bodyName)
+                drumSelection = if (live in labels) live else ""
+                lastApplied = drumSelection
+            }
             else -> selectedMode = 0
         }
     }
@@ -408,6 +444,12 @@ private fun LiveControlSheetContent(
                 // Session.setColorMode hops native ISO — same as iOS CameraSession.
                 commitDrumValue { model.setColorMode(command.colorMode) }
             }
+            LiveSheet.MODE -> {
+                commitDrumValue {
+                    applyCaptureShootingMode(value, model.session.status.value,
+                        model.session.connectedCamera?.model?.name, model::setShootingMode)
+                }
+            }
             else -> Unit
         }
     }
@@ -448,35 +490,54 @@ private fun LiveControlSheetContent(
     }
 
     val cap = maxHeightDp?.dp
+    val compact = preview != null
+    val fromTop = sheet.isTopAnchored
+    val portrait = viewportIsPortrait()
+    val topPadding = com.opencapture.monitorui.MonitorLayoutPolicy.captureTopPadding(fromTop, portrait, compact)
     // Every drum has the same 86dp viewport; the card hugs its own controls.
     Column(
         Modifier
             .fillMaxWidth()
-            .then(
-                when {
-                    else ->
-                        Modifier.wrapContentHeight(align = Alignment.Top)
-                            .then(if (cap != null) Modifier.heightIn(max = cap) else Modifier)
-                },
-            )
-            .pickerPanelGlass(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            .then(Modifier.wrapContentHeight(align = Alignment.Top))
+            .then(if (cap != null) Modifier.heightIn(max = cap) else Modifier)
+            .pickerPanelGlass(capturePanelShape(fromTop, portrait))
             .verticalScroll(rememberScrollState(), enabled = preview == null)
             .pointerInput(Unit) { detectTapGestures(onTap = {}) }
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+            .padding(horizontal = 14.dp)
+            .padding(
+                top = topPadding.dp,
+                bottom = when {
+                    compact -> com.opencapture.monitorui.MonitorLayoutPolicy.compactCaptureBottomPadding(
+                        topPadding).dp
+                    fromTop -> 14.dp
+                    else -> 11.dp
+                },
+            ),
         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
     ) {
             SheetHeader(
                 title = CaptureLists.headerTitle(sheet, status.expoMode),
                 subtitle =
-                    CaptureLists.headerSubtitle(
-                        sheet,
-                        status.expoMode,
-                        selectedMode,
-                        model.facePriorityExposureEnabled,
-                    ),
+                    if (compact) "drag to set"
+                    else
+                        CaptureLists.headerSubtitle(
+                            sheet,
+                            status.expoMode,
+                            selectedMode,
+                            model.facePriorityExposureEnabled,
+                        ),
                 onClose = onDismiss,
+                showsClose = !compact,
             )
-            when (sheet) {
+            if (preview != null) {
+                CaptureDrumWheel(
+                    options = preview.control.options,
+                    selection = preview.selection,
+                    markedValues = preview.control.marked,
+                    interactive = false,
+                    onSelect = {},
+                )
+            } else when (sheet) {
                 LiveSheet.ISO -> {
                     Column(
                         Modifier.wrapContentHeight(),
@@ -654,35 +715,57 @@ private fun LiveControlSheetContent(
                             },
                         )
                     }
-            }
-            if (sheet == LiveSheet.FORMAT && formatAspects.size > 1) {
-                ModeBar(
-                    tabs = formatAspects.map { it.label },
-                    selected = formatAspects.indexOf(selectedAspect).coerceAtLeast(0),
-                    enabled = enabled,
-                    uppercase = false,
-                ) { index ->
-                    formatAspects.getOrNull(index)?.let(::handleAspectChange)
+                LiveSheet.MODE -> {
+                    val labels = CaptureLists.shootingModeLabels(bodyName)
+                    CaptureDrumWheel(
+                        options = labels,
+                        selection = CameraCommands.shootingModeLabel(status.shootingMode).orEmpty()
+                            .takeIf { it in labels }.orEmpty(),
+                        interactive = enabled && !status.isRecording,
+                        onSelect = {
+                            drumSelection = it
+                            applyDrum(it)
+                        },
+                    )
+                    if (status.isRecording) Text("Stop recording to change mode.",
+                        color = LiveDesign.muted, style = LiveType.text(11f))
                 }
             }
-            if (tabs.isNotEmpty()) {
-                ModeBar(
-                    tabs = tabs,
-                    selected = selectedMode,
-                    enabled = enabled,
-                ) { index ->
-                    selectedMode = index
-                    handleModeChange(index)
-                    if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
+            if (!compact) {
+                if (sheet == LiveSheet.FORMAT && formatAspects.size > 1) {
+                    ModeBar(
+                        tabs = formatAspects.map { it.label },
+                        selected = formatAspects.indexOf(selectedAspect).coerceAtLeast(0),
+                        enabled = enabled,
+                        uppercase = false,
+                    ) { index ->
+                        formatAspects.getOrNull(index)?.let(::handleAspectChange)
+                    }
+                }
+                if (tabs.isNotEmpty()) {
+                    ModeBar(
+                        tabs = tabs,
+                        selected = selectedMode,
+                        enabled = enabled,
+                    ) { index ->
+                        selectedMode = index
+                        handleModeChange(index)
+                        if (sheet == LiveSheet.SHUTTER && !isEvSheet) reseatShutter()
+                    }
+                }
+                if (com.opencapture.monitorui.MonitorLayoutPolicy.showsRecordingCategoryTabs(portrait, compact)) {
+                    footer?.invoke()
+                }
+                if (com.opencapture.monitorui.MonitorLayoutPolicy.showsCaptureGrabber(compact, fromTop)) {
+                    com.opencapture.monitorui.MonitorPanelGrabber()
                 }
             }
-            footer?.invoke()
-            com.opencapture.monitorui.MonitorPanelGrabber()
     }
 }
 
 /**
- * Every capture card shares the bottom-center anchor, with outside dismissal.
+ * Camera values sit on the bottom-center well; recording categories hang from
+ * the top edge. Outside taps dismiss the persistent drawer.
  */
 @Composable
 fun LivePickerHost(
@@ -698,19 +781,24 @@ fun LivePickerHost(
     status: CameraStatus,
     locked: Boolean,
     onSelect: (LiveSheet?) -> Unit,
+    ceilingY: Float? = null,
 ) {
     val density = LocalDensity.current
     var panelHeight by remember(sheet) { mutableFloatStateOf(LiveChromeMetrics.DRUM_PICKER_HEIGHT) }
-    val place = LivePopupPlacement.bottomCapturePanel(panelHeight, viewportWidth, viewportHeight,
-        safeLeading, safeTrailing, safeTop, safeBottom, floorY)
+    val fromTop = sheet.isTopAnchored
+    val place = if (fromTop) {
+        LivePopupPlacement.topCapturePanel(panelHeight, viewportWidth, viewportHeight,
+            safeLeading, safeTrailing, safeTop, safeBottom, ceilingY, floorY)
+    } else {
+        LivePopupPlacement.bottomCapturePanel(panelHeight, viewportWidth, viewportHeight,
+            safeLeading, safeTrailing, safeTop, safeBottom, floorY)
+    }
     Box(
         Modifier
             .fillMaxWidth()
-            .fillMaxHeight()
-            .pointerInput(sheet) {
-                detectTapGestures { onSelect(null) }
-            },
+            .fillMaxHeight(),
     ) {
+        com.opencapture.monitorui.MonitorReadoutDismissBackdrop(onDismiss = { onSelect(null) })
         androidx.compose.runtime.key(sheet) {
             com.opencapture.monitorui.MonitorCaptureReveal(
                 Modifier
@@ -718,6 +806,7 @@ fun LivePickerHost(
                     .width(place.width.dp)
                     .heightIn(max = place.maxHeight.dp)
                     .onSizeChanged { panelHeight = it.height / density.density },
+                fromTop = fromTop,
             ) {
                 androidx.compose.runtime.key(sheet) {
                     LiveControlSheet(
@@ -735,9 +824,28 @@ fun LivePickerHost(
 }
 
 @Composable
-private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
+private fun viewportIsPortrait(): Boolean {
+    val config = LocalConfiguration.current
+    return config.screenHeightDp > config.screenWidthDp
+}
+
+private fun capturePanelShape(fromTop: Boolean, portrait: Boolean): RoundedCornerShape {
+    val top = com.opencapture.monitorui.MonitorLayoutPolicy.capturePanelTopCorner(fromTop, portrait).dp
+    val bottom = com.opencapture.monitorui.MonitorLayoutPolicy.capturePanelBottomCorner(fromTop, portrait).dp
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
+@Composable
+private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit,
+    showsClose: Boolean = true) {
     val interactive = LocalCapturePreview.current == null
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().then(
+            if (!showsClose) Modifier.height(com.opencapture.monitorui.MonitorLayoutPolicy.CAPTURE_HEADER_HEIGHT.dp)
+            else Modifier,
+        ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
             Modifier.weight(1f),
             verticalAlignment = Alignment.Bottom,
@@ -757,9 +865,11 @@ private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit) {
                 modifier = Modifier.padding(bottom = 2.dp),
             )
         }
-        Box(Modifier.size(44.dp).chromeClickable(enabled = interactive, onClick = { if (interactive) onClose() })
-            .semantics { contentDescription = "Close camera control" }, contentAlignment = Alignment.Center) {
-            OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
+        if (showsClose) {
+            Box(Modifier.size(44.dp).chromeClickable(enabled = interactive, onClick = { if (interactive) onClose() })
+                .semantics { contentDescription = "Close camera control" }, contentAlignment = Alignment.Center) {
+                OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
+            }
         }
     }
 }
@@ -935,6 +1045,7 @@ val LiveSheet.headerLabel: String
             LiveSheet.AUDIO -> "AUDIO"
             LiveSheet.COLOR -> "COLOR"
             LiveSheet.FORMAT -> "RESOLUTION"
+            LiveSheet.MODE -> "SHOOTING MODE"
         }
 
 val LiveSheet.subtitle: String
@@ -948,6 +1059,7 @@ val LiveSheet.subtitle: String
             LiveSheet.AUDIO -> "Channel · wind · direction · vocal"
             LiveSheet.COLOR -> "Color mode"
             LiveSheet.FORMAT -> "Frame rate"
+            LiveSheet.MODE -> "Shooting mode"
         }
 
 /** Operator shutter-angle ladder. Body only accepts 1/N; convert locally. */
@@ -1697,6 +1809,17 @@ object CaptureLists {
         val have = available.toSet()
         val ranked = order.filter { it.first in have }
         return ranked.ifEmpty { order }
+    }
+
+    fun shootingModeLabels(name: String?): List<String> =
+        CameraCommands.shootingModeCarousel(name).map { CameraCommands.shootingModeLabel(it).orEmpty() }
+
+    fun shootingModeRaw(label: String, name: String?): Int? {
+        val modes = CameraCommands.shootingModeCarousel(name)
+        val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
+        val index = labels.indexOf(label)
+        if (index < 0) return null
+        return modes.getOrNull(index)
     }
 
     fun colorWheelLabels(

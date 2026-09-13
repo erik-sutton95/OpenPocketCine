@@ -29,11 +29,15 @@ Lock matches the Settings and Media button size.
 The native UI uses Sora typography, cyan controls and dark panels. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
-format, color and shooting options. Drag a value drum to select a supported
-camera value; lift to apply it. All camera pickers open from bottom-center.
-Holding or dragging a camera readout opens the same full drawer and details;
-releasing that original touch applies the selected value.
-Hold Record to open shooting mode.
+format, color and shooting options from the top of the monitor. Portrait keeps
+Format / Color / Mode tabs on the details drawer; landscape has no extra
+category row, and shooting mode is its own top control (not FORMAT). ISO,
+shutter, white balance, focus and audio stay along the bottom and remain
+visible while a top picker is open. Tap a value for the full details drawer;
+hold or drag for a compact dial. Lift to apply the selected value.
+Hold Record to open shooting mode. In portrait, Settings and Media remain usable
+with a picker open; returning to the monitor restores that picker. Physical Android proof of this Field
+Monitor chrome remains outstanding.
 
 The View Assist palette collapses into the picture corner. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.

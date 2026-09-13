@@ -113,6 +113,67 @@ provide backdrop pixels. These fallback differences are recorded in
 cross-platform identity. Physical thermal and live-rate qualification remain
 required for this additional presentation work.
 
+iOS HUD readout shadows group, then rasterize the glyph/shadow stack locally
+(`drawingGroup` on the readout, never the native video). Treat the isolated
+Debug shadow-only A/B and camera-connected Release timings as separate runs.
+The camera-connected Debug A/B went from the original ungrouped shadows at
+render median 19.28 ms and 153 offscreen passes to the same shadows grouped
+and rasterized at 5 passes, median 5.67 ms. Grouping alone measured 16.13 ms
+and 101 passes. That is not 120 fps proof.
+
+Release measurements on a camera-connected iPhone 16 Pro Max, also not thermal
+qualification: live HUD 112 UI updates, median 9.83 ms / p95 15.35 ms; render
+median 5.71 ms / p95 8.03 ms, five offscreen passes, zero 16.67 ms render
+overruns. Settings 468 updates, median 0.67 ms / p95 8.79 ms / max 124.77 ms;
+render median 3.59 ms / p95 5.24 ms / max 8.93 ms, one or two passes, zero
+render overruns. The settings UI-update max is a main-thread spike, not a
+render overrun.
+
+Covered chrome follows `monitorPresentationVisibility`: opacity, hit-testing and
+accessibility track coverage; decorative pulses stop without remounting the host
+or native feed. Page and feed owners stay outside that modifier. `MonitorCanvas`
+evaluates picture, assist and chrome builders in separate child bodies so a
+slot's telemetry does not subscribe the parent geometry owner. Hosted tests
+verify independent updates and native view identity through coverage and rotation.
+The subsequent 20-second Release live capture measured 118 UI updates: median
+8.51 ms / p95 15.71 ms; render median 5.69 ms / p95 8.21 ms. This does not show
+a material p95 improvement from observation isolation alone.
+
+Settings card placement uses the same width and unspecified-height proposal as
+measurement. Proposing the measured height again during placement caused a
+second layout of nested rows. Hosted tests cover growing content, one/two-column
+transitions, full-width cards and retained native view identity. Comparable
+30-second Release Time Profiler captures on the same phone, View Assist settings
+page and ten alternating scroll gestures measured 16.17 seconds of main-thread
+samples before the correction and 9.11 seconds after. The former 9.98-second
+inclusive placement stack disappeared from the dominant sampled stacks. These
+are sampled CPU costs, not wall-clock scroll latency or a battery measurement.
+A subsequent 25-second, eight-gesture Animation Hitches capture contained 702 UI
+updates: median 1.56 ms / p95 9.04 ms / maximum 33.43 ms. Render median was
+3.79 ms / p95 5.26 ms / maximum 11.95 ms, one or two offscreen passes, with no
+16.67 ms render overruns. The earlier settings capture had a 124.77 ms maximum
+UI update; the p95 remained similar. Gesture completion and update counts vary
+between captures, so these runs do not establish sustained 120 Hz or thermal
+performance. Feed, HUD, scope and backdrop refresh policies remain unchanged.
+
+With waveform and histogram active, a 20-second Release capture with the
+collapsed palette measured UI median 13.92 ms / p95 19.61 ms and render median
+7.86 ms / p95 9.10 ms (13 offscreen passes; no 16.67 ms render overruns).
+With the expanded palette, render median was 10.58 ms / p95 11.76 ms
+(16 passes). These are separate operating states, not a before/after scope
+optimization. Scope rasterization remains Metal-backed and source sampling
+keeps the existing budget. This workload does not establish a 120 Hz UI budget.
+
+The iOS backdrop owner retains one successful input/result for an unchanged
+paused or held source. The key includes ordered retained buffers, effects,
+canvas size, placements, clips and surround color. Identical inputs skip native
+look/blur rendering and snapshot publication while preserving admission timing.
+Owner changes, failure and changed inputs invalidate the entry. Mutable working
+raster buffers and false-color/zebra looks bypass this cache: the former can
+change pixels in place, and the latter depend on additional asynchronously
+updated color/exposure state. This optimization does not change the producer,
+decoder, source cadence or the existing GPU rendering path.
+
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
 fallback. GLES `FeedEffectsGlProgram` is the Android decode fallback when
 Vulkan cannot init.

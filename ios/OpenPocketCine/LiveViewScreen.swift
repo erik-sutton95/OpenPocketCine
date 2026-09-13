@@ -28,6 +28,7 @@ struct LiveViewScreen: View {
     /// batteries, rail (DISP / record / media / settings) stay. Lock remounts while locked.
     private var editingMode: PocketDispMode? { model.chromeEditorMode }
     private var chromeInteractive: Bool { !model.isEditingChrome }
+    private var liveChromeVisible: Bool { model.liveOperatorPanel == nil || model.isEditingChrome }
     private var showsStatusBar: Bool { model.chromeSectionMounts(.statusBar) }
     private var showsBottomBars: Bool {
         model.chromeSectionMounts(.toolBar) || model.chromeSectionMounts(.cameraValues)
@@ -36,6 +37,12 @@ struct LiveViewScreen: View {
     private var showsBatteries: Bool { model.chromeSectionMounts(.batteries) }
     private var captureControlsPresented: Bool {
         model.captureSheet != nil || model.captureDrum != nil
+    }
+    /// Bottom camera-value drawers cover the strip; a top recording-category
+    /// drawer leaves the strip in place, matching the Field Monitor mockup.
+    private var hidesCaptureValues: Bool {
+        CaptureReadoutAdmission.hidesLowerCaptureValues(
+            sheet: model.captureSheet, drum: model.captureDrum?.sheet)
     }
     private var showsGimbalButton: Bool {
         OsmoMonitorPresentation.capabilities(model.session).gimbal
@@ -241,21 +248,29 @@ struct LiveViewScreen: View {
             )
             .clipped()
             .opacity(model.session.isFeedWarming ? 1 : 0)
-            .accessibilityHidden(!model.session.isFeedWarming)
+            .monitorPresentationVisibility(liveChromeVisible)
+            .accessibilityHidden(!model.session.isFeedWarming || !liveChromeVisible)
             .allowsHitTesting(false)
 
             chrome(layout)
                 .environment(\.interfaceLocked, interfaceLocked)
                 .opacity(zoomDialVisible ? 0.16 : 1)
                 .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
+                .monitorPresentationVisibility(liveChromeVisible)
                 .allowsHitTesting(
-                    chromeInteractive && model.liveChromeInteractive && !zoomDialVisible)
+                    chromeInteractive && model.liveChromeInteractive && !zoomDialVisible
+                        && liveChromeVisible
+                )
 
             // Keep these controls mounted above the zoom disc. Their identity
             // and recording-confirmation state survive opening and closing it.
             ZStack(alignment: .topLeading) {
                 if model.chromeSectionMounts(.railRecord) || model.session.status.isRecording {
                     LiveRecordButton(diameter: layout.record.width)
+                        // Record explicitly exposes its decorative lamp to AX.
+                        // Override that opt-in at the bounded control, before
+                        // viewport positioning, so coverage hides it as well.
+                        .accessibilityHidden(!liveChromeVisible)
                         .chromeEditable(.railRecord, editing: editingMode)
                         .liveModuleFrame(layout.record)
                 }
@@ -266,18 +281,28 @@ struct LiveViewScreen: View {
                 width: layout.viewport.width, height: layout.viewport.height, alignment: .topLeading
             )
             .environment(\.interfaceLocked, interfaceLocked)
-            .allowsHitTesting(chromeInteractive && model.liveChromeInteractive)
+            .monitorPresentationVisibility(liveChromeVisible)
+            .allowsHitTesting(chromeInteractive && model.liveChromeInteractive && liveChromeVisible)
             .zIndex(zoomDialVisible || captureControlsPresented ? 11 : 0)
 
             // After chrome so the bezel stroke sits on the physical screen, not the feed well.
             LiveRecordingTallyGate()
                 .frame(width: layout.viewport.width, height: layout.viewport.height)
+                .monitorPresentationVisibility(liveChromeVisible)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
 
             popups(layout)
                 // Clear the container's full-screen hit region as its last
                 // popup leaves; a dismissed picker must not swallow Lock.
-                .allowsHitTesting(hasInteractivePopup)
                 .zIndex(10)
+                // These hosts position bounded panels inside the viewport.
+                // An AX attachment on the hosts promotes a sole panel to that
+                // full frame (and exposes an empty host above other drawers).
+                // Keep AX on their controls; zero opacity hides covered hosts.
+                // The retained zoom dial owns its dismissal AX gate itself.
+                .monitorPresentationVisibility(liveChromeVisible)
+                .allowsHitTesting(hasInteractivePopup && liveChromeVisible)
 
             // The expanded Motion editor owns its outside-tap minimization
             // region above camera controls, including the stable Record layer.
@@ -467,7 +492,7 @@ struct LiveViewScreen: View {
                 .liveModuleFrame(layout.settings)
                 .opacity(captureHidesNavigation ? 0 : 1)
                 .allowsHitTesting(!captureHidesNavigation)
-                .accessibilityHidden(captureHidesNavigation)
+                .accessibilityHidden(captureHidesNavigation || !liveChromeVisible)
             }
             if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton(size: layout.media.width) { model.liveOperatorPanel = .media }
@@ -475,7 +500,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(layout.media)
                     .opacity(captureHidesNavigation ? 0 : 1)
                     .allowsHitTesting(!captureHidesNavigation)
-                    .accessibilityHidden(captureHidesNavigation)
+                    .accessibilityHidden(captureHidesNavigation || !liveChromeVisible)
             }
 
             // After the scope well — that well covers this chip and used to eat the tap.
@@ -487,7 +512,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented)
+                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
                     .zIndex(2)
             }
 
@@ -496,7 +521,7 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented)
+                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
                     .zIndex(2)
             }
 
@@ -510,7 +535,7 @@ struct LiveViewScreen: View {
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .opacity(captureControlsPresented ? 0 : 1)
-                .accessibilityHidden(captureControlsPresented)
+                .accessibilityHidden(captureControlsPresented || !liveChromeVisible)
                 .zIndex(3)
             }
 
@@ -564,11 +589,15 @@ struct LiveViewScreen: View {
                 LiveCameraControlBar(columns: layout.capture.height > 60 ? 3 : 6)
                     .chromeEditable(.cameraValues, editing: editingMode)
                     .liveModuleFrame(layout.capture, alignment: .bottom)
-                    .opacity(captureControlsPresented ? 0 : (interfaceLocked ? 0.4 : 1))
+                    .opacity(hidesCaptureValues ? 0 : (interfaceLocked ? 0.4 : 1))
                     // A held readout retains its existing pointer until lift;
                     // persistent pickers own their outside-tap dismissal instead.
-                    .allowsHitTesting(!interfaceLocked && model.captureSheet == nil)
-                    .accessibilityHidden(captureControlsPresented)
+                    .allowsHitTesting(
+                        !interfaceLocked
+                            && (model.captureSheet == nil
+                                || model.captureSheet?.isTopAnchored == true)
+                    )
+                    .accessibilityHidden(hidesCaptureValues || !liveChromeVisible)
             }
         }
         .frame(width: layout.viewport.width, height: layout.viewport.height)
@@ -628,7 +657,8 @@ struct LiveViewScreen: View {
         if chromeInteractive, !interfaceLocked {
             LiveCapturePickerHost(
                 sheet: Bindable(model).captureSheet,
-                frames: [:],
+                frames: captureTileFrames,
+                passthroughFrames: captureNavigationFrames(layout),
                 bar: layout.capture,
                 viewport: layout.viewport,
                 safeArea: layout.safeArea,
@@ -637,7 +667,8 @@ struct LiveViewScreen: View {
                     LivePopupPlacement.edgeMargin
                 ),
                 bottomY: layout.presentation?.portrait == true
-                    ? layout.rail.minY - 12 : layout.viewport.height
+                    ? layout.rail.minY - 12 : layout.viewport.height,
+                topDeckMaxY: layout.topDeck.maxY
             )
         }
 
@@ -649,7 +680,8 @@ struct LiveViewScreen: View {
                     LivePopupPlacement.edgeMargin
                 ),
                 bottomY: layout.presentation?.portrait == true
-                    ? layout.rail.minY - 12 : layout.viewport.height)
+                    ? layout.rail.minY - 12 : layout.viewport.height,
+                topDeckMaxY: layout.topDeck.maxY)
         }
 
         if zoomDialMounted, chromeInteractive, !interfaceLocked {
@@ -676,6 +708,20 @@ struct LiveViewScreen: View {
                     }
                 }, onClose: closeZoomDial)
         }
+    }
+
+    /// Portrait keeps these buttons above the reference drawer's dismiss plane.
+    /// Exclude their real rectangles so their original controls receive the tap.
+    private func captureNavigationFrames(_ layout: LiveMonitorLayout) -> [CGRect] {
+        guard layout.presentation?.portrait == true, model.captureDrum == nil else { return [] }
+        var frames: [CGRect] = []
+        if model.chromeSectionMounts(.railSettings) || model.session.status.isRecording {
+            frames.append(layout.settings)
+        }
+        if model.chromeSectionMounts(.railMedia), !model.session.isMultiviewBorrowed {
+            frames.append(layout.media)
+        }
+        return frames
     }
 
     private func openZoomDial() {

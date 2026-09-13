@@ -1,3 +1,4 @@
+import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -304,11 +305,16 @@ struct SettingsInlineRow<Trailing: View>: View {
     private var labelRow: some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(LiveType.ui(size: 12.5, weight: .semibold))
+                .font(
+                    LiveType.ui(
+                        size: CGFloat(MonitorSettingsCardMetrics.rowTitlePointSize),
+                        weight: .semibold)
+                )
                 .foregroundStyle(LiveDesign.text)
                 .lineLimit(stacked ? 2 : 1)
-                .fixedSize(horizontal: !stacked, vertical: false)
+                .fixedSize(horizontal: !stacked, vertical: true)
                 .layoutPriority(1)
+                .accessibilityIdentifier("monitor.settings.row.title")
             if inspectorHelp == nil, let help { HelpBadge(text: help) }
             if !stacked { Spacer(minLength: 0) }
         }
@@ -663,20 +669,28 @@ struct SettingsRowCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: CGFloat(MonitorSettingsCardMetrics.titleContentGap)) {
             if let title {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(title)
-                        .font(LiveType.ui(size: 13, weight: .semibold))
+                        .font(
+                            LiveType.ui(
+                                size: CGFloat(MonitorSettingsCardMetrics.titlePointSize),
+                                weight: .semibold)
+                        )
                         .foregroundStyle(LiveDesign.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("monitor.settings.card.title")
                     Spacer(minLength: 0)
                     if let onReset {
                         SettingsResetButton(action: onReset)
                     }
                 }
-                .frame(minHeight: 24, alignment: .topLeading)
-                .padding(.top, 11)
-                .padding(.bottom, 2)
+                .frame(
+                    minHeight: CGFloat(MonitorSettingsCardMetrics.titleMinHeight),
+                    alignment: .leading
+                )
+                .padding(.top, CGFloat(MonitorSettingsCardMetrics.titleTopPadding))
             }
             content
         }

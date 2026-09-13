@@ -104,12 +104,15 @@ internal class MonitorQuickInteraction(private val control: MonitorQuickControl?
 
 /** One recognizer owns tap, 280ms hold, and >14dp travel. Only release commits. */
 @Composable
-internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabled: Boolean,
+fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabled: Boolean,
     onOpen: () -> Unit, onCommit: (MonitorQuickControl, String) -> Unit, bottomClearanceDp: Float,
     owner: MonitorQuickGestureOwner, ownerId: String,
-    previewContent: (@Composable (MonitorQuickPreview, Float) -> Unit)? = null): Modifier {
+    previewContent: (@Composable (MonitorQuickPreview, Float) -> Unit)? = null,
+    fromTop: Boolean = false, ceilingY: Float? = null,
+    onPreviewBegin: () -> Unit = {}): Modifier {
     var preview by remember { mutableStateOf<MonitorQuickPreview?>(null) }
     val open by rememberUpdatedState(onOpen)
+    val beginPreview by rememberUpdatedState(onPreviewBegin)
     val commit by rememberUpdatedState(onCommit)
     val currentControl by rememberUpdatedState(control)
     val currentEnabled by rememberUpdatedState(enabled)
@@ -121,31 +124,34 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
     val trailing = insets.getRight(density, direction) / density.density
     val top = insets.getTop(density) / density.density
     val bottom = insets.getBottom(density) / density.density
-    val layout = MonitorLayoutPolicy.bottomPanel(0f, config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat(),
-        leading, trailing, top, bottom,
-        if (bottomClearanceDp > 0f) config.screenHeightDp - bottomClearanceDp + 12f else null)
+    fun place(height: Float, width: Float, heightWindow: Float) = if (fromTop) {
+        MonitorLayoutPolicy.topPanel(height, width, heightWindow, leading, trailing, top, bottom,
+            ceilingY, if (bottomClearanceDp > 0f) heightWindow - bottomClearanceDp + 12f else null)
+    } else {
+        MonitorLayoutPolicy.bottomPanel(height, width, heightWindow, leading, trailing, top, bottom,
+            if (bottomClearanceDp > 0f) heightWindow - bottomClearanceDp + 12f else null)
+    }
+    val layout = place(0f, config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat())
     val heldPreview = preview
     if (heldPreview != null && heldPreview.control == control && enabled && previewContent != null) Popup(
-        popupPositionProvider = remember(bottomClearanceDp, top, bottom, leading, trailing, density.density) {
+        popupPositionProvider = remember(bottomClearanceDp, top, bottom, leading, trailing, density.density, fromTop, ceilingY) {
             object : PopupPositionProvider {
                 override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
                     layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
                     val scale = density.density
-                    val place = MonitorLayoutPolicy.bottomPanel(popupContentSize.height / scale,
-                        windowSize.width / scale, windowSize.height / scale, leading, trailing, top, bottom,
-                        if (bottomClearanceDp > 0f) windowSize.height / scale - bottomClearanceDp + 12f else null)
-                    return IntOffset((place.x * scale).roundToInt(), (place.y * scale).roundToInt())
+                    val placed = place(popupContentSize.height / scale, windowSize.width / scale, windowSize.height / scale)
+                    return IntOffset((placed.x * scale).roundToInt(), (placed.y * scale).roundToInt())
                 }
             }
         }, properties = PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
         MonitorCaptureReveal(Modifier.width(layout.width.dp).heightIn(max = layout.maxHeight.dp)
-            .clearAndSetSemantics { }) {
+            .clearAndSetSemantics { }, fromTop = fromTop) {
             previewContent(heldPreview, layout.maxHeight)
         }
     }
-    return this.semantics { role = Role.Button; if (enabled) onClick { open(); true } }
+    return this.monitorReadoutRegion(enabled).semantics { role = Role.Button; if (enabled) onClick { open(); true } }
         .pointerInput(control, enabled, config.orientation, config.screenWidthDp, config.screenHeightDp,
-            bottomClearanceDp, leading, trailing, top, bottom, density.density, density.fontScale) {
+            bottomClearanceDp, leading, trailing, top, bottom, density.density, density.fontScale, fromTop, ceilingY) {
             if (!enabled) { preview = null; return@pointerInput }
             var held: MonitorQuickGestureOwner.Lease? = null
             try {
@@ -164,6 +170,7 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
                             } else awaitPointerEvent()
                             if (event == null) {
                                 interaction.hold(MonitorDrumSelection.HOLD_MILLISECONDS)
+                                if (preview == null && interaction.preview != null) beginPreview()
                                 preview = interaction.preview
                                 owner.setActive(token, preview != null)
                                 continue
@@ -174,6 +181,7 @@ internal fun Modifier.monitorReadoutGesture(control: MonitorQuickControl?, enabl
                             interaction.move(delta.x / density.density, delta.y / density.density,
                                 change.isConsumed, event.changes.count { it.pressed })
                             if (previewContent != null) interaction.hold(elapsed)
+                            if (preview == null && interaction.preview != null) beginPreview()
                             preview = interaction.preview
                             owner.setActive(token, preview != null)
                             if (interaction.finished) break

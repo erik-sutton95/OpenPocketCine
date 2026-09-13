@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 
 /** Exclusive readout pointer lease; a late cancellation cannot release a newer owner. */
 @Stable
-internal class MonitorQuickGestureOwner {
+class MonitorQuickGestureOwner {
     data class Lease(val id: String, val revision: Long)
     private var revision = 0L
     private var lease: Lease? by mutableStateOf(null)

@@ -34,15 +34,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** The same reveal wraps the app's complete drawer for both tap and held preview. */
+/** Scale-Y morph from the well the control lives on. Compact and details share it. */
 @Composable
-fun MonitorCaptureReveal(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+fun MonitorCaptureReveal(modifier: Modifier = Modifier, fromTop: Boolean = false,
+    content: @Composable BoxScope.() -> Unit) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val progress by animateFloatAsState(if (shown) 1f else 0f,
         tween(MonitorMotion.PICKER_MORPH_MS, easing = MonitorMotion.EaseOutCubic), label = "capture-reveal")
     Box(modifier.graphicsLayer {
-        transformOrigin = TransformOrigin(0.5f, 1f)
+        transformOrigin = TransformOrigin(0.5f, if (fromTop) 0f else 1f)
         scaleY = 0.22f + 0.78f * progress
         alpha = 0.5f + 0.5f * progress
     }, content = content)

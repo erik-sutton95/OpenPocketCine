@@ -42,19 +42,32 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 
 - The reference and device matrix are [UI 2.0 design](UI-2.0-DESIGN.md).
   Sora, cyan `#00A3E0`, dark solid page cards and translucent floating chrome.
+  Camera-value type is 16/9 on phone (approved iPhone 16 Pro Max HUD) and 18/9
+  on tablet; label tracking 1.26. On-feed labels keep Sora at their existing
+  role sizes. DISP is 12 bold with 0.04 em tracking. Operator Setup cards keep
+  an 8 pt/dp measured gap under the 13 pt title so stacked rows do not overlap
+  labels. Cameras page titles are 19 phone / 24 tablet; catalog cards use a 13
+  corner.
 - Capture drums are 86 pt/dp tall with animated horizontal values, a fine tick ruler,
   a cyan center mark and fading edges.
   Camera-derived options remain authoritative; settle commits through existing
   command handlers. Width caps: 480 phone / 620 tablet, also bounded by viewport.
-- Every camera picker grows from bottom-center, including FORMAT /
-  COLOR / MODE. REC SETUP groups Format / Color / Mode. Portrait pickers end above
-  the system row; landscape pickers meet the screen bottom. Headers and the bottom
-  grabber remain visible while long option lists scroll. Only camera-supported
-  focus and white-balance choices are offered; the prototype's independent Face
-  tracking switch has no corresponding backend operation.
-  Holding or dragging a readout uses that same complete drawer and details;
-  the original touch alone commits on lift. A held preview cannot send camera
-  GETs or SETs. Focus offers the same five native choices through either gesture.
+- Camera-value pickers (ISO, shutter/EV, exposure, WB, focus, audio) grow from
+  bottom-center. FORMAT, COLOR and shooting mode hang from the top well of those
+  controls: portrait details sit under the info bar and keep Format / Color / Mode
+  category tabs; landscape attaches to the screen top with no extra category row.
+  Portrait floating lower corners are 16; landscape attached bottom edges stay
+  square. Details keep a close control; the grabber is details plus bottom-edge
+  only. Tap keeps the full details drawer. Hold/drag is a compact 128 pt/dp dial
+  (visible header + 86 drum, no tabs, toggles or grabber). Landscape shooting
+  mode is its own top sheet (not FORMAT). A top tap or hold leaves the lower
+  camera-value strip visible and hittable. The original touch alone commits on
+  lift. Portrait Settings and Media accept the first tap through an open picker;
+  returning restores that picker. A held preview cannot send camera GETs or SETs. Focus offers the same
+  five native choices through either gesture. Only camera-supported focus and
+  white-balance choices are offered; the prototype's independent Face tracking
+  switch has no corresponding backend operation. Compact holds, top MODE taps and
+  portrait storage were checked on iPhone; see the qualification details below.
 - LUT 50/50 stays pinned. LUT exposure slider is −3…+3 at ½ stop,
   input-referred before the cube (ETTR pull). Not camera EV. Playback Auto
   uses clip Keys `com.dji.camera.ColorGammaSxS` on the **original** take
@@ -397,20 +410,33 @@ The transport, signal-health mapping, camera SET arbitration, watchdog, and main
 feed ownership remain the existing implementations. Earlier physical results in
 this document apply to those earlier builds; they do not qualify the new chrome.
 
-- iOS: automated navigation, both landscape orientations, portrait, input and
-  geometry checks. The feedback round passed native tests and targeted UI checks
-  on pre-notch, notch and pill iPhones plus iPad on 2026-09-13. A signed feedback
-  build from the first feedback pass was installed on the physical iPhone; its navigation tests could not
-  launch because the device was locked. The earlier 2026-09-12 physical navigation
-  result applies to the initial UI build. The subsequent glass, full held-drawer,
-  motion and gimbal-tab revision is simulator-qualified only. Current physical camera-connected touch,
-  thermal and long-session proof remains pending.
-- Android: build, unit tests and lint plus emulator layout review. Physical Android
-  hardware and camera-session proof pending.
-- The lock/battery/top-readout corrections are installed and launched on a real
-  iPhone. Its UI test runner timed out enabling automation, so automated physical
-  alignment proof remains pending. The matching Android corrections pass build,
-  unit tests and lint; physical Android visual review remains pending.
+- iOS: WDA on iPhone 16 Pro Max exercised all nine camera full-details pickers,
+  all nine assist tabs, Operator Setup sections, media grid / list / player /
+  info / share, zoom tap/double-tap, gimbal tabs, lock/unlock and audio orientation,
+  dB display and movement. Forty-five independently queried assist-tab switches
+  completed in 29.42 seconds without a crash. Compact top/bottom holds were
+  captured during contact, retained active dial contrast and dismissed on release
+  without changing the camera value. Padded top-readout taps and direct FORMAT
+  to ISO replacement worked on the phone, and portrait storage remained visible.
+  The final Release also passed first-tap portrait Settings/Media navigation,
+  hidden covered controls and restoration of the same ISO picker on return.
+  Persistent picker accessibility frames match their bounded panels. Automated
+  coverage tests verify Close, Record and navigation are not hittable beneath
+  Settings/Media and return afterward; mounted hidden nodes can still appear in
+  XCTest inventories. This is not a VoiceOver traversal qualification. Shadow, CPU layout and Release
+  live/settings measurements are in [PERFORMANCE.md](PERFORMANCE.md). Sustained
+  120 Hz, thermal and long-session qualification remain outstanding.
+- Android: build, unit tests and lint plus emulator layout review. Native emulator
+  pointer injection verifies direct picker replacement, original-touch hold and
+  release ownership, no commit for a stationary hold, and disabled-readout
+  dismissal. Portrait Settings/Media receive the first native tap through a retained
+  picker on phone/tablet layouts; disabled and unmounted controls retire their input
+  exclusions. Actual compact panels measure 128 dp in both orientations.
+  Physical hardware and camera-session proof remain an outstanding exception.
+- Lock, battery percentage, and top-readout alignment were launched on a real
+  iPhone and are part of the WDA chrome pass above. Matching Android corrections
+  pass build, unit tests and lint; physical Android visual review remains an
+  outstanding exception.
 - Both shells use the reference's fixed heavy blur, saturation and tint when a
   passive displayed-look source is available. These surfaces have no Liquid Glass
   lens or refraction effects. Foreground controls stay sharp. Low-resolution source
@@ -423,14 +449,21 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   decoder handoff or live-enable request just for chrome. Reduce Transparency
   uses opaque surfaces. Android unsupported hardware/API or unavailable sampled
   sources use an explicit opaque fallback. These cases do not claim 1:1 material
-  parity. Physical camera-connected blur performance remains unqualified.
+  parity. These fallback paths and long-session blur thermal behavior remain
+  unqualified.
 - Android scope inspectors reuse the existing sampled
   scope products. LUT, peaking, false-color and zebra previews reuse the existing raw
   tap and production shaders in a bounded, isolated EGL worker with no second feed tap.
 - iOS inspector previews use the existing sampled source and scope products with
   bounded, cancellable work while open. One retained renderer preserves its occupied
   slot and 200 ms admission floor across tabs and remounts; stale source/option
-  results cannot publish. Camera-connected budget proof is pending.
+  results cannot publish. Observing that occupied native slot in an actual test
+  or on a physical camera session remains pending.
+- iOS playback inspection at the end of a cached clip found that enabling LUT can
+  retain the identity picture until playback resumes. Restart then showed the
+  grade, and opening Clip information retained the graded picture and blur.
+  Playback producer/decoder behavior is unchanged by this UI refactor; immediate
+  parked-at-end regrading remains outside this qualification.
 - iPad supports native window resizing across supported iPadOS versions. On iPadOS
   26, system-reported window-control exclusions keep the top controls reachable.
   Physical iPad resizing and camera-connected session qualification remain pending.

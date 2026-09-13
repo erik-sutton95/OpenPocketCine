@@ -41,8 +41,14 @@ OpenPocketCine app → MonitorUI → MonitorPresentation
                  → OpenPocketViewCore
 ```
 
-`MonitorPresentation` knows viewport, safe area, capabilities and display values.
-`MonitorUI` draws those values and forwards actions. Neither package imports
+`MonitorPresentation` knows viewport, safe area, capabilities and display values,
+including operator chrome tokens (readout type, settings-card title gap, compact
+capture height, category-tab and grabber gating). Motion placement uses
+module-owned `Point` / `Size` (`Double`) so the portable policy compiles on the
+Release SDK without CoreGraphics overlays; native shells convert at their
+presentation boundary. That is a compiler/SDK seam, not an operator-visible
+behavior change. `MonitorUI` draws those values
+and forwards actions. Neither package imports
 `CameraSession`, `AppModel`, a camera-brand enum, DUML, or the Android facade.
 An app injects identity and a backend's actual capabilities; missing hardware
 controls disappear rather than selecting a different brand's screen. Sora font
@@ -127,12 +133,37 @@ The slim meter plate does not grow when its channel labels are enabled.
 
 Floating system buttons share `MonitorChromeButton` for visible shape, glass,
 active/disabled appearance and press feedback. Camera taps and held previews
-use one capture drawer renderer and geometry; the held presentation is read-only
-and cannot refresh camera settings. The Osmo adapter retains option mapping,
-release authorization and delayed command settlement. Gimbal Mode / Speed /
-Ramp use tabs within the shared inspector, with the same value drum used by
-capture controls. `MonitorMotion` owns reference timing and easing so shells do
+use one capture drawer renderer and geometry: tap is the details drawer, hold is
+the compact 128 pt dial at the same well. FORMAT / COLOR / shooting mode hang
+from the top well; landscape shooting mode is its own top sheet, not FORMAT.
+Camera values stay bottom-center and remain visible during a top tap or hold.
+The held presentation is
+read-only and cannot refresh camera settings. The Osmo adapter retains option
+mapping, release authorization and delayed command settlement. Gimbal Mode /
+Speed / Ramp use tabs within the shared inspector, with the same value drum used
+by capture controls. `MonitorMotion` owns reference timing and easing so shells do
 not tune independent versions of a widget's animation.
+
+Covered chrome uses `monitorPresentationVisibility`. Coverage by an opaque page
+is separate from scene activity and from a visible source lacking pixels. The
+host stays mounted; opacity, hit-testing and accessibility follow coverage, and
+decorative pulses stop without remounting page or native-feed owners. The shared
+modifier must not introduce a layout stack or force accessibility visible on an
+ancestor: either can override the ordering or accessibility of bounded controls.
+A control that explicitly opts into accessibility, such as Record, applies its
+coverage gate at that bounded control; persistent capture panels apply the same
+gate before viewport placement. Callers apply their final restrictive hit-testing
+predicate after the visibility modifier. Portrait Settings and Media retain their
+original native input through the picker's dismiss plane: iOS excludes their
+enabled rectangles, and Android registers them in the same bounded region owner
+as readouts. Disabling or unmounting a control retires its exclusion.
+
+`MonitorCanvas` stores main-actor builders for picture, assists and chrome, then
+evaluates each in its own fixed child body. Observable reads belong to that
+slot instead of the parent geometry calculation. Parent layout changes supply
+fresh builders; there is no cached output or equality gate that could retain
+stale state. Hosted tests verify independent telemetry delivery, updated layout
+captures and native view identity through rotation and coverage.
 
 UI 2.0 surface policy separates Gaussian blur, saturation and tint from geometry
 and foreground content. Shared widgets consume passive image products and their
@@ -151,8 +182,9 @@ ruler lives in `MonitorDurationDial` with injected range, labels and actions.
 Clip cards accept an optional favorite action; its absence removes the action
 from both grid and list layouts without importing a camera capability enum.
 The shared camera readout owns the original pointer and a display-only preview
-slot. The Osmo shell injects its full drawer and revalidates source, lifecycle,
-lock state and current options immediately before dispatching a release action.
+slot. The Osmo shell injects the compact or details drawer for that well and
+revalidates source, lifecycle, lock state and current options immediately before
+dispatching a release action.
 
 Shared editing widgets pair each begin event with exactly one normal or
 cancelled completion. Playback scrub cancellation clears the host's editing

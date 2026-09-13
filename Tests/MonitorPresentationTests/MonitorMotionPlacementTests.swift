@@ -3,11 +3,14 @@ import MonitorPresentation
 import Testing
 
 struct MonitorMotionPlacementTests {
+    private typealias Point = MonitorMotionPlacement.Point
+    private typealias Size = MonitorMotionPlacement.Size
+
     @Test func untouchedFullAndPillShareTopAndCenterAcrossRotation() {
-        for viewport in [CGSize(width: 402, height: 874), CGSize(width: 874, height: 402)] {
+        for viewport in [Size(width: 402, height: 874), Size(width: 874, height: 402)] {
             let bounds = insetBounds(viewport)
-            let full = CGSize(width: 340, height: 300)
-            let pill = CGSize(width: 172, height: 66)
+            let full = Size(width: 340, height: 300)
+            let pill = Size(width: 172, height: 66)
             let expectedTop = max(16, (viewport.height - 430) / 2)
             for size in [full, pill, full] {
                 let center = MonitorMotionPlacement.center(
@@ -19,10 +22,10 @@ struct MonitorMotionPlacementTests {
     }
 
     @Test func measurementKeepsDefaultTopStableAndRespectsSafeAreas() {
-        let viewport = CGSize(width: 667, height: 375)
+        let viewport = Size(width: 667, height: 375)
         let bounds = MonitorRect(x: 8, y: 24, width: 651, height: 343)
         for height in [280.0, 330, 343] {
-            let size = CGSize(width: 340, height: height)
+            let size = Size(width: 340, height: height)
             let center = MonitorMotionPlacement.center(
                 preferred: nil, size: size, viewport: viewport, bounds: bounds)
             #expect(center.y - height / 2 == bounds.y)
@@ -31,10 +34,10 @@ struct MonitorMotionPlacementTests {
     }
 
     @Test func manualCenterSurvivesFullPillAndRotationWithoutBeingOverwrittenByClamp() {
-        let preferred = CGPoint(x: 620, y: 230)
-        let landscape = CGSize(width: 874, height: 402)
-        let portrait = CGSize(width: 402, height: 874)
-        for size in [CGSize(width: 340, height: 300), CGSize(width: 172, height: 66)] {
+        let preferred = Point(x: 620, y: 230)
+        let landscape = Size(width: 874, height: 402)
+        let portrait = Size(width: 402, height: 874)
+        for size in [Size(width: 340, height: 300), Size(width: 172, height: 66)] {
             let original = MonitorMotionPlacement.center(
                 preferred: preferred, size: size, viewport: landscape,
                 bounds: insetBounds(landscape))
@@ -51,7 +54,7 @@ struct MonitorMotionPlacementTests {
         }
     }
 
-    private func insetBounds(_ size: CGSize) -> MonitorRect {
-        MonitorRect(x: 8, y: 8, width: Double(size.width - 16), height: Double(size.height - 16))
+    private func insetBounds(_ size: Size) -> MonitorRect {
+        MonitorRect(x: 8, y: 8, width: size.width - 16, height: size.height - 16)
     }
 }

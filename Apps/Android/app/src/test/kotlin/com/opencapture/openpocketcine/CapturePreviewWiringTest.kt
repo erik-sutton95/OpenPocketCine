@@ -12,24 +12,34 @@ class CapturePreviewWiringTest {
     private fun app(name: String) = File(repository,
         "Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/$name").readText()
 
-    @Test fun heldReadoutInvokesTheSameFullBodyAsTheTappedHost() {
+    @Test fun heldReadoutUsesTheCompactDialVariantOfTheTappedHost() {
         val caller = app("LivePortraitChrome.kt").substringAfter("quickPreview =")
             .substringBefore("onQuickActiveChange =")
         assertTrue(caller.contains("LiveControlSheet("))
         assertTrue(caller.contains("preview = preview"))
         val body = app("LiveControlSheets.kt")
-        val host = body.substringAfter("fun LivePickerHost(").substringBefore("private fun SheetHeader")
+        val host = body.substringAfter("fun LivePickerHost(").substringBefore("private fun viewportIsPortrait")
         assertTrue(host.contains("LiveControlSheet("))
+        assertTrue(host.contains("topCapturePanel"))
+        assertTrue(host.contains("fromTop = fromTop"))
         assertTrue(body.contains("CompositionLocalProvider(LocalCapturePreview provides preview)"))
         val content = body.substringAfter("private fun LiveControlSheetContent(").substringBefore("fun LivePickerHost(")
+        assertTrue(content.contains("val compact = preview != null"))
+        assertTrue(content.contains("\"drag to set\""))
+        assertTrue(content.contains("showsClose = !compact"))
+        assertTrue(content.contains("if (!compact)"))
+        assertTrue(content.contains("compactCaptureBottomPadding"))
+        assertTrue(content.contains("showsRecordingCategoryTabs(portrait, compact)"))
+        assertTrue(body.contains("sheet.isRecordingSetup && viewportIsPortrait()"))
+        assertTrue(body.contains("capturePanelBottomCorner"))
         for (required in listOf("SheetHeader(", "CaptureLists.NATIVE_ISO_HOP_HELP", "CaptureLists.FACE_PRIORITY_HELP",
             "FocusBody(", "AudioBody(status, enabled, selectedMode, model)", "ModeBar(", "MonitorPanelGrabber()")) {
-            assertTrue(content.contains(required), "Both entry points must keep the approved drawer content: $required")
+            assertTrue(content.contains(required), "Tap still keeps the full details drawer: $required")
         }
         val shared = File(repository,
             "Apps/Android/monitor-ui/src/main/kotlin/com/opencapture/monitorui/MonitorQuickControl.kt").readText()
         assertTrue(shared.contains("previewContent(heldPreview, layout.maxHeight)"))
-        assertFalse(shared.contains("MonitorValueDrum("), "A reduced second drum must not replace the injected full body")
+        assertFalse(shared.contains("MonitorValueDrum("), "A reduced second drum must not replace the injected compact body")
         assertFalse(shared.contains("LiveSheet"), "The shared gesture must not own camera taxonomy")
     }
 

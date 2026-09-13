@@ -8,6 +8,7 @@ import SwiftUI
 struct CaptureQuickSnapshot: Hashable, Sendable {
     enum Kind: Hashable, Sendable {
         case iso, isoLimit, ev, shutter, angle, whiteBalanceMode, kelvin, focus, exposure, audio
+        case format, color, shootingMode
     }
     let kind: Kind
     let title: String
@@ -123,8 +124,59 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             return Self(
                 kind: .audio, title: "AUDIO", options: AudioChannel.allCases.map(\.label),
                 selection: status.audioChannel?.label ?? "")
-        case .mode, .resolution, .color: return nil
+        case .resolution: return formatSnapshot(status: status, cameraModel: cameraModel)
+        case .color: return colorSnapshot(status: status, cameraModel: cameraModel)
+        case .mode: return shootingModeSnapshot(status: status)
         }
+    }
+
+    private static func formatSnapshot(status: CameraStatus, cameraModel: CameraModel?) -> Self? {
+        let formats = CamCapVideoFormat.pickerFormats(
+            available: status.availableVideoFormats, model: cameraModel,
+            shootingMode: status.shootingMode)
+        let current =
+            status.videoFormat
+            ?? VideoFormat(
+                resolution: status.videoResolution ?? .p1080,
+                frameRate: VideoFrameRate.fromFps(status.fps) ?? .fps24)
+        let rates = CamCapVideoFormat.frameRates(
+            available: formats, resolution: current.resolution, current: current.frameRate)
+        let options = rates.map(\.drumLabel)
+        guard !options.isEmpty else { return nil }
+        let live = current.frameRate.drumLabel
+        return Self(
+            kind: .format, title: "FORMAT", options: options,
+            selection: options.contains(live) ? live : "",
+            context:
+                "\(current.resolution.rawValue):\(status.shootingMode):\(options.joined(separator: ","))"
+        )
+    }
+
+    private static func colorSnapshot(status: CameraStatus, cameraModel: CameraModel?) -> Self? {
+        let family = cameraModel?.family ?? .other
+        let modes =
+            cameraModel.map {
+                CamCapColorMode.wheel(available: status.availableColorModes, model: $0)
+            }
+            ?? CamCapColorMode.wheel(available: status.availableColorModes, family: family)
+        let options = modes.map { $0.label(for: family) }
+        guard !options.isEmpty else { return nil }
+        let live = status.colorMode?.label(for: family) ?? ""
+        return Self(
+            kind: .color, title: "COLOR", options: options,
+            selection: options.contains(live) ? live : "",
+            context: "\(family):\(options.joined(separator: ",")):\(status.isRecording)")
+    }
+
+    private static func shootingModeSnapshot(status: CameraStatus) -> Self {
+        let options = ShootingMode.allCases.map(\.label)
+        let live =
+            ShootingMode(rawValue: UInt8(truncatingIfNeeded: status.shootingMode))?.label ?? ""
+        return Self(
+            kind: .shootingMode, title: "MODE", options: options,
+            selection: options.contains(live) ? live : "",
+            context: "\(status.shootingMode):\(status.isRecording)",
+            enabled: !status.isRecording)
     }
 
     /// Typed camera calls retain the production capability lists, Kelvin/tint
@@ -192,6 +244,30 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             if let channel = AudioChannel.allCases.first(where: { $0.label == value }) {
                 model.session.setAudioChannel(channel)
             }
+        case .format:
+            let formats = CamCapVideoFormat.pickerFormats(
+                available: status.availableVideoFormats,
+                model: model.session.connectedCamera?.model,
+                shootingMode: status.shootingMode)
+            let current =
+                status.videoFormat
+                ?? VideoFormat(
+                    resolution: status.videoResolution ?? .p1080,
+                    frameRate: VideoFrameRate.fromFps(status.fps) ?? .fps24)
+            let rates = CamCapVideoFormat.frameRates(
+                available: formats, resolution: current.resolution, current: current.frameRate)
+            if let rate = VideoFrameRate(drumLabel: value), rates.contains(rate) {
+                model.session.setVideoFormat(resolution: current.resolution, frameRate: rate)
+            }
+        case .color:
+            if let mode = ColorMode(label: value) {
+                model.session.setColorMode(mode)
+            }
+        case .shootingMode:
+            guard !status.isRecording else { return }
+            if let mode = ShootingMode.allCases.first(where: { $0.label == value }) {
+                model.session.setShootingMode(mode)
+            }
         }
     }
 }
@@ -232,9 +308,14 @@ struct CaptureReadoutGesture: ViewModifier {
             controlID: sheet.rawValue, snapshot: CaptureQuickSnapshot.primary(sheet, model: model))
     }
 
-    private var canInteract: Bool {
-        !locked && !model.session.isLocked && scenePhase == .active
-            && model.liveOperatorPanel == nil && model.captureSheet == nil
+    private var canBegin: Bool {
+        CaptureReadoutAdmission.canBegin(
+            locked: locked, sessionLocked: model.session.isLocked,
+            sceneActive: scenePhase == .active, operatorPanel: model.liveOperatorPanel != nil)
+    }
+
+    private var canCommit: Bool {
+        CaptureReadoutAdmission.canCommit(canBegin: canBegin, captureSheet: model.captureSheet)
     }
 
     func body(content: Content) -> some View {
@@ -242,23 +323,24 @@ struct CaptureReadoutGesture: ViewModifier {
         return content.modifier(
             MonitorReadoutGesture(
                 snapshot: current.snapshot.flatMap { $0.enabled ? $0.display : nil },
-                sourceIdentity: current, isEnabled: canInteract, ownership: $ownership,
+                sourceIdentity: current, isEnabled: canBegin, ownership: $ownership,
                 presentationOwner: { model.captureDrum?.id }, onEvent: handleEvent))
     }
 
     private func handleEvent(_ event: MonitorReadoutEvent<Source>) {
         switch event {
         case .open(let admittedSource):
-            if canInteract, admittedSource == source,
+            if canBegin, admittedSource == source,
                 ownership.owner == nil, model.captureDrum == nil
             {
                 onTap()
             }
         case .preview(let preview):
-            guard canInteract, ownership.owns(preview.id), preview.sourceIdentity == source,
+            guard canBegin, ownership.owns(preview.id), preview.sourceIdentity == source,
                 let snapshot = preview.sourceIdentity.snapshot, snapshot.enabled,
                 model.captureDrum == nil || model.captureDrum?.id == preview.id
             else { return }
+            model.captureSheet = nil
             model.captureDrum = CaptureDrumPresentation(
                 id: preview.id, sheet: sheet, snapshot: snapshot, position: preview.position)
         case .commit(let release, let revision):
@@ -275,19 +357,41 @@ struct CaptureReadoutGesture: ViewModifier {
     private func scheduleCommit(_ release: MonitorReadoutValue<Source>, revision: UInt64) {
         let admittedSource = release.sourceIdentity
         let admittedWindow = windowGeometry
-        guard canInteract, admittedSource == source,
+        guard canCommit, admittedSource == source,
             let snapshot = admittedSource.snapshot, snapshot.enabled,
             let value = release.changedValue
         else { return }
         commitTask?.cancel()
         commitTask = Task { @MainActor in
             if snapshot.delayed { try? await Task.sleep(for: .milliseconds(80)) }
-            guard !Task.isCancelled, canInteract, admittedSource == source,
+            guard !Task.isCancelled, canCommit, admittedSource == source,
                 admittedWindow == windowGeometry, ownership.permitsDeferredCommit(revision),
                 model.captureDrum == nil
             else { return }
             commitTask = nil
             snapshot.apply(value, model: model)
         }
+    }
+}
+
+enum CaptureReadoutAdmission {
+    static func canBegin(
+        locked: Bool, sessionLocked: Bool, sceneActive: Bool, operatorPanel: Bool
+    ) -> Bool {
+        !locked && !sessionLocked && sceneActive && !operatorPanel
+    }
+
+    static func canCommit(canBegin: Bool, captureSheet: CaptureSheet?) -> Bool {
+        canBegin && captureSheet == nil
+    }
+
+    static func replacing(_ current: CaptureSheet?, with next: CaptureSheet) -> CaptureSheet? {
+        current == next ? nil : next
+    }
+
+    static func hidesLowerCaptureValues(sheet: CaptureSheet?, drum: CaptureSheet?) -> Bool {
+        if let drum { return !drum.isTopAnchored }
+        if let sheet { return !sheet.isTopAnchored }
+        return false
     }
 }

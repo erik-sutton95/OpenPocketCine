@@ -78,6 +78,68 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("iso-drum")
     }
 
+    func testSettingsCoverageAndCardTitleSpacing() throws {
+        app.launch()
+        rotate(.landscapeLeft)
+        app.buttons["monitor.system.settings"].tap()
+        let back = app.buttons["Back to live"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["monitor.system.record"].isHittable)
+        app.buttons["monitor.settings.tab.View Assist"].tap()
+        let zebra = app.staticTexts.matching(
+            NSPredicate(
+                format: "identifier == %@ AND label == %@",
+                "monitor.settings.card.title", "Zebra")
+        ).firstMatch
+        for _ in 0..<6 where !zebra.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.8))
+                .press(
+                    forDuration: 0.01,
+                    thenDragTo:
+                        app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.4)))
+        }
+        XCTAssertTrue(zebra.isHittable, "The Zebra title remains visible")
+        let title = zebra.frame
+        let units = try XCTUnwrap(
+            app.staticTexts.matching(identifier: "monitor.settings.row.title")
+                .allElementsBoundByIndex
+                .filter { $0.label == "Units" && abs($0.frame.minX - title.minX) < 30 }
+                .min { abs($0.frame.minY - title.maxY) < abs($1.frame.minY - title.maxY) })
+        XCTAssertGreaterThanOrEqual(units.frame.minY - title.maxY, 8)
+        capture("settings-zebra-spacing")
+        back.tap()
+        XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+        XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
+    }
+
+    func testCoveredPickerControlsAreInaccessibleAndReturnWithTheirState() {
+        app.launch()
+        rotate(.portrait)
+        app.buttons["monitor.capture.iso"].tap()
+        let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        for (control, backLabel) in [("settings", "Back to live"), ("media", "Back")] {
+            let navigation = app.buttons["monitor.system.\(control)"]
+            XCTAssertTrue(navigation.isHittable)
+            navigation.tap()
+            let back = app.buttons[backLabel].firstMatch
+            XCTAssertTrue(back.waitForExistence(timeout: 5))
+            capture("covered-picker-\(control)")
+            // XCTest still inventories mounted layout containers and hidden
+            // controls. Test actionable reachability rather than query omission.
+            XCTAssertFalse(app.buttons["monitor.capture.close"].isHittable)
+            XCTAssertFalse(app.buttons["monitor.system.record"].isHittable)
+            XCTAssertFalse(app.buttons["monitor.capture.iso"].isHittable)
+            XCTAssertFalse(navigation.isHittable)
+            back.tap()
+            XCTAssertTrue(panel.isHittable, "The same picker returns after \(control)")
+            XCTAssertTrue(app.buttons["monitor.capture.close"].isHittable)
+            XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+        }
+        app.buttons["monitor.capture.close"].tap()
+        XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
+    }
+
     func testRecordHoldDoesNotRecordAndLockedControlsStayBlocked() {
         app.launch()
         let record = app.buttons["monitor.system.record"]
@@ -201,20 +263,24 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("capture-top-format-landscape")
     }
 
-    func testCameraPickersShareTheBottomCenterAnchor() {
+    func testCameraPickersUseReferenceTopAndBottomAnchors() {
         app.launch()
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             rotate(orientation)
             let identifiers =
                 ["iso", "shutter", "exposure", "wb", "focus", "audio", "format"]
-                + (orientation == .landscapeLeft ? ["color"] : [])
+                + (orientation == .landscapeLeft ? ["color", "mode"] : [])
             for id in identifiers {
                 app.buttons["monitor.capture.\(id)"].tap()
                 let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
                 XCTAssertTrue(panel.waitForExistence(timeout: 5), id)
                 XCTAssertEqual(panel.frame.midX, app.frame.midX, accuracy: 1, id)
                 XCTAssertLessThanOrEqual(panel.frame.maxY, app.frame.maxY + 1, id)
-                XCTAssertGreaterThan(panel.frame.minY, app.frame.minY, id)
+                if ["format", "color", "mode"].contains(id), orientation == .landscapeLeft {
+                    XCTAssertEqual(panel.frame.minY, app.frame.minY, accuracy: 1, id)
+                } else {
+                    XCTAssertGreaterThan(panel.frame.minY, app.frame.minY, id)
+                }
                 XCTAssertTrue(app.buttons["monitor.system.record"].isHittable, id)
                 XCTAssertTrue(app.buttons["monitor.system.display"].isHittable, id)
                 XCTAssertFalse(app.buttons["monitor.system.zoom"].isHittable, id)
@@ -224,6 +290,47 @@ final class MonitorUIFlowTests: XCTestCase {
                 }
                 capture("capture-\(id)-\(orientation.rawValue)")
                 app.buttons["Close"].firstMatch.tap()
+                XCTAssertFalse(panel.exists)
+            }
+        }
+    }
+
+    func testTopPickerKeepsLowerReadoutsInteractiveAndCanBeReplaced() {
+        app.launch()
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+            rotate(orientation)
+            for id in ["format", "color", "mode"] {
+                app.buttons["monitor.capture.\(id)"].tap()
+                let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
+                XCTAssertTrue(panel.waitForExistence(timeout: 5), id)
+                XCTAssertEqual(panel.frame.minY, app.frame.minY, accuracy: 1, id)
+                let iso = app.buttons["monitor.capture.iso"]
+                XCTAssertTrue(iso.isHittable, id)
+                iso.tap()
+                // Full ISO details can extend above the midpoint on short
+                // landscape screens; the reference anchors its bottom edge.
+                XCTAssertGreaterThan(panel.frame.minY, app.frame.minY, id)
+                XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1, id)
+                XCTAssertEqual(app.buttons.matching(identifier: "monitor.capture.close").count, 1)
+                app.buttons["monitor.capture.close"].tap()
+                XCTAssertFalse(panel.exists)
+            }
+        }
+    }
+
+    func testTopReadoutPaddingOpensThePickerWithoutMovingItsLabel() {
+        app.launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
+            rotate(orientation)
+            let controls = orientation == .portrait ? ["format"] : ["format", "color", "mode"]
+            for id in controls {
+                let readout = app.buttons["monitor.capture.\(id)"]
+                XCTAssertTrue(readout.isHittable, id)
+                let center = readout.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                center.withOffset(CGVector(dx: 0, dy: 18)).tap()
+                let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
+                XCTAssertTrue(panel.waitForExistence(timeout: 5), "Padding tap: \(id)")
+                app.buttons["monitor.capture.close"].tap()
                 XCTAssertFalse(panel.exists)
             }
         }

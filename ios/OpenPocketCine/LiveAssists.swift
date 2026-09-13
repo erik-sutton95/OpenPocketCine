@@ -1511,7 +1511,7 @@ struct FeedSplitComparisonMarks: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .font(MonitorTheme.font(8, weight: .semibold)).monospacedDigit()
             .kerning(0.5)
             .foregroundStyle(Color.white.opacity(0.85))
             .shadow(color: .black.opacity(0.8), radius: 1.5, y: 0.5)
@@ -1733,7 +1733,7 @@ private struct LevelAxisGauge: View {
     private var readout: some View {
         let shown = abs(value) < 0.05 ? 0 : value
         return Text(String(format: "%+.1f°", shown))
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
             .foregroundStyle(isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85))
             .fixedSize()
             .offset(
@@ -1762,7 +1762,7 @@ struct EVMeterOverlay: View {
     var body: some View {
         HStack(spacing: 10) {
             Text("+0.0")
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .font(MonitorTheme.font(11.5, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(LiveDesign.text)
                 .frame(width: 34, alignment: .trailing)
             Capsule().fill(LiveDesign.hairlineStrong).frame(width: 120, height: 3)
@@ -1818,7 +1818,7 @@ struct AssistToolChip: View {
             AssistToolIcon(tool: tool, size: 19)
                 .frame(height: 23)
             Text(tool.rawValue)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(MonitorTheme.font(9, weight: .medium)).monospacedDigit()
                 .tracking(0.9)
                 .lineLimit(1)
         }

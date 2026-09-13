@@ -553,12 +553,21 @@ object LivePopupPlacement {
     fun leadingX(desired: Float, width: Float, minX: Float, maxX: Float): Float =
         min(max(desired, minX), max(minX, maxX - width))
 
-    /** One viewport-centered floor for every camera picker, independent of its source readout. */
+    /** One viewport-centered floor for every camera-value picker, independent of its source readout. */
     fun bottomCapturePanel(panelHeight: Float, viewportWidth: Float, viewportHeight: Float,
         safeLeading: Float, safeTrailing: Float, safeTop: Float, safeBottom: Float,
         floorY: Float? = null): Box {
         val panel = com.opencapture.monitorui.MonitorLayoutPolicy.bottomPanel(panelHeight, viewportWidth,
             viewportHeight, safeLeading, safeTrailing, safeTop, safeBottom, floorY)
+        return Box(panel.x, panel.y, panel.width, panel.maxHeight)
+    }
+
+    /** Format / color / mode hang from the top edge, 6dp below the portrait info bar. */
+    fun topCapturePanel(panelHeight: Float, viewportWidth: Float, viewportHeight: Float,
+        safeLeading: Float, safeTrailing: Float, safeTop: Float, safeBottom: Float,
+        ceilingY: Float? = null, floorY: Float? = null): Box {
+        val panel = com.opencapture.monitorui.MonitorLayoutPolicy.topPanel(panelHeight, viewportWidth,
+            viewportHeight, safeLeading, safeTrailing, safeTop, safeBottom, ceilingY, floorY)
         return Box(panel.x, panel.y, panel.width, panel.maxHeight)
     }
 
@@ -1314,7 +1323,8 @@ fun DispButton(
         Text(
             "DISP",
             color = LiveDesign.muted,
-            style = LiveType.ui(11f, FontWeight.SemiBold),
+            style = LiveType.ui(com.opencapture.monitorui.MonitorLayoutPolicy.DISP_SIZE, FontWeight.Bold)
+                .copy(letterSpacing = com.opencapture.monitorui.MonitorLayoutPolicy.DISP_TRACKING.sp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Box(

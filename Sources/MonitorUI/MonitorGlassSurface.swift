@@ -29,9 +29,6 @@
         var shape: S
         var density: MonitorGlassDensity
         var reduceTransparencyOverride: Bool?
-        @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-        @Environment(\.monitorBackdrop) private var backdrop
-
         init(shape: S, density: MonitorGlassDensity, reduceTransparencyOverride: Bool? = nil) {
             self.shape = shape
             self.density = density
@@ -40,6 +37,31 @@
 
         func body(content: Content) -> some View {
             content.background {
+                MonitorGlassBackground(
+                    shape: shape, density: density,
+                    reduceTransparencyOverride: reduceTransparencyOverride)
+            }
+            .overlay {
+                if density.hairline > 0 {
+                    shape.stroke(Color.white.opacity(density.hairline), lineWidth: 0.75)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    /// Only this leaf consumes the changing passive image. Foreground labels,
+    /// gesture hosts and shadows do not observe backdrop refreshes.
+    private struct MonitorGlassBackground<S: Shape>: View {
+        let shape: S
+        let density: MonitorGlassDensity
+        let reduceTransparencyOverride: Bool?
+        @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+        @Environment(\.monitorBackdrop) private var backdrop
+        @Environment(\.monitorPresentationIsVisible) private var isVisible
+
+        var body: some View {
+            if isVisible {
                 if reduceTransparencyOverride ?? reduceTransparency {
                     shape.fill(reduceTransparencyFill)
                 } else if let snapshot = backdrop.snapshot, let image = snapshot.image(for: density)
@@ -47,17 +69,18 @@
                     GeometryReader { proxy in
                         let frame = proxy.frame(in: .global)
                         Canvas { context, size in
-                            context.clip(to: Path(CGRect(origin: .zero, size: size)))
+                            let path = shape.path(in: CGRect(origin: .zero, size: size))
+                            context.clip(to: path)
                             context.draw(
                                 Image(decorative: image, scale: 1),
                                 in: CGRect(
                                     x: backdrop.frame.minX - frame.minX,
                                     y: backdrop.frame.minY - frame.minY,
                                     width: backdrop.frame.width, height: backdrop.frame.height))
+                            context.fill(
+                                path, with: .color(density.tint.opacity(density.overlayOpacity)))
                         }
                     }
-                    .overlay(density.tint.opacity(density.overlayOpacity))
-                    .clipShape(shape)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 } else {
@@ -69,12 +92,6 @@
                         .clipShape(shape)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
-                }
-            }
-            .overlay {
-                if density.hairline > 0 {
-                    shape.stroke(Color.white.opacity(density.hairline), lineWidth: 0.75)
-                        .allowsHitTesting(false)
                 }
             }
         }

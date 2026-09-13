@@ -16,6 +16,7 @@ import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.monitorui.MonitorQuickControl
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.VideoFormat
 
 /** Reuses the persistent picker's production choices and typed action methods. */
 internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: AppModel,
@@ -49,9 +50,54 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
         LiveSheet.FOCUS -> chrome(captureQuickFocusControl(status))
         LiveSheet.EXPO -> chrome(MonitorQuickControl(CaptureLists.expoLabels, CaptureLists.expoLabel(status.expoMode)))
         LiveSheet.AUDIO -> chrome(MonitorQuickControl(CaptureLists.audioChannelLabels, CaptureLists.audioChannelLabel(status.audioChannel).orEmpty()))
-        else -> null
+        LiveSheet.FORMAT, LiveSheet.COLOR, LiveSheet.MODE -> {
+            val family = model.session.connectedCamera?.model?.family ?: "pocket"
+            recordingCategoryQuickControl(sheet, status, body, family)?.let(::chrome)
+        }
     }
 }
+
+/** Same primary drum the persistent FORMAT / COLOR / MODE pickers use. */
+internal fun recordingCategoryQuickControl(
+    sheet: LiveSheet,
+    status: CameraStatus,
+    bodyName: String = "",
+    family: String = "pocket",
+): MonitorQuickControl? =
+    when (sheet) {
+        LiveSheet.FORMAT -> {
+            val format = VideoFormat.current(status)
+            val aspect = format.resolution.aspect
+            val tab = CaptureLists.formatResolutions(status, aspect).indexOf(format.resolution).coerceAtLeast(0)
+            val options = CaptureLists.fpsDrumLabels(status, tab, aspect)
+            if (options.isEmpty()) null
+            else {
+                val live = format.frameRate.drumLabel
+                MonitorQuickControl(
+                    options, if (live in options) live else "",
+                    context = "${format.resolution.rawValue}:${status.shootingMode}:${options.joinToString()}",
+                )
+            }
+        }
+        LiveSheet.COLOR -> {
+            val options = CaptureLists.colorWheelLabels(status, family, bodyName)
+            if (options.isEmpty()) null
+            else {
+                val live = CameraCommands.colorLabel(status.colorMode, family)
+                MonitorQuickControl(
+                    options, if (live in options) live else "",
+                    context = "$family:${options.joinToString()}:${status.isRecording}",
+                )
+            }
+        }
+        LiveSheet.MODE -> {
+            val options = CaptureLists.shootingModeLabels(bodyName)
+            val live = CameraCommands.shootingModeLabel(status.shootingMode).orEmpty()
+            MonitorQuickControl(options, if (live in options) live else "", enabled = !status.isRecording,
+                context = "${status.shootingMode}:$bodyName:${status.isRecording}")
+        }
+        else -> null
+    }
 
 internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: CameraStatus,
     model: AppModel, context: Context) {
@@ -86,8 +132,27 @@ internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: C
         LiveSheet.FOCUS -> applyCaptureFocusChoice(value, status, model)
         LiveSheet.EXPO -> CaptureLists.expoModeFromLabel(value)?.let(model::setExpoMode)
         LiveSheet.AUDIO -> CaptureLists.audioChannelValue(value)?.let(model::setAudioChannel)
-        else -> Unit
+        LiveSheet.FORMAT -> {
+            val format = VideoFormat.current(status)
+            val aspect = format.resolution.aspect
+            val tab = CaptureLists.formatResolutions(status, aspect).indexOf(format.resolution).coerceAtLeast(0)
+            CaptureLists.nextVideoFormat(status, tab, value, fromDrum = true, aspect)?.let(model::setVideoFormat)
+        }
+        LiveSheet.COLOR -> CaptureLists.applyColorDrum(
+            label = value, family = model.session.connectedCamera?.model?.family ?: "pocket",
+            status = status, hopEnabled = model.nativeISOHopEnabled,
+            name = model.session.connectedCamera?.model?.name.orEmpty(),
+        )?.let { model.setColorMode(it.colorMode) }
+        LiveSheet.MODE -> applyCaptureShootingMode(value, model.session.status.value,
+            model.session.connectedCamera?.model?.name, model::setShootingMode)
     }
+}
+
+/** Shared full-picker and quick-release boundary: never change shooting mode during a take. */
+internal fun applyCaptureShootingMode(value: String, status: CameraStatus, bodyName: String?,
+    send: (Int) -> Unit) {
+    if (status.isRecording) return
+    CaptureLists.shootingModeRaw(value, bodyName)?.let(send)
 }
 
 internal fun captureQuickFocusControl(status: CameraStatus) = MonitorQuickControl(

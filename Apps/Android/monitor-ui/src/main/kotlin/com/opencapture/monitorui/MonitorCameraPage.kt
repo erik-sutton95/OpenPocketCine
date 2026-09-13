@@ -47,7 +47,7 @@ fun <T> MonitorCameraPage(brand: String, sections: List<MonitorCameraSection<T>>
                 Text(brand, color = MonitorPalette.accent,
                     style = MonitorTypography.text(8.5f, FontWeight.Bold).copy(letterSpacing = 1.5.sp))
                 Text(title, color = MonitorPalette.text,
-                    style = MonitorTypography.text(if (config.screenWidthDp < 400) 22f else 26f, FontWeight.SemiBold), maxLines = 1)
+                    style = MonitorTypography.text(MonitorLayoutPolicy.cameraPageTitleSize(tablet), FontWeight.SemiBold), maxLines = 1)
             }
             actions()
         }
@@ -74,7 +74,7 @@ fun <T> MonitorCameraPage(brand: String, sections: List<MonitorCameraSection<T>>
 fun MonitorCameraCard(title: String, detail: String, enabled: Boolean, onOpen: () -> Unit,
     modifier: Modifier = Modifier, glyph: @Composable () -> Unit,
     options: @Composable () -> Unit, status: @Composable RowScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MonitorPalette.surface)
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(MonitorLayoutPolicy.CAMERA_CARD_CORNER.dp)).background(MonitorPalette.surface)
         .padding(horizontal = 14.dp, vertical = 13.dp)) {
         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MonitorPalette.tile),

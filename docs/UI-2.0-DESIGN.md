@@ -201,8 +201,9 @@ Portrait uses explicit top/readout, picture, capture-strip and system-row zones:
    Fit/Fill is a centered 48-round control 8 above the floor, above values.
 5. Storage leads at top; three gauges trail on phones, stack leading on tablets.
    STBY/REC, centered timecode, and trailing **REC SETUP** share the next line.
-   REC SETUP replaces separate format/colour/shooting readouts and opens a drum
-   with Format / Color / Mode category tabs. Tablet timecode line is at top 12.
+   REC SETUP replaces separate format/colour/shooting readouts. Portrait details
+   keep Format / Color / Mode category tabs; landscape hangs from the screen top
+   without that extra row. Tablet timecode line is at top 12.
 
 `PZ` at 5643–5721 and final overrides 7621–7820 are the geometry source.
 
@@ -280,11 +281,19 @@ These accepted refinements supersede the corresponding prototype defaults:
   applies to tight local text/icon shadows, not panel opacity.
 - Audio keeps the reference slim 28 × 168 plate (168 × 28 horizontally),
   including when optional dBFS labels are visible.
-- Every camera picker rises from bottom-center, including the three
-  recording categories. Use the reference ruler, horizontal value movement,
-  selected type scaling, inline toggle details, header and bottom grabber.
-  Tap and hold/drag use the same complete drawer. Held previews remain
-  noninteractive; only releasing the original readout gesture applies a value.
+- Camera-value pickers rise from bottom-center. FORMAT / COLOR / shooting mode
+  hang from the top well: portrait details keep Format / Color / Mode category
+  tabs; landscape has no extra category row and shooting mode is its own top
+  sheet, not FORMAT. Lower camera values stay visible during a top tap or hold.
+  Use the reference ruler, horizontal value movement and selected type scaling.
+  Tap keeps the full details drawer (close, and a grabber only on bottom-edge
+  details). Hold/drag is a compact 128 pt dial (header + 86 drum). Portrait
+  floating lower corners are 16; landscape attached bottoms stay square. Held
+  previews remain noninteractive; only releasing the original readout gesture
+  applies a value. Those top MODE/tap/hold and portrait storage-raster fixes
+  are not yet physically proven. Camera-value type
+  is 16/9 on phone and 18/9 on tablet. Operator Setup cards keep an 8 pt gap
+  under the 13 pt title. DISP is 12 bold with 0.04 em tracking.
 - Pocket 4 Pro separates 1×/3× single taps from 6×/12× double taps when supported.
   Other camera limits and command mapping remain authoritative.
 - iPhone top controls do not receive iPad window-control exclusions. Landscape
@@ -306,7 +315,8 @@ selected detent and closes it. Within persistent mode, dragging changes selected
 value and release leaves panel open. Leftward drag advances to higher indexed
 values; 56 points per value; elastic detent function is
 `x − 0.55*sin(2πx)/(2π)` after clamping. Persistent panels have close/outside
-dismissal, tabs and auxiliary switch; temporary mode is dial-only. Panel max width
+dismissal and, when shown, tabs and auxiliary switches; temporary mode is a
+128 pt dial-only card (header + 86 drum). Panel max width
 480 phone / 620 tablet, also bounded by screen−28. Drum viewport 86 high, cells
 78 high, 15-point type with selected enlargement, cyan 15-point tick and dim
 9-point ticks; edges fade over 14% each side. Source 4124–4137, 4244–4267,
@@ -326,10 +336,11 @@ dismissal, tabs and auxiliary switch; temporary mode is dial-only. Panel max wid
 | Shooting | Supported capture modes; also accessible through record hold |
 
 Use production camera-derived values/capabilities, not `DIALS`/`SHEETS` demo arrays.
-Top-category panels grow from top in landscape; bottom-category panels grow from
-bottom. Portrait top panel begins below info bar and bottom panel clears system
-row, both rounded on all corners and above other controls. Source 5446–5507,
-7500–7570, 7765–7818.
+Top-category panels grow from top; bottom-category panels grow from bottom.
+Portrait top panel begins below the info bar and keeps Format / Color / Mode
+tabs on details. Landscape top panels attach to the screen top with no extra
+category row. Portrait floating panels round all corners (16); landscape
+attached edges stay square. Source 5446–5507, 7500–7570, 7765–7818.
 
 Zoom chip is 44 square, numeric 18/20. Prototype tap toggles optical lenses,
 double-tap selects digital crops, hold 380 ms opens logarithmic dial. Its

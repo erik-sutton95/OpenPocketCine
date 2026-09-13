@@ -110,13 +110,7 @@ struct LiveCameraControlBar: View {
     private func open(_ sheet: CaptureSheet) {
         guard !tilesLocked, model.captureDrum == nil, readoutOwnership.owner == nil else { return }
         model.captureDrum = nil
-        if model.captureSheet == nil {
-            model.captureSheet = sheet
-        } else if model.captureSheet == sheet {
-            model.captureSheet = nil
-        } else {
-            model.captureSheet = sheet
-        }
+        model.captureSheet = CaptureReadoutAdmission.replacing(model.captureSheet, with: sheet)
     }
 
     private var isoValue: String {

@@ -12,11 +12,15 @@ project with XcodeGen — see [Setup](../guides/setup/).
 The native UI uses Sora typography, cyan controls and dark panels. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
-format, color and shooting options. Drag a value drum to select a supported
-camera value; lift to apply it. All camera pickers open from bottom-center.
-Holding or dragging a camera readout opens the same full drawer and details;
-releasing that original touch applies the selected value.
+format, color and shooting options from the top of the monitor. Portrait keeps
+Format / Color / Mode tabs on the details drawer; landscape has no extra
+category row, and shooting mode is its own top control (not FORMAT). ISO,
+shutter, white balance, focus and audio stay along the bottom and remain
+visible while a top picker is open. Tap a value for the full details drawer;
+hold or drag for a compact dial. Lift to apply the selected value.
 Hold Record to open shooting mode.
+In portrait, Settings and Media remain usable with a picker open; returning to
+the monitor restores that picker.
 
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;

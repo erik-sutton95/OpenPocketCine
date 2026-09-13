@@ -5,6 +5,19 @@ import XCTest
 @testable import OpenPocketCine
 
 final class CaptureQuickSnapshotTests: XCTestCase {
+    func testStartingRecordingInvalidatesAnInFlightShootingModeAdjustment() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        let standby = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertTrue(standby.enabled)
+        status.isRecording = true
+        let recording = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertFalse(recording.enabled)
+        XCTAssertNotEqual(standby, recording)
+        XCTAssertNil(standby.changedValue(translation: -56, current: recording))
+        XCTAssertNil(recording.changedValue(translation: -56, current: recording))
+    }
+
     func testUnknownCameraValuesStayUnknownAndStationaryHoldCannotSelectTheirFallback() throws {
         var status = CameraStatus()
         status.expoMode = .auto
@@ -97,5 +110,79 @@ final class CaptureQuickSnapshotTests: XCTestCase {
             .shutter, status: status, facePriorityExposureEnabled: true)
         XCTAssertNil(ev.changedValue(translation: -56, current: automatic))
         XCTAssertNil(automatic?.changedValue(translation: -56, current: automatic))
+    }
+
+    func testFormatColorAndModeSnapshotsMatchTheFullPickerPrimaryDrum() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        status.videoFormat = VideoFormat(resolution: .p4K, frameRate: .fps24)
+        status.availableVideoFormats = [
+            VideoFormat(resolution: .p4K, frameRate: .fps24),
+            VideoFormat(resolution: .p4K, frameRate: .fps30),
+            VideoFormat(resolution: .p1080, frameRate: .fps24),
+        ]
+        let format = try XCTUnwrap(CaptureQuickSnapshot.primary(.resolution, status: status))
+        XCTAssertEqual(format.options, ["24p", "30p"])
+        XCTAssertEqual(format.selection, "24p")
+        XCTAssertEqual(format.changedValue(translation: -56, current: format), "30p")
+        XCTAssertNil(format.changedValue(translation: 0, current: format))
+
+        status.availableVideoFormats = [VideoFormat(resolution: .p4K, frameRate: .fps24)]
+        let narrowed = CaptureQuickSnapshot.primary(.resolution, status: status)
+        XCTAssertNil(format.changedValue(translation: -56, current: narrowed))
+
+        status.colorMode = .normal
+        status.availableColorModes = [.normal, .hdr, .dLog]
+        let color = try XCTUnwrap(CaptureQuickSnapshot.primary(.color, status: status))
+        XCTAssertEqual(color.options, ["Normal", "HDR", "D-Log"])
+        XCTAssertEqual(color.selection, "Normal")
+        XCTAssertEqual(color.changedValue(translation: -56, current: color), "HDR")
+
+        status.availableColorModes = [.normal]
+        let colorChanged = CaptureQuickSnapshot.primary(.color, status: status)
+        XCTAssertNil(color.changedValue(translation: -56, current: colorChanged))
+
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        let mode = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertEqual(mode.options, ShootingMode.allCases.map(\.label))
+        XCTAssertEqual(mode.selection, "Video")
+        XCTAssertNil(mode.changedValue(translation: 0, current: mode))
+        XCTAssertEqual(mode.changedValue(translation: -56, current: mode), "TimeLapse")
+
+        status.shootingMode = Int(ShootingMode.photo.rawValue)
+        let photo = CaptureQuickSnapshot.primary(.mode, status: status)
+        XCTAssertNil(mode.changedValue(translation: -56, current: photo))
+
+        status.shootingMode = -1
+        let unknown = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertEqual(unknown.selection, "")
+        XCTAssertNil(unknown.changedValue(translation: 0, current: unknown))
+    }
+
+    func testTopFullPickerSwitchesDirectlyToLowerControlAndViceVersa() {
+        XCTAssertTrue(
+            CaptureReadoutAdmission.canBegin(
+                locked: false, sessionLocked: false, sceneActive: true, operatorPanel: false))
+        XCTAssertFalse(
+            CaptureReadoutAdmission.canBegin(
+                locked: true, sessionLocked: false, sceneActive: true, operatorPanel: false))
+        XCTAssertTrue(CaptureReadoutAdmission.canCommit(canBegin: true, captureSheet: nil))
+        XCTAssertFalse(
+            CaptureReadoutAdmission.canCommit(canBegin: true, captureSheet: .resolution),
+            "A delayed SET cannot outlive a still-open persistent picker")
+        XCTAssertEqual(CaptureReadoutAdmission.replacing(nil, with: .resolution), .resolution)
+        XCTAssertEqual(
+            CaptureReadoutAdmission.replacing(.resolution, with: .iso), .iso,
+            "FORMAT details yield to a lower ISO tap")
+        XCTAssertEqual(
+            CaptureReadoutAdmission.replacing(.iso, with: .color), .color,
+            "A lower picker yields to a top COLOR tap")
+        XCTAssertNil(CaptureReadoutAdmission.replacing(.iso, with: .iso))
+        XCTAssertFalse(
+            CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: .resolution, drum: nil))
+        XCTAssertFalse(
+            CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: nil, drum: .color))
+        XCTAssertTrue(CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: .iso, drum: nil))
+        XCTAssertTrue(CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: nil, drum: .wb))
     }
 }

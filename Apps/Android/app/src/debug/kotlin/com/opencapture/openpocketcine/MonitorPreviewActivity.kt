@@ -111,7 +111,11 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
     val backdrop = remember(image) { MonitorBackdropSource().apply {
         this.image = image?.let { Bitmap.createScaledBitmap(it, 180, 120, true) }
     } }
-    CompositionLocalProvider(LocalMonitorBackdrops provides if (image != null) listOf(backdrop) else emptyList()) {
+    val readoutRegions = remember { com.opencapture.monitorui.MonitorReadoutRegions() }
+    CompositionLocalProvider(
+        LocalMonitorBackdrops provides if (image != null) listOf(backdrop) else emptyList(),
+        com.opencapture.monitorui.LocalMonitorReadoutRegions provides readoutRegions,
+    ) {
     BoxWithConstraints(Modifier.fillMaxSize().background(LiveDesign.background)) {
         val width = maxWidth.value
         val height = maxHeight.value
@@ -146,7 +150,7 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
         }
         if (!locked) sheet?.let {
             LivePickerHost(it, width, height, 0f, 0f, safeTop, safeBottom, zones?.systemBar?.minY,
-                model, status, false, { sheet = it })
+                model, status, false, { sheet = it }, zones?.topBar?.maxY)
         }
         if (!locked && capabilities.gimbal && model.liveGimbalPanel == LiveGimbalPanel.SHEET) {
             LiveGimbalSheetHost(model, layout, cluster, 0f, 0f, 0f, 0f)

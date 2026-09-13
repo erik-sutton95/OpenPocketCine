@@ -208,7 +208,10 @@
                 subviews[index].place(
                     at: CGPoint(x: bounds.minX + rect.minX, y: bounds.minY + rect.minY),
                     anchor: .topLeading,
-                    proposal: ProposedViewSize(width: rect.width, height: rect.height))
+                    // Match measurement exactly. Supplying the measured height
+                    // here creates a second proposal and relays out every nested
+                    // settings row during placement and scrolling.
+                    proposal: ProposedViewSize(width: rect.width, height: nil))
             }
         }
 

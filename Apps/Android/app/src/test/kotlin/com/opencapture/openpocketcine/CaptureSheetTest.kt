@@ -474,6 +474,22 @@ class CaptureSheetTest {
         assertEquals("AUDIO", LiveSheet.AUDIO.headerLabel)
         assertEquals("COLOR", LiveSheet.COLOR.headerLabel)
         assertEquals("RESOLUTION", LiveSheet.FORMAT.headerLabel)
+        assertEquals("SHOOTING MODE", LiveSheet.MODE.headerLabel)
+        assertEquals("Shooting mode", LiveSheet.MODE.subtitle)
+        assertTrue(LiveSheet.MODE.isTopAnchored)
+        assertTrue(!LiveSheet.EXPO.isTopAnchored)
+        assertTrue(!LiveSheet.MODE.isRecordingSetup)
+        assertTrue(!hidesLowerCaptureValues(LiveSheet.FORMAT, stripQuick = false, topQuick = false))
+        assertTrue(!hidesLowerCaptureValues(LiveSheet.MODE, stripQuick = false, topQuick = false))
+        assertTrue(!hidesLowerCaptureValues(null, stripQuick = false, topQuick = true))
+        assertTrue(hidesLowerCaptureValues(LiveSheet.ISO, stripQuick = false, topQuick = false))
+        assertTrue(hidesLowerCaptureValues(null, stripQuick = true, topQuick = false))
+        assertEquals(
+            128f,
+            com.opencapture.monitorui.MonitorLayoutPolicy.CAPTURE_HEADER_HEIGHT
+                + 11f + 8f + 86f
+                + com.opencapture.monitorui.MonitorLayoutPolicy.compactCaptureBottomPadding(11f),
+        )
     }
 
     @Test
@@ -825,9 +841,10 @@ class CaptureSheetTest {
         assertEquals(CameraCommands.EXPO_MANUAL, CaptureLists.expoModeFromLabel("Manual"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Video"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Photo"))
-        assertTrue(LiveSheet.entries.none { it.subtitle == "Shooting mode" })
+        assertEquals("Exposure", LiveSheet.EXPO.subtitle)
+        assertEquals("Shooting mode", LiveSheet.MODE.subtitle)
         assertEquals(
-            setOf("ISO", "SHUTTER", "WB", "FOCUS", "EXPO", "AUDIO", "COLOR", "FORMAT"),
+            setOf("ISO", "SHUTTER", "WB", "FOCUS", "EXPO", "AUDIO", "COLOR", "FORMAT", "MODE"),
             LiveSheet.entries.map { it.name }.toSet(),
         )
     }

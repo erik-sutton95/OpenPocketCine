@@ -3,6 +3,9 @@ package com.opencapture.openpocketcine
 import com.opencapture.monitorui.MonitorQuickControl
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.VideoFormat
+import com.opencapture.openpocketcine.session.VideoFrameRate
+import com.opencapture.openpocketcine.session.VideoResolution
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,6 +13,25 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CaptureQuickControlTest {
+    @Test fun shootingModeRejectsRecordingAtAdmissionAndAtTheSetterBoundary() {
+        val stopped = CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO)
+        val recording = stopped.copy(isRecording = true)
+        val admitted = requireNotNull(recordingCategoryQuickControl(LiveSheet.MODE, stopped))
+        val changed = admitted.options.first { it != admitted.selection }
+        val blocked = requireNotNull(recordingCategoryQuickControl(LiveSheet.MODE, recording))
+        assertTrue(admitted.enabled)
+        assertFalse(blocked.enabled)
+        val sent = mutableListOf<Int>()
+        commitCaptureQuickControl(admitted, blocked, changed, true) { sent += -1 }
+        assertTrue(sent.isEmpty(), "Recording starting after down invalidates the source")
+        applyCaptureShootingMode(changed, recording, null) { sent += it }
+        assertTrue(sent.isEmpty(), "Full picker and release cannot bypass recording policy")
+        commitCaptureQuickControl(admitted, admitted, changed, true) {
+            applyCaptureShootingMode(changed, stopped, null) { sent += it }
+        }
+        assertEquals(listOf(CaptureLists.shootingModeRaw(changed, null)), sent)
+    }
+
     @Test fun everyHeldPanelMountHasZeroGetsSetsAndPreferenceWrites() = runBlocking {
         val effects = CapturePanelEffects(preview = true)
         val traffic = mutableListOf<String>()
@@ -122,5 +144,51 @@ class CaptureQuickControlTest {
         lifetime.invalidate() // Connection phase changes while the monitor remains mounted.
         commitCaptureQuickControl(resumed, source.copy(identity = lifetime.epoch), "200", lifetime.active) { sends++ }
         assertEquals(0, sends)
+    }
+
+    @Test fun recordingCategoryHoldUsesFullPickerPrimaryChoicesAndRejectsStaleLists() {
+        val fourK24 = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS24)
+        val fourK30 = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS30)
+        val status = CameraStatus(
+            shootingMode = CameraCommands.SHOOT_VIDEO,
+            resolutionCode = VideoResolution.P4K.rawValue,
+            fpsIndex = VideoFrameRate.FPS24.rawValue,
+            fps = 24,
+            availableVideoFormats = listOf(fourK24, fourK30),
+            colorMode = CameraCommands.COLOR_NORMAL,
+            availableColorModes = listOf(CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_HDR),
+        )
+        val format = requireNotNull(recordingCategoryQuickControl(LiveSheet.FORMAT, status))
+        assertEquals(listOf("24p", "30p"), format.options)
+        assertEquals("24p", format.selection)
+        val narrowed = requireNotNull(
+            recordingCategoryQuickControl(LiveSheet.FORMAT, status.copy(availableVideoFormats = listOf(fourK24))),
+        )
+        var sends = 0
+        commitCaptureQuickControl(format, narrowed, "30p", enabled = true) { sends++ }
+        commitCaptureQuickControl(format, format, "24p", enabled = true) { sends++ }
+        assertEquals(0, sends)
+        commitCaptureQuickControl(format, format, "30p", enabled = true) { sends++ }
+        assertEquals(1, sends)
+
+        val color = requireNotNull(recordingCategoryQuickControl(LiveSheet.COLOR, status, family = "pocket"))
+        assertEquals(CaptureLists.colorWheelLabels(status, "pocket"), color.options)
+        assertTrue(color.options.contains("Normal"))
+        assertEquals("Normal", color.selection)
+
+        val mode = requireNotNull(recordingCategoryQuickControl(LiveSheet.MODE, status))
+        assertEquals(CaptureLists.shootingModeLabels(null), mode.options)
+        assertEquals("Video", mode.selection)
+        assertTrue("Photo" in mode.options)
+        val photo = requireNotNull(
+            recordingCategoryQuickControl(
+                LiveSheet.MODE, status.copy(shootingMode = CameraCommands.SHOOT_PHOTO_POCKET4)),
+        )
+        commitCaptureQuickControl(mode, photo, "Photo", enabled = true) { sends++ }
+        assertEquals(1, sends, "A changed shooting-mode source cannot commit")
+        assertTrue(LiveSheet.MODE.isTopAnchored)
+        assertTrue(!LiveSheet.EXPO.isTopAnchored)
+        assertTrue(LiveSheet.FORMAT.isRecordingSetup)
+        assertTrue(!LiveSheet.MODE.isRecordingSetup)
     }
 }
