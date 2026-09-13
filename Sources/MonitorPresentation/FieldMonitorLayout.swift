@@ -37,9 +37,11 @@ public struct FieldMonitorLayout: Equatable, Sendable {
     public let viewport: MonitorRect
     public let picture: MonitorRect
     public let status: MonitorRect
-    /// The tally and clock sit a little farther into the picture than the
-    /// tappable format row. Keeping this separate preserves its 44pt targets.
-    public let recordingReadoutInset: Double = 8
+    /// Keep the landscape tally and clock inside the picture without moving
+    /// them off the format row's vertical center or shrinking its touch targets.
+    public var recordingReadoutTrailingInset: Double {
+        portrait ? 0 : max(8, status.maxX - picture.maxX + 12)
+    }
     public let values: MonitorRect
     public let system: MonitorRect
     public let lock: MonitorRect
@@ -160,7 +162,7 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: tablet ? settings.maxX + 8 : settings.x,
                 y: tablet ? cornerTop : settings.maxY + 8, width: button, height: button)
             lock = .init(
-                x: 18, y: 12 + controlInset + cornerClearance, width: button, height: button)
+                x: 18, y: cornerTop, width: button, height: button)
             gauges = .init(x: 18, y: lock.maxY + 6, width: 49, height: 52)
             // Keep the full 44pt touch target inside the screen. A 35pt band
             // centred at 21.5pt put its accessibility bounds above the window,

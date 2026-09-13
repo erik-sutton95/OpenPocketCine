@@ -18,6 +18,10 @@ Holding or dragging a camera readout opens the same full drawer and details;
 releasing that original touch applies the selected value.
 Hold Record to open shooting mode.
 
+The camera battery gauge shows the percentage reported by your Osmo, or a dash
+when unavailable. Top capture settings, STBY and timecode align in one row;
+Lock matches the Settings and Media button size.
+
 Floating controls use blurred translucent panels with sharp labels and icons.
 Reduce Transparency uses solid panels. Some live-video paths use the system's
 blur treatment until decoded picture samples are available.

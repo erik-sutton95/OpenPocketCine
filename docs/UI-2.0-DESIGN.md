@@ -64,6 +64,16 @@ route change must retain the production live-session lifetime beneath it.
 | Switch | ordinary 38×22 with 18 knob; dense display-switch 30×18 with 14 knob; 2 padding | 1370, 1072 |
 | Sliders | 4 track, 15 thumb (playback 13), min 34 interaction row | 1022, 525 |
 
+The subsequent lock-control review aligns Lock with Settings on the same
+vertical center, including phones without a cutout. Lock keeps the same tile
+and touch area as Settings and Media; its taller Lucide outline uses a 26/54
+icon-to-tile ratio to match their apparent size.
+
+The top capture settings, tally and timecode share a vertical center. In landscape,
+the tally/timecode group moves left by at least 8 points and stays 12 points inside
+the picture's right edge. Osmo camera battery gauges show the reported percentage;
+unknown readings show a dash, with bars reserved for level-only inputs.
+
 ### Blurred surfaces
 
 UI 2.0 uses heavily blurred translucent surfaces. The operator explicitly

@@ -49,6 +49,15 @@ final class MonitorUIFlowTests: XCTestCase {
             let settingsFrame = app.buttons["monitor.system.settings"].frame
             XCTAssertEqual(lockFrame.width, settingsFrame.width, accuracy: 0.5)
             XCTAssertEqual(lockFrame.height, settingsFrame.height, accuracy: 0.5)
+            XCTAssertEqual(lockFrame.midY, settingsFrame.midY, accuracy: 0.5)
+            let format = app.buttons["monitor.capture.format"]
+            let tally = app.descendants(matching: .any)["monitor.recording.readout"].firstMatch
+            XCTAssertTrue(tally.exists)
+            XCTAssertEqual(format.frame.midY, tally.frame.midY, accuracy: 1)
+            let cameraBattery = app.descendants(matching: .any)["monitor.telemetry.camera"]
+                .firstMatch
+            XCTAssertTrue(cameraBattery.exists)
+            XCTAssertTrue(cameraBattery.label.hasPrefix("Camera battery "))
             capture("monitor-\(orientation.rawValue)")
         }
     }

@@ -54,15 +54,16 @@ object MonitorLayoutPolicy {
             MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
     }
 
-    /** Extra STBY/timecode push into the picture, past the mockup's pictureTop+8. */
-    const val FEED_READOUT_INSET = 8f
+    /** Landscape readouts share the format row's center and stay inside the picture. */
+    fun recordingReadoutTrailingInset(statusRight: Float, pictureRight: Float): Float =
+        max(8f, statusRight - pictureRight + 12f)
     /** Landscape cutout-phone lock/settings/media drop, as a fraction of HUD height. */
     const val CUTOUT_CORNER_INSET = 0.025f
 
     fun portraitReadoutTop(tablet: Boolean, safeTop: Float, statusTop: Float, pictureTop: Float): Float {
         if (tablet) return 12f
         val gaugeTop = if (safeTop > 20f) max(4f, statusTop - 16f) else 4f
-        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f + FEED_READOUT_INSET)
+        return max(max(if (safeTop > 20f) 50f else 8f, gaugeTop + 36f), pictureTop + 8f)
     }
 
     fun cutoutPhoneCornerInset(viewportHeight: Float, tablet: Boolean, hasDisplayCutout: Boolean): Float =

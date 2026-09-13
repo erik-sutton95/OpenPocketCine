@@ -22,10 +22,9 @@ struct FieldMonitorStatusChrome: View {
                             model.session.status.timecodeClock,
                             fontSize: layout.presentation?.tablet == true ? 25 : 23
                         )
-                        .offset(y: layout.presentation?.recordingReadoutInset ?? 0)
                     }
                     HStack {
-                        tally.offset(y: layout.presentation?.recordingReadoutInset ?? 0)
+                        tally
                         Spacer(minLength: 4)
                         Button("REC SETUP") { if !locked { model.captureSheet = .resolution } }
                             .font(MonitorTheme.font(12, weight: .semibold))
@@ -69,7 +68,7 @@ struct FieldMonitorStatusChrome: View {
                                 fontSize: layout.presentation?.tablet == true ? 25 : 23)
                         }
                     }
-                    .offset(y: layout.presentation?.recordingReadoutInset ?? 0)
+                    .padding(.trailing, layout.presentation?.recordingReadoutTrailingInset ?? 8)
                 }
             }
         }
@@ -95,6 +94,7 @@ struct FieldMonitorStatusChrome: View {
             .background(.black.opacity(0.65), in: Capsule())
             .fixedSize()
             .accessibilityLabel(status.isRecording ? "Recording" : "Standby")
+            .accessibilityIdentifier("monitor.recording.readout")
         }
     }
 
@@ -242,17 +242,23 @@ struct FieldMonitorGauges: View {
             .accessibilityLabel(
                 "Live link \(model.session.liveSignalBars) of 4 bars, \(model.session.liveFPS) frames per second"
             )
-            gauge(icon: .smartphone, value: phonePercent, bars: 0, color: .mint)
-                .accessibilityLabel(
-                    "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
+            gauge(
+                icon: .smartphone, value: phonePercent < 0 ? "—" : String(phonePercent),
+                bars: 0, color: .mint
+            )
+            .accessibilityLabel(
+                "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
             let percent = model.session.status.batteryPercent
             gauge(
-                icon: .camera, value: nil, bars: percent < 0 ? 0 : Int(ceil(Double(percent) / 25)),
+                icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—", bars: 0,
                 color: percent <= 20
                     ? MonitorTheme.recording : percent <= 40 ? LiveDesign.amber : LiveDesign.good
             )
             .accessibilityLabel(
-                "Camera battery \(percent >= 0 ? String(percent) : "unknown") percent")
+                (0...100).contains(percent)
+                    ? "Camera battery \(percent) percent" : "Camera battery unavailable"
+            )
+            .accessibilityIdentifier("monitor.telemetry.camera")
         }
         .onAppear {
             UIDevice.current.isBatteryMonitoringEnabled = true
@@ -268,7 +274,7 @@ struct FieldMonitorGauges: View {
         phonePercent = value < 0 ? -1 : Int((value * 100).rounded())
     }
 
-    private func gauge(icon: OpcIcon, value: Int?, bars: Int, color: Color) -> some View {
+    private func gauge(icon: OpcIcon, value: String?, bars: Int, color: Color) -> some View {
         let axis =
             horizontal ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 5))
         return axis {
@@ -276,7 +282,7 @@ struct FieldMonitorGauges: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 2).strokeBorder(color, lineWidth: 1)
                 if let value {
-                    Text(value < 0 ? "—" : String(value)).font(
+                    Text(value).font(
                         MonitorTheme.font(tablet ? 9 : 8, weight: .semibold))
                 } else {
                     HStack(spacing: 2) {

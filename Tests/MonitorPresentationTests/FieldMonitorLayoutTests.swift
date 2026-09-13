@@ -22,6 +22,7 @@ struct FieldMonitorLayoutTests {
                 #expect(layout.focusReset.maxX < layout.stick.x)
                 #expect(layout.focusReset.maxY <= layout.values.y)
                 #expect(layout.picture.width > 0 && layout.picture.height > 0)
+                #expect(layout.lock.midY == layout.settings.midY)
                 if portrait { #expect(layout.record.midX == layout.viewport.midX) }
             }
         }
@@ -89,14 +90,17 @@ struct FieldMonitorLayoutTests {
                         trailing: cutoutOnRight ? inset : 0))
                 #expect(layout.settings.y > 8 + height * 0.02)
                 #expect(layout.settings.y < 8 + height * 0.03)
-                #expect(layout.lock.y > 12 + height * 0.02)
+                #expect(layout.lock.midY == layout.settings.midY)
                 #expect(layout.lock.width == layout.settings.width)
                 #expect(layout.lock.height == layout.settings.height)
                 #expect(layout.media.width == layout.settings.width)
                 #expect(layout.media.height == layout.settings.height)
                 #expect(layout.media.y == layout.settings.maxY + 8)
                 #expect(layout.gauges.y >= layout.lock.maxY + 6)
-                #expect(layout.status.midY + layout.recordingReadoutInset > layout.picture.y)
+                #expect(layout.status.midY > layout.picture.y)
+                #expect(
+                    layout.status.maxX - layout.recordingReadoutTrailingInset <= layout.picture.maxX
+                        - 12)
             }
         }
     }

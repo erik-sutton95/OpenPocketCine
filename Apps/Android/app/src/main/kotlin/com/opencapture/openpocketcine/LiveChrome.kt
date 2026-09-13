@@ -992,16 +992,16 @@ data class LiveMonitorLayout(
                 val top = if (tablet) 12f else if (max(safeLeading, safeTrailing) < 20f) 52f else 8f
                 val cornerDrop = com.opencapture.monitorui.MonitorLayoutPolicy.cutoutPhoneCornerInset(
                     vh, tablet, hasDisplayCutout)
-                val readoutY = 12f + com.opencapture.monitorui.MonitorLayoutPolicy.FEED_READOUT_INSET
-                val lockY = 12f + cornerDrop
+                val readoutY = if (tablet) 4f else 0f
                 val stackTop = top + cornerDrop
+                val lockY = stackTop
                 val valuesInset = if (tablet) 140f else 112f
                 layout = layout.copy(
                     lock = ChromeRect(edge, lockY, btn, btn),
                     battery = ChromeRect(edge, lockY + btn + 8f, 46f, 54f),
                     topDeck = ChromeRect(max(72f, feed.minX + 12f), readoutY,
                         max(0f, (if (tablet) buttonX - btn - 8f else buttonX) - 12f -
-                            max(72f, feed.minX + 12f)), if (vw < 760f) 46f else 35f),
+                            max(72f, feed.minX + 12f)), if (tablet) 46f else 44f),
                     settings = ChromeRect(if (tablet) buttonX - btn - 8f else buttonX, stackTop, btn, btn),
                     media = ChromeRect(buttonX, if (tablet) stackTop else stackTop + btn + 8f, btn, btn),
                     record = ChromeRect(recordX, recordY, record, record),
@@ -1285,7 +1285,8 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
             icon = OpcIcon.LOCK,
             contentDescription = null,
             tint = tint,
-            modifier = Modifier.fillMaxSize(.54f),
+            // Match the reference's visible glyph height, retaining the full tile/touch area.
+            modifier = Modifier.fillMaxSize(26f / 54f),
         )
     }
 }

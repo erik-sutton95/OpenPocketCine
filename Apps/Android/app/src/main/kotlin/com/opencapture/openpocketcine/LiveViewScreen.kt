@@ -1297,6 +1297,8 @@ internal fun LandscapeChrome(
                     onToggleStorage = onToggleStorage,
                     onOpen = { if (!uiLocked && hits) onSheet(if (sheet == it) null else it) },
                     maxWidth = layout.topDeck.width,
+                    readoutTrailingInset = com.opencapture.monitorui.MonitorLayoutPolicy.recordingReadoutTrailingInset(
+                        layout.topDeck.maxX, layout.picture.maxX),
                     showsTimecode = capabilities.timecode,
                     editing = editing,
                     onChipFrame = onStatusChipFrame,
@@ -1469,6 +1471,7 @@ private fun LiveTopDeck(
     onToggleStorage: () -> Unit,
     onOpen: (LiveSheet) -> Unit,
     maxWidth: Float,
+    readoutTrailingInset: Float,
     showsTimecode: Boolean = true,
     editing: PocketDispMode? = null,
     onChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
@@ -1516,7 +1519,8 @@ private fun LiveTopDeck(
                 modifier = Modifier.chromeClickable(enabled = enabled) { onOpen(LiveSheet.FORMAT) })
         }
         }
-        androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(10.dp),
+        androidx.compose.foundation.layout.Row(Modifier.padding(end = readoutTrailingInset.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
         if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
             Box(chipMod(PocketDispSection.REC_READOUT)) { RecChip(status.isRecording, status.recordElapsedSec) }

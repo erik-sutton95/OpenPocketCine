@@ -38,9 +38,10 @@ fun MonitorTelemetry(
             "Live view $fps frames per second, $signalBars of 4 delivery bars", horizontal)
         TelemetryGauge(OpcIcon.SMARTPHONE, Color(0xFF3FE0C7), phonePercent / 100f,
             if (phonePercent >= 0) "Phone battery $phonePercent percent" else "Phone battery unavailable",
-            horizontal, phonePercent.takeIf { it in 0..100 }?.toString())
+            horizontal, phonePercent.takeIf { it in 0..100 }?.toString() ?: "—")
         TelemetryGauge(OpcIcon.CAMERA, LiveDesign.amber, cameraPercent / 100f,
-            if (cameraPercent >= 0) "Camera battery $cameraPercent percent" else "Camera battery unavailable", horizontal)
+            if (cameraPercent in 0..100) "Camera battery $cameraPercent percent" else "Camera battery unavailable",
+            horizontal, cameraPercent.takeIf { it in 0..100 }?.let { "$it%" } ?: "—")
     }
     if (horizontal) Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) { gauges() }
     else Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) { gauges() }

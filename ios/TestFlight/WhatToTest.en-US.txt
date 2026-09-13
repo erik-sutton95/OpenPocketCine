@@ -17,6 +17,8 @@ New and changed
 
 Fixes
 
+- Lock matches Settings and Media, with Lock and Settings aligned. Top capture settings, STBY and timecode align; readouts sit inside the feed. Camera battery shows the Osmo percentage.
+
 - iPhone corner controls clear rounded edges. Panels are blurred and translucent, text shadows are tighter, and audio meters are slim. Rapid View Assist tab changes keep preview work bounded.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
 - Pocket 3 improvements cover live view, reconnects, camera settings and access to newly recorded clips, including files on its memory card.

@@ -22,6 +22,10 @@ new discoveries. Select a camera to see its connection progress and **Cancel**.
 
 ## Field Monitor interface
 
+The camera battery gauge shows the percentage reported by your Osmo, or a dash
+when unavailable. Top capture settings, STBY and timecode align in one row;
+Lock matches the Settings and Media button size.
+
 The native UI uses Sora typography, cyan controls and dark panels. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture

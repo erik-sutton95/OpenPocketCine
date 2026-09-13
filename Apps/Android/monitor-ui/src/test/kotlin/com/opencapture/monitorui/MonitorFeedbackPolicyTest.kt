@@ -58,7 +58,7 @@ class MonitorFeedbackPolicyTest {
     @Test fun portraitTimecodeAnswersToCutoutAndPictureWithoutAnExtraHeaderLift() {
         assertEquals(71f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 10f))
         assertEquals(40f, MonitorLayoutPolicy.portraitReadoutTop(false, 0f, 0f, 10f))
-        assertEquals(216f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
+        assertEquals(208f, MonitorLayoutPolicy.portraitReadoutTop(false, 59f, 51f, 200f))
         assertEquals(12f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
     }
 

@@ -75,8 +75,12 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   it does not approximate blur by adding a more opaque drawer.
 - Lock, Settings and Media share their visible size and 14 pt/dp corners.
   On cutout phones in landscape, their top positions move down by 2.5% of
-  viewport height to clear rounded screen corners. The tally/timecode sit
-  another 8 pt/dp into the picture; format actions retain their touch targets.
+  viewport height to clear rounded screen corners. Lock and Settings share a
+  vertical center; Lock's Lucide glyph uses 26/54 of the tile for optical balance.
+  Top capture settings, tally and timecode share a vertical center. The landscape
+  tally/timecode move left by at least 8 pt/dp, staying 12 pt/dp inside the picture.
+  Osmo camera batteries show the reported percentage, including 0%; missing
+  readings show a dash. Only level-based inputs use battery bars.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
 - Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
   floating false-color reference key open at
@@ -403,6 +407,10 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   thermal and long-session proof remains pending.
 - Android: build, unit tests and lint plus emulator layout review. Physical Android
   hardware and camera-session proof pending.
+- The lock/battery/top-readout corrections are installed and launched on a real
+  iPhone. Its UI test runner timed out enabling automation, so automated physical
+  alignment proof remains pending. The matching Android corrections pass build,
+  unit tests and lint; physical Android visual review remains pending.
 - Both shells use the reference's fixed heavy blur, saturation and tint when a
   passive displayed-look source is available. These surfaces have no Liquid Glass
   lens or refraction effects. Foreground controls stay sharp. Low-resolution source
