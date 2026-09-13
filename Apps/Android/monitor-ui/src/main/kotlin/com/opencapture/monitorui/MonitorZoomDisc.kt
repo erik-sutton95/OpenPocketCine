@@ -169,7 +169,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                     scaleY = scaleX
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
                     alpha = motion }
-                .background(Color(0xFF121416).copy(alpha = .72f),
+                .monitorMaterial(MonitorMaterial.Zoom,
                     RoundedCornerShape(topStart = radius.dp, bottomStart = radius.dp))) {
                 Canvas(Modifier.fillMaxSize().semantics {
                     contentDescription = "Zoom ${label(factor)}"

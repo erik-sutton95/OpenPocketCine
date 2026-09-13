@@ -26,7 +26,7 @@ separate iOS and Android lists.
   New windowed tools start centered; audio is movable with vertical/horizontal
   slim bars and optional channel dB readings. Tapping and dragging camera values
   share the full bottom-center drawer, with reference ruler animations,
-  translucent glass, tighter dark readout shadows and corrected corner spacing.
+  blurred translucent surfaces, tighter dark readout shadows and corrected corner spacing.
   Assist previews retain their admission limit across rapid tabs and remounts.
   Android settings switches announce their labels and on/off states.
   Pocket 4 Pro zoom separates 1×/3× taps from 6×/12× double taps.

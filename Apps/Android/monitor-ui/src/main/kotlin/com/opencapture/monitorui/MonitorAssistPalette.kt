@@ -125,7 +125,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     Box(modifier, contentAlignment = Alignment.BottomStart) {
         Row(Modifier.graphicsLayer { alpha = if (fullMounted) 0f else 1f }
             .then(if (fullMounted) Modifier.clearAndSetSemantics { } else Modifier)
-            .clip(RoundedCornerShape(14.dp)).background(MonitorPalette.compactGlass).padding(4.dp),
+            .clip(RoundedCornerShape(14.dp)).monitorMaterial(MonitorMaterial.Compact).padding(4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 if (portrait) expandHit(false)
@@ -145,7 +145,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
                         CornerRadius(14.dp.toPx())))
                 }
                 clip = true
-            }.background(MonitorPalette.expandedGlass).padding(4.dp)) {
+            }.monitorMaterial(MonitorMaterial.Expanded).padding(4.dp)) {
                 if (portrait) Column(horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     expandHit(true)

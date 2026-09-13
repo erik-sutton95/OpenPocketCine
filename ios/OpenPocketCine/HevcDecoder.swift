@@ -247,6 +247,26 @@ final class HevcDecoder {
     private var lastReplacesIdentity = false
     /// Last VT / assist source. LUT-off enqueues this on the layer so the canvas never goes black.
     private var lastDecodedBuffer: CVPixelBuffer?
+    /// Passive chrome input. Never starts VT, requests an IDR, or changes the
+    /// display owner; a compressed-layer-only session uses the public fallback.
+    var backdropSource: CVPixelBuffer? {
+        displayedImageRemoved ? nil : lastDecodedBuffer
+    }
+
+    var backdropEffects: LiveImageEffects {
+        var result = effects
+        result.mirror = presentedPictureFlip ?? pictureFlip
+        // Until the current Metal product owns the picture, use identity.
+        if result.needsGPUFeed, processedFeed?.hasPresentedFrame != true {
+            result.lutDimension = 0
+            result.lutRGBA = Data()
+            result.peaking = false
+            result.zebra = false
+            result.falseColor = false
+            result.desqueezeFactor = 1
+        }
+        return result
+    }
     private var lastDecodedTimeNs: Int64 = 0
     private var lastPresentHealthLogAt: Date?
     private var builtVPS: [UInt8]?

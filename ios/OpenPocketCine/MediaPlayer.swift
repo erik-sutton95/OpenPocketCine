@@ -521,6 +521,33 @@ struct MediaPlayerView: View {
             .zIndex(2)
         }
         .animation(.easeInOut(duration: 0.28), value: active.id)
+        .monitorVideoBackdrop(
+            renderer: model.playbackBackdrop,
+            configuration: [
+                MonitorVideoBackdropConfiguration(
+                    source: ObjectIdentifier(playbackFeed), generation: playerLoadGeneration,
+                    effects: model.assist.playbackEffects,
+                    geometry: [
+                        videoDisplaySize.width, videoDisplaySize.height,
+                        zoom.scale, zoom.offset.width, zoom.offset.height,
+                    ])
+            ],
+            enabled: playerVisible && isClipReady, surroundRGB: 0x000000
+        ) { size in
+            guard let buffer = playbackFeed.backdropSource() else { return [] }
+            let rect = PlaybackVideoLayout.aspectFitRect(
+                videoSize: videoDisplaySize, in: CGRect(origin: .zero, size: size))
+            let effects = model.assist.playbackEffects
+            return [
+                MonitorVideoBackdropSource(
+                    buffer: buffer, effects: effects,
+                    frame: MonitorVideoBackdropSource.displayedFrame(
+                        sourceAspect: videoDisplaySize.width / max(1, videoDisplaySize.height),
+                        effects: effects,
+                        in: rect, zoom: zoom.scale, offset: zoom.offset),
+                    clip: rect)
+            ]
+        }
         .statusBarHidden()
         .preferredColorScheme(.dark)
         .onAppear {

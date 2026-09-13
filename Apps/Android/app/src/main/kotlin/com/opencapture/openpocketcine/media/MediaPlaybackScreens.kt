@@ -2,6 +2,11 @@
 
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.LocalMonitorBackdrops
+import com.opencapture.monitorui.monitorBackdropSource
+import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
@@ -78,7 +83,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
@@ -127,12 +131,6 @@ fun MediaPhotoViewer(
     val photoConfig = LocalConfiguration.current
     val favorite = controller.isFavorite(file)
     val glass = rememberPlaybackMonitorGlass()
-    val recorded =
-        if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
-            Modifier.layerBackdrop(glass.layerBackdrop)
-        } else {
-            Modifier
-        }
 
     LaunchedEffect(file.id) {
         loading = true
@@ -149,13 +147,22 @@ fun MediaPhotoViewer(
         loading = false
     }
 
-    CompositionLocalProvider(LocalMonitorGlass provides glass) {
+    val backdrop = rememberPhotoBackdrop(bitmap, file.id)
+    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop),
+        com.opencapture.monitorui.LocalMonitorBackdropSurround provides LiveDesign.feedWell) {
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         val image = bitmap
         if (image != null) {
-            BoxWithConstraints(Modifier.fillMaxSize().then(recorded)) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
                 val widthPx = constraints.maxWidth.toFloat()
                 val heightPx = constraints.maxHeight.toFloat()
+                val fit = min(widthPx / image.width, heightPx / image.height)
+                val imageW = image.width * fit * zoom.scale
+                val imageH = image.height * fit * zoom.scale
+                val left = (widthPx - imageW) / 2f + zoom.offsetX
+                val top = (heightPx - imageH) / 2f + zoom.offsetY
+                Box(Modifier.fillMaxSize().monitorBackdropSource(backdrop,
+                    imageRect = androidx.compose.ui.geometry.Rect(left, top, left + imageW, top + imageH)))
                 Image(
                     image.asImageBitmap(),
                     contentDescription = file.filename,
@@ -331,6 +338,7 @@ fun MediaPlayerScreen(
     val meterBox = remember { AudioLevelTapBox() }
     val meterSink = remember { PlaybackPcmBufferSink(meterBox) }
     val glass = remember { MonitorGlass(GlassTier.FLAT) }
+    val backdrop = rememberMonitorBackdropFeed(active.id, enabled = ready)
     val status by model.session.status.collectAsState()
     var decodeWidth by remember { mutableIntStateOf(1280) }
     var decodeHeight by remember { mutableIntStateOf(720) }
@@ -574,7 +582,8 @@ fun MediaPlayerScreen(
         active = playlist[next]
     }
 
-    CompositionLocalProvider(LocalMonitorGlass provides glass) {
+    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop.source),
+        com.opencapture.monitorui.LocalMonitorBackdropSurround provides LiveDesign.feedWell) {
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val container =
@@ -598,6 +607,7 @@ fun MediaPlayerScreen(
             ) {
                 PlaybackFeedView(
                     player = player,
+                    backdrop = backdrop,
                     plan = effectsPlan,
                     mirrored = mirror < 0f,
                     zoom = zoom,
@@ -1103,7 +1113,7 @@ private fun PlaybackConformButton(
             Popup(popupPositionProvider = provider, onDismissRequest = { onMenuOpenChange(false) },
                 properties = PopupProperties(focusable = true)) {
                 Column(Modifier.width(width).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(Color(0xFF141618).copy(alpha = .62f)).navigationBarsPadding()
+                    .monitorMaterial(MonitorMaterial.Expanded).navigationBarsPadding()
                     .padding(horizontal = 14.dp, vertical = 11.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {

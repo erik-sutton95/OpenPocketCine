@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -439,7 +441,7 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
         Modifier
             .width(EDITOR_WIDTH_DP.dp)
             .heightIn(max = maxHeightDp.dp)
-            .background(MonitorPalette.expandedGlass, RoundedCornerShape(16.dp))
+            .monitorMaterial(MonitorMaterial.Expanded, RoundedCornerShape(16.dp))
             .verticalScroll(rememberScrollState())
             .padding(top = 10.dp, start = 12.dp, end = 12.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),

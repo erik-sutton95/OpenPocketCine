@@ -55,10 +55,9 @@ fun MonitorRecordLamp(recording: Boolean, modifier: Modifier = Modifier) {
         tween(MonitorMotion.REC_MORPH_MS, easing = MonitorMotion.Soft), label = "record-shape")
     val pulse = monitorPulsePhase(1600, enabled = recording)
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
-    Canvas(modifier.fillMaxSize()) {
+    Canvas(modifier.fillMaxSize().monitorMaterial(MonitorMaterial.Record, androidx.compose.foundation.shape.CircleShape)) {
         val diameter = size.minDimension
         val disc = (diameter - 10.dp.toPx()).coerceAtLeast(0f)
-        drawCircle(MonitorPalette.recHousing, radius = diameter / 2)
         drawCircle(Color.White.copy(alpha = .16f), radius = diameter / 2 - .5.dp.toPx(),
             style = Stroke(1.dp.toPx()))
         drawCircle(MonitorPalette.recording, radius = disc / 2, style = Stroke(4.5.dp.toPx()))

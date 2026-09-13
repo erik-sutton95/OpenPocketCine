@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,7 +89,6 @@ import kotlinx.coroutines.withContext
 
 private val PanelShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 private val ChipShape = RoundedCornerShape(percent = 50)
-private val PanelFill = LiveDesign.scopePlate
 private val Boundary = Color(220 / 255f, 235 / 255f, 225 / 255f, 0.8f)
 private val ClipColor = Color(255 / 255f, 150 / 255f, 142 / 255f, 0.8f)
 private val MiddleColor = Color(246 / 255f, 241 / 255f, 226 / 255f, 0.8f)
@@ -218,7 +219,7 @@ internal fun MovableAssistPanel(
                     spotColor = Color.Black.copy(alpha = 0.34f),
                 )
                 .clip(plateShape)
-                .then(if (fillPlate) Modifier.background(LiveDesign.scopePlate) else Modifier)
+                .then(if (fillPlate) Modifier.monitorMaterial(MonitorMaterial.Scope, plateShape) else Modifier)
                 .onGloballyPositioned { panelCoords = it }
                 .pointerInput(tool, enabled, base, canvas, placementBounds, density.density) {
                     detectPanelDrag(
@@ -403,7 +404,6 @@ internal fun HistogramPanel(state: LiveAssistState, modifier: Modifier = Modifie
     val traffic = bundle.traffic
     Canvas(modifier.fillMaxSize()) {
         val d = density
-        drawRect(PanelFill)
         val plot = HistogramAssist.plotRect(this.size.width, this.size.height, d)
         for (step in 1 until 4) {
             val y = plot.minY + plot.height * step / 4f
@@ -581,13 +581,12 @@ private fun DrawScope.drawWaveGuides(plot: AssistRect, guides: ScopeGuides, colo
 }
 
 /**
- * One 0.72 plate, then traces into [dstPlot] (same rect as the 0 / 100 IRE
+ * Traces into [dstPlot] over the shared scope material (same rect as the 0 / 100 IRE
  * guides). The baked image is plot-sized and transparent aside from ticks, so
  * it does not stack a second plate (the black square) and L-scale cannot
  * drift IRE 100.
  */
 private fun DrawScope.blitScopePlot(trace: ImageBitmap?, dstPlot: AssistRect) {
-    drawRect(PanelFill)
     if (trace == null) return
     drawImage(
         trace,
@@ -840,8 +839,9 @@ private fun zoneColor(db: Double): Color =
         else -> MeterGreen.copy(alpha = 0.9f)
     }
 
+@Composable
 internal fun Modifier.scopePanelChrome(): Modifier =
-    clip(PanelShape).background(PanelFill).border(1.dp, LiveDesign.hairline, PanelShape)
+    monitorMaterial(MonitorMaterial.Scope, PanelShape).border(1.dp, LiveDesign.hairline, PanelShape)
 
 /** Plot origin in root pixels — same rect the Canvas punches, so Vulkan fill matches. */
 private fun Modifier.reportGpuPlot(

@@ -4,7 +4,6 @@ import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
@@ -15,16 +14,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.highlight.HighlightStyle
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 
-// UI 2.0 composites translucent monitor chrome without copying camera frames.
-// Page surfaces remain opaque. The compatibility gate is retained for legacy
-// callers, but production live/playback choose FLAT and never sample a backdrop.
+// UI 2.0 uses the shared controlled blur renderer and passive low-resolution image sources.
+// Legacy Kyant capability types remain for callers outside the floating monitor chrome.
 
 private const val TAG = "OpcGlass"
 
@@ -88,29 +82,30 @@ class MonitorGlass(
 val LocalMonitorGlass = compositionLocalOf<MonitorGlass?> { null }
 
 /**
- * UI 2.0 uses composited tint plates. These compatibility modifiers let existing
- * media/assist controls share the new renderer without changing their ownership
- * or reattaching a decoder surface. No backdrop sampling runs in these modifiers.
+ * Existing media/assist controls use the shared controlled material renderer.
+ * Source sampling belongs to the shell and never to an individual widget.
  */
 fun Modifier.panelGlass(shape: Shape = ChromeShape): Modifier =
     background(LiveDesign.surface, shape).border(1.dp, LiveDesign.hairline, shape)
 
 @Composable
-fun Modifier.glass(shape: Shape = ChromeShape): Modifier = panelGlass(shape)
+fun Modifier.glass(shape: Shape = ChromeShape): Modifier =
+    if (com.opencapture.monitorui.LocalMonitorBackdrops.current.isEmpty()) panelGlass(shape)
+    else monitorMaterial(MonitorMaterial.Compact, shape)
 
 @Composable
 fun Modifier.overlayGlass(shape: Shape = ChromeShape): Modifier = pickerPanelGlass(shape)
 
 @Composable
 fun Modifier.liveChromeGlass(shape: Shape = ChromeShape): Modifier =
-    background(com.opencapture.monitorui.MonitorPalette.compactGlass, shape)
+    monitorMaterial(MonitorMaterial.Compact, shape)
 
 @Composable
 fun Modifier.playbackBarGlass(shape: Shape = ChromeShape): Modifier = liveChromeGlass(shape)
 
 @Composable
 fun Modifier.pickerPanelGlass(shape: Shape = ChromeShape): Modifier =
-    background(com.opencapture.monitorui.MonitorPalette.expandedGlass, shape)
+    monitorMaterial(MonitorMaterial.Expanded, shape)
 
 fun Modifier.chipGlass(shape: Shape = ChromeShape): Modifier =
     background(LiveDesign.tile, shape)

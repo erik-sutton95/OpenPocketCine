@@ -136,6 +136,34 @@ struct MultiviewView: View {
         }
         .frame(width: viewport.size.width, height: viewport.size.height)
         .background(MonitorTheme.canvas)
+        .monitorVideoBackdrop(
+            renderer: session.backdropRenderer,
+            configuration: session.tiles.enumerated().map { index, tile in
+                let frame = layout.tiles[index]
+                return MonitorVideoBackdropConfiguration(
+                    source: ObjectIdentifier(tile.decoder),
+                    generation: Int(tile.sampleBus.inspectorSourceEpoch), effects: tile.effects,
+                    geometry: [
+                        frame.x, frame.y, frame.width, frame.height,
+                        tile.pose.poseViewFlip ? 1 : 0, session.feedAspect == .fill ? 1 : 0,
+                    ])
+            },
+            enabled: liveTile == nil && !showNetwork && adding == nil && !session.closing
+        ) { _ in
+            session.tiles.enumerated().compactMap { index, tile in
+                guard tile.liveModel == nil, tile.camera != nil,
+                    let buffer = tile.decoder.backdropSource
+                else { return nil }
+                let rect = layout.tiles[index].cgRect
+                let effects = tile.decoder.backdropEffects
+                return MonitorVideoBackdropSource(
+                    buffer: buffer, effects: effects,
+                    frame: MonitorVideoBackdropSource.displayedFrame(
+                        sourceAspect: tile.decoder.pictureAspect, effects: effects, in: rect,
+                        fill: session.feedAspect == .fill),
+                    clip: rect)
+            }
+        }
     }
 
     private func sessionControls(horizontal: Bool, cellSize: CGFloat) -> some View {

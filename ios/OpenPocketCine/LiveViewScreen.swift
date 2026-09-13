@@ -333,6 +333,37 @@ struct LiveViewScreen: View {
         }
         .environment(\.colorScheme, .dark)
         .ignoresSafeArea()
+        .monitorVideoBackdrop(
+            renderer: model.liveBackdrop,
+            configuration: [
+                MonitorVideoBackdropConfiguration(
+                    source: ObjectIdentifier(model.session.decoder),
+                    generation: Int(model.frameSamples.inspectorSourceEpoch),
+                    effects: model.assist.effects,
+                    geometry: [
+                        layout.onFeed.minX, layout.onFeed.minY,
+                        layout.onFeed.width, layout.onFeed.height,
+                        model.livePictureViewFlip ? 1 : 0,
+                        model.portraitFeedAspect == .fill ? 1 : 0,
+                    ])
+            ],
+            enabled: model.liveOperatorPanel == nil && !model.assist.gradesClip
+                && !model.isWatchingFeed
+                && !model.session.isFeedWarming
+        ) { _ in
+            let decoder = model.session.decoder
+            guard let buffer = decoder.backdropSource else { return [] }
+            let effects = decoder.backdropEffects
+            return [
+                MonitorVideoBackdropSource(
+                    buffer: buffer, effects: effects,
+                    frame: MonitorVideoBackdropSource.displayedFrame(
+                        sourceAspect: decoder.pictureAspect, effects: effects, in: layout.onFeed,
+                        fill: layout.presentation?.portrait == true
+                            && model.portraitFeedAspect == .fill && decoder.pictureAspect >= 1),
+                    clip: layout.onFeed)
+            ]
+        }
     }
 
     private func chromeEditBannerY(_ layout: LiveMonitorLayout) -> CGFloat {

@@ -1,44 +1,17 @@
 #if os(iOS)
+    import MonitorPresentation
     import SwiftUI
+    import UIKit
 
-    /// Compositor-owned material: this never snapshots, subscribes to, or filters
-    /// camera frames. Page backgrounds remain opaque; only floating chrome uses it.
-    public enum MonitorGlassDensity {
-        /// Compact chrome — lock, settings, media, DISP, collapsed cluster.
-        case compact
-        /// Expanded palette, capture drawer, assist/gimbal pane.
-        case expanded
-        /// Clip info / trailing metadata.
-        case information
-        /// Share / delivery sheet.
-        case delivery
-        /// Zoom half-disc.
-        case zoom
-        /// Scope plates and the audio meter.
-        case scope
-        /// White-tinted record housing with its inset ring.
-        case recording
+    extension MonitorGlassDensity {
+        public var tint: Color { MonitorTheme.color(tintRGB) }
 
-        /// Overlay alpha of the mockup fill (`rgba(20,22,24,α)` except zoom/scope).
-        public var overlayOpacity: Double {
-            switch self {
-            case .compact: 0.52
-            case .expanded: 0.62
-            case .information: 0.82
-            case .delivery: 0.86
-            case .zoom: 0.72
-            case .scope: 0.70
-            case .recording: 0.08
-            }
-        }
-
-        public var tint: Color {
-            switch self {
-            case .zoom: MonitorTheme.color(0x121416)
-            case .scope: Color(red: 6 / 255, green: 9 / 255, blue: 8 / 255)
-            case .recording: .white
-            default: MonitorTheme.color(0x141618)
-            }
+        /// Public UIKit fallback includes a dark tint (measured white-side
+        /// attenuation about 0.345 on iOS 26). Compensate that contribution,
+        /// keeping its full-strength blur. Black-side lift and radius remain
+        /// OS-defined; only the injected passive-image path is reference-exact.
+        fileprivate var fallbackTintOpacity: Double {
+            self == .recording ? 0 : max(0, (overlayOpacity - 0.345) / (1 - 0.345))
         }
 
         fileprivate var hairline: Double {
@@ -52,24 +25,50 @@
         }
     }
 
-    private struct MonitorGlassSurface<S: Shape>: ViewModifier {
+    struct MonitorGlassSurface<S: Shape>: ViewModifier {
         var shape: S
         var density: MonitorGlassDensity
+        var reduceTransparencyOverride: Bool?
         @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+        @Environment(\.monitorBackdrop) private var backdrop
+
+        init(shape: S, density: MonitorGlassDensity, reduceTransparencyOverride: Bool? = nil) {
+            self.shape = shape
+            self.density = density
+            self.reduceTransparencyOverride = reduceTransparencyOverride
+        }
 
         func body(content: Content) -> some View {
             content.background {
-                if reduceTransparency {
+                if reduceTransparencyOverride ?? reduceTransparency {
                     shape.fill(reduceTransparencyFill)
+                } else if let snapshot = backdrop.snapshot, let image = snapshot.image(for: density)
+                {
+                    GeometryReader { proxy in
+                        let frame = proxy.frame(in: .global)
+                        Canvas { context, size in
+                            context.clip(to: Path(CGRect(origin: .zero, size: size)))
+                            context.draw(
+                                Image(decorative: image, scale: 1),
+                                in: CGRect(
+                                    x: backdrop.frame.minX - frame.minX,
+                                    y: backdrop.frame.minY - frame.minY,
+                                    width: backdrop.frame.width, height: backdrop.frame.height))
+                        }
+                    }
+                    .overlay(density.tint.opacity(density.overlayOpacity))
+                    .clipShape(shape)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 } else {
-                    // Material includes its own dark tint. Keep that contribution
-                    // subtle before applying the reference fill, otherwise two
-                    // stacked tints turn a translucent drawer nearly opaque.
-                    // The system compositor still owns all backdrop work.
-                    shape.fill(.ultraThinMaterial)
-                        .opacity(0.18)
-                        .overlay(shape.fill(density.tint.opacity(density.overlayOpacity)))
-                        .environment(\.colorScheme, .dark)
+                    // Public compositor fallback when no passive source exists.
+                    // Its radius/saturation/tint are OS-defined approximations;
+                    // never fade the blur itself and leak sharp video through it.
+                    MonitorCompositorBackdrop()
+                        .overlay(density.tint.opacity(density.fallbackTintOpacity))
+                        .clipShape(shape)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
             .overlay {
@@ -86,6 +85,16 @@
             default: MonitorTheme.canvas
             }
         }
+    }
+
+    private struct MonitorCompositorBackdrop: UIViewRepresentable {
+        func makeUIView(context: Context) -> UIVisualEffectView {
+            let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+            view.isUserInteractionEnabled = false
+            return view
+        }
+
+        func updateUIView(_ view: UIVisualEffectView, context: Context) {}
     }
 
     extension View {

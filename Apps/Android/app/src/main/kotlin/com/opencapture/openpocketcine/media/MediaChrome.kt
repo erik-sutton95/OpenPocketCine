@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeShape
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
@@ -526,7 +528,8 @@ fun MediaTransportIconButton(
         modifier
             .size(width = width, height = height)
             .clip(shape)
-            .background(if (primary) Color.White else if (highlighted) LiveDesign.accentDim else Color(0xFF141618).copy(alpha = .52f), shape)
+            .then(if (primary) Modifier.background(Color.White, shape) else Modifier.monitorMaterial(
+                if (highlighted) MonitorMaterial.Compact.copy(tint = LiveDesign.accentDim) else MonitorMaterial.Compact, shape))
             .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,

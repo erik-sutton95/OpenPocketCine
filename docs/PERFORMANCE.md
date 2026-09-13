@@ -20,8 +20,8 @@ the same PR.
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
 | Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits two enables, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
-| Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. Assists-off is one blit — no 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
-| Floating chrome | iOS native compositor material; Android translucent tint. No application-side full-frame backdrop copy for UI 2.0 chrome. Page surfaces are opaque. | `MonitorUI`, Android `monitor-ui` |
+| Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. No scope histogram work with scopes off; the separate floating-chrome budget can request the small tap. No 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
+| Floating chrome | Controlled Gaussian blur, saturation and tint. One passive displayed-look job per visible source at most 5 Hz, thermal ×3 serious / ×5 critical; admission survives source, option and view changes. iOS canvas products are at most 320 px on their longest side; Android reuses the 213×120-class raw tap and production look shaders. No full-resolution window/swapchain capture, second decoder or per-widget CPU readback. Hidden sources stop backdrop work. Page surfaces remain opaque. | `MonitorUI`, Android `monitor-ui`, platform backdrop source owners |
 | Inspector preview | Only while the visible source’s inspector is open and the scene is active: at most 5 Hz, latest source, downsample to at most 320 px before image processing, one job in flight; session-retained admission preserves its 200 ms floor and occupied slot across tab changes and remounts. Cancellation invalidates results without releasing unfinished work, and expensive LUT preparation happens only after admission. Playback cannot request samples from a hidden live inspector. Scope previews reuse the existing bounded scope products. | `AssistInspectorPreview` |
 | Zoom pinch | Distinct lens ticks at 20 Hz, no ACK wait | [`PARITY.md`](PARITY.md) |
 | Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; a 25 Hz pump publishes native targets to a latest-only mailbox. Native wire emission has a 40 ms minimum interval on the 25 ms ACK timer (typically 20 Hz). Duplicate targets are suppressed; a not-ready socket cannot accumulate a backlog. HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). Motion Control waypoint letters follow the 25 Hz stick budget — not 60 Hz `TimelineView.animation` / `withFrameNanos` on the live canvas (that starved ingest and flashed Reconnecting). Motion Control session progress is 5 Hz; no debug overlay is drawn. Timed-path ticks use monotonic elapsed time; a gap over 120 ms or attitude receipt age over 300 ms aborts the take. Physical precision remains unqualified ([Motion Control takes](programmed-moves.md)). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
@@ -97,9 +97,21 @@ UI thread (`allowsNextDrawableTimeout` on iOS).
 
 ## Hardware
 
-UI 2.0 floating chrome uses platform compositing, not an application-side
-SurfaceView capture loop. iOS Reduce Transparency uses solid plates. Keep the
-legacy Android glass capability policy isolated from the new monitor chrome.
+UI 2.0 floating chrome blurs a bounded passive presentation image, not a
+full-resolution SurfaceView capture. iOS shares four small blur products across
+all seven surface roles. Android records only sampled image pixels into its
+panel render nodes; recording descendant chrome would create a render-graph
+cycle. Foreground controls remain sharp. Source identity, display look and
+placement determine cache validity; cancelling a task cannot release an
+unfinished render slot.
+
+iOS Reduce Transparency uses solid plates. Android rendering capability and
+source availability select an explicit fallback. An iOS compressed-layer-only
+feed must not start a second decoder or trigger a live-enable handoff just to
+provide backdrop pixels. These fallback differences are recorded in
+[UI 2.0 qualification](PARITY.md#ui-20-qualification), not presented as measured
+cross-platform identity. Physical thermal and live-rate qualification remain
+required for this additional presentation work.
 
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
 fallback. GLES `FeedEffectsGlProgram` is the Android decode fallback when

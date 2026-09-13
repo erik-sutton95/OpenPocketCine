@@ -18,6 +18,10 @@ Holding or dragging a camera readout opens the same full drawer and details;
 releasing that original touch applies the selected value.
 Hold Record to open shooting mode.
 
+Floating controls use blurred translucent panels with sharp labels and icons.
+Reduce Transparency uses solid panels. Some live-video paths use the system's
+blur treatment until decoded picture samples are available.
+
 The View Assist palette collapses into the picture corner. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×

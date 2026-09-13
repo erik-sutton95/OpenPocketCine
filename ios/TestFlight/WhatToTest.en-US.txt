@@ -17,7 +17,7 @@ New and changed
 
 Fixes
 
-- iPhone corner controls clear rounded edges. Glass is translucent with tighter dark text shadows; audio meters are slim again. Rapid View Assist tab changes keep preview work bounded.
+- iPhone corner controls clear rounded edges. Panels are blurred and translucent, text shadows are tighter, and audio meters are slim. Rapid View Assist tab changes keep preview work bounded.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
 - Pocket 3 improvements cover live view, reconnects, camera settings and access to newly recorded clips, including files on its memory card.
 - Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.
@@ -29,7 +29,7 @@ Fixes
 
 What to test
 
-- Rotate every UI 2.0 page and drawer on iPhone/iPad. Try camera-value drums, View Assist options, zoom, lock/unlock, media selection and playback.
+- Compare panel blur over bright/dark footage with LUT/scopes off and on. Rotate iPhone/iPad pages and drawers; try value drums, View Assist, zoom, lock, media selection and playback.
 - On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
 - Try Direction Lock and Motion Control, then take over manually. Move scopes to every edge; compare false-color scales and ND units.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.

@@ -403,8 +403,20 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   thermal and long-session proof remains pending.
 - Android: build, unit tests and lint plus emulator layout review. Physical Android
   hardware and camera-session proof pending.
-- Android floating chrome approximates backdrop glass with translucent tint;
-  full-frame backdrop capture is disabled. Scope inspectors reuse the existing sampled
+- Both shells use the reference's fixed heavy blur, saturation and tint when a
+  passive displayed-look source is available. These surfaces have no Liquid Glass
+  lens or refraction effects. Foreground controls stay sharp. Low-resolution source
+  work is shared and bounded to 5 Hz with thermal backoff; no full-resolution
+  backdrop capture or additional decoder is introduced. Scope/guide/chrome graphics
+  drawn above the video are not included in this passive video source, so overlapping
+  overlays do not establish exact whole-window backdrop parity.
+- iOS compressed-layer-only live sessions can lack decoded pixels. Their native
+  compositor fallback has system-defined blur and tint; the UI must not force a
+  decoder handoff or live-enable request just for chrome. Reduce Transparency
+  uses opaque surfaces. Android unsupported hardware/API or unavailable sampled
+  sources use an explicit opaque fallback. These cases do not claim 1:1 material
+  parity. Physical camera-connected blur performance remains unqualified.
+- Android scope inspectors reuse the existing sampled
   scope products. LUT, peaking, false-color and zebra previews reuse the existing raw
   tap and production shaders in a bounded, isolated EGL worker with no second feed tap.
 - iOS inspector previews use the existing sampled source and scope products with

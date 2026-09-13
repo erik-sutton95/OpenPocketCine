@@ -134,6 +134,16 @@ Ramp use tabs within the shared inspector, with the same value drum used by
 capture controls. `MonitorMotion` owns reference timing and easing so shells do
 not tune independent versions of a widget's animation.
 
+UI 2.0 surface policy separates Gaussian blur, saturation and tint from geometry
+and foreground content. Shared widgets consume passive image products and their
+canvas placement; they do not request camera frames. Platform presentation
+owners admit bounded display-look work, reuse the existing frame source and
+invalidate old products when the visible source changes. This lets another
+camera shell reuse the surface renderer without copying decoder or connection
+logic. The [reference contract](UI-2.0-DESIGN.md#blurred-surfaces) defines the
+values; [parity](PARITY.md#ui-20-qualification) records source and platform
+fallbacks, and [performance](PERFORMANCE.md) owns admission limits.
+
 Compose page navigation keeps the content slot in one composition position as
 the rail becomes a portrait tab row; rotation does not remount the page owner.
 Assist and gimbal panes share `MonitorInspector`, and the Motion Control duration

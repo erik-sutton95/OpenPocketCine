@@ -6,13 +6,13 @@ New and changed
 
 Fixes
 
-- Glass is translucent, text shadows are tighter, and audio meters are slim. Wider View Assist options stay the same size between tabs; Record remains reachable above Zoom.
+- Panels use blurred translucent backgrounds, text shadows are tighter, and audio meters are slim. Wider View Assist options stay the same size between tabs; Record remains reachable above Zoom.
 - App return checks camera Wi-Fi. Recovery waits for a new picture, shows its current stage and bounds automatic retries; old control requests cannot cross reconnects.
 - Live rendering synchronizes completed frames with presentation. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
 - Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
 
 What to test
 
-- Rotate UI 2.0 pages and drawers on phones/tablets. Try value drums, rapid View Assist tab changes, audio placement, zoom, lock/unlock, media selection, playback and TalkBack.
+- Check blur over bright/dark footage with LUT/scopes off/on. Rotate pages/drawers; try value drums, rapid assist tabs, audio placement, zoom, lock, media, playback and TalkBack.
 - On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
 - Check joystick after first picture, app return, Wi-Fi changes, Retry/Cancel and reconnects. Test Pocket 3 portrait 3K. Motion Control remains experimental.

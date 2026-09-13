@@ -129,7 +129,7 @@ fun MonitorInspector(
         ) {
             Box(
                 Modifier.width(frame.width.dp).height(frame.height.dp)
-                    .background(MonitorPalette.expandedGlass, shape)
+                    .monitorMaterial(MonitorMaterial.Expanded, shape)
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
                 Column(

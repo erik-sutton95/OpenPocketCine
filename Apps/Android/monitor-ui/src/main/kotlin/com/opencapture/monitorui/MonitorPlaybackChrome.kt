@@ -85,7 +85,7 @@ fun MonitorMetadataDrawer(rows: List<MonitorMetadataRow>, modifier: Modifier = M
     close: @Composable () -> Unit) {
     Column(modifier.width(296.dp).fillMaxHeight()
         .clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp))
-        .background(MonitorPalette.overlayPanel).padding(top = 12.dp, bottom = 8.dp)) {
+        .monitorMaterial(MonitorMaterial.Info).padding(top = 12.dp, bottom = 8.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("CLIP INFO", modifier = Modifier.weight(1f), style = MonitorTypography.text(9f, FontWeight.SemiBold))
             close()

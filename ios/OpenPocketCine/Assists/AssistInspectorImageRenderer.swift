@@ -104,7 +104,9 @@ final class AssistInspectorImageRenderer: @unchecked Sendable {
         admission.complete(ticket)
     }
 
-    private func renderImage(source: CVPixelBuffer, effects: LiveImageEffects) -> CGImage? {
+    /// A caller with its own retained instance may reuse the production display
+    /// look on a serial worker. It must not overlap this with `render` on that instance.
+    func renderImage(source: CVPixelBuffer, effects: LiveImageEffects) -> CGImage? {
         autoreleasepool {
             let width = CGFloat(CVPixelBufferGetWidth(source))
             let height = CGFloat(CVPixelBufferGetHeight(source))

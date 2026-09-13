@@ -177,8 +177,9 @@ recorded motion checks are on Pocket 4 Pro/iPhone. See
 
 Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
 PEAK / FALSE / ZEBRA grade the decoded 720p raster with a 3D cube (same lattice
-as iOS), then bilinear-fit the panel (peaking is the same 3-pass as GLES). HUD liquid
-floating chrome uses composited translucent tint without a live-frame backdrop copy.
+as iOS), then bilinear-fit the panel (peaking is the same 3-pass as GLES).
+Floating controls use blurred translucent panels with sharp labels and icons.
+Devices or sources that cannot supply the blur use solid readable panels.
 Page cards are solid. Assist inspectors show the selected scope or image effect
 without requiring that tool on the main picture. Image previews reuse the existing
 small source sample and effect shaders, with at most one job at 5 Hz while visible.

@@ -3,5 +3,6 @@
         <activity android:name=".MonitorPreviewActivity" android:exported="true" android:screenOrientation="user"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.OpenPocketCine" />
+        <activity android:name=".BackdropRenderActivity" android:exported="true" android:theme="@style/Theme.OpenPocketCine" />
     </application>
 </manifest>

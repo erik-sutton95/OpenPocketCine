@@ -27,6 +27,8 @@ final class AppModel {
     /// Decoded-frame scopes. Filled by `HevcDecoder.handleDecodedFrame` — not camera DUML.
     var frameSamples = LiveFrameSampleBus()
     @ObservationIgnored var inspectorPreview = AssistInspectorImageRenderer()
+    @ObservationIgnored let liveBackdrop = MonitorVideoBackdropRenderer()
+    @ObservationIgnored let playbackBackdrop = MonitorVideoBackdropRenderer()
     /// Monitor tools follow the displayed source; watcher scopes must never read the camera bus.
     var monitorSamples: LiveFrameSampleBus { isWatchingFeed ? relayClient.samples : frameSamples }
     var monitorColorMode: ColorMode? {

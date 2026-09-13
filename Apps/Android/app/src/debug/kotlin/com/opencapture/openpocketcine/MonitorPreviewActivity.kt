@@ -1,5 +1,14 @@
 package com.opencapture.openpocketcine
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import com.opencapture.monitorui.MonitorBackdropSource
+import com.opencapture.monitorui.LocalMonitorBackdrops
+import com.opencapture.monitorui.monitorBackdropSource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -58,7 +67,8 @@ class MonitorPreviewActivity : ComponentActivity() {
                         ReviewClipCapabilities(intent.getBooleanExtra("clipStar", false))
                     } else {
                         ReviewMonitor(model, capabilities, sourceAspect,
-                            intent.getFloatExtra("safeTop", 0f), intent.getFloatExtra("safeBottom", 0f))
+                            intent.getFloatExtra("safeTop", 0f), intent.getFloatExtra("safeBottom", 0f),
+                            intent.getBooleanExtra("patterned", false))
                     }
                     when (model.liveOperatorPanel) {
                         LiveOperatorPanel.SETTINGS -> OperatorSetupScreen(model) { model.liveOperatorPanel = null }
@@ -80,7 +90,7 @@ class MonitorPreviewActivity : ComponentActivity() {
 
 @Composable
 private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, sourceAspect: Float,
-    safeTop: Float, safeBottom: Float) {
+    safeTop: Float, safeBottom: Float, patterned: Boolean = false) {
     val status = remember(capabilities) {
         CameraStatus(batteryPercent = 80, storageTotalMb = 131072, storageFreeMb = 109568,
             timecode = if (capabilities.timecode) "15:39:50:00" else null,
@@ -94,6 +104,14 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
     }
     var locked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<LiveSheet?>(null) }
+    val context = LocalContext.current
+    val image = remember(context, patterned) {
+        if (patterned) context.assets.open("monitor_backdrop_reference.png").use { BitmapFactory.decodeStream(it) } else null
+    }
+    val backdrop = remember(image) { MonitorBackdropSource().apply {
+        this.image = image?.let { Bitmap.createScaledBitmap(it, 180, 120, true) }
+    } }
+    CompositionLocalProvider(LocalMonitorBackdrops provides if (image != null) listOf(backdrop) else emptyList()) {
     BoxWithConstraints(Modifier.fillMaxSize().background(LiveDesign.background)) {
         val width = maxWidth.value
         val height = maxHeight.value
@@ -107,8 +125,10 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
         val cluster = if (zones != null) portraitOnFeedControls(layout.onFeed,
             model.portraitFeedAspect == PortraitFeedAspect.FILL, zones.controls.height + 10f,
             zones.controls.minY - 8f, capabilities.gimbal) else layout.gimbalCluster(capabilities.gimbal)
-        // Uniform fixture makes geometry, alpha and clipping differences visible.
-        Box(Modifier.liveModuleFrame(layout.onFeed).background(Color(0xFF4A4C48)))
+        // Optional pattern exercises the production widgets against a passive sampled source.
+        if (image != null) Image(image.asImageBitmap(), null,
+            Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop), contentScale = ContentScale.FillBounds)
+        else Box(Modifier.liveModuleFrame(layout.onFeed).background(Color(0xFF4A4C48)))
         com.opencapture.openpocketcine.assists.LiveAssistLayer(model.assist, status, focus = null,
             feedFrame = layout.onFeed, placementFrame = ChromeRect(6f, safeTop + 6f, width - 12f,
                 (zones?.systemBar?.minY ?: (height - safeBottom)) - safeTop - 12f), locked = locked,
@@ -136,6 +156,7 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
                 width, height, 0f, 0f, 0f, zones?.controls?.minY ?: height,
                 onDismiss = { model.assist.configureTool = null })
         }
+    }
     }
 }
 

@@ -64,6 +64,33 @@ route change must retain the production live-session lifetime beneath it.
 | Switch | ordinary 38×22 with 18 knob; dense display-switch 30×18 with 14 knob; 2 padding | 1370, 1072 |
 | Sliders | 4 track, 15 thumb (playback 13), min 34 interaction row | 1022, 525 |
 
+### Blurred surfaces
+
+UI 2.0 uses heavily blurred translucent surfaces. The operator explicitly
+confirmed on 2026-09-13 that this replaces Apple's Liquid Glass treatment and
+should follow the same visual contract on iOS and Android. Blur radius,
+saturation and tint opacity are independent; making a shadow darker must not
+make the panel more opaque or weaken its blur. Foreground labels and icons stay
+sharp. Do not add lens distortion, refraction or adaptive specular effects.
+
+| Surface | Tint | Alpha | Blur radius | Saturation |
+| --- | --- | --- | --- | --- |
+| Compact controls | `(20,22,24)` | 0.52 | 18 | 125% |
+| Expanded palette, capture and inspectors | `(20,22,24)` | 0.62 | 20 | 125% |
+| Clip information | `(20,22,24)` | 0.82 | 20 | 125% |
+| Delivery | `(20,22,24)` | 0.86 | 20 | 125% |
+| Zoom | `(18,20,22)` | 0.72 | 24 | 125% |
+| Scope plates | `(6,9,8)` | 0.70 | 8 | 100% |
+| Record housing | White | 0.08 | 18 | 125% |
+
+The reference radius uses CSS pixels at the device's logical viewport size;
+native implementations account for display scale. Compare an actual patterned
+backdrop, edge spread and tint as well as the sharp foreground. Uniform fills
+cannot prove blur. Accessibility and unsupported-renderer fallbacks must be
+explicit in [parity](PARITY.md#ui-20-qualification); a tint-only fallback does
+not establish visual parity. Keep bounded source sampling and rendering owned
+outside individual widgets, following the [performance budget](PERFORMANCE.md).
+
 ## Device and safe-area matrix
 
 The design explicitly tests these viewport points. Actual apps should derive

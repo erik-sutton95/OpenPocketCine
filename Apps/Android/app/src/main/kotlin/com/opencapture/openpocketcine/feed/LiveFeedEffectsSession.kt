@@ -49,6 +49,7 @@ internal class LiveFeedEffectsSession(
     private val notifySurfaceOnMain: Boolean = false,
     private val onFramePresented: (Long) -> Unit = {},
     private val playback: Boolean = false,
+    private val backdrop: MonitorBackdropFeed? = null,
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -79,6 +80,7 @@ internal class LiveFeedEffectsSession(
 
     fun attachDisplay(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
         detachDisplay()
+        backdrop?.attach(this)
         displayTexture = surfaceTexture
         displayWidth = width.coerceAtLeast(1)
         displayHeight = height.coerceAtLeast(1)
@@ -97,6 +99,7 @@ internal class LiveFeedEffectsSession(
     }
 
     fun updatePlan(next: FeedEffectsRenderPlan) {
+        backdrop?.updatePlan(this, next)
         plan.set(next)
         planDirty = true
         requestRender()
@@ -108,18 +111,23 @@ internal class LiveFeedEffectsSession(
         if (w == sourceWidth && h == sourceHeight) return
         previewSource.invalidate()
         InspectorPreviewPipeline.sourceChanged(playback)
+        backdrop?.invalidate(this)
         sourceWidth = w
         sourceHeight = h
         requestRender()
     }
 
     fun configurePreviewSource(identity: Any, ready: Boolean) {
-        if (previewSource.configure(identity, ready)) InspectorPreviewPipeline.sourceChanged(playback)
+        if (previewSource.configure(identity, ready)) {
+            InspectorPreviewPipeline.sourceChanged(playback)
+            backdrop?.invalidate(this)
+        }
     }
 
     fun detachDisplay() {
         previewSource.invalidate()
         InspectorPreviewPipeline.sourceChanged(playback)
+        backdrop?.invalidate(this)
         running.set(false)
         synchronized(frameLock) { frameLock.notifyAll() }
         renderThread?.join(800)
@@ -143,6 +151,7 @@ internal class LiveFeedEffectsSession(
      */
     private fun maybeTapScopes(
         policy: ScopeTapPolicy,
+        currentPlan: FeedEffectsRenderPlan,
         oesCopy: OesCopyGlProgram,
         oesTexture: Int,
         texMatrix: FloatArray,
@@ -150,7 +159,7 @@ internal class LiveFeedEffectsSession(
         tapPixels: ByteBuffer?,
         tapScratch: ByteArray?,
     ) {
-        if (!policy.needsTap || tapTarget == null || tapPixels == null || tapScratch == null) return
+        if ((!policy.needsTap && backdrop?.hasDemand(this) != true) || tapTarget == null || tapPixels == null || tapScratch == null) return
         val now = System.nanoTime()
         if (now < nextScopeAtNs) return
         if (!sampleBusy.compareAndSet(false, true)) return
@@ -161,16 +170,20 @@ internal class LiveFeedEffectsSession(
                 else { InspectorPreviewPipeline.cancel(it); false }
             }
         } else null
-        if (policy.activeScopeCount == 0 && previewTicket == null) {
-            sampleBusy.set(false)
-            return
-        }
         val thermal =
             runCatching {
                 val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                 PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
             }.getOrDefault(1.0)
-        nextScopeAtNs = now + policy.minIntervalNs(thermal)
+        val backdropTicket = if (sourceEpoch != null && previewSource.isCurrent(sourceEpoch)) {
+            backdrop?.acquire(this, now, thermal)
+        } else null
+        if (policy.activeScopeCount == 0 && previewTicket == null && backdropTicket == null) {
+            sampleBusy.set(false)
+            return
+        }
+        nextScopeAtNs = now + if (policy.activeScopeCount == 0) (200_000_000L * thermal).toLong()
+            else policy.minIntervalNs(thermal)
         var handedOff = false
         try {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, tapTarget.framebufferId)
@@ -196,7 +209,13 @@ internal class LiveFeedEffectsSession(
             val previous = previousBundle
             sampleExecutor.execute {
                 var previewSubmitted = false
+                var backdropSubmitted = false
                 try {
+                    if (backdropTicket != null && previewSource.isCurrent(sourceEpoch)) {
+                        backdrop?.submit(backdropTicket,
+                            InspectorPreviewFrame.fromTap(packed, width, height, bottomUp = true), currentPlan)
+                        backdropSubmitted = true
+                    }
                     if (previewTicket != null) {
                         InspectorPreviewPipeline.submit(previewTicket,
                             InspectorPreviewFrame.fromTap(packed, width, height, bottomUp = true))
@@ -233,12 +252,14 @@ internal class LiveFeedEffectsSession(
                     if (!previewSubmitted) InspectorPreviewPipeline.cancel(previewTicket)
                     Log.w(TAG, "scope tap failed", error)
                 } finally {
+                    if (!backdropSubmitted) backdrop?.cancel(backdropTicket)
                     sampleBusy.set(false)
                 }
             }
             handedOff = true
         } finally {
             if (!handedOff) {
+                backdrop?.cancel(backdropTicket)
                 InspectorPreviewPipeline.cancel(previewTicket)
                 sampleBusy.set(false)
             }
@@ -438,6 +459,7 @@ internal class LiveFeedEffectsSession(
                 }
                 maybeTapScopes(
                     policy = nextPlan.scopeTap,
+                    currentPlan = nextPlan,
                     oesCopy = copy,
                     oesTexture = oesTexture,
                     texMatrix = texMatrix,

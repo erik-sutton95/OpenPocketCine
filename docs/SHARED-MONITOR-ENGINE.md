@@ -356,6 +356,7 @@ Agents: prefer extending existing `Frameio*Tests` / parity docs over new paralle
 
 | Date | Decision |
 | --- | --- |
+| 2026-09-13 | UI 2.0 uses shared heavy-blur, saturation and tint tokens across native iOS/Android presentation; no Liquid Glass lens or refraction treatment. Rendering belongs to reusable UI components and passive platform presentation sources, never camera adapters. |
 | 2026-09-06 | Keep separate brand apps for partnership optics |
 | 2026-09-06 | Share monitor tools, media/playback, and cloud delivery across brands |
 | 2026-09-06 | Only connection/protocol (+ capabilities) differ per brand |

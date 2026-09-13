@@ -83,8 +83,6 @@ import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opencapture.openpocketcine.assists.AssistLongPress
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.LiveAssistBar
@@ -97,6 +95,10 @@ import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.feed.LiveVulkanSession
 import com.opencapture.openpocketcine.feed.LocalGpuLive
+import com.opencapture.monitorui.LocalMonitorBackdrops
+import com.opencapture.monitorui.monitorBackdropSource
+import com.opencapture.openpocketcine.feed.MonitorBackdropFeed
+import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.OpcVulkan
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
@@ -140,6 +142,7 @@ fun LiveViewScreen(model: AppModel) {
     var showStorageDuration by remember { mutableStateOf(false) }
     val recovery by model.session.recoveryState.collectAsState()
     val verticalPicture by model.session.decoder.isVerticalPicture.collectAsState()
+    val hasPicture by model.session.decoder.hasPicture.collectAsState()
 
     ObservePhoneBattery(model)
     LaunchedEffect(Unit) {
@@ -217,8 +220,9 @@ fun LiveViewScreen(model: AppModel) {
     val signalBars = remember { LinkSignalBars() }
     tick
 
-    // Flat UI 2.0 chrome has no backdrop render pass. Keep decoder ownership intact.
     val glass = remember { MonitorGlass(GlassTier.FLAT) }
+    val backdrop = rememberMonitorBackdropFeed(model.session.connectedCamera ?: model.session,
+        enabled = model.liveOperatorPanel == null && hasPicture)
 
     var vulkanFailed by remember { mutableStateOf(false) }
     val vulkanSession =
@@ -226,6 +230,7 @@ fun LiveViewScreen(model: AppModel) {
             if (OpcVulkan.isAvailable) {
                 LiveVulkanSession(
                     context = context,
+                    backdrop = backdrop,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onFirstFrame = { model.session.noteLiveFrame() },
                     onFailed = { vulkanFailed = true },
@@ -292,7 +297,8 @@ fun LiveViewScreen(model: AppModel) {
         }
     }
 
-    CompositionLocalProvider(LocalMonitorGlass provides glass) {
+    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop.source),
+        com.opencapture.monitorui.LocalMonitorBackdropSurround provides if (useVulkan) Color.Black else LiveDesign.background) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -472,8 +478,6 @@ fun LiveViewScreen(model: AppModel) {
             maxOf(0f, minOf(scopeBottom, layout.viewportHeight) - scopeTop))
         val focusOffCenter = model.session.isFocusResetAvailable
 
-        // Kyant sibling pattern: this box records feed + chrome; popups sit
-        // outside so overlayGlass does not loop.
         val effectsPlan =
             rememberLiveFeedEffectsPlan(
                 assist = assist,
@@ -482,12 +486,6 @@ fun LiveViewScreen(model: AppModel) {
                 family = model.session.connectedCamera?.model?.family.orEmpty(),
                 cameraName = model.session.connectedCamera?.name,
             )
-        val sceneLayer =
-            if (glass.tier == GlassTier.FULL && glass.overlayBackdrop != null) {
-                Modifier.layerBackdrop(glass.overlayBackdrop)
-            } else {
-                Modifier
-            }
         var vulkanSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
         var glesTextureView by remember { mutableStateOf<TextureView?>(null) }
         val wantsFaceDetect by model.session.wantsFaceDetect.collectAsState()
@@ -543,7 +541,6 @@ fun LiveViewScreen(model: AppModel) {
         Box(
             Modifier
                 .fillMaxSize()
-                .then(sceneLayer)
                 .onGloballyPositioned {
                     if (!useVulkan) canvasOrigin = it.positionInRoot()
                 },
@@ -557,45 +554,19 @@ fun LiveViewScreen(model: AppModel) {
                             .fillMaxSize()
                             .onGloballyPositioned { canvasOrigin = it.positionInRoot() },
                 )
-                if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
-                    // Record the well for HUD glass. Do not blit PixelCopy here —
-                    // SurfaceView sits behind the window, and an opaque 20 Hz
-                    // copy became the picture (blocky S25 feed, LUT on or off).
-                    Box(
-                        Modifier
-                            .liveModuleFrame(layout.onFeed)
-                            .layerBackdrop(glass.layerBackdrop)
-                            .clipToBounds(),
-                    ) {
-                        vulkanSurfaceView?.let { view ->
-                            VulkanKyantCapture(
-                                surfaceView = view,
-                                displayCopy = false,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                }
             }
-            // GLES TextureView stays inside the feed well so Kyant can sample it
-            // when Vulkan is unavailable. Vulkan presents a full-canvas SurfaceView;
-            // FULL glass PixelCopies that surface into the recorded well.
+            // The native image stays in its existing SurfaceView/TextureView.
             if (!useVulkan) {
             Box(
                 Modifier
                     .liveModuleFrame(layout.onFeed)
-                    .then(
-                        if (glass.tier == GlassTier.FULL && glass.layerBackdrop != null) {
-                            Modifier.layerBackdrop(glass.layerBackdrop)
-                        } else {
-                            Modifier
-                        },
-                    )
                     .clipToBounds(),
             ) {
                 LiveFeedPresenter(
                     mirrored = liveViewFlip,
-                    captureFrames = false,
+                    backdrop = backdrop,
+                    sourceIdentity = model.session.connectedCamera ?: model.session,
+                    sourceReady = hasPicture,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
@@ -611,6 +582,14 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
             }
+
+            // Passive source geometry; this box draws and captures nothing.
+            Box(Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop.source,
+                imageRect = androidx.compose.ui.geometry.Rect(
+                    (pictureContent.x - layout.onFeed.x) * density.density,
+                    (pictureContent.y - layout.onFeed.y) * density.density,
+                    (pictureContent.maxX - layout.onFeed.x) * density.density,
+                    (pictureContent.maxY - layout.onFeed.y) * density.density), mirrored = liveViewFlip))
 
             // iOS `LiveZoomPinchWell` sits under chip + scopes so direct drag
             // on WAVE / PARADE / HISTO / VECTOR still reaches MovableAssistPanel.
@@ -653,7 +632,6 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
 
-            val hasPicture by model.session.decoder.hasPicture.collectAsState()
             if (!hasPicture) {
                 val context = LocalContext.current
                 var showVpnHint by remember { mutableStateOf(false) }
@@ -1033,15 +1011,6 @@ private fun LiveFaceFramePump(
     }
 }
 
-private val GLASS_BLIT_PAINT =
-    Paint().apply {
-        // Filter when a copy is scaled. The live well must not *display* this
-        // bitmap — nearest 20 Hz PixelCopy over SurfaceView is the S25 mosaic.
-        isFilterBitmap = true
-        isAntiAlias = false
-        isDither = false
-    }
-
 @Composable
 private fun VulkanLivePresenter(
     session: LiveVulkanSession,
@@ -1116,91 +1085,13 @@ private fun View.unsplitMotionEvents() {
     }
 }
 
-/**
- * Kyant cannot sample a SurfaceView. FULL glass PixelCopies the well so
- * [Modifier.layerBackdrop] can record it for HUD frost.
- *
- * Do not display that copy in the well. SurfaceView is behind the window;
- * an opaque Canvas there is what the operator sees, and a 20 Hz nearest
- * PixelCopy is a mosaic (S25 / Pocket 4 Pro).
- */
-@Composable
-private fun VulkanKyantCapture(
-    surfaceView: SurfaceView,
-    displayCopy: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    var frameGen by remember { mutableIntStateOf(0) }
-    val frameBmp = remember { arrayOfNulls<Bitmap>(1) }
-    var srcRect by remember { mutableStateOf(Rect()) }
-    val inFlight = remember { AtomicBoolean(false) }
-    val handler = remember { Handler(Looper.getMainLooper()) }
-
-    LaunchedEffect(surfaceView, displayCopy) {
-        if (!displayCopy) return@LaunchedEffect
-        while (isActive) {
-            withFrameNanos { }
-            val rect = Rect(srcRect)
-            val w = rect.width()
-            val h = rect.height()
-            if (w <= 1 || h <= 1) continue
-            if (!surfaceView.holder.surface.isValid) continue
-            if (!inFlight.compareAndSet(false, true)) continue
-            val dst =
-                frameBmp[0]?.takeIf { it.width == w && it.height == h }
-                    ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { frameBmp[0] = it }
-            PixelCopy.request(surfaceView, rect, dst, { result ->
-                inFlight.set(false)
-                if (result == PixelCopy.SUCCESS) frameGen += 1
-            }, handler)
-            // HUD glass does not need 120 Hz copies — that plus per-scope lens
-            // is what cooked the S25.
-            delay(48)
-        }
-    }
-
-    Canvas(
-        modifier.onGloballyPositioned { coords ->
-            val pos = coords.positionInWindow()
-            val size = coords.size
-            val loc = IntArray(2)
-            surfaceView.getLocationInWindow(loc)
-            val left = (pos.x - loc[0]).roundToInt().coerceIn(0, surfaceView.width)
-            val top = (pos.y - loc[1]).roundToInt().coerceIn(0, surfaceView.height)
-            val right = (left + size.width).coerceIn(0, surfaceView.width)
-            val bottom = (top + size.height).coerceIn(0, surfaceView.height)
-            srcRect = Rect(left, top, right, bottom)
-        },
-    ) {
-        @Suppress("UNUSED_EXPRESSION")
-        val gen = frameGen
-        val bmp = frameBmp[0]
-        if (displayCopy && gen > 0 && bmp != null && !bmp.isRecycled) {
-            drawIntoCanvas { canvas ->
-                val dstW = size.width.toInt()
-                val dstH = size.height.toInt()
-                if (bmp.width == dstW && bmp.height == dstH) {
-                    canvas.nativeCanvas.drawBitmap(bmp, 0f, 0f, GLASS_BLIT_PAINT)
-                } else {
-                    val dst = Rect(0, 0, dstW, dstH)
-                    canvas.nativeCanvas.drawBitmap(bmp, null, dst, GLASS_BLIT_PAINT)
-                }
-            }
-        }
-    }
-}
-
-/**
- * GLES fallback when Vulkan cannot init. Kyant cannot sample a TextureView, so
- * FULL glass still blits each frame into a Compose Canvas.
- *
- * LUT / PEAK / FALSE / ZEBRA paint through GLES on a `GL_TEXTURE_EXTERNAL_OES`
- * producer so the identity HEVC surface is never remade when those tools toggle.
- */
+/** GLES fallback; the same bounded raw tap supplies chrome after the native present. */
 @Composable
 private fun LiveFeedPresenter(
     mirrored: Boolean,
-    captureFrames: Boolean,
+    backdrop: MonitorBackdropFeed,
+    sourceIdentity: Any,
+    sourceReady: Boolean,
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
     onPresented: () -> Unit = {},
@@ -1208,9 +1099,6 @@ private fun LiveFeedPresenter(
     onTextureView: (TextureView?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var frameGen by remember { mutableIntStateOf(0) }
-    val frameBmp = remember { arrayOfNulls<Bitmap>(1) }
-    val capture = rememberUpdatedState(captureFrames)
     val attach = rememberUpdatedState(onDecoderSurface)
     val presented = rememberUpdatedState(onPresented)
     val sourcePresented = rememberUpdatedState(onSourcePresented)
@@ -1221,6 +1109,7 @@ private fun LiveFeedPresenter(
         remember {
             LiveFeedEffectsSession(
                 context = context,
+                backdrop = backdrop,
                 onDecoderSurface = { attach.value(it) },
                 onGpuFailed = { gpuFailed = true },
                 onFirstFrame = { presented.value() },
@@ -1233,6 +1122,7 @@ private fun LiveFeedPresenter(
             textureViewOut.value(null)
         }
     }
+    LaunchedEffect(sourceIdentity, sourceReady) { session.configurePreviewSource(sourceIdentity, sourceReady) }
     LaunchedEffect(plan) { session.updatePlan(plan) }
 
     Box(modifier.graphicsLayer { scaleX = if (mirrored) -1f else 1f }) {
@@ -1245,18 +1135,6 @@ private fun LiveFeedPresenter(
                         val onUpdated: (TextureView) -> Unit = { tv ->
                             if (gpuFailed) tv.surfaceTexture?.let { sourcePresented.value(it.timestamp) }
                             presented.value()
-                            if (capture.value) {
-                                val w = tv.width
-                                val h = tv.height
-                                if (w > 0 && h > 0) {
-                                    val dst =
-                                        frameBmp[0]?.takeIf { it.width == w && it.height == h }
-                                            ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                                                .also { frameBmp[0] = it }
-                                    tv.getBitmap(dst)
-                                    tv.post { frameGen += 1 }
-                                }
-                            }
                         }
                         surfaceTextureListener =
                             if (gpuFailed) {
@@ -1277,24 +1155,7 @@ private fun LiveFeedPresenter(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        val gen = frameGen
-        val bmp = frameBmp[0]
-        if (captureFrames && gen > 0 && bmp != null && !bmp.isRecycled) {
-            Canvas(Modifier.fillMaxSize()) {
-                @Suppress("UNUSED_EXPRESSION")
-                gen
-                drawIntoCanvas { canvas ->
-                    val dstW = size.width.toInt()
-                    val dstH = size.height.toInt()
-                    if (bmp.width == dstW && bmp.height == dstH) {
-                        canvas.nativeCanvas.drawBitmap(bmp, 0f, 0f, GLASS_BLIT_PAINT)
-                    } else {
-                        val dst = android.graphics.Rect(0, 0, dstW, dstH)
-                        canvas.nativeCanvas.drawBitmap(bmp, null, dst, GLASS_BLIT_PAINT)
-                    }
-                }
-            }
-        }
+
     }
 }
 

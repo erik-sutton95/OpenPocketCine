@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -214,7 +216,7 @@ fun MediaDeliveryPopup(
                 .fillMaxWidth()
                 .heightIn(max = 520.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .background(Color(0xFF141618).copy(alpha = .86f))
+                .monitorMaterial(MonitorMaterial.Delivery)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

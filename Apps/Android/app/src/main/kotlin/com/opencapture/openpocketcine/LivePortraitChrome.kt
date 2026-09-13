@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -413,7 +415,7 @@ fun LivePortraitChrome(
 
 @Composable
 fun LivePortraitTopBar(model: AppModel, status: CameraStatus) {
-    Box(Modifier.fillMaxSize().background(LiveDesign.glass)) {
+    Box(Modifier.fillMaxSize().monitorMaterial(MonitorMaterial.Expanded)) {
         if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
             Text(
                 portraitStorageLabel(status),
@@ -726,7 +728,7 @@ fun LivePortraitRecOptionsButton(
                 offset = menuOffset,
                 onDismissRequest = { open = false },
             ) {
-                Column(Modifier.width(220.dp).background(LiveDesign.glass)) {
+                Column(Modifier.width(220.dp).monitorMaterial(MonitorMaterial.Expanded)) {
                     RecOptionsRow("Resolution · Framerate") {
                         open = false
                         onOpen(LiveSheet.FORMAT)

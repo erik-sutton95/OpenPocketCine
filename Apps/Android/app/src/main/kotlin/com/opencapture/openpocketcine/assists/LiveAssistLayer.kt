@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -282,7 +284,7 @@ private fun StackedScopePanel(
             onScale = onScale,
             onOpenOptions = onOpenOptions?.let { present -> { frame -> present(tool, frame) } },
             onActivate = { state.bringToFront(tool) },
-            fillPlate = tool == LiveAssistTool.LIGHTS || tool == LiveAssistTool.ND,
+            fillPlate = true,
             chip = tool == LiveAssistTool.ND,
         ) {
             when (tool) {
@@ -416,7 +418,7 @@ internal fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mo
         modifier
             .size(ScopePanelSize.falseColorReference.width.dp, ScopePanelSize.falseColorReference.height.dp)
             .clip(RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp))
-            .background(LiveDesign.glass)
+            .monitorMaterial(MonitorMaterial.Scope)
             .padding(7.dp),
     ) {
         Canvas(Modifier.fillMaxSize()) {

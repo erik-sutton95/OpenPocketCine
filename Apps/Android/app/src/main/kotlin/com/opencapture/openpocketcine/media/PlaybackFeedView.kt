@@ -6,6 +6,9 @@ import android.graphics.SurfaceTexture
 import android.os.Handler
 import android.os.Looper
 import android.view.TextureView
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.opencapture.monitorui.monitorBackdropSource
+import com.opencapture.openpocketcine.feed.MonitorBackdropFeed
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -28,6 +31,7 @@ import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 @Composable
 internal fun PlaybackFeedView(
     player: ExoPlayer,
+    backdrop: MonitorBackdropFeed,
     plan: FeedEffectsRenderPlan,
     mirrored: Boolean,
     zoom: AnchoredPinchZoom,
@@ -43,6 +47,7 @@ internal fun PlaybackFeedView(
         remember {
             LiveFeedEffectsSession(
                 context = context,
+                backdrop = backdrop,
                 onDecoderSurface = { surface ->
                     main.post { player.setVideoSurface(surface) }
                 },
@@ -65,8 +70,16 @@ internal fun PlaybackFeedView(
     LaunchedEffect(sourceWidth, sourceHeight) {
         session.setSourceSize(sourceWidth.coerceAtLeast(16), sourceHeight.coerceAtLeast(16))
     }
+    BoxWithConstraints(modifier) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        val left = (w - w * zoom.scale) / 2f + zoom.offsetX
+        val top = (h - h * zoom.scale) / 2f + zoom.offsetY
+        Box(Modifier.fillMaxSize().monitorBackdropSource(backdrop.source,
+            imageRect = androidx.compose.ui.geometry.Rect(left, top, left + w * zoom.scale, top + h * zoom.scale),
+            mirrored = mirrored))
     Box(
-        modifier.graphicsLayer {
+        Modifier.fillMaxSize().graphicsLayer {
             compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
             scaleX = zoom.scale * if (mirrored) -1f else 1f
             scaleY = zoom.scale
@@ -84,6 +97,7 @@ internal fun PlaybackFeedView(
             },
             modifier = Modifier.fillMaxSize(),
         )
+    }
     }
 }
 

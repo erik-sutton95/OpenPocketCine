@@ -31,6 +31,7 @@ internal class LiveVulkanSession(
     private val onFirstFrame: () -> Unit,
     private val onFailed: () -> Unit,
     private val onFramePresented: (Long) -> Unit = {},
+    private val backdrop: MonitorBackdropFeed? = null,
 ) {
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -78,6 +79,7 @@ internal class LiveVulkanSession(
     private var sourceH = SOURCE_H
 
     init {
+        backdrop?.attach(this)
         // Decoder surface on this thread, now. nativeCreate compiles on opc.vk.gpu
         // so ImageReader callbacks are not stuck behind feed.frag (5–10 s WAITING).
         ensureReader()
@@ -183,6 +185,7 @@ internal class LiveVulkanSession(
 
     /** Pocket screen flip — coded raster is 720×1280. Recreate the decoder AHB. */
     fun setSourceSize(width: Int, height: Int) {
+        if (width != sourceW || height != sourceH) backdrop?.invalidate(this)
         if (presentGate.isReleased) return
         val w = width.coerceAtLeast(2)
         val h = height.coerceAtLeast(2)
@@ -231,6 +234,7 @@ internal class LiveVulkanSession(
     ) {
         val native = handle
         if (native == 0L || presentGate.isReleased) return
+        backdrop?.updatePlan(this, plan)
         lastPlan = plan
         OpcVulkan.nativeSetUiScale(native, uiScale)
         uploadCube(0, plan.lutCube, lastLut) { lastLut = it }
@@ -346,6 +350,7 @@ internal class LiveVulkanSession(
     /** Must run from `surfaceDestroyed` before that callback returns. */
     fun detachWindow() {
         InspectorPreviewPipeline.sourceChanged(playback = false)
+        backdrop?.invalidate(this)
         pendingAttach = null
         presentGate.detach()
         attachedSurface = null
@@ -356,6 +361,7 @@ internal class LiveVulkanSession(
 
     fun release() {
         InspectorPreviewPipeline.sourceChanged(playback = false)
+        backdrop?.invalidate(this)
         presentGate.release()
         reader?.setOnImageAvailableListener(null, null)
         gpuHandler.removeCallbacksAndMessages(null)
@@ -431,11 +437,13 @@ internal class LiveVulkanSession(
             main.post(onFailed)
             return
         }
-        val policy = lastPlan?.scopeTap ?: ScopeTapPolicy.IDLE
-        val wantSample = policy.needsTap
+        val currentPlan = lastPlan ?: FeedEffectsRenderPlan.IDENTITY
+        val policy = currentPlan.scopeTap
+        val wantSample = policy.needsTap || backdrop?.hasDemand(this) == true
         val now = System.nanoTime()
         var intervalNs = PocketScopeSampler.BASE_MIN_INTERVAL_NS
         var previewTicket: InspectorPreviewAdmission.Ticket? = null
+        var backdropTicket: BackdropFrameAdmission.Ticket? = null
         val takeTap =
             if (wantSample && now - lastSampleNs >= PocketScopeSampler.BASE_MIN_INTERVAL_NS) {
                 val thermal =
@@ -445,10 +453,11 @@ internal class LiveVulkanSession(
                         PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
                     }.getOrDefault(1.0)
                 intervalNs =
-                    policy.minIntervalNs(thermal)
+                    if (policy.activeScopeCount == 0) (200_000_000L * thermal).toLong() else policy.minIntervalNs(thermal)
                 if (now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)) {
                     previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback = false, now)
-                    if (policy.activeScopeCount > 0 || previewTicket != null) true
+                    backdropTicket = backdrop?.acquire(this, now, thermal)
+                    if (policy.activeScopeCount > 0 || previewTicket != null || backdropTicket != null) true
                     else { sampleBusy.set(false); false }
                 } else false
             } else {
@@ -464,7 +473,7 @@ internal class LiveVulkanSession(
         held?.close()
         held = image
         if (!ok) {
-            if (takeTap) { sampleBusy.set(false); InspectorPreviewPipeline.cancel(previewTicket) }
+            if (takeTap) { sampleBusy.set(false); InspectorPreviewPipeline.cancel(previewTicket); backdrop?.cancel(backdropTicket) }
             if (takeFace) faceWanted.set(true)
             if (presentGate.shouldFallbackOnSubmitFailure()) main.post(onFailed)
             return
@@ -486,7 +495,7 @@ internal class LiveVulkanSession(
         val iso = policy.iso
         val previous = previousBundle
         val packed =
-            if ((includePoints || includeVectorPoints || previewTicket != null) &&
+            if ((includePoints || includeVectorPoints || previewTicket != null || backdropTicket != null) &&
                 OpcVulkan.nativeCopyTap(native, tapBytes)
             ) {
                 tapBytes.copyOf()
@@ -504,7 +513,15 @@ internal class LiveVulkanSession(
         val loggedIntervalNs = intervalNs
         sampleExecutor.execute {
             var previewSubmitted = false
+            var backdropSubmitted = false
             try {
+                backdropTicket?.let { ticket ->
+                    if (packed != null) {
+                        backdrop?.submit(ticket,
+                            InspectorPreviewFrame.fromTap(packed, TAP_W, TAP_H, bottomUp = false), currentPlan)
+                        backdropSubmitted = true
+                    }
+                }
                 val ticket = previewTicket
                 if (ticket != null) {
                     if (packed != null) {
@@ -564,6 +581,7 @@ internal class LiveVulkanSession(
                 if (!previewSubmitted) InspectorPreviewPipeline.cancel(previewTicket)
                 Log.w(TAG, "scope tap failed", error)
             } finally {
+                if (!backdropSubmitted) backdrop?.cancel(backdropTicket)
                 sampleBusy.set(false)
             }
         }

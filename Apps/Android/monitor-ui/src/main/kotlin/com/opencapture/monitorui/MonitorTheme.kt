@@ -18,12 +18,12 @@ object MonitorPalette {
     val tile = Color(0xFF232527)
     /** Mockup panel RGB (20,22,24). Alphas follow compact / expanded / share plates. */
     val panel = Color(20, 22, 24)
-    val compactGlass = panel.copy(alpha = .52f)
-    val expandedGlass = panel.copy(alpha = .62f)
-    /** Share / dense info plates. Capture drawers use [expandedGlass]. */
-    val overlayPanel = panel.copy(alpha = .86f)
-    val zoomGlass = Color(18, 20, 22).copy(alpha = .72f)
-    val recHousing = Color.White.copy(alpha = .08f)
+    val compactGlass = MonitorMaterial.Compact.tint
+    val expandedGlass = MonitorMaterial.Expanded.tint
+    /** Delivery plates. Information uses MonitorMaterial.Info; capture uses expanded. */
+    val overlayPanel = MonitorMaterial.Delivery.tint
+    val zoomGlass = MonitorMaterial.Zoom.tint
+    val recHousing = MonitorMaterial.Record.tint
     val accent = Color(0xFF00A3E0)
     val text = Color.White
     val muted = Color(0xFF8D9293)

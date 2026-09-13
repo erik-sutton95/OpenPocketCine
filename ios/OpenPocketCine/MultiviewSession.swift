@@ -6,6 +6,7 @@ import UIKit
 
 @MainActor @Observable
 final class MultiviewSession {
+    let backdropRenderer = MonitorVideoBackdropRenderer()
     @MainActor @Observable final class Tile: Identifiable {
         let id = UUID()
         let decoder = HevcDecoder()
@@ -437,7 +438,8 @@ final class MultiviewSession {
             let scanMessage = networkMessage
             networkMessage = "Returning camera to its Wi-Fi"
             if !(await resetStationOnce(saved)) {
-                networkSetupError = "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
+                networkSetupError =
+                    "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
             }
             networkMessage = scanMessage
         }
@@ -647,7 +649,8 @@ final class MultiviewSession {
                 foregroundRejoin = true
             }
         }
-        let action: FeedWatchdog.Action = foregroundRejoin ? .fullSessionRejoin : tile.recovery.action(snapshot)
+        let action: FeedWatchdog.Action =
+            foregroundRejoin ? .fullSessionRejoin : tile.recovery.action(snapshot)
         if tile.decoder.awaitingIDR,
             FeedWatchdog.shouldReleaseIDRHold(
                 awaitingIDR: true, udpReceiveAlive: FeedWatchdog.udpReceiveAlive(snapshot),
@@ -1218,7 +1221,8 @@ final class MultiviewSession {
                 ssid: networkConfigured ? ssid : "", hotspot: usePhoneHotspot,
                 layout: layout.rawValue, focusedIndex: focusedIndex, cameras: saved,
                 pendingReset: running && !closing
-                    ? MultiviewStageStore.cleanupTargets(pendingReset, including: saved) : pendingReset,
+                    ? MultiviewStageStore.cleanupTargets(pendingReset, including: saved)
+                    : pendingReset,
                 returnedToCameraWiFi: !running && pendingReset.isEmpty,
                 fill: feedAspect == .fill))
         if !success { ControlLiveLog.line("multiview: could not save stage") }
@@ -1234,7 +1238,8 @@ final class MultiviewSession {
         guard let stage = savedStage else { return }
         pendingReset = stage.pendingReset ?? []
         if !stage.ssid.isEmpty,
-            let network = MultiviewNetworkStore.load(ssid: stage.ssid, hotspot: stage.hotspot) {
+            let network = MultiviewNetworkStore.load(ssid: stage.ssid, hotspot: stage.hotspot)
+        {
             ssid = network.ssid
             password = network.password
             usePhoneHotspot = stage.hotspot
@@ -1315,7 +1320,8 @@ final class MultiviewSession {
         guard !closing else { return false }
         closing = true
         if running {
-            pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, including: savedCameras())
+            pendingReset = MultiviewStageStore.cleanupTargets(
+                pendingReset, including: savedCameras())
         }
         persistStage()
         stop()
@@ -1343,8 +1349,11 @@ final class MultiviewSession {
         guard pendingReset.contains(where: { $0.id == saved.id }) else { return true }
         let task = Task {
             let success: Bool
-            if let resetCamera { success = await resetCamera(saved) }
-            else { success = await resetStation(saved) }
+            if let resetCamera {
+                success = await resetCamera(saved)
+            } else {
+                success = await resetStation(saved)
+            }
             if success { pendingReset.removeAll { $0.id == saved.id } }
             persistStage()
             stationResetTasks.removeValue(forKey: saved.id)
