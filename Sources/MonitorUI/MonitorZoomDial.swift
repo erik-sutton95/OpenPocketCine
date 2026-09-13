@@ -128,13 +128,16 @@
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Zoom dial")
                     .accessibilityValue(
-                        [label(value), caption].filter { !$0.isEmpty }.joined(separator: ", ")
+                        [scale.dialLabel(value), caption].filter { !$0.isEmpty }.joined(
+                            separator: ", ")
                     )
                     .accessibilityAdjustableAction { direction in
                         guard acceptsInput else { return }
                         onEditing(true)
-                        value = scale.value(
-                            at: scale.position(value) + (direction == .increment ? 0.02 : -0.02))
+                        let step =
+                            direction == .increment
+                            ? MonitorZoomScale.tickIncrement : -MonitorZoomScale.tickIncrement
+                        value = scale.quantized(value + step)
                         onEditing(false)
                     }
                     .accessibilityIdentifier("monitor.zoom.dial")
@@ -196,7 +199,7 @@
             let zoom = value
             return MonitorZoomCanvasSnapshot(
                 radius: radius, attachment: attachment, scale: scale,
-                position: scale.position(zoom),
+                position: scale.position(scale.quantized(zoom)),
                 opticalMaximum: opticalStops.max() ?? scale.minimum,
                 marks: marks.filter { $0 >= scale.minimum && $0 <= scale.maximum }.map {
                     MonitorZoomCanvasMark(value: $0, fraction: scale.position($0), label: label($0))
@@ -247,20 +250,36 @@
                     startAngle: bottom ? .degrees(180) : .degrees(90),
                     endAngle: bottom ? .degrees(360) : .degrees(270), clockwise: false)
                 context.stroke(rim, with: .color(.white.opacity(0.07)), lineWidth: 1.5 * unit)
-                for tick in 0...48 { stroke(Double(tick) / 48, major: false) }
-                for mark in snapshot.marks {
-                    let fraction = mark.fraction
-                    stroke(fraction, major: true)
+                let lo = scale.value(at: position - window / MonitorZoomScale.angularSpan)
+                let hi = scale.value(at: position + window / MonitorZoomScale.angularSpan)
+                let minDelta = 2.5 / max(Double(164 * unit), 1)
+                var lastDelta = -Double.infinity
+                var hundredths = Int((lo / MonitorZoomScale.tickIncrement).rounded(.down))
+                let lastHundredths = Int((hi / MonitorZoomScale.tickIncrement).rounded(.up))
+                while hundredths <= lastHundredths {
+                    let tick = scale.quantized(
+                        Double(hundredths) * MonitorZoomScale.tickIncrement)
+                    hundredths += 1
+                    let fraction = scale.position(tick)
                     let delta = (fraction - position) * MonitorZoomScale.angularSpan
                     guard abs(delta) <= window else { continue }
-                    let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
-                    let color =
-                        mark.value > opticalMaximum + 0.02
-                        ? snapshot.digitalInk : snapshot.secondaryInk
-                    context.draw(
-                        Text(mark.label).font(snapshot.labelFont)
-                            .foregroundStyle(color.opacity(opacity)),
-                        at: point(.pi + delta, 124 * unit))
+                    let mark = snapshot.marks.first {
+                        abs(scale.quantized($0.value) - tick) < MonitorZoomScale.tickIncrement / 2
+                    }
+                    let major = mark != nil || scale.isLabeledTick(tick)
+                    if !major, abs(delta - lastDelta) < minDelta { continue }
+                    stroke(fraction, major: major)
+                    lastDelta = delta
+                    if let mark {
+                        let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
+                        let color =
+                            mark.value > opticalMaximum + 0.02
+                            ? snapshot.digitalInk : snapshot.secondaryInk
+                        context.draw(
+                            Text(mark.label).font(snapshot.labelFont)
+                                .foregroundStyle(color.opacity(opacity)),
+                            at: point(.pi + delta, 124 * unit))
+                    }
                 }
                 var marker = Path()
                 if bottom {
@@ -286,7 +305,8 @@
             ZStack(alignment: isBottom ? .top : .leading) {
                 Self.canvas(canvasSnapshot)
                 VStack(spacing: 5) {
-                    Text(label(value)).font(MonitorTheme.font(radius * 0.19, weight: .bold))
+                    Text(scale.dialLabel(value)).font(
+                        MonitorTheme.font(radius * 0.19, weight: .bold))
                         .monospacedDigit().foregroundStyle(MonitorTheme.text)
                     if !caption.isEmpty {
                         Text(caption).font(MonitorTheme.font(10)).tracking(1)

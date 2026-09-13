@@ -160,8 +160,11 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     val textMeasurer = rememberTextMeasurer()
     fun update(next: Float) {
         if (!next.isFinite() || closing) return
-        position = next.coerceIn(0f, 1f)
-        send(exp(position * logMax).coerceIn(1.0, maxZoom))
+        val factor = MonitorZoomScale.quantized(
+            exp(next.toDouble().coerceIn(0.0, 1.0) * logMax).coerceIn(1.0, maxZoom),
+            maximum = maxZoom)
+        position = MonitorZoomScale.position(factor, 1.0, maxZoom).toFloat()
+        send(factor)
     }
     val provider = remember { object : PopupPositionProvider {
         override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
@@ -192,7 +195,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                     alpha = motion }
                 .monitorMaterial(MonitorMaterial.Zoom, MonitorZoomDiscShape(attachment))) {
                 Canvas(Modifier.fillMaxSize().semantics {
-                    contentDescription = "Zoom ${label(factor)}"
+                    contentDescription = "Zoom ${MonitorZoomScale.dialLabel(factor, maximum = maxZoom)}"
                     progressBarRangeInfo = ProgressBarRangeInfo(position, 0f..1f)
                     setProgress { update(it); true }
                     customActions = listOf(CustomAccessibilityAction("Close zoom") { closing = true; true })
@@ -247,19 +250,33 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                         style = Stroke(1.5f * scale))
                     val window = .36 * PI
                     fun alpha(angle: Double) = ((window - abs(angle - PI / 2)) / (.3 * window)).toFloat().coerceIn(0f, 1f)
-                    fun angle(t: Double) = PI / 2 + (t - position) * (210 * PI / 180)
-                    repeat(49) { index ->
-                        val a = angle(index / 48.0)
-                        if (abs(a - PI / 2) <= window) drawLine(Color.White.copy(alpha = .3f * alpha(a)),
-                            point(a, 164f), point(a, 155f), 1.2f * scale, StrokeCap.Round)
-                    }
-                    listOf(1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0).filter { it <= maxZoom }.forEach { value ->
-                        val a = angle(ln(value) / logMax)
-                        if (abs(a - PI / 2) <= window) {
-                            drawLine(Color.White.copy(alpha = .7f * alpha(a)), point(a, 164f), point(a, 143f),
-                                2.2f * scale, StrokeCap.Round)
+                    fun angle(t: Double) = PI / 2 + (t - position) * MonitorZoomScale.ANGULAR_SPAN
+                    val lo = MonitorZoomScale.valueAt(position - window / MonitorZoomScale.ANGULAR_SPAN, 1.0, maxZoom)
+                    val hi = MonitorZoomScale.valueAt(position + window / MonitorZoomScale.ANGULAR_SPAN, 1.0, maxZoom)
+                    val minDelta = 2.5 / maxOf(164f * scale, 1f)
+                    var lastDelta = -Double.MAX_VALUE
+                    var hundredths = kotlin.math.floor(lo / MonitorZoomScale.TICK_INCREMENT).toInt()
+                    val lastHundredths = kotlin.math.ceil(hi / MonitorZoomScale.TICK_INCREMENT).toInt()
+                    while (hundredths <= lastHundredths) {
+                        val tick = MonitorZoomScale.quantized(
+                            hundredths * MonitorZoomScale.TICK_INCREMENT, maximum = maxZoom)
+                        hundredths++
+                        val t = MonitorZoomScale.position(tick, 1.0, maxZoom)
+                        val a = angle(t)
+                        val delta = a - PI / 2
+                        if (abs(delta) > window) continue
+                        val major = MonitorZoomScale.isLabeledTick(tick, maximum = maxZoom)
+                        if (!major && abs(delta - lastDelta) < minDelta) continue
+                        val digital = tick > (opticalStops.maxOrNull() ?: 1.0) + .02
+                        val color = if (digital) Color(0xFFF0B23C) else Color.White
+                        drawLine(color.copy(alpha = (if (major) .7f else .3f) * alpha(a)),
+                            point(a, 164f), point(a, if (major) 143f else 155f),
+                            (if (major) 2.2f else 1.2f) * scale, StrokeCap.Round)
+                        lastDelta = delta
+                        if (major) {
                             val near = ((abs(a - PI / 2) - .035) / .075).toFloat().coerceIn(0f, 1f)
-                            val measured = textMeasurer.measure(label(value), MonitorTypography.readout(12f, FontWeight.SemiBold))
+                            val measured = textMeasurer.measure(
+                                label(tick), MonitorTypography.readout(12f, FontWeight.SemiBold))
                             drawText(measured, Color.White.copy(alpha = .78f * alpha(a) * near),
                                 topLeft = point(a, 124f) - Offset(measured.size.width / 2f, measured.size.height / 2f))
                         }
@@ -284,7 +301,8 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                     else (radius * .04f + disc.edgeExtension).dp,
                 ),
                     horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label(factor), style = MonitorTypography.readout(radius * .19f, FontWeight.Bold))
+                    Text(MonitorZoomScale.dialLabel(factor, maximum = maxZoom),
+                        style = MonitorTypography.readout(radius * .19f, FontWeight.Bold))
                     Text(caption(factor), style = MonitorTypography.text(10f, FontWeight.Medium), color = accent)
                 }
             }

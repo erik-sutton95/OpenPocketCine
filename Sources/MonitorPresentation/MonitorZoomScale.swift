@@ -6,6 +6,8 @@ public struct MonitorZoomScale: Equatable, Sendable {
     public let minimum: Double
     public let maximum: Double
     public static let angularSpan = 210.0 * Double.pi / 180
+    public static let tickIncrement = 0.01
+    public static let labeledTicks = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
 
     public init(minimum: Double, maximum: Double) {
         self.minimum = minimum.isFinite && minimum > 0 ? minimum : 1
@@ -23,8 +25,24 @@ public struct MonitorZoomScale: Equatable, Sendable {
     }
 
     public func dragged(from value: Double, angleDelta: Double) -> Double {
-        guard angleDelta.isFinite else { return self.value(at: position(value)) }
-        return self.value(at: position(value) - angleDelta / Self.angularSpan)
+        guard angleDelta.isFinite else { return quantized(self.value(at: position(value))) }
+        return quantized(self.value(at: position(value) - angleDelta / Self.angularSpan))
+    }
+
+    public func quantized(_ value: Double) -> Double {
+        guard value.isFinite else { return minimum }
+        let clamped = min(maximum, max(minimum, value))
+        let snapped = (clamped / Self.tickIncrement).rounded() * Self.tickIncrement
+        return min(maximum, max(minimum, snapped))
+    }
+
+    public func dialLabel(_ value: Double) -> String {
+        String(format: "%.2f×", quantized(value))
+    }
+
+    public func isLabeledTick(_ value: Double, marks: [Double] = Self.labeledTicks) -> Bool {
+        let tick = quantized(value)
+        return marks.contains { abs(quantized($0) - tick) < Self.tickIncrement / 2 }
     }
 }
 

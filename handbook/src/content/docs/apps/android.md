@@ -189,7 +189,8 @@ Platform differences, including Frame.io and MetalFX, are listed in
 The fitted portrait feed is centered vertically, with STBY, timecode and REC SETUP in
 a separate row below the status area. View Assist, FIT/FILL and the joystick
 cluster stay above the camera values in fixed positions when switching FIT/FILL.
-In landscape the larger zoom disc extends to the trailing screen
+Hold zoom for a continuous dial. The disc reads hundredths (1.53×) and ticks in
+0.01 steps; the chip still shows tenths. In landscape the larger zoom disc extends to the trailing screen
 edge and covers the controls beneath it until closed. In portrait it rises from
 above the camera values and system buttons so more of the picture stays visible.
 

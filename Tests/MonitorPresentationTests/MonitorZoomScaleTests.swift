@@ -12,6 +12,19 @@ struct MonitorZoomScaleTests {
         #expect(scale.dragged(from: 3, angleDelta: -100) == 12)
     }
 
+    @Test func dialTicksAndLabelsUseHundredths() {
+        let scale = MonitorZoomScale(minimum: 1, maximum: 12)
+        #expect(scale.quantized(1.534) == 1.53)
+        #expect(scale.quantized(1.536) == 1.54)
+        #expect(scale.dialLabel(1.534) == "1.53×")
+        #expect(scale.dialLabel(1) == "1.00×")
+        #expect(scale.isLabeledTick(1.5))
+        #expect(scale.isLabeledTick(1.50))
+        #expect(!scale.isLabeledTick(1.53))
+        let nearby = scale.dragged(from: 1.53, angleDelta: 0)
+        #expect(nearby == 1.53)
+    }
+
     @Test func singleStopAndInvalidGeometryStayFinite() {
         let single = MonitorZoomScale(minimum: 2, maximum: 1)
         #expect(single.value(at: 0.5) == 2)

@@ -136,7 +136,9 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   viewport, and one continuous material to the physical edge. In portrait the disc
   is a bottom half-circle that sits above the camera-value and system-button rows
   so more of the feed stays visible; a full-screen dismiss plane still owns
-  underlying control input while it is open.
+  underlying control input while it is open. Disc ticks are 0.01× increments;
+  labeled marks share that grid. The disc hub shows hundredths (1.53×); the
+  chip still shows tenths.
 - The expanded Motion Control editor passes joystick touches to the original
   control so positions can be set without minimizing the window. Other outside
   taps minimize without activating covered controls. Window dragging uses local
