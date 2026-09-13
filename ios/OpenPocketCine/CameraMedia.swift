@@ -32,6 +32,7 @@ final class CameraMedia {
     var favoritesCameraID: String?
     var thumbInFlight: Set<String> = []
     var downloadInFlight: Set<String> = []
+    private var colorMapCache: (cameraID: String, map: [String: Int])?
 
     private let pump = MediaDownloadPump()
     private lazy var http: URLSession = {
@@ -222,14 +223,22 @@ final class CameraMedia {
     }
 
     private func loadColorMap(cameraID: String) -> [String: Int] {
+        if let cached = colorMapCache, cached.cameraID == cameraID { return cached.map }
         let url = colorStoreURL(cameraID: cameraID)
-        guard let data = try? Data(contentsOf: url),
-            let map = try? JSONDecoder().decode([String: Int].self, from: data)
-        else { return [:] }
+        let map: [String: Int]
+        if let data = try? Data(contentsOf: url),
+            let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        {
+            map = decoded
+        } else {
+            map = [:]
+        }
+        colorMapCache = (cameraID, map)
         return map
     }
 
     private func persistColorMap(_ map: [String: Int], cameraID: String) {
+        colorMapCache = (cameraID, map)
         let url = colorStoreURL(cameraID: cameraID)
         do {
             try FileManager.default.createDirectory(

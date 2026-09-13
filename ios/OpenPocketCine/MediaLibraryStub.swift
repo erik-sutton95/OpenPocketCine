@@ -364,10 +364,13 @@ struct MediaLibraryView: View {
     }
 
     private var shotColorCodes: [String: UInt8] {
-        Dictionary(
-            uniqueKeysWithValues: filterSourceFiles.compactMap { file in
-                session.shotColor(for: file).map { (file.path, $0.rawValue) }
-            })
+        var map: [String: UInt8] = [:]
+        for file in filterSourceFiles {
+            if let mode = session.shotColor(for: file) {
+                map[file.path] = mode.rawValue
+            }
+        }
+        return map
     }
 
     private var colorOptions: [ColorMode] {
@@ -437,7 +440,8 @@ struct MediaLibraryView: View {
     }
 
     var body: some View {
-        let filesByID = Dictionary(uniqueKeysWithValues: displayedFiles.map { ($0.id, $0) })
+        let filesByID = Dictionary(
+            displayedFiles.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         ZStack(alignment: .topLeading) {
             LiveDesign.background
 
@@ -890,9 +894,8 @@ private struct FilterCalendarSheet: View {
         self.title = title
         self.range = range
         self._key = key
-        let initial =
-            key.wrappedValue.flatMap { MediaLibraryQuery.date(fromKey: $0) }
-            ?? min(max(Date(), range.lowerBound), range.upperBound)
+        let parsed = key.wrappedValue.flatMap { MediaLibraryQuery.date(fromKey: $0) }
+        let initial = min(max(parsed ?? Date(), range.lowerBound), range.upperBound)
         _date = State(initialValue: initial)
     }
 
@@ -902,6 +905,7 @@ private struct FilterCalendarSheet: View {
                 title, selection: $date, in: range, displayedComponents: .date
             )
             .datePickerStyle(.graphical)
+            .environment(\.calendar, MediaLibraryQuery.filenameCalendar())
             .tint(MonitorTheme.accent)
             .padding(.horizontal, 8)
             .navigationTitle(title)

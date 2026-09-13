@@ -833,14 +833,22 @@ public enum MediaLibraryQuery {
         }
     }
 
-    /// Filename `YYYYMMDD` as local calendar year-month-day. Not an instant.
-    public static func dateKey(from date: Date, calendar: Calendar = .current) -> String {
+    /// Gregorian civil date in the local zone. Filenames are `YYYYMMDD`, not the
+    /// device calendar identifier (Thai Buddhist years would otherwise miss).
+    public static func filenameCalendar(timeZone: TimeZone = .current) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    /// Filename `YYYYMMDD` as Gregorian year-month-day. Not an instant.
+    public static func dateKey(from date: Date, calendar: Calendar = filenameCalendar()) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(
             format: "%04d%02d%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    public static func date(fromKey key: String, calendar: Calendar = .current) -> Date? {
+    public static func date(fromKey key: String, calendar: Calendar = filenameCalendar()) -> Date? {
         guard key.count == 8,
             let year = Int(key.prefix(4)),
             let month = Int(key.dropFirst(4).prefix(2)),

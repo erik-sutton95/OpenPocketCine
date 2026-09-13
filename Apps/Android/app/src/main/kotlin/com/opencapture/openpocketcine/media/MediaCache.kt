@@ -11,6 +11,8 @@ class MediaCache(
     private val filesDir: File,
     private val prefs: SharedPreferences,
 ) {
+    private var colorMapCameraId: String? = null
+    private var colorMapCache: JSONObject? = null
     fun cacheRoot(cameraId: String): File =
         File(filesDir, "OpenPocketCine/media/$cameraId")
 
@@ -76,12 +78,19 @@ class MediaCache(
     }
 
     private fun loadColorMap(cameraId: String): JSONObject {
+        if (colorMapCameraId == cameraId) colorMapCache?.let { return it }
         val dest = colorStoreFile(cameraId)
-        if (!dest.isFile) return JSONObject()
-        return runCatching { JSONObject(dest.readText()) }.getOrDefault(JSONObject())
+        val map =
+            if (!dest.isFile) JSONObject()
+            else runCatching { JSONObject(dest.readText()) }.getOrDefault(JSONObject())
+        colorMapCameraId = cameraId
+        colorMapCache = map
+        return map
     }
 
     private fun persistColorMap(map: JSONObject, cameraId: String) {
+        colorMapCameraId = cameraId
+        colorMapCache = map
         val dest = colorStoreFile(cameraId)
         dest.parentFile?.mkdirs()
         dest.writeText(map.toString())

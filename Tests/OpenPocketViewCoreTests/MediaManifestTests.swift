@@ -200,6 +200,11 @@ import Testing
                 shotColors: [files[0].path: UInt8(0x41)]
             ).map(\.path) == [files[0].path])
         #expect(MediaLibraryQuery.dateKey(from: MediaLibraryQuery.date(fromKey: "20260814")!) == "20260814")
+        var buddhist = Calendar(identifier: .buddhist)
+        buddhist.timeZone = .current
+        let civil = MediaLibraryQuery.date(fromKey: "20260814")!
+        #expect(MediaLibraryQuery.dateKey(from: civil) == "20260814")
+        #expect(MediaLibraryQuery.dateKey(from: civil, calendar: buddhist) != "20260814")
         #expect(MediaClipFormatting.durationLabel(seconds: 209) == "3:29")
     }
 

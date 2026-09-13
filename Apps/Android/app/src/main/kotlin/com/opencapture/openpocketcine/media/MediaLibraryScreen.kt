@@ -39,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -853,31 +854,33 @@ private fun FilterPopup(
                 )
             }
         }
-        if (pickingBound != null) {
-            val isStart = pickingBound == "start"
-            val current = if (isStart) dateStartKey else dateEndKey
-            val pickerState = rememberDatePickerState(
-                initialSelectedDateMillis = current?.let { MediaLibraryQuery.millisFromDateKey(it) },
-            )
-            DatePickerDialog(
-                onDismissRequest = { pickingBound = null },
-                confirmButton = {
-                    TextButton(onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            val key = MediaLibraryQuery.dateKeyFromMillis(millis)
-                            if (isStart) onDateStart(key) else onDateEnd(key)
-                        }
-                        pickingBound = null
-                    }) { Text("Done") }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        if (isStart) onDateStart(null) else onDateEnd(null)
-                        pickingBound = null
-                    }) { Text("Clear") }
-                },
-            ) {
-                DatePicker(pickerState)
+        pickingBound?.let { bound ->
+            key(bound) {
+                val isStart = bound == "start"
+                val current = if (isStart) dateStartKey else dateEndKey
+                val pickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = current?.let { MediaLibraryQuery.millisFromDateKey(it) },
+                )
+                DatePickerDialog(
+                    onDismissRequest = { pickingBound = null },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            pickerState.selectedDateMillis?.let { millis ->
+                                val key = MediaLibraryQuery.dateKeyFromMillis(millis)
+                                if (isStart) onDateStart(key) else onDateEnd(key)
+                            }
+                            pickingBound = null
+                        }) { Text("Done") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            if (isStart) onDateStart(null) else onDateEnd(null)
+                            pickingBound = null
+                        }) { Text("Clear") }
+                    },
+                ) {
+                    DatePicker(pickerState)
+                }
             }
         }
     }
