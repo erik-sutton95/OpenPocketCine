@@ -2,7 +2,10 @@
 
 Surfaces: portable core, iOS shell, Android shell, diagnostics and Debug XCTest.
 This records implementation after the [incident audit](2026-09-14-feed-incidents.md).
-**Release qualification is blocked. No physical live-feed stress pass was obtained.**
+This records the earlier blocked attempt. The later operator-assisted
+[physical stress results](2026-09-14-physical-feed-stress.md) reproduce and fix an
+iOS foreground recovery defect and include passing focused/mixed runs. Full
+release qualification remains incomplete.
 
 ## Implemented
 

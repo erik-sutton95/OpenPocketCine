@@ -70,3 +70,9 @@ investigation on both iPhone and Android, including the
 [Redmi report](https://github.com/erik-sutton95/OpenPocketCine/issues/334).
 
 More: [Camera Wi-Fi](../protocol/wifi/), [iOS app](../apps/ios/), [Android app](../apps/android/).
+
+On iOS, returning from the background with arriving video but an invalid native
+decoder now hands recovery to the feed watchdog. It can rebuild the decoder
+without forcing a full camera reconnect. A short picture hold can still occur
+while it waits for a new random-access frame. If a hold persists, keep the app
+open briefly and share diagnostics so the incident's recovery timeline is saved.

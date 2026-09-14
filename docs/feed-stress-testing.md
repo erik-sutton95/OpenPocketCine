@@ -1,8 +1,9 @@
 # Physical feed stress testing
 
 Surface: **iOS Debug XCTest** and `tools/feed-stress-*`. Not a production
-background task. Not an Android qualification. This branch has **not** recorded
-a passing physical camera baseline; the coordinator owns hardware.
+background task. Not an Android qualification. See the
+[physical stress results](audits/2026-09-14-physical-feed-stress.md) for the tested
+phone/camera, reproduction and remaining limits.
 
 Requires a paired, unlocked USB iPhone with Developer Mode, a powered Pocket 4
 Pro, and exactly one saved camera with Pocket 4 Pro identity (`modelId` 0x0022).
@@ -21,7 +22,7 @@ powered. XCTest can accept the app's Bluetooth, local-network, and camera Wi-Fi
 Join prompts; unrelated prompts still need the operator. Do not overlap another
 Xcode device run.
 
-The seeded sequence repeats until `limit` (60–1800 s): Settings open/close,
+The seeded sequence repeats until `limit` (60–1740 s): Settings open/close,
 assist toggles, rotation, camera-setting changes, short joystick throws, and
 foreground/background. Teardown rests the stick, restores captured assist/ISO/WB
 and portrait, and stops a recording this run started. A killed app or dropped USB
@@ -68,4 +69,14 @@ case as a proven camera take.
 
 The [September 14 attempt](audits/2026-09-14-feed-qualification.md) was blocked by
 XCTest automation-mode timeouts and camera Wi-Fi join error 8. It produced zero
-live exposure, not a passing stress result.
+live exposure. A later operator-assisted session enabled UI automation and
+produced the [physical results](audits/2026-09-14-physical-feed-stress.md).
+
+## Focused reproduction
+
+Set `SCENARIOS=lifecycleInterrupt` before `just ios-feed-stress` to isolate
+background/foreground transitions. A comma-separated subset of core scenario
+names is also accepted. The lifecycle assertion measures counters **after**
+activation, so frames delivered before Home cannot pass recovery. The app's
+numeric recorder gets 60 seconds beyond the scenario deadline for a final
+in-flight operation and teardown; this is not additional test exposure.

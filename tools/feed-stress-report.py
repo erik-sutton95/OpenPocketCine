@@ -72,8 +72,7 @@ def stats(values: list[float]) -> str:
     )
 
 
-def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/opc-feed-stress")
+def report_run(root: Path) -> int:
     files = collect_files(root)
     print(f"artifact root: {root}")
     print(f"files: {len(files)}")
@@ -170,6 +169,38 @@ def main() -> int:
     print("Rates are 1s counter deltas, not ControlLiveLog history or cached FPS.")
     print("presEnqueue=identity layer enqueue admission; presMetal=Metal GPU completion; neither is scanout.")
     return 0
+
+
+def main() -> int:
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/opc-feed-stress")
+    runs = {}
+    for header_path in root.rglob("header.json"):
+        try:
+            header = json.loads(header_path.read_text())
+            run_id = header["runId"]
+        except (OSError, ValueError, KeyError):
+            continue
+        # CoreDevice preserves header mtimes across pulls. Prefer the most
+        # complete append-only capture, not an arbitrary earlier partial copy.
+        def capture_rank(path):
+            snapshots = path.parent / "snapshots.ndjson"
+            return (
+                snapshots.stat().st_size if snapshots.exists() else 0,
+                (path.parent / "summary.json").exists(),
+                path.stat().st_mtime,
+            )
+
+        previous = runs.get(run_id)
+        if previous is None or capture_rank(header_path) > capture_rank(previous):
+            runs[run_id] = header_path
+    if not runs:
+        print("No identifiable feed-stress run found.")
+        return 1
+    result = 0
+    for run_id, header_path in sorted(runs.items()):
+        print(f"\nRun: {run_id}")
+        result = max(result, report_run(header_path.parent))
+    return result
 
 
 if __name__ == "__main__":

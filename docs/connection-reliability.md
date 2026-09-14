@@ -197,3 +197,15 @@ Out of scope until #148 is classified: ACK group 2 identity, wiring
 
 Do not spam `0x09/0xa8`. Do not tear UDP because a SET timed out while
 video still arrives. Do not flush the last frame on freeze.
+
+### iOS native decoder after foreground return
+
+When the camera path and compressed video are fresh and native output is
+expected, foreground return flushes a failed display layer and releases its
+foreground check task. The existing watchdog then owns native-output recovery.
+It must not wait for picture while suppressing keepalive/watchdog ticks: an
+invalid VideoToolbox session cannot recover from that wait, and the old timeout
+forced a full saved-camera reconnect. Camera-network loss still uses the saved
+camera recovery path. Fresh native output with stale presentation does not
+justify a camera rejoin. Android's MediaCodec lifecycle is separate; this repair
+addresses an iOS foreground-task ownership conflict.

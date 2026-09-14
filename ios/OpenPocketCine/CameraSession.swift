@@ -4620,6 +4620,14 @@ final class CameraSession {
         ControlLiveLog.line("session: foreground fresh video, repairing presentation")
         decoder.prepareAfterForeground()
         endGimbalStick(cancelMove: true)
+        if decoder.nativeOutputExpected {
+            // This task suppresses keepalive/watchdog ticks while it exists.
+            // Release it so the existing native-output repair owner can run;
+            // waiting here cannot revive an invalid VT session and would force
+            // a full reconnect before the watchdog ever sees the stall.
+            ControlLiveLog.line("session: foreground native output handed to watchdog")
+            return
+        }
         let repaired = await waitForRecoveryPicture(
             since: now, timeout: .seconds(CameraSoftAP.foregroundPictureGrace))
         guard !Task.isCancelled else { return }

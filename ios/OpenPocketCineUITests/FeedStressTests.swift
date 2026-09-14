@@ -17,6 +17,7 @@ final class FeedStressTests: XCTestCase {
     private var failures: [String] = []
     private var rng = FeedStressSeed(state: 20_260_914)
     private var finished = false
+    private var selectedScenarios = FeedStressScenario.core
 
     override func setUp() {
         continueAfterFailure = true
@@ -43,16 +44,25 @@ final class FeedStressTests: XCTestCase {
         seed = UInt64(env["OPV_FEED_STRESS_SEED"] ?? "") ?? 20_260_914
         limitS = TimeInterval(env["OPV_FEED_STRESS_LIMIT_S"] ?? "") ?? 300
         if limitS < 60 { limitS = 60 }
-        if limitS > 1_800 { limitS = 1_800 }
+        // Reserve the final minute inside the app recorder's 30-minute cap.
+        if limitS > 1_740 { limitS = 1_740 }
         recordOptIn = env["OPV_FEED_STRESS_RECORD"] == "1"
         injectOptIn = !(env["OPV_FEED_STRESS_INJECT"] ?? "").isEmpty
+        if let filter = env["OPV_FEED_STRESS_SCENARIOS"], !filter.isEmpty {
+            let names = filter.split(separator: ",").map(String.init)
+            selectedScenarios = FeedStressScenario.core.filter { names.contains($0.rawValue) }
+            guard selectedScenarios.count == names.count else {
+                throw FeedStressError.halted("Unknown or duplicate scenario filter")
+            }
+        }
         rng = FeedStressSeed(state: seed == 0 ? 1 : seed)
         deadline = Date().addingTimeInterval(limitS)
 
         app = XCUIApplication()
         app.launchEnvironment["OPV_FEED_STRESS"] = "1"
         app.launchEnvironment["OPV_FEED_STRESS_SEED"] = "\(seed)"
-        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] = "\(Int(limitS))"
+        // Keep counters alive through a final in-flight scenario and teardown.
+        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] = "\(Int(limitS) + 60)"
         if recordOptIn { app.launchEnvironment["OPV_FEED_STRESS_RECORD"] = "1" }
         if let inject = env["OPV_FEED_STRESS_INJECT"], !inject.isEmpty {
             app.launchEnvironment["OPV_FEED_STRESS_INJECT"] = inject
@@ -80,7 +90,7 @@ final class FeedStressTests: XCTestCase {
                 break
             }
             cycle += 1
-            var scenarios = FeedStressScenario.core
+            var scenarios = selectedScenarios
             if recordOptIn { scenarios.append(.briefRecord) }
             if injectOptIn { scenarios.append(.injectFault) }
             scenarios.shuffle(using: &rng)
@@ -212,12 +222,13 @@ final class FeedStressTests: XCTestCase {
     }
 
     private func lifecycleInterrupt() throws {
-        let before = try requireSnapshot()
         XCUIDevice.shared.press(.home)
         sleepStep(2.0)
         app.activate()
+        // Frames submitted before Home/activation cannot prove foreground recovery.
+        let returned = try requireSnapshot()
         _ = try waitProgress(
-            from: before, source: true, decode: true, present: true, timeout: 16,
+            from: returned, source: true, decode: true, present: true, timeout: 16,
             why: "lifecycle recover deadline")
     }
 
@@ -241,11 +252,10 @@ final class FeedStressTests: XCTestCase {
     }
 
     private func injectFault() throws {
+        // Every arm needs a new continuous healthy window, including after a
+        // previous fault or lifecycle scenario. Elapsed run time is not health.
+        try waitForHealthyBaseline(minimum: 30)
         let before = try requireSnapshot()
-        let healthy = Double(before["t"] ?? "0") ?? 0
-        if healthy < 30 {
-            sleepStep(30 - healthy + 0.5)
-        }
         postFeedStress("com.opencapture.opc.feed-stress.arm-inject")
         sleepStep(3.5)
         postFeedStress("com.opencapture.opc.feed-stress.disarm-inject")
@@ -326,22 +336,20 @@ final class FeedStressTests: XCTestCase {
     }
 
     private func waitForHealthyBaseline(minimum: TimeInterval) throws {
-        let start = Date()
+        var healthySince = Date()
+        let expires = Date().addingTimeInterval(max(60, minimum * 3))
         var last = try requireSnapshot()
-        var ticks = 0
-        while Date().timeIntervalSince(start) < minimum {
-            if thermalHalt() {
-                throw FeedStressError.halted("thermal during baseline")
-            }
+        while Date() < expires {
+            if thermalHalt() { throw FeedStressError.halted("thermal during baseline") }
             sleepStep(1.0)
             let now = try requireSnapshot()
-            if progressed(from: last, to: now, source: true, decode: true, present: false) {
-                ticks += 1
+            if !progressed(from: last, to: now, source: true, decode: true, present: false) {
+                healthySince = Date()
             }
             last = now
+            if Date().timeIntervalSince(healthySince) >= minimum { return }
         }
-        XCTAssertGreaterThan(
-            ticks, 0, "No source/decode counter progress in \(minimum)s healthy baseline")
+        throw FeedStressError.halted("No continuous healthy source/decode baseline")
     }
 
     private func openLiveSettings() throws {

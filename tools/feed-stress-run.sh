@@ -89,6 +89,9 @@ run_tests() {
     if [[ -n "$INJECT" ]]; then
         env_args+=(TEST_RUNNER_OPV_FEED_STRESS_INJECT="$INJECT")
     fi
+    if [[ -n "${SCENARIOS:-}" ]]; then
+        env_args+=(TEST_RUNNER_OPV_FEED_STRESS_SCENARIOS="$SCENARIOS")
+    fi
     status=0
     pull_artifacts() {
         DEVICE="$DEVICE" DEST="$DEST" "$ROOT/tools/feed-stress-pull.sh" || true
