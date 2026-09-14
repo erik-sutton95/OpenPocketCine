@@ -162,9 +162,13 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     val textMeasurer = rememberTextMeasurer()
     fun update(next: Float) {
         if (!next.isFinite() || closing) return
-        val factor = MonitorZoomScale.quantized(
+        val unconstrained = MonitorZoomScale.quantized(
             exp(next.toDouble().coerceIn(0.0, 1.0) * logMax).coerceIn(1.0, maxZoom),
             maximum = maxZoom)
+        val current = MonitorZoomScale.quantized(
+            exp(position.toDouble().coerceIn(0.0, 1.0) * logMax).coerceIn(1.0, maxZoom),
+            maximum = maxZoom)
+        val factor = MonitorZoomScale.slowSnap(unconstrained, current, maximum = maxZoom)
         position = MonitorZoomScale.position(factor, 1.0, maxZoom).toFloat()
         send(factor)
     }

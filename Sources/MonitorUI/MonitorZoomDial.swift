@@ -124,7 +124,8 @@
                                             let delta = radial?.angleDelta(
                                                 x: gesture.location.x, y: gesture.location.y)
                                         else { return }
-                                        value = scale.dragged(from: origin, angleDelta: delta)
+                                        value = scale.dragged(
+                                            from: origin, angleDelta: delta, current: value)
                                     }
                                     .onEnded { _ in finishEditing() }
                             )

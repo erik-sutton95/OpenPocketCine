@@ -33,6 +33,18 @@ struct MonitorZoomScaleTests {
         #expect(abs(step / 0.01 - (step / 0.01).rounded()) < 1e-9)
     }
 
+    @Test func slowRotationSnapsToWholeStopsAndFastRotationDoesNot() {
+        let scale = MonitorZoomScale(minimum: 1, maximum: 12)
+        #expect(scale.slowSnap(2.98, current: 2.97) == 3)
+        #expect(scale.slowSnap(3.02, current: 3.00) == 3)
+        #expect(abs(scale.slowSnap(3.08, current: 3.00) - 3.08) < 1e-9)
+        #expect(scale.slowSnap(3.12, current: 3.00) == 3.12)
+        #expect(abs(scale.slowSnap(1.52, current: 1.51) - 1.52) < 1e-9)
+        #expect(scale.slowSnap(6.02, current: 6.00) == 6)
+        let fast = scale.dragged(from: 2.5, angleDelta: -0.4, current: 2.5)
+        #expect(abs(fast - 3) > 0.05)
+    }
+
     @Test func singleStopAndInvalidGeometryStayFinite() {
         let single = MonitorZoomScale(minimum: 2, maximum: 1)
         #expect(single.value(at: 0.5) == 2)
