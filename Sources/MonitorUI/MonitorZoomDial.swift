@@ -57,8 +57,8 @@
                     trailingInset: safeArea.trailing > 0 ? safeArea.trailing + 6 : 0)
             case .bottom:
                 return MonitorZoomGeometry(
-                    width: viewport.width,
-                    height: max(0, viewport.height - bottomClearance),
+                    width: viewport.width, height: viewport.height,
+                    bottomInset: safeArea.bottom > 0 ? safeArea.bottom : 0,
                     attachment: .bottom)
             }
         }
@@ -254,36 +254,24 @@
                     startAngle: bottom ? .degrees(180) : .degrees(90),
                     endAngle: bottom ? .degrees(360) : .degrees(270), clockwise: false)
                 context.stroke(rim, with: .color(.white.opacity(0.07)), lineWidth: 1.5 * unit)
-                let lo = scale.value(at: position - window / MonitorZoomScale.angularSpan)
-                let hi = scale.value(at: position + window / MonitorZoomScale.angularSpan)
-                let minDelta = 2.5 / max(Double(164 * unit), 1)
-                var lastDelta = -Double.infinity
-                var hundredths = Int((lo / MonitorZoomScale.tickIncrement).rounded(.down))
-                let lastHundredths = Int((hi / MonitorZoomScale.tickIncrement).rounded(.up))
-                while hundredths <= lastHundredths {
-                    let tick = scale.quantized(
-                        Double(hundredths) * MonitorZoomScale.tickIncrement)
-                    hundredths += 1
-                    let fraction = scale.position(tick)
-                    let delta = (fraction - position) * MonitorZoomScale.angularSpan
+                for fraction in MonitorZoomScale.minorTickPositions() {
+                    let nearMajor = snapshot.marks.contains {
+                        abs($0.fraction - fraction) < 0.012
+                    }
+                    if !nearMajor { stroke(fraction, major: false) }
+                }
+                for mark in snapshot.marks {
+                    stroke(mark.fraction, major: true)
+                    let delta = (mark.fraction - position) * MonitorZoomScale.angularSpan
                     guard abs(delta) <= window else { continue }
-                    let mark = snapshot.marks.first {
-                        abs(scale.quantized($0.value) - tick) < MonitorZoomScale.tickIncrement / 2
-                    }
-                    let major = mark != nil || scale.isLabeledTick(tick)
-                    if !major, abs(delta - lastDelta) < minDelta { continue }
-                    stroke(fraction, major: major)
-                    lastDelta = delta
-                    if let mark {
-                        let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
-                        let color =
-                            mark.value > opticalMaximum + 0.02
-                            ? snapshot.digitalInk : snapshot.secondaryInk
-                        context.draw(
-                            Text(mark.label).font(snapshot.labelFont)
-                                .foregroundStyle(color.opacity(opacity)),
-                            at: point(.pi + delta, 124 * unit))
-                    }
+                    let opacity = fade(delta) * min(1, max(0, (abs(delta) - 0.035) / 0.075))
+                    let color =
+                        mark.value > opticalMaximum + 0.02
+                        ? snapshot.digitalInk : snapshot.secondaryInk
+                    context.draw(
+                        Text(mark.label).font(snapshot.labelFont)
+                            .foregroundStyle(color.opacity(opacity)),
+                        at: point(.pi + delta, 124 * unit))
                 }
                 var marker = Path()
                 if bottom {

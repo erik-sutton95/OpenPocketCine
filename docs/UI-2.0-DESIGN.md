@@ -82,8 +82,8 @@ independent of FIT/FILL and source aspect. The camera-value and system-button
 strips remain at the bottom. The
 zoom-disc follow-up increases its preferred radius by 10%, subject to viewport
 bounds. Landscape material extends continuously from the flat edge to the
-trailing screen edge. Portrait uses a bottom half-circle above the camera-value
-and system-button rows so more of the feed stays visible. These are
+trailing screen edge. Portrait uses a bottom half-circle flush to the screen
+edge, covering camera values until closed. These are
 operator-approved changes to the original reference, not new camera behavior.
 
 ### Blurred surfaces
@@ -361,14 +361,13 @@ attached edges stay square. Source 5446–5507, 7500–7570, 7765–7818.
 
 Zoom chip is 44 square, numeric 18/20. Prototype tap toggles optical lenses,
 double-tap selects digital crops, hold 380 ms opens logarithmic dial. Its
-double-tap window is 240 ms. Dial spans 210°, shows ±0.36π, uses 0.01 zoom ticks with taller marks on
-1/1.5/2/3/4/6/9/12 so both sit on the same increment grid; the hub reads
-hundredths (1.53×). Selected label fades as it reaches the fixed center
+double-tap window is 240 ms. Dial spans 210°, shows ±0.36π, uses equally spaced
+minor ticks on the log ring with taller marks on 1/1.5/2/3/4/6/9/12; the hub
+reads hundredths (1.53×). Selected label fades as it reaches the fixed center
 marker. The zoom chip still uses tenths. Optical labels are cyan/white; crop warning amber. Landscape is a trailing
 half-disc (radius clamps 120…260 phone or 330 tablet and half viewport height−12)
-with material to the physical edge. Portrait is a later operator correction: the
-same logarithmic scale as a bottom half-circle that sits above the camera-value
-and system-button rows so the feed stays visible. Other chrome fades to 0.16.
+with material to the physical edge. Portrait is the same logarithmic scale as a
+bottom half-circle flush to the screen edge. Other chrome fades to 0.16.
 Map this gesture shell onto existing model-specific zoom stops/limits and D-Log2
 safety; never hardcode two lenses on bodies without them. Source 5290–5376,
 6797–6990.

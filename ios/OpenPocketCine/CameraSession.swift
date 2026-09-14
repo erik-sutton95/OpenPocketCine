@@ -1357,13 +1357,17 @@ final class CameraSession {
     }
 
     /// Chip label. Pinch preview, then the chip-tap target, then `cam_fov`.
+    /// Stays on live 1× while D-Log2→D-Log is in flight — the body ignores zoom.
     var zoomReadout: Double {
         CamFov.readout(
-            live: status.zoomFactor, preview: zoomPinchPreview, fallback: zoomStop,
-            optimistic: zoomOptimistic)
+            live: status.zoomFactor,
+            preview: zoomColorHopPending ? nil : zoomPinchPreview,
+            fallback: zoomStop,
+            optimistic: zoomColorHopPending ? nil : zoomOptimistic)
     }
 
-    /// Zoom disc hub. Hundredths, not the chip's 0.1× steps.
+    /// Zoom disc hub. Hundredths, not the chip's 0.1× steps. Follows the finger
+    /// even while a D-Log2 hop is holding camera writes.
     var zoomDialReadout: Double {
         CamFov.continuousReadout(
             live: status.zoomFactor, preview: zoomPinchPreview, fallback: zoomStop,
@@ -1421,15 +1425,16 @@ final class CameraSession {
             factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
         {
             pendingZoomAfterHop = factor
+            zoomPinchPreview = factor
             return
         }
         pendingZoomAfterHop = nil
         let first = zoomPinchPreview == nil
         zoomPinchPreview = factor
         let lens = CamFov.pinchLens(for: factor)
+        if first && abs(factor - zoomPinchAnchor) < 0.01 { return }
         if lastPinchLens == lens { return }
         lastPinchLens = lens
-        if first && abs(factor - zoomPinchAnchor) < 0.01 { return }
         applyPinchWrite(preview: factor)
     }
 

@@ -7,7 +7,13 @@ public struct MonitorZoomScale: Equatable, Sendable {
     public let maximum: Double
     public static let angularSpan = 210.0 * Double.pi / 180
     public static let tickIncrement = 0.01
+    /// Equal-angle minor ticks across the full ring. Hub still steps hundredths.
+    public static let minorTickCount = 18
     public static let labeledTicks = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
+
+    public static func minorTickPositions() -> [Double] {
+        (0...minorTickCount).map { Double($0) / Double(minorTickCount) }
+    }
 
     public init(minimum: Double, maximum: Double) {
         self.minimum = minimum.isFinite && minimum > 0 ? minimum : 1

@@ -139,11 +139,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Tall pictures stay canvas-centered when chrome cannot fit around them. Landscape
   zoom uses the trailing half-disc: 10% larger preferred radius, bounded by
   viewport, and one continuous material to the physical edge. In portrait the disc
-  is a bottom half-circle that sits above the camera-value and system-button rows
-  so more of the feed stays visible; a full-screen dismiss plane still owns
-  underlying control input while it is open. Disc ticks are 0.01× increments;
-  labeled marks share that grid. The disc hub shows hundredths (1.53×); the
-  chip still shows tenths.
+  is a bottom half-circle flush to the screen edge, covering camera values and
+  system buttons until closed. Minor ticks are equally spaced on the log ring;
+  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. The disc hub shows
+  hundredths (1.53×); the chip still shows tenths.
 - The expanded Motion Control editor passes joystick touches to the original
   control so positions can be set without minimizing the window. Other outside
   taps minimize without activating covered controls. Window dragging uses local

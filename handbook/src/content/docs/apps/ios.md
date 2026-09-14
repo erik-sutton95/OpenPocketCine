@@ -40,12 +40,11 @@ full catalog; tap a tool to toggle it or hold to open its options inspector.
 Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
-Hold the zoom value for a continuous dial. The disc reads hundredths (1.53×)
-and ticks in 0.01 steps; the chip still shows tenths. Its limits and recording restrictions
-remain camera-specific. In landscape the larger disc extends to the trailing
+Hold the zoom value for a continuous dial. The disc hub reads hundredths (1.53×)
+and the chip still shows tenths. Its limits and recording restrictions
+remain camera-specific. In landscape the larger disc sits on the trailing
 screen edge and covers the controls beneath it until closed. In portrait it
-rises from above the camera values and system buttons so more of the picture
-stays visible. Gimbal cameras expose Mode, Speed, Ramp and
+sits on the bottom screen edge. Gimbal cameras expose Mode, Speed, Ramp and
 the existing experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
 Ramp each have a tab with their own dial; the Motion Control action stays visible.
 

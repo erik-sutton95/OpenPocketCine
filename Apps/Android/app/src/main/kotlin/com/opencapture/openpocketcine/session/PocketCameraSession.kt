@@ -2115,15 +2115,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         dropDLog2ForZoom(factor)
         if (CamFov.holdZoomWrite(factor, _status.value.colorMode, zoomColorHopPending)) {
             pendingZoomAfterHop = factor
+            zoomPinchPreview = factor
+            refreshZoomHud()
             return
         }
         pendingZoomAfterHop = null
         zoomPinchPreview = factor
         val lens = CamFov.pinchLens(factor)
         refreshZoomHud()
+        if (first && abs(factor - zoomPinchAnchor) < 0.01) return
         if (lastPinchLens == lens) return
         lastPinchLens = lens
-        if (first && abs(factor - zoomPinchAnchor) < 0.01) return
         setZoomSlider(factor)
     }
 
@@ -2960,9 +2962,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _zoomReadout.value =
             CamFov.readout(
                 live = _status.value.zoomFactor,
-                preview = zoomPinchPreview,
+                preview = if (zoomColorHopPending) null else zoomPinchPreview,
                 fallback = zoomStop,
-                optimistic = zoomOptimistic,
+                optimistic = if (zoomColorHopPending) null else zoomOptimistic,
             )
         _zoomPinching.value = zoomPinchPreview != null
     }

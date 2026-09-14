@@ -9,7 +9,11 @@ import kotlin.math.roundToInt
 object MonitorZoomScale {
     const val ANGULAR_SPAN = 210.0 * Math.PI / 180.0
     const val TICK_INCREMENT = 0.01
+    const val MINOR_TICK_COUNT = 18
     val labeledTicks = listOf(1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0)
+
+    fun minorTickPositions(): List<Double> =
+        (0..MINOR_TICK_COUNT).map { it.toDouble() / MINOR_TICK_COUNT }
 
     fun quantized(value: Double, minimum: Double = 1.0, maximum: Double): Double {
         if (!value.isFinite()) return minimum
