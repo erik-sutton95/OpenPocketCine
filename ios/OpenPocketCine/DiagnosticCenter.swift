@@ -156,7 +156,11 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         guard let dir = Self.diagnosticsDirectory else { return nil }
         let name = "report.txt"
         let url = dir.appendingPathComponent(name)
-        try? body.write(to: url, atomically: true, encoding: .utf8)
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            return nil
+        }
         event(
             level: .notice, category: .diagnostics, code: "report",
             message: "wrote diagnostic report")

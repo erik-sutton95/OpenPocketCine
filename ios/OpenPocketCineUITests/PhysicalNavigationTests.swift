@@ -3,6 +3,45 @@ import XCTest
 /// Opt-in real-device navigation. This does not manufacture telemetry, start a
 /// recording, or move a camera. Live-camera and thermal proof remain separate.
 final class PhysicalNavigationTests: XCTestCase {
+    func testPhysicalSimplifiedSupportNavigation() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
+            throw XCTSkip("Requires the opted-in physical navigation run")
+        }
+        let originalOrientation = XCUIDevice.shared.orientation
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = originalOrientation
+        }
+        let home = app.buttons["cameras.settings"]
+        let live = app.buttons["monitor.system.settings"]
+        expectation(for: NSPredicate { _, _ in home.exists || live.exists }, evaluatedWith: app)
+        waitForExpectations(timeout: 20)
+        // The launch splash briefly intercepts touches while the home controls
+        // already exist in the accessibility tree.
+        Thread.sleep(forTimeInterval: 3)
+        let settings = live.exists ? live : home
+        XCTAssertTrue(settings.isHittable)
+        settings.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let system = app.buttons["monitor.settings.tab.System"]
+        XCTAssertTrue(system.waitForExistence(timeout: 10), "Settings did not open")
+        system.tap()
+        XCTAssertTrue(app.staticTexts["Report a problem"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Request a Feature"].exists)
+        XCTAssertFalse(app.staticTexts["Save diagnostic report"].exists)
+        attach(app, "support-simple")
+        app.buttons["SHOW"].firstMatch.tap()
+        XCTAssertTrue(
+            app.staticTexts["Save diagnostic report"].firstMatch.waitForExistence(timeout: 5))
+        attach(app, "support-diagnostic-options")
+        app.buttons["HIDE"].firstMatch.tap()
+        app.buttons["READ"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Privacy"].firstMatch.waitForExistence(timeout: 5))
+        attach(app, "support-offline-privacy")
+    }
+
     func testPhysicalAssistTabsWithConnectedCamera() throws {
         guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
             throw XCTSkip("Run just ios-physical-ui-test with a connected test device")

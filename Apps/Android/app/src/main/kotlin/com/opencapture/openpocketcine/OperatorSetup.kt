@@ -1483,18 +1483,16 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
     var reliabilityOptIn by remember { mutableStateOf(ReliabilityReporting.isOptedIn) }
+    var diagnosticOptions by remember { mutableStateOf(false) }
     SettingsRowCard(title = "Help & Feedback") {
-        SettingsInlineRow("Support", SettingsHelpCopy.SUPPORT, showTopDivider = false) {
-            SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SUPPORT) }
-        }
-        SettingsInlineRow("Share Diagnostics", SettingsHelpCopy.SHARE_DIAGNOSTICS) {
-            SettingsActionPill("Share") {
-                DiagnosticCenter.shareReport(context, model.session)
-            }
+        SettingsInlineRow("Report a problem",
+            "Tell us what happened by email. Technical details are included, and you review everything before sending.",
+            showTopDivider = false) {
+            SettingsActionPill("Write") { DiagnosticCenter.shareReport(context, model.session, emailSupport = true) }
         }
         if (ReliabilityReporting.isAvailable) {
             SettingsSwitchInlineRow(
-                title = "Automatic reliability reports",
+                title = "Automatic error reports",
                 help = SettingsHelpCopy.RELIABILITY_REPORTS,
                 isOn = reliabilityOptIn,
             ) {
@@ -1504,7 +1502,7 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
             }
         } else {
             SettingsInlineRow(
-                title = "Automatic reliability reports",
+                title = "Automatic error reports",
                 help = SettingsHelpCopy.RELIABILITY_UNAVAILABLE,
             ) {
                 SettingsValueText("Off")
@@ -1513,13 +1511,26 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
         SettingsInlineRow("Reporting Privacy", "What reports contain, retention, and how to request deletion.") {
             SettingsActionPill("Read") { onLegal(LegalKind.PRIVACY) }
         }
-        SettingsInlineRow("Report a Problem", SettingsHelpCopy.REPORT) {
-            SettingsActionPill("Report") { openUrl(context, OpenPocketCineLinks.REPORT_PROBLEM) }
+        SettingsInlineRow("Diagnostic options", "Save or remove reports stored on this phone.") {
+            SettingsActionPill(if (diagnosticOptions) "Hide" else "Show") { diagnosticOptions = !diagnosticOptions }
         }
-        SettingsInlineRow("Request a Feature", SettingsHelpCopy.FEATURE) {
-            SettingsActionPill("Request") { openUrl(context, OpenPocketCineLinks.FEATURE_REQUEST) }
+        if (diagnosticOptions) {
+            SettingsInlineRow("Save diagnostic report", "Keep a copy or share it with support.") {
+                SettingsActionPill("Save") { DiagnosticCenter.shareReport(context, model.session, copyForFeedback = false) }
+            }
+            SettingsInlineRow("Delete saved feed reports",
+                "Remove saved feed reports from this phone. Connection logs remain. Turn off automatic reporting to clear pending uploads. Reports already sent cannot be removed here.") {
+                SettingsActionPill("Delete") {
+                    com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime.deleteStoredReports { deleted ->
+                        android.widget.Toast.makeText(context,
+                            if (deleted) "Saved feed reports deleted" else "Couldn't delete saved feed reports. Please try again.",
+                            android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
     }
+
     SettingsRowCard(title = "Project & Legal") {
         SettingsInlineRow("Source Code", SettingsHelpCopy.SOURCE, showTopDivider = false) {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SOURCE) }

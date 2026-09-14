@@ -139,8 +139,8 @@ ios-ui-test device *args: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS Simulator,id={{device}}' {{args}} test
 
 # Opt-in navigation on an attached physical iPhone/iPad; never records or moves a camera.
-ios-physical-ui-test device: ios-generate
-    TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:OpenPocketCineUITests/PhysicalNavigationTests test
+ios-physical-ui-test device test="OpenPocketCineUITests/PhysicalNavigationTests": ios-generate
+    TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:{{test}} test
 
 # Seeded physical live-feed stress; optional recording is off by default.
 ios-feed-stress device seed="20260914" limit="300" record="0": ios-generate

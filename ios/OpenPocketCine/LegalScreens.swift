@@ -88,13 +88,16 @@ struct LegalDocumentView: View {
             switch self {
             case .privacy:
                 """
-                OpenPocketCine talks to your Osmo Pocket over Bluetooth and the camera's own Wi-Fi. The app has no account. Automatic reliability reports are optional and off by default.
+                OpenPocketCine talks to your Osmo Pocket over Bluetooth and the camera's own Wi-Fi. The app has no account. Automatic error reports are optional and off by default.
 
                 OpenCapture is the data controller. Privacy or deletion requests: support@openpocketcine.app.
 
                 Optional reliability reports
                 With your consent, configured builds send crash, hang and feed diagnostics, app/OS/device versions and session health counts through Sentry. No footage, screenshots, raw camera packets or GPS location are included. Sentry receives the connection IP; stored event IP and derived geography are removed. Event storage uses Germany. Some provider processing may occur internationally.
                 Turn reporting off in Operator Setup at any time without losing app features. This clears pending SDK uploads, but does not delete reports already received. Contact us privately to request deletion. The website policy explains retention, transfers and your rights.
+
+                Reporting a problem yourself
+                Report a problem prepares an email to support@openpocketcine.app with technical diagnostics attached or included in the message. You review and send it. OpenCapture receives your sender address, message and included diagnostics; your email provider handles delivery. This does not enable automatic Sentry reporting. Do not include passwords or private footage.
 
                 What stays on this phone
                 • Saved camera names and last SSID. The camera Wi-Fi password is stored in the iOS Keychain on this phone only.

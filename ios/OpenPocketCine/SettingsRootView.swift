@@ -1,3 +1,4 @@
+import MessageUI
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -40,12 +41,6 @@ enum SettingsHelpCopy {
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. iOS may still dim when the device overheats."
     static let themeHelp =
         "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
-    static let supportHelp =
-        "Connection, live view, controls, and troubleshooting."
-    static let reportHelp =
-        "Opens a public issue form on GitHub for this project."
-    static let featureHelp =
-        "Start an idea in this project's feature-request discussion."
     static let sourceHelp =
         "View the OpenPocketCine project on GitHub. Opening this may leave the camera Wi-Fi if that is the only network."
     static let linkHealth =
@@ -60,10 +55,8 @@ enum SettingsHelpCopy {
         "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
     static let reliabilityUnavailable =
         "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
-    static let savedReports =
-        "Share the typed freeze reports stored on this phone."
     static let deleteStoredIncidents =
-        "Remove local copies of saved freeze reports. Turn off Automatic reliability reports to clear pending uploads. Reports already sent cannot be removed here."
+        "Remove local copies of saved freeze reports. Turn off Automatic error reports to clear pending uploads. Reports already sent cannot be removed here."
 }
 
 enum OperatorSettingsTab: String, CaseIterable, Identifiable {
@@ -96,6 +89,10 @@ struct SettingsRootView: View {
     @State private var showWatcherWiFiCode = false
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
+    @State private var supportReport: SupportEmailPayload?
+    @State private var showDiagnosticOptions = false
+    @State private var supportError = false
+    @State private var supportMailFailed = false
     @State private var reliabilityOptIn = ReliabilityReporting.isOptedIn
 
     var body: some View {
@@ -120,6 +117,24 @@ struct SettingsRootView: View {
         }
         .sheet(isPresented: $showLUTPicker) {
             LUTPicker(assist: model.assist)
+        }
+        .sheet(
+            item: $supportReport,
+            onDismiss: {
+                supportReport = nil
+                if supportMailFailed { supportError = true }
+            }
+        ) { payload in
+            SupportEmailComposer(report: payload.data) { failed in
+                supportMailFailed = failed
+                supportReport = nil
+            }
+        }
+        .alert("Report unavailable", isPresented: $supportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(
+                "Email support@openpocketcine.app. You can save a report under Diagnostic options.")
         }
         .sheet(item: $diagnosticsShare) { payload in
             DiagnosticActivityShareView(items: [payload.url])
@@ -848,29 +863,54 @@ struct SettingsRootView: View {
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
+    private func openSupportEmail() {
+        if MFMailComposeViewController.canSendMail() {
+            guard let url = DiagnosticCenter.shared.writeReport(session: model.session),
+                let data = try? Data(contentsOf: url)
+            else {
+                supportError = true
+                return
+            }
+            supportMailFailed = false
+            supportReport = SupportEmailPayload(data: data)
+        } else {
+            // The default email app can receive a compact report in the message
+            // even when Apple's attachment composer is unavailable.
+            var url = URLComponents()
+            url.scheme = "mailto"
+            url.path = "support@openpocketcine.app"
+            url.queryItems = [
+                URLQueryItem(name: "subject", value: "OpenPocketCine — report a problem"),
+                URLQueryItem(
+                    name: "body",
+                    value: "What happened?\n\n\nTechnical details:\n"
+                        + DiagnosticCenter.shared.compactSummary(session: model.session)),
+            ]
+            guard let target = url.url else {
+                supportError = true
+                return
+            }
+            openURL(target) { accepted in
+                if !accepted { supportError = true }
+            }
+        }
+    }
+
     // MARK: - System
 
     @ViewBuilder private var systemRows: some View {
         SettingsRowCard(title: "Help & Feedback") {
             SettingsInlineRow(
-                title: "Support",
-                help: SettingsHelpCopy.supportHelp,
+                title: "Report a problem",
+                help:
+                    "Tell us what happened by email. Technical details are included, and you review everything before sending.",
                 showTopDivider: false
             ) {
-                SettingsActionPill(title: "Open") {
-                    if let url = OpenPocketCineLinks.support { openURL(url) }
-                }
-            }
-            SettingsInlineRow(title: "Share Diagnostics", help: SettingsHelpCopy.shareDiagnostics) {
-                SettingsActionPill(title: "Share") {
-                    if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
-                        diagnosticsShare = DiagnosticSharePayload(url: url)
-                    }
-                }
+                SettingsActionPill(title: "Write") { openSupportEmail() }
             }
             if ReliabilityReporting.isAvailable {
                 SettingsSwitchInlineRow(
-                    title: "Automatic reliability reports",
+                    title: "Automatic error reports",
                     help: SettingsHelpCopy.reliabilityReports,
                     isOn: reliabilityOptIn
                 ) {
@@ -879,7 +919,7 @@ struct SettingsRootView: View {
                 }
             } else {
                 SettingsInlineRow(
-                    title: "Automatic reliability reports",
+                    title: "Automatic error reports",
                     help: SettingsHelpCopy.reliabilityUnavailable
                 ) {
                     SettingsValueText(value: "Off")
@@ -893,31 +933,32 @@ struct SettingsRootView: View {
                     legalKind = .privacy
                 }
             }
-            SettingsInlineRow(title: "Saved Reports", help: SettingsHelpCopy.savedReports) {
-                SettingsActionPill(title: "Share") {
-                    FeedIncidentRuntime.exportVendorBundles { url in
-                        if let url {
+            SettingsInlineRow(
+                title: "Diagnostic options", help: "Save or remove reports stored on this phone."
+            ) {
+                SettingsActionPill(title: showDiagnosticOptions ? "Hide" : "Show") {
+                    showDiagnosticOptions.toggle()
+                }
+            }
+            if showDiagnosticOptions {
+                SettingsInlineRow(
+                    title: "Save diagnostic report", help: "Keep a copy or share it with support."
+                ) {
+                    SettingsActionPill(title: "Save") {
+                        if let url = DiagnosticCenter.shared.writeReport(session: model.session) {
                             diagnosticsShare = DiagnosticSharePayload(url: url)
+                        } else {
+                            supportError = true
                         }
                     }
                 }
-            }
-            SettingsInlineRow(
-                title: "Delete Stored Incidents",
-                help: SettingsHelpCopy.deleteStoredIncidents
-            ) {
-                SettingsActionPill(title: "Delete") {
-                    FeedIncidentRuntime.deleteStoredIncidents {}
-                }
-            }
-            SettingsInlineRow(title: "Report a Problem", help: SettingsHelpCopy.reportHelp) {
-                SettingsActionPill(title: "Report") {
-                    if let url = OpenPocketCineLinks.reportProblem { openURL(url) }
-                }
-            }
-            SettingsInlineRow(title: "Request a Feature", help: SettingsHelpCopy.featureHelp) {
-                SettingsActionPill(title: "Request") {
-                    if let url = OpenPocketCineLinks.featureRequest { openURL(url) }
+                SettingsInlineRow(
+                    title: "Delete saved feed reports",
+                    help: SettingsHelpCopy.deleteStoredIncidents
+                ) {
+                    SettingsActionPill(title: "Delete") {
+                        FeedIncidentRuntime.deleteStoredIncidents {}
+                    }
                 }
             }
         }

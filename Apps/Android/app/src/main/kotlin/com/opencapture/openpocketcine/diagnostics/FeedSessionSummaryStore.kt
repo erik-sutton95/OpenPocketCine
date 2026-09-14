@@ -45,9 +45,7 @@ internal object FeedSessionSummaryStore {
         }
     }
 
-    fun deleteAll(root: File) {
-        directory(root).deleteRecursively()
-    }
+    fun deleteAll(root: File): Boolean = directory(root).let { !it.exists() || it.deleteRecursively() }
 
     private fun urls(root: File): List<File> {
         val files = directory(root).listFiles() ?: return emptyList()

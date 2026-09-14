@@ -129,8 +129,12 @@ separate hold-to-move interaction.
 - TestFlight / Play What to Test is this-build operator copy (`docs/tester-notes.md`).
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a
   tester who never reaches Operator Setup can still send a report.
-- Operator Setup → System → **Share Diagnostics**. iOS screenshot for
-  TestFlight copies a compact paste (`docs/diagnostics.md`).
+- Operator Setup → System → **Report a problem** opens a private support email
+  with technical diagnostics for review before sending. Automatic error reports
+  are a separate optional toggle; manual email does not turn that toggle on.
+  **Diagnostic options** contains save/export and local deletion. Public GitHub
+  reporting and feature-request choices are absent from this operator flow.
+  iOS screenshot for TestFlight still copies a compact paste (`docs/diagnostics.md`).
 
 ## When this pointer fires
 

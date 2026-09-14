@@ -81,9 +81,12 @@ object DiagnosticCenter {
             .firstOrNull { it.name == "report.txt" }
     }
 
-    fun shareReport(context: Context, session: PocketCameraSession) {
-        copyCompact(context, session)
-        if (!sharing.compareAndSet(false, true)) return
+    fun shareReport(context: Context, session: PocketCameraSession, emailSupport: Boolean = false, copyForFeedback: Boolean = true) {
+        if (!sharing.compareAndSet(false, true)) {
+            android.widget.Toast.makeText(context, "Preparing the report…", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!emailSupport && copyForFeedback) copyCompact(context, session)
         val app = context.applicationContext
         val env = environment(session)
         val journal = journalLines()
@@ -93,7 +96,13 @@ object DiagnosticCenter {
                 try {
                     val extras = FeedIncidentRuntime.exportExtras()
                     val files = writeShareFiles(app, env, journal, exceptions, extras)
-                    Handler(Looper.getMainLooper()).post { launchShare(app, files) }
+                    Handler(Looper.getMainLooper()).post { launchShare(app, files, emailSupport) }
+                } catch (_: Exception) {
+                    Handler(Looper.getMainLooper()).post {
+                        android.widget.Toast.makeText(app,
+                            "Couldn't prepare the report. Please try again or email support@openpocketcine.app.",
+                            android.widget.Toast.LENGTH_LONG).show()
+                    }
                 } finally {
                     sharing.set(false)
                 }
@@ -137,8 +146,12 @@ object DiagnosticCenter {
         return files
     }
 
-    private fun launchShare(context: Context, files: List<File>) {
-        if (files.isEmpty()) return
+    private fun launchShare(context: Context, files: List<File>, emailSupport: Boolean = false) {
+        if (files.isEmpty()) {
+            android.widget.Toast.makeText(context, "Couldn't prepare a diagnostic report. Please try again.",
+                android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         val uris = ArrayList<Uri>()
         for (file in files) {
             val uri =
@@ -147,7 +160,11 @@ object DiagnosticCenter {
                 }.getOrNull() ?: continue
             uris.add(uri)
         }
-        if (uris.isEmpty()) return
+        if (uris.isEmpty()) {
+            android.widget.Toast.makeText(context, "Couldn't attach the diagnostic report. Please try again.",
+                android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         val clip = ClipData.newRawUri("OpenPocketCine diagnostics", uris[0])
         for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
         val intent =
@@ -168,9 +185,22 @@ object DiagnosticCenter {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             }
-        val chooser = Intent.createChooser(intent, null)
+        if (emailSupport) {
+            intent.selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
+            intent.putExtra(Intent.EXTRA_EMAIL, arrayOf("support@openpocketcine.app"))
+            intent.putExtra(Intent.EXTRA_SUBJECT, "OpenPocketCine — report a problem")
+            intent.putExtra(Intent.EXTRA_TEXT,
+                "What happened?\n\n\nTechnical details are attached to help us investigate. Please do not include private footage or passwords.")
+        }
+        val chooser = Intent.createChooser(intent, if (emailSupport) "Email support" else null)
         if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
+        try {
+            context.startActivity(chooser)
+        } catch (_: android.content.ActivityNotFoundException) {
+            android.widget.Toast.makeText(context,
+                "Email support@openpocketcine.app. No compatible app is available.",
+                android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     @Volatile var lastCompact: String = ""

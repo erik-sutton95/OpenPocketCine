@@ -19,9 +19,8 @@ remain separate rollout requirements.
 | Path | What it is |
 | --- | --- |
 | Connection setup (first pair) → **Share Diagnostics** | Same redacted report, available before a camera is saved |
-| Operator Setup → System → **Share Diagnostics** | Redacted report (`report.txt`) plus a compact paste. Includes a local typed incident summary when one was captured (`incidents.txt`) |
-| Operator Setup → System → **Saved Reports** | Share stored typed freeze bundles from this phone |
-| Operator Setup → System → **Automatic reliability reports** | Off by default. Available only when the build contains a valid HTTPS reporting destination. Consent can be revoked without deleting locally saved reports |
+| Operator Setup → System → **Diagnostic options → Save diagnostic report** | Redacted report (`report.txt`). Includes a local typed incident summary when one was captured (`incidents.txt`) |
+| Operator Setup → System → **Automatic error reports** | Off by default. Available only when the build contains a valid HTTPS reporting destination. Consent can be revoked without deleting locally saved reports |
 | TestFlight screenshot feedback | iOS copies that compact paste to the clipboard — paste it into the TestFlight comment. Apple does not let an app attach files to TestFlight feedback. |
 | Finder / Files (iOS) | `Documents/control-live.log` and `Documents/diagnostics/` (file sharing on) |
 | USB | `tools/pull-control-log.sh` |
@@ -226,3 +225,18 @@ revision across updates. Old session summaries without version metadata are
 explicitly marked as having an unknown legacy release.
 
 See [privacy operations](sentry-privacy-operations.md) for controller contact, DPA, retention, access controls, deletion verification and store-disclosure readiness.
+
+## Manual support from System
+
+**Report a problem** opens a private email addressed to OpenCapture support.
+iOS uses the native mail composer with a redacted report attachment. If that
+composer is unavailable, it opens the default email app with compact diagnostics
+in the message. Android opens a email chooser with the support recipient,
+subject and report attachments supplied. The operator reviews and sends; opening
+the flow is not proof of delivery. No automatic Sentry consent is changed.
+
+**Diagnostic options** reveals save/export and deletion of local reports.
+The first-pair wizard retains its independent Share Diagnostics escape route.
+Email contains the sender's address and any text they choose to write; do not
+promise that manual correspondence is anonymous. The privacy policy covers
+private support and retention.

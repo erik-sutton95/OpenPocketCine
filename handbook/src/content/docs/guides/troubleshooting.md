@@ -5,7 +5,7 @@ description: Pairing, camera Wi-Fi, live view, and local VPNs or ad blockers tha
 
 Pairing and live view need a **physical** phone and the camera. The Simulator has no Bluetooth or camera Wi-Fi.
 
-If a step fails: Connection setup **Share Diagnostics**, or Operator Setup → System → **Share Diagnostics**. The report has no name, location, or Wi-Fi password.
+If a step fails: Connection setup **Share Diagnostics**, or Operator Setup → System → **Report a problem**. The report has no name, location, or Wi-Fi password.
 
 ## Live view never starts
 
@@ -42,7 +42,7 @@ presentation counters, recovery attempts, Settings enter/exit) when one was
 captured. Keep the app open briefly after a dropout so that summary can finish.
 The last held picture is not live video. Opening Settings is a reported trigger
 from testers; it is not a proven decoder error. In builds with reporting configured, **Operator Setup → System → Automatic
-reliability reports** lets you opt in to crash, hang and feed-incident reports.
+error reports** lets you opt in to crash, hang and feed-incident reports.
 It is off by default. Reports include recent feed measurements and recovery
 actions, not footage, camera credentials or operator identity. Uploads wait
 until you leave the camera Wi-Fi. Turning it off clears pending automatic
@@ -85,3 +85,10 @@ decoder now hands recovery to the feed watchdog. It can rebuild the decoder
 without forcing a full camera reconnect. A short picture hold can still occur
 while it waits for a new random-access frame. If a hold persists, keep the app
 open briefly and share diagnostics so the incident's recovery timeline is saved.
+
+For a private reply, use **Operator Setup → System → Report a problem**. Describe
+what happened in the email that opens; technical details are included for you to
+review. Choose an email app on Android. On iPhone, diagnostics are attached when
+the native mail composer is available, or included as a compact message otherwise.
+This does not turn on automatic reports. **Diagnostic options** holds save/export
+and local deletion; you do not need a GitHub account to contact support.

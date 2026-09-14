@@ -54,9 +54,7 @@ internal class FeedIncidentStore(
         }
     }
 
-    fun deleteAll() {
-        urls().forEach { it.delete() }
-    }
+    fun deleteAll(): Boolean = urls().map { it.delete() || !it.exists() }.all { it }
 
     fun exportText(): String = text(loadAll())
 

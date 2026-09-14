@@ -30,6 +30,18 @@ internal object FeedIncidentRuntime {
         }
     }
 
+    fun deleteStoredReports(completion: (Boolean) -> Unit) {
+        writer.execute {
+            val deleted = runCatching {
+                val saved = store ?: return@runCatching false
+                val incidentsDeleted = saved.deleteAll()
+                val summariesDeleted = FeedSessionSummaryStore.deleteAll(saved.directory)
+                incidentsDeleted && summariesDeleted
+            }.getOrDefault(false)
+            android.os.Handler(android.os.Looper.getMainLooper()).post { completion(deleted) }
+        }
+    }
+
     fun beginSession(context: FeedIncidentSessionContext) {
         writer.execute {
             persist(recorder.beginSession(context))
