@@ -88,7 +88,7 @@ GitHub-specific:
   [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a).
 - **Feature ideas, enhancements & discussions** — Use **GitHub Discussions**. Start a new
   discussion in the
-  [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas)
+  [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=ideas-feature-requests)
   category. Questions go in
   [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a).
   A GitHub account is required, which keeps conversations attributable and Issues focused on
