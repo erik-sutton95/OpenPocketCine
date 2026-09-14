@@ -69,7 +69,7 @@
 
         private var ink: Color {
             opticalStops.contains { abs($0 - value) < 0.05 }
-                ? MonitorTheme.accent : MonitorTheme.color(0xF0B23C)
+                ? MonitorTheme.accent : MonitorTheme.digitalCrop
         }
 
         private var visible: Bool { appeared && isPresented }
@@ -208,7 +208,7 @@
                 opticalMaximum: opticalStops.max() ?? scale.minimum,
                 marks: marks.filter { $0 >= scale.minimum && $0 <= scale.maximum }.map {
                     MonitorZoomCanvasMark(value: $0, fraction: scale.position($0), label: label($0))
-                }, ink: ink, digitalInk: MonitorTheme.color(0xF0B23C),
+                }, ink: ink, digitalInk: MonitorTheme.digitalCrop,
                 secondaryInk: MonitorTheme.secondary,
                 labelFont: MonitorTheme.font(12, weight: .semibold))
         }

@@ -306,6 +306,13 @@ struct LiveZoomChip: View {
             ?? model.session.zoomStop
     }
     private var title: String { CamFov.displayLabel(factor: displayFactor) }
+    private var opticalStops: [Double] {
+        let stops = tapStops.singleTap
+        return stops.isEmpty ? [1] : stops
+    }
+    private var isDigitalCrop: Bool {
+        MonitorZoomCaption.isDigital(factor: displayFactor, opticalStops: opticalStops)
+    }
     private var tapStops: MonitorZoomTapStops {
         OsmoMonitorPresentation.zoomTapStops(model.session)
     }
@@ -339,7 +346,7 @@ struct LiveZoomChip: View {
         KeyframeAnimator(initialValue: Double(1), trigger: snapTick) { progress in
             Text(title)
                 .font(LiveType.ui(size: 18, weight: .bold))
-                .foregroundStyle(LiveDesign.text)
+                .foregroundStyle(isDigitalCrop ? MonitorTheme.digitalCrop : LiveDesign.text)
                 .minimumScaleFactor(0.75)
                 .scaleEffect(reduceMotion ? 1 : MonitorMotion.chipPopScale(at: progress))
                 .frame(
@@ -373,7 +380,8 @@ struct LiveZoomChip: View {
         .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
         .allowsHitTesting(!interfaceLocked)
         .disabled(interfaceLocked)
-        .accessibilityLabel("Zoom \(title)")
+        .accessibilityLabel(
+            isDigitalCrop ? "Zoom \(title), digital crop" : "Zoom \(title)")
         .accessibilityHint(
             tapStops.doubleTap.isEmpty
                 ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."

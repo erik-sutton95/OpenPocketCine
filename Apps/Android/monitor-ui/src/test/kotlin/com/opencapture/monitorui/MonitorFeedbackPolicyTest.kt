@@ -57,6 +57,10 @@ class MonitorFeedbackPolicyTest {
         assertEquals("TELE", MonitorZoomCaption.label(3.0, listOf(1.0, 3.0, 6.0, 12.0)))
         assertEquals("DIGITAL · SOFT", MonitorZoomCaption.label(6.0, listOf(1.0, 3.0, 6.0, 12.0)))
         assertEquals("DIGITAL CROP", MonitorZoomCaption.label(2.0, listOf(1.0, 2.0, 4.0)))
+        assertFalse(MonitorZoomCaption.isDigital(1.0, listOf(1.0, 3.0)))
+        assertFalse(MonitorZoomCaption.isDigital(3.0, listOf(1.0, 3.0)))
+        assertTrue(MonitorZoomCaption.isDigital(6.0, listOf(1.0, 3.0)))
+        assertTrue(MonitorZoomCaption.isDigital(12.0, listOf(1.0, 3.0)))
     }
 
     @Test fun allCapturePanelsShareCenterAndBottomWithinSafeBounds() {

@@ -12,4 +12,11 @@ public enum MonitorZoomCaption {
         }
         return "DIGITAL CROP"
     }
+
+    /// Past the last optical stop the picture is a digital crop (detail loss).
+    public static func isDigital(factor: Double, opticalStops: [Double]) -> Bool {
+        guard factor.isFinite else { return false }
+        let opticalMax = opticalStops.filter { $0.isFinite && $0 > 0 }.max() ?? 1
+        return factor > opticalMax + 0.02
+    }
 }

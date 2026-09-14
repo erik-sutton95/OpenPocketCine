@@ -42,4 +42,11 @@ object MonitorZoomCaption {
         }
         return "DIGITAL CROP"
     }
+
+    /** Past the last optical stop the picture is a digital crop (detail loss). */
+    fun isDigital(factor: Double, opticalStops: List<Double>): Boolean {
+        if (!factor.isFinite()) return false
+        val opticalMax = opticalStops.filter { it.isFinite() && it > 0.0 }.maxOrNull() ?: 1.0
+        return factor > opticalMax + 0.02
+    }
 }

@@ -36,6 +36,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorZoomCaption
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.LiveFeedFocusGesture
@@ -116,6 +118,7 @@ fun LiveZoomChip(
             held = factor
         }
     }
+    val digital = MonitorZoomCaption.isDigital(held, opticalStops)
     Box(
         modifier
             .size(LiveDesign.ZOOM_CHIP_DP.dp)
@@ -126,14 +129,17 @@ fun LiveZoomChip(
                     { haptics.longPress(); dialBase = dialFactor; dialOpen = true }
                 } else null)
             .semantics {
-                contentDescription = "Zoom ${LiveZoom.label(held)}. Tap to cycle; hold to adjust" +
-                    if (onDigitalCycle != null) "; double tap for digital zoom" else ""
+                val crop = if (digital) ", digital crop" else ""
+                val extra = if (onDigitalCycle != null) "; double tap for digital zoom" else ""
+                contentDescription =
+                    "Zoom ${LiveZoom.label(held)}$crop. Tap to cycle; hold to adjust$extra"
             },
         contentAlignment = Alignment.Center,
     ) {
+        val ink = if (digital) MonitorPalette.digitalCrop else LiveDesign.text
         Text(
             LiveZoom.label(held),
-            color = LiveDesign.text.copy(alpha = if (locked || dimmed) 0.4f else 1f),
+            color = ink.copy(alpha = if (locked || dimmed) 0.4f else 1f),
             style = LiveType.ui(18f, FontWeight.Medium),
             maxLines = 1,
         )

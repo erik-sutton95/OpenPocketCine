@@ -143,7 +143,9 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   system buttons until closed. Minor ticks are equally spaced on the log ring;
   labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. A very slow turn
   can rest on whole stops (2×, 3×, 4×, 6×, 9×, 12×); a faster turn does not.
-  The disc hub shows hundredths (1.53×); the chip still shows tenths.
+  The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
+  last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
+  amber as the disc ticks.
 - The expanded Motion Control editor passes joystick touches to the original
   control so positions can be set without minimizing the window. Other outside
   taps minimize without activating covered controls. Window dragging uses local

@@ -29,6 +29,8 @@ object MonitorPalette {
     val muted = Color(0xFF8D9293)
     val faint = Color(0xFF5E6262)
     val recording = Color(0xFFD13034)
+    /** Digital-crop warning on the zoom chip and disc (same as the dial ticks). */
+    val digitalCrop = Color(0xFFF0B23C)
 }
 
 /** Darker, tighter readout halo than the mockup's 5+12 bloom. */

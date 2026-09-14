@@ -35,5 +35,10 @@ struct MonitorZoomTapStopsTests {
         #expect(MonitorZoomCaption.label(factor: 3, opticalStops: [1, 3, 6, 12]) == "TELE")
         #expect(MonitorZoomCaption.label(factor: 6, opticalStops: [1, 3, 6, 12]) == "DIGITAL · SOFT")
         #expect(MonitorZoomCaption.label(factor: 2, opticalStops: [1, 2, 4]) == "DIGITAL CROP")
+        #expect(!MonitorZoomCaption.isDigital(factor: 1, opticalStops: [1, 3]))
+        #expect(!MonitorZoomCaption.isDigital(factor: 3, opticalStops: [1, 3]))
+        #expect(MonitorZoomCaption.isDigital(factor: 6, opticalStops: [1, 3]))
+        #expect(MonitorZoomCaption.isDigital(factor: 12, opticalStops: [1, 3]))
+        #expect(!MonitorZoomCaption.isDigital(factor: 2.9, opticalStops: [1, 3]))
     }
 }

@@ -17,6 +17,8 @@
         public static let faint = color(0x5E6262)
         public static let border = Color.white.opacity(0.08)
         public static let recording = color(0xD13034)
+        /// Digital-crop warning on the zoom chip and disc (same as the dial ticks).
+        public static let digitalCrop = color(0xF0B23C)
         public static let radius: CGFloat = 12
 
         public static func linkHealthColor(_ band: MonitorLinkHealthBand) -> Color {

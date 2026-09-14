@@ -158,7 +158,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
         radius * density.density, disc.edgeExtension * density.density, disc.attachment)
     val factor = exp(position * logMax).coerceIn(1.0, maxZoom)
     val optical = opticalStops.any { abs(it - factor) < .05 }
-    val accent = if (optical) MonitorPalette.accent else Color(0xFFF0B23C)
+    val accent = if (optical) MonitorPalette.accent else MonitorPalette.digitalCrop
     val textMeasurer = rememberTextMeasurer()
     fun update(next: Float) {
         if (!next.isFinite() || closing) return
@@ -263,7 +263,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
                         if (abs(delta) > window) return
                         val tick = MonitorZoomScale.valueAt(t, 1.0, maxZoom)
                         val digital = tick > (opticalStops.maxOrNull() ?: 1.0) + .02
-                        val color = if (digital) Color(0xFFF0B23C) else Color.White
+                        val color = if (digital) MonitorPalette.digitalCrop else Color.White
                         drawLine(color.copy(alpha = (if (major) .7f else .3f) * alpha(a)),
                             point(a, 164f), point(a, if (major) 143f else 155f),
                             (if (major) 2.2f else 1.2f) * scale, StrokeCap.Round)
