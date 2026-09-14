@@ -139,11 +139,11 @@ object SettingsHelpCopy {
     const val SUPPORT = "Connection, live view, controls, and troubleshooting."
     const val REPORT = "Opens a public issue form on GitHub for this project."
     const val REPORT_PROBLEM =
-        "Tell us what happened. Technical details stay off unless you include them. Sending does not turn on automatic reports."
+        "Tell us what happened. Technical details stay off unless you include them. You can attach up to three photos. Sending does not turn on automatic reports."
     const val SHARE_DIAGNOSTICS =
         "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Paste the copied text into a bug report."
     const val RELIABILITY_REPORTS =
-        "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
+        "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. Automatic reports exclude all images. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
     const val RELIABILITY_UNAVAILABLE =
         "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
     const val FEATURE = "Start an idea in this project's feature-request discussion."

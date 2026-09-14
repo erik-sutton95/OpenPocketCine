@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -79,10 +80,11 @@ private fun chromeStyle(size: Float, weight: FontWeight, mono: Boolean = false):
 
 /** Ripple-free click carrying a semantics [role] (the settings-panel `chromeClickable`). */
 @Composable
-internal fun Modifier.settingsClickable(role: Role, onClick: () -> Unit): Modifier =
+internal fun Modifier.settingsClickable(role: Role, enabled: Boolean = true, onClick: () -> Unit): Modifier =
     clickable(
         interactionSource = remember { MutableInteractionSource() },
         indication = null,
+        enabled = enabled,
         role = role,
         onClick = onClick,
     )
@@ -142,13 +144,15 @@ fun SettingsActionPill(
     tint: Color = LiveDesign.accent,
     background: Color = LiveDesign.accentDim,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
         modifier
+            .alpha(if (enabled) 1f else 0.45f)
             .background(background, CircleShape)
             .border(1.dp, tint.copy(alpha = 0.5f), CircleShape)
-            .settingsClickable(role = Role.Button, onClick = onClick)
+            .settingsClickable(role = Role.Button, enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,

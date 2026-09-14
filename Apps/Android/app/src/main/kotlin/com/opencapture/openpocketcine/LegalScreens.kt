@@ -103,11 +103,11 @@ OpenPocketCine talks to your Osmo Pocket over Bluetooth and the camera's own Wi-
 OpenCapture is the data controller. Privacy or deletion requests: support@openpocketcine.app.
 
 Optional reliability reports
-With your consent, configured builds send crash, hang and feed diagnostics, app/OS/device versions and session health counts through Sentry. No footage, screenshots, raw camera packets or GPS location are included. Sentry receives the connection IP; stored event IP and derived geography are removed. Event storage uses Germany. Some provider processing may occur internationally.
+With your consent, configured builds send crash, hang and feed diagnostics, app/OS/device versions and session health counts through Sentry. Automatic reports exclude all images. No footage, screenshots, raw camera packets or GPS location are included. Sentry receives the connection IP; stored event IP and derived geography are removed. Event storage uses Germany. Some provider processing may occur internationally.
 Turn reporting off in Operator Setup at any time without losing app features. This clears pending SDK uploads, but does not delete reports already received. Contact us privately to request deletion. The website policy explains retention, transfers and your rights.
 
 Reporting a problem yourself
-Report a problem sends a private note through Sentry to OpenCapture. You write what happened. A reply email is optional. Technical details are included only when you turn that on and review the preview. This does not enable automatic Sentry reporting. Do not include passwords or private footage.
+Report a problem sends your description and any optional reply email to OpenCapture through Sentry when you tap Send report. Technical details are included only if you choose them and can be reviewed first. You can choose up to three photos or screenshots and review or remove them before sending. Selected images are resized and re-encoded without original filenames or location metadata. Only share images you have permission to send; no images are attached automatically. This one-off submission does not enable automatic reports. Unsent reports stay privately on this phone, expire after 7 days (removed when the app next runs), wait until you leave camera Wi-Fi, and can be removed before delivery. Do not include passwords or other sensitive information in your message.
 
 What stays on this phone
 • Saved camera names and last SSID. The camera Wi-Fi password is stored in the Android Keystore on this phone only.

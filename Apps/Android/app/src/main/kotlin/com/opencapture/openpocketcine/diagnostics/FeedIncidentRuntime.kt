@@ -102,6 +102,21 @@ internal object FeedIncidentRuntime {
         return runCatching { future.get(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrDefault(emptyList())
     }
 
+    /** Manual-report extras: typed incidents plus compact session summaries. */
+    fun reportExtras(): List<Pair<String, String>> {
+        val extras = exportExtras().toMutableList()
+        val summaries = loadSessionSummaries().sortedByDescending { it.recordedAtMs }
+        summaries.firstOrNull()?.let { newest ->
+            extras += "session-summary.json" to PrivacyRedactor.redact(FeedSessionSummaryStore.encodeForReport(newest))
+        }
+        for (summary in summaries.drop(1).take(4)) {
+            extras +=
+                "session-${summary.sessionID}.json" to
+                    PrivacyRedactor.redact(FeedSessionSummaryStore.encodeForReport(summary))
+        }
+        return extras
+    }
+
     fun loadFinalized(): List<FeedIncidentBundle> {
         val future =
             writer.submit<List<FeedIncidentBundle>> {

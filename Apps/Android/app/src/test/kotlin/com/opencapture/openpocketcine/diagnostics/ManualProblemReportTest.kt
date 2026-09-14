@@ -88,6 +88,12 @@ class ManualProblemReportTest {
         assertEquals(userEmail, ctx.getString("contact_email"))
         assertEquals("custom", ctx.getString("source"))
         assertFalse(feedback.has("user"))
+        assertEquals(if (com.opencapture.openpocketcine.BuildConfig.DEBUG) "development" else "production", feedback.getString("environment"))
+        assertEquals(com.opencapture.openpocketcine.BuildConfig.VERSION_CODE.toString(), feedback.getString("dist"))
+        assertEquals(
+            com.opencapture.openpocketcine.BuildConfig.SOURCE_REVISION.take(64),
+            feedback.getJSONObject("tags").getString("sourceRevision"),
+        )
         val attachment = composed.items[1]
         assertEquals("attachment", attachment.header.getString("type"))
         assertEquals("diagnostics.txt", attachment.header.getString("filename"))
@@ -322,5 +328,89 @@ class ManualProblemReportTest {
         ManualProblemReport.setForeground(true)
         assertEquals(ManualProblemReportDelivery.SENT, ManualProblemReport.current().delivery)
         assertNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun imageAttachmentsUseGeneratedJpegNamesWithoutExifOrOriginalFilename() {
+        val jpeg = jpegFixture(256)
+        val composed =
+            ManualProblemReportEnvelope.compose(
+                eventId = "dddddddddddddddddddddddddddddddd",
+                timestampMs = 1L,
+                release = "com.opencapture.openpocketcine@1.0+1",
+                message = "black live view",
+                contactEmail = null,
+                diagnostics = null,
+                images = listOf(jpeg),
+            )
+        assertEquals(2, composed.items.size)
+        val image = composed.items[1]
+        assertEquals("attachment", image.header.getString("type"))
+        assertEquals("image-1.jpg", image.header.getString("filename"))
+        assertEquals("image/jpeg", image.header.getString("content_type"))
+        assertTrue(image.payload.contentEquals(jpeg))
+        assertFalse(image.header.toString().contains("DSC_"))
+        assertFalse(ManualReportImages.containsExif(image.payload))
+        assertNull(ManualReportImages.accept(listOf(jpegFixture(64, exif = true))))
+        assertNull(ManualReportImages.accept(listOf("not-an-image".toByteArray())))
+        assertNull(ManualReportImages.accept(List(4) { jpegFixture(64) }))
+        assertNull(ManualReportImages.accept(listOf(jpegFixture(ManualReportImages.MAX_EACH_BYTES + 1))))
+        val almost = jpegFixture(ManualReportImages.MAX_EACH_BYTES)
+        assertEquals(3, ManualReportImages.accept(listOf(almost, almost, almost))!!.size)
+    }
+
+    @Test
+    fun queuedEnvelopeRoundtripsImageBytesAndRejectsInvalidCountWithoutWriting() {
+        ReliabilityReportingGate.setValidInternetForTests(false)
+        val jpeg = jpegFixture(512)
+        val result =
+            ManualProblemReport.submit(
+                message = "with photo",
+                replyEmail = "",
+                diagnostics = "phase=live",
+                images = listOf(jpeg, jpegFixture(128)),
+            )
+        assertEquals(ManualSubmitResult.QUEUED, result)
+        assertEquals(ManualProblemReportDelivery.WAITING, ManualProblemReport.current().delivery)
+        val envelopeBytes = File(root, "pending.envelope").readBytes()
+        val parsed = ManualProblemReportEnvelope.parse(envelopeBytes)
+        assertEquals(4, parsed.items.size)
+        assertEquals("diagnostics.txt", parsed.items[1].header.getString("filename"))
+        assertEquals("image-1.jpg", parsed.items[2].header.getString("filename"))
+        assertEquals("image/jpeg", parsed.items[2].header.getString("content_type"))
+        assertEquals("image-2.jpg", parsed.items[3].header.getString("filename"))
+        assertTrue(parsed.items[2].payload.contentEquals(jpeg))
+        val restored = ManualProblemReportEnvelope.parse(File(root, "pending.envelope").readBytes())
+        assertEquals(parsed.items.size, restored.items.size)
+        assertTrue(restored.items[2].payload.contentEquals(jpeg))
+        ManualProblemReport.discard()
+        assertEquals(
+            ManualSubmitResult.INVALID,
+            ManualProblemReport.submit("too many", "", null, List(4) { jpegFixture(64) }),
+        )
+        assertEquals(ManualProblemReportDelivery.IDLE, ManualProblemReport.current().delivery)
+        assertFalse(File(root, "pending.envelope").exists())
+        assertFalse(ReliabilityReportingConsent.isOptedIn)
+    }
+
+    private fun jpegFixture(size: Int, exif: Boolean = false): ByteArray {
+        val bytes = ByteArray(size.coerceAtLeast(24))
+        bytes[0] = 0xFF.toByte()
+        bytes[1] = 0xD8.toByte()
+        bytes[2] = 0xFF.toByte()
+        if (exif) {
+            bytes[3] = 0xE1.toByte()
+            bytes[4] = 0x00
+            bytes[5] = 0x10
+            byteArrayOf(0x45, 0x78, 0x69, 0x66, 0x00, 0x00).copyInto(bytes, 6)
+        } else {
+            bytes[3] = 0xE0.toByte()
+            bytes[4] = 0x00
+            bytes[5] = 0x10
+            byteArrayOf(0x4A, 0x46, 0x49, 0x46, 0x00).copyInto(bytes, 6)
+        }
+        bytes[bytes.lastIndex - 1] = 0xFF.toByte()
+        bytes[bytes.lastIndex] = 0xD9.toByte()
+        return bytes
     }
 }

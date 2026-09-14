@@ -7,6 +7,7 @@ import UIKit
 /// Explicit, one-off feedback. Never starts the automatic SDK or changes its consent.
 @MainActor @Observable final class ProblemReporting {
     static let shared = ProblemReporting()
+    static let maximumStoredBytes = 5_000_000
     static let lifetime: TimeInterval = 7 * 24 * 60 * 60
     private(set) var pending: Pending?
     private(set) var status = ""
@@ -45,17 +46,19 @@ import UIKit
         let configuration = sessionConfiguration ?? URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 120
         session = URLSession(
             configuration: configuration, delegate: ProblemReportingRedirects(), delegateQueue: nil)
-        if let data = try? Data(contentsOf: file), data.count < 250_000 {
+        if let data = try? Data(contentsOf: file), data.count < Self.maximumStoredBytes {
             pending = try? JSONDecoder().decode(Pending.self, from: data)
         }
         if pending != nil { status = "Waiting to send" }
     }
 
     static func envelope(
-        id: String, message: String, email: String, diagnostics: String?, date: Date
+        id: String, message: String, email: String, diagnostics: String?, date: Date,
+        images: [ProblemReportImage] = []
     ) throws -> Data {
         let feedback = SentryFeedback(
             message: message, name: nil, email: email.isEmpty ? nil : email, source: .custom)
@@ -64,11 +67,13 @@ import UIKit
             "timestamp": ISO8601DateFormatter().string(from: date),
             "contexts": ["feedback": feedback.serialize()],
         ]
-        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-            as? String
-        {
-            event["release"] = "com.opencapture.openpocketcine@\(version)"
-        }
+        event["release"] = ReliabilityReportingConfiguration.release()
+        event["environment"] = ReliabilityReportingConfiguration.environment
+        event["dist"] = ReliabilityReportingConfiguration.build
+        event["tags"] = [
+            "sourceRevision": Bundle.main.object(forInfoDictionaryKey: "OPCSourceRevision")
+                as? String ?? "unknown"
+        ]
         func json(_ value: [String: Any]) throws -> Data {
             try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
         }
@@ -91,6 +96,22 @@ import UIKit
             output.append(attachment)
             output.append(10)
         }
+        guard images.count <= ProblemReportImage.maximumCount,
+            images.allSatisfy({
+                !$0.jpeg.isEmpty && $0.jpeg.count <= ProblemReportImage.maximumBytes
+            })
+        else { throw Failure.invalid }
+        for (index, image) in images.enumerated() {
+            output.append(
+                try json([
+                    "type": "attachment", "length": image.jpeg.count,
+                    "filename": "image-\(index + 1).jpg", "content_type": "image/jpeg",
+                    "attachment_type": "event.attachment",
+                ]))
+            output.append(10)
+            output.append(image.jpeg)
+            output.append(10)
+        }
         return output
     }
 
@@ -110,7 +131,9 @@ import UIKit
         return parts.url
     }
 
-    func submit(message: String, email: String, diagnostics: String?) throws {
+    func submit(
+        message: String, email: String, diagnostics: String?, images: [ProblemReportImage] = []
+    ) throws {
         guard pending == nil else { throw Failure.pending }
         let message = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -125,7 +148,8 @@ import UIKit
         let record = Pending(
             id: id, created: now, dsn: dsn,
             envelope: try Self.envelope(
-                id: id, message: message, email: email, diagnostics: diagnostics, date: now))
+                id: id, message: message, email: email, diagnostics: diagnostics, date: now,
+                images: images))
         try persist(record)
         pending = record
         status = "Waiting to send"
@@ -260,14 +284,16 @@ import UIKit
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try directory.setResourceValues(values)
-        try JSONEncoder().encode(record).write(
-            to: file, options: [.atomic, .completeFileProtection])
+        let bytes = try JSONEncoder().encode(record)
+        guard bytes.count < Self.maximumStoredBytes else { throw Failure.tooLarge }
+        try bytes.write(to: file, options: [.atomic, .completeFileProtection])
     }
 
     enum Failure: LocalizedError {
-        case pending, invalid, unavailable
+        case pending, invalid, unavailable, tooLarge
         var errorDescription: String? {
             switch self {
+            case .tooLarge: "This report is too large. Remove an image or shorten the description and try again."
             case .pending: "A report is already waiting to send."
             case .invalid: "Describe what happened and check your optional email address."
             case .unavailable:

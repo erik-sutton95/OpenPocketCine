@@ -88,7 +88,10 @@ open briefly and share diagnostics so the incident's recovery timeline is saved.
 
 Use **Operator Setup → System → Report a problem** to describe what happened
 without leaving the app. Add an email if you would like a reply. Technical details
-are optional and can be reviewed before you send. No footage is attached.
+are optional and can be reviewed before you send. You can add up to three photos
+or screenshots, preview them and remove any before sending. Only choose images
+you have permission to share. Location metadata is removed; images are never
+attached automatically.
 The app saves your report while camera Wi-Fi is in use; keep it open with internet
 access afterward to send. Waiting to send is not a delivery confirmation. Unsent
 reports expire after seven days and can be removed from the form.

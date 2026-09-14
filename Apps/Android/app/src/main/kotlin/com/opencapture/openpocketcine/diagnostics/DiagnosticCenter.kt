@@ -65,15 +65,26 @@ object DiagnosticCenter {
         maxChars: Int = ManualProblemReport.ATTACHMENT_MAX_CHARS,
     ): String {
         val env = environment(session)
-        val extras = FeedIncidentRuntime.exportExtras()
-        var body = fullReport(env, journalLines(), exceptionLines(), extras)
-        if (body.length > maxChars || body.toByteArray(Charsets.UTF_8).size > maxBytes) {
-            body = fullReport(env, emptyList(), exceptionLines(), extras)
-        }
-        if (body.length > maxChars || body.toByteArray(Charsets.UTF_8).size > maxBytes) {
-            body = fullReport(env, emptyList(), exceptionLines(), emptyList())
-        }
-        return ManualProblemReportEnvelope.utf8Prefix(body.take(maxChars), maxBytes)
+        val body =
+            BoundedDiagnosticFormatter.format(
+                environment =
+                    BoundedDiagnosticFormatter.Environment(
+                        appVersion = env.appVersion,
+                        appBuild = env.appBuild,
+                        osName = env.osName,
+                        osVersion = env.osVersion,
+                        deviceModel = env.deviceModel,
+                        cameraFamily = env.cameraFamily,
+                        cameraModel = env.cameraModel,
+                        phase = env.phase,
+                        vpnActive = env.vpnActive,
+                    ),
+                journal = journalLines(),
+                exceptions = exceptionLines(),
+                extras = FeedIncidentRuntime.reportExtras(),
+                cap = minOf(maxChars, BoundedDiagnosticFormatter.CHARACTER_CAP),
+            )
+        return ManualProblemReportEnvelope.utf8Prefix(body, maxBytes)
     }
 
     fun log(level: String, category: String, code: String, message: String) {

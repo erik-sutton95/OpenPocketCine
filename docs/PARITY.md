@@ -617,3 +617,15 @@ first-launch prompt, remembered decline after relaunch, native form, chevron
 disclosure and offline privacy navigation.
 No manual report was submitted in that run. Physical Android and hosted manual
 feedback delivery remain pending.
+
+### Manual report image attachments
+
+Both shells accept up to three explicitly selected images through the system
+photo picker. Selected pixels are resized and re-encoded as bounded JPEGs without
+source location metadata or filenames, previewed and removable before Send.
+Automatic reporting remains image-free. Manual-report text reserves space for
+recent activity and incidents instead of cutting off inside an old MetricKit
+payload. Physical iPhone validation passed opening and cancelling the system image picker,
+including first-launch consent and support navigation. Image normalization and
+envelope contents have automated test coverage; no Android device is attached.
+Hosted image attachment validation is pending.

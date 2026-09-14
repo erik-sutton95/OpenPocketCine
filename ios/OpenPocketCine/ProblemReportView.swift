@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import PhotosUI
 import SwiftUI
 
 struct ProblemReportView: View {
@@ -12,6 +13,9 @@ struct ProblemReportView: View {
     @State private var error: String?
     @State private var submitted = false
     @State private var showPrivacy = false
+    @State private var selectedImages: [PhotosPickerItem] = []
+    @State private var images: [ProblemReportImage] = []
+    @State private var preparingImages = false
 
     var body: some View {
         NavigationStack {
@@ -29,6 +33,31 @@ struct ProblemReportView: View {
                 } message: {
                     Text(error ?? "")
                 }
+        }
+        .task(id: selectedImages) {
+            guard !selectedImages.isEmpty else { return }
+            preparingImages = true
+            defer { preparingImages = false }
+            for item in selectedImages {
+                guard !Task.isCancelled, images.count < ProblemReportImage.maximumCount else {
+                    break
+                }
+                do {
+                    let image = try await item.loadTransferable(type: ProblemReportImage.self)
+                    guard !Task.isCancelled else { return }
+                    if let image {
+                        images.append(image)
+                    } else {
+                        error = "Couldn't open this image. Please choose another."
+                    }
+                } catch {
+                    if !Task.isCancelled {
+                        self.error =
+                            "Couldn’t prepare this image. Please choose another photo or screenshot."
+                    }
+                }
+            }
+            selectedImages = []
         }
         .tint(LiveDesign.accent).preferredColorScheme(.dark)
         .sheet(isPresented: $showPrivacy) {
@@ -70,7 +99,7 @@ struct ProblemReportView: View {
                             message = String(value.prefix(4_000))
                         }
                     Text(
-                        "Describe what you were doing and what went wrong. Please leave out passwords and private footage."
+                        "Describe what you were doing and what went wrong. Please don’t include passwords or other sensitive information."
                     )
                     .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -89,17 +118,7 @@ struct ProblemReportView: View {
                                 details = nil
                                 return
                             }
-                            guard
-                                let url = DiagnosticCenter.shared.writeReport(
-                                    session: model.session),
-                                let text = try? String(contentsOf: url, encoding: .utf8)
-                            else {
-                                includeDetails = false
-                                error =
-                                    "Couldn't prepare technical details. You can still send your description."
-                                return
-                            }
-                            details = PrivacyRedactor.redact(String(text.prefix(32_000)))
+                            details = DiagnosticCenter.shared.manualReport(session: model.session)
                         }
                     Text(
                         "App and device versions, connection events and errors. No footage, screenshots or GPS location."
@@ -111,9 +130,10 @@ struct ProblemReportView: View {
                         }
                     }
                 }
+                imageSection
                 Section {
                     Text(
-                        "Send this report to OpenCapture through Sentry to help improve the app. Your message and optional email are included. This does not enable automatic reports."
+                        "Send this report to OpenCapture through Sentry to help improve the app. Your message, optional email and chosen images are included. This does not enable automatic reports."
                     )
                     .font(.footnote)
                     Button("Reporting privacy") { showPrivacy = true }
@@ -126,7 +146,8 @@ struct ProblemReportView: View {
                         do {
                             try reporting.submit(
                                 message: message, email: email,
-                                diagnostics: includeDetails ? details : nil)
+                                diagnostics: includeDetails ? details : nil, images: images)
+                            images = []
                             submitted = true
                             includeDetails = false
                             message = ""
@@ -136,13 +157,44 @@ struct ProblemReportView: View {
                     }
                     .disabled(
                         message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || !ReliabilityReporting.isAvailable
+                            || !ReliabilityReporting.isAvailable || preparingImages
+                            || !selectedImages.isEmpty
                     )
                     .accessibilityIdentifier("support.report.send")
                 }
             }
         }
     }
+    private var imageSection: some View {
+        Section("Photos or screenshots (optional)") {
+            if images.count < ProblemReportImage.maximumCount {
+                PhotosPicker(
+                    selection: $selectedImages,
+                    maxSelectionCount: ProblemReportImage.maximumCount - images.count,
+                    matching: .images
+                ) { Label("Add photos or screenshots", systemImage: "photo.badge.plus") }
+                .disabled(preparingImages)
+                .accessibilityIdentifier("support.report.images.add")
+            }
+            if preparingImages { ProgressView("Preparing images…") }
+            ForEach(images) { image in
+                HStack {
+                    if let preview = UIImage(data: image.jpeg) {
+                        Image(uiImage: preview).resizable().scaledToFit().frame(height: 100)
+                    }
+                    Spacer()
+                    Button("Remove", role: .destructive) { images.removeAll { $0.id == image.id } }
+                        .disabled(preparingImages)
+                        .accessibilityLabel("Remove attached image")
+                }
+            }
+            Text(
+                "Choose up to 3 images you have permission to share. Location metadata is removed. Images are sent only with this report."
+            )
+            .font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
 }
 
 struct ReliabilityConsentPrompt: View {

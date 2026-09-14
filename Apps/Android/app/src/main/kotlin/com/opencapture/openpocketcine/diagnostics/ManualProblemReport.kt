@@ -132,9 +132,14 @@ internal object ManualProblemReport {
         tick()
     }
 
-    fun submit(message: String, replyEmail: String, diagnostics: String?): ManualSubmitResult =
+    fun submit(
+        message: String,
+        replyEmail: String,
+        diagnostics: String?,
+        images: List<ByteArray> = emptyList(),
+    ): ManualSubmitResult =
         try {
-            storeSubmission(message, replyEmail, diagnostics)
+            storeSubmission(message, replyEmail, diagnostics, images)
         } catch (_: Exception) {
             ManualSubmitResult.STORAGE_ERROR
         }
@@ -143,11 +148,13 @@ internal object ManualProblemReport {
         message: String,
         replyEmail: String,
         diagnostics: String?,
+        images: List<ByteArray>,
     ): ManualSubmitResult {
         val trimmed = ManualProblemReportEnvelope.sanitizeMessage(message)
         val email = ManualProblemReportEnvelope.sanitizeEmail(replyEmail)
         if (trimmed.isEmpty()) return ManualSubmitResult.INVALID
         if (replyEmail.isNotBlank() && email == null) return ManualSubmitResult.INVALID
+        val acceptedImages = ManualReportImages.accept(images) ?: return ManualSubmitResult.INVALID
         val resolved = endpointFromConfigured() ?: return ManualSubmitResult.UNAVAILABLE
         val dsn = ReliabilityReportingDSN.configured() ?: envelopeUrlOverride ?: return ManualSubmitResult.UNAVAILABLE
         synchronized(lock) {
@@ -165,6 +172,7 @@ internal object ManualProblemReport {
                     message = trimmed,
                     contactEmail = email,
                     diagnostics = diagnostics,
+                    images = acceptedImages,
                 )
             val bytes = ManualProblemReportEnvelope.serialize(envelope)
             val dir = directory() ?: return ManualSubmitResult.UNAVAILABLE
@@ -331,8 +339,8 @@ internal object ManualProblemReport {
                         .followSslRedirects(false)
                         .retryOnConnectionFailure(false)
                         .connectTimeout(20, TimeUnit.SECONDS)
-                        .readTimeout(20, TimeUnit.SECONDS)
-                        .callTimeout(20, TimeUnit.SECONDS)
+                        .readTimeout(60, TimeUnit.SECONDS)
+                        .callTimeout(120, TimeUnit.SECONDS)
                         .build()
             val request =
                 Request.Builder()
@@ -634,8 +642,13 @@ internal object ManualProblemReportEnvelope {
         message: String,
         contactEmail: String?,
         diagnostics: String?,
+        images: List<ByteArray> = emptyList(),
+        environment: String = if (BuildConfig.DEBUG) "development" else "production",
+        dist: String = BuildConfig.VERSION_CODE.toString(),
+        sourceRevision: String = BuildConfig.SOURCE_REVISION.take(64),
     ): ManualEnvelope {
         val iso = isoMs(timestampMs)
+        val acceptedImages = ManualReportImages.accept(images) ?: emptyList()
         val feedbackFields =
             JSONObject()
                 .put("message", message)
@@ -648,6 +661,9 @@ internal object ManualProblemReportEnvelope {
                 .put("timestamp", iso)
                 .put("platform", "java")
                 .put("release", release)
+                .put("environment", environment)
+                .put("dist", dist)
+                .put("tags", JSONObject().put("sourceRevision", sourceRevision))
                 .put("contexts", JSONObject().put("feedback", feedbackFields))
         val items = mutableListOf(
             ManualEnvelopeItem(
@@ -674,6 +690,18 @@ internal object ManualProblemReportEnvelope {
                             .put("content_type", "text/plain")
                             .put("attachment_type", "event.attachment"),
                     payload = redacted.toByteArray(Charsets.UTF_8),
+                )
+        }
+        for ((index, jpeg) in acceptedImages.withIndex()) {
+            items +=
+                ManualEnvelopeItem(
+                    header =
+                        JSONObject()
+                            .put("type", "attachment")
+                            .put("filename", ManualReportImages.generatedName(index))
+                            .put("content_type", "image/jpeg")
+                            .put("attachment_type", "event.attachment"),
+                    payload = jpeg,
                 )
         }
         return ManualEnvelope(

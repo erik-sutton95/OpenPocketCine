@@ -146,6 +146,15 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
     }
 
     @MainActor
+    func manualReport(session: CameraSession) -> String {
+        DiagnosticReport.manualReport(
+            environment: environment(session: session),
+            journal: ControlLiveLog.recentLines(),
+            exceptions: Self.readLines(Self.exceptionsURL),
+            extras: FeedIncidentRuntime.reportExtras() + Self.metricKitExtras())
+    }
+
+    @MainActor
     func writeReport(session: CameraSession) -> URL? {
         let env = environment(session: session)
         let journal = ControlLiveLog.recentLines()
@@ -199,12 +208,12 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
 
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         persistMetricKit(kind: "diagnostic", payloads: payloads.map { $0.jsonRepresentation() })
-        for payload in payloads {
-            event(
-                level: .error, category: .diagnostics, code: "metrickit",
-                message: "MetricKit diagnostic payload received")
-            _ = payload
-        }
+        // Receipt time is not crash time; a collector stack would misidentify
+        // this callback as the fault. Original stacks remain in the payload.
+        event(
+            level: .notice, category: .diagnostics, code: "metrickit",
+            message: "MetricKit diagnostic payload received",
+            fields: ["payloadCount": String(payloads.count)])
     }
 
     private func persistMetricKit(kind: String, payloads: [Data]) {

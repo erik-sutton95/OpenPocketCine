@@ -1,7 +1,8 @@
 # Diagnostics
 
 On-device logging and tester reports. Share Diagnostics is local and redacted.
-The app does not send footage, names, or locations. Automatic reports require
+Automatic reports do not include footage, names, or locations. Manual reports can
+include images explicitly chosen by the operator. Automatic reports require
 a configured Sentry project and explicit operator consent; they are off by
 default. SDK adapters live in the platform shells, outside the portable core.
 Local crash capture and internet upload have separate gates: starting on camera
@@ -238,7 +239,11 @@ removed when the app next runs. It transmits a Sentry feedback envelope only whi
 upload gate permits internet use. Reports retain their original ID on retry.
 HTTP acceptance is required for Sent; queued and failed states stay visible.
 The operator can remove an unsent report. Optional diagnostic text is redacted
-and bounded; footage, screenshots and raw camera packets are not attached.
+and bounded; raw camera packets are not attached. The form accepts up to three
+explicitly selected photos/screenshots with preview and removal. Image processing
+runs off the main thread, limits the longest edge to 1600 pixels and each JPEG
+to 1 MiB, and strips source metadata and filenames. No automatic capture occurs.
+Image bytes share the manual queue, cancellation and seven-day expiry policy.
 Messages and optional reply addresses are intentionally supplied by the operator
 and are not anonymous. The queue is separate from automatic-report consent.
 
@@ -249,3 +254,15 @@ A one-time prompt after the first configured launch explains the improvement
 purpose and offers Enable automatic reports, Not now and offline privacy.
 Existing decisions persist. Declining does not disable manual reports or prevent
 a later opt-in in System.
+
+### Compact manual-report evidence
+
+The native form uses a budgeted 32,000-character report, with generation time,
+current environment, recent activity, typed incident/session summaries and recent
+faults. Large historical MetricKit payloads cannot displace recent evidence;
+omission markers describe excluded detail rather than chopping JSON. Local
+Save diagnostic report remains the fuller export. MetricKit receipt is logged
+as a notice: the collection callback stack is not the original crash stack.
+Manual feedback uses the same release/build and environment labels as automatic
+reports so investigators can compare them; a manual description is not proof of
+a captured crash or a direct link to a particular incident.

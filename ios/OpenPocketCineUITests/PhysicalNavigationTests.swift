@@ -48,8 +48,20 @@ final class PhysicalNavigationTests: XCTestCase {
         app.buttons["support.diagnostics.disclosure"].tap()
         app.buttons["support.report.open"].tap()
         XCTAssertTrue(app.textViews["What happened?"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["support.report.send"].isEnabled)
         attach(app, "support-native-form")
+        let addImages = app.buttons["support.report.images.add"]
+        for _ in 0..<3 where !addImages.isHittable { app.swipeUp() }
+        XCTAssertTrue(addImages.isHittable)
+        attach(app, "support-image-options")
+        addImages.tap()
+        let cancelPicker = app.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancelPicker.waitForExistence(timeout: 10))
+        cancelPicker.tap()
+        XCTAssertTrue(addImages.waitForExistence(timeout: 5))
+        let send = app.buttons["support.report.send"]
+        for _ in 0..<3 where !send.exists { app.swipeUp() }
+        XCTAssertTrue(send.exists)
+        XCTAssertFalse(send.isEnabled)
         app.buttons["Close"].firstMatch.tap()
         app.buttons["READ"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Privacy"].firstMatch.waitForExistence(timeout: 5))

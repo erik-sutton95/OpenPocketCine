@@ -98,4 +98,152 @@ import Testing
         #expect(DiagnosticLevel.info.persistsToJournal)
         #expect(DiagnosticLevel.fault.persistsToJournal)
     }
+
+    @Test func manualReportIncludesGeneratedUTCAndSubmissionHeader() {
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(), journal: [], exceptions: [])
+        #expect(text.contains("Generated: "))
+        #expect(text.contains("Prepared for explicit manual submission."))
+        #expect(
+            text.contains(
+                "Environment below is a report-time snapshot, not necessarily the failure state."))
+        #expect(text.contains("incidents: none captured"))
+        #expect(!text.contains("Not uploaded"))
+        let stamp = text.split(separator: "\n").first { $0.hasPrefix("Generated: ") }
+        #expect(stamp?.hasSuffix("Z") == true)
+        #expect(stamp?.contains("T") == true)
+    }
+
+    @Test func manualReportKeepsJournalAndIncidentsWhenMetricKitIsHuge() {
+        let journal = [
+            "info feed first-picture needsPoke=0",
+            "warning feed stall gapMs=400",
+        ]
+        let incidents = """
+            OpenPocketCine feed incidents (typed snapshots, no journal)
+            count=1 schema=1
+            id=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee kind=freshInputStaleOutput
+            """
+        let summary = #"{"sessionID":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","outcome":"recovered"}"#
+        let metric = "{\"crashDiagnostics\":\"" + String(repeating: "M", count: 40_000) + "\"}"
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(),
+            journal: journal,
+            exceptions: ["error decoder vt-fail code=4"],
+            extras: [
+                ("incidents.txt", incidents),
+                ("session-summary.json", summary),
+                ("metrickit-diagnostic-1.json", metric),
+            ])
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+        #expect(text.contains("first-picture"))
+        #expect(text.contains("stall gapMs=400"))
+        #expect(text.contains("vt-fail"))
+        #expect(text.contains("freshInputStaleOutput"))
+        #expect(text.contains("session-summary.json"))
+        #expect(!text.contains(String(repeating: "M", count: 1_000)))
+        #expect(text.contains("[truncated:"))
+        #expect(!text.contains("incidents: none captured"))
+    }
+
+    @Test func manualReportOmitsCollectorStacksAndKeepsNewestJournal() {
+        var journal: [String] = []
+        for index in 0..<80 {
+            journal.append("info feed tick n=\(index)")
+        }
+        let exceptions = [
+            "2026-09-14T00:00:00Z error diagnostics metrickit MetricKit diagnostic payload received stack=DiagnosticCenterC12currentStack",
+            "2026-09-14T00:00:01Z error decoder vt-fail code=1",
+        ]
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(), journal: journal, exceptions: exceptions)
+        #expect(text.contains("vt-fail"))
+        #expect(!text.contains("currentStack"))
+        #expect(!text.contains("MetricKit diagnostic payload received"))
+        #expect(text.contains("tick n=79"))
+        #expect(text.contains("collector MetricKit stacks"))
+    }
+
+    @Test func manualReportOmitsWholeJSONExtraRatherThanSlicing() {
+        let token = "UNIQUE_METRIC_TOKEN_SHOULD_NOT_APPEAR"
+        let huge = "{" + String(repeating: "x", count: 40_000) + token + "}"
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(),
+            journal: ["notice session live picture=1"],
+            exceptions: [],
+            extras: [
+                ("incidents.txt", "count=1 kind=packet"),
+                ("metrickit-diagnostic-9.json", huge),
+            ])
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+        #expect(text.contains("count=1 kind=packet"))
+        #expect(text.contains("picture=1"))
+        #expect(!text.contains(token))
+        #expect(text.contains("omitted extra metrickit-diagnostic-9.json"))
+    }
+
+    @Test func manualReportStaysWithinCharacterCapWithHugeJournal() {
+        let line = String(repeating: "a", count: 120)
+        let journal = (0..<400).map { "info feed row \($0) \(line)" }
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(), journal: journal, exceptions: [])
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+        #expect(text.contains("[truncated:"))
+        #expect(text.contains("row 399"))
+        #expect(!text.contains("row 0 \(line)"))
+    }
+
+    @Test func manualReportRetainsRealCollectorCallsiteAndOversizedNewestLine() {
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(),
+            journal: ["notice prior", "error latest " + String(repeating: "x", count: 40_000)],
+            exceptions: ["error decoder failed stack=DiagnosticCenterC12currentStack"])
+        #expect(text.contains("error latest"))
+        #expect(text.contains("decoder failed"))
+        #expect(text.contains("newest line shortened"))
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+    }
+
+    @Test func manualReportCapMakesProgressWithOversizedEnvironmentAndOmissions() {
+        let environment = DiagnosticEnvironment(
+            appVersion: String(repeating: "v", count: 40_000), appBuild: "1", osName: "test",
+            osVersion: "1", deviceModel: "test", cameraFamily: "none", cameraModel: "none",
+            phase: "idle")
+        let text = DiagnosticReport.manualReport(
+            environment: environment, journal: [], exceptions: [],
+            extras: [(name: "metrickit-large.json", body: String(repeating: "x", count: 40_000))])
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+        #expect(text.contains("[truncated:"))
+    }
+
+    @Test func manualReportPrioritizesNewestFirstIncidentExports() {
+        let text = DiagnosticReport.manualReport(
+            environment: sampleEnv(), journal: ["latest activity"], exceptions: [],
+            extras: [
+                (
+                    name: "incidents.txt",
+                    body: "newest incident\n" + String(repeating: "old detail\n", count: 4_000)
+                ),
+                (name: "incident-new.json", body: "{\"id\":\"new\"}"),
+                (name: "incident-old.json", body: "{\"id\":\"old\"}"),
+            ])
+        #expect(text.contains("newest incident"))
+        #expect(text.contains("latest activity"))
+        #expect(
+            text.range(of: "incident-new.json")!.lowerBound
+                < text.range(of: "incident-old.json")!.lowerBound)
+        #expect(text.count <= DiagnosticReport.manualReportCharacterCap)
+    }
+
+    private func sampleEnv() -> DiagnosticEnvironment {
+        DiagnosticEnvironment(
+            appVersion: "0.1.0",
+            appBuild: "1",
+            osName: "iOS",
+            osVersion: "26.6",
+            deviceModel: "iPhone17,2",
+            cameraFamily: "pocket",
+            cameraModel: "Osmo Pocket 3",
+            phase: "live")
+    }
 }

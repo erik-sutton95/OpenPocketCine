@@ -130,7 +130,8 @@ separate hold-to-move interaction.
 - Connection setup (first pair): **Share Diagnostics** on the wizard so a
   tester who never reaches Operator Setup can still send a report.
 - Operator Setup → System → **Report a problem** opens a native Sentry form
-  for a description, optional reply email and optional reviewed technical details.
+  for a description, optional reply email, optional reviewed technical details and
+  up to three selected photos/screenshots. Show previews and removal before Send.
   Automatic error reports are a separate optional toggle; manual submission does not turn that toggle on.
   **Diagnostic options** is a separate chevron disclosure card for save/export
   and local deletion. Public GitHub reporting and feature-request choices are absent from this operator flow.

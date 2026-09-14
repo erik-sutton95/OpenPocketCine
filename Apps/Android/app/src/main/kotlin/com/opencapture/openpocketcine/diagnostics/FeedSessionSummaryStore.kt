@@ -47,6 +47,20 @@ internal object FeedSessionSummaryStore {
 
     fun deleteAll(root: File): Boolean = directory(root).let { !it.exists() || it.deleteRecursively() }
 
+    fun encodeForReport(summary: FeedIncidentSessionSummary): String =
+        JSONObject()
+            .put("sessionID", summary.sessionID)
+            .put("healthyExposureSeconds", summary.healthyExposureSeconds)
+            .put("incidentCount", summary.incidentCount)
+            .put("outcome", summary.outcome)
+            .put("sourceRevision", summary.sourceRevision)
+            .put("recordedAtMs", summary.recordedAtMs)
+            .also { json ->
+                summary.appVersion?.let { json.put("appVersion", it) }
+                summary.appBuild?.let { json.put("appBuild", it) }
+            }
+            .toString()
+
     private fun urls(root: File): List<File> {
         val files = directory(root).listFiles() ?: return emptyList()
         return files.filter { it.extension == "json" }

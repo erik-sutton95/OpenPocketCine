@@ -257,4 +257,295 @@ public enum DiagnosticReport: Sendable {
         }
         return PrivacyRedactor.redact(sections.joined(separator: "\n\n"))
     }
+
+    /// Hard cap for explicit manual submission, including truncation markers.
+    public static let manualReportCharacterCap = 32_000
+    private static let reservedJournalCharacters = 8_000
+    private static let reservedExceptionCharacters = 3_500
+    private static let reservedTypedExtraCharacters = 10_000
+
+    /// Bounded report for the native Send form. Same inputs as `fullReport`.
+    public static func manualReport(
+        environment: DiagnosticEnvironment,
+        journal: [String],
+        exceptions: [String],
+        extras: [(name: String, body: String)] = []
+    ) -> String {
+        let cap = manualReportCharacterCap
+        let journalLines = journal.map { PrivacyRedactor.redact($0) }
+        let collectorCount = exceptions.filter { isCollectorException($0) }.count
+        let exceptionLines = exceptions.map { PrivacyRedactor.redact($0) }.filter {
+            !isCollectorException($0)
+        }
+        var typed: [(name: String, body: String)] = []
+        var metricKit: [(name: String, body: String)] = []
+        var other: [(name: String, body: String)] = []
+        for extra in extras {
+            let name = PrivacyRedactor.redact(extra.name)
+            let body = PrivacyRedactor.redact(extra.body)
+            guard !name.isEmpty, !body.isEmpty else { continue }
+            if isTypedIncidentExtra(name) {
+                typed.append((name, body))
+            } else if name.lowercased().hasPrefix("metrickit-") {
+                metricKit.append((name, body))
+            } else {
+                other.append((name, body))
+            }
+        }
+        typed = orderedTypedExtras(typed)
+        metricKit.sort { $0.name > $1.name }
+
+        let header = manualHeader(environment: environment, hasTypedExtras: !typed.isEmpty)
+        // Reserve separators and a bounded omission notice so low-priority extras
+        // cannot force the final clamp to discard reserved journal evidence.
+        var remaining = max(0, cap - header.count - 1_024)
+        let exceptionBudget =
+            exceptionLines.isEmpty ? 0 : min(reservedExceptionCharacters, remaining)
+        remaining -= exceptionBudget
+        let typedBudget = typed.isEmpty ? 0 : min(reservedTypedExtraCharacters, remaining)
+        remaining -= typedBudget
+        let journalBudget = journalLines.isEmpty ? 0 : min(reservedJournalCharacters, remaining)
+        remaining -= journalBudget
+
+        var omitted: [String] = []
+        if collectorCount > 0 {
+            omitted.append("omitted \(collectorCount) collector MetricKit stacks")
+        }
+
+        let exceptionSection = fitLineSection(
+            title: "Exceptions / faults",
+            lines: Array(exceptionLines.suffix(exceptionCap)),
+            budget: exceptionBudget)
+        var typedFitted = fitExtras(
+            typed, budget: typedBudget, allowTextTruncate: true, omitted: &omitted)
+        let journalSection = fitLineSection(
+            title: "Journal",
+            lines: Array(journalLines.suffix(journalCap)),
+            budget: journalBudget)
+
+        var leftover =
+            remaining
+            + unusedBudget(exceptionBudget, exceptionSection)
+            + unusedBudget(typedBudget, typedFitted.map(\.section))
+            + unusedBudget(journalBudget, journalSection)
+
+        let typedIncluded = Set(typedFitted.map(\.name))
+        let typedRemainder = typed.filter { !typedIncluded.contains($0.name) }
+        if leftover > 0, !typedRemainder.isEmpty {
+            let more = fitExtras(
+                typedRemainder, budget: leftover, allowTextTruncate: true, omitted: &omitted)
+            leftover -= joinedSectionCount(more.map(\.section))
+            typedFitted.append(contentsOf: more)
+        }
+        let otherFitted: [String]
+        if leftover > 0 {
+            let moreOther = fitExtras(
+                other, budget: leftover, allowTextTruncate: false, omitted: &omitted)
+            leftover -= joinedSectionCount(moreOther.map(\.section))
+            otherFitted = moreOther.map(\.section)
+        } else {
+            for extra in other {
+                omitted.append("omitted extra \(extra.name) (did not fit)")
+            }
+            otherFitted = []
+        }
+        let metricFitted: [String]
+        if leftover > 0 {
+            let moreMetric = fitExtras(
+                metricKit, budget: leftover, allowTextTruncate: false, omitted: &omitted)
+            leftover -= joinedSectionCount(moreMetric.map(\.section))
+            metricFitted = moreMetric.map(\.section)
+        } else {
+            if !metricKit.isEmpty {
+                omitted.append("omitted \(metricKit.count) MetricKit extras that did not fit")
+            }
+            metricFitted = []
+        }
+        _ = leftover
+
+        let fittedNames = Set(typedFitted.map(\.name))
+        omitted.removeAll { note in
+            fittedNames.contains { note.contains($0) }
+        }
+
+        var sections = [header]
+        if let exceptionSection { sections.append(exceptionSection) }
+        sections.append(contentsOf: typedFitted.map(\.section))
+        if let journalSection { sections.append(journalSection) }
+        sections.append(contentsOf: otherFitted)
+        sections.append(contentsOf: metricFitted)
+        if !omitted.isEmpty {
+            let notice = omitted.joined(separator: "; ")
+            sections.append(
+                "[truncated: \(String(notice.prefix(900)))\(notice.count > 900 ? "; further omissions" : "")]"
+            )
+        }
+        return clampSections(sections, cap: cap)
+    }
+
+    private static func manualHeader(
+        environment: DiagnosticEnvironment, hasTypedExtras: Bool
+    ) -> String {
+        let stamp = ISO8601DateFormatter()
+        stamp.timeZone = TimeZone(secondsFromGMT: 0)
+        stamp.formatOptions = [.withInternetDateTime]
+        var lines = [
+            "OpenPocketCine diagnostic report",
+            "Privacy: no personal name, email, location, device name, or Wi-Fi password.",
+            "Generated: \(stamp.string(from: Date()))",
+            "Prepared for explicit manual submission.",
+            "Environment below is a report-time snapshot, not necessarily the failure state.",
+            "",
+            "app: \(environment.appVersion) (\(environment.appBuild))",
+            "os: \(environment.osName) \(environment.osVersion)",
+            "device: \(environment.deviceModel)",
+            "camera: \(environment.cameraModel)",
+            "family: \(environment.cameraFamily)",
+            "phase: \(environment.phase)",
+            "vpn: \(environment.vpnActive ? "on" : "off")",
+        ]
+        if !hasTypedExtras {
+            lines.append("incidents: none captured")
+        }
+        return PrivacyRedactor.redact(lines.joined(separator: "\n"))
+    }
+
+    private static func isCollectorException(_ line: String) -> Bool {
+        if line.contains("MetricKit diagnostic payload received") { return true }
+        if line.contains("diagnostics metrickit") { return true }
+        return false
+    }
+
+    private static func isTypedIncidentExtra(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        if lower == "incidents.txt" { return true }
+        if lower == "session-summary.json" { return true }
+        if lower.hasPrefix("incident-") && lower.hasSuffix(".json") { return true }
+        if lower.hasPrefix("session-") && lower.hasSuffix(".json") { return true }
+        return false
+    }
+
+    private static func orderedTypedExtras(
+        _ extras: [(name: String, body: String)]
+    ) -> [(name: String, body: String)] {
+        let listing = extras.filter { $0.name.lowercased() == "incidents.txt" }
+        let summaries = extras.filter {
+            let lower = $0.name.lowercased()
+            return lower == "session-summary.json"
+                || (lower.hasPrefix("session-") && lower.hasSuffix(".json"))
+        }
+        let incidents = extras.filter {
+            let lower = $0.name.lowercased()
+            return lower.hasPrefix("incident-") && lower.hasSuffix(".json")
+        }
+        // FeedIncidentStore exports newest first; preserve that ordering.
+        return listing + summaries + incidents
+    }
+
+    private static func isJSONExtra(name: String, body: String) -> Bool {
+        if name.lowercased().hasSuffix(".json") { return true }
+        if let first = body.first(where: { !$0.isWhitespace }), first == "{" || first == "[" {
+            return true
+        }
+        return false
+    }
+
+    private static func unusedBudget(_ budget: Int, _ section: String?) -> Int {
+        max(0, budget - (section?.count ?? 0))
+    }
+
+    private static func unusedBudget(_ budget: Int, _ sections: [String]) -> Int {
+        max(0, budget - joinedSectionCount(sections))
+    }
+
+    private static func joinedSectionCount(_ sections: [String]) -> Int {
+        guard !sections.isEmpty else { return 0 }
+        return sections.reduce(0) { $0 + $1.count } + 2 * (sections.count - 1)
+    }
+
+    private static func fitLineSection(title: String, lines: [String], budget: Int) -> String? {
+        guard !lines.isEmpty, budget > 0 else { return nil }
+        var kept: [String] = []
+        for line in lines.reversed() {
+            let candidateCount = kept.count + 1
+            let heading = "\(title) (last \(candidateCount) lines)\n"
+            let body = ([line] + kept).joined(separator: "\n")
+            let omitted = lines.count - candidateCount
+            let suffix = omitted > 0 ? "\n[truncated: omitted \(omitted) older lines]" : ""
+            if heading.count + body.count + suffix.count > budget {
+                if kept.isEmpty {
+                    let clippedMarker = "\n[truncated: newest line shortened; older lines omitted]"
+                    let room = max(0, budget - heading.count - clippedMarker.count)
+                    return heading + String(line.prefix(room)) + clippedMarker
+                }
+                break
+            }
+            kept.insert(line, at: 0)
+        }
+        guard !kept.isEmpty else { return nil }
+        let omitted = lines.count - kept.count
+        var text = "\(title) (last \(kept.count) lines)\n" + kept.joined(separator: "\n")
+        if omitted > 0 {
+            text += "\n[truncated: omitted \(omitted) older lines]"
+        }
+        return text
+    }
+
+    private static func fitExtras(
+        _ extras: [(name: String, body: String)],
+        budget: Int,
+        allowTextTruncate: Bool,
+        omitted: inout [String]
+    ) -> [(name: String, section: String)] {
+        var remaining = budget
+        var fitted: [(name: String, section: String)] = []
+        for extra in extras {
+            let json = isJSONExtra(name: extra.name, body: extra.body)
+            let separator = fitted.isEmpty ? 0 : 2
+            if json || !allowTextTruncate {
+                let section = "\(extra.name)\n\(extra.body)"
+                let cost = section.count + separator
+                if cost <= remaining {
+                    fitted.append((extra.name, section))
+                    remaining -= cost
+                } else {
+                    omitted.append("omitted extra \(extra.name) (did not fit)")
+                }
+                continue
+            }
+            let separatorCost = fitted.isEmpty ? 0 : 2
+            let heading = extra.name + "\n"
+            let marker = "\n[truncated: older incident detail omitted]"
+            let room = remaining - separatorCost - heading.count
+            if room >= extra.body.count {
+                let section = heading + extra.body
+                fitted.append((extra.name, section))
+                remaining -= section.count + separatorCost
+            } else if room > marker.count {
+                // Incident listings are newest first; keep their beginning.
+                let prefix = String(extra.body.prefix(room - marker.count))
+                let section = heading + prefix + marker
+                fitted.append((extra.name, section))
+                remaining -= section.count + separatorCost
+            } else {
+                omitted.append("omitted extra \(extra.name) (did not fit)")
+            }
+        }
+        return fitted
+    }
+
+    private static func clampSections(_ sections: [String], cap: Int) -> String {
+        let original = sections.joined(separator: "\n\n")
+        guard original.count > cap else { return original }
+        let marker = "[truncated: report capped at \(cap) characters]"
+        var kept = sections
+        // Every iteration removes a real section; never reinsert the marker
+        // into the mutable list (which could otherwise prevent progress).
+        while kept.count > 1 {
+            kept.removeLast()
+            let result = (kept + [marker]).joined(separator: "\n\n")
+            if result.count <= cap { return result }
+        }
+        return String((kept.first ?? "").prefix(max(0, cap - marker.count - 2))) + "\n\n" + marker
+    }
 }

@@ -190,8 +190,10 @@ class OperatorSetupContractTest {
         assertTrue(LegalKind.PRIVACY.body.contains("OpenCapture is the data controller"))
         assertTrue(LegalKind.PRIVACY.body.contains("support@openpocketcine.app"))
         assertTrue(LegalKind.PRIVACY.body.contains("optional and off by default"))
-        assertTrue(LegalKind.PRIVACY.body.contains("sends a private note through Sentry"))
-        assertTrue(LegalKind.PRIVACY.body.contains("reply email is optional"))
+        assertTrue(LegalKind.PRIVACY.body.contains("sends your description and any optional reply email"))
+        assertTrue(LegalKind.PRIVACY.body.contains("up to three photos or screenshots"))
+        assertTrue(LegalKind.PRIVACY.body.contains("no images are attached automatically"))
+        assertTrue(LegalKind.PRIVACY.body.contains("Automatic reports exclude all images"))
         assertFalse(LegalKind.PRIVACY.body.contains("prepares an email to support@openpocketcine.app"))
         assertFalse(LegalKind.PRIVACY.body.contains("does not send analytics, crash reports"))
         assertTrue(LegalKind.NOTICE.body.contains("Apache License, Version 2.0"))
@@ -238,6 +240,8 @@ class OperatorSetupContractTest {
         assertTrue(SettingsHelpCopy.RELIABILITY_REPORTS.contains("leave camera Wi-Fi"))
         assertTrue(SettingsHelpCopy.RELIABILITY_UNAVAILABLE.contains("cannot send automatic reports"))
         assertTrue(SettingsHelpCopy.REPORT_PROBLEM.contains("does not turn on automatic reports"))
+        assertTrue(SettingsHelpCopy.REPORT_PROBLEM.contains("up to three photos"))
+        assertTrue(SettingsHelpCopy.RELIABILITY_REPORTS.contains("Automatic reports exclude all images"))
         assertFalse(SettingsHelpCopy.REPORT_PROBLEM.contains("by email"))
     }
 
