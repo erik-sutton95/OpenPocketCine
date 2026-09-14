@@ -1197,6 +1197,9 @@ import Testing
 
         #expect(CamFov.readout(live: 5.36, preview: nil, fallback: 1) == 5.4)
         #expect(CamFov.readout(live: 2.29, preview: 5.3, fallback: 1) == 5.3)
+        #expect(CamFov.continuousReadout(live: 1.534, preview: nil, fallback: 1) == 1.534)
+        #expect(CamFov.continuousReadout(live: 1, preview: 1.53, fallback: 1) == 1.53)
+        #expect(CamFov.readout(live: 1, preview: 1.53, fallback: 1) == 1.5)
         #expect(CamFov.readout(live: nil, preview: nil, fallback: 1) == 1)
         #expect(
             CamFov.displayLabel(factor: CamFov.readout(live: 2.29, preview: nil, fallback: 1))

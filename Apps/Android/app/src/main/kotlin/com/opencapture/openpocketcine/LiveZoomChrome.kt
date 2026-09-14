@@ -95,6 +95,7 @@ fun LiveZoomChip(
     onDialEnd: () -> Unit = {},
     opticalStops: List<Double> = listOf(1.0),
     onDigitalCycle: (() -> Unit)? = null,
+    dialFactor: Double = factor,
 ) {
     val haptics = LocalOperatorHaptics.current
     val interaction = remember { MutableInteractionSource() }
@@ -122,7 +123,7 @@ fun LiveZoomChip(
                 onClick = { haptics.selection(); onCycle() },
                 onDoubleClick = onDigitalCycle?.let { action -> { haptics.selection(); action() } },
                 onLongClick = if (!dimmed && onDial != null && maximum > 1.0) {
-                    { haptics.longPress(); dialBase = factor; dialOpen = true }
+                    { haptics.longPress(); dialBase = dialFactor; dialOpen = true }
                 } else null)
             .semantics {
                 contentDescription = "Zoom ${LiveZoom.label(held)}. Tap to cycle; hold to adjust" +

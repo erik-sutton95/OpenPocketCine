@@ -170,11 +170,19 @@ object CamFov {
         preview: Double?,
         fallback: Double,
         optimistic: Double? = null,
+    ): Double = displayTenths(continuousReadout(live, preview, fallback, optimistic))
+
+    /** Unrounded lens factor for the zoom disc. The chip still uses [readout]. */
+    fun continuousReadout(
+        live: Double?,
+        preview: Double?,
+        fallback: Double,
+        optimistic: Double? = null,
     ): Double {
-        if (preview != null) return displayTenths(preview)
-        if (optimistic != null) return displayTenths(optimistic)
-        if (live != null) return displayTenths(live)
-        return displayTenths(fallback)
+        if (preview != null) return clamp(preview)
+        if (optimistic != null) return clamp(optimistic)
+        if (live != null) return clamp(live)
+        return clamp(fallback)
     }
 
     fun hybridFactor(raw: Int, lens: Int?): Double? {

@@ -40,6 +40,12 @@ final class LiveZoomReadoutTests: XCTestCase {
             "2.3×")
     }
 
+    func testDialReadoutKeepsHundredthsWhileChipStaysTenths() {
+        XCTAssertEqual(CamFov.continuousReadout(live: 1, preview: 1.53, fallback: 1), 1.53, accuracy: 0.0001)
+        XCTAssertEqual(CamFov.readout(live: 1, preview: 1.53, fallback: 1), 1.5, accuracy: 0.0001)
+        XCTAssertEqual(CamFov.displayLabel(factor: CamFov.readout(live: 1, preview: 1.53, fallback: 1)), "1.5×")
+    }
+
     func testChipIsCameraTruthNotOptimisticGuess() {
         XCTAssertEqual(CamFov.readout(live: 1, preview: nil, fallback: 12), 1)
         XCTAssertEqual(

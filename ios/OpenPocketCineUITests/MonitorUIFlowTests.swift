@@ -242,6 +242,13 @@ final class MonitorUIFlowTests: XCTestCase {
                 "The zoom modal must cover underlying \(control) controls")
         }
         capture("zoom-dial-landscape")
+        XCTAssertGreaterThan(
+            dial.frame.height, dial.frame.width,
+            "Landscape zoom disc must be a trailing half-circle")
+        XCTAssertGreaterThan(
+            dial.frame.minX, app.frame.midX - 24,
+            "Landscape zoom disc must sit on the trailing edge, not over the picture")
+        XCTAssertEqual(dial.frame.maxX, app.frame.maxX, accuracy: 12)
         rotate(.portrait)
         XCTAssertTrue(dial.isHittable)
         XCTAssertGreaterThan(

@@ -85,86 +85,90 @@
                 .opacity(visible ? 1 : 0)
                 .animation(MonitorMotion.dim(reduceMotion), value: visible)
 
-                ZStack(alignment: isBottom ? .bottom : .trailing) {
-                dial
-                    .frame(
-                        width: isBottom ? radius * 2 : radius,
-                        height: isBottom ? radius : radius * 2)
-                    .frame(
-                        width: geometry.width, height: geometry.height,
-                        alignment: isBottom ? .top : .leading)
-                    .monitorGlass(in: MonitorZoomHalfDisc(attachment: attachment), density: .zoom)
-                    .clipShape(MonitorZoomHalfDisc(attachment: attachment))
-                    .contentShape(MonitorZoomHalfDisc(attachment: attachment))
-                    .shadow(color: .black.opacity(0.5), radius: 22, y: 10)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .updating($pointerActive) { _, active, _ in active = true }
-                            .onChanged { gesture in
-                                guard acceptsInput else {
-                                    cancelPointer()
-                                    return
-                                }
-                                guard
-                                    geometry.canStartZoom(
-                                        x: gesture.startLocation.x, y: gesture.startLocation.y)
-                                else { return }
-                                if drag.begin(at: value) {
-                                    radial = MonitorZoomRadialGesture(
-                                        geometry: geometry,
-                                        startX: gesture.startLocation.x,
-                                        startY: gesture.startLocation.y)
-                                    onEditing(true)
-                                }
-                                guard let origin = drag.anchor else { return }
-                                guard
-                                    let delta = radial?.angleDelta(
-                                        x: gesture.location.x, y: gesture.location.y)
-                                else { return }
-                                value = scale.dragged(from: origin, angleDelta: delta)
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: isBottom ? .bottom : .trailing) {
+                        dial
+                            .frame(
+                                width: isBottom ? radius * 2 : radius,
+                                height: isBottom ? radius : radius * 2)
+                            .frame(
+                                width: geometry.width, height: geometry.height,
+                                alignment: isBottom ? .top : .leading)
+                            .monitorGlass(
+                                in: MonitorZoomHalfDisc(attachment: attachment), density: .zoom)
+                            .clipShape(MonitorZoomHalfDisc(attachment: attachment))
+                            .contentShape(MonitorZoomHalfDisc(attachment: attachment))
+                            .shadow(color: .black.opacity(0.5), radius: 22, y: 10)
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .updating($pointerActive) { _, active, _ in active = true }
+                                    .onChanged { gesture in
+                                        guard acceptsInput else {
+                                            cancelPointer()
+                                            return
+                                        }
+                                        guard
+                                            geometry.canStartZoom(
+                                                x: gesture.startLocation.x, y: gesture.startLocation.y)
+                                        else { return }
+                                        if drag.begin(at: value) {
+                                            radial = MonitorZoomRadialGesture(
+                                                geometry: geometry,
+                                                startX: gesture.startLocation.x,
+                                                startY: gesture.startLocation.y)
+                                            onEditing(true)
+                                        }
+                                        guard let origin = drag.anchor else { return }
+                                        guard
+                                            let delta = radial?.angleDelta(
+                                                x: gesture.location.x, y: gesture.location.y)
+                                        else { return }
+                                        value = scale.dragged(from: origin, angleDelta: delta)
+                                    }
+                                    .onEnded { _ in finishEditing() }
+                            )
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Zoom dial")
+                            .accessibilityValue(
+                                [scale.dialLabel(value), caption].filter { !$0.isEmpty }.joined(
+                                    separator: ", ")
+                            )
+                            .accessibilityAdjustableAction { direction in
+                                guard acceptsInput else { return }
+                                onEditing(true)
+                                let step =
+                                    direction == .increment
+                                    ? MonitorZoomScale.tickIncrement : -MonitorZoomScale.tickIncrement
+                                value = scale.quantized(value + step)
+                                onEditing(false)
                             }
-                            .onEnded { _ in finishEditing() }
-                    )
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Zoom dial")
-                    .accessibilityValue(
-                        [scale.dialLabel(value), caption].filter { !$0.isEmpty }.joined(
-                            separator: ", ")
-                    )
-                    .accessibilityAdjustableAction { direction in
-                        guard acceptsInput else { return }
-                        onEditing(true)
-                        let step =
-                            direction == .increment
-                            ? MonitorZoomScale.tickIncrement : -MonitorZoomScale.tickIncrement
-                        value = scale.quantized(value + step)
-                        onEditing(false)
+                            .accessibilityIdentifier("monitor.zoom.dial")
+                            .scaleEffect(
+                                visible || reduceMotion
+                                    ? 1
+                                    : (isPresented
+                                        ? MonitorMotion.zoomDiscInScale
+                                        : MonitorMotion.zoomDiscOutScale),
+                                anchor: isBottom ? .bottom : .trailing
+                            )
+                            .offset(
+                                x: isBottom || visible || reduceMotion
+                                    ? 0 : radius * MonitorMotion.zoomDiscSlide,
+                                y: !isBottom || visible || reduceMotion
+                                    ? 0 : radius * MonitorMotion.zoomDiscSlide
+                            )
+                            .opacity(visible ? 1 : 0)
+                            .animation(
+                                visible
+                                    ? MonitorMotion.discIn(reduceMotion)
+                                    : MonitorMotion.discOut(reduceMotion),
+                                value: visible
+                            )
                     }
-                    .accessibilityIdentifier("monitor.zoom.dial")
-                    .scaleEffect(
-                        visible || reduceMotion
-                            ? 1
-                            : (isPresented
-                                ? MonitorMotion.zoomDiscInScale : MonitorMotion.zoomDiscOutScale),
-                        anchor: isBottom ? .bottom : .trailing
-                    )
-                    .offset(
-                        x: isBottom || visible || reduceMotion
-                            ? 0 : radius * MonitorMotion.zoomDiscSlide,
-                        y: !isBottom || visible || reduceMotion
-                            ? 0 : radius * MonitorMotion.zoomDiscSlide
-                    )
-                    .opacity(visible ? 1 : 0)
-                    .animation(
-                        visible
-                            ? MonitorMotion.discIn(reduceMotion)
-                            : MonitorMotion.discOut(reduceMotion),
-                        value: visible
-                    )
-                }
-                .padding(.bottom, isBottom ? bottomClearance : 0)
-                .frame(width: viewport.width, height: viewport.height)
+                    .padding(.bottom, isBottom ? bottomClearance : 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .frame(width: viewport.width, height: viewport.height)
             .allowsHitTesting(acceptsInput)
             .accessibilityHidden(!acceptsInput)
@@ -308,6 +312,7 @@
                     Text(scale.dialLabel(value)).font(
                         MonitorTheme.font(radius * 0.19, weight: .bold))
                         .monospacedDigit().foregroundStyle(MonitorTheme.text)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                     if !caption.isEmpty {
                         Text(caption).font(MonitorTheme.font(10)).tracking(1)
                             .foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.75)

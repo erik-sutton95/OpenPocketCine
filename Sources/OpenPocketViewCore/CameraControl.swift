@@ -2178,10 +2178,18 @@ public enum CamFov {
     public static func readout(
         live: Double?, preview: Double?, fallback: Double, optimistic: Double? = nil
     ) -> Double {
-        if let preview { return displayTenths(preview) }
-        if let optimistic { return displayTenths(optimistic) }
-        if let live { return displayTenths(live) }
-        return displayTenths(fallback)
+        displayTenths(continuousReadout(
+            live: live, preview: preview, fallback: fallback, optimistic: optimistic))
+    }
+
+    /// Unrounded lens factor for the zoom disc. The chip still uses `readout`.
+    public static func continuousReadout(
+        live: Double?, preview: Double?, fallback: Double, optimistic: Double? = nil
+    ) -> Double {
+        if let preview { return clamp(preview) }
+        if let optimistic { return clamp(optimistic) }
+        if let live { return clamp(live) }
+        return clamp(fallback)
     }
 
     /// Lens is monotonic with the 1× → 12× pinch. `cam_fov` jumps at the 3× hop.

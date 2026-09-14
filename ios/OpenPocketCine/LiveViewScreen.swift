@@ -715,7 +715,7 @@ struct LiveViewScreen: View {
                 opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
                 caption: OsmoMonitorPresentation.zoomCaption(model.session),
                 value: Binding(
-                    get: { model.session.zoomReadout },
+                    get: { model.session.zoomDialReadout },
                     set: {
                         model.session.updateZoomPinch(magnification: $0 / max(1, zoomGestureAnchor))
                     }),
@@ -729,6 +729,9 @@ struct LiveViewScreen: View {
                         model.session.endZoomPinch()
                     }
                 }, onClose: closeZoomDial)
+            .frame(
+                width: layout.viewport.width, height: layout.viewport.height,
+                alignment: .topLeading)
         }
     }
 

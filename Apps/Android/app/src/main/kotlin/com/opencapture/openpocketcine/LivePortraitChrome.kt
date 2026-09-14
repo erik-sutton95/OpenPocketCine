@@ -345,6 +345,7 @@ fun LivePortraitChrome(
 
         if (!captureOpen && capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) {
             val zoomReadout by model.session.zoomReadout.collectAsState()
+            val zoomDialReadout by model.session.zoomDialReadout.collectAsState()
             val zoomPinching by model.session.zoomPinching.collectAsState()
             val zoomBlocked =
                 CamFov.zoomNeedsColorHopWhileRecording(
@@ -354,6 +355,7 @@ fun LivePortraitChrome(
                 )
             LiveZoomChip(
                 factor = zoomReadout,
+                dialFactor = zoomDialReadout,
                 locked = uiLocked,
                 pinching = zoomPinching,
                 dimmed = zoomBlocked,

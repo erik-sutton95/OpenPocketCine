@@ -23,6 +23,9 @@ struct MonitorZoomScaleTests {
         #expect(!scale.isLabeledTick(1.53))
         let nearby = scale.dragged(from: 1.53, angleDelta: 0)
         #expect(nearby == 1.53)
+        let step = scale.dragged(from: 1.00, angleDelta: -0.02)
+        #expect(step > 1.00 && step < 1.10)
+        #expect(abs(step / 0.01 - (step / 0.01).rounded()) < 1e-9)
     }
 
     @Test func singleStopAndInvalidGeometryStayFinite() {

@@ -346,6 +346,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastFaceAt: Long? = null
     private val _zoomReadout = MutableStateFlow(1.0)
     val zoomReadout: StateFlow<Double> = _zoomReadout.asStateFlow()
+    private val _zoomDialReadout = MutableStateFlow(1.0)
+    val zoomDialReadout: StateFlow<Double> = _zoomDialReadout.asStateFlow()
     private val _zoomPinching = MutableStateFlow(false)
     val zoomPinching: StateFlow<Boolean> = _zoomPinching.asStateFlow()
     private var searchBox: TrackingBox? = null
@@ -2948,6 +2950,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun refreshZoomHud() {
+        _zoomDialReadout.value =
+            CamFov.continuousReadout(
+                live = _status.value.zoomFactor,
+                preview = zoomPinchPreview,
+                fallback = zoomStop,
+                optimistic = zoomOptimistic,
+            )
         _zoomReadout.value =
             CamFov.readout(
                 live = _status.value.zoomFactor,

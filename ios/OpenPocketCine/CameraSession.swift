@@ -1363,6 +1363,13 @@ final class CameraSession {
             optimistic: zoomOptimistic)
     }
 
+    /// Zoom disc hub. Hundredths, not the chip's 0.1× steps.
+    var zoomDialReadout: Double {
+        CamFov.continuousReadout(
+            live: status.zoomFactor, preview: zoomPinchPreview, fallback: zoomStop,
+            optimistic: zoomOptimistic)
+    }
+
     private func noteZoomIfChanged(_ new: CameraStatus) {
         guard new.zoomFactorRaw != lastLoggedZoomRaw || new.zoomLens != lastLoggedZoomLens else {
             return

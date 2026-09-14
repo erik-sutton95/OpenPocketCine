@@ -123,6 +123,7 @@ fun LiveViewScreen(model: AppModel) {
     val controlBusy by model.session.controlBusy.collectAsState()
     val focusPoint by model.session.focusPoint.collectAsState()
     val zoomReadout by model.session.zoomReadout.collectAsState()
+    val zoomDialReadout by model.session.zoomDialReadout.collectAsState()
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
     val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
@@ -727,6 +728,7 @@ fun LiveViewScreen(model: AppModel) {
                     focusOffCenter = focusOffCenter,
                     onFocusReset = { model.session.resetFocusPoint() },
                     zoomReadout = zoomReadout,
+                    zoomDialReadout = zoomDialReadout,
                     zoomPinching = zoomPinching,
                     onStatusChipFrame = { section, rect -> statusChipFrames[section] = rect },
                 )
@@ -1242,6 +1244,7 @@ internal fun LandscapeChrome(
     onFocusReset: () -> Unit,
     zoomReadout: Double,
     zoomPinching: Boolean,
+    zoomDialReadout: Double = zoomReadout,
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
@@ -1354,6 +1357,7 @@ internal fun LandscapeChrome(
                 )
             LiveZoomChip(
                 factor = zoomReadout,
+                dialFactor = zoomDialReadout,
                 locked = uiLocked,
                 pinching = zoomPinching,
                 dimmed = zoomBlocked,
