@@ -429,7 +429,8 @@ fun LiveViewScreen(model: AppModel) {
         val pictureContent =
             if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
         val showGimbalButton =
-            model.session.hasGimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
+            model.monitorCapabilities(status).gimbal &&
+                model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
         val cluster =
             if (portrait && zones != null) {
                 portraitOnFeedControls(

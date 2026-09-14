@@ -12,12 +12,13 @@ public struct MonitorCapabilities: Equatable, Sendable {
     public var clipDelete: Bool
     public var clipStar: Bool
     public var requiresInternetHop: Bool
+    public var timecode: Bool
 
     public init(
         gimbal: Bool = false, zoom: Bool = false, focus: Bool = false,
         iris: Bool = false, audio: Bool = false, headTracking: Bool = false,
         clipDelete: Bool = false, clipStar: Bool = false,
-        requiresInternetHop: Bool = false
+        requiresInternetHop: Bool = false, timecode: Bool = false
     ) {
         self.gimbal = gimbal
         self.zoom = zoom
@@ -28,5 +29,6 @@ public struct MonitorCapabilities: Equatable, Sendable {
         self.clipDelete = clipDelete
         self.clipStar = clipStar
         self.requiresInternetHop = requiresInternetHop
+        self.timecode = timecode
     }
 }

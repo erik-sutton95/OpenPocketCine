@@ -643,73 +643,28 @@ struct MediaLibraryView: View {
                 }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if !formatOptions.isEmpty {
-                            filterSection(title: "FORMAT") {
-                                filterChipGrid(formatOptions, active: formatFilters) { format in
-                                    toggle(format, in: &formatFilters)
-                                }
-                            }
-                        }
-
-                        if !resolutionOptions.isEmpty {
-                            filterSection(title: "RESOLUTION") {
-                                filterChipGrid(resolutionOptions, active: resolutionFilters) {
-                                    resolution in
-                                    toggle(resolution, in: &resolutionFilters)
-                                }
-                            }
-                        }
-
-                        if dateBounds != nil {
-                            filterSection(title: "DATE") {
-                                HStack(spacing: 6) {
-                                    filterDateField("Start", key: dateStartKey) {
-                                        pickingDate = .start
-                                    }
-                                    Text("–")
-                                        .font(MonitorTheme.font(10.5, weight: .semibold))
-                                        .foregroundStyle(MonitorTheme.muted)
-                                    filterDateField("End", key: dateEndKey) {
-                                        pickingDate = .end
-                                    }
-                                }
-                            }
-                        }
-
-                        if !colorOptions.isEmpty {
-                            filterSection(title: "COLOUR") {
-                                filterChipGrid(colorOptions.map(\.label), active: Set(colorOptions.filter { colorFilters.contains($0.rawValue) }.map(\.label))) { title in
-                                    if let mode = colorOptions.first(where: { $0.label == title }) {
-                                        toggle(mode.rawValue, in: &colorFilters)
-                                    }
-                                }
-                            }
-                        }
-
-                        if formatOptions.isEmpty, resolutionOptions.isEmpty, dateBounds == nil,
-                            colorOptions.isEmpty
-                        {
-                            Text("Nothing in this tab to filter by.")
-                                .font(LiveType.ui(size: 11))
-                                .foregroundStyle(LiveDesign.faint)
-                                .padding(.vertical, 2)
-                        }
-
-                        if hasActiveFilters {
-                            Button("Clear all filters") {
-                                formatFilters.removeAll()
-                                resolutionFilters.removeAll()
-                                colorFilters.removeAll()
-                                dateStartKey = nil
-                                dateEndKey = nil
-                            }
-                            .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
-                            .foregroundStyle(LiveDesign.accent)
-                            .padding(.top, 2)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    MonitorMediaFilterForm(
+                        formats: formatOptions, resolutions: resolutionOptions,
+                        colors: colorOptions.map {
+                            MonitorMediaFilterForm.ColorOption(id: $0.rawValue, label: $0.label)
+                        },
+                        formatSelection: formatFilters, resolutionSelection: resolutionFilters,
+                        colorSelection: colorFilters,
+                        dateStartLabel: dateStartKey.map(MediaClipPresentation.dateLabel),
+                        dateEndLabel: dateEndKey.map(MediaClipPresentation.dateLabel),
+                        hasDates: dateBounds != nil,
+                        onToggleFormat: { toggle($0, in: &formatFilters) },
+                        onToggleResolution: { toggle($0, in: &resolutionFilters) },
+                        onToggleColor: { toggle($0, in: &colorFilters) },
+                        onPickStart: { pickingDate = .start },
+                        onPickEnd: { pickingDate = .end },
+                        onClear: {
+                            formatFilters.removeAll()
+                            resolutionFilters.removeAll()
+                            colorFilters.removeAll()
+                            dateStartKey = nil
+                            dateEndKey = nil
+                        })
                 }
             }
             .padding(16)
@@ -723,58 +678,12 @@ struct MediaLibraryView: View {
         }
     }
 
-    private func filterSection<Content: View>(
-        title: String, @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(MonitorTheme.font(9, weight: .bold)).monospacedDigit()
-                .foregroundStyle(LiveDesign.muted)
-            content()
-        }
-    }
-
-    private func filterChipGrid(
-        _ titles: [String],
-        active: Set<String>,
-        toggle: @escaping (String) -> Void
-    ) -> some View {
-        let columns = [GridItem(.adaptive(minimum: 150), spacing: 5)]
-        return LazyVGrid(columns: columns, spacing: 5) {
-            ForEach(titles, id: \.self) { title in
-                MediaFilterChip(
-                    title: title,
-                    expands: true,
-                    isActive: active.contains(title),
-                    action: { toggle(title) }
-                )
-            }
-        }
-    }
-
     private func toggle<Value: Hashable>(_ value: Value, in set: inout Set<Value>) {
         if set.contains(value) {
             set.remove(value)
         } else {
             set.insert(value)
         }
-    }
-
-    private func filterDateField(_ title: String, key: String?, action: @escaping () -> Void)
-        -> some View
-    {
-        Button(action: action) {
-            Text(key.map(MediaClipPresentation.dateLabel) ?? title)
-                .font(MonitorTheme.font(10.5, weight: .semibold))
-                .foregroundStyle(key == nil ? MonitorTheme.muted : MonitorTheme.text)
-                .frame(maxWidth: .infinity, minHeight: 34)
-                .background(
-                    Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(MonitorButtonStyle())
-        .accessibilityLabel(title)
-        .accessibilityValue(key.map(MediaClipPresentation.dateLabel) ?? "Any")
-        .accessibilityIdentifier("monitor.media.filter.\(title.lowercased())")
     }
 
     private var emptyState: some View {
@@ -927,36 +836,6 @@ private struct FilterCalendarSheet: View {
         }
         .presentationDetents([.medium, .large])
         .preferredColorScheme(.dark)
-    }
-}
-
-private struct MediaFilterChip: View {
-    let title: String
-    var expands = false
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(MonitorTheme.font(10, weight: .semibold)).monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .foregroundStyle(isActive ? LiveDesign.accent : LiveDesign.muted)
-                .frame(maxWidth: expands ? .infinity : nil)
-                .frame(minHeight: 30)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    isActive ? LiveDesign.accentDim : LiveDesign.glassBright,
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().stroke(
-                        isActive ? LiveDesign.accent.opacity(0.45) : LiveDesign.hairline,
-                        lineWidth: 1))
-        }
-        .buttonStyle(.zcTapTarget)
     }
 }
 

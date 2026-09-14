@@ -8,10 +8,10 @@ import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import kotlin.math.abs
 import androidx.compose.runtime.Composable
 import com.opencapture.monitorui.MonitorLayoutPolicy
 import com.opencapture.monitorui.MonitorZoomAttachment
+import com.opencapture.monitorui.MonitorZoomCaption
 import com.opencapture.openpocketcine.LiveZoom
 
 /** Existing session gestures adapt to the shared native logarithmic zoom scale. */
@@ -34,15 +34,9 @@ fun MonitorZoomDial(initial: Double, maximum: Double, onChange: (Double) -> Unit
         (configuration.screenHeightDp - layout.values.y).coerceAtLeast(0f)
     } else 0f
     com.opencapture.monitorui.MonitorZoomDisc(initial, maximum, LiveZoom::label, onChange, onDismiss,
-        opticalStops = opticalStops, caption = { factor ->
-            when {
-                abs(factor - 1.0) < .05 -> "WIDE"
-                3.0 in opticalStops && abs(factor - 3.0) < .05 -> "TELE"
-                3.0 in opticalStops && factor > 3.0 -> "DIGITAL · SOFT"
-                3.0 in opticalStops -> "WIDE CROP"
-                else -> "DIGITAL CROP"
-            }
-        }, trailingInset = if (inset > 0f) inset + 6f else 0f,
+        opticalStops = opticalStops,
+        caption = { factor -> MonitorZoomCaption.label(factor, opticalStops) },
+        trailingInset = if (inset > 0f) inset + 6f else 0f,
         attachment = if (portrait) MonitorZoomAttachment.Bottom else MonitorZoomAttachment.Trailing,
         bottomClearance = bottomClearance)
 }

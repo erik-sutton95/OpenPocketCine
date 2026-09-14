@@ -44,13 +44,19 @@ class MonitorFeedbackPolicyTest {
     }
 
     @Test fun proShortcutsPartitionOnlyDeclaredStopsAndRespectRestrictedModes() {
-        assertEquals(MonitorZoomStops(listOf(1.0, 3.0), listOf(6.0, 12.0)),
-            MonitorZoomStops.from(listOf(1.0, 3.0, 6.0, 12.0), true))
-        assertEquals(MonitorZoomStops(listOf(1.0, 3.0), emptyList()),
-            MonitorZoomStops.from(listOf(1.0, 3.0), true))
-        assertEquals(MonitorZoomStops(listOf(1.0, 2.0, 4.0), emptyList()),
-            MonitorZoomStops.from(listOf(1.0, 2.0, 4.0), false))
-        assertEquals(listOf(1.0), MonitorZoomStops.from(listOf(1.0, Double.NaN, -2.0), false).primary)
+        assertEquals(MonitorZoomTapStops(listOf(1.0, 3.0), listOf(6.0, 12.0)),
+            MonitorZoomTapStops.from(listOf(1.0, 3.0, 6.0, 12.0), listOf(6.0, 12.0)))
+        assertEquals(MonitorZoomTapStops(listOf(1.0, 3.0), emptyList()),
+            MonitorZoomTapStops.from(listOf(1.0, 3.0), listOf(6.0, 12.0)))
+        assertEquals(MonitorZoomTapStops(listOf(1.0, 2.0, 4.0), emptyList()),
+            MonitorZoomTapStops.from(listOf(1.0, 2.0, 4.0)))
+        assertEquals(listOf(1.0), MonitorZoomTapStops.from(listOf(1.0, Double.NaN, -2.0)).singleTap)
+        assertEquals(3.0, MonitorZoomTapStops.from(listOf(1.0, 3.0, 6.0, 12.0), listOf(6.0, 12.0)).next(1.0))
+        assertEquals(6.0, MonitorZoomTapStops.from(listOf(1.0, 3.0, 6.0, 12.0), listOf(6.0, 12.0)).next(1.0, extended = true))
+        assertEquals("WIDE", MonitorZoomCaption.label(1.0, listOf(1.0, 3.0, 6.0, 12.0)))
+        assertEquals("TELE", MonitorZoomCaption.label(3.0, listOf(1.0, 3.0, 6.0, 12.0)))
+        assertEquals("DIGITAL · SOFT", MonitorZoomCaption.label(6.0, listOf(1.0, 3.0, 6.0, 12.0)))
+        assertEquals("DIGITAL CROP", MonitorZoomCaption.label(2.0, listOf(1.0, 2.0, 4.0)))
     }
 
     @Test fun allCapturePanelsShareCenterAndBottomWithinSafeBounds() {

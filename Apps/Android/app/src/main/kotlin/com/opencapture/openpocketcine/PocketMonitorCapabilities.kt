@@ -8,15 +8,20 @@ internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabili
     val body = session.connectedCamera?.model
     return MonitorCapabilities(
         gimbal = session.hasGimbal,
-        zoom = body?.activeZoomStops(status.resolutionCode, status.shootingMode)?.size?.let { it > 1 } ?: false,
+        zoom = body?.activeZoomStops(status.resolutionCode, status.shootingMode)?.isNotEmpty() == true,
         focus = body?.supportsFocusMode == true,
-        timecode = status.timecode?.isNotBlank() == true,
+        audio = true,
+        headTracking = session.hasGimbal,
+        clipDelete = true,
+        clipStar = true,
+        requiresInternetHop = true,
+        timecode = true,
     )
 }
 
 /** The camera profile, including current recording mode limits, owns shortcut availability. */
-internal fun AppModel.monitorZoomStops(): com.opencapture.monitorui.MonitorZoomStops {
+internal fun AppModel.monitorZoomStops(): com.opencapture.monitorui.MonitorZoomTapStops {
     val profile = session.connectedCamera?.model
-    val separateDigital = profile?.zoomStops?.containsAll(listOf(1.0, 3.0, 6.0, 12.0)) == true
-    return com.opencapture.monitorui.MonitorZoomStops.from(session.zoomStops(), separateDigital)
+    val extended = if (profile?.zoomStops?.contains(12.0) == true) listOf(6.0, 12.0) else emptyList()
+    return com.opencapture.monitorui.MonitorZoomTapStops.from(session.zoomStops(), extended)
 }

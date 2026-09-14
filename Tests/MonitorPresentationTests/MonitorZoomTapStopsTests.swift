@@ -29,4 +29,11 @@ struct MonitorZoomTapStopsTests {
         #expect(stops.doubleTap.isEmpty)
         #expect(MonitorZoomTapStops(supported: []).next(from: 1) == nil)
     }
+
+    @Test func captionFollowsOpticalStopsNotBrand() {
+        #expect(MonitorZoomCaption.label(factor: 1, opticalStops: [1, 3, 6, 12]) == "WIDE")
+        #expect(MonitorZoomCaption.label(factor: 3, opticalStops: [1, 3, 6, 12]) == "TELE")
+        #expect(MonitorZoomCaption.label(factor: 6, opticalStops: [1, 3, 6, 12]) == "DIGITAL · SOFT")
+        #expect(MonitorZoomCaption.label(factor: 2, opticalStops: [1, 2, 4]) == "DIGITAL CROP")
+    }
 }

@@ -55,12 +55,17 @@ fun SavedCamerasExperience(model: AppModel) {
     val connectingLabel = if (reconnecting && phase == ConnectionPhase.SCANNING) {
         "Looking for camera…"
     } else StartupConnectionCopy.phaseLabel(phase, null)
-    val sections = listOf(true, false).map { nearby ->
-        val cameras = model.savedCameras.filter { saved -> found.any { it.id == saved.id } == nearby }
-        com.opencapture.monitorui.MonitorCameraSection(
-            (if (nearby) "NEARBY" else "SAVED") + " · ${cameras.size}", cameras)
-    }
-    com.opencapture.monitorui.MonitorCameraPage(
+    val savedIds = model.savedCameras.map { it.id }.toSet()
+    val unsaved = found.filter { it.id !in savedIds }
+    val sections = listOf(
+        com.opencapture.monitorui.MonitorCameraSection<HomeCamera>(
+            "PAIRED · ${model.savedCameras.size}",
+            model.savedCameras.map { HomeCamera.Paired(it) }),
+        com.opencapture.monitorui.MonitorCameraSection<HomeCamera>(
+            "NEARBY · ${unsaved.size}",
+            unsaved.map { HomeCamera.Nearby(it) }),
+    )
+    com.opencapture.monitorui.MonitorCameraPage<HomeCamera>(
         brand = "OPENPOCKETCINE", sections = sections, key = { it.id },
         emptyMessage = "Pair a camera to start monitoring.",
         actions = {
@@ -69,10 +74,20 @@ fun SavedCamerasExperience(model: AppModel) {
                 onClick = { model.homePanel = AppPanel.MEDIA })
             com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.SETTINGS, "Settings",
                 onClick = { model.homePanel = AppPanel.SETTINGS })
-        }, camera = { camera ->
-            SavedCameraRow(camera, found.firstOrNull { it.id == camera.id }, phase, busy,
-                connectingLabel.takeIf { busy && targetId == camera.id }, model::cancelPairing,
-                { model.reconnect(camera) }, { model.rename(camera, it) }, { model.forget(camera) })
+        }, camera = { item ->
+            when (item) {
+                is HomeCamera.Paired ->
+                    SavedCameraRow(
+                        item.camera, found.firstOrNull { it.id == item.camera.id }, phase, busy,
+                        connectingLabel.takeIf { busy && targetId == item.camera.id },
+                        model::cancelPairing, { model.reconnect(item.camera) },
+                        { model.rename(item.camera, it) }, { model.forget(item.camera) })
+                is HomeCamera.Nearby ->
+                    NearbyCameraRow(
+                        item.camera, phase, busy,
+                        connectingLabel.takeIf { busy && targetId == item.camera.id },
+                        model::cancelPairing, { model.connectDiscovered(item.camera) })
+            }
         }, footer = {
             StartupQuietButton("+  Pair a new camera", enabled = !busy,
                 onClick = model::pairNewCamera, modifier = Modifier.fillMaxWidth().height(46.dp))
@@ -200,4 +215,55 @@ private fun SavedCameraRow(
             dismissButton = { TextButton(onClick = { remove = false }) { Text("Cancel") } },
         )
     }
+}
+
+private sealed class HomeCamera {
+    abstract val id: String
+    data class Paired(val camera: SavedCamera) : HomeCamera() {
+        override val id: String get() = camera.id
+    }
+    data class Nearby(val camera: FoundCamera) : HomeCamera() {
+        override val id: String get() = camera.id
+    }
+}
+
+@Composable
+private fun NearbyCameraRow(
+    camera: FoundCamera,
+    phase: ConnectionPhase,
+    isBusy: Boolean,
+    connectionLabel: String?,
+    onCancel: () -> Unit,
+    onConnect: () -> Unit,
+) {
+    val connectLocked =
+        phase == ConnectionPhase.JOINING_WIFI ||
+            phase == ConnectionPhase.OPENING_DATALINK ||
+            phase == ConnectionPhase.LIVE
+    com.opencapture.monitorui.MonitorCameraCard(
+        title = camera.name,
+        detail = camera.model.name,
+        enabled = !isBusy && !connectLocked, onOpen = onConnect,
+        glyph = {
+            OpcIcon(OpcIcon.CAMERA, contentDescription = null, tint = StartupColors.ready,
+                modifier = Modifier.size(19.dp))
+        },
+        options = {},
+        status = {
+            if (connectionLabel != null) {
+                Box(Modifier.weight(1f)) { StartupConnectionProgress(connectionLabel) }
+                StartupQuietButton("Cancel", onClick = onCancel, modifier = Modifier.height(44.dp))
+            } else {
+                StartupStatusPill("Announcing", StartupColors.ready)
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.heightIn(min = 44.dp)
+                        .clickable(enabled = !isBusy && !connectLocked, onClick = onConnect),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    StartupConnectChrome(text = "Connect", filled = true, enabled = !isBusy && !connectLocked)
+                }
+            }
+        },
+    )
 }

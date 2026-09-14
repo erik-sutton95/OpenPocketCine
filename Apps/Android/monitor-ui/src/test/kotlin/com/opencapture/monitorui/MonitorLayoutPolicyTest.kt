@@ -169,6 +169,16 @@ class MonitorLayoutPolicyTest {
         assertEquals(220f, toggle.midX, .01f)
     }
 
+    @Test
+    fun portraitStickZoomGimbalMatchFieldMonitorLayout() {
+        val stick = MonitorLayoutPolicy.portraitStick(393f, 700f)
+        val zoom = MonitorLayoutPolicy.portraitZoom(stick)
+        val gimbal = MonitorLayoutPolicy.portraitGimbal(stick, zoom)
+        assertEquals(MonitorRect(289f, 596f, 88f, 88f), stick)
+        assertEquals(MonitorRect(289f, 552f, 44f, 36f), zoom)
+        assertEquals(MonitorRect(341f, 552f, 36f, 36f), gimbal)
+    }
+
     @Test fun tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {
         listOf(Triple(375f, 667f, 20f), Triple(393f, 852f, 59f), Triple(320f, 600f, 20f))
             .forEach { (width, height, safeTop) ->

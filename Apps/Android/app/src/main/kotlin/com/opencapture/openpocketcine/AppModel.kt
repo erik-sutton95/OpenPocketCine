@@ -17,6 +17,7 @@ import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.GimbalRamp
+import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import com.opencapture.openpocketcine.session.VideoFormat
 import kotlinx.coroutines.CoroutineScope
@@ -354,6 +355,11 @@ class AppModel(context: Context) {
     fun pairNewCamera() {
         isPairingNewCamera = true
         session.startScan()
+    }
+
+    fun connectDiscovered(camera: FoundCamera) {
+        isPairingNewCamera = true
+        session.connect(camera)
     }
 
     fun cancelPairing() {

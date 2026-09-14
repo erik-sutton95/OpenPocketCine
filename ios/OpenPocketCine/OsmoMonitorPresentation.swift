@@ -17,13 +17,7 @@ enum OsmoMonitorPresentation {
     }
 
     static func zoomCaption(_ session: CameraSession) -> String {
-        let factor = session.zoomReadout
-        if abs(factor - 1) < 0.05 { return "WIDE" }
-        if session.zoomStops.contains(3) {
-            if abs(factor - 3) < 0.05 { return "TELE" }
-            return factor > 3 ? "DIGITAL · SOFT" : "WIDE CROP"
-        }
-        return "DIGITAL CROP"
+        MonitorZoomCaption.label(factor: session.zoomReadout, opticalStops: session.zoomStops)
     }
 
     static func capabilities(_ session: CameraSession) -> MonitorCapabilities {
@@ -32,12 +26,14 @@ enum OsmoMonitorPresentation {
                 let gimbal = ProcessInfo.processInfo.environment["OPV_UI_REVIEW_BODY"] != "nano"
                 return MonitorCapabilities(
                     gimbal: gimbal, zoom: true, focus: true, audio: true,
-                    headTracking: gimbal, requiresInternetHop: true)
+                    headTracking: gimbal, clipDelete: true, clipStar: true,
+                    requiresInternetHop: true, timecode: true)
             }
         #endif
         return MonitorCapabilities(
             gimbal: session.hasGimbal, zoom: !session.zoomStops.isEmpty,
             focus: session.supportsFocusMode, audio: true,
-            headTracking: session.hasGimbal, requiresInternetHop: true)
+            headTracking: session.hasGimbal, clipDelete: true, clipStar: true,
+            requiresInternetHop: true, timecode: true)
     }
 }

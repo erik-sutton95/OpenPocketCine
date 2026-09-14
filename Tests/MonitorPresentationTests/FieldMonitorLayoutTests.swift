@@ -152,6 +152,14 @@ struct FieldMonitorLayoutTests {
         #expect(layout.aspectToggle.midX == layout.viewport.midX)
         #expect(layout.assists.maxY == layout.stick.maxY)
         #expect(layout.zoom.maxY < layout.stick.y)
+        #expect(layout.stick.x == layout.viewport.width - 104)
+        #expect(layout.stick.width == 88 && layout.stick.height == 88)
+        #expect(layout.zoom.x == layout.stick.x)
+        #expect(layout.zoom.y == layout.stick.y - 44)
+        #expect(layout.zoom.width == 44 && layout.zoom.height == 36)
+        #expect(layout.gimbal.x == layout.stick.maxX - 36)
+        #expect(layout.gimbal.y == layout.zoom.y)
+        #expect(layout.gimbal.width == 36 && layout.gimbal.height == 36)
     }
 
     @Test func windowControlsMoveLandscapeChromeWithoutMovingThePictureOrBottomControls() {

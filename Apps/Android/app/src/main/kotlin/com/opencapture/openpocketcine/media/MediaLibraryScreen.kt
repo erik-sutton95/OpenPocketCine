@@ -805,54 +805,23 @@ private fun FilterPopup(
                 MediaCloseButton(onClick = onClose, size = 26.dp)
             }
             Spacer(Modifier.height(10.dp))
-            if (formatOptions.isNotEmpty()) {
-                FilterSection("FORMAT") {
-                    formatOptions.forEach { title ->
-                        MediaFilterChip(title, formatFilters.contains(title)) { onToggleFormat(title) }
-                    }
-                }
-            }
-            if (resolutionOptions.isNotEmpty()) {
-                FilterSection("RESOLUTION") {
-                    resolutionOptions.forEach { title ->
-                        MediaFilterChip(title, resolutionFilters.contains(title)) { onToggleResolution(title) }
-                    }
-                }
-            }
-            if (hasDates) {
-                FilterSection("DATE") {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        FilterDateField("Start", dateStartKey, Modifier.weight(1f)) { pickingBound = "start" }
-                        Text("–", color = LiveDesign.muted, style = LiveType.ui(10.5f, FontWeight.SemiBold))
-                        FilterDateField("End", dateEndKey, Modifier.weight(1f)) { pickingBound = "end" }
-                    }
-                }
-            }
-            if (colorOptions.isNotEmpty()) {
-                FilterSection("COLOUR") {
-                    colorOptions.forEach { (mode, label) ->
-                        MediaFilterChip(label, colorFilters.contains(mode)) { onToggleColor(mode) }
-                    }
-                }
-            }
-            if (formatOptions.isEmpty() && resolutionOptions.isEmpty() && !hasDates && colorOptions.isEmpty()) {
-                Text("Nothing in this tab to filter by.", color = LiveDesign.faint, style = LiveType.ui(11f))
-            }
-            if (formatFilters.isNotEmpty() || resolutionFilters.isNotEmpty() || colorFilters.isNotEmpty()
-                || dateStartKey != null || dateEndKey != null
-            ) {
-                Text(
-                    "Clear all filters",
-                    color = LiveDesign.accent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-                    modifier = Modifier.padding(top = 8.dp).chromeClickable(onClick = onClear),
-                )
-            }
+            com.opencapture.monitorui.MonitorMediaFilterForm(
+                formats = formatOptions,
+                resolutions = resolutionOptions,
+                colors = colorOptions.map { com.opencapture.monitorui.MonitorMediaColorOption(it.first, it.second) },
+                formatSelection = formatFilters,
+                resolutionSelection = resolutionFilters,
+                colorSelection = colorFilters,
+                dateStartLabel = dateStartKey?.let { MediaClipPresentation.dateLabel(it) },
+                dateEndLabel = dateEndKey?.let { MediaClipPresentation.dateLabel(it) },
+                hasDates = hasDates,
+                onToggleFormat = onToggleFormat,
+                onToggleResolution = onToggleResolution,
+                onToggleColor = onToggleColor,
+                onPickStart = { pickingBound = "start" },
+                onPickEnd = { pickingBound = "end" },
+                onClear = onClear,
+            )
         }
         pickingBound?.let { bound ->
             key(bound) {
@@ -883,31 +852,6 @@ private fun FilterPopup(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FilterDateField(title: String, key: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Text(
-        key?.let { MediaClipPresentation.dateLabel(it) } ?: title,
-        color = if (key == null) LiveDesign.muted else LiveDesign.text,
-        fontSize = 10.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-        modifier = modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp))
-            .background(Color.White.copy(alpha = 0.04f))
-            .chromeClickable(onClick = onClick)
-            .semantics { contentDescription = title }
-            .padding(horizontal = 11.dp, vertical = 8.dp),
-    )
-}
-
-@Composable
-private fun FilterSection(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(title, color = LiveDesign.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = com.opencapture.openpocketcine.OpcFonts.sora)
-        content()
     }
 }
 

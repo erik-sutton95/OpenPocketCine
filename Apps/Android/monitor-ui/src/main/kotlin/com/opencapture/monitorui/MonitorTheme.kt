@@ -57,7 +57,23 @@ data class MonitorCapabilities(
     val gimbal: Boolean = false,
     val zoom: Boolean = false,
     val focus: Boolean = false,
-    val timecode: Boolean = false,
+    val iris: Boolean = false,
+    val audio: Boolean = false,
+    val headTracking: Boolean = false,
     val clipDelete: Boolean = false,
     val clipStar: Boolean = false,
-)
+    val requiresInternetHop: Boolean = false,
+    val timecode: Boolean = false,
+) {
+    val availableControls: Set<MonitorControlRole>
+        get() = buildSet {
+            if (gimbal) add(MonitorControlRole.GIMBAL)
+            if (zoom) add(MonitorControlRole.ZOOM)
+            if (focus) add(MonitorControlRole.FOCUS)
+            if (iris) add(MonitorControlRole.IRIS)
+            if (audio) add(MonitorControlRole.AUDIO)
+            if (headTracking && gimbal) add(MonitorControlRole.HEAD_TRACKING)
+        }
+}
+
+enum class MonitorControlRole { GIMBAL, ZOOM, FOCUS, IRIS, AUDIO, HEAD_TRACKING }

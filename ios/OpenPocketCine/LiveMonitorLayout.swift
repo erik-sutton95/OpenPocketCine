@@ -35,6 +35,8 @@ struct LiveMonitorLayout: Equatable {
     var safeArea: EdgeInsets = EdgeInsets()
 
     /// 874×402 Dynamic Island leading 59: feed.maxX ≈ 773.7, rail.x ≈ 782.4, record center ≈ (823.8, 202).
+    /// Assist-popup and unit-test geometry. Production live chrome uses
+    /// ``fieldMonitor`` (`FieldMonitorLayout`) — do not grow this path.
     static func fit(
         viewportWidth: CGFloat,
         viewportHeight: CGFloat,

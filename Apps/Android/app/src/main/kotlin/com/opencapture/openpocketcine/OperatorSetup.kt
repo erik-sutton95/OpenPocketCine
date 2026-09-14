@@ -1230,6 +1230,7 @@ private fun ShootingModeRow(model: AppModel, view: View) {
 @Composable
 private fun ControlsRows(model: AppModel, isLive: Boolean) {
     val view = LocalView.current
+    val status by model.session.status.collectAsState()
     if (isLive) {
         SettingsRowCard(title = "Capture") {
             ShootingModeRow(model, view)
@@ -1254,36 +1255,36 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
             operatorHaptic(view, model.hapticsEnabled)
             model.updateHapticsEnabled(next)
         }
-        if (model.session.hasGimbal) {
-        SettingsInlineRow(
-            title = "Joystick Sensitivity",
-            help = SettingsHelpCopy.JOYSTICK_SENSITIVITY,
-            stacked = true,
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
+        if (model.monitorCapabilities(status).gimbal) {
+            SettingsInlineRow(
+                title = "Joystick Sensitivity",
+                help = SettingsHelpCopy.JOYSTICK_SENSITIVITY,
+                stacked = true,
             ) {
-                GlassPillSlider(
-                    value = model.gimbalStickSensitivity,
-                    range = 1..5,
-                    onChange = { next ->
-                        if (next != model.gimbalStickSensitivity) {
-                            operatorHaptic(view, model.hapticsEnabled)
-                            model.updateGimbalStickSensitivity(next)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    "${model.gimbalStickSensitivity}",
-                    style = LiveType.mono(12f),
-                    color = LiveDesign.text,
-                    modifier = Modifier.width(24.dp),
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    GlassPillSlider(
+                        value = model.gimbalStickSensitivity,
+                        range = 1..5,
+                        onChange = { next ->
+                            if (next != model.gimbalStickSensitivity) {
+                                operatorHaptic(view, model.hapticsEnabled)
+                                model.updateGimbalStickSensitivity(next)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${model.gimbalStickSensitivity}",
+                        style = LiveType.mono(12f),
+                        color = LiveDesign.text,
+                        modifier = Modifier.width(24.dp),
+                    )
+                }
             }
-        }
         }
         SettingsInlineRow("Gamepad", SettingsHelpCopy.GAMEPAD) {
             SettingsValueText(if (model.gamepadConnected) "Connected" else "Not connected")
@@ -1393,7 +1394,10 @@ private val dispToggleSpecs =
 @Composable
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
-    dispToggleSpecs.filter { it.section != PocketDispSection.GIMBAL_STICK || model.session.hasGimbal }.forEach { spec ->
+    val status by model.session.status.collectAsState()
+    dispToggleSpecs.filter {
+        it.section != PocketDispSection.GIMBAL_STICK || model.monitorCapabilities(status).gimbal
+    }.forEach { spec ->
         SettingsSwitchInlineRow(
             title = spec.title,
             help = spec.help,

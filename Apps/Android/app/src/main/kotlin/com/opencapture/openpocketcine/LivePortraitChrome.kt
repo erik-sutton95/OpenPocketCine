@@ -176,8 +176,15 @@ fun portraitOnFeedControls(
     floorY: Float,
     showGimbalButton: Boolean = false,
 ): GimbalCluster {
-    val well = ChromeRect(0f, 0f, max(0f, viewportWidth), max(floorY, 1f))
-    return GimbalCluster.inTrailingBottom(well, floorY, floorY, showGimbalButton = showGimbalButton)
+    val stickFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitStick(viewportWidth, floorY)
+    val zoomFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitZoom(stickFrame)
+    val gimbalFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitGimbal(stickFrame, zoomFrame)
+    val stick = ChromeRect(stickFrame.x, stickFrame.y, stickFrame.width, stickFrame.height)
+    val zoom = ChromeRect(zoomFrame.x, zoomFrame.y, zoomFrame.width, zoomFrame.height)
+    val controls =
+        if (showGimbalButton) ChromeRect(gimbalFrame.x, gimbalFrame.y, gimbalFrame.width, gimbalFrame.height)
+        else ChromeRect(0f, 0f, 0f, 0f)
+    return GimbalCluster(stick, zoom, controls)
 }
 
 @Composable

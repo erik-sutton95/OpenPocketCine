@@ -356,6 +356,7 @@ Agents: prefer extending existing `Frameio*Tests` / parity docs over new paralle
 
 | Date | Decision |
 | --- | --- |
+| 2026-09-14 | Shared `MonitorCapabilities` is one snapshot (gimbal/zoom/focus/iris/audio/headTracking/clipDelete/clipStar/requiresInternetHop/timecode). Adapters fill it; UI must not read `session.hasGimbal`. Zoom tap groups and WIDE/TELE captions live in presentation. Media filter body is `MonitorMediaFilterForm`. `MediaLibraryQuery` stays next to `MediaFile` (core / Android app) until that catalog record moves into the engine. Android Your cameras uses PAIRED = saved and NEARBY = unsaved BLE, matching `CamerasPage`. Production live chrome consumes `FieldMonitorLayout`; `LiveMonitorLayout.fit` is assist-test geometry only. |
 | 2026-09-13 | UI 2.0 uses shared heavy-blur, saturation and tint tokens across native iOS/Android presentation; no Liquid Glass lens or refraction treatment. Rendering belongs to reusable UI components and passive platform presentation sources, never camera adapters. |
 | 2026-09-06 | Keep separate brand apps for partnership optics |
 | 2026-09-06 | Share monitor tools, media/playback, and cloud delivery across brands |

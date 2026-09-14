@@ -38,4 +38,16 @@ struct CapabilitiesTests {
         #expect(!invalid.availableControls.contains(.headTracking))
         #expect(MonitorCapabilities().availableControls.isEmpty)
     }
+
+    @Test func snapshotIncludesSharedOptionalSlots() {
+        let full = MonitorCapabilities(
+            gimbal: true, zoom: true, focus: true, iris: true, audio: true,
+            headTracking: true, clipDelete: true, clipStar: true,
+            requiresInternetHop: true, timecode: true)
+        #expect(full.availableControls == [.gimbal, .zoom, .focus, .iris, .audio, .headTracking])
+        #expect(full.clipDelete)
+        #expect(full.clipStar)
+        #expect(full.requiresInternetHop)
+        #expect(full.timecode)
+    }
 }

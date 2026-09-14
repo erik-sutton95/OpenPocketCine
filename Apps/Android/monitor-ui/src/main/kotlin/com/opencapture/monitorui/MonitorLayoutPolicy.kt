@@ -81,6 +81,16 @@ object MonitorLayoutPolicy {
     fun portraitAspect(width: Float, floor: Float): MonitorRect =
         MonitorRect(max(0f, width) / 2f - 24f, max(0f, floor - 56f), 48f, 48f)
 
+    /** FieldMonitorLayout portrait stick / zoom / gimbal. */
+    fun portraitStick(width: Float, floor: Float): MonitorRect =
+        MonitorRect(max(0f, width) - 104f, floor - 104f, 88f, 88f)
+
+    fun portraitZoom(stick: MonitorRect): MonitorRect =
+        MonitorRect(stick.x, stick.y - 44f, 44f, 36f)
+
+    fun portraitGimbal(stick: MonitorRect, zoom: MonitorRect): MonitorRect =
+        MonitorRect(stick.maxX - 36f, zoom.y, 36f, 36f)
+
     /** Landscape readouts share the format row's center and stay inside the picture. */
     fun recordingReadoutTrailingInset(statusRight: Float, pictureRight: Float): Float =
         max(8f, statusRight - pictureRight + 12f)
