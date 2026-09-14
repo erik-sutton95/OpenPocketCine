@@ -3701,7 +3701,9 @@ final class CameraSession {
             log.info("control: SET timeouts during AF-C grace — leave UDP")
             return
         }
-        if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
+        if CamFov.shouldHoldWatchdog(
+            secondsSinceSet: secondsSinceZoomSet, pinchActive: zoomPinchPreview != nil)
+        {
             log.info("control: SET timeouts during zoom grace — leave UDP")
             return
         }
@@ -3741,7 +3743,9 @@ final class CameraSession {
         if FocusTrackMode.shouldHoldWatchdog(secondsSinceSet: secondsSinceFocusTrackSet) {
             return false
         }
-        if CamFov.shouldHoldWatchdog(secondsSinceSet: secondsSinceZoomSet) {
+        if CamFov.shouldHoldWatchdog(
+            secondsSinceSet: secondsSinceZoomSet, pinchActive: zoomPinchPreview != nil)
+        {
             return false
         }
         if GimbalStick.shouldHoldWatchdog(
@@ -4034,6 +4038,7 @@ final class CameraSession {
             secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
+            zoomPinchActive: zoomPinchPreview != nil,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
             secondsSinceCameraSet: datalink?.secondsSinceLastCommand
         )
@@ -4082,7 +4087,9 @@ final class CameraSession {
                 )
                 logFeedObserve(snap: snap, watchdog: action)
             } else if !FeedWatchdog.udpReceiveAlive(snap),
-                CamFov.shouldHoldWatchdog(secondsSinceSet: snap.secondsSinceZoomSet)
+                CamFov.shouldHoldWatchdog(
+                    secondsSinceSet: snap.secondsSinceZoomSet,
+                    pinchActive: snap.zoomPinchActive)
             {
                 log.info(
                     "feed: hold UDP rebuild — zoom grace lastSet=\(snap.secondsSinceZoomSet ?? -1, format: .fixed(precision: 1), privacy: .public)s lastVideo=\(snap.lastVideoPacketAge ?? -1, format: .fixed(precision: 1), privacy: .public)s"

@@ -1090,6 +1090,7 @@ public enum AndroidSessionWire {
             secondsSinceLastEnable: jsonOptionalNumber(json, key: "secondsSinceLastEnable"),
             secondsSinceFocusTrackSet: jsonOptionalNumber(json, key: "secondsSinceFocusTrackSet"),
             secondsSinceZoomSet: jsonOptionalNumber(json, key: "secondsSinceZoomSet"),
+            zoomPinchActive: jsonBool(json, key: "zoomPinchActive", default: false),
             secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow"),
             secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet")
         )

@@ -86,6 +86,23 @@ import Testing
             "past zoom grace with young status is an encoder pause")
     }
 
+    @Test func zoomDialHoldDoesNotGopCutWhilePinchIsDown() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 8, videoAge: 8, statusAge: 0.3, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        snap.secondsSinceZoomSet = 8
+        snap.zoomPinchActive = true
+        #expect(
+            dog.tick(snap) == .none,
+            "fingers on the zoom disc: encoder pause must not GOP-cut or rebuild UDP")
+        #expect(dog.stage == .idle)
+        snap.zoomPinchActive = false
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "after lift, past zoom grace is an encoder pause")
+    }
+
     @Test func gimbalThrowHoldsEncoderPauseEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(

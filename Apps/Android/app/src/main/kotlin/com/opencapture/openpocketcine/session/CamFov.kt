@@ -32,7 +32,8 @@ object CamFov {
     /** Camera can pause HEVC while the lens slews. Same 4 s as AF-C. */
     const val VIDEO_GRACE_SEC = 4.0
 
-    fun shouldHoldWatchdog(secondsSinceSet: Double?): Boolean {
+    fun shouldHoldWatchdog(secondsSinceSet: Double?, pinchActive: Boolean = false): Boolean {
+        if (pinchActive) return true
         val s = secondsSinceSet ?: return false
         return s >= 0.0 && s < VIDEO_GRACE_SEC
     }

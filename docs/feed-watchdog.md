@@ -34,7 +34,7 @@ The first time VT starts after the identity layer already presented, that is sti
 one PLI — skipping it because the live-start enable was `< 1 s` ago leaves
 WAITING FOR LIVE VIEW while UDP stays live.
 
-A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut), **4 s after an AF-C SET**, and **4 s after a zoom `0xB8` SET**. Zoom / FORMAT VPS on a live 720p GOP must not tear the decoder or IDR-hold while skipping `0x09/0xa8` — that blacks the well while HUD and gimbal stay up. First picture uses that 8 s grace too — do not second-enable or rebuild UDP at 2 s (Mimo first look is 1–2 s). Do not `still holding for IDR` — a live UDP receive must not GOP-cut, and a silent encoder is `FeedWatchdog.tick`. One feed-repair Task at a time. Log:
+A **2 s** gap with no video packet / AU is a stall, except for **8 s after `0x09/0xa8`** (GOP cut), **4 s after an AF-C SET**, **4 s after a zoom `0xB8` SET**, and **the whole time the zoom disc is held**. Zoom / FORMAT VPS on a live 720p GOP must not tear the decoder or IDR-hold while skipping `0x09/0xa8` — that blacks the well while HUD and gimbal stay up. A 2026-09-14 physical take: dragging the disc paused HEVC; the watchdog GOP-cut then rebuilt UDP (`diagnose=encoderPaused`) — that looked like a dropped connection and recovered after handshake. Do not enable or rebuild while `zoomPinchActive`. First picture uses that 8 s grace too — do not second-enable or rebuild UDP at 2 s (Mimo first look is 1–2 s). Do not `still holding for IDR` — a live UDP receive must not GOP-cut, and a silent encoder is `FeedWatchdog.tick`. One feed-repair Task at a time. Log:
 
 `feed: stall lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=0`
 

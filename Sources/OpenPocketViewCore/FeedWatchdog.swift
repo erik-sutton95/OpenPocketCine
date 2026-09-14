@@ -92,6 +92,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         /// Age of the last zoom `0xB8` SET. Lens slew can pause HEVC the same
         /// way AF-C does; GOP-cutting mid-zoom blacks the well.
         public var secondsSinceZoomSet: TimeInterval?
+        /// Operator is still on the zoom disc. Hold encoder-pause recover until lift.
+        public var zoomPinchActive: Bool
         /// Age of the last non-rest gimbal stick throw. Motion can pause HEVC.
         public var secondsSinceGimbalThrow: TimeInterval?
         /// Age of the last tracked camera SET on the datalink (any opcode).
@@ -117,6 +119,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             secondsSinceLastEnable: TimeInterval? = nil,
             secondsSinceFocusTrackSet: TimeInterval? = nil,
             secondsSinceZoomSet: TimeInterval? = nil,
+            zoomPinchActive: Bool = false,
             secondsSinceGimbalThrow: TimeInterval? = nil,
             secondsSinceCameraSet: TimeInterval? = nil
         ) {
@@ -139,6 +142,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.secondsSinceLastEnable = secondsSinceLastEnable
             self.secondsSinceFocusTrackSet = secondsSinceFocusTrackSet
             self.secondsSinceZoomSet = secondsSinceZoomSet
+            self.zoomPinchActive = zoomPinchActive
             self.secondsSinceGimbalThrow = secondsSinceGimbalThrow
             self.secondsSinceCameraSet = secondsSinceCameraSet
         }
@@ -357,7 +361,8 @@ public struct FeedWatchdog: Equatable, Sendable {
 
         if CamFov.shouldHoldWatchdog(
             secondsSinceSet: snap.secondsSinceZoomSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
+            lastVideoPacketAge: snap.lastVideoPacketAge,
+            pinchActive: snap.zoomPinchActive)
         {
             return .none
         }

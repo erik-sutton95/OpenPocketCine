@@ -1967,8 +1967,12 @@ public enum CamFov {
 
     public static func shouldHoldWatchdog(
         secondsSinceSet: TimeInterval?,
-        lastVideoPacketAge: TimeInterval? = nil
+        lastVideoPacketAge: TimeInterval? = nil,
+        pinchActive: Bool = false
     ) -> Bool {
+        // Fingers on the dial: slew / D-Log2 hop can pause HEVC. GOP-cutting
+        // or rebuilding UDP mid-drag is the dropped-connection look.
+        if pinchActive { return true }
         guard let secondsSinceSet else { return false }
         guard secondsSinceSet >= 0, secondsSinceSet < videoGrace else { return false }
         if let video = lastVideoPacketAge,

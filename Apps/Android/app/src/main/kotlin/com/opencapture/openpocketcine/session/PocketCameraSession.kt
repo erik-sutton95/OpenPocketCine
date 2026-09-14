@@ -913,6 +913,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
             if (CamFov.shouldHoldWatchdog(
                     lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                    zoomPinchPreview != null,
                 )
             ) {
                 return false
@@ -1169,6 +1170,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 hadVideo = videoHistory.hadVideo(packets, videoAgeMs),
                 lastFocusTrackAt = lastFocusTrackAt,
                 lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
+                zoomPinchActive = zoomPinchPreview != null,
                 lastGimbalThrowAt = lastGimbalThrowAt,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
@@ -1201,6 +1203,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
                     age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
+                    append(",\"zoomPinchActive\":${zoomPinchPreview != null}")
                     age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
                     age(lastCameraSetAt)?.let { append(",\"secondsSinceCameraSet\":$it") }
                     append("}")
@@ -1310,6 +1313,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         } else if (
             CamFov.shouldHoldWatchdog(
                 LiveViewEnablePolicy.age(snap.now, snap.lastZoomAt)?.div(1000.0),
+                snap.zoomPinchActive,
             )
         ) {
             Log.i(
@@ -3916,6 +3920,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         }
         if (CamFov.shouldHoldWatchdog(
                 lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                zoomPinchPreview != null,
             )
         ) {
             Log.i(TAG, "control: SET timeouts during zoom grace — leave UDP")
@@ -4158,6 +4163,7 @@ internal object LiveViewEnablePolicy {
         val sawPicture: Boolean,
         val lastFocusTrackAt: Long? = null,
         val lastZoomAt: Long? = null,
+        val zoomPinchActive: Boolean = false,
         val lastGimbalThrowAt: Long? = null,
         val hadVideo: Boolean? = null,
     )
@@ -4628,7 +4634,11 @@ internal object LiveViewEnablePolicy {
         if (FocusTrackMode.shouldHoldWatchdog(age(snap.now, snap.lastFocusTrackAt)?.div(1000.0))) {
             return Action.NONE
         }
-        if (CamFov.shouldHoldWatchdog(age(snap.now, snap.lastZoomAt)?.div(1000.0))) {
+        if (CamFov.shouldHoldWatchdog(
+                age(snap.now, snap.lastZoomAt)?.div(1000.0),
+                snap.zoomPinchActive,
+            )
+        ) {
             return Action.NONE
         }
         if (CameraCommands.shouldHoldGimbalWatchdog(
