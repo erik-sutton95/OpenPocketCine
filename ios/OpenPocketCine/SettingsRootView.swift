@@ -1,4 +1,3 @@
-import MessageUI
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -89,10 +88,9 @@ struct SettingsRootView: View {
     @State private var showWatcherWiFiCode = false
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
-    @State private var supportReport: SupportEmailPayload?
+    @State private var showProblemReport = false
     @State private var showDiagnosticOptions = false
     @State private var supportError = false
-    @State private var supportMailFailed = false
     @State private var reliabilityOptIn = ReliabilityReporting.isOptedIn
 
     var body: some View {
@@ -118,17 +116,8 @@ struct SettingsRootView: View {
         .sheet(isPresented: $showLUTPicker) {
             LUTPicker(assist: model.assist)
         }
-        .sheet(
-            item: $supportReport,
-            onDismiss: {
-                supportReport = nil
-                if supportMailFailed { supportError = true }
-            }
-        ) { payload in
-            SupportEmailComposer(report: payload.data) { failed in
-                supportMailFailed = failed
-                supportReport = nil
-            }
+        .sheet(isPresented: $showProblemReport) {
+            ProblemReportView().environment(model)
         }
         .alert("Report unavailable", isPresented: $supportError) {
             Button("OK", role: .cancel) {}
@@ -863,39 +852,6 @@ struct SettingsRootView: View {
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    private func openSupportEmail() {
-        if MFMailComposeViewController.canSendMail() {
-            guard let url = DiagnosticCenter.shared.writeReport(session: model.session),
-                let data = try? Data(contentsOf: url)
-            else {
-                supportError = true
-                return
-            }
-            supportMailFailed = false
-            supportReport = SupportEmailPayload(data: data)
-        } else {
-            // The default email app can receive a compact report in the message
-            // even when Apple's attachment composer is unavailable.
-            var url = URLComponents()
-            url.scheme = "mailto"
-            url.path = "support@openpocketcine.app"
-            url.queryItems = [
-                URLQueryItem(name: "subject", value: "OpenPocketCine — report a problem"),
-                URLQueryItem(
-                    name: "body",
-                    value: "What happened?\n\n\nTechnical details:\n"
-                        + DiagnosticCenter.shared.compactSummary(session: model.session)),
-            ]
-            guard let target = url.url else {
-                supportError = true
-                return
-            }
-            openURL(target) { accepted in
-                if !accepted { supportError = true }
-            }
-        }
-    }
-
     // MARK: - System
 
     @ViewBuilder private var systemRows: some View {
@@ -903,10 +859,11 @@ struct SettingsRootView: View {
             SettingsInlineRow(
                 title: "Report a problem",
                 help:
-                    "Tell us what happened by email. Technical details are included, and you review everything before sending.",
+                    "Tell us what happened in the app. Choose whether to include technical details and an email for a reply.",
                 showTopDivider: false
             ) {
-                SettingsActionPill(title: "Write") { openSupportEmail() }
+                SettingsActionPill(title: "Open") { showProblemReport = true }
+                    .accessibilityIdentifier("support.report.open")
             }
             if ReliabilityReporting.isAvailable {
                 SettingsSwitchInlineRow(
@@ -933,13 +890,29 @@ struct SettingsRootView: View {
                     legalKind = .privacy
                 }
             }
-            SettingsInlineRow(
-                title: "Diagnostic options", help: "Save or remove reports stored on this phone."
-            ) {
-                SettingsActionPill(title: showDiagnosticOptions ? "Hide" : "Show") {
-                    showDiagnosticOptions.toggle()
+        }
+        SettingsRowCard {
+            Button {
+                showDiagnosticOptions.toggle()
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Diagnostic options").font(LiveType.ui(size: 13, weight: .semibold))
+                        Text("Save or remove reports on this phone").font(
+                            LiveType.ui(size: 11.5, weight: .regular)
+                        )
+                        .foregroundStyle(LiveDesign.muted)
+                    }
+                    Spacer()
+                    (showDiagnosticOptions ? OpcIcon.chevronUp : OpcIcon.chevronDown)
+                        .frame(width: 20, height: 20).foregroundStyle(LiveDesign.muted)
                 }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain).foregroundStyle(LiveDesign.text)
+            .accessibilityIdentifier("support.diagnostics.disclosure")
+            .accessibilityValue(showDiagnosticOptions ? "Expanded" : "Collapsed")
             if showDiagnosticOptions {
                 SettingsInlineRow(
                     title: "Save diagnostic report", help: "Keep a copy or share it with support."

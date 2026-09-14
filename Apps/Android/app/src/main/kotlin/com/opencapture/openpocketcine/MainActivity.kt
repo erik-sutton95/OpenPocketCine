@@ -57,6 +57,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.diagnostics.AutomaticReportsPrompt
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
+import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
+import com.opencapture.openpocketcine.diagnostics.ReliabilityReportingConsent
 import com.opencapture.openpocketcine.pairing.PairingExperience
 import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
 import com.opencapture.openpocketcine.pairing.StartupColors
@@ -111,11 +115,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         if (::model.isInitialized) model.session.noteSceneBecameInactive()
+        ManualProblemReport.setForeground(false)
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        ManualProblemReport.setForeground(true)
         if (::model.isInitialized) {
             model.session.noteSceneBecameActive()
             model.gimbalGamepad.ensureListening(this, model)
@@ -214,6 +220,22 @@ private fun OpenPocketCineApp(model: AppModel) {
         LaunchSplashOverlay(visible = launchSplashVisible)
         if (model.homePanel != null && !showLive) {
             AppPanelHost(model)
+        }
+        var showAutomaticPrompt by remember {
+            mutableStateOf(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        }
+        if (!launchSplashVisible && !showLive && showAutomaticPrompt && model.homePanel != AppPanel.PRIVACY) {
+            AutomaticReportsPrompt(
+                onPrivacy = { model.homePanel = AppPanel.PRIVACY },
+                onEnable = {
+                    ReliabilityReporting.setConsent(true)
+                    showAutomaticPrompt = false
+                },
+                onNotNow = {
+                    ReliabilityReporting.setConsent(false)
+                    showAutomaticPrompt = false
+                },
+            )
         }
     }
     }

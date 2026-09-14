@@ -19,6 +19,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 internal interface ReliabilityReportingCancellable {
     fun cancel()
+
+    /** Manual operator reports keep transmitting after automatic-SDK opt-out. */
+    val independentOfAutomaticConsent: Boolean
+        get() = false
 }
 
 internal object ReliabilityReportingGate : ITransportGate {
@@ -74,7 +78,10 @@ internal object ReliabilityReportingGate : ITransportGate {
     fun register(task: ReliabilityReportingCancellable) {
         val blockNow = synchronized(lock) {
             pending.add(task)
-            !ReliabilityReportingConsent.isOptedIn || cameraSessionActive || cameraIPv4PathReady()
+            val cameraBlock = cameraSessionActive || cameraIPv4PathReady()
+            val consentBlock =
+                !task.independentOfAutomaticConsent && !ReliabilityReportingConsent.isOptedIn
+            cameraBlock || consentBlock
         }
         if (blockNow) task.cancel()
     }
@@ -83,10 +90,10 @@ internal object ReliabilityReportingGate : ITransportGate {
         pending.remove(task)
     }
 
-    fun cancelPending() {
+    fun cancelPending(includeIndependent: Boolean = true) {
         val toCancel = synchronized(lock) {
-            val copy = pending.toList()
-            pending.clear()
+            val copy = pending.filter { includeIndependent || !it.independentOfAutomaticConsent }
+            pending.removeAll(copy.toSet())
             copy
         }
         for (task in toCancel) task.cancel()

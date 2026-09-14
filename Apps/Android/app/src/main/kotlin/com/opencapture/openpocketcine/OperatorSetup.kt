@@ -80,6 +80,9 @@ import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDelivery
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.feed.LutLookResolver
@@ -135,6 +138,8 @@ object SettingsHelpCopy {
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
     const val SUPPORT = "Connection, live view, controls, and troubleshooting."
     const val REPORT = "Opens a public issue form on GitHub for this project."
+    const val REPORT_PROBLEM =
+        "Tell us what happened. Technical details stay off unless you include them. Sending does not turn on automatic reports."
     const val SHARE_DIAGNOSTICS =
         "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Paste the copied text into a bug report."
     const val RELIABILITY_REPORTS =
@@ -1484,11 +1489,31 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     val view = LocalView.current
     var reliabilityOptIn by remember { mutableStateOf(ReliabilityReporting.isOptedIn) }
     var diagnosticOptions by remember { mutableStateOf(false) }
+    var showReportForm by remember { mutableStateOf(false) }
+    val report by ManualProblemReport.snapshot.collectAsState()
     SettingsRowCard(title = "Help & Feedback") {
         SettingsInlineRow("Report a problem",
-            "Tell us what happened by email. Technical details are included, and you review everything before sending.",
+            SettingsHelpCopy.REPORT_PROBLEM,
             showTopDivider = false) {
-            SettingsActionPill("Write") { DiagnosticCenter.shareReport(context, model.session, emailSupport = true) }
+            SettingsActionPill("Write") { showReportForm = true }
+        }
+        if (report.delivery != ManualProblemReportDelivery.IDLE) {
+            SettingsInlineRow(
+                "Report status",
+                report.detail ?: "This phone keeps one report until Sentry accepts it or you discard it.",
+            ) {
+                SettingsValueText(report.statusLabel)
+            }
+            report.eventId?.let { id ->
+                SettingsInlineRow("Report ID", "Use this ID if you follow up.") {
+                    SettingsValueText(id)
+                }
+            }
+            if (report.allowsDiscard) {
+                SettingsInlineRow("Queued report", "Remove the unsent report from this phone.") {
+                    SettingsActionPill("Discard") { ManualProblemReport.discard() }
+                }
+            }
         }
         if (ReliabilityReporting.isAvailable) {
             SettingsSwitchInlineRow(
@@ -1511,24 +1536,36 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
         SettingsInlineRow("Reporting Privacy", "What reports contain, retention, and how to request deletion.") {
             SettingsActionPill("Read") { onLegal(LegalKind.PRIVACY) }
         }
-        SettingsInlineRow("Diagnostic options", "Save or remove reports stored on this phone.") {
-            SettingsActionPill(if (diagnosticOptions) "Hide" else "Show") { diagnosticOptions = !diagnosticOptions }
+    }
+    SettingsGroupCard(
+        title = "Diagnostic options",
+        caption = "Save or remove reports stored on this phone.",
+        expanded = diagnosticOptions,
+        onExpandToggle = { diagnosticOptions = !diagnosticOptions },
+    ) {
+        SettingsInlineRow("Save diagnostic report", "Keep a copy or share it with support.", showTopDivider = false) {
+            SettingsActionPill("Save") { DiagnosticCenter.shareReport(context, model.session, copyForFeedback = false) }
         }
-        if (diagnosticOptions) {
-            SettingsInlineRow("Save diagnostic report", "Keep a copy or share it with support.") {
-                SettingsActionPill("Save") { DiagnosticCenter.shareReport(context, model.session, copyForFeedback = false) }
-            }
-            SettingsInlineRow("Delete saved feed reports",
-                "Remove saved feed reports from this phone. Connection logs remain. Turn off automatic reporting to clear pending uploads. Reports already sent cannot be removed here.") {
-                SettingsActionPill("Delete") {
-                    com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime.deleteStoredReports { deleted ->
-                        android.widget.Toast.makeText(context,
-                            if (deleted) "Saved feed reports deleted" else "Couldn't delete saved feed reports. Please try again.",
-                            android.widget.Toast.LENGTH_LONG).show()
-                    }
+        SettingsInlineRow("Delete saved feed reports",
+            "Remove saved feed reports from this phone. Connection logs remain. Turn off automatic reporting to clear pending uploads. Reports already sent cannot be removed here.") {
+            SettingsActionPill("Delete") {
+                com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime.deleteStoredReports { deleted ->
+                    android.widget.Toast.makeText(context,
+                        if (deleted) "Saved feed reports deleted" else "Couldn't delete saved feed reports. Please try again.",
+                        android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }
+    }
+    if (showReportForm) {
+        ManualProblemReportDialog(
+            model = model,
+            onClose = { showReportForm = false },
+            onPrivacy = {
+                showReportForm = false
+                onLegal(LegalKind.PRIVACY)
+            },
+        )
     }
 
     SettingsRowCard(title = "Project & Legal") {

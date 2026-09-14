@@ -10,7 +10,16 @@ final class PhysicalNavigationTests: XCTestCase {
         let originalOrientation = XCUIDevice.shared.orientation
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
+        app.launchEnvironment["OPV_CONSENT_REVIEW_ID"] = UUID().uuidString
         app.launch()
+        let decline = app.buttons["reliability.consent.decline"]
+        XCTAssertTrue(decline.waitForExistence(timeout: 15))
+        attach(app, "support-first-launch-consent")
+        decline.tap()
+        app.terminate()
+        app.launch()
+        Thread.sleep(forTimeInterval: 3)
+        XCTAssertFalse(decline.exists, "A saved decline must not prompt again")
         defer {
             app.terminate()
             XCUIDevice.shared.orientation = originalOrientation
@@ -32,11 +41,16 @@ final class PhysicalNavigationTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Request a Feature"].exists)
         XCTAssertFalse(app.staticTexts["Save diagnostic report"].exists)
         attach(app, "support-simple")
-        app.buttons["SHOW"].firstMatch.tap()
+        app.buttons["support.diagnostics.disclosure"].tap()
         XCTAssertTrue(
             app.staticTexts["Save diagnostic report"].firstMatch.waitForExistence(timeout: 5))
         attach(app, "support-diagnostic-options")
-        app.buttons["HIDE"].firstMatch.tap()
+        app.buttons["support.diagnostics.disclosure"].tap()
+        app.buttons["support.report.open"].tap()
+        XCTAssertTrue(app.textViews["What happened?"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["support.report.send"].isEnabled)
+        attach(app, "support-native-form")
+        app.buttons["Close"].firstMatch.tap()
         app.buttons["READ"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Privacy"].firstMatch.waitForExistence(timeout: 5))
         attach(app, "support-offline-privacy")

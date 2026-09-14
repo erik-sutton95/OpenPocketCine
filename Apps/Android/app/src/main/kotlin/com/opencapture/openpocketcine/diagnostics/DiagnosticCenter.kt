@@ -55,7 +55,25 @@ object DiagnosticCenter {
         }
         filesDir()?.let { FeedIncidentRuntime.install(it) }
         ReliabilityReporting.install(context.applicationContext)
+        ManualProblemReport.install(context.applicationContext)
         log("notice", "diagnostics", "boot", "diagnostics installed")
+    }
+
+    fun boundedDiagnosticText(
+        session: PocketCameraSession,
+        maxBytes: Int = ManualProblemReport.ATTACHMENT_MAX_BYTES,
+        maxChars: Int = ManualProblemReport.ATTACHMENT_MAX_CHARS,
+    ): String {
+        val env = environment(session)
+        val extras = FeedIncidentRuntime.exportExtras()
+        var body = fullReport(env, journalLines(), exceptionLines(), extras)
+        if (body.length > maxChars || body.toByteArray(Charsets.UTF_8).size > maxBytes) {
+            body = fullReport(env, emptyList(), exceptionLines(), extras)
+        }
+        if (body.length > maxChars || body.toByteArray(Charsets.UTF_8).size > maxBytes) {
+            body = fullReport(env, emptyList(), exceptionLines(), emptyList())
+        }
+        return ManualProblemReportEnvelope.utf8Prefix(body.take(maxChars), maxBytes)
     }
 
     fun log(level: String, category: String, code: String, message: String) {

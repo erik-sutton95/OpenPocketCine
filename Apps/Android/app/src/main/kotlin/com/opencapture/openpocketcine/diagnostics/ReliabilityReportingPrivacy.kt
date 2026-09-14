@@ -18,23 +18,33 @@ internal object ReliabilityReportingConsent {
     const val KEY = "opc.reliabilityReporting.optIn"
 
     @Volatile private var optedIn: Boolean = false
+    @Volatile private var decided: Boolean = false
     @Volatile private var persist: ((Boolean) -> Unit)? = null
 
     val isOptedIn: Boolean
         get() = optedIn
 
+    val hasDecision: Boolean
+        get() = decided
+
     fun setOptedIn(on: Boolean) {
         optedIn = on
+        decided = true
         persist?.invoke(on)
     }
 
+    fun shouldOfferAutomaticPrompt(): Boolean =
+        ReliabilityReportingDSN.isAvailable && !decided
+
     fun bind(prefs: SharedPreferences) {
+        decided = prefs.contains(KEY)
         optedIn = prefs.getBoolean(KEY, false)
         persist = { value -> prefs.edit().putBoolean(KEY, value).apply() }
     }
 
     fun resetForTests() {
         optedIn = false
+        decided = false
         persist = null
     }
 }

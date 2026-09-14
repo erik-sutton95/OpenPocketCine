@@ -81,7 +81,7 @@ enum ReliabilityReporting {
         bumpEpoch()
         ReliabilityReportingConsent.setOptedIn(on)
         if !on {
-            ReliabilityReportingGate.shared.cancelPending()
+            ReliabilityReportingGate.shared.cancelPending(includeIndependent: false)
         }
         applySDKState()
     }
@@ -268,7 +268,7 @@ enum ReliabilityReporting {
     private static func stopAndPurgeSDKOwned() {
         pathMonitor?.cancel()
         pathMonitor = nil
-        ReliabilityReportingGate.shared.cancelPending()
+        ReliabilityReportingGate.shared.cancelPending(includeIndependent: false)
         let close = {
             if sdkStarted {
                 SentrySDK.close()

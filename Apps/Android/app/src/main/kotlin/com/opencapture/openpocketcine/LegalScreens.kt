@@ -107,7 +107,7 @@ With your consent, configured builds send crash, hang and feed diagnostics, app/
 Turn reporting off in Operator Setup at any time without losing app features. This clears pending SDK uploads, but does not delete reports already received. Contact us privately to request deletion. The website policy explains retention, transfers and your rights.
 
 Reporting a problem yourself
-Report a problem prepares an email to support@openpocketcine.app with technical diagnostics attached or included in the message. You review and send it. OpenCapture receives your sender address, message and included diagnostics; your email provider handles delivery. This does not enable automatic Sentry reporting. Do not include passwords or private footage.
+Report a problem sends a private note through Sentry to OpenCapture. You write what happened. A reply email is optional. Technical details are included only when you turn that on and review the preview. This does not enable automatic Sentry reporting. Do not include passwords or private footage.
 
 What stays on this phone
 • Saved camera names and last SSID. The camera Wi-Fi password is stored in the Android Keystore on this phone only.

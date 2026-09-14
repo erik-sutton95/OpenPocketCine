@@ -83,13 +83,14 @@ internal object ReliabilityReporting {
             }
             enqueueFinalizedFromSpool()
             scheduleResumeIfIdle()
+            ManualProblemReport.noteCameraPathClear()
         }
     }
 
     fun setConsent(on: Boolean) {
         bumpEpoch()
         ReliabilityReportingConsent.setOptedIn(on)
-        if (!on) ReliabilityReportingGate.cancelPending()
+        if (!on) ReliabilityReportingGate.cancelPending(includeIndependent = false)
         applySdkState()
     }
 

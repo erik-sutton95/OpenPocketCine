@@ -228,15 +228,24 @@ See [privacy operations](sentry-privacy-operations.md) for controller contact, D
 
 ## Manual support from System
 
-**Report a problem** opens a private email addressed to OpenCapture support.
-iOS uses the native mail composer with a redacted report attachment. If that
-composer is unavailable, it opens the default email app with compact diagnostics
-in the message. Android opens a email chooser with the support recipient,
-subject and report attachments supplied. The operator reviews and sends; opening
-the flow is not proof of delivery. No automatic Sentry consent is changed.
+**Report a problem** opens a native form. A description is required; reply email
+and technical details are optional. Details are off by default and available for
+review. Only Send report stores a submission. This does not enable automatic
+Sentry reporting, and no email application or account is required.
 
-**Diagnostic options** reveals save/export and deletion of local reports.
-The first-pair wizard retains its independent Share Diagnostics escape route.
-Email contains the sender's address and any text they choose to write; do not
-promise that manual correspondence is anonymous. The privacy policy covers
-private support and retention.
+A separate private queue holds one report. It expires after seven days and is
+removed when the app next runs. It transmits a Sentry feedback envelope only while the app is in the foreground and the camera
+upload gate permits internet use. Reports retain their original ID on retry.
+HTTP acceptance is required for Sent; queued and failed states stay visible.
+The operator can remove an unsent report. Optional diagnostic text is redacted
+and bounded; footage, screenshots and raw camera packets are not attached.
+Messages and optional reply addresses are intentionally supplied by the operator
+and are not anonymous. The queue is separate from automatic-report consent.
+
+**Diagnostic options** is a chevron disclosure card for export and local feed
+report deletion. The first-pair wizard retains Share Diagnostics.
+
+A one-time prompt after the first configured launch explains the improvement
+purpose and offers Enable automatic reports, Not now and offline privacy.
+Existing decisions persist. Declining does not disable manual reports or prevent
+a later opt-in in System.

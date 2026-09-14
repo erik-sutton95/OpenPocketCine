@@ -645,6 +645,7 @@ enum LiveOperatorPanel: Equatable {
 
 struct AppRoot: View {
     @State private var model = AppModel()
+    @State private var showReliabilityPrompt = false
     @Environment(\.scenePhase) private var scenePhase
 
     @ViewBuilder private var primaryExperience: some View {
@@ -702,7 +703,29 @@ struct AppRoot: View {
         .environment(model)
         .environment(\.font, LiveType.text(16))
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showReliabilityPrompt) {
+            ReliabilityConsentPrompt { enabled in
+                ReliabilityReporting.setConsent(enabled)
+                showReliabilityPrompt = false
+            }.environment(model)
+        }
+        .task {
+            while !Task.isCancelled {
+                ProblemReporting.shared.tick()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
         .onAppear {
+            #if DEBUG
+                // Physical consent review uses an isolated preference domain;
+                // the operator's saved choice is never overwritten.
+                if let reviewID = ProcessInfo.processInfo.environment["OPV_CONSENT_REVIEW_ID"],
+                    UUID(uuidString: reviewID) != nil
+                {
+                    ReliabilityReportingConsent.defaults = UserDefaults(
+                        suiteName: "opc.consent.review.\(reviewID)")!
+                }
+            #endif
             DiagnosticCenter.shared.install()
             AppModelDiagnosticsAnchor.model = model
             DiagnosticCenter.shared.onCopiedForTestFlight = { [weak model] in
@@ -723,6 +746,9 @@ struct AppRoot: View {
             try? await Task.sleep(for: LaunchSplashTiming.visibleDuration)
             withAnimation(.easeOut(duration: LaunchSplashTiming.fadeOutDuration)) {
                 model.showsLaunchSplash = false
+            }
+            if ReliabilityReporting.isAvailable && !ReliabilityReportingConsent.hasDecision {
+                showReliabilityPrompt = true
             }
         }
         .onChange(of: model.gimbalAnalogHeld) { _, held in
@@ -768,6 +794,7 @@ struct AppRoot: View {
         }
         .onAppear { model.assist.inspectorSceneActive = scenePhase == .active }
         .onChange(of: scenePhase) { _, phase in
+            ProblemReporting.shared.tick()
             model.assist.inspectorSceneActive = phase == .active
             switch phase {
             case .active:

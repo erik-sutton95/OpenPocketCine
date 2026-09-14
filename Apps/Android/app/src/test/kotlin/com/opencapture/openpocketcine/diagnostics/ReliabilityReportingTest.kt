@@ -106,6 +106,43 @@ class ReliabilityReportingTest {
     }
 
     @Test
+    fun manualRegisterSurvivesMissingConsentAndConsentRevoke() {
+        val fake = object : ReliabilityReportingCancellable {
+            var cancelled = false
+            override val independentOfAutomaticConsent = true
+            override fun cancel() {
+                cancelled = true
+            }
+        }
+        ReliabilityReportingConsent.setOptedIn(false)
+        ReliabilityReportingGate.setValidInternetForTests(true)
+        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
+        ReliabilityReportingGate.setCameraSessionActive(false)
+        ReliabilityReportingGate.register(fake)
+        assertFalse(fake.cancelled)
+        ReliabilityReportingGate.cancelPending(includeIndependent = false)
+        assertFalse(fake.cancelled)
+        ReliabilityReportingGate.setCameraSessionActive(true)
+        assertTrue(fake.cancelled)
+    }
+
+    @Test
+    fun automaticPromptIsOffUntilConfiguredAndUndecided() {
+        ReliabilityReportingDSN.buildDsn = null
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
+        assertTrue(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        ReliabilityReportingConsent.setOptedIn(true)
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        ReliabilityReportingConsent.resetForTests()
+        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
+        ReliabilityReportingConsent.setOptedIn(false)
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        assertFalse(ReliabilityReportingConsent.isOptedIn)
+        assertTrue(ReliabilityReportingConsent.hasDecision)
+    }
+
+    @Test
     fun hostIsolationRejectsNonDsnHosts() {
         val dsnHost = "o0.ingest.sentry.io"
         val allowed = URL("https://o0.ingest.sentry.io/api/0/envelope/")

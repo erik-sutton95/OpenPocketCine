@@ -6,6 +6,8 @@ enum ReliabilityReportingConsent {
     static let defaultsKey = "opc.reliabilityReporting.optIn"
     static var defaults: UserDefaults = .standard
 
+    static var hasDecision: Bool { defaults.object(forKey: defaultsKey) != nil }
+
     static var isOptedIn: Bool {
         defaults.bool(forKey: defaultsKey)
     }

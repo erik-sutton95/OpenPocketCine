@@ -86,9 +86,14 @@ without forcing a full camera reconnect. A short picture hold can still occur
 while it waits for a new random-access frame. If a hold persists, keep the app
 open briefly and share diagnostics so the incident's recovery timeline is saved.
 
-For a private reply, use **Operator Setup → System → Report a problem**. Describe
-what happened in the email that opens; technical details are included for you to
-review. Choose an email app on Android. On iPhone, diagnostics are attached when
-the native mail composer is available, or included as a compact message otherwise.
-This does not turn on automatic reports. **Diagnostic options** holds save/export
-and local deletion; you do not need a GitHub account to contact support.
+Use **Operator Setup → System → Report a problem** to describe what happened
+without leaving the app. Add an email if you would like a reply. Technical details
+are optional and can be reviewed before you send. No footage is attached.
+The app saves your report while camera Wi-Fi is in use; keep it open with internet
+access afterward to send. Waiting to send is not a delivery confirmation. Unsent
+reports expire after seven days and can be removed from the form.
+
+The first-launch prompt asks whether to enable automatic error reports. You can
+choose Not now and still report a problem manually, or enable automatic reports
+later in System. **Diagnostic options** expands with a chevron for local export
+and deletion. No GitHub account or email application is needed.

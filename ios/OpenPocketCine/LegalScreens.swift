@@ -97,7 +97,7 @@ struct LegalDocumentView: View {
                 Turn reporting off in Operator Setup at any time without losing app features. This clears pending SDK uploads, but does not delete reports already received. Contact us privately to request deletion. The website policy explains retention, transfers and your rights.
 
                 Reporting a problem yourself
-                Report a problem prepares an email to support@openpocketcine.app with technical diagnostics attached or included in the message. You review and send it. OpenCapture receives your sender address, message and included diagnostics; your email provider handles delivery. This does not enable automatic Sentry reporting. Do not include passwords or private footage.
+                Report a problem sends your description and any optional reply email to OpenCapture through Sentry when you tap Send report. Technical details are included only if you choose them and can be reviewed first. No footage or screenshots are attached. This one-off submission does not enable automatic reports. Unsent reports stay privately on this phone, expire after 7 days (removed when the app next runs), wait until you leave camera Wi-Fi, and can be removed before delivery. Do not include passwords or private footage in your message. You can decline the first-launch prompt and enable automatic reports later in System.
 
                 What stays on this phone
                 • Saved camera names and last SSID. The camera Wi-Fi password is stored in the iOS Keychain on this phone only.

@@ -66,7 +66,7 @@ final class ReliabilityReportingGate: @unchecked Sendable {
         pending.append(task)
         let blockNow = cameraSessionActive || (ipv4Override ?? false)
         lock.unlock()
-        if blockNow { task.cancel() }
+        if blockNow || shouldBlockUpload { task.cancel() }
     }
 
     func unregister(_ task: ReliabilityReportingCancellable) {
@@ -75,10 +75,10 @@ final class ReliabilityReportingGate: @unchecked Sendable {
         lock.unlock()
     }
 
-    func cancelPending() {
+    func cancelPending(includeIndependent: Bool = true) {
         lock.lock()
-        let toCancel = pending
-        pending.removeAll(keepingCapacity: true)
+        let toCancel = pending.filter { includeIndependent || !$0.independentOfAutomaticConsent }
+        pending.removeAll { includeIndependent || !$0.independentOfAutomaticConsent }
         lock.unlock()
         for task in toCancel { task.cancel() }
     }
@@ -119,6 +119,11 @@ final class ReliabilityReportingGate: @unchecked Sendable {
 
 protocol ReliabilityReportingCancellable: AnyObject {
     func cancel()
+    var independentOfAutomaticConsent: Bool { get }
+}
+
+extension ReliabilityReportingCancellable {
+    var independentOfAutomaticConsent: Bool { false }
 }
 
 extension URLSessionTask: ReliabilityReportingCancellable {}
