@@ -210,6 +210,7 @@ class DatalinkDriver internal constructor(
                 CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
         },
     )
+    /** One hop at a time; admission already caps pending AUs. Unbounded execute would replay a GOP. */
     private val decodeExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.hevc") }
     private var socket: DatagramSocket? = null
     private val pokeLock = Any()
@@ -259,10 +260,16 @@ class DatalinkDriver internal constructor(
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
     var onAccessUnit: ((ByteArray) -> Unit)? = null
+    var onReferenceDiscontinuity: (() -> Unit)? = null
+    private val lastIncompleteDropped = AtomicInteger(0)
+    private val admission = CompressedAccessUnitAdmission()
 
     val videoPackets: Int get() = rawVideoPackets.get()
     val droppedIncomplete: Int
         get() = if (depacketizer != 0L && SwiftCore.isAvailable) SwiftCore.depacketizerDropped(depacketizer) else 0
+    val pendingAccessUnits: Int get() = admission.pendingCount
+    val pendingAccessUnitBytes: Int get() = admission.queuedBytes
+    val admissionDrops: Int get() = admission.drops
     val lastVideoPacketAt: Long? get() = lastVideoElapsed.get().takeIf { it > 0 }
     val lastStatusAt: Long? get() = lastStatusElapsed.get().takeIf { it > 0 }
     val lastAccessUnitAt: Long? get() = lastAccessUnitElapsed.get().takeIf { it > 0 }
@@ -293,6 +300,8 @@ class DatalinkDriver internal constructor(
         inboundLogs.set(0)
         rawVideoPackets.set(0)
         leftoverVideoPackets.set(0)
+        lastIncompleteDropped.set(0)
+        admission.reset()
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
         lastAccessUnitElapsed.set(0)
@@ -466,6 +475,31 @@ class DatalinkDriver internal constructor(
      * bounded handshake/register/subscribe path, retaining ready TCP 7001 and the
      * caller's decoder. The caller owns one live enable after successful negotiation.
      */
+    private fun scheduleAdmissionDrain(receiveEpoch: Long) {
+        if (closed.get() || decodeExecutor.isShutdown) {
+            admission.releaseScheduledHop()
+            return
+        }
+        val enqueuedAt = cadence.queued()
+        runCatching {
+            decodeExecutor.execute {
+                cadence.dequeued(enqueuedAt)
+                val delivery = admission.takeDelivery()
+                if (delivery.discontinuity && !closed.get()) {
+                    onReferenceDiscontinuity?.invoke()
+                }
+                for (unit in delivery.accessUnits) {
+                    if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                        onAccessUnit?.invoke(unit)
+                    }
+                }
+            }
+        }.onFailure {
+            cadence.dequeued(enqueuedAt)
+            admission.releaseScheduledHop()
+        }
+    }
+
     fun rebuildUdp() {
         synchronized(this) {
             if (closed.get() || rebuilding) throw DatalinkHandshakeException("datalink repair unavailable")
@@ -602,6 +636,7 @@ class DatalinkDriver internal constructor(
             running.set(false)
             liveViewEnabled = false
             onAccessUnit = null
+            onReferenceDiscontinuity = null
             onStatusFrame = null
         },
         // This is the sole send admitted after closed=true. The executor is shut
@@ -1052,21 +1087,18 @@ class DatalinkDriver internal constructor(
             }
             if (depacketizer != 0L) {
                 val au = SwiftCore.depacketizerFeed(depacketizer, datagram)
+                val dropped = droppedIncomplete
+                val previous = lastIncompleteDropped.getAndSet(dropped)
+                var hop = false
+                if (AccessUnitDiscontinuity.shouldNote(previous, dropped)) {
+                    hop = admission.noteIncompleteLoss() || hop
+                }
                 if (au != null) {
                     lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
                     cadence.note(LivePipelineCadence.Stage.AU)
-                    if (!closed.get() && !decodeExecutor.isShutdown) {
-                        val enqueuedAt = cadence.queued()
-                        runCatching {
-                            decodeExecutor.execute {
-                                cadence.dequeued(enqueuedAt)
-                                if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
-                                    onAccessUnit?.invoke(au)
-                                }
-                            }
-                        }.onFailure { cadence.dequeued(enqueuedAt) }
-                    }
+                    hop = admission.offer(au) || hop
                 }
+                if (hop) scheduleAdmissionDrain(receiveEpoch)
             }
             return
         }

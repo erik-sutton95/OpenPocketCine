@@ -133,9 +133,16 @@ Media is pktType `0x02`. Disconnect has no live-stop — leftover GOP P-frames
 during handshake are expected until this pair starts a clean VPS.
 
 Settings and the media library cover the monitor; they must not drop
-pktType `0x02` ingest. Pocket has no periodic GOP. The watchdog will not
-PLI while UDP `0x02` is still arriving, so a dropped GOP returns as a
-black well with live HUD (#177). Android API 34+ SurfaceView follows
+pktType `0x02` ingest. Pocket has no periodic GOP. Settings enter/exit is
+a diagnostic breadcrumb, not a repair suppress. Fresh `0x02` packets still
+prevent a UDP rebuild. They do **not** by themselves prevent a decoder-output
+repair: when native decode is expected and complete AUs keep arriving, two
+seconds without decoder output can request one owned enable after the usual
+grace gates ([feed-watchdog](feed-watchdog.md#fresh-input-with-silent-native-output)).
+Packets without a complete AU do not native-rebuild; they take the existing
+enable ×2 then endpoint ladder (portable tests, physical qualification pending).
+A dropped GOP with live HUD was #177. The 2026-09-14 Settings-return freeze
+is **cause unknown** (no VT status in that report). Android API 34+ SurfaceView follows
 visibility by default — covering the well with Operator Setup or clips
 destroyed the live surface while UDP stayed alive (#248). Keep
 `SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT` so occlusion is not
@@ -173,6 +180,10 @@ Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 left Waiting for live view up. Pocket HEVC IRAP is often **BLA_W_LP (16)**
 (`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
 IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
+The live pending queue is bounded (eight AUs) and keeps an independently
+decodable suffix when it can. An IRAP in that suffix still releases IDR hold
+on decode. A later incomplete AU cannot be repaired by replaying an older
+complete GOP.
 
 Same-raster new VPS/SPS (zoom `0xB8`, FORMAT SET, D-Log2 → D-Log hop) keep
 VT **only if** `VTDecompressionSessionCanAcceptFormatDescription` says so.
@@ -182,7 +193,9 @@ on, #148; 3× hop, #194). On refusal: `feed: VT refused new parameter sets`,
 rebuild VT, keep the picture, no IDR hold (the sets ride the IRAP AU).
 Android MediaCodec takes in-band SPS itself. Async VT decode errors count
 toward `decoderErrors`; `decoderWedged` on the observe line means an error
-**after** the last presented frame, not any error this session.
+**after** the last presented frame, not any error this session. Native
+callback age (`vtOutput` / decoder-output Hz) is not presentation age
+(`gpuFPS` / display-layer enqueue). Neither is physical scanout.
 
 ## Foreground / SoftAP flap
 

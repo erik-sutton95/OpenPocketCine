@@ -36,6 +36,15 @@ Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the ca
 
 Stay on the camera Wi-Fi. Session recovery holds the last frame under **Reconnecting**. If chrome still moves (timecode, storage) while the well is black, send **Share Diagnostics**.
 
+If it happens when opening or leaving Operator Setup, say so and about when.
+Share Diagnostics can include a local freeze summary (packet, decoder, and
+presentation counters, recovery attempts, Settings enter/exit) when one was
+captured. Keep the app open briefly after a dropout so that summary can finish.
+The last held picture is not live video. Opening Settings is a reported trigger
+from testers; it is not a proven decoder error. Automatic internet reports are
+off unless a future build ships a report destination and you turn them on;
+they do not run while you are on the camera Wi-Fi.
+
 Recovery shows its current step and keeps **Retry connection** and **Operator
 menu** available. It waits for a new picture before clearing the recovery card.
 Automatic full reconnect stops after eight attempts or three minutes total;

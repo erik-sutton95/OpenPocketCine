@@ -7,16 +7,25 @@ import os
 final class LiveDecodeMetrics: @unchecked Sendable {
     private struct State {
         var submitted: DeliveryCadence
+        var accepted: DeliveryCadence
         var decoded: DeliveryCadence
         var assistInput: DeliveryCadence
         var assistOutput: DeliveryCadence
         var adopted: DeliveryCadence
+        var lastOutputAt: TimeInterval?
+        var totalOutputs = 0
+        var totalSubmissions = 0
+        var totalAccepted = 0
+        var totalAssistOutputs = 0
+        var lastAcceptedAt: TimeInterval?
+        var lastAssistOutputAt: TimeInterval?
         var decodeMax: TimeInterval = 0
         var assistMax: TimeInterval = 0
         var mainMax: TimeInterval = 0
 
         init(at now: TimeInterval) {
             submitted = DeliveryCadence(startedAt: now)
+            accepted = DeliveryCadence(startedAt: now)
             decoded = DeliveryCadence(startedAt: now)
             assistInput = DeliveryCadence(startedAt: now)
             assistOutput = DeliveryCadence(startedAt: now)
@@ -32,13 +41,58 @@ final class LiveDecodeMetrics: @unchecked Sendable {
     }
 
     func submitted() {
-        state.withLock { $0.submitted.note(at: ProcessInfo.processInfo.systemUptime) }
+        state.withLock {
+            $0.submitted.note(at: ProcessInfo.processInfo.systemUptime)
+            $0.totalSubmissions += 1
+        }
     }
 
     func decoded(at now: TimeInterval, submittedAt: TimeInterval) {
         state.withLock {
-            $0.decoded.note(at: ProcessInfo.processInfo.systemUptime)
+            $0.decoded.note(at: now)
+            $0.lastOutputAt = now
+            $0.totalOutputs += 1
             $0.decodeMax = max($0.decodeMax, now - submittedAt)
+        }
+    }
+
+    func accepted() {
+        state.withLock {
+            $0.accepted.note(at: ProcessInfo.processInfo.systemUptime)
+            $0.totalAccepted += 1
+            $0.lastAcceptedAt = ProcessInfo.processInfo.systemUptime
+        }
+    }
+
+    var outputAge: TimeInterval? {
+        state.withLock { value in
+            value.lastOutputAt.map { max(0, ProcessInfo.processInfo.systemUptime - $0) }
+        }
+    }
+
+    var totals: (submitted: Int, accepted: Int, output: Int) {
+        state.withLock { ($0.totalSubmissions, $0.totalAccepted, $0.totalOutputs) }
+    }
+
+    struct Snapshot {
+        var submitted: Int
+        var accepted: Int
+        var output: Int
+        var assistOutput: Int
+        var acceptedAge: TimeInterval?
+        var outputAge: TimeInterval?
+        var assistOutputAge: TimeInterval?
+    }
+
+    var snapshot: Snapshot {
+        state.withLock { value in
+            let now = ProcessInfo.processInfo.systemUptime
+            return Snapshot(
+                submitted: value.totalSubmissions, accepted: value.totalAccepted,
+                output: value.totalOutputs, assistOutput: value.totalAssistOutputs,
+                acceptedAge: value.lastAcceptedAt.map { max(0, now - $0) },
+                outputAge: value.lastOutputAt.map { max(0, now - $0) },
+                assistOutputAge: value.lastAssistOutputAt.map { max(0, now - $0) })
         }
     }
 
@@ -48,7 +102,9 @@ final class LiveDecodeMetrics: @unchecked Sendable {
 
     func assistOutput(at now: TimeInterval, submittedAt: TimeInterval) {
         state.withLock {
-            $0.assistOutput.note(at: ProcessInfo.processInfo.systemUptime)
+            $0.assistOutput.note(at: now)
+            $0.totalAssistOutputs += 1
+            $0.lastAssistOutputAt = now
             $0.assistMax = max($0.assistMax, now - submittedAt)
         }
     }
@@ -65,6 +121,7 @@ final class LiveDecodeMetrics: @unchecked Sendable {
             let now = ProcessInfo.processInfo.systemUptime
             let windows = [
                 ("vtSubmit", value.submitted.takeWindow(at: now)),
+                ("vtAccept", value.accepted.takeWindow(at: now)),
                 ("vtOutput", value.decoded.takeWindow(at: now)),
                 ("assistInput", value.assistInput.takeWindow(at: now)),
                 ("assistOutput", value.assistOutput.takeWindow(at: now)),

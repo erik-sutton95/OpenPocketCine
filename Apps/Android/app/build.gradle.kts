@@ -24,6 +24,7 @@ android {
         versionCode = resolvedVersionCode
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SOURCE_REVISION", "\"unknown\"")
 
         ndk {
             abiFilters += supportedAndroidAbi
@@ -101,6 +102,38 @@ android {
             clear()
             add(swiftCoreJniLibsRoot.get().asFile.absolutePath)
         }
+    }
+}
+
+val sourceRevisionField =
+    providers.exec {
+        workingDir = repositoryRoot
+        commandLine("git", "rev-parse", "--short=12", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText
+        .zip(
+            providers.exec {
+                workingDir = repositoryRoot
+                commandLine("git", "status", "--porcelain")
+                isIgnoreExitValue = true
+            }.standardOutput.asText,
+        ) { rev, status ->
+            val envRev =
+                System.getenv("OPENPOCKETCINE_SOURCE_REVISION")
+                    ?: System.getenv("GITHUB_SHA")?.take(12)
+            val cleaned =
+                (envRev ?: rev.trim())
+                    .filter { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
+                    .ifEmpty { "unknown" }
+            val dirty =
+                status.isNotBlank() || System.getenv("OPENPOCKETCINE_SOURCE_DIRTY") == "1"
+            val value = if (dirty) "$cleaned+" else cleaned
+            com.android.build.api.variant.BuildConfigField("String", "\"$value\"", "git source revision")
+        }
+
+androidComponents {
+    onVariants { variant ->
+        variant.buildConfigFields?.put("SOURCE_REVISION", sourceRevisionField)
     }
 }
 

@@ -1,14 +1,19 @@
 # Diagnostics
 
-On-device logging and tester reports. Nothing is uploaded. The app has no
-analytics SDK and does not send footage, names, or locations.
+On-device logging and tester reports. Share Diagnostics is local and redacted.
+The app does not send footage, names, or locations. There is **no production
+upload setup in this tree**: no Sentry DSN is supplied, Automatic reliability
+reports stay Off / unavailable, and no delivery has been proven. Optional
+consent+DSN wiring exists on iOS only; it must not start a camera-time network.
 
 ## What testers can send
 
 | Path | What it is |
 | --- | --- |
 | Connection setup (first pair) → **Share Diagnostics** | Same redacted report, available before a camera is saved |
-| Operator Setup → System → **Share Diagnostics** | Redacted report (`report.txt`) plus a compact paste |
+| Operator Setup → System → **Share Diagnostics** | Redacted report (`report.txt`) plus a compact paste. Includes a local typed incident summary when one was captured (`incidents.txt`) |
+| Operator Setup → System → **Saved Reports** | Share stored typed freeze bundles from this phone |
+| Operator Setup → System → **Automatic reliability reports** | iOS only, off by default, shown only if a https DSN is compiled in. This tree has none, so the row reads Off. Android has no Sentry adapter |
 | TestFlight screenshot feedback | iOS copies that compact paste to the clipboard — paste it into the TestFlight comment. Apple does not let an app attach files to TestFlight feedback. |
 | Finder / Files (iOS) | `Documents/control-live.log` and `Documents/diagnostics/` (file sharing on) |
 | USB | `tools/pull-control-log.sh` |
@@ -64,6 +69,27 @@ Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 `DiagnosticCenter` (MetricKit, uncaught `NSException`, screenshot paste).
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
 Android has no TestFlight screenshot hook — PARITY exception.
+
+## Typed feed incidents
+
+A 1 Hz allowlisted spool records packet, AU, decode-submit/accept/output,
+assist, and present rates and ages, plus recovery attempts. Settings
+enter/exit, assist changes, and scene activity are breadcrumbs — context,
+not a suppress. Prelude is 60 s, aftermath 30 s, snapshot ring 60, breadcrumb/repair rings 32.
+On-device retention: 20 bundles, 256 KiB each, 10 MiB, 7 days
+(`Documents/diagnostics/incidents/` on iOS; app files on Android).
+
+Healthy exposure accumulates only while an **observable** stage is fresh.
+If neither decoder output nor presentation is expected (identity path under
+Settings), that interval is not healthy exposure and is not recovery.
+
+These rows are counters, not scanout. Cached FPS cannot satisfy them.
+Share Diagnostics can attach the local extra; keep the app open briefly
+after a dropout so aftermath can land. No camera-time network: iOS
+ReliabilityReporting cancels SDK traffic while a live session is active or
+the camera IPv4 path is up. Queued automatic send, if a DSN and consent
+ever exist, waits until the operator leaves the camera Wi-Fi. That path is
+unproven here.
 
 ## Motion stutter and recovery capture
 
@@ -125,3 +151,40 @@ Crashes, hangs, CPU/disk exceptions are written under
 `Documents/diagnostics/metrickit-*.json` when the system delivers them.
 They are included in **Share Diagnostics**. TestFlight still gets Apple’s
 own crash reports regardless.
+
+## Optional iOS reporting deployment
+
+Sentry Cocoa is pinned to 9.24.0 in `ios/project.yml`. Copy
+`ios/OpenPocketCine/Reliability.local.xcconfig.example` to its gitignored
+`Reliability.local.xcconfig` counterpart and supply the project's public HTTPS
+DSN. Keep upload credentials out of the app and repository. The operator must
+then opt in; supplying a DSN alone does not enable collection by the SDK.
+
+Before distributing an enabled build, configure the project's retention,
+access and server-side IP handling, update store privacy disclosures, and upload
+matching release dSYMs through the release pipeline. Verify a synthetic incident
+and a symbolicated test crash on a non-camera network. Check that a matching
+HTTP success changes the local receipt from queued to confirmed, that camera
+activation cancels transfers, and that opt-out prevents cached uploads. None of
+those remote deployment checks has been performed for this branch.
+
+Use separate views for incident stage/error/build and session exposure. iOS
+keeps up to 20 session summaries (4 KiB each, seven days) alongside incidents;
+30-second checkpoints let a later launch mark an unfinished session interrupted.
+These summaries include incident count and observable healthy seconds, including
+sessions without incidents. Do not infer a failure rate from incident count
+alone. Android currently has local reports only, so a cloud dashboard would
+represent opted-in iOS sessions, not the entire installed population.
+
+The SDK sends typed incident attachments and small session summaries. Native
+crash/hang events preserve diagnostic stack information but scrub user, request,
+breadcrumb, message and exception-value fields. Replay, screenshots, view
+hierarchy, tracing, profiling and automatic network breadcrumbs are disabled.
+SDK close uses no flush timeout on the UI thread; consent is rechecked by the
+transport, and cache deletion follows close on a utility queue. Idle retry checks
+run every 30 seconds while opted in, without sending on the camera path.
+
+Configure alerts for a new failing-stage/error fingerprint or a release increase
+in incidents per observable session-hour. Keep the alert threshold provisional
+until real exposure data establishes the baseline. The adapter and local tests
+are implemented; this is not a claim that a hosted monitoring service is live.

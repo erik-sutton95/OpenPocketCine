@@ -32,6 +32,7 @@ GoogleService-Info.plist
 service-account*.json
 # Local Frame.io OAuth config (PKCE client ID)
 ios/OpenPocketCine/Frameio.local.xcconfig
+ios/OpenPocketCine/Reliability.local.xcconfig
 # Android SDK path — machine-specific
 Apps/Android/local.properties
 

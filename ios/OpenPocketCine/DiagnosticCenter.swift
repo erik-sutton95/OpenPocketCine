@@ -6,7 +6,7 @@ import UIKit
 import os
 
 /// On-device diagnostics: unified log, capped journal, exceptions, MetricKit,
-/// and a shareable report. Nothing is uploaded. Personal name, location,
+/// and a shareable report. Optional uploads belong to ReliabilityReporting. Personal name, location,
 /// device name, and Wi-Fi passwords are stripped before a line is stored.
 final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
     static let shared = DiagnosticCenter()
@@ -55,6 +55,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         event(
             level: .notice, category: .diagnostics, code: "boot",
             message: "diagnostics installed")
+        FeedIncidentRuntime.install()
     }
 
     func event(
@@ -149,7 +150,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let env = environment(session: session)
         let journal = ControlLiveLog.recentLines()
         let exceptions = Self.readLines(Self.exceptionsURL)
-        let extras = Self.metricKitExtras()
+        let extras = Self.metricKitExtras() + FeedIncidentRuntime.reportExtras()
         let body = DiagnosticReport.fullReport(
             environment: env, journal: journal, exceptions: exceptions, extras: extras)
         guard let dir = Self.diagnosticsDirectory else { return nil }
@@ -204,10 +205,52 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
 
     private func persistMetricKit(kind: String, payloads: [Data]) {
         guard let dir = Self.diagnosticsDirectory else { return }
-        for (i, data) in payloads.enumerated() {
+        let deliveryID = UUID()
+        let deliveredAt = Date()
+        for (index, data) in payloads.enumerated() {
             let text = PrivacyRedactor.redact(String(data: data, encoding: .utf8) ?? "")
-            let url = dir.appendingPathComponent("metrickit-\(kind)-\(i).json")
+            let name = FeedIncidentFileNaming.metricKit(
+                kind: kind, deliveredAt: deliveredAt, deliveryID: deliveryID, index: index)
+            let url = dir.appendingPathComponent(name)
             try? text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        pruneMetricKit(in: dir)
+    }
+
+    private func pruneMetricKit(in dir: URL) {
+        let fm = FileManager.default
+        let ttl: TimeInterval = 604_800
+        let maxFiles = 20
+        let maxBytes = 2_097_152
+        guard
+            var files = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
+        else { return }
+        files = files.filter { $0.lastPathComponent.hasPrefix("metrickit-") }
+        let now = Date()
+        for url in files {
+            let modified =
+                (try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                    .contentModificationDate) ?? now
+            if now.timeIntervalSince(modified) > ttl {
+                try? fm.removeItem(at: url)
+            }
+        }
+        files = files.filter { fm.fileExists(atPath: $0.path) }
+        func fileSize(_ url: URL) -> Int {
+            (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        }
+        func fileDate(_ url: URL) -> Date {
+            (try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate) ?? .distantPast
+        }
+        files.sort { fileDate($0) < fileDate($1) }
+        var total = files.reduce(0) { $0 + fileSize($1) }
+        while files.count > maxFiles || total > maxBytes, let oldest = files.first {
+            total -= fileSize(oldest)
+            try? fm.removeItem(at: oldest)
+            files.removeFirst()
         }
     }
 

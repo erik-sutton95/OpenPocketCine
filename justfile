@@ -138,6 +138,10 @@ ios-ui-test device *args: ios-generate
 ios-physical-ui-test device: ios-generate
     TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:OpenPocketCineUITests/PhysicalNavigationTests test
 
+# Seeded physical live-feed stress; optional recording is off by default.
+ios-feed-stress device seed="20260914" limit="300" record="0": ios-generate
+    DEVICE='{{device}}' SEED='{{seed}}' LIMIT='{{limit}}' RECORD='{{record}}' bash tools/feed-stress-run.sh run
+
 # Build the watchOS companion for the simulator.
 watch-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build

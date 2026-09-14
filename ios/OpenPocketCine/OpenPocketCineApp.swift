@@ -4,7 +4,9 @@ import SwiftUI
 @main
 struct OpenPocketCineApp: App {
     init() {
+        ReliabilityReporting.install()
         MonitorTheme.prepareResources()
+        FeedStressAutomation.installIfRequested()
     }
 
     var body: some Scene {

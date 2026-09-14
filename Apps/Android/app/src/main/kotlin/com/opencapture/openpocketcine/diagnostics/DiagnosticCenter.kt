@@ -4,7 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.opencapture.openpocketcine.BuildConfig
@@ -16,6 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * On-device journal, exceptions, and a shareable report. Nothing is uploaded.
@@ -25,12 +29,18 @@ object DiagnosticCenter {
     private const val TAG = "opc.diagnostics"
     private const val JOURNAL_CAP = 2500
     private const val EXCEPTION_CAP = 200
+    private const val SHARE_MAX_BYTES = 2_097_152L
     private val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
     @Volatile private var appContext: Context? = null
     @Volatile var onCopiedForFeedback: (() -> Unit)? = null
+    internal val journal = DiagnosticJournal(JOURNAL_CAP)
+    internal val exceptionJournal = DiagnosticJournal(EXCEPTION_CAP)
+    private val journalWritten = java.util.concurrent.atomic.AtomicInteger(0)
+    private val exceptionWritten = java.util.concurrent.atomic.AtomicInteger(0)
+    private val sharing = AtomicBoolean(false)
 
     fun install(context: Context) {
         appContext = context.applicationContext
@@ -39,18 +49,23 @@ object DiagnosticCenter {
             recordFault("uncaught", error.stackTraceToString())
             previous?.uncaughtException(thread, error)
         }
+        journal.startWriter { batch -> persistBatch(journalFile(), batch, JOURNAL_CAP, journalWritten, journal) }
+        exceptionJournal.startWriter { batch ->
+            persistBatch(exceptionFile(), batch, EXCEPTION_CAP, exceptionWritten, exceptionJournal)
+        }
+        filesDir()?.let { FeedIncidentRuntime.install(it) }
         log("notice", "diagnostics", "boot", "diagnostics installed")
     }
 
-    @Synchronized fun log(level: String, category: String, code: String, message: String) {
+    fun log(level: String, category: String, code: String, message: String) {
         val line = PrivacyRedactor.redact("$level $category $code $message")
         when (level) {
             "error", "fault" -> Log.e(TAG, line)
             "warning" -> Log.w(TAG, line)
             else -> Log.i(TAG, line)
         }
-        if (level != "debug") appendJournal(line)
-        if (level == "error" || level == "fault") appendException(line)
+        if (level != "debug") journal.append(line)
+        if (level == "error" || level == "fault") exceptionJournal.append(line)
     }
 
     fun recordFault(code: String, stack: String) {
@@ -61,28 +76,96 @@ object DiagnosticCenter {
         val env = environment(session)
         val journal = journalLines()
         val exceptions = exceptionLines()
-        val body = fullReport(env, journal, exceptions)
-        val dir = File(context.cacheDir, "diagnostics").apply { mkdirs() }
-        val file = File(dir, "report.txt")
-        file.writeText(body)
-        log("notice", "diagnostics", "report", "wrote diagnostic report")
-        return file
+        return writeShareFiles(context, env, journal, exceptions, FeedIncidentRuntime.exportExtras())
+            .firstOrNull { it.name == "report.txt" }
     }
 
     fun shareReport(context: Context, session: PocketCameraSession) {
         copyCompact(context, session)
-        val file = writeReport(context, session) ?: return
-        val uri =
-            runCatching {
-                FileProvider.getUriForFile(context, MediaShare.authority(context), file)
-            }
-                .getOrNull() ?: return
+        if (!sharing.compareAndSet(false, true)) return
+        val app = context.applicationContext
+        val env = environment(session)
+        val journal = journalLines()
+        val exceptions = exceptionLines()
+        Thread(
+            {
+                try {
+                    val extras = FeedIncidentRuntime.exportExtras()
+                    val files = writeShareFiles(app, env, journal, exceptions, extras)
+                    Handler(Looper.getMainLooper()).post { launchShare(app, files) }
+                } finally {
+                    sharing.set(false)
+                }
+            },
+            "opc.diag.share",
+        ).apply { isDaemon = true; start() }
+    }
+
+    private fun writeShareFiles(
+        context: Context,
+        env: Env,
+        journal: List<String>,
+        exceptions: List<String>,
+        extras: List<Pair<String, String>>,
+    ): List<File> {
+        val dir = File(context.cacheDir, "diagnostics").apply { mkdirs() }
+        dir.listFiles()?.filter { it.name.startsWith("incident-") || it.name == "incidents.txt" }?.forEach { it.delete() }
+        val report = File(dir, "report.txt")
+        var body = fullReport(env, journal, exceptions, extras)
+        if (body.length > SHARE_MAX_BYTES) {
+            body = fullReport(env, emptyList(), exceptions, extras)
+        }
+        if (body.length > SHARE_MAX_BYTES) {
+            body = body.take(SHARE_MAX_BYTES.toInt())
+        }
+        report.writeText(body)
+        val files = mutableListOf(report)
+        var bytes = report.length()
+        for ((name, body) in extras) {
+            if (bytes >= SHARE_MAX_BYTES) break
+            val safe = name.filter { it.isLetterOrDigit() || it == '-' || it == '.' }
+            if (safe.isEmpty() || safe == "report.txt") continue
+            val remaining = SHARE_MAX_BYTES - bytes
+            if (body.length.toLong() > remaining) break
+            val file = File(dir, safe)
+            file.writeText(body)
+            bytes += file.length()
+            files += file
+        }
+        log("notice", "diagnostics", "report", "wrote diagnostic report attachments=${files.size}")
+        return files
+    }
+
+    private fun launchShare(context: Context, files: List<File>) {
+        if (files.isEmpty()) return
+        val uris = ArrayList<Uri>()
+        for (file in files) {
+            val uri =
+                runCatching {
+                    FileProvider.getUriForFile(context, MediaShare.authority(context), file)
+                }.getOrNull() ?: continue
+            uris.add(uri)
+        }
+        if (uris.isEmpty()) return
+        val clip = ClipData.newRawUri("OpenPocketCine diagnostics", uris[0])
+        for (i in 1 until uris.size) clip.addItem(ClipData.Item(uris[i]))
         val intent =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_TEXT, lastCompact)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    clipData = clip
+                    putExtra(Intent.EXTRA_STREAM, uris[0])
+                    putExtra(Intent.EXTRA_TEXT, lastCompact)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "text/plain"
+                    clipData = clip
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                    putExtra(Intent.EXTRA_TEXT, lastCompact)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
             }
         val chooser = Intent.createChooser(intent, null)
         if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -109,6 +192,7 @@ object DiagnosticCenter {
         return Env(
             appVersion = BuildConfig.VERSION_NAME,
             appBuild = BuildConfig.VERSION_CODE.toString(),
+            sourceRevision = BuildConfig.SOURCE_REVISION,
             osName = "Android",
             osVersion = Build.VERSION.RELEASE ?: "?",
             deviceModel = Build.MODEL ?: "unknown",
@@ -123,7 +207,7 @@ object DiagnosticCenter {
         val lines =
             mutableListOf(
                 "OpenPocketCine diagnostics (no name, no location)",
-                "app ${env.appVersion} (${env.appBuild}) ${env.osName} ${env.osVersion} ${env.deviceModel}",
+                "app ${env.appVersion} (${env.appBuild}) source=${env.sourceRevision} ${env.osName} ${env.osVersion} ${env.deviceModel}",
                 "camera ${env.cameraModel} family=${env.cameraFamily} phase=${env.phase} vpn=${if (env.vpnActive) "on" else "off"}",
             )
         val tail = recent.takeLast(12)
@@ -134,7 +218,12 @@ object DiagnosticCenter {
         return PrivacyRedactor.clampCompact(PrivacyRedactor.redact(lines.joinToString("\n")))
     }
 
-    private fun fullReport(env: Env, journal: List<String>, exceptions: List<String>): String {
+    private fun fullReport(
+        env: Env,
+        journal: List<String>,
+        exceptions: List<String>,
+        extras: List<Pair<String, String>> = emptyList(),
+    ): String {
         val sections = mutableListOf<String>()
         sections +=
             """
@@ -143,6 +232,7 @@ object DiagnosticCenter {
             Generated for a tester to paste or share. Not uploaded.
 
             app: ${env.appVersion} (${env.appBuild})
+            source: ${env.sourceRevision}
             os: ${env.osName} ${env.osVersion}
             device: ${env.deviceModel}
             camera: ${env.cameraModel}
@@ -152,6 +242,9 @@ object DiagnosticCenter {
             """.trimIndent()
         if (exceptions.isNotEmpty()) {
             sections += "Exceptions / faults\n" + exceptions.takeLast(EXCEPTION_CAP).joinToString("\n")
+        }
+        for ((name, body) in extras) {
+            if (body.isNotBlank()) sections += "$name\n$body"
         }
         if (journal.isNotEmpty()) {
             sections +=
@@ -170,36 +263,34 @@ object DiagnosticCenter {
 
     private fun exceptionFile(): File? = filesDir()?.let { File(it, "exceptions.log") }
 
-    private fun appendJournal(line: String) {
-        val file = journalFile() ?: return
-        file.appendText("${iso.format(Date())} $line\n")
-        trimFile(file, JOURNAL_CAP)
-    }
+    private fun journalLines(): List<String> = journal.snapshot()
 
-    private fun appendException(line: String) {
-        val file = exceptionFile() ?: return
-        file.appendText("${iso.format(Date())} $line\n")
-        trimFile(file, EXCEPTION_CAP)
-    }
+    private fun exceptionLines(): List<String> = exceptionJournal.snapshot()
 
-    @Synchronized private fun journalLines(): List<String> = readLines(journalFile())
-
-    @Synchronized private fun exceptionLines(): List<String> = readLines(exceptionFile())
-
-    private fun readLines(file: File?): List<String> {
-        if (file == null || !file.exists()) return emptyList()
-        return runCatching { file.readLines() }.getOrDefault(emptyList())
-    }
-
-    private fun trimFile(file: File, cap: Int) {
-        val lines = readLines(file)
-        if (lines.size <= cap) return
-        file.writeText(lines.takeLast(cap).joinToString("\n") + "\n")
+    private fun persistBatch(
+        file: File?,
+        batch: List<String>,
+        cap: Int,
+        written: java.util.concurrent.atomic.AtomicInteger,
+        source: DiagnosticJournal,
+    ) {
+        if (file == null || batch.isEmpty()) return
+        runCatching {
+            val stamped = batch.joinToString("") { "${iso.format(Date())} $it\n" }
+            file.appendText(stamped)
+            val count = written.addAndGet(batch.size)
+            if (count >= cap * 2) {
+                val keep = source.snapshot()
+                file.writeText(keep.joinToString("\n") + "\n")
+                written.set(keep.size)
+            }
+        }
     }
 
     private data class Env(
         val appVersion: String,
         val appBuild: String,
+        val sourceRevision: String,
         val osName: String,
         val osVersion: String,
         val deviceModel: String,

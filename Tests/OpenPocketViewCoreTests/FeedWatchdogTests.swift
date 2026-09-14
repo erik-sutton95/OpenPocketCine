@@ -4,6 +4,70 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct FeedWatchdogTests {
+    @Test func packetOnlyTrafficUsesBoundedEnableLadderWhenCompletePicturesStop() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)
+        snap.lastAccessUnitAge = 3
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 3
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        snap.now = 101
+        #expect(dog.tick(snap) == .none)
+        snap.now = 105
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        snap.now = 110
+        #expect(dog.tick(snap) == .reopenDatalink)
+        snap.now = 111
+        snap.lastAccessUnitAge = 0.01
+        snap.lastDecoderOutputAge = 0.01
+        snap.lastDecodedFrameAge = 0.01
+        #expect(dog.tick(snap) == .none)
+        #expect(dog.stage == .idle)
+    }
+
+    @Test func continuousInputWithSilentDecoderRequestsOneOwnedRepair() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)
+        snap.lastAccessUnitAge = 0.01
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 3
+        #expect(dog.tick(snap) == .rebuildVTSession)
+        for second in 1..<16 {
+            snap.now = 100 + Double(second)
+            snap.lastDecoderOutputAge = 3 + Double(second)
+            #expect(dog.tick(snap) == .none)
+        }
+        snap.now = 116
+        #expect(dog.tick(snap) == .fullSessionRejoin)
+    }
+
+    @Test func freshDecoderOutputNeverCutsGOPForRendererStall() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 20, videoAge: 0.01)
+        snap.lastAccessUnitAge = 0.01
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 0.01
+        snap.decoderFailed = true  // An older error does not override fresh output.
+        #expect(dog.tick(snap) == .none)
+    }
+
+    @Test func decoderRepairRespectsReadinessAndResetsOnlyOnFreshOutput() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)
+        snap.lastAccessUnitAge = 0.01
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 3
+        snap.repairReady = false
+        #expect(dog.tick(snap) == .none)
+        #expect(dog.stage == .idle)
+        snap.repairReady = true
+        #expect(dog.tick(snap) == .rebuildVTSession)
+        snap.now = 101
+        snap.lastDecoderOutputAge = 0.01
+        #expect(dog.tick(snap) == .none)
+        #expect(dog.stage == .idle)
+    }
+
     @Test func ignoresHitchShorterThanStall() {
         var dog = FeedWatchdog()
         #expect(dog.tick(Self.snap(now: 10, frameAge: 1.5)) == .none)

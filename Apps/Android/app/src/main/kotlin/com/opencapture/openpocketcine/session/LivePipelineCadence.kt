@@ -34,28 +34,82 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
 
     @Synchronized fun inputMiss() { inputMisses += 1 }
 
-    @Synchronized fun drain(): String? {
+    data class Window(
+        val seconds: Double,
+        val hz: Map<Stage, Double>,
+        val ageMs: Map<Stage, Double>,
+        val gapMs: Map<Stage, Double>,
+        val queue: Int,
+        val peak: Int,
+        val waitMs: Double,
+        val inputMiss: Int,
+    )
+
+    @Synchronized fun takeWindow(): Window? {
         val now = nowNs()
         val seconds = (now - started) / 1e9
         if (seconds < 1.0) return null
-        val line = buildString {
-            append(String.format(Locale.US, "feed: cadence window=%.2fs", seconds))
-            for ((stage, c) in counters) {
-                val age = c.last?.let { (now - it).coerceAtLeast(0) / 1e6 } ?: -1.0
-                val gap = maxOf(c.maxGap, (now - (c.last ?: started)).coerceAtLeast(0))
-                append(String.format(Locale.US, " %s=%.1f/s gap=%.1fms age=%.1fms",
-                    stage.name.lowercase(Locale.US), c.count / seconds, gap / 1e6, age))
-                c.count = 0
-                c.maxGap = 0
-            }
-            append(String.format(Locale.US, " queue=%d peak=%d wait=%.1fms inputMiss=%d",
-                queued, queuePeak, queueDelayNs / 1e6, inputMisses))
+        val hz = linkedMapOf<Stage, Double>()
+        val ageMs = linkedMapOf<Stage, Double>()
+        val gapMs = linkedMapOf<Stage, Double>()
+        for ((stage, c) in counters) {
+            hz[stage] = c.count / seconds
+            ageMs[stage] = c.last?.let { (now - it).coerceAtLeast(0) / 1e6 } ?: -1.0
+            val gap = maxOf(c.maxGap, (now - (c.last ?: started)).coerceAtLeast(0))
+            gapMs[stage] = gap / 1e6
+            c.count = 0
+            c.maxGap = 0
         }
+        val window =
+            Window(
+                seconds = seconds,
+                hz = hz,
+                ageMs = ageMs,
+                gapMs = gapMs,
+                queue = queued,
+                peak = queuePeak,
+                waitMs = queueDelayNs / 1e6,
+                inputMiss = inputMisses,
+            )
         started = now
         queuePeak = queued
         queueDelayNs = 0
         inputMisses = 0
-        return line
+        return window
+    }
+
+    @Synchronized fun drain(): String? {
+        val window = takeWindow() ?: return null
+        return format(window)
+    }
+
+    fun format(window: Window): String = buildString {
+        append(String.format(Locale.US, "feed: cadence window=%.2fs", window.seconds))
+        for (stage in Stage.entries) {
+            val hz = window.hz[stage] ?: 0.0
+            val gap = window.gapMs[stage] ?: 0.0
+            val age = window.ageMs[stage] ?: -1.0
+            append(
+                String.format(
+                    Locale.US,
+                    " %s=%.1f/s gap=%.1fms age=%.1fms",
+                    stage.name.lowercase(Locale.US),
+                    hz,
+                    gap,
+                    age,
+                ),
+            )
+        }
+        append(
+            String.format(
+                Locale.US,
+                " queue=%d peak=%d wait=%.1fms inputMiss=%d",
+                window.queue,
+                window.peak,
+                window.waitMs,
+                window.inputMiss,
+            ),
+        )
     }
 }
 

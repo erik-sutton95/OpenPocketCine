@@ -32,8 +32,10 @@ public struct FrameRateSampler: Sendable {
     /// Records a frame at the given timestamp. Non-monotonic or zero-delta timestamps are ignored
     /// so a stale or reordered frame can't corrupt the rate or divide by zero.
     public mutating func recordFrame(at timestamp: Double) {
+        guard timestamp.isFinite else { return }
+        if let previous = lastTimestamp, timestamp <= previous { return }
         defer { lastTimestamp = timestamp }
-        guard let previous = lastTimestamp, timestamp > previous else { return }
+        guard let previous = lastTimestamp else { return }
         intervals.append(timestamp - previous)
         if intervals.count > windowSize { intervals.removeFirst() }
         // Republish the readout at a steady cadence (≈ once per second), not every frame, so the
@@ -41,6 +43,18 @@ public struct FrameRateSampler: Sendable {
         if let last = lastDisplayTimestamp, timestamp - last < displayInterval { return }
         displayedFPS = currentFPS
         lastDisplayTimestamp = timestamp
+    }
+
+    /// Publish silence from the existing HUD timer even when no frame arrives.
+    /// Clear the old window so resumed delivery is measured from the new run.
+    public mutating func age(at timestamp: Double, staleAfter: Double = 2) {
+        guard timestamp.isFinite, let lastTimestamp,
+            timestamp - lastTimestamp >= staleAfter
+        else { return }
+        displayedFPS = 0
+        intervals.removeAll(keepingCapacity: true)
+        self.lastTimestamp = nil
+        lastDisplayTimestamp = nil
     }
 
     /// Inter-frame intervals in the window. Zero until the second presented frame.

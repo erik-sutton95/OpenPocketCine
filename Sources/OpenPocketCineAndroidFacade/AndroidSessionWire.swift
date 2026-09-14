@@ -823,6 +823,7 @@ public enum AndroidSessionWire {
     private final class WatchdogStore: @unchecked Sendable {
         let lock = NSLock()
         var boxes: [Int64: FeedWatchdog] = [:]
+        var beforeAction: [Int64: FeedWatchdog] = [:]
         var next: Int64 = 1
     }
 
@@ -1037,6 +1038,7 @@ public enum AndroidSessionWire {
         let store = watchdogStore
         store.lock.lock()
         store.boxes[handle] = FeedWatchdog()
+        store.beforeAction.removeValue(forKey: handle)
         store.lock.unlock()
     }
 
@@ -1044,6 +1046,7 @@ public enum AndroidSessionWire {
         let store = watchdogStore
         store.lock.lock()
         store.boxes.removeValue(forKey: handle)
+        store.beforeAction.removeValue(forKey: handle)
         store.lock.unlock()
     }
 
@@ -1054,7 +1057,18 @@ public enum AndroidSessionWire {
         store.lock.lock()
         defer { store.lock.unlock() }
         guard var watchdog = store.boxes[handle] else { return "none" }
+        // Shell effect feedback uses the existing JNI entry point. Only the
+        // immediately preceding action can be rolled back, once, and only
+        // before another tick. A blocked write is not a spent enable rung.
+        if jsonBool(snapshotJSON, key: "rollbackLastAction", default: false) {
+            if let previous = store.beforeAction.removeValue(forKey: handle) {
+                store.boxes[handle] = previous
+            }
+            return "none"
+        }
+        let previous = watchdog
         let action = feedWatchdogAction(snapshotJSON: snapshotJSON, watchdog: &watchdog)
+        store.beforeAction[handle] = action == "none" ? nil : previous
         store.boxes[handle] = watchdog
         return action
     }
@@ -1093,7 +1107,10 @@ public enum AndroidSessionWire {
             zoomPinchActive: jsonBool(json, key: "zoomPinchActive", default: false),
             secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow"),
             gimbalStickHeld: jsonBool(json, key: "gimbalStickHeld", default: false),
-            secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet")
+            secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet"),
+            lastDecoderOutputAge: jsonOptionalNumber(json, key: "lastDecoderOutputAge"),
+            decoderOutputExpected: jsonBool(json, key: "decoderOutputExpected", default: false),
+            repairReady: jsonBool(json, key: "repairReady", default: true)
         )
         switch watchdog.tick(snap) {
         case .none: return "none"

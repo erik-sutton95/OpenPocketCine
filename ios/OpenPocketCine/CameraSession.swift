@@ -3,6 +3,7 @@ import CoreGraphics
 import Foundation
 import Observation
 import OpenPocketViewCore
+import UIKit
 import os
 
 /// Orchestrates the whole Phase-0 spine: scan -> GATT -> pair -> read Wi-Fi creds -> join AP ->
@@ -88,6 +89,11 @@ final class CameraSession {
     @ObservationIgnored private var firstPictureFormatPokeTask: Task<Void, Never>?
     @ObservationIgnored private var firstPictureFormatPokeGeneration = 0
     /// One `0x09/0xa8` write in flight. Overlapping enables are a black well.
+    @ObservationIgnored private var incidentSessionActive = false
+    @ObservationIgnored private var incidentPrevious: (at: Double, counts: [Int])?
+    @ObservationIgnored private var incidentSocketGeneration = 0
+    @ObservationIgnored var incidentSettingsCovered = false
+
     @ObservationIgnored private var liveEnableGate = SerialSessionGate()
     /// `0x09/0xa8` sends while `awaitingIDR` is still true. Caps the mid-session
     /// IDR retry at one extra enable so a missed keyframe cannot 1 Hz loop.
@@ -619,6 +625,7 @@ final class CameraSession {
         }
         // One `run` at a time. A second tap (or Cancel→tap) used to leave the old
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
+        ReliabilityReporting.setCameraSessionActive(true)
         connectGeneration += 1
         let generation = connectGeneration
         LocalVPNProbe.noteIfActive()
@@ -627,6 +634,7 @@ final class CameraSession {
         reconnectTarget = nil
         isReconnecting = preserveMonitor
         connectedCamera = camera
+        if !incidentSessionActive { beginFeedIncidentSession(cameraFamily: camera.model.name) }
         connectionTargetID = camera.id
         phase = .connectingGatt
         runTask = Task {
@@ -656,6 +664,10 @@ final class CameraSession {
             releaseMultiview()
             return
         }
+        ReliabilityReporting.setCameraSessionActive(false)
+        FeedIncidentRuntime.endSession(now: ProcessInfo.processInfo.systemUptime)
+        incidentSessionActive = false
+        incidentPrevious = nil
         connectGeneration += 1
         reconnectTarget = nil
         connectionTargetID = nil
@@ -3502,6 +3514,99 @@ final class CameraSession {
         }
     }
 
+    private func beginFeedIncidentSession(cameraFamily: String) {
+        incidentSessionActive = true
+        incidentPrevious = nil
+        let info = Bundle.main.infoDictionary ?? [:]
+        FeedIncidentRuntime.beginSession(
+            FeedIncidentSessionContext(
+                sessionID: UUID().uuidString,
+                appVersion: info["CFBundleShortVersionString"] as? String ?? "unknown",
+                appBuild: info["CFBundleVersion"] as? String ?? "unknown",
+                sourceRevision: info["OPCSourceRevision"] as? String ?? "unknown",
+                osName: "iOS", osVersion: UIDevice.current.systemVersion,
+                hardwareClass: DiagnosticCenter.machineIdentifier,
+                cameraFamily: cameraFamily))
+    }
+
+    func recordFeedBreadcrumb(_ kind: FeedIncidentBreadcrumbKind, detail: String = "") {
+        FeedIncidentRuntime.recordBreadcrumb(
+            FeedIncidentBreadcrumb(
+                monotonicAt: ProcessInfo.processInfo.systemUptime, kind: kind, detail: detail))
+    }
+
+    private func recordFeedRepair(_ action: String, phase: FeedRepairPhase, reason: String? = nil) {
+        FeedIncidentRuntime.recordRepair(
+            FeedRepairRecord(
+                monotonicAt: ProcessInfo.processInfo.systemUptime, action: action, phase: phase,
+                reason: reason))
+    }
+
+    private func publishFeedIncidentSnapshot() {
+        guard incidentSessionActive else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let wall = Date()
+        let decode = decoder.incidentDecodeSnapshot
+        let counts = [
+            datalink?.videoPackets ?? 0, datalink?.accessUnits ?? 0,
+            decode.submitted, decode.accepted, decode.output, decode.assistOutput,
+            decoder.incidentPresentations, datalink?.incidentACKs ?? 0,
+        ]
+        let previous = incidentPrevious
+        let elapsed = previous.map { now - $0.at } ?? 0
+        let rates = counts.enumerated().map { index, count -> Double in
+            guard let previous, elapsed > 0 else { return 0 }
+            return Double(max(0, count - previous.counts[index])) / elapsed
+        }
+        incidentPrevious = (now, counts)
+        let currentError = decoder.isDecoderWedged
+        FeedIncidentRuntime.noteDecoderGeneration(decoder.sourceFrameGeneration)
+        FeedIncidentRuntime.ingestSnapshot(
+            FeedIncidentSnapshot(
+                monotonicNow: now, wallClock: wall,
+                rates: FeedIncidentRates(
+                    packetHz: rates[0], accessUnitHz: rates[1],
+                    decodeSubmitHz: rates[2], decodeAcceptHz: rates[3], decodedOutputHz: rates[4],
+                    assistOutputHz: rates[5], presentHz: rates[6], ackHz: rates[7]),
+                ages: FeedIncidentAges(
+                    packetAge: datalink?.lastVideoPacketAt.map { wall.timeIntervalSince($0) },
+                    accessUnitAge: datalink?.lastAccessUnitAt.map { wall.timeIntervalSince($0) },
+                    decodeAcceptAge: decode.acceptedAge, decodedOutputAge: decode.outputAge,
+                    assistOutputAge: decode.assistOutputAge,
+                    presentAge: decoder.monitorPresentedAt.map { wall.timeIntervalSince($0) }),
+                queue: datalink?.incidentQueue ?? FeedIncidentQueue(),
+                decoder: FeedIncidentDecoder(
+                    generation: decoder.sourceFrameGeneration,
+                    formatGeneration: decoder.vtRebuildCount,
+                    codec: decoder.incidentCodec,
+                    width: Int(decoder.pictureSize.width), height: Int(decoder.pictureSize.height),
+                    lastStatus: decoder.lastDecodeStatus, lastFlags: decoder.lastDecodeFlags,
+                    origin: decoder.lastDecodeOrigin == "submit"
+                        ? .sync
+                        : FeedDecoderErrorOrigin(rawValue: decoder.lastDecodeOrigin) ?? .none,
+                    errorClass: currentError ? "nativeDecoder" : nil,
+                    errorCount: decoder.decoderErrors,
+                    decoderFailed: currentError,
+                    errorAge: decoder.lastDecodeErrorAt.map { wall.timeIntervalSince($0) },
+                    receivedIrap: decoder.sawKeyframe,
+                    awaitingIrap: decoder.awaitingIDR,
+                    hasDecodableReferences: decoder.canReleaseIDRHold,
+                    lastIrapAge: decoder.lastKeyframeAt.map { wall.timeIntervalSince($0) },
+                    lastSuccessfulOutputAge: decode.outputAge),
+                lifecycle: FeedIncidentLifecycle(
+                    foreground: gimbalControlSceneActive, settingsCovered: incidentSettingsCovered,
+                    playbackActive: status.inPlayback || isBrowsingMedia,
+                    connected: connectedCamera != nil,
+                    liveEstablished: decoder.lastPresentedAt != nil,
+                    thermalState: String(ProcessInfo.processInfo.thermalState.rawValue),
+                    lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                    sceneActive: gimbalControlSceneActive,
+                    assistState: decoder.effects.replacesIdentityFeed ? "replacement" : "identity",
+                    outputObservable: decoder.videoToolboxActive,
+                    presentationExpected: !incidentSettingsCovered),
+                watchdogAction: feedWatchdog.stage.rawValue))
+    }
+
     /// Interface loss while BLE remains up needs its own session handoff.
     /// Sample at 1 Hz and allow the same reassociation grace as Android; an
     /// address-list flicker with fresh video must not tear down a live socket.
@@ -3526,6 +3631,7 @@ final class CameraSession {
     }
 
     private func publishPipelineStats() {
+        publishFeedIncidentSnapshot()
         ControlLiveLog.line(decoder.takePipelineTimingLine())
         videoPackets = datalink?.videoPackets ?? 0
         accessUnits = rawAccessUnits
@@ -4048,13 +4154,18 @@ final class CameraSession {
             zoomPinchActive: zoomPinchPreview != nil,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
             gimbalStickHeld: gimbalStickHeld,
-            secondsSinceCameraSet: datalink?.secondsSinceLastCommand
+            secondsSinceCameraSet: datalink?.secondsSinceLastCommand,
+            lastDecoderOutputAge: decoder.nativeOutputAge,
+            decoderOutputExpected: decoder.nativeOutputExpected,
+            repairReady: decoder.isDisplayReady && !isBrowsingMedia && !status.inPlayback
+                && !liveEnableGate.inFlight
         )
+        let watchdogBeforeTick = feedWatchdog
         let action = feedWatchdog.tick(snap)
         feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
         switch action {
         case .none:
-            if decoder.awaitingIDR,
+            if decoder.awaitingIDR, decoder.canReleaseIDRHold,
                 FeedWatchdog.shouldReleaseIDRHold(
                     awaitingIDR: true,
                     udpReceiveAlive: FeedWatchdog.udpReceiveAlive(snap),
@@ -4134,13 +4245,68 @@ final class CameraSession {
             log.info("\(line, privacy: .public)")
             ControlLiveLog.line(line)
             logFeedObserve(snap: snap, watchdog: action)
-            sendRecoverEnable(force: true, reason: "watchdog")
+            if !sendRecoverEnable(force: true, reason: "watchdog") {
+                feedWatchdog = watchdogBeforeTick
+            }
         case .rebuildVTSession:
-            // UDP pause is not a wedged decoder. Rebuild the socket; keep VT.
-            log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
-            ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
+            endGimbalStick(cancelMove: true)
+            recordFeedRepair("decoder", phase: .requested, reason: "outputSilence")
+            ControlLiveLog.line("recovery: action=decoder effect=requested reason=outputSilence")
             logFeedObserve(snap: snap, watchdog: action)
-            rebuildUDPKeepingVT()
+            startFeedRecovery { [weak self] in
+                guard let self else { return }
+                let started = Date()
+                _ = self.decoder.rebuildPresentation()
+                // The rebuild is a real attempt, but a temporarily detached
+                // display or in-flight enable is not a failed connection.
+                // Keep this owner and its bounded deadline while gates settle.
+                var sent = false
+                while !Task.isCancelled,
+                    Date().timeIntervalSince(started) < FeedWatchdog.decoderRepairDeadline
+                {
+                    if self.decoder.isPresentationReady, WiFiJoiner.isCameraPathReady(),
+                        !self.isBrowsingMedia, !self.status.inPlayback,
+                        !self.liveEnableGate.inFlight
+                    {
+                        sent = self.sendRecoverEnable(force: true, reason: "watchdog decoder")
+                        if sent { break }
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                guard !Task.isCancelled else { return }
+                guard sent else {
+                    self.recordFeedRepair("decoder", phase: .blocked, reason: "notReady")
+                    ControlLiveLog.line("recovery: action=decoder effect=blocked reason=notReady")
+                    // No wire attempt was sent. Preserve the held frame; the
+                    // existing watchdog deadline/path owner handles escalation.
+                    return
+                }
+                let restored = await self.waitForRecoveryPicture(
+                    since: started, timeout: .seconds(FeedWatchdog.decoderRepairDeadline))
+                guard !Task.isCancelled else { return }
+                if restored {
+                    self.recordFeedRepair(
+                        "decoder", phase: .pictureRestored, reason: "outputResumed")
+                    ControlLiveLog.line(
+                        "recovery: action=decoder effect=freshPicture reason=outputResumed")
+                    self.feedWatchdog = FeedWatchdog()
+                } else {
+                    if self.decoder.nativeOutputExpected,
+                        (self.decoder.nativeOutputAge ?? .infinity) < FeedWatchdog.stallThreshold
+                    {
+                        self.recordFeedRepair(
+                            "decoder", phase: .blocked, reason: "presentationOnly")
+                        ControlLiveLog.line(
+                            "recovery: action=decoder effect=blocked reason=presentationOnly")
+                        self.feedWatchdog = FeedWatchdog()
+                        return
+                    }
+                    FeedIncidentRuntime.noteExhausted(now: ProcessInfo.processInfo.systemUptime)
+                    ControlLiveLog.line(
+                        "recovery: action=decoder effect=exhausted reason=pictureDeadline")
+                    await self.rejoinDatalinkKeepingLive()
+                }
+            }
         case .reopenDatalink:
             endGimbalStick(cancelMove: true)
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
@@ -4171,27 +4337,40 @@ final class CameraSession {
     }
 
     /// Re-enable only after SoftAP + VT/display are ready. Holds P-frames until IDR.
-    private func sendRecoverEnable(force: Bool, reason: String = "recover") {
+    @discardableResult
+    private func sendRecoverEnable(force: Bool, reason: String = "recover") -> Bool {
+        recordFeedRepair("enable", phase: .requested)
+        ControlLiveLog.line("recovery: action=enable effect=requested")
         endGimbalStick(cancelMove: true)
-        if isBrowsingMedia { return }
+        if isBrowsingMedia {
+            recordFeedRepair("enable", phase: .blocked, reason: "mediaBrowsing")
+            return false
+        }
         if status.inPlayback {
             sendExitPlayback()
             ControlLiveLog.line("feed: hold enable — camera still in playback (\(reason))")
-            return
+            recordFeedRepair("enable", phase: .blocked, reason: "playback")
+            return false
         }
         let pathReady = WiFiJoiner.isCameraPathReady()
         let decoderReady = decoder.isPresentationReady
         guard FeedWatchdog.shouldSendRecoverEnable(pathReady: pathReady, decoderReady: decoderReady)
         else {
+            recordFeedRepair(
+                "enable", phase: .blocked, reason: pathReady ? "decoderNotReady" : "pathNotReady")
             log.info(
                 "feed: hold enable path=\(pathReady ? 1 : 0) decoder=\(decoderReady ? 1 : 0) reason=\(reason, privacy: .public)"
             )
-            return
+            return false
         }
         if !force, Date().timeIntervalSince(lastIdrRequest) < FeedWatchdog.escalateAfter {
-            return
+            recordFeedRepair("enable", phase: .blocked, reason: "cooldown")
+            return false
         }
-        guard startCapturedLiveView(reason: reason) else { return }
+        guard startCapturedLiveView(reason: reason) else {
+            recordFeedRepair("enable", phase: .blocked, reason: "enableGate")
+            return false
+        }
         lastIdrRequest = Date()
         liveViewEnableSends += 1
         if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
@@ -4202,6 +4381,9 @@ final class CameraSession {
         )
         ControlLiveLog.line(
             "feed: recover 0x09/0xa8 reason=\(reason) #\(liveViewEnableSends)")
+        recordFeedRepair("enable", phase: .locallySent)
+        ControlLiveLog.line("recovery: action=enable effect=sent")
+        return true
     }
 
     func resetFeedWatchdog() {
@@ -4281,6 +4463,7 @@ final class CameraSession {
     }
 
     private func refreshLinkHealth() {
+        frameRate.age(at: Date.timeIntervalSinceReferenceDate)
         noteTransportFailures()
         applyLinkPresentation()
     }
@@ -4367,6 +4550,7 @@ final class CameraSession {
 
     func noteSceneBecameInactive() {
         cameraPathRecovery.reset()
+        recordFeedBreadcrumb(.sceneActivity, detail: "inactive")
         gimbalControlSceneActive = false
         cancelProgrammedMove()
         foregroundGeneration += 1
@@ -4376,6 +4560,7 @@ final class CameraSession {
     }
 
     func noteSceneBecameActive() {
+        recordFeedBreadcrumb(.sceneActivity, detail: "active")
         gimbalControlSceneActive = true
         guard needsForegroundRecover else { return }
         needsForegroundRecover = false
@@ -4566,6 +4751,8 @@ final class CameraSession {
             log.info("session: drop (\(reason, privacy: .public)) — no camera to recover")
             return
         }
+        FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
+        recordFeedRepair("session", phase: .requested, reason: "connectionInterrupted")
         recoveryCameraID = cameraID
         if recoveryDeviceName.isEmpty {
             recoveryDeviceName =
@@ -4863,6 +5050,7 @@ final class CameraSession {
         datalink = nil
         guard let link else { return }
         link.onAccessUnit = nil
+        link.onVideoDiscontinuity = nil
         link.onStatusFrame = nil
         link.close()
     }
@@ -4879,6 +5067,12 @@ final class CameraSession {
     }
 
     private func wireDatalink(_ dl: DatalinkDriver) {
+        incidentSocketGeneration += 1
+        FeedIncidentRuntime.noteSocketGeneration(incidentSocketGeneration)
+        dl.onVideoDiscontinuity = { [weak self, weak dl] in
+            guard let self, let dl, self.datalink === dl else { return }
+            self.decoder.noteCompressedDiscontinuity()
+        }
         dl.onStatusFrame = { [weak self, weak dl] frame in
             guard let self, let dl, self.datalink === dl else { return }
             self.applyIncomingStatus(frame)

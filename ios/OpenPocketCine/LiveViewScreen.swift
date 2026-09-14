@@ -155,7 +155,10 @@ struct LiveViewScreen: View {
                 model.session.cancelProgrammedMove()
             }
         }
-        .onChange(of: model.liveOperatorPanel) { _, panel in
+        .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
+            model.session.incidentSettingsCovered = panel == .settings
+            if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }
+            if panel == .settings { model.session.recordFeedBreadcrumb(.settingsEnter) }
             if panel != nil {
                 model.captureDrum = nil
                 model.assist.configureTool = nil
@@ -289,7 +292,8 @@ struct LiveViewScreen: View {
             .monitorPresentationVisibility(liveChromeVisible)
             .allowsHitTesting(
                 chromeInteractive && model.liveChromeInteractive && liveChromeVisible
-                    && !zoomDialMounted)
+                    && !zoomDialMounted
+            )
             .zIndex(captureControlsPresented ? 11 : 0)
 
             // After chrome so the bezel stroke sits on the physical screen, not the feed well.
@@ -320,10 +324,11 @@ struct LiveViewScreen: View {
                     layout: layout, feed: layout.onFeed,
                     joystickBounds: model.chromeSectionMounts(.gimbalStick)
                         && !captureControlsPresented
-                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero)
-                    .environment(\.interfaceLocked, interfaceLocked)
-                    .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
-                    .zIndex(15)
+                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero
+                )
+                .environment(\.interfaceLocked, interfaceLocked)
+                .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
+                .zIndex(15)
             }
 
             if let panel = model.liveOperatorPanel, !model.isEditingChrome {
@@ -508,7 +513,8 @@ struct LiveViewScreen: View {
                 .liveModuleFrame(layout.settings)
                 .opacity(captureHidesNavigation ? 0 : 1)
                 .allowsHitTesting(!captureHidesNavigation)
-                .accessibilityHidden(captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
+                .accessibilityHidden(
+                    captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
             }
             if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton(size: layout.media.width) { model.liveOperatorPanel = .media }
@@ -516,7 +522,8 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(layout.media)
                     .opacity(captureHidesNavigation ? 0 : 1)
                     .allowsHitTesting(!captureHidesNavigation)
-                    .accessibilityHidden(captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
+                    .accessibilityHidden(
+                        captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
             }
 
             // After the scope well — that well covers this chip and used to eat the tap.
@@ -528,7 +535,9 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
+                    .accessibilityHidden(
+                        captureControlsPresented || !liveChromeVisible || zoomDialMounted
+                    )
                     .zIndex(2)
             }
 
@@ -537,7 +546,9 @@ struct LiveViewScreen: View {
                     .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
                     .opacity(captureControlsPresented ? 0 : 1)
                     .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
+                    .accessibilityHidden(
+                        captureControlsPresented || !liveChromeVisible || zoomDialMounted
+                    )
                     .zIndex(2)
             }
 
@@ -553,7 +564,9 @@ struct LiveViewScreen: View {
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .opacity(captureControlsPresented ? 0 : 1)
-                .accessibilityHidden(captureControlsPresented || !liveChromeVisible || zoomDialMounted)
+                .accessibilityHidden(
+                    captureControlsPresented || !liveChromeVisible || zoomDialMounted
+                )
                 .zIndex(3)
             }
 
@@ -569,7 +582,8 @@ struct LiveViewScreen: View {
                 .opacity(captureControlsPresented ? 0 : 1)
                 .allowsHitTesting(!captureControlsPresented && !zoomDialMounted)
                 .accessibilityHidden(
-                    captureControlsPresented || !liveChromeVisible || zoomDialMounted)
+                    captureControlsPresented || !liveChromeVisible || zoomDialMounted
+                )
                 .zIndex(3)
             }
 
@@ -619,7 +633,8 @@ struct LiveViewScreen: View {
                             && (model.captureSheet == nil
                                 || model.captureSheet?.isTopAnchored == true)
                     )
-                    .accessibilityHidden(hidesCaptureValues || !liveChromeVisible || zoomDialMounted)
+                    .accessibilityHidden(
+                        hidesCaptureValues || !liveChromeVisible || zoomDialMounted)
             }
         }
         .frame(width: layout.viewport.width, height: layout.viewport.height)
@@ -731,7 +746,8 @@ struct LiveViewScreen: View {
                     } else {
                         model.session.endZoomPinch()
                     }
-                }, onClose: closeZoomDial, haptics: model.hapticsEnabled)
+                }, onClose: closeZoomDial, haptics: model.hapticsEnabled
+            )
             .frame(
                 width: layout.viewport.width, height: layout.viewport.height,
                 alignment: .topLeading)

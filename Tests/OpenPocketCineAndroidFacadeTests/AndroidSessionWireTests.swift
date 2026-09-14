@@ -5,6 +5,29 @@ import Testing
 
 @Suite
 struct AndroidSessionWireTests {
+    @Test func blockedWatchdogEnableDoesNotSpendNativeRetryBudget() {
+        let handle = AndroidSessionWire.feedWatchdogCreate()
+        defer { AndroidSessionWire.feedWatchdogDestroy(handle: handle) }
+        func tick(_ now: Int) -> String {
+            AndroidSessionWire.feedWatchdogTick(
+                handle: handle,
+                snapshotJSON: """
+                    {"now":\(now),"live":true,"sawPicture":true,"pathReady":true,
+                    "hasFormat":true,"hadVideo":true,"lastVideoPacketAge":3,
+                    "lastAccessUnitAge":3,"lastDecodedFrameAge":3,"lastStatusAge":0.1}
+                    """)
+        }
+        #expect(tick(100) == "resendLiveViewEnable")
+        for _ in 0..<2 {
+            #expect(
+                AndroidSessionWire.feedWatchdogTick(
+                    handle: handle, snapshotJSON: "{\"rollbackLastAction\":true}") == "none")
+        }
+        #expect(tick(101) == "resendLiveViewEnable")
+        #expect(tick(106) == "resendLiveViewEnable")
+        #expect(tick(111) == "reopenDatalink")
+    }
+
     @Test
     func setExpoModeExtrasMatchIosPayload() {
         let auto = AndroidSessionWire.encodeCommand(kind: .setExpoMode, seq: 1, extra: "auto")
@@ -73,7 +96,8 @@ struct AndroidSessionWireTests {
         ]
         for (flags, expected) in reports {
             payload[6] = flags
-            let frame = Duml.Frame(sender: 4, receiver: 2, seq: 1, flags: Duml.flagNotify,
+            let frame = Duml.Frame(
+                sender: 4, receiver: 2, seq: 1, flags: Duml.flagNotify,
                 cmdSet: 4, cmdId: 5, payload: payload)
             #expect(CameraStatusDecoder.apply(frame, to: &status))
             #expect(status.gimbalModeFamily == expected)
@@ -81,7 +105,8 @@ struct AndroidSessionWireTests {
             #expect(status.gimbalModeFamily == expected)
         }
         payload[6] = 0xC4
-        let unknown = Duml.Frame(sender: 4, receiver: 2, seq: 2, flags: Duml.flagNotify,
+        let unknown = Duml.Frame(
+            sender: 4, receiver: 2, seq: 2, flags: Duml.flagNotify,
             cmdSet: 4, cmdId: 5, payload: payload)
         #expect(CameraStatusDecoder.apply(unknown, to: &status))
         #expect(status.gimbalModeFamily == nil)

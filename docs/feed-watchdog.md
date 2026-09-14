@@ -29,7 +29,13 @@ Previous recover (`recoverLiveViewIfNeeded`) only re-enabled when **cumulative**
 
 ## Reconnect policy (feed watchdog)
 
-UDP receive age is the stall signal — not a black or frozen canvas. Packets or AUs still arriving means the socket is alive; LUT / PEAK / WAVE toggles must not send `0x09/0xa8` once VT already owns the session.
+UDP receive age is the **socket** stall signal — not a black or frozen canvas.
+Packets or complete AUs still arriving means the UDP flow is alive; LUT / PEAK /
+WAVE toggles must not send `0x09/0xa8` once VT already owns the session.
+Fresh packets are not a healthy feed by themselves: when native decode is
+expected, two seconds without decoder **output** (complete AUs still arriving)
+is a decoder repair, not a UDP rebuild. See [Fresh input with silent native
+output](#fresh-input-with-silent-native-output).
 The first time VT starts after the identity layer already presented, that is still
 one PLI — skipping it because the live-start enable was `< 1 s` ago leaves
 WAITING FOR LIVE VIEW while UDP stays live.
@@ -86,13 +92,47 @@ Watch Console (`com.opencapture.openpocketcine`) and `Documents/control-live.log
 - `feed: watchdog full datalink rejoin` / `feed: full datalink rejoin (SoftAP bind kept)`
 - `feed: full rejoin failed (…)` then `session: drop (datalink rejoin failed) → bounded recovery`
 - `feed: stall` / `feed: black` / `feed: freeze`
+- `recovery: action=decoder` (`requested` / `blocked` / `freshPicture` / `exhausted`)
 
 The live canvas shows a brief **Reconnecting** chip while UDP rebuilds. The last picture stays under that chip. SoftAP interface binding is unchanged (do not pin only `requiredInterfaceType = .wifi`).
 
 State machine: `Sources/OpenPocketViewCore/FeedWatchdog.swift` (tested). Session hook: `CameraSession.applyFeedWatchdog()`.
 
+## Fresh input with silent native output
+
+When native decoding is expected, fresh packets and complete access units do not
+by themselves prove a healthy feed. Two seconds without actual decoder output
+(after the same command/GOP/motion grace gates) requests one owned decoder
+rebuild and one recovery enable. The owner keeps the last image and waits up to
+16 seconds for fresh source and presentation before transferring to full datalink
+rejoin. Fresh native output with stale presentation does not request a camera PLI.
+
+A rebuilt decoder has no valid inter-frame references. Invalid-session errors
+must not rebuild inline and retry the same P-frame. Numeric errors are scoped to
+the decoder generation; IDR hold can expire only while valid references remain.
+Compressed discontinuity invalidates those references until a random-access
+frame arrives. An IRAP/IDR in the same delivery batch still clears that hold
+(`hasIDR` bypasses `awaitingIDR`; a successful submit restores references).
+The live AU queue keeps at most eight pending units and prefers an independently
+decodable IRAP suffix. Dropping a later incomplete AU cannot reconstruct future
+P-frames from an older GOP; that is discarded pending work, not proof of a
+permanent stall. Requests, blocked attempts and local sends are distinct
+diagnostic effects; a local send does not prove peer receipt.
+
+Packet-only traffic with no complete AU does **not** take the decoder-rebuild
+rung. When picture and AUs are stale (and native output is stale if expected),
+the existing enable ×2 then endpoint ladder runs. That is implemented in
+`FeedWatchdog.tick` and portable tests; it is **not** a physical camera proof.
+A presentation stall while decoder output is fresh still does **not** PLI
+(renderer-only repair is not implemented).
+
+See [physical stress testing](feed-stress-testing.md) for the seeded iOS XCTest
+harness and the limitations of simulated packet loss. That harness is not an
+Android qualification and has not been recorded as a passed camera baseline on
+this branch.
+
 ## How to confirm on a 5+ min take
 
 Watch Console for `feed: stall` vs `feed: black`. After a stall you should see one UDP rebuild (VT kept), then picture without leaving Live. `recoverBlack=1` means the last frame was already gone. A LUT toggle after the first assist must **not** log another `0x09/0xa8`.
 
-If `lastStatus` stays young while `lastVideo` ages, past GOP / AF-C grace, send two `0x09/0xa8` then one UDP rebuild. Keepalive must not flap while status is young. If both age and `flow=dead`, it is the UDP path. If `lastVideo` stays young and the picture is still frozen, it is VT / display. If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.
+If `lastStatus` stays young while `lastVideo` ages, past GOP / AF-C grace, send two `0x09/0xa8` then one UDP rebuild. Keepalive must not flap while status is young. If both age and `flow=dead`, it is the UDP path. If `lastVideo` / `lastAU` stay young and **decoder output** ages, it is the decoder-rebuild rung (`recovery: action=decoder`), not UDP. If decoder output stays young and the picture is still frozen, it is presentation — do not PLI (no renderer-only owner yet). If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.

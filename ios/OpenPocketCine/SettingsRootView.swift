@@ -56,6 +56,14 @@ enum SettingsHelpCopy {
         "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original — connect the camera if it is not cached."
     static let shareDiagnostics =
         "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Take a screenshot for TestFlight and paste the copied text into the feedback."
+    static let reliabilityReports =
+        "Send crash, hang and live-feed reports, plus session health counts. Off by default. Reports wait until you leave the camera Wi-Fi. No name, location, or video."
+    static let reliabilityUnavailable =
+        "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
+    static let savedReports =
+        "Share the typed freeze reports stored on this phone."
+    static let deleteStoredIncidents =
+        "Remove local copies of saved freeze reports. Turn off Automatic reliability reports to clear pending uploads. Reports already sent cannot be removed here."
 }
 
 enum OperatorSettingsTab: String, CaseIterable, Identifiable {
@@ -88,6 +96,7 @@ struct SettingsRootView: View {
     @State private var showWatcherWiFiCode = false
     @State private var confirmClearCache = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
+    @State private var reliabilityOptIn = ReliabilityReporting.isOptedIn
 
     var body: some View {
         MonitorPage(
@@ -857,6 +866,40 @@ struct SettingsRootView: View {
                     if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
                         diagnosticsShare = DiagnosticSharePayload(url: url)
                     }
+                }
+            }
+            if ReliabilityReporting.isAvailable {
+                SettingsSwitchInlineRow(
+                    title: "Automatic reliability reports",
+                    help: SettingsHelpCopy.reliabilityReports,
+                    isOn: reliabilityOptIn
+                ) {
+                    reliabilityOptIn.toggle()
+                    ReliabilityReporting.setConsent(reliabilityOptIn)
+                }
+            } else {
+                SettingsInlineRow(
+                    title: "Automatic reliability reports",
+                    help: SettingsHelpCopy.reliabilityUnavailable
+                ) {
+                    SettingsValueText(value: "Off")
+                }
+            }
+            SettingsInlineRow(title: "Saved Reports", help: SettingsHelpCopy.savedReports) {
+                SettingsActionPill(title: "Share") {
+                    FeedIncidentRuntime.exportVendorBundles { url in
+                        if let url {
+                            diagnosticsShare = DiagnosticSharePayload(url: url)
+                        }
+                    }
+                }
+            }
+            SettingsInlineRow(
+                title: "Delete Stored Incidents",
+                help: SettingsHelpCopy.deleteStoredIncidents
+            ) {
+                SettingsActionPill(title: "Delete") {
+                    FeedIncidentRuntime.deleteStoredIncidents {}
                 }
             }
             SettingsInlineRow(title: "Report a Problem", help: SettingsHelpCopy.reportHelp) {

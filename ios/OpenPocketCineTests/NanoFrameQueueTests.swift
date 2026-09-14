@@ -15,6 +15,30 @@ final class NanoFrameQueueTests: XCTestCase {
         XCTAssertEqual(assembler.takePending().count, 1)
     }
 
+    func testAllRandomAccessBacklogIsStrictlyBounded() {
+        let assembler = SoftAPVideoAssembler()
+        let key: [UInt8] = [0, 0, 0, 1, 0x67, 0x11, 0, 0, 0, 1, 0x68, 0x22, 0, 0, 0, 1, 0x65, 0x33]
+        for frame in UInt8(0)...24 { _ = assembler.ingest(packet(frame, key)) }
+        let delivery = assembler.takeDelivery()
+        XCTAssertLessThanOrEqual(delivery.accessUnits.count, 8)
+        XCTAssertTrue(delivery.discontinuity)
+    }
+
+    func testOverflowDoesNotDeliverDependantsOfDroppedReference() {
+        let assembler = SoftAPVideoAssembler()
+        let key: [UInt8] = [0, 0, 0, 1, 0x67, 0x11, 0, 0, 0, 1, 0x68, 0x22, 0, 0, 0, 1, 0x65, 0x33]
+        _ = assembler.ingest(packet(0, key))
+        for frame in UInt8(1)...14 { _ = assembler.ingest(packet(frame, start + [0x41, frame])) }
+        let delivery = assembler.takeDelivery()
+        XCTAssertTrue(delivery.discontinuity)
+        XCTAssertEqual(delivery.accessUnits, [Hevc.stripDjiMarker(key)])
+        _ = assembler.ingest(packet(15, start + [0x41, 15]))
+        XCTAssertTrue(assembler.takePending().isEmpty)
+        _ = assembler.ingest(packet(16, key))
+        _ = assembler.ingest(packet(17, start + [0x41, 17]))
+        XCTAssertEqual(assembler.takePending(), [Hevc.stripDjiMarker(key)])
+    }
+
     private let start: [UInt8] = [0, 0, 0, 1]
 
     private func packet(_ frame: UInt8, _ nal: [UInt8]) -> [UInt8] {

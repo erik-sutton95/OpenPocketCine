@@ -1349,6 +1349,9 @@ final class CIFeedView: UIView {
                     frame.drawableSize == self.metalLayer.drawableSize
                 {
                     if success {
+                        #if DEBUG
+                            FeedStressAutomation.notePresent()
+                        #endif
                         self.notePresented(frame, at: completedAt)
                         self.onPresented?()
                     } else {

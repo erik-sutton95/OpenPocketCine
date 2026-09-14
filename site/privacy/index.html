@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>OpenPocketCine Privacy Policy</title>
-  <meta name="description" content="OpenPocketCine collects no personal data and operates no servers. Camera control and live view stay on your local network.">
+  <meta name="description" content="Camera control and live view stay on your local network. Reliability reports are optional and off by default.">
   <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
   <link rel="canonical" href="https://openpocketcine.app/privacy/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="OpenPocketCine Privacy Policy">
-  <meta property="og:description" content="No telemetry or automatic uploads. Live view stays on the local link.">
+  <meta property="og:description" content="Live view stays on the local link. Optional reliability reports require opt-in.">
   <meta property="og:url" content="https://openpocketcine.app/privacy/">
   <link rel="icon" href="../assets/icon.png">
   <link rel="apple-touch-icon" href="../assets/icon.png">
@@ -59,14 +59,14 @@
       <div class="container legal-article">
         <span class="kicker">Privacy policy</span>
         <h1>Your footage is nobody's business.</h1>
-        <p class="legal-updated">Last updated: August 23, 2026</p>
+        <p class="legal-updated">Last updated: September 14, 2026</p>
       </div>
     </section>
 
     <div class="container legal-article">
       <p>
         OpenPocketCine is an open-source field monitor for DJI Osmo Pocket cameras.
-        <strong>The app has no account, telemetry, or automatic data upload.</strong>
+        <strong>The app has no account. Automatic reliability reports are off by default.</strong>
         This page is the canonical privacy text.
       </p>
 
@@ -74,8 +74,7 @@
       <ul>
         <li>
           <strong>Live view and camera status</strong> happen entirely over Bluetooth and the
-          camera's own Wi-Fi between your device and your camera. Video frames and telemetry
-          never leave that local link.
+          camera's own Wi-Fi between your device and your camera. Video frames and raw camera packets stay on that local link.
         </li>
         <li>
           <strong>Saved camera names and last SSID</strong> are stored only in app-local storage
@@ -91,8 +90,8 @@
       <h2>What never leaves the phone</h2>
       <p>
         Live HEVC, DUML telemetry, and pairing traffic stay on the local link. We do not operate
-        a cloud. We do not sell data. We do not run analytics, advertising, or crash-reporting
-        SDKs.
+        a footage cloud. We do not sell data or use advertising SDKs. Optional reliability
+        reporting sends technical measurements, never camera footage or raw camera packets.
       </p>
 
       <h2>Third parties</h2>
@@ -100,8 +99,22 @@
         <li>
           <strong>Apple (or Google).</strong> Permission prompts and OS diagnostics are processed
           under their own policies. If you install a TestFlight or Play beta, Apple or Google may
-          provide crash reports to the developer under their terms. OpenPocketCine adds no
-          crash-reporting SDK.
+          provide crash reports to the developer under their terms.
+        </li>
+        <li>
+          <strong>Sentry (optional iOS reliability reports).</strong> In builds configured for
+          this service, you can enable Automatic reliability reports in Operator Setup.
+          Reports include app/build and OS versions, hardware class, camera family, ephemeral
+          session identifiers, frame timing, recovery attempts, session duration measurements,
+          and crash or hang diagnostics. They exclude footage, screenshots, raw camera packets,
+          camera Wi-Fi passwords, personal device names and location. Reports wait while a
+          camera session or camera Wi-Fi path is active. Turning the option off stops reporting
+          and clears the pending reporting cache on this phone; it does not retract reports
+          already received by the service. Local diagnostic reports remain available to share
+          or delete. Sentry explains its privacy practices in its
+          <a href="https://sentry.io/privacy/">privacy policy</a>; submitted reports are handled
+          under the configured project's service agreement. Builds without a configured service
+          cannot enable uploads.
         </li>
         <li>
           <strong>Frame.io (optional).</strong> If this build is configured and you sign in, the
@@ -138,7 +151,7 @@
 
       <h2>What the app does not do</h2>
       <ul>
-        <li>No analytics, telemetry, or crash-reporting SDKs.</li>
+        <li>No automatic reliability uploads without opt-in and a configured reporting service.</li>
         <li>No advertising or tracking of any kind.</li>
         <li>No account with us &mdash; the app has no sign-up.</li>
         <li>No sale of personal data.</li>

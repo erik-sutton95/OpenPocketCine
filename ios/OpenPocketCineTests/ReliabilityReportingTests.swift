@@ -1,0 +1,465 @@
+import Foundation
+import OpenPocketViewCore
+import Sentry
+import XCTest
+
+@testable import OpenPocketCine
+
+final class ReliabilityReportingTests: XCTestCase {
+    private var suite: UserDefaults!
+    private var cacheRoot: URL!
+
+    private func waitForReceipt(_ id: String, state: ReliabilityReportingReceiptState) {
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                ReliabilityReporting.receipt(for: id)?.state == state
+            }, object: nil)
+        wait(for: [ready], timeout: 2)
+    }
+
+    override func setUp() {
+        super.setUp()
+        suite = UserDefaults(suiteName: "opc.reliability.test.\(UUID().uuidString)")
+        ReliabilityReportingConsent.defaults = suite
+        ReliabilityReportingConsent.resetForTests()
+        cacheRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opc-rel-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+        ReliabilityReporting.sdkCacheRoot = cacheRoot
+        ReliabilityReporting.setCaptureHandlerForTests(nil)
+        ReliabilityReportingURLProtocol.gate = ReliabilityReportingGate.shared
+        ReliabilityReportingGate.shared.resetForTests()
+        ReliabilityReportingURLProtocol.dsnHost = "o0.ingest.sentry.io"
+        ReliabilityReportingURLProtocol.onEnvelopeAccepted = nil
+        ReliabilityReportingURLProtocol.forwardingSession = URLSession(
+            configuration: {
+                let config = URLSessionConfiguration.ephemeral
+                config.waitsForConnectivity = false
+                return config
+            }())
+    }
+
+    override func tearDown() {
+        ReliabilityReportingGate.shared.resetForTests()
+        ReliabilityReportingConsent.resetForTests()
+        ReliabilityReportingConsent.defaults = .standard
+        ReliabilityReporting.setCaptureHandlerForTests(nil)
+        try? FileManager.default.removeItem(at: cacheRoot)
+        super.tearDown()
+    }
+
+    func testConsentDefaultsOffAndRevokePurgesOnlySDKOwnedSpool() {
+        XCTAssertFalse(ReliabilityReportingConsent.isOptedIn)
+        XCTAssertFalse(ReliabilityReporting.isOptedIn)
+        ReliabilityReportingConsent.setOptedIn(true)
+        XCTAssertTrue(ReliabilityReporting.isOptedIn)
+        let localDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opc-local-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: localDir, withIntermediateDirectories: true)
+        let local = localDir.appendingPathComponent("incident-keep.json")
+        try? Data("keep".utf8).write(to: local)
+        defer { try? FileManager.default.removeItem(at: localDir) }
+        ReliabilityReportingReceipts.store(
+            ReliabilityReportingReceipt(
+                incidentID: "inc-1", eventID: "abc", state: .queued, updatedAt: Date()),
+            root: cacheRoot)
+        XCTAssertNotNil(ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot))
+        ReliabilityReporting.setConsent(false)
+        XCTAssertFalse(ReliabilityReporting.isOptedIn)
+        let purged = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [self] _, _ in
+                ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot) == nil
+            }, object: nil)
+        wait(for: [purged], timeout: 2)
+        XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: local.path))
+    }
+
+    func testDSNRequiresHTTPSSentryShape() {
+        XCTAssertNil(ReliabilityReportingDSN.validated(""))
+        XCTAssertNil(ReliabilityReportingDSN.validated("http://key@host/1"))
+        XCTAssertNil(ReliabilityReportingDSN.validated("https://ingest.sentry.io/1"))
+        XCTAssertNotNil(
+            ReliabilityReportingDSN.validated("https://publickey@o0.ingest.sentry.io/0"))
+    }
+
+    func testCameraGateBlocksEvenWithInternetAndCancelsPending() {
+        let fake = FakeTask()
+        ReliabilityReportingGate.shared.setValidInternetForTests(true)
+        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(false)
+        ReliabilityReportingGate.shared.setCameraSessionActive(false)
+        ReliabilityReportingGate.shared.register(fake)
+        XCTAssertFalse(ReliabilityReportingGate.shared.shouldBlockUpload)
+        ReliabilityReportingGate.shared.setCameraSessionActive(true)
+        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
+        XCTAssertTrue(fake.cancelled)
+        ReliabilityReportingGate.shared.setCameraSessionActive(false)
+        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(true)
+        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
+    }
+
+    func testHostIsolationRejectsNonDSNHosts() {
+        let dsnHost = "o0.ingest.sentry.io"
+        let allowed = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
+        let other = URL(string: "https://example.com/ingest")!
+        XCTAssertTrue(ReliabilityReportingHostPolicy.allows(allowed, dsnHost: dsnHost))
+        XCTAssertFalse(ReliabilityReportingHostPolicy.allows(other, dsnHost: dsnHost))
+        XCTAssertEqual(
+            ReliabilityReportingNetwork.decision(
+                for: other, dsnHost: dsnHost, gate: ReliabilityReportingGate.shared),
+            .rejectHost)
+        ReliabilityReportingGate.shared.setCameraSessionActive(true)
+        XCTAssertEqual(
+            ReliabilityReportingNetwork.decision(
+                for: allowed, dsnHost: dsnHost, gate: ReliabilityReportingGate.shared),
+            .blockCameraPath)
+        XCTAssertEqual(
+            ReliabilityReportingNetwork.retentionError(for: .blockCameraPath).code,
+            URLError.notConnectedToInternet)
+    }
+
+    func testBlockedSDKSessionFailsWithoutHTTPResponse() {
+        ReliabilityReportingGate.shared.setCameraSessionActive(true)
+        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let url = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
+        let done = expectation(description: "blocked")
+        var response: URLResponse?
+        session.dataTask(with: url) { _, resp, error in
+            response = resp
+            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
+            done.fulfill()
+        }.resume()
+        wait(for: [done], timeout: 2)
+        XCTAssertNil(response)
+    }
+
+    func testRevokedConsentBlocksCachedEnvelopeWithoutHTTPResponse() {
+        ReliabilityReportingConsent.setOptedIn(false)
+        ReliabilityReportingGate.shared.setCameraSessionActive(false)
+        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let done = expectation(description: "revoked transport")
+        session.dataTask(with: URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!) {
+            _, response, error in
+            XCTAssertNil(response)
+            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
+            done.fulfill()
+        }.resume()
+        wait(for: [done], timeout: 2)
+    }
+
+    func testHostIsolationOnSessionDoesNotForward() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let url = URL(string: "https://example.com/secret")!
+        let done = expectation(description: "reject")
+        var response: URLResponse?
+        session.dataTask(with: url) { _, resp, error in
+            response = resp
+            XCTAssertEqual((error as NSError?)?.code, NSURLErrorCannotFindHost)
+            done.fulfill()
+        }.resume()
+        wait(for: [done], timeout: 2)
+        XCTAssertNil(response)
+    }
+
+    func testCameraActivationCancelsInFlightForwardWithoutResponse() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        SlowForwardProtocol.reset()
+        let forwardConfig = URLSessionConfiguration.ephemeral
+        forwardConfig.protocolClasses = [SlowForwardProtocol.self]
+        ReliabilityReportingURLProtocol.forwardingSession = URLSession(
+            configuration: forwardConfig)
+        ReliabilityReportingGate.shared.setCameraSessionActive(false)
+        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let url = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
+        let done = expectation(description: "race")
+        var response: URLResponse?
+        session.dataTask(with: url) { _, resp, error in
+            response = resp
+            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
+            done.fulfill()
+        }.resume()
+        wait(for: [SlowForwardProtocol.started], timeout: 2)
+        ReliabilityReporting.setCameraSessionActive(true)
+        wait(for: [done], timeout: 2)
+        XCTAssertNil(response)
+        ReliabilityReportingURLProtocol.forwardingSession = {
+            let config = URLSessionConfiguration.ephemeral
+            config.waitsForConnectivity = false
+            return URLSession(configuration: config)
+        }()
+    }
+
+    func testEventIDAndFingerprintAreStable() {
+        let id = "12c2d058-d584-4270-9aa2-eca08bf20986"
+        let first = ReliabilityReportingPrivacy.eventID(fromIncidentID: id)
+        let second = ReliabilityReportingPrivacy.eventID(fromIncidentID: id)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
+        let prints = ReliabilityReportingPrivacy.fingerprint(
+            schema: 1, stage: "decodedOutput", errorClass: "invalidSession")
+        XCTAssertEqual(
+            prints,
+            ["feed-incident", "schema:1", "stage:decodedOutput", "errorClass:invalidSession"]
+        )
+    }
+
+    func testScrubRemovesUserRequestBreadcrumbsAndPaths() {
+        let event = Event(level: .error)
+        let user = User()
+        user.email = "tester@example.com"
+        user.username = "example-user"
+        event.user = user
+        event.request = SentryRequest()
+        event.breadcrumbs = [Breadcrumb(level: .info, category: "http")]
+        event.tags = ["failingStage": "decodedOutput", "email": "tester@example.com"]
+        event.extra = ["password": "hunter2", "failingStage": "decodedOutput"]
+        event.context = [
+            "device": ["name": "Example Phone", "model": "iPhone17,2"],
+            "feed": ["failingStage": "decodedOutput", "serial": "ABC"],
+        ]
+        event.exceptions = [
+            Exception(value: "/" + "Users/example/Library/crash", type: "NSError")
+        ]
+        _ = ReliabilityReportingPrivacy.scrub(event)
+        XCTAssertNil(event.user)
+        XCTAssertNil(event.request)
+        XCTAssertEqual(event.breadcrumbs?.count ?? 0, 0)
+        XCTAssertNil(event.tags?["email"])
+        XCTAssertEqual(event.tags?["failingStage"], "decodedOutput")
+        XCTAssertNil(event.extra?["password"])
+        XCTAssertEqual(event.extra?["failingStage"] as? String, "decodedOutput")
+        XCTAssertNil(event.context?["device"]?["name"])
+        XCTAssertEqual(event.context?["device"]?["model"] as? String, "iPhone17,2")
+        XCTAssertNil(event.context?["feed"]?["serial"])
+        XCTAssertFalse(event.exceptions?.first?.value?.contains("example/Library") ?? true)
+    }
+
+    func testImmediateConfirmationIsNotOverwrittenByQueuedReceipt() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        let id = "cccccccccccccccccccccccccccccccc"
+        var bundle = try stallBundle(id: id)
+        bundle.header.outcome = .recovered
+        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
+            ReliabilityReporting.noteTransportSuccess(eventID: event.eventId.sentryIdString)
+        }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        waitForReceipt(id, state: .confirmed)
+    }
+
+    func testIncidentExposureDoesNotInheritPreviousSessionSummary() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        ReliabilityReporting.noteSessionSummary(
+            FeedIncidentSessionSummary(
+                sessionID: UUID().uuidString, healthyExposureSeconds: 123456,
+                incidentCount: 99, outcome: "healthy", sourceRevision: "test"))
+        var bundle = try stallBundle(id: "dddddddddddddddddddddddddddddddd")
+        bundle.header.outcome = .recovered
+        let captured = expectation(description: "incident")
+        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
+            guard event.fingerprint?.first == "feed-incident" else { return }
+            XCTAssertNotEqual(event.extra?["healthyExposureSeconds"] as? Double, 123456)
+            XCTAssertNil(event.extra?["incidentCount"])
+            captured.fulfill()
+        }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        wait(for: [captured], timeout: 2)
+    }
+
+    func testCaptureEnqueueIsQueuedNotDeliveredAndDedupsConfirmed() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        var bundle = try stallBundle(id: "12c2d058d58442709aa2eca08bf20986")
+        bundle.header.outcome = .recovered
+        let captured = expectation(description: "handler")
+        captured.expectedFulfillmentCount = 1
+        ReliabilityReporting.setCaptureHandlerForTests { event, data in
+            XCTAssertEqual(event.eventId.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
+            XCTAssertEqual(event.fingerprint?.first, "feed-incident")
+            XCTAssertNil(event.user)
+            let text = String(data: data, encoding: .utf8) ?? ""
+            XCTAssertTrue(text.contains("prelude"))
+            XCTAssertTrue(text.contains("repairs") || text.contains("during"))
+            XCTAssertFalse(text.contains("control-live.log"))
+            captured.fulfill()
+        }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        wait(for: [captured], timeout: 2)
+        waitForReceipt("12c2d058d58442709aa2eca08bf20986", state: .queued)
+        XCTAssertEqual(
+            ReliabilityReporting.receipt(for: "12c2d058d58442709aa2eca08bf20986")?.state,
+            .queued)
+        ReliabilityReporting.noteTransportSuccess(eventID: "12c2d058d58442709aa2eca08bf20986")
+        waitForReceipt("12c2d058d58442709aa2eca08bf20986", state: .confirmed)
+        XCTAssertEqual(
+            ReliabilityReporting.receipt(for: "12c2d058d58442709aa2eca08bf20986")?.state,
+            .confirmed)
+        let again = expectation(description: "no-second")
+        again.isInverted = true
+        ReliabilityReporting.setCaptureHandlerForTests { _, _ in again.fulfill() }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        wait(for: [again], timeout: 0.3)
+    }
+
+    func testOpenCheckpointDoesNotEnqueueDuplicate() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        let open = try stallBundle(id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        XCTAssertEqual(open.header.outcome, .open)
+        XCTAssertFalse(ReliabilityReporting.isFinalized(open))
+        let captured = expectation(description: "open-must-not-capture")
+        captured.isInverted = true
+        ReliabilityReporting.setCaptureHandlerForTests { _, _ in captured.fulfill() }
+        ReliabilityReporting.enqueueFinalized(open)
+        wait(for: [captured], timeout: 0.4)
+        XCTAssertNil(ReliabilityReporting.receipt(for: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+    }
+
+    func testHealthyOnlyEndSummaryDoesNotClaimHealthyAtZeroExposure() {
+        XCTAssertEqual(
+            FeedIncidentRuntime.summaryOutcome(incidentCount: 0, exposure: 12), "healthy")
+        XCTAssertEqual(
+            FeedIncidentRuntime.summaryOutcome(incidentCount: 0, exposure: 0), "no-exposure")
+        XCTAssertEqual(FeedIncidentRuntime.summaryOutcome(incidentCount: 2, exposure: 40), "ended")
+    }
+
+    func testDeleteStoredIncidentsClearsExtrasCache() {
+        FeedIncidentRuntime.seedExtrasCacheForTests([
+            ("incident-dead.json", "should-not-share")
+        ])
+        XCTAssertEqual(FeedIncidentRuntime.reportExtras().count, 1)
+        let done = expectation(description: "deleted")
+        FeedIncidentRuntime.deleteStoredIncidents { done.fulfill() }
+        wait(for: [done], timeout: 2)
+        XCTAssertTrue(FeedIncidentRuntime.reportExtras().isEmpty)
+    }
+
+    func testRevokeAbortsQueuedCapture() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        var bundle = try stallBundle(id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        bundle.header.outcome = .interrupted
+        let captured = expectation(description: "revoked")
+        captured.isInverted = true
+        ReliabilityReporting.setCaptureHandlerForTests { _, _ in captured.fulfill() }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        ReliabilityReporting.setConsent(false)
+        wait(for: [captured], timeout: 0.5)
+        XCTAssertFalse(ReliabilityReporting.isOptedIn)
+        XCTAssertNil(ReliabilityReporting.receipt(for: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+    }
+
+    func testTransportSuccessConfirmsOnlyMatchingEventID() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        ReliabilityReportingReceipts.store(
+            ReliabilityReportingReceipt(
+                incidentID: "a", eventID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                state: .queued, updatedAt: Date()),
+            root: cacheRoot)
+        ReliabilityReportingReceipts.store(
+            ReliabilityReportingReceipt(
+                incidentID: "b", eventID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                state: .queued, updatedAt: Date()),
+            root: cacheRoot)
+        ReliabilityReporting.noteTransportSuccess(eventID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        waitForReceipt("a", state: .confirmed)
+        XCTAssertEqual(
+            ReliabilityReportingReceipts.load(incidentID: "a", root: cacheRoot)?.state,
+            .confirmed)
+        XCTAssertEqual(
+            ReliabilityReportingReceipts.load(incidentID: "b", root: cacheRoot)?.state,
+            .queued)
+        var request = URLRequest(url: URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!)
+        request.httpBody = Data("{\"event_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n{}".utf8)
+        XCTAssertEqual(
+            ReliabilityReportingEnvelopeID.eventID(from: request),
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    }
+
+    func testReceiptTTLAndOptionsPrivacyFlags() {
+        var old = ReliabilityReportingReceipt(
+            incidentID: "old", eventID: "e", state: .queued,
+            updatedAt: Date(timeIntervalSince1970: 1))
+        ReliabilityReportingReceipts.store(old, root: cacheRoot)
+        let url = ReliabilityReportingReceipts.directory(root: cacheRoot)
+            .appendingPathComponent("old.json")
+        try? FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: url.path)
+        ReliabilityReportingReceipts.applyTTL(
+            root: cacheRoot, now: Date(), ttl: 10)
+        XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "old", root: cacheRoot))
+        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let options = ReliabilityReporting.makeOptions(
+            dsn: "https://publickey@o0.ingest.sentry.io/0", urlSession: session)
+        XCTAssertFalse(options.sendDefaultPii)
+        XCTAssertFalse(options.enableSwizzling)
+        XCTAssertFalse(options.enableNetworkBreadcrumbs)
+        XCTAssertFalse(options.enableAutoSessionTracking)
+        XCTAssertFalse(options.enableAutoPerformanceTracing)
+        XCTAssertEqual(options.tracesSampleRate?.intValue ?? 0, 0)
+        XCTAssertFalse(options.attachScreenshot)
+        XCTAssertFalse(options.attachViewHierarchy)
+        XCTAssertFalse(options.enableMetricKit)
+        XCTAssertTrue(options.enableCrashHandler)
+        XCTAssertTrue(options.enableAppHangTracking)
+        XCTAssertEqual(options.maxCacheItems, 30)
+        XCTAssertEqual(options.maxAttachmentSize, 256 * 1_024)
+        XCTAssertEqual(options.sessionReplay.sessionSampleRate, 0)
+        XCTAssertEqual(options.sessionReplay.onErrorSampleRate, 0)
+    }
+
+    func testBackoffGrowsWithJitterBound() {
+        let first = ReliabilityReportingBackoff.delaySeconds(attempt: 0, jitter: 0)
+        let later = ReliabilityReportingBackoff.delaySeconds(attempt: 5, jitter: 1)
+        XCTAssertGreaterThan(later, first)
+        XCTAssertLessThanOrEqual(later, 30)
+    }
+
+    private func stallBundle(id: String) throws -> FeedIncidentBundle {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { id })
+        _ = recorder.beginSession(
+            FeedIncidentSessionContext(
+                sessionID: "session-1",
+                appVersion: "0.1.0",
+                appBuild: "107",
+                sourceRevision: "test",
+                osName: "iOS",
+                osVersion: "17.0",
+                hardwareClass: "iPhone17,2",
+                cameraFamily: "pocket"))
+        _ = recorder.recordSnapshot(
+            FeedIncidentSnapshot(
+                monotonicNow: 1,
+                wallClock: Date(),
+                rates: FeedIncidentRates(packetHz: 25, decodedOutputHz: 25, presentHz: 25),
+                ages: FeedIncidentAges(
+                    packetAge: 0.04, decodedOutputAge: 0.04, presentAge: 0.04),
+                lifecycle: FeedIncidentLifecycle(
+                    connected: true, liveEstablished: true)))
+        let job = recorder.recordSnapshot(
+            FeedIncidentSnapshot(
+                monotonicNow: 4,
+                wallClock: Date(),
+                rates: FeedIncidentRates(packetHz: 25, decodeSubmitHz: 25, decodedOutputHz: 0),
+                ages: FeedIncidentAges(
+                    packetAge: 0.04, decodedOutputAge: 3, presentAge: 3),
+                lifecycle: FeedIncidentLifecycle(
+                    connected: true, liveEstablished: true)))
+        return try XCTUnwrap(job?.bundle)
+    }
+}
+
+private final class FakeTask: ReliabilityReportingCancellable {
+    var cancelled = false
+    func cancel() { cancelled = true }
+}
+
+private final class SlowForwardProtocol: URLProtocol {
+    static var started = XCTestExpectation(description: "slow-start")
+
+    static func reset() {
+        started = XCTestExpectation(description: "slow-start")
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.started.fulfill() }
+    override func stopLoading() {}
+}

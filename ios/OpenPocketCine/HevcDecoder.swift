@@ -38,6 +38,25 @@ final class HevcDecoder {
     /// Last VT / layer decode failure. `decoderErrors` is cumulative — one bad
     /// AU an hour ago must not read as `decoderWedged` on the observe line.
     private(set) var lastDecodeErrorAt: Date?
+    private var lastDecodeErrorUptime: TimeInterval?
+    private(set) var lastDecodeStatus: Int32 = 0
+    private(set) var lastDecodeOrigin = "none"
+    private(set) var lastDecodeFlags: UInt32 = 0
+    private var nativeSessionFailed = false
+    private var lastErrorJournalAt: Date?
+
+    var nativeOutputAge: TimeInterval? { pipelineMetrics.outputAge }
+    var incidentDecodeSnapshot: LiveDecodeMetrics.Snapshot { pipelineMetrics.snapshot }
+    private(set) var sourcePresentations = 0
+    var incidentPresentations: Int {
+        if effects.replacesIdentityFeed, let processedFeed { return processedFeed.presentedFrames }
+        return sourcePresentations
+    }
+    var nativeOutputExpected: Bool { shouldStartVT || referenceRecoveryNeeded }
+    private(set) var referenceRecoveryNeeded = false
+    var nativeDecodeTotals: (submitted: Int, accepted: Int, output: Int) { pipelineMetrics.totals }
+    var canReleaseIDRHold: Bool { hasSubmittedRandomAccess && !nativeSessionFailed }
+
     private(set) var lastKeyframeAt: Date?
     /// Last AU enqueued or VT frame presented. Watchdog stall signal (not keyframe age).
     private(set) var lastPresentedAt: Date?
@@ -147,6 +166,7 @@ final class HevcDecoder {
     private var format: CMVideoFormatDescription?
     /// Latched from the first parameter-set AU. Pocket HEVC / Nano AVC.
     private var liveCodec: LiveVideoCodec?
+    var incidentCodec: String { liveCodec.map { $0 == .avc ? "avc" : "hevc" } ?? "unknown" }
     private var vps: [UInt8]?
     private var sps: [UInt8]?
     private var pps: [UInt8]?
@@ -217,6 +237,10 @@ final class HevcDecoder {
     /// producing frames right now. Fresh signal for `LinkDiagnoser`.
     var isDecoderWedged: Bool {
         guard let error = lastDecodeErrorAt else { return false }
+        if shouldStartVT, let lastDecodeErrorUptime {
+            guard let outputAge = pipelineMetrics.outputAge else { return true }
+            return ProcessInfo.processInfo.systemUptime - lastDecodeErrorUptime < outputAge
+        }
         guard let presented = lastPresentedAt else { return true }
         return error > presented
     }
@@ -446,7 +470,10 @@ final class HevcDecoder {
             // Do not fall through to HEVC enqueue — that dual-decodes and can
             // fail the layer to black when presentProcessed misses one AU.
             let submitted = presentProcessed(sample)
-            if submitted && hasIDR { hasSubmittedRandomAccess = true }
+            if submitted && hasIDR {
+                hasSubmittedRandomAccess = true
+                referenceRecoveryNeeded = false
+            }
             return submitted
         } else {
             vtOwnsHardwareDecode = false
@@ -470,7 +497,10 @@ final class HevcDecoder {
                 return false
             }
         }
-        if hasIDR { hasSubmittedRandomAccess = true }
+        if hasIDR {
+            hasSubmittedRandomAccess = true
+            referenceRecoveryNeeded = false
+        }
         finishLayerHandoffIfNeeded()
         lastSourceFrameAt = Date()
         notePresentedFrame(sampleRate: true)
@@ -533,6 +563,7 @@ final class HevcDecoder {
     func reset() {
         invalidateVT()
         hasSubmittedRandomAccess = false
+        referenceRecoveryNeeded = false
         finishDisplayWait(false)
         stopSimulatorSample()
         format = nil
@@ -545,6 +576,12 @@ final class HevcDecoder {
         pictureSize = .zero
         isVerticalPicture = false
         decoderErrors = 0
+        lastDecodeErrorAt = nil
+        lastDecodeErrorUptime = nil
+        lastDecodeStatus = 0
+        lastDecodeOrigin = "none"
+        lastDecodeFlags = 0
+        lastErrorJournalAt = nil
         lastKeyframeAt = nil
         lastPresentedAt = nil
         lastSourceFrameAt = nil
@@ -619,6 +656,15 @@ final class HevcDecoder {
         return isPresentationReady
     }
 
+    /// Missing compressed references cannot be repaired by dropping another
+    /// arbitrary frame. Retain the image and let the watchdog request an IRAP.
+    func noteCompressedDiscontinuity() {
+        hasSubmittedRandomAccess = false
+        referenceRecoveryNeeded = true
+        beginIDRHold()
+        ControlLiveLog.line("decoder: compressedDiscontinuity awaitingRandomAccess=1")
+    }
+
     /// After a GOP-reset enable, ignore P-frames until the IDR AU.
     func beginIDRHold() {
         awaitingIDR = true
@@ -627,6 +673,7 @@ final class HevcDecoder {
     /// UDP is alive and the last picture is still on the layer — do not wait
     /// forever for an IRAP that a PLI did not cut.
     func endIDRHold() {
+        guard canReleaseIDRHold else { return }
         awaitingIDR = false
     }
 
@@ -658,6 +705,7 @@ final class HevcDecoder {
     }
 
     private func notePresentedFrame(sampleRate: Bool = false) {
+        sourcePresentations += 1
         lastPresentedAt = Date()
         displayedImageRemoved = false
         if sampleRate { onPresentedFrame?() }
@@ -679,7 +727,8 @@ final class HevcDecoder {
             displayLayer.flush()
         }
         if displayLayer.status == .failed { displayedImageRemoved = true }
-        if shouldStartVT, format != nil { rebuildVT(force: true) }
+        // Preserve the native reference chain on app return. The watchdog owns
+        // an evidenced decoder rebuild and its one random-access request.
     }
 
     private func releaseLayerDecoderIfNeeded() {
@@ -724,6 +773,10 @@ final class HevcDecoder {
     }
 
     private func applyEffectsChange() {
+        FeedIncidentRuntime.recordBreadcrumb(
+            FeedIncidentBreadcrumb(
+                monotonicAt: ProcessInfo.processInfo.systemUptime, kind: .assistChange,
+                detail: effects.replacesIdentityFeed ? "replacement" : "identity"))
         // Parameter sets + assist: start VT now. Gating on lastPresentedAt
         // delayed persisted LUT until the 5 s unlock, then sent 0x09/0xa8.
         if hasFormat, needsDecodedSample {
@@ -1156,6 +1209,8 @@ final class HevcDecoder {
         decodedFrameGeneration.withLock { $0 &+= 1 }
         if let vtSession { VTDecompressionSessionInvalidate(vtSession) }
         vtSession = nil
+        hasSubmittedRandomAccess = false
+        nativeSessionFailed = false
         vtAttemptedStamp = nil
     }
 
@@ -1239,6 +1294,7 @@ final class HevcDecoder {
                 log.info("VT session \(attempt.name, privacy: .public)")
                 return
             }
+            noteDecodeError(status: status, origin: "create")
             log.error("VT create \(attempt.name, privacy: .public) failed \(status)")
         }
     }
@@ -1322,6 +1378,9 @@ final class HevcDecoder {
         }
         finishLayerHandoffIfNeeded()
         if isNewSourceFrame {
+            #if DEBUG
+                FeedStressAutomation.notePresent()
+            #endif
             notePresentedFrame()
         } else {
             displayedImageRemoved = false
@@ -1333,7 +1392,7 @@ final class HevcDecoder {
     @discardableResult
     private func presentProcessed(_ sample: CMSampleBuffer) -> Bool {
         if vtSession == nil, format != nil { rebuildVT() }
-        guard let vtSession else { return false }
+        guard let vtSession, !nativeSessionFailed else { return false }
         let fx = effects
         let transfer = MonitorTransfer.resolved(
             transferProvider?() ?? incomingTransfer,
@@ -1344,23 +1403,29 @@ final class HevcDecoder {
         let err = decodeFrame(
             vtSession, sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
         if err == noErr { return true }
-        if Self.shouldRebuildSession(status: err) {
-            rebuildVT(force: true)
-            if let rebuilt = self.vtSession,
-                decodeFrame(
-                    rebuilt, sample, flags: flags, generation: sourceFrameGeneration, effects: fx,
-                    transfer: transfer) == noErr
-            {
-                return true
-            }
-        }
-        noteDecodeError()
+        noteDecodeError(status: err, origin: "submit")
         return false
     }
 
-    private func noteDecodeError() {
+    private func noteDecodeError(
+        status: OSStatus = 0, origin: String = "display", flags: UInt32 = 0
+    ) {
         decoderErrors += 1
-        lastDecodeErrorAt = Date()
+        let now = Date()
+        let changed =
+            status != lastDecodeStatus || origin != lastDecodeOrigin || flags != lastDecodeFlags
+        lastDecodeErrorAt = now
+        lastDecodeErrorUptime = ProcessInfo.processInfo.systemUptime
+        lastDecodeStatus = status
+        lastDecodeOrigin = origin
+        lastDecodeFlags = flags
+        if Self.shouldRebuildSession(status: status) { nativeSessionFailed = true }
+        if changed || lastErrorJournalAt.map({ now.timeIntervalSince($0) >= 1 }) ?? true {
+            lastErrorJournalAt = now
+            ControlLiveLog.line(
+                "decoder: error origin=\(origin) status=\(status) flags=\(flags) generation=\(sourceFrameGeneration) count=\(decoderErrors)"
+            )
+        }
     }
 
     /// Called by the existing 1 Hz session publisher, including during silence.
@@ -1378,29 +1443,42 @@ final class HevcDecoder {
     ) -> OSStatus {
         let submittedAt = ProcessInfo.processInfo.systemUptime
         pipelineMetrics.submitted()
-        return VTDecompressionSessionDecodeFrame(
+        #if DEBUG
+            FeedStressAutomation.noteDecodeSubmit()
+        #endif
+        let result = VTDecompressionSessionDecodeFrame(
             session, sampleBuffer: sample, flags: flags, infoFlagsOut: nil
-        ) { [weak self] status, _, imageBuffer, _, _ in
+        ) { [weak self] status, infoFlags, imageBuffer, _, _ in
             guard let self else { return }
             if status != noErr {
                 Task { @MainActor [weak self] in
                     guard let self, self.sourceFrameGeneration == generation else { return }
-                    self.noteDecodeError()
-                    if Self.shouldRebuildSession(status: status), self.shouldStartVT {
-                        self.rebuildVT(force: true)
-                    }
+                    self.noteDecodeError(
+                        status: status, origin: "callback", flags: infoFlags.rawValue)
                 }
                 return
             }
-            guard self.sourceFrameGeneration == generation,
-                let imageBuffer, Self.isPresentable(imageBuffer)
-            else { return }
+            guard self.sourceFrameGeneration == generation else { return }
+            guard let imageBuffer, Self.isPresentable(imageBuffer) else {
+                Task { @MainActor [weak self] in
+                    guard let self, self.sourceFrameGeneration == generation else { return }
+                    self.noteDecodeError(
+                        status: status, origin: "callback", flags: infoFlags.rawValue)
+                }
+                return
+            }
+            #if DEBUG
+                if FeedStressAutomation.shouldSilenceOutput() { return }
+                FeedStressAutomation.noteDecoded()
+            #endif
             self.pipelineMetrics.decoded(
                 at: ProcessInfo.processInfo.systemUptime, submittedAt: submittedAt)
             self.logFirstLiveVT(imageBuffer)
             self.handleDecodedFrame(
                 imageBuffer, effects: effects, transfer: transfer, generation: generation)
         }
+        if result == noErr { pipelineMetrics.accepted() }
+        return result
     }
 
     nonisolated private func logFirstLiveVT(_ buffer: CVPixelBuffer) {

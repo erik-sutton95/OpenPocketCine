@@ -145,6 +145,7 @@ final class DatalinkDriver {
         var gimbalStickHeld = false
         var gimbalSendRest = false
         var lastGimbalStickAt: TimeInterval = 0
+        var totalACKs = 0
         var ackTiming = DeliveryCadence(startedAt: ProcessInfo.processInfo.systemUptime)
         var lastDeliveryLogAt = ProcessInfo.processInfo.systemUptime
         var stickWrites = 0
@@ -156,13 +157,17 @@ final class DatalinkDriver {
     var onStatusFrame: ((Duml.Frame) -> Void)?
     /// Called (on the main actor) with each complete HEVC access unit (DJI marker already stripped).
     var onAccessUnit: (([UInt8]) -> Void)?
+    var onVideoDiscontinuity: (() -> Void)?
 
     /// Snapshot of video-pipeline counters. Safe to read from the main actor for the HUD.
     var videoPackets: Int { videoAssembler.snapshot().packets }
+    var incidentACKs: Int { wire.withLock { $0.totalACKs } }
+    var incidentQueue: FeedIncidentQueue { videoAssembler.incidentQueue }
     var droppedIncomplete: Int { videoAssembler.snapshot().dropped }
     var receiveErrorCount: Int { receiveErrors }
     var lastVideoPacketAt: Date? { videoAssembler.snapshot().lastPacket }
     var lastAccessUnitAt: Date? { videoAssembler.snapshot().lastAU }
+    var accessUnits: Int { videoAssembler.snapshot().accessUnits }
     var lastStatusAt: Date? { lastStatusDate }
     var isTcpPokeReady: Bool {
         guard let pokeConn else { return false }
@@ -791,6 +796,7 @@ final class DatalinkDriver {
     }
 
     func close() {
+        onVideoDiscontinuity = nil
         closed = true
         onAccessUnit = nil
         onStatusFrame = nil
@@ -1081,7 +1087,10 @@ final class DatalinkDriver {
                 pktType: 0x04, payloadLen: payload.count, sessionId: session, seq: 0
             ) + payload
         conn.send(content: Data(pkt), completion: .idempotent)
-        wire.withLock { $0.ackTiming.note(at: ProcessInfo.processInfo.systemUptime) }
+        wire.withLock {
+            $0.ackTiming.note(at: ProcessInfo.processInfo.systemUptime)
+            $0.totalACKs += 1
+        }
     }
 
     /// Submission cadence, receive cadence and UI delivery pressure are separate
@@ -1401,7 +1410,21 @@ final class DatalinkDriver {
                         }
                         return
                     }
+                    #if DEBUG
+                        FeedStressAutomation.noteSourceObserved(videoPackets: 1, accessUnits: 0)
+                        if FeedStressAutomation.shouldDropPacket(
+                            seq: UInt64(DumlTransport.transportSeq(bytes) ?? 0))
+                        {
+                            return
+                        }
+                        FeedStressAutomation.noteSourceDelivered(videoPackets: 1, accessUnits: 0)
+                    #endif
                     let assembled = assembler.ingest(bytes)
+                    #if DEBUG
+                        if assembled.accessUnit != nil {
+                            FeedStressAutomation.noteSourceObserved(videoPackets: 0, accessUnits: 1)
+                        }
+                    #endif
                     if assembled.firstPacket {
                         let count = bytes.count
                         Task { @MainActor in
@@ -1538,8 +1561,12 @@ final class DatalinkDriver {
     private func flushPendingAccessUnits(generation: Int) {
         guard !closed, udpGeneration == generation else { return }
         noteInboundTraffic()
-        let batch = videoAssembler.takePending()
-        for accessUnit in batch {
+        let batch = videoAssembler.takeDelivery()
+        if batch.discontinuity { onVideoDiscontinuity?() }
+        for accessUnit in batch.accessUnits {
+            #if DEBUG
+                FeedStressAutomation.noteSourceDelivered(videoPackets: 0, accessUnits: 1)
+            #endif
             onAccessUnit?(accessUnit)
         }
         if videoAssembler.hasPending {
@@ -1829,6 +1856,9 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
         /// `hasVideoSeq` so later `0x01` cannot rewind after video is seen.
         var hasGroup0 = false
         var pending: [[UInt8]] = []
+        var awaitingRandomAccess = false
+        var discontinuity = false
+        var incompleteSeen = 0
         var hopScheduled = false
         var pendingSince: TimeInterval?
         var pendingPeak = 0
@@ -1857,26 +1887,47 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             let au = state.depacketizer.feed(datagram)
             var shouldHop = false
             var droppedPending = 0
+            if state.depacketizer.droppedIncomplete > state.incompleteSeen {
+                state.incompleteSeen = state.depacketizer.droppedIncomplete
+                droppedPending += state.pending.count
+                state.pending.removeAll(keepingCapacity: true)
+                state.awaitingRandomAccess = true
+                state.discontinuity = true
+            }
             if let au {
                 state.accessUnitTiming.note(at: now)
                 if state.codec == nil { state.codec = LiveVideo.detect(annexB: au) }
                 state.accessUnits += 1
                 state.lastAU = Date()
-                state.pending.append(au)
+                let codec = state.codec ?? .hevc
+                let randomAccess = Self.hasRandomAccess(au, codec: codec)
+                if randomAccess { state.awaitingRandomAccess = false }
+                if !state.awaitingRandomAccess
+                    || LiveVideo.accessUnitCarriesKeyframe(au, codec: codec)
+                {
+                    state.pending.append(au)
+                } else {
+                    droppedPending += 1
+                }
                 if state.pendingSince == nil { state.pendingSince = now }
                 if state.pending.count > 8 {
-                    // Classify with the latched codec: Nano AVC 0x41 P-slices
-                    // otherwise look like HEVC VPS, while its IDRs get dropped.
-                    let codec = state.codec ?? .hevc
-                    while state.pending.count > 8 {
-                        guard
-                            let i = state.pending.firstIndex(where: {
-                                !LiveVideo.accessUnitCarriesKeyframe($0, codec: codec)
-                            })
-                        else { break }
-                        state.pending.remove(at: i)
-                        droppedPending += 1
+                    // Keep a complete independently decodable suffix. Removing
+                    // arbitrary P-frames leaves their dependants undecodable.
+                    let lastIRAP = state.pending.lastIndex {
+                        Self.hasRandomAccess($0, codec: codec)
                     }
+                    if let lastIRAP, state.pending.count - lastIRAP <= 8 {
+                        droppedPending += lastIRAP
+                        state.pending.removeFirst(lastIRAP)
+                    } else {
+                        let retained = state.pending.last {
+                            LiveVideo.accessUnitCarriesKeyframe($0, codec: codec)
+                        }
+                        droppedPending += state.pending.count - (retained == nil ? 0 : 1)
+                        state.pending = retained.map { [$0] } ?? []
+                        state.awaitingRandomAccess = true
+                    }
+                    state.discontinuity = true
                 }
                 state.pendingDrops += droppedPending
                 state.pendingPeak = max(state.pendingPeak, state.pending.count)
@@ -1885,13 +1936,26 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
                     shouldHop = true
                 }
             }
+            if state.discontinuity, !state.hopScheduled {
+                state.hopScheduled = true
+                shouldHop = true
+            }
             return Ingest(
                 accessUnit: au, firstPacket: first, shouldHop: shouldHop,
                 droppedPending: droppedPending)
         }
     }
 
-    func takePending() -> [[UInt8]] {
+    private static func hasRandomAccess(_ au: [UInt8], codec: LiveVideoCodec) -> Bool {
+        Hevc.nalUnits(au).contains { nal in
+            guard let byte = nal.first else { return false }
+            return codec == .avc ? Avc.nalType(byte) == Avc.idr : Hevc.isIRAP(Hevc.nalType(byte))
+        }
+    }
+
+    func takePending() -> [[UInt8]] { takeDelivery().accessUnits }
+
+    func takeDelivery() -> (accessUnits: [[UInt8]], discontinuity: Bool) {
         lock.withLock { state in
             if let pendingSince = state.pendingSince {
                 state.maximumDeliveryWait = max(
@@ -1900,9 +1964,11 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             }
             state.pendingSince = nil
             let aus = state.pending
+            let discontinuity = state.discontinuity
+            state.discontinuity = false
             state.pending.removeAll(keepingCapacity: true)
             state.hopScheduled = false
-            return aus
+            return (aus, discontinuity)
         }
     }
 
@@ -1930,6 +1996,18 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             state.pendingDrops = 0
             state.maximumDeliveryWait = 0
             return summary
+        }
+    }
+
+    var incidentQueue: FeedIncidentQueue {
+        lock.withLock { state in
+            FeedIncidentQueue(
+                bytes: state.pending.reduce(0) { $0 + $1.count }, count: state.pending.count,
+                ageMilliseconds: state.pendingSince.map {
+                    max(0, ProcessInfo.processInfo.systemUptime - $0) * 1_000
+                } ?? 0,
+                incompleteAccessUnits: state.depacketizer.droppedIncomplete,
+                drops: state.pendingDrops)
         }
     }
 
@@ -1995,6 +2073,9 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             $0.hopScheduled = false
             $0.pendingSince = nil
             $0.previousIncomplete = 0
+            $0.incompleteSeen = 0
+            $0.awaitingRandomAccess = false
+            $0.discontinuity = false
         }
     }
 }

@@ -1,0 +1,5 @@
+// Copy to Reliability.local.xcconfig (keep out of git) and paste a https DSN.
+// Leave SENTRY_DSN empty to keep automatic reports unavailable.
+// xcconfig treats // as a comment, so split the scheme:
+// SENTRY_DSN = https:/$()/PUBLIC_KEY@o0.ingest.sentry.io/0
+SENTRY_DSN =

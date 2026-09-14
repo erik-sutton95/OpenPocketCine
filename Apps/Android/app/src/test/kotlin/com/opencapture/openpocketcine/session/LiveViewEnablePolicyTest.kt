@@ -903,6 +903,209 @@ class LiveViewEnablePolicyTest {
         assertEquals(217, (payload[2].toInt() and 0xFF) or ((payload[3].toInt() and 0xFF) shl 8))
     }
 
+    @Test
+    fun idrHoldReleasesAfterGopGraceOnlyWhenUdpAndPictureExist() {
+        assertTrue(
+            !LiveViewEnablePolicy.shouldReleaseIDRHold(
+                awaitingIDR = true,
+                udpReceiveAlive = true,
+                sinceEnableMs = 2_000,
+                hasPresentedPicture = true,
+            ),
+            "still inside GOP grace",
+        )
+        assertTrue(
+            LiveViewEnablePolicy.shouldReleaseIDRHold(
+                awaitingIDR = true,
+                udpReceiveAlive = true,
+                sinceEnableMs = 8_000,
+                hasPresentedPicture = true,
+            ),
+        )
+        assertTrue(
+            !LiveViewEnablePolicy.shouldReleaseIDRHold(
+                awaitingIDR = true,
+                udpReceiveAlive = true,
+                sinceEnableMs = 8_000,
+                hasPresentedPicture = false,
+            ),
+            "first picture stays held until IRAP",
+        )
+    }
+
+    @Test
+    fun fullRejoinAndEndpointRepairShareSixteenSecondPictureGrace() {
+        assertEquals(16_000L, LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS)
+        assertEquals(
+            LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
+            2 * LiveViewEnablePolicy.FOREGROUND_PICTURE_GRACE_MS,
+        )
+    }
+
+    @Test
+    fun fallbackWatchdogRequestsOneDecoderRepairThenRejoinsAtDeadline() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 100_000L
+        val snap = decoderSilentSnap(now)
+        assertEquals(LiveViewEnablePolicy.Action.REBUILD_DECODER, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(
+            LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(state, decoderSilentSnap(now + 1_000)),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(state, decoderSilentSnap(now + 15_000)),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.Action.FULL_REJOIN,
+            LiveViewEnablePolicy.tick(state, decoderSilentSnap(now + 16_000)),
+        )
+    }
+
+    @Test
+    fun fallbackWatchdogDoesNotPliForRendererStallWhenNativeOutputIsFresh() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 100_000L
+        val snap =
+            decoderSilentSnap(now).copy(
+                lastDecoderOutputAt = now,
+                lastPresentedAt = now - 20_000,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
+    }
+
+    @Test
+    fun fallbackWatchdogDoesNotInventDecoderRepairWithoutNativeOutputClock() {
+        val state = LiveViewEnablePolicy.State()
+        val snap = decoderSilentSnap(100_000L).copy(decoderOutputExpected = false, lastDecoderOutputAt = null)
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
+    }
+
+    @Test
+    fun blockedRepairReadyDoesNotSpendADecoderRung() {
+        val state = LiveViewEnablePolicy.State()
+        val snap = decoderSilentSnap(100_000L).copy(repairReady = false)
+        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
+        val ready = decoderSilentSnap(100_000L)
+        assertEquals(LiveViewEnablePolicy.Action.REBUILD_DECODER, LiveViewEnablePolicy.tick(state, ready))
+    }
+
+    @Test
+    fun unknownAccessUnitAgeDoesNotTreatRendererStallAsAssemblyStall() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 100_000L
+        val snap =
+            decoderSilentSnap(now).copy(
+                decoderOutputExpected = false,
+                lastDecoderOutputAt = null,
+                lastAccessUnitAt = null,
+                lastPresentedAt = now - 3_000,
+                lastVideoPacketAt = now,
+            )
+        assertEquals(
+            LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(state, snap),
+            "nil AU age must not PLI a renderer-only stall",
+        )
+        assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
+    }
+
+    @Test
+    fun packetOnlyAssemblyStallUsesEnableLadderNotDecoderRebuild() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 100_000L
+        val snap =
+            decoderSilentSnap(now).copy(
+                decoderOutputExpected = false,
+                lastDecoderOutputAt = null,
+                lastAccessUnitAt = now - 3_000,
+                lastPresentedAt = now - 3_000,
+                lastVideoPacketAt = now,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(
+            LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(state, snap.copy(now = now + 1_000, lastVideoPacketAt = now + 1_000)),
+        )
+        assertEquals(
+            LiveViewEnablePolicy.Action.RESEND_ENABLE,
+            LiveViewEnablePolicy.tick(
+                state,
+                snap.copy(
+                    now = now + 5_000,
+                    lastVideoPacketAt = now + 5_000,
+                    lastStatusAt = now + 5_000,
+                    lastBleNotifyAt = now + 5_000,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun blockedEnableDoesNotKeepASpentWatchdogRung() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+            )
+        val before = state.capture()
+        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(LiveViewEnablePolicy.Stage.RESEND_ENABLE, state.stage)
+        state.restore(before)
+        assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
+        assertEquals(0, state.encoderPauseEnables)
+        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, snap))
+    }
+
+    @Test
+    fun fallbackUdpRebuildEscalatesToFullRejoin() {
+        val state = LiveViewEnablePolicy.State()
+        val now = 20_000L
+        val snap =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, snap))
+        val second =
+            snap.copy(
+                now = now + 5_000,
+                lastEnableAt = now,
+                lastStatusAt = now + 5_000 - 200,
+                lastBleNotifyAt = now + 5_000 - 100,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, second))
+        val rebuild =
+            snap.copy(
+                now = now + 10_000,
+                lastEnableAt = now + 5_000,
+                lastStatusAt = now + 10_000 - 200,
+                lastBleNotifyAt = now + 10_000 - 100,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.REBUILD_UDP, LiveViewEnablePolicy.tick(state, rebuild))
+        val rejoin =
+            snap.copy(
+                now = now + 15_000,
+                lastEnableAt = now + 5_000,
+                lastStatusAt = now + 15_000 - 200,
+                lastBleNotifyAt = now + 15_000 - 100,
+            )
+        assertEquals(LiveViewEnablePolicy.Action.FULL_REJOIN, LiveViewEnablePolicy.tick(state, rejoin))
+    }
+
     companion object {
         private fun stalledSnap(
             now: Long,
@@ -928,6 +1131,27 @@ class LiveViewEnablePolicyTest {
                 live = true,
                 sawPicture = true,
                 lastGimbalThrowAt = lastGimbalThrowAt,
+            )
+
+        private fun decoderSilentSnap(now: Long): LiveViewEnablePolicy.Snapshot =
+            LiveViewEnablePolicy.Snapshot(
+                now = now,
+                videoPackets = 40,
+                lastVideoPacketAt = now,
+                lastAccessUnitAt = now,
+                lastStatusAt = now,
+                lastBleNotifyAt = now,
+                lastRebuildAt = now - 70_000,
+                lastEnableAt = now - 10_000,
+                pathReady = true,
+                hasFormat = true,
+                decoderErrors = 0,
+                live = true,
+                sawPicture = true,
+                lastDecoderOutputAt = now - 3_000,
+                lastPresentedAt = now - 3_000,
+                decoderOutputExpected = true,
+                repairReady = true,
             )
     }
 }

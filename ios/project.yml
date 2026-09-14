@@ -7,6 +7,9 @@ options:
   createIntermediateGroups: true
 
 packages:
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
 
@@ -16,7 +19,13 @@ targets:
     platform: iOS
     sources:
       - OpenPocketCine
+    postBuildScripts:
+      - name: Stamp source revision
+        script: bash "${SRCROOT}/../tools/stamp-source-revision.sh"
+        basedOnDependencyAnalysis: false
     dependencies:
+      - package: Sentry
+        product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
       - package: OpenPocketViewCore

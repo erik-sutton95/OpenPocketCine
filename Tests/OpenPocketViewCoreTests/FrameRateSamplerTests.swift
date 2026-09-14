@@ -70,3 +70,24 @@ import Testing
     }
     #expect(abs(sampler.displayFPS - 50.0) < 2.0)
 }
+
+@Test func frameRateSamplerPublishesSilenceAndMeasuresResumedRun() {
+    var sampler = FrameRateSampler()
+    sampler.recordFrame(at: 0)
+    sampler.recordFrame(at: 0.04)
+    #expect(sampler.formatted == "25.00")
+    sampler.age(at: 2.04)
+    #expect(sampler.formatted == "0.00")
+    sampler.recordFrame(at: 3)
+    sampler.recordFrame(at: 3.04)
+    #expect(sampler.formatted == "25.00")
+}
+
+@Test func frameRateSamplerDoesNotRewindAfterStaleInput() {
+    var sampler = FrameRateSampler()
+    sampler.recordFrame(at: 1)
+    sampler.recordFrame(at: 1.04)
+    sampler.recordFrame(at: 0)
+    sampler.recordFrame(at: 1.08)
+    #expect(abs(sampler.currentFPS - 25) < 0.001)
+}

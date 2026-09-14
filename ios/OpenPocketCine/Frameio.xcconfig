@@ -7,3 +7,11 @@ FRAMEIO_REDIRECT_URI =
 FRAMEIO_URL_SCHEME =
 
 #include? "Frameio.local.xcconfig"
+
+// Optional Sentry DSN for automatic reliability reports. Empty keeps the
+// setting unavailable. Copy Reliability.local.xcconfig.example →
+// Reliability.local.xcconfig. xcconfig treats // as a comment; write
+// https:/$()/key@host/project in the local file.
+SENTRY_DSN =
+#include? "Reliability.local.xcconfig"
+INFOPLIST_KEY_SentryDSN = $(SENTRY_DSN)
