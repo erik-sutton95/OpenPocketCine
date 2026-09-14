@@ -158,7 +158,7 @@ struct CapturePickerPanel: View {
         let color: ColorMode?
         let fps: Int
         let shutterDenoms: [Int]
-        let snapshot: CaptureQuickSnapshot?
+        let snapshotIdentity: CaptureQuickSnapshot.SourceIdentity?
         let focusTrack: FocusTrackMode?
         let options: [String]
     }
@@ -182,7 +182,7 @@ struct CapturePickerPanel: View {
             cameraID: model.session.connectedCamera?.id, phase: model.session.phase.label,
             sheet: sheet, mode: selectedMode, color: model.session.status.colorMode,
             fps: model.session.status.fps, shutterDenoms: shutterDenoms,
-            snapshot: CaptureQuickSnapshot.primary(sheet, model: model),
+            snapshotIdentity: CaptureQuickSnapshot.primary(sheet, model: model)?.sourceIdentity,
             focusTrack: sheet == .focus ? model.session.status.focusTrack : nil,
             options: drumOptions)
     }
@@ -516,12 +516,9 @@ struct CapturePickerPanel: View {
         _ options: [String], selected: String?, isInteractive: Bool = true,
         action: @escaping (String) -> Void
     ) -> some View {
-        CaptureDrumWheel(
-            options: options,
-            selection: Binding(
-                get: { selected ?? "" },
-                set: { value in if canApplyDrum && isInteractive { action(value) } }),
-            isInteractive: isInteractive)
+        CaptureChoiceDrum(
+            options: options, cameraValue: selected, isInteractive: isInteractive,
+            canApply: canApplyDrum, action: action)
     }
 
     private var headerTitle: String {
@@ -986,6 +983,50 @@ struct CapturePickerPanel: View {
             return shutterLabels.first ?? ""
         }
         return CamCapShutter.label(near)
+    }
+}
+
+/// Choice drums must own the displayed value. A get-only binding to live
+/// camera status reseats the wheel on the previous detent before the SET
+/// HUD catches up, so Auto↔Manual (and the other binary drums) bounce.
+private struct CaptureChoiceDrum: View {
+    let options: [String]
+    let cameraValue: String?
+    var isInteractive: Bool = true
+    let canApply: Bool
+    let action: (String) -> Void
+    @State private var selection: String
+
+    init(
+        options: [String], cameraValue: String?, isInteractive: Bool = true, canApply: Bool,
+        action: @escaping (String) -> Void
+    ) {
+        self.options = options
+        self.cameraValue = cameraValue
+        self.isInteractive = isInteractive
+        self.canApply = canApply
+        self.action = action
+        _selection = State(initialValue: cameraValue ?? "")
+    }
+
+    var body: some View {
+        CaptureDrumWheel(
+            options: options,
+            selection: Binding(
+                get: { selection },
+                set: { value in
+                    guard value != selection else { return }
+                    selection = value
+                    if canApply, isInteractive { action(value) }
+                }),
+            isInteractive: isInteractive)
+        .onAppear { selection = cameraValue ?? "" }
+        .onChange(of: cameraValue) { _, new in
+            if let new, new != selection { selection = new }
+        }
+        .onChange(of: options) { _, _ in
+            if selection.isEmpty { selection = cameraValue ?? "" }
+        }
     }
 }
 

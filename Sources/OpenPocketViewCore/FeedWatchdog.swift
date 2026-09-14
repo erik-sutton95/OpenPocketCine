@@ -96,6 +96,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         public var zoomPinchActive: Bool
         /// Age of the last non-rest gimbal stick throw. Motion can pause HEVC.
         public var secondsSinceGimbalThrow: TimeInterval?
+        /// Operator is still on the analog stick. Hold encoder-pause recover until lift.
+        public var gimbalStickHeld: Bool
         /// Age of the last tracked camera SET on the datalink (any opcode).
         public var secondsSinceCameraSet: TimeInterval?
 
@@ -121,6 +123,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             secondsSinceZoomSet: TimeInterval? = nil,
             zoomPinchActive: Bool = false,
             secondsSinceGimbalThrow: TimeInterval? = nil,
+            gimbalStickHeld: Bool = false,
             secondsSinceCameraSet: TimeInterval? = nil
         ) {
             self.now = now
@@ -144,6 +147,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.secondsSinceZoomSet = secondsSinceZoomSet
             self.zoomPinchActive = zoomPinchActive
             self.secondsSinceGimbalThrow = secondsSinceGimbalThrow
+            self.gimbalStickHeld = gimbalStickHeld
             self.secondsSinceCameraSet = secondsSinceCameraSet
         }
     }
@@ -369,7 +373,8 @@ public struct FeedWatchdog: Equatable, Sendable {
 
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: snap.secondsSinceGimbalThrow,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
+            lastVideoPacketAge: snap.lastVideoPacketAge,
+            stickHeld: snap.gimbalStickHeld)
         {
             return .none
         }

@@ -136,8 +136,10 @@ _Avoid_: follow speed, follow deadband
 
 **Head tracking**:
 iOS-only AirPods IMU (`CMHeadphoneMotionManager`). Controls **Head
-Tracking (Experimental)**, off by default. **Calibrate Head Lock** captures
-shared forward: a still head quaternion and a fresh camera-native pose.
+Tracking (Experimental)**, off by default. Live chrome is a Lucide compass
+above the right-side joystick cluster; VoiceOver still says **Calibrate Head
+Lock**. That action captures shared forward: a still head quaternion and a
+fresh camera-native pose.
 Look uses nose azimuth/elevation (`HeadTrack.look`), not Euler differences.
 `HeadTrackNative` maps that look to native timed-angle targets, with a
 100 ms command horizon. Neither native path has an artificial speed ceiling.

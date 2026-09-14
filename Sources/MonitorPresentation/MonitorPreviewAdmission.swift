@@ -38,11 +38,14 @@ public struct MonitorPreviewAdmission: Sendable {
 
     /// Drops busy/early requests. Switching owners cannot reset the cadence or
     /// enqueue a second job behind a cancelled operation that is still running.
-    public mutating func acquire(owner: UUID, nowNanoseconds: UInt64) -> Ticket? {
+    public mutating func acquire(
+        owner: UUID, nowNanoseconds: UInt64,
+        minimumIntervalNanoseconds: UInt64 = Self.minimumIntervalNanoseconds
+    ) -> Ticket? {
         guard self.owner == owner, busy == nil else { return nil }
         if let lastAdmission {
             guard nowNanoseconds >= lastAdmission,
-                nowNanoseconds - lastAdmission >= Self.minimumIntervalNanoseconds
+                nowNanoseconds - lastAdmission >= minimumIntervalNanoseconds
             else { return nil }
         }
         serial &+= 1

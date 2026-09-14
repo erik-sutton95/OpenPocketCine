@@ -577,7 +577,9 @@ object CameraCommands {
     fun shouldHoldGimbalWatchdog(
         secondsSinceThrow: Double?,
         lastVideoPacketAgeSec: Double? = null,
+        stickHeld: Boolean = false,
     ): Boolean {
+        if (stickHeld) return true
         val s = secondsSinceThrow ?: return false
         if (s < 0.0 || s >= GIMBAL_STICK_VIDEO_GRACE_SEC) return false
         if (lastVideoPacketAgeSec != null &&

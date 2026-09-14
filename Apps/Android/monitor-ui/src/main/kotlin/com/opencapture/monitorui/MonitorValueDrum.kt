@@ -41,40 +41,61 @@ import kotlin.math.roundToInt
 @Composable
 fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifier = Modifier,
     markedValues: Set<String> = emptySet(), interactive: Boolean = true,
-    displayPosition: Float? = null, dimDisabled: Boolean = true, onSelect: (String) -> Unit) {
+    displayPosition: Float? = null, dimDisabled: Boolean = true,
+    onDetent: () -> Unit = {}, onSelect: (String) -> Unit) {
     if (options.isEmpty()) return
     var cursor by remember(options) { mutableFloatStateOf(options.indexOf(selection).coerceAtLeast(0).toFloat()) }
     var dragOrigin by remember(options) { mutableFloatStateOf(cursor) }
     var dragging by remember(options) { mutableStateOf(false) }
     var expected by remember(options) { mutableStateOf<String?>(null) }
     var cancelled by remember(options) { mutableStateOf(false) }
+    var lastTickIndex by remember(options) { mutableStateOf(options.indexOf(selection).coerceAtLeast(0)) }
     val send by rememberUpdatedState(onSelect)
+    val playDetent by rememberUpdatedState(onDetent)
+    fun tickIfNeeded(index: Int) {
+        if (index == lastTickIndex || index !in options.indices) return
+        val previous = options.getOrNull(lastTickIndex)
+        lastTickIndex = index
+        if (MonitorDialHaptic.shouldTick(previous, options[index], options.size)) playDetent()
+    }
     val actualSelection by rememberUpdatedState(selection)
     val density = LocalDensity.current
     val detent = with(density) { 56.dp.toPx() }
     val metrics = remember(options) { MonitorDrumSelection.metrics(options) }
     val cell = with(density) { metrics.cellWidth.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
-    LaunchedEffect(selection, options, interactive) {
+    LaunchedEffect(selection, options, interactive, displayPosition) {
+        val preview = displayPosition
+        if (preview != null && preview.isFinite()) {
+            tickIfNeeded(preview.roundToInt().coerceIn(0, options.lastIndex))
+            return@LaunchedEffect
+        }
         if (selection != expected || !interactive) {
             // An authoritative change cancels the pending gesture. Unknown values
             // seat visually on the first option but do not send a camera write.
             cancelled = dragging
             dragging = false
             cursor = options.indexOf(selection).coerceAtLeast(0).toFloat()
+            lastTickIndex = cursor.roundToInt()
         }
         expected = null
     }
     fun choose(position: Float) {
         if (!position.isFinite()) return
         cursor = position.coerceIn(0f, options.lastIndex.toFloat())
+        tickIfNeeded(cursor.roundToInt())
         val value = options[cursor.roundToInt()]
         if (value != expected && value != actualSelection) {
             expected = value
             send(value)
         }
     }
-    val rendered by animateFloatAsState(displayPosition ?: cursor, animationSpec = if (dragging || displayPosition != null) snap() else tween(MonitorMotion.DRUM_SETTLE_MS, easing = MonitorMotion.DrumSettle), label = "drum detent")
+    val rendered by animateFloatAsState(
+        displayPosition ?: cursor,
+        animationSpec = if (dragging || displayPosition != null) snap()
+            else tween(MonitorMotion.DRUM_SETTLE_MS, easing = MonitorMotion.DrumSettle),
+        label = "drum detent",
+    )
     Canvas(modifier.fillMaxWidth().height(86.dp).alpha(if (interactive || !dimDisabled) 1f else .45f)
         .semantics {
             contentDescription = selection.ifBlank { "Choose value" }
@@ -97,7 +118,10 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
                 },
                 onHorizontalDrag = { change, delta ->
                     change.consume()
-                    if (!cancelled) cursor = (cursor - delta / detent).coerceIn(0f, options.lastIndex.toFloat())
+                    if (!cancelled) {
+                        cursor = (cursor - delta / detent).coerceIn(0f, options.lastIndex.toFloat())
+                        tickIfNeeded(cursor.roundToInt())
+                    }
                 })
         }) {
         val center = size.width / 2f

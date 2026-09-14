@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorExposureReadout
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
@@ -621,7 +622,9 @@ fun LiveCaptureStrip(
         )
     val values = buildList {
         add(value(LiveSheet.ISO, "ISO", CaptureLists.isoChipValue(status)))
-        add(value(LiveSheet.SHUTTER, if (auto) "EV" else "SHUTTER",
+        add(value(LiveSheet.SHUTTER,
+            if (auto) MonitorExposureReadout.autoEvCaption(status.shutterDenom)
+            else "SHUTTER",
             if (auto) EvComp.fromRaw(status.evComp)?.label ?: "—" else shutter,
             if (auto && facePriority) "FACE" else null))
         add(value(LiveSheet.EXPO, "EXPOSURE", if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))

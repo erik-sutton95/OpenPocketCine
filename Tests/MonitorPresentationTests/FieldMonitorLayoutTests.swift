@@ -28,6 +28,16 @@ struct FieldMonitorLayoutTests {
         }
     }
 
+    @Test func landscapeCameraValuesClearTheHomeIndicator() {
+        let layout = FieldMonitorLayout(
+            width: 852, height: 393, safeArea: .init(bottom: 21, trailing: 59))
+        let clearance = FieldMonitorLayout.landscapeBottomClearance(safeBottom: 21)
+        #expect(clearance == 31)
+        #expect(layout.values.maxY == 393 - clearance)
+        #expect(layout.assists.maxY == layout.values.maxY)
+        #expect(layout.values.maxY <= 393 - 21)
+    }
+
     @Test func landscapeRotationDoesNotWalkThePictureOrValues() {
         let left = FieldMonitorLayout(
             width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21))
@@ -132,6 +142,7 @@ struct FieldMonitorLayoutTests {
                         #expect(layout.stick == reference.stick)
                         #expect(layout.zoom == reference.zoom)
                         #expect(layout.gimbal == reference.gimbal)
+                        #expect(layout.headTrack == reference.headTrack)
                         #expect(layout.aspectToggle == reference.aspectToggle)
                         #expect(layout.focusReset == reference.focusReset)
                         #expect(layout.stick.maxY < layout.values.y)
@@ -160,6 +171,27 @@ struct FieldMonitorLayoutTests {
         #expect(layout.gimbal.x == layout.stick.maxX - 36)
         #expect(layout.gimbal.y == layout.zoom.y)
         #expect(layout.gimbal.width == 36 && layout.gimbal.height == 36)
+        #expect(layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom))
+        #expect(layout.headTrack.x == layout.stick.maxX - 44)
+        #expect(layout.headTrack.y == layout.zoom.y - 8 - 44)
+        #expect(layout.headTrack.width == 44 && layout.headTrack.height == 44)
+        #expect(layout.headTrack.maxY + 8 == layout.zoom.y)
+    }
+
+    @Test func headTrackCompassParksAboveTheClusterInBothOrientations() {
+        for (width, height) in [(393.0, 852.0), (852, 393), (440, 956), (956, 440)] {
+            let portrait = height > width
+            let layout = FieldMonitorLayout(
+                width: width, height: height,
+                safeArea: .init(
+                    top: portrait ? 59 : 0,
+                    leading: portrait ? 0 : 59, bottom: 34,
+                    trailing: portrait ? 0 : 59))
+            #expect(layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom))
+            #expect(layout.headTrack.maxX == layout.stick.maxX)
+            #expect(layout.headTrack.maxY == layout.zoom.y - 8)
+            #expect(layout.headTrack.width == 44 && layout.headTrack.height == 44)
+        }
     }
 
     @Test func windowControlsMoveLandscapeChromeWithoutMovingThePictureOrBottomControls() {

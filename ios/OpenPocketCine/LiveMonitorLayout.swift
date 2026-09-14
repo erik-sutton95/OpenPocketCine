@@ -638,26 +638,10 @@ extension LiveMonitorLayout {
         Self.cgRect(gimbalCluster(showGimbalButton: showGimbalButton).controls)
     }
 
-    /// Centered above the bottom bars (assist + capture). Feed floor when those are off.
+    /// Compass Head Lock, trailing-aligned above the stick/zoom cluster.
     var gimbalCalibrate: CGRect {
-        var barTop = CGFloat.greatestFiniteMagnitude
-        if showsBottomBars {
-            if assist.height > 1 { barTop = min(barTop, assist.minY) }
-            if capture.height > 1 { barTop = min(barTop, capture.minY) }
-        }
-        if barTop == .greatestFiniteMagnitude { barTop = feed.maxY }
-        return Self.headTrackCalibrateFrame(canvasWidth: viewport.width, barTopY: barTop)
-    }
-
-    static func headTrackCalibrateFrame(canvasWidth: CGFloat, barTopY: CGFloat) -> CGRect {
-        let width = LiveChromeMetrics.headTrackCalibrateWidth
-        let height = LiveChromeMetrics.headTrackCalibrateHeight
-        let gap = LiveChromeMetrics.gimbalStickGap
-        return CGRect(
-            x: (canvasWidth - width) / 2,
-            y: barTopY - gap - height,
-            width: width,
-            height: height)
+        if let presentation { return presentation.headTrack.cgRect }
+        return Self.cgRect(gimbalCluster().headTrack)
     }
 
     private static func cgRect(_ region: MonitorLayoutRegion) -> CGRect {

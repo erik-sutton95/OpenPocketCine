@@ -67,9 +67,7 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
     init(
         clock: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
         minimumInterval: @escaping @Sendable () -> Double = {
-            let thermal = ProcessInfo.processInfo.thermalState
-            return MonitorBackdropPolicy.interval(
-                serious: thermal == .serious, critical: thermal == .critical)
+            MonitorBackdropPolicy.minimumInterval
         },
         operation: Operation? = nil
     ) {
@@ -105,10 +103,14 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         defer { lock.unlock() }
         let now = clock()
         guard now >= nextAdmission,
-            let ticket = admission.acquire(owner: owner, nowNanoseconds: now)
+            let ticket = admission.acquire(
+                owner: owner, nowNanoseconds: now, minimumIntervalNanoseconds: 0)
         else { return nil }
-        let interval = max(MonitorBackdropPolicy.minimumInterval, minimumInterval())
-        nextAdmission = now &+ UInt64(interval * 1_000_000_000)
+        let seconds = max(MonitorBackdropPolicy.minimumInterval, minimumInterval())
+        nextAdmission =
+            now &+ max(
+                MonitorBackdropPolicy.minimumIntervalNanoseconds,
+                UInt64((seconds * 1_000_000_000).rounded(.up)))
         return ticket
     }
 
@@ -277,6 +279,9 @@ private struct MonitorVideoBackdrop: ViewModifier {
         }
         while !Task.isCancelled {
             let thermal = ProcessInfo.processInfo.thermalState
+            let intervalNs = MonitorBackdropPolicy.intervalNanoseconds(
+                serious: thermal == .serious, critical: thermal == .critical)
+            let started = DispatchTime.now().uptimeNanoseconds
             if let result = await renderer.render(
                 owner: identity, canvasSize: expected.frame.size, surroundRGB: expected.surroundRGB,
                 prepare: { sources(expected.frame.size) }),
@@ -287,9 +292,12 @@ private struct MonitorVideoBackdrop: ViewModifier {
                     renderedKey = expected
                 }
             }
-            let interval = MonitorBackdropPolicy.interval(
-                serious: thermal == .serious, critical: thermal == .critical)
-            do { try await Task.sleep(for: .seconds(interval)) } catch { return }
+            let spent = DispatchTime.now().uptimeNanoseconds &- started
+            if spent < intervalNs {
+                do {
+                    try await Task.sleep(for: .nanoseconds(Int64(intervalNs - spent)))
+                } catch { return }
+            }
         }
     }
 }

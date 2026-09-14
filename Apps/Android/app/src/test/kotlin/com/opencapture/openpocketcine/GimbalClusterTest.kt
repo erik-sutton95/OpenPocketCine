@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,6 +22,15 @@ class GimbalClusterTest {
         assertTrue(cluster.zoom.minY >= well.minY)
         assertEquals(cluster.stick.maxY, cluster.bounds.maxY, 0.05f)
         assertEquals(cluster.zoom.minY, cluster.bounds.minY, 0.05f)
+        assertEquals(cluster.stick.maxX, cluster.headTrack.maxX, 0.05f)
+        assertEquals(
+            min(cluster.zoom.minY, cluster.stick.minY) - GimbalCluster.GAP,
+            cluster.headTrack.maxY,
+            0.05f,
+        )
+        assertEquals(GimbalCluster.ZOOM, cluster.headTrack.width, 0.05f)
+        assertEquals(GimbalCluster.ZOOM, cluster.headTrack.height, 0.05f)
+        assertTrue(cluster.headTrack.minY < cluster.bounds.minY)
     }
 
     @Test

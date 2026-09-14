@@ -37,6 +37,7 @@ ICON_NAMES = [
     "circle-question-mark",
     "circle-play",
     "circle-plus",
+    "compass",
     "contrast",
     "copy",
     "crosshair",

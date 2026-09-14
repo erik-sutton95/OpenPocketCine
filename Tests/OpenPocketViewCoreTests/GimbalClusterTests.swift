@@ -17,6 +17,13 @@ import Testing
         #expect(cluster.zoom.y >= well.y)
         #expect(cluster.bounds.maxY == cluster.stick.maxY)
         #expect(cluster.bounds.minY == cluster.zoom.y)
+        #expect(abs(cluster.headTrack.maxX - cluster.stick.maxX) < 0.05)
+        #expect(
+            abs(cluster.headTrack.maxY - (min(cluster.zoom.y, cluster.stick.y) - GimbalCluster.gap))
+                < 0.05)
+        #expect(abs(cluster.headTrack.width - GimbalCluster.zoomSize) < 0.05)
+        #expect(abs(cluster.headTrack.height - GimbalCluster.zoomSize) < 0.05)
+        #expect(cluster.headTrack.y < cluster.bounds.minY)
     }
 
     @Test func recordOnTheFloorLiftsTheClusterAboveAndKeepsTheTrailingEdge() {

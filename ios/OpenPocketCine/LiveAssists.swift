@@ -1,4 +1,5 @@
 import CoreMotion
+import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -768,6 +769,7 @@ enum OperatorPrefs {
     private static let shareThisFeedKey = "OpenPocketCine.ShareThisFeed"
     private static let controlRequestsKey = "OpenPocketCine.ControlRequests"
     private static let broadcastPriorityKey = "OpenPocketCine.BroadcastPriority"
+    private static let assistToolUsageKey = "OpenPocketCine.AssistToolUsage.v1"
 
     static var shareThisFeed: Bool {
         get { UserDefaults.standard.bool(forKey: shareThisFeedKey) }
@@ -822,6 +824,20 @@ enum OperatorPrefs {
             return UserDefaults.standard.bool(forKey: hapticsKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: hapticsKey) }
+    }
+
+    static var assistToolUsage: MonitorToolUsage {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: assistToolUsageKey),
+                let value = try? JSONDecoder().decode(MonitorToolUsage.self, from: data)
+            else { return MonitorToolUsage() }
+            return value
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: assistToolUsageKey)
+            }
+        }
     }
 
     static var headTrackingEnabled: Bool {

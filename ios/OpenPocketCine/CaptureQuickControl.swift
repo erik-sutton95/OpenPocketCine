@@ -34,6 +34,23 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     }
     var delayed: Bool { [.iso, .isoLimit, .ev, .shutter, .angle].contains(kind) }
 
+    /// Options and capability for an in-flight gesture. Live HUD selection is
+    /// excluded so an optimistic Auto/Manual write cannot cancel a drag or settle.
+    var sourceIdentity: SourceIdentity {
+        SourceIdentity(
+            kind: kind, title: title, options: options, marked: marked, context: context,
+            enabled: enabled)
+    }
+
+    struct SourceIdentity: Hashable, Sendable {
+        var kind: Kind
+        var title: String
+        var options: [String]
+        var marked: Set<String>
+        var context: String
+        var enabled: Bool
+    }
+
     var display: MonitorReadoutSnapshot {
         MonitorReadoutSnapshot(
             title: title, options: options, selection: selection, marked: marked,

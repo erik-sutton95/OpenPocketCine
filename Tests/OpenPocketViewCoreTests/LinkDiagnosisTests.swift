@@ -91,6 +91,11 @@ struct LinkDiagnosisTests {
                 udpReceiveAlive: false,
                 secondsSinceGimbalThrow: GimbalStick.videoGrace)
                 == .udpFlowDead)
+        #expect(
+            diagnose(
+                statusAge: 0.3, udpReceiveAlive: false, gimbalStickHeld: true)
+                == .none,
+            "held stick must not classify as a dead socket")
     }
 
     @Test func zoomHoldIsNone() {
@@ -240,6 +245,7 @@ struct LinkDiagnosisTests {
         secondsSinceFocusTrackSet: TimeInterval? = nil,
         secondsSinceZoomSet: TimeInterval? = nil,
         secondsSinceGimbalThrow: TimeInterval? = nil,
+        gimbalStickHeld: Bool = false,
         secondsSinceCameraSet: TimeInterval? = nil,
         presentAge: TimeInterval? = nil
     ) -> LinkFailure {
@@ -256,6 +262,7 @@ struct LinkDiagnosisTests {
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
+            gimbalStickHeld: gimbalStickHeld,
             presentAge: presentAge,
             secondsSinceCameraSet: secondsSinceCameraSet)
     }

@@ -196,6 +196,21 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.Action.RESEND_ENABLE,
             LiveViewEnablePolicy.tick(state, pastGrace),
         )
+        val held =
+            stalledSnap(
+                now = now,
+                lastEnableAt = now - 10_000,
+                lastVideoAt = now - 8_000,
+                lastStatusAt = now - 200,
+                lastBleAt = now - 100,
+                lastRebuildAt = now - 70_000,
+                lastGimbalThrowAt = now - 8_000,
+            ).copy(gimbalStickHeld = true)
+        assertEquals(
+            LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(LiveViewEnablePolicy.State(), held),
+            "finger on the stick must not GOP-cut",
+        )
     }
 
     @Test

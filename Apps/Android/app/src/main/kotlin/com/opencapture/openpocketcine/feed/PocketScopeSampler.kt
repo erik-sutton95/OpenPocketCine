@@ -95,6 +95,22 @@ object PocketScopeSampler {
         return (base * thermalMultiplier).toLong().coerceAtLeast(BASE_MIN_INTERVAL_NS)
     }
 
+    /** Backdrop-only taps reuse the 25 Hz 213×120 well; inspector-only stays 5 Hz. */
+    fun chromeSampleIntervalNs(
+        activeScopeCount: Int, thermalMultiplier: Double, backdropDemand: Boolean,
+    ): Long {
+        val heat = thermalMultiplier.coerceAtLeast(1.0)
+        return when {
+            activeScopeCount > 0 -> minIntervalNs(activeScopeCount, heat)
+            backdropDemand ->
+                maxOf(
+                    com.opencapture.monitorui.MonitorBackdropPolicy.intervalNs(heat),
+                    minIntervalNs(1, heat),
+                )
+            else -> (InspectorPreviewAdmission.MIN_INTERVAL_NS * heat).toLong()
+        }
+    }
+
     fun thermalMultiplier(androidThermalStatus: Int): Double =
         when (androidThermalStatus) {
             // PowerManager.THERMAL_STATUS_SEVERE

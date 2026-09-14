@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import com.opencapture.monitorui.MonitorZoomAttachment
 import com.opencapture.monitorui.MonitorZoomCaption
 import com.opencapture.openpocketcine.LiveZoom
+import com.opencapture.openpocketcine.LocalOperatorHaptics
 
 /** Existing session gestures adapt to the shared native logarithmic zoom scale. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -23,10 +24,12 @@ fun MonitorZoomDial(initial: Double, maximum: Double, onChange: (Double) -> Unit
     val inset = WindowInsets.displayCutout.getRight(density, layoutDirection) / density.density
     val portrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT ||
         configuration.screenHeightDp > configuration.screenWidthDp
+    val haptics = LocalOperatorHaptics.current
     com.opencapture.monitorui.MonitorZoomDisc(initial, maximum, LiveZoom::label, onChange, onDismiss,
         opticalStops = opticalStops,
         caption = { factor -> MonitorZoomCaption.label(factor, opticalStops) },
         trailingInset = if (inset > 0f) inset + 6f else 0f,
         attachment = if (portrait) MonitorZoomAttachment.Bottom else MonitorZoomAttachment.Trailing,
-        bottomClearance = 0f)
+        bottomClearance = 0f,
+        onDetent = { haptics.confirm() })
 }

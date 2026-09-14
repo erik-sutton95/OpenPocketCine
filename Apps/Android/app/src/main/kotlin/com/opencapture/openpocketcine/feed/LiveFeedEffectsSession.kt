@@ -182,8 +182,8 @@ internal class LiveFeedEffectsSession(
             sampleBusy.set(false)
             return
         }
-        nextScopeAtNs = now + if (policy.activeScopeCount == 0) (200_000_000L * thermal).toLong()
-            else policy.minIntervalNs(thermal)
+        nextScopeAtNs = now + PocketScopeSampler.chromeSampleIntervalNs(
+            policy.activeScopeCount, thermal, backdropTicket != null || backdrop?.hasDemand(this) == true)
         var handedOff = false
         try {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, tapTarget.framebufferId)

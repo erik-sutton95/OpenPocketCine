@@ -2,7 +2,8 @@ import Foundation
 
 /// Stick, zoom chip, and gimbal-controls button as one parking spot.
 /// The button is a zoom-sized circle leading of zoom, trailing-aligned
-/// as a pair above the stick. The stick does not move.
+/// as a pair above the stick. Head Lock is a zoom-sized compass above
+/// that row, trailing-aligned with the stick. The stick does not move.
 ///
 /// Zoom stacks above the stick, trailing-aligned when the button is off.
 /// The cluster sits in the cinema well's trailing-bottom (landscape and
@@ -17,6 +18,14 @@ public struct GimbalCluster: Equatable, Sendable {
     public static let zoomSize = 44.0
     public static let gap = 8.0
     public static let inset = 16.0
+
+    /// Compass Head Lock, trailing-aligned above the zoom row.
+    public var headTrack: MonitorLayoutRegion {
+        MonitorLayoutRegion(
+            x: stick.maxX - Self.zoomSize,
+            y: min(zoom.y, stick.y) - Self.gap - Self.zoomSize,
+            width: Self.zoomSize, height: Self.zoomSize)
+    }
 
     public var bounds: MonitorLayoutRegion {
         var minX = min(stick.x, zoom.x)

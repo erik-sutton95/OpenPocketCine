@@ -14,9 +14,11 @@ the resulting body-relative pan/tilt to the known reach, then computes native
 pitch from the captured attitude i16 `@0`. Display pitch remains negated `@20`;
 these are different coordinate references and must not be substituted.
 
-Movable scopes can sit beneath the Calibrate Head Lock / STOP button in portrait
-and landscape. Enabling Head Tracking does not shrink their placement area.
-The button draws above scopes and keeps its touch target.
+Movable scopes can sit beneath the compass Head Lock control (trailing-aligned
+above the right-side joystick cluster) in portrait and landscape. Enabling Head
+Tracking does not shrink their placement area. The 44 pt compass draws above
+scopes and keeps its touch target. VoiceOver still says Calibrate Head Lock;
+the same control becomes STOP.
 
 The command requests completion in 100 ms. This is a command horizon, **not a
 measured end-to-end latency guarantee**. Programmed paths also have no artificial speed ceiling. Firmware response to continuous replacement determines

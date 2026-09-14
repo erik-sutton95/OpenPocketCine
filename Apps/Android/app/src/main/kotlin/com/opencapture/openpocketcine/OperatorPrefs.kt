@@ -219,6 +219,7 @@ object OperatorPrefs {
     private const val CLIP_SHOT_COLOR = "OpenPocketCine.ClipShotColor"
     private const val CACHE_FULL_RESOLUTION = "OpenPocketCine.CacheFullResolution"
     private const val ASSIST_V1 = "OpenPocketCine.Assist.v1"
+    private const val ASSIST_TOOL_USAGE = "OpenPocketCine.AssistToolUsage.v1"
     private const val PLAYBACK_ASSISTS = "OpenPocketCine.PlaybackAssists.v1"
     private const val FEED_UPSCALER = "OpenPocketCine.feedUpscaler"
 
@@ -420,6 +421,43 @@ object OperatorPrefs {
 
     fun setAssistEncoded(context: Context, value: String) {
         prefs(context).edit().putString(ASSIST_V1, value).apply()
+    }
+
+    fun assistToolUsage(context: Context): com.opencapture.monitorui.MonitorToolUsageState {
+        val raw = prefs(context).getString(ASSIST_TOOL_USAGE, null) ?: return com.opencapture.monitorui.MonitorToolUsageState()
+        return try {
+            val obj = JSONObject(raw)
+            fun doubles(key: String): Map<String, Double> {
+                if (!obj.has(key)) return emptyMap()
+                val child = obj.getJSONObject(key)
+                return child.keys().asSequence().associateWith { child.getDouble(it) }
+            }
+            fun ints(key: String): Map<String, Int> {
+                if (!obj.has(key)) return emptyMap()
+                val child = obj.getJSONObject(key)
+                return child.keys().asSequence().associateWith { child.getInt(it) }
+            }
+            com.opencapture.monitorui.MonitorToolUsageState(
+                doubles("scores"), ints("counts"), doubles("lastUsed"), obj.optDouble("clock", 0.0),
+            )
+        } catch (_: Exception) {
+            com.opencapture.monitorui.MonitorToolUsageState()
+        }
+    }
+
+    fun setAssistToolUsage(context: Context, value: com.opencapture.monitorui.MonitorToolUsageState) {
+        val scores = JSONObject()
+        value.scores.forEach { scores.put(it.key, it.value) }
+        val counts = JSONObject()
+        value.counts.forEach { counts.put(it.key, it.value) }
+        val lastUsed = JSONObject()
+        value.lastUsed.forEach { lastUsed.put(it.key, it.value) }
+        val obj = JSONObject()
+            .put("scores", scores)
+            .put("counts", counts)
+            .put("lastUsed", lastUsed)
+            .put("clock", value.clock)
+        prefs(context).edit().putString(ASSIST_TOOL_USAGE, obj.toString()).apply()
     }
 
     fun playbackVisibleAssistTools(context: Context): Set<String> =

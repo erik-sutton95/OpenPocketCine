@@ -43,7 +43,10 @@ struct LiveCameraControlBar: View {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
                 tile(
-                    .shutter, label: "EV", value: evValue, widest: "+3.0",
+                    .shutter,
+                    label: MonitorExposureReadout.autoEvCaption(
+                        shutterDenom: model.session.status.shutterDenom),
+                    value: evValue, widest: "+3.0",
                     badgeIcon: model.facePriorityExposureEnabled
                         ? CaptureLists.facePriorityBadgeIcon : nil)
             } else {

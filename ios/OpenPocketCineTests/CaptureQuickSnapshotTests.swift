@@ -5,6 +5,16 @@ import XCTest
 @testable import OpenPocketCine
 
 final class CaptureQuickSnapshotTests: XCTestCase {
+    func testSourceIdentityIgnoresLiveHUDSelection() throws {
+        var status = CameraStatus()
+        status.expoMode = .manual
+        let manual = try XCTUnwrap(CaptureQuickSnapshot.primary(.exposure, status: status))
+        status.expoMode = .auto
+        let automatic = try XCTUnwrap(CaptureQuickSnapshot.primary(.exposure, status: status))
+        XCTAssertNotEqual(manual.selection, automatic.selection)
+        XCTAssertEqual(manual.sourceIdentity, automatic.sourceIdentity)
+    }
+
     func testStartingRecordingInvalidatesAnInFlightShootingModeAdjustment() throws {
         var status = CameraStatus()
         status.shootingMode = Int(ShootingMode.video.rawValue)

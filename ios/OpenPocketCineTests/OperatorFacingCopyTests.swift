@@ -16,6 +16,14 @@ final class OperatorFacingCopyTests: XCTestCase {
         XCTAssertTrue(
             SettingsHelpCopy.headTracking.hasPrefix("Experimental."),
             "Settings help must lead with Experimental")
+        XCTAssertTrue(
+            SettingsHelpCopy.headTracking.contains("compass"),
+            "Settings help must describe the live compass control")
+        XCTAssertTrue(
+            SettingsHelpCopy.headTracking.contains("joystick"),
+            "Settings help must park Head Lock above the joystick")
+        XCTAssertFalse(
+            SettingsHelpCopy.headTracking.contains("centered above the bottom bars"))
     }
 
     func testHelpCopyDoesNotNameSisterApps() {

@@ -342,7 +342,7 @@ dismissal and, when shown, tabs and auxiliary switches; temporary mode is a
 | Control | Tabs / auxiliary options |
 | --- | --- |
 | ISO | Auto / Manual; Auto native ISO switch |
-| EV | Compensation; Face priority switch; camera-chosen shutter remains readable |
+| EV | Compensation; Face priority switch; camera-chosen shutter remains readable as `EV 1/Ns` under the value |
 | WB | Mode / Kelvin / Tint |
 | Shutter | Speed / Angle |
 | Exposure | Auto / Manual; compact Manual value reads M |

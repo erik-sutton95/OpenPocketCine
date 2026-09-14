@@ -16,6 +16,10 @@
         private let interactionIdentity: () -> AnyHashable
         @State private var drag = MonitorDrumDrag<AnyHashable>()
         @State private var translation: CGFloat = 0
+        /// GestureState lags the first `onChanged`, so finger tracking is a
+        /// separate flag set in the same write as the first translation.
+        @State private var tracking = false
+        @State private var canvasWidth: CGFloat = 0
         @GestureState private var dragging = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -43,6 +47,7 @@
         }
         private var focusedIndex: Int { Int(position.rounded()) }
         private var acceptsInput: Bool { isInteractive && previewPosition == nil }
+        private var followsFinger: Bool { tracking || dragging }
         private var settleAnimation: Animation? {
             MonitorMotion.settle(reduceMotion)
         }
@@ -50,7 +55,7 @@
         public var body: some View {
             let metrics = MonitorDrumMetrics(options: options)
             let currentPosition = position
-            let hasSelection = dragging || options.contains(selection)
+            let hasSelection = followsFinger || options.contains(selection)
             let rows = options.enumerated().compactMap { index, option -> MonitorDrumRow? in
                 let distance = Double(index) - currentPosition
                 guard abs(distance) < 4 else { return nil }
@@ -61,33 +66,30 @@
                     action: { commit(option) })
             }
             Self.drawing(rows: rows, position: currentPosition, cellWidth: metrics.cellWidth)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: DrumCanvasWidthKey.self, value: proxy.size.width)
+                    }
+                }
+                .onPreferenceChange(DrumCanvasWidthKey.self) { canvasWidth = $0 }
                 .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 3)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0)
                         .updating($dragging) { _, active, _ in active = true }
                         .onChanged { value in
                             guard acceptsInput,
                                 drag.begin(selection: selection, identity: interactionIdentity())
                             else { return }
-                            translation = value.translation.width
+                            followFinger(value.translation.width)
                         }
                         .onEnded { value in
-                            let origin = drag.end(identity: interactionIdentity())
-                            guard acceptsInput, let origin,
-                                let index = MonitorDrumSelection.changedIndex(
-                                    origin: options.firstIndex(of: origin) ?? 0,
-                                    translation: value.translation.width,
-                                    count: options.count)
-                            else {
-                                resetDrag()
-                                return
-                            }
-                            commit(options[index])
+                            finishPointer(value, metrics: metrics)
                         }
                 )
                 .frame(height: 86)
+                .transaction { if followsFinger || previewPosition != nil { $0.animation = nil } }
                 .animation(
-                    dragging || previewPosition != nil ? nil : settleAnimation, value: selection
+                    followsFinger || previewPosition != nil ? nil : settleAnimation, value: selection
                 )
                 .opacity(isInteractive || previewPosition != nil ? 1 : 0.45)
                 .onChange(of: options) { _, _ in cancelDrag() }
@@ -96,11 +98,19 @@
                 .onChange(of: acceptsInput) { _, active in if !active { cancelDrag() } }
                 .onChange(of: dragging) { _, active in
                     if !active {
-                        resetDrag()
+                        tracking = false
+                        if drag.origin != nil { settleToRest() }
                     }
                 }
-                .sensoryFeedback(.selection, trigger: focusedIndex) { _, _ in
-                    haptics && isInteractive
+                .sensoryFeedback(.impact(weight: .medium), trigger: focusedIndex) { old, new in
+                    guard haptics, isInteractive || previewPosition != nil,
+                        options.indices.contains(new)
+                    else {
+                        return false
+                    }
+                    let previous = options.indices.contains(old) ? options[old] : nil
+                    return MonitorDialHaptic.shouldTick(
+                        previous: previous, next: options[new], optionCount: options.count)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Value")
@@ -115,11 +125,55 @@
                 }
         }
 
+        private func finishPointer(_ value: DragGesture.Value, metrics: MonitorDrumMetrics) {
+            let origin = drag.end(identity: interactionIdentity())
+            tracking = false
+            guard acceptsInput, let origin else {
+                settleToRest()
+                return
+            }
+            let originIndex = options.firstIndex(of: origin) ?? 0
+            let travel = hypot(value.translation.width, value.translation.height)
+            if travel < 10, canvasWidth > 1 {
+                let dx = Double(value.startLocation.x - canvasWidth / 2)
+                let tapped = Int((Double(originIndex) + dx / metrics.cellWidth).rounded())
+                if options.indices.contains(tapped) {
+                    commit(options[tapped])
+                    return
+                }
+            }
+            if let index = MonitorDrumSelection.changedIndex(
+                origin: originIndex, translation: value.translation.width, count: options.count)
+            {
+                commit(options[index])
+            } else {
+                settleToRest()
+            }
+        }
+
         private func commit(_ option: String) {
             guard acceptsInput, options.contains(option) else { return }
+            tracking = false
             withAnimation(settleAnimation) {
                 if selection != option { selection = option }
                 drag.cancel(pointerIsActive: dragging)
+                translation = 0
+            }
+        }
+
+        private func followFinger(_ next: CGFloat) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                tracking = true
+                translation = next
+            }
+        }
+
+        private func settleToRest() {
+            tracking = false
+            withAnimation(settleAnimation) {
+                drag.reset()
                 translation = 0
             }
         }
@@ -130,6 +184,7 @@
         }
         private func cancelDrag() {
             drag.cancel(pointerIsActive: dragging)
+            tracking = false
             translation = 0
         }
 
@@ -179,6 +234,13 @@
         }
     }
 
+    private struct DrumCanvasWidthKey: PreferenceKey {
+        static var defaultValue: CGFloat { 0 }
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+
     struct MonitorDrumRow: Sendable {
         let option: String
         let distance: Double
@@ -224,7 +286,8 @@
                 value: row.selected
             )
             .position(x: canvasWidth / 2 + row.distance * row.metrics.cellWidth, y: 39)
-            .onTapGesture(perform: row.action)
+            .animation(nil, value: row.distance)
+            .allowsHitTesting(false)
         }
     }
 #endif

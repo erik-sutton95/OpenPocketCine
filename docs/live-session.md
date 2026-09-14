@@ -67,12 +67,14 @@ dead-reckoned gimbal model onto the look (live `0x04/0x05` is ~0.25 s
 stale — closing on it hunted); arrival streams center ~1 s, then lifts
 (rest/throw the same second paused HEVC — 22:24 and the 18:29 stall
 with 4 recovers + UDP rebuilds). Analog/head-track rest when
-HEVC is stale so a held stick cannot block recover. After a UDP rebuild
+HEVC is stale so a leftover throw cannot block recover after lift. While the
+stick is still down, do not GOP-cut or rebuild UDP — a phone roll that remounts
+chrome must not flash Reconnecting. After a UDP rebuild
 `lastVideo` is nil — that is stale if HEVC had already existed, not “fresh.”
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
-Gimbal grace is at
-most stall+3 s after the last video packet, even if throw is still
-refreshing. Two failed encoder-pause enables rebuild UDP
+After lift, gimbal grace is at most stall+3 s after the last video packet.
+While `gimbalStickHeld`, do not GOP-cut even if throw is still refreshing.
+Two failed encoder-pause enables rebuild UDP
 once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
 the same encoder-pause — do not rebuild UDP. A permitted keepalive rebuild

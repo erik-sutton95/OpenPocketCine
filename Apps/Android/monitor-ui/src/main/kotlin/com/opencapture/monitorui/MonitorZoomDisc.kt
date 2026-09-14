@@ -105,7 +105,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
     onChange: (Double) -> Unit, onDismiss: () -> Unit,
     opticalStops: List<Double> = listOf(1.0), caption: (Double) -> String = { "ZOOM" },
     trailingInset: Float = 0f, attachment: MonitorZoomAttachment = MonitorZoomAttachment.Trailing,
-    bottomClearance: Float = 0f) {
+    bottomClearance: Float = 0f, onDetent: () -> Unit = {}) {
     val maxZoom = maximum.takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
     val logMax = ln(maxZoom).coerceAtLeast(.001)
     val initialValue = initial.takeIf { it.isFinite() }?.coerceIn(1.0, maxZoom) ?: 1.0
@@ -117,6 +117,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
             easing = if (closing) MonitorMotion.ZoomOut else MonitorMotion.Soft), label = "zoom-disc")
     val send by rememberUpdatedState(onChange)
     val dismiss by rememberUpdatedState(onDismiss)
+    val detent by rememberUpdatedState(onDetent)
     LaunchedEffect(Unit) { entering = true }
     LaunchedEffect(closing) { if (closing) { delay(MonitorMotion.ZOOM_HOST_MS.toLong()); dismiss() } }
     val configuration = LocalConfiguration.current
@@ -169,6 +170,7 @@ fun MonitorZoomDisc(initial: Double, maximum: Double, label: (Double) -> String,
             exp(position.toDouble().coerceIn(0.0, 1.0) * logMax).coerceIn(1.0, maxZoom),
             maximum = maxZoom)
         val factor = MonitorZoomScale.slowSnap(unconstrained, current, maximum = maxZoom)
+        if (MonitorDialHaptic.shouldTick(current, factor, MonitorZoomScale.wholeStops)) detent()
         position = MonitorZoomScale.position(factor, 1.0, maxZoom).toFloat()
         send(factor)
     }

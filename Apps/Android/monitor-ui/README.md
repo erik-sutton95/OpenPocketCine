@@ -86,10 +86,11 @@ completion policy. Emulator validation does not exercise BLE or camera Wi-Fi.
 
 ## Deliberate rendering limits
 
-Android overlays preserve the reference shapes without blurring the live picture.
-Floating chrome keeps the reference tint; modal editors and drawers use a denser
-96% tint so unblurred HUD and playback text cannot compete with their controls.
-This avoids adding frame capture or a second rendering path for glass.
+Floating chrome GPU-blurs the existing 213×120 sampled tap (RenderEffect on
+API 31+), not a SurfaceView screenshot or a second decoder. The sample follows
+the picture (25 Hz when that tap is the only consumer) so the plates track
+motion. Modal editors and drawers keep the same sampled material. Unsupported
+API/hardware uses an explicit opaque fallback.
 Scope inspectors reuse the existing latest-frame GPU scope tap, request only
 the selected scope, and run at at most 5 Hz when no monitor scope is active.
 Demand has an owner token and a live/playback domain, is released on disposal or

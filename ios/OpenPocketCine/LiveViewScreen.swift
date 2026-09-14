@@ -230,7 +230,9 @@ struct LiveViewScreen: View {
             layout.presentation
             ?? FieldMonitorLayout(width: layout.viewport.width, height: layout.viewport.height)
         MonitorCanvas(layout: geometry, sourceAspect: model.session.decoder.pictureAspect) {
-            LiveFeedPane().opacity(model.session.isFeedWarming ? 0 : 1)
+            LiveFeedPane()
+                .opacity(model.session.isFeedWarming ? 0 : 1)
+                .transaction { $0.animation = nil }
         } assists: {
             LiveFeedAssistsPane().opacity(model.session.isFeedWarming ? 0 : 1)
         } chrome: {
@@ -546,6 +548,8 @@ struct LiveViewScreen: View {
                     enabled: !interfaceLocked && model.liveOperatorPanel == nil
                         && chromeInteractive && !captureControlsPresented
                 )
+                .id("live-gimbal-stick")
+                .transaction { $0.animation = nil }
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .opacity(captureControlsPresented ? 0 : 1)
@@ -562,6 +566,10 @@ struct LiveViewScreen: View {
                     title: model.headTrackControlTitle, onTap: { headphones.tapControl() }
                 )
                 .liveModuleFrame(layout.gimbalCalibrate)
+                .opacity(captureControlsPresented ? 0 : 1)
+                .allowsHitTesting(!captureControlsPresented && !zoomDialMounted)
+                .accessibilityHidden(
+                    captureControlsPresented || !liveChromeVisible || zoomDialMounted)
                 .zIndex(3)
             }
 
@@ -723,7 +731,7 @@ struct LiveViewScreen: View {
                     } else {
                         model.session.endZoomPinch()
                     }
-                }, onClose: closeZoomDial)
+                }, onClose: closeZoomDial, haptics: model.hapticsEnabled)
             .frame(
                 width: layout.viewport.width, height: layout.viewport.height,
                 alignment: .topLeading)

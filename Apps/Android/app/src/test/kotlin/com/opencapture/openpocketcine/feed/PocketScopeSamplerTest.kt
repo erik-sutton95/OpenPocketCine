@@ -37,6 +37,21 @@ class PocketScopeSamplerTest {
         assertEquals(9, scheduledTaps(frames = 25, fps = 25, PocketScopeSampler.minIntervalNs(3)))
     }
 
+    @Test fun chromeSampleFollowsThePictureWhenBackdropNeedsATap() {
+        assertEquals(
+            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
+            PocketScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = true),
+        )
+        assertEquals(
+            InspectorPreviewAdmission.MIN_INTERVAL_NS,
+            PocketScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = false),
+        )
+        assertEquals(
+            PocketScopeSampler.minIntervalNs(2, 1.0),
+            PocketScopeSampler.chromeSampleIntervalNs(2, 1.0, backdropDemand = true),
+        )
+    }
+
     private fun scheduledTaps(frames: Int, fps: Int, intervalNs: Long): Int {
         var next = 0L
         var taps = 0

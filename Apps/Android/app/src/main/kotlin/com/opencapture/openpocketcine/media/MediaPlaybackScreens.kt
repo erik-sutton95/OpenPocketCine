@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -56,7 +59,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -83,9 +85,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import com.opencapture.monitorui.MonitorLayoutPolicy
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.liveModuleFrame
+import com.opencapture.openpocketcine.monitorBottomInsetDp
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LocalOperatorHaptics
@@ -324,7 +330,6 @@ fun MediaPlayerScreen(
     val context = LocalContext.current
     val playbackConfiguration = LocalConfiguration.current
     val portraitPlayback = playbackConfiguration.screenHeightDp > playbackConfiguration.screenWidthDp
-    var footerHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val anyPlaybackAssistOn = assist.playbackVisibleTools.isNotEmpty()
     val audioMetersOn = assist.isPlaybackVisible(LiveAssistTool.AUDIO)
@@ -596,6 +601,27 @@ fun MediaPlayerScreen(
             val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
             val overlayWidthPx = constraints.maxWidth
             val overlayHeightPx = constraints.maxHeight
+            val viewportWidth = maxWidth.value
+            val viewportHeight = maxHeight.value
+            val safeTop = with(density) {
+                maxOf(
+                    WindowInsets.displayCutout.getTop(this),
+                    WindowInsets.statusBars.getTop(this),
+                ).toDp().value
+            }
+            val safeBottom = monitorBottomInsetDp(
+                rawInsetDp = with(density) {
+                    maxOf(
+                        WindowInsets.displayCutout.getBottom(this),
+                        WindowInsets.navigationBars.getBottom(this),
+                    ).toDp().value
+                },
+                isPortrait = portraitPlayback,
+            )
+            val assistFrame = MonitorLayoutPolicy.fieldMonitorAssists(
+                viewportWidth, viewportHeight, safeTop, safeBottom,
+            )
+            val assistRect = ChromeRect(assistFrame.x, assistFrame.y, assistFrame.width, assistFrame.height)
             Box(
                 Modifier
                     .offset { IntOffset(fitted.x.roundToInt(), fitted.y.roundToInt()) }
@@ -831,7 +857,7 @@ fun MediaPlayerScreen(
                 com.opencapture.monitorui.MonitorPlaybackFooter(
                     position = conformedLabel(currentTime), duration = conformedLabel(duration), portrait = portraitPlayback,
                     modifier = Modifier.align(Alignment.BottomCenter).width(overlayWidth)
-                        .onSizeChanged { footerHeightPx = it.height }.navigationBarsPadding()
+                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     scrubber = {
                         MediaPlaybackScrubber(
@@ -902,8 +928,7 @@ fun MediaPlayerScreen(
                     isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it },
                     requestExpand = assistMode, onExpansionHandled = { assistMode = false },
-                    modifier = Modifier.align(Alignment.BottomStart)
-                        .padding(start = 14.dp, bottom = with(density) { footerHeightPx.toDp() } + 8.dp),
+                    modifier = Modifier.liveModuleFrame(assistRect),
                 )
             } else {
                 Box(
@@ -1124,8 +1149,12 @@ private fun PlaybackConformButton(
                     }
                     val choices = listOf<Double?>(null) + availability.targets
                     val labels = choices.map { if (it == null) "Real time" else ConformPreview.targetLabel(captureRate, it) }
-                    com.opencapture.monitorui.MonitorValueDrum(labels,
-                        if (selected == null) "Real time" else ConformPreview.targetLabel(captureRate, selected)) { label ->
+                    val haptics = LocalOperatorHaptics.current
+                    com.opencapture.monitorui.MonitorValueDrum(
+                        labels,
+                        if (selected == null) "Real time" else ConformPreview.targetLabel(captureRate, selected),
+                        onDetent = { haptics.confirm() },
+                    ) { label ->
                         val index = labels.indexOf(label)
                         if (index >= 0) onSelect(choices[index])
                     }

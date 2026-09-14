@@ -275,9 +275,13 @@ struct FieldMonitorAssistPalette: View {
             || model.isEditingChrome
     }
 
-    var body: some View {
-        let portrait = layout.presentation?.portrait == true
+    private var paletteGeometry: (layout: MonitorAssistPaletteLayout, frame: MonitorRect) {
+        if let presentation = layout.presentation {
+            return MonitorAssistPaletteLayout.fieldMonitor(
+                presentation, toolCount: tools.count, safeTop: layout.safeArea.top)
+        }
         let tablet = UIDevice.current.userInterfaceIdiom == .pad
+        let portrait = layout.viewport.height > layout.viewport.width
         let maximumWidth =
             portrait
             ? layout.viewport.width - (tablet ? 140 : 126)
@@ -289,16 +293,25 @@ struct FieldMonitorAssistPalette: View {
                 layout.assist.maxY - max(layout.safeArea.top, 8))
             : layout.assist.maxY - max(layout.safeArea.top, 8)
         let metrics = MonitorAssistPaletteLayout(
-            portrait: portrait, tablet: tablet, expanded: expanded, toolCount: tools.count,
+            portrait: portrait, tablet: tablet, expanded: true, toolCount: tools.count,
             maximumWidth: maximumWidth, maximumHeight: maximumHeight)
-        let frame = metrics.anchored(leading: layout.assist.minX, bottom: layout.assist.maxY)
+        return (
+            metrics,
+            metrics.anchored(leading: layout.assist.minX, bottom: layout.assist.maxY))
+    }
+
+    var body: some View {
+        @Bindable var model = model
+        let metrics = paletteGeometry.layout
+        let frame = paletteGeometry.frame
         MonitorAssistPalette(
             tools: tools.map {
                 MonitorToolItem(
                     id: $0.rawValue, title: $0.rawValue,
                     enabled: model.assist.isOn($0), hasOptions: $0.hasConfiguration)
             },
-            layout: metrics, usageSeed: MonitorToolUsage.fieldMonitorSeed, expanded: $expanded,
+            layout: metrics, usageSeed: MonitorToolUsage.fieldMonitorSeed,
+            usage: $model.assistToolUsage, expanded: $expanded,
             onToggle: { id in
                 guard !shouldCollapse, let tool = LiveAssistTool(rawValue: id) else { return }
                 model.assist.toggle(tool)

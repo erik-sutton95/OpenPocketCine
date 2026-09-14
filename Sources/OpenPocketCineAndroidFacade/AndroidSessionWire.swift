@@ -1092,6 +1092,7 @@ public enum AndroidSessionWire {
             secondsSinceZoomSet: jsonOptionalNumber(json, key: "secondsSinceZoomSet"),
             zoomPinchActive: jsonBool(json, key: "zoomPinchActive", default: false),
             secondsSinceGimbalThrow: jsonOptionalNumber(json, key: "secondsSinceGimbalThrow"),
+            gimbalStickHeld: jsonBool(json, key: "gimbalStickHeld", default: false),
             secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet")
         )
         switch watchdog.tick(snap) {

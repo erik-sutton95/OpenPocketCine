@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -46,6 +49,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -774,7 +779,17 @@ private fun FilterPopup(
     onClose: () -> Unit,
 ) {
     var pickingBound by remember { mutableStateOf<String?>(null) }
-    Box(Modifier.fillMaxSize()) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val insets = WindowInsets.safeDrawing
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val card = com.opencapture.monitorui.MonitorLayoutPolicy.mediaFilterPopup(
+            maxWidth.value, maxHeight.value,
+            insets.getTop(density) / density.density,
+            insets.getLeft(density, layoutDirection) / density.density,
+            insets.getBottom(density) / density.density,
+            insets.getRight(density, layoutDirection) / density.density,
+        )
         Box(
             Modifier
                 .fillMaxSize()
@@ -783,14 +798,14 @@ private fun FilterPopup(
         )
         Column(
             Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 88.dp, end = 20.dp)
-                .width(320.dp)
-                .height(420.dp)
+                .absoluteOffset { IntOffset((card.x * density.density).roundToInt(), (card.y * density.density).roundToInt()) }
+                .width(card.width.dp)
+                .height(card.height.dp)
                 .clip(MediaCornerShape)
                 .panelGlass(MediaCornerShape)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .semantics { contentDescription = "Filter popup" },
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

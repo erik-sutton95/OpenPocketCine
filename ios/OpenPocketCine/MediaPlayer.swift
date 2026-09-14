@@ -497,8 +497,6 @@ struct MediaPlayerView: View {
                         }
                     }
                     if chromeVisible {
-                        playbackAssistPalette(layout: layout)
-                            .padding(.leading, 12).padding(.bottom, layout.paletteBottom)
                         if isConformPresented {
                             conformPanel
                                 .frame(maxWidth: min(480, geometry.size.width - 24))
@@ -519,6 +517,10 @@ struct MediaPlayerView: View {
                 .animation(.easeInOut(duration: 0.22), value: chromeVisible)
             }
             .zIndex(2)
+            if chromeVisible {
+                playbackAssistOverlay
+                    .zIndex(3)
+            }
         }
         .animation(.easeInOut(duration: 0.28), value: active.id)
         .monitorVideoBackdrop(
@@ -982,20 +984,41 @@ struct MediaPlayerView: View {
         return "Preparing playback…"
     }
 
-    private func playbackAssistPalette(layout: MonitorPlaybackLayout) -> some View {
-        let portrait = layout.portrait
+    private var playbackAssistOverlay: some View {
+        GeometryReader { proxy in
+            let safeArea = LiveMonitorLayout.resolvedSafeArea(
+                proxy.safeAreaInsets, scene: windowGeometry.safeArea)
+            let size = LiveMonitorLayout.canvasSize(
+                layoutSize: proxy.size, safeArea: safeArea,
+                screenSize: windowGeometry.validSize)
+            let presentation = FieldMonitorLayout(
+                width: size.width, height: size.height,
+                safeArea: MonitorSafeArea(
+                    top: safeArea.top, leading: safeArea.leading,
+                    bottom: safeArea.bottom, trailing: safeArea.trailing),
+                showsValues: true,
+                topControlInset: windowGeometry.topControlInset)
+            playbackAssistPalette(presentation: presentation, safeTop: safeArea.top)
+                .frame(width: size.width, height: size.height)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func playbackAssistPalette(presentation: FieldMonitorLayout, safeTop: CGFloat)
+        -> some View
+    {
+        @Bindable var model = model
         let tools = LiveAssistTool.toolbarCases + [.audioMeters]
+        let (metrics, frame) = MonitorAssistPaletteLayout.fieldMonitor(
+            presentation, toolCount: tools.count, safeTop: safeTop)
         return MonitorAssistPalette(
             tools: tools.map {
                 MonitorToolItem(
                     id: $0.rawValue, title: $0.rawValue,
                     enabled: model.assist.isPlaybackVisible($0), hasOptions: $0.hasConfiguration)
             },
-            layout: MonitorAssistPaletteLayout(
-                portrait: portrait, tablet: UIDevice.current.userInterfaceIdiom == .pad,
-                expanded: assistMode, toolCount: tools.count,
-                maximumWidth: layout.paletteWidth, maximumHeight: layout.paletteHeight),
-            usageSeed: MonitorToolUsage.fieldMonitorSeed, expanded: $assistMode,
+            layout: metrics, usageSeed: MonitorToolUsage.fieldMonitorSeed,
+            usage: $model.assistToolUsage, expanded: $assistMode,
             onToggle: { id in
                 if let tool = LiveAssistTool(rawValue: id) { model.assist.togglePlayback(tool) }
             },
@@ -1011,10 +1034,17 @@ struct MediaPlayerView: View {
         .background {
             GeometryReader { proxy in
                 Color.clear.onAppear { playbackAssistToolbarFrame = proxy.frame(in: .global) }
-                    .onChange(of: proxy.frame(in: .global)) { _, frame in
-                        playbackAssistToolbarFrame = frame
+                    .onChange(of: proxy.frame(in: .global)) { _, next in
+                        playbackAssistToolbarFrame = next
                     }
             }
+        }
+        .position(x: frame.midX, y: frame.midY)
+        .frame(
+            width: presentation.viewport.width, height: presentation.viewport.height,
+            alignment: .topLeading)
+        .onAppear {
+            playbackAssistToolbarFrame = frame.cgRect
         }
     }
 

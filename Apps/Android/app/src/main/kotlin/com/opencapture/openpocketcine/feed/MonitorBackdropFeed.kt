@@ -23,8 +23,9 @@ import java.util.concurrent.Executors
 
 /**
  * Passive consumer of the existing raw scope tap. One <=213x120 grade/readback per
- * admitted source tick, shared by every panel, at <=5 Hz (thermal x3/x5). No timer,
- * decoder, SurfaceView capture, or per-widget readback. The visible feed stays native.
+ * admitted source tick, shared by every panel, following the picture (25 Hz tap,
+ * 60 Hz admission cap, thermal x3/x5). No timer, decoder, SurfaceView capture, or
+ * per-widget readback. The visible feed stays native.
  */
 internal class MonitorBackdropFeed(context: Context) {
     val source = MonitorBackdropSource()
@@ -34,6 +35,7 @@ internal class MonitorBackdropFeed(context: Context) {
     private var renderer: InspectorPreviewRenderer? = null // executor-only
     private var lookKey: Int? = null
     @Volatile private var failed = false
+    private var recycled: Bitmap? = null
 
     @Synchronized fun sourceChanged() { gate.invalidateAll(); clear() }
     @Synchronized fun attach(producer: Any) { synchronized(this) { gate.attach(producer); lookKey = null; clear() } }
@@ -61,13 +63,24 @@ internal class MonitorBackdropFeed(context: Context) {
                 val image = if (plan.hasPlaybackLook) {
                     val gl = renderer ?: InspectorPreviewRenderer().also { renderer = it }
                     gl.render(app, plan, frame)
-                } else Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888).apply {
-                    // Raw identity is already the displayed image; avoid a second GPU pass/readback.
-                    copyPixelsFromBuffer(ByteBuffer.wrap(frame.rgba))
+                } else {
+                    val bitmap = synchronized(this@MonitorBackdropFeed) {
+                        recycled?.takeIf { it.width == frame.width && it.height == frame.height }
+                            ?: Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
+                    }
+                    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(frame.rgba))
+                    bitmap
                 }
                 posted = main.post {
-                    try { if (gate.isCurrent(ticket)) source.image = image }
-                    finally { gate.complete(ticket) }
+                    try {
+                        if (gate.isCurrent(ticket)) {
+                            val previous = source.image
+                            source.image = image
+                            if (previous !== image) {
+                                synchronized(this@MonitorBackdropFeed) { recycled = previous }
+                            }
+                        }
+                    } finally { gate.complete(ticket) }
                 }
             } catch (error: Exception) {
                 synchronized(this) {
@@ -85,8 +98,12 @@ internal class MonitorBackdropFeed(context: Context) {
 
     private fun clear() {
         val generation = gate.generation()
-        if (Looper.myLooper() == Looper.getMainLooper()) source.image = null
-        else main.post { if (gate.generation() == generation) source.image = null }
+        fun drop() {
+            source.image = null
+            recycled = null
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) drop()
+        else main.post { if (gate.generation() == generation) drop() }
     }
     private fun releaseRenderer() { executor.execute { renderer?.close(); renderer = null } }
 

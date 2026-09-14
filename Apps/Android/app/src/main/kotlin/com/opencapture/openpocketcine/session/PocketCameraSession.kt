@@ -312,6 +312,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val isFormatPinActive: Boolean
         get() = formatPin != null
     private var colorPin: ColorPin? = null
+    private var expoPin: ExpoPin? = null
     private var gimbalStickMapping = GimbalStickMapping()
     /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
     @Volatile private var lastSelfieFlipReplyElapsed = 0L
@@ -519,6 +520,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlBusy.value = false
         formatPin = null
         colorPin = null
+        expoPin = null
         gimbalStickMapping = GimbalStickMapping()
         lastSelfieFlipReplyElapsed = 0L
         lastAssistMirror = false
@@ -921,6 +923,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             if (CameraCommands.shouldHoldGimbalWatchdog(
                     lastGimbalThrowAt?.let { (now - it) / 1000.0 },
                     videoAge?.div(1000.0),
+                    gimbalStickHeld,
                 )
             ) {
                 return false
@@ -1172,6 +1175,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
                 zoomPinchActive = zoomPinchPreview != null,
                 lastGimbalThrowAt = lastGimbalThrowAt,
+                gimbalStickHeld = gimbalStickHeld,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
             coreWatchdog = SwiftCore.feedWatchdogCreate()
@@ -1205,6 +1209,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
                     append(",\"zoomPinchActive\":${zoomPinchPreview != null}")
                     age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
+                    append(",\"gimbalStickHeld\":$gimbalStickHeld")
                     age(lastCameraSetAt)?.let { append(",\"secondsSinceCameraSet\":$it") }
                     append("}")
                 }
@@ -1843,6 +1848,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 next.fps != prev.fps
         next = absorbStaleFormat(next, formatReported)
         next = absorbStaleColor(next)
+        next = absorbStaleExpo(next)
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
             syncGimbalPose()
@@ -1954,6 +1960,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setEv(thirds: Int) {
         val ev = EvComp.fromThirds(thirds)
         val previous = _status.value.evComp
+        pinExpo(evComp = ev.rawValue)
         _status.value = _status.value.copy(evComp = ev.rawValue)
         fireKind(
             SwiftCore.CMD_SET_EV,
@@ -1962,6 +1969,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             coalesce = true,
             onFail = {
                 if (_status.value.evComp == ev.rawValue) {
+                    clearExpoPin(ev = true)
                     _status.value = _status.value.copy(evComp = previous)
                 }
             },
@@ -2515,6 +2523,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun setIsoIndex(index: Int) {
         val previous = _status.value.isoIndex
+        pinExpo(isoIndex = index)
         _status.value = _status.value.copy(isoIndex = index)
         fireKind(
             SwiftCore.CMD_SET_ISO_INDEX,
@@ -2523,6 +2532,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             coalesce = true,
             onFail = {
                 if (_status.value.isoIndex == index) {
+                    clearExpoPin(iso = true)
                     _status.value = _status.value.copy(isoIndex = previous)
                 }
             },
@@ -2532,6 +2542,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setShutterDenom(denom: Int) {
         if (_status.value.expoMode != CameraCommands.EXPO_MANUAL) {
             val previousExpo = _status.value.expoMode
+            pinExpo(expoMode = CameraCommands.EXPO_MANUAL)
             _status.value = _status.value.copy(expoMode = CameraCommands.EXPO_MANUAL)
             fireKind(
                 SwiftCore.CMD_SET_EXPO_MODE,
@@ -2539,12 +2550,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 "Manual expo",
                 onFail = {
                     if (_status.value.expoMode == CameraCommands.EXPO_MANUAL) {
+                        clearExpoPin(mode = true)
                         _status.value = _status.value.copy(expoMode = previousExpo)
                     }
                 },
             )
         }
         val previous = _status.value.shutterDenom
+        pinExpo(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
         _status.value = _status.value.copy(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
         fireKind(
             SwiftCore.CMD_SET_SHUTTER,
@@ -2553,6 +2566,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             coalesce = true,
             onFail = {
                 if (_status.value.shutterDenom == denom) {
+                    clearExpoPin(shutter = true)
                     _status.value = _status.value.copy(shutterDenom = previous)
                 }
             },
@@ -2562,6 +2576,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setExpoMode(mode: Int) {
         val extra = CameraCommands.expoWireExtra(mode) ?: return
         val previous = _status.value.expoMode
+        pinExpo(expoMode = mode)
         _status.value = _status.value.copy(expoMode = mode)
         fireKind(
             SwiftCore.CMD_SET_EXPO_MODE,
@@ -2569,6 +2584,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             "ExpoMode",
             onFail = {
                 if (_status.value.expoMode == mode) {
+                    clearExpoPin(mode = true)
                     _status.value = _status.value.copy(expoMode = previous)
                 }
             },
@@ -2757,6 +2773,49 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             ColorPin.absorbStale(incoming, colorPin, SystemClock.elapsedRealtime())
         colorPin = remaining
         return next
+    }
+
+    private fun absorbStaleExpo(incoming: CameraStatus): CameraStatus {
+        val pin = expoPin ?: return incoming
+        val (next, remaining) = pin.absorb(incoming, _status.value, SystemClock.elapsedRealtime())
+        expoPin = remaining
+        return next
+    }
+
+    private fun pinExpo(
+        isoIndex: Int? = null,
+        shutterDenom: Int? = null,
+        evComp: Int? = null,
+        expoMode: Int? = null,
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        val pin = expoPin ?: ExpoPin(deadlineElapsedRealtime = now + 2_000L)
+        expoPin =
+            ExpoPin(
+                isoIndex = isoIndex ?: pin.isoIndex,
+                shutterDenom = shutterDenom ?: pin.shutterDenom,
+                evComp = evComp ?: pin.evComp,
+                expoMode = expoMode ?: pin.expoMode,
+                deadlineElapsedRealtime = now + 2_000L,
+            )
+    }
+
+    private fun clearExpoPin(
+        iso: Boolean = false,
+        shutter: Boolean = false,
+        ev: Boolean = false,
+        mode: Boolean = false,
+    ) {
+        val pin = expoPin ?: return
+        val next =
+            ExpoPin(
+                isoIndex = if (iso) null else pin.isoIndex,
+                shutterDenom = if (shutter) null else pin.shutterDenom,
+                evComp = if (ev) null else pin.evComp,
+                expoMode = if (mode) null else pin.expoMode,
+                deadlineElapsedRealtime = pin.deadlineElapsedRealtime,
+            )
+        expoPin = if (next.isEmpty()) null else next
     }
 
     private fun pinColor(mode: Int) {
@@ -3937,6 +3996,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (CameraCommands.shouldHoldGimbalWatchdog(
                 lastGimbalThrowAt?.let { (now - it) / 1000.0 },
                 videoAge?.div(1000.0),
+                gimbalStickHeld,
             )
         ) {
             Log.i(TAG, "control: SET timeouts during gimbal grace — leave UDP")
@@ -4165,6 +4225,7 @@ internal object LiveViewEnablePolicy {
         val lastZoomAt: Long? = null,
         val zoomPinchActive: Boolean = false,
         val lastGimbalThrowAt: Long? = null,
+        val gimbalStickHeld: Boolean = false,
         val hadVideo: Boolean? = null,
     )
 
@@ -4644,6 +4705,7 @@ internal object LiveViewEnablePolicy {
         if (CameraCommands.shouldHoldGimbalWatchdog(
                 age(snap.now, snap.lastGimbalThrowAt)?.div(1000.0),
                 videoAge?.div(1000.0),
+                snap.gimbalStickHeld,
             )
         ) {
             return Action.NONE

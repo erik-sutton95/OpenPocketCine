@@ -6,13 +6,20 @@ import kotlin.math.min
 /**
  * Lockstep with Swift `GimbalCluster`. Stick, zoom chip, and gimbal-controls
  * button as one parking spot. The button is a zoom-sized circle leading of
- * zoom. The stick does not move.
+ * zoom. Head Lock is a zoom-sized compass above that row, trailing-aligned
+ * with the stick. The stick does not move.
  */
 data class GimbalCluster(
     val stick: ChromeRect,
     val zoom: ChromeRect,
     val controls: ChromeRect,
 ) {
+    val headTrack: ChromeRect
+        get() {
+            val y = min(zoom.minY, stick.minY) - GAP - ZOOM
+            return ChromeRect(stick.maxX - ZOOM, y, ZOOM, ZOOM)
+        }
+
     val bounds: ChromeRect
         get() {
             var minX = min(stick.minX, zoom.minX)

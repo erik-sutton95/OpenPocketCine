@@ -1016,8 +1016,12 @@ data class LiveMonitorLayout(
                     record = ChromeRect(recordX, recordY, record, record),
                     disp = ChromeRect(recordButtonX, recordY - 8f - btn, btn, btn),
                     rail = ChromeRect(recordX, 0f, record, vh),
-                    capture = ChromeRect(valuesInset, vh - 52f, max(0f, vw - 2 * valuesInset), 44f),
-                    assist = com.opencapture.monitorui.MonitorLayoutPolicy.landscapeAssists(vh, tablet, edge).let {
+                    capture = ChromeRect(
+                        valuesInset,
+                        vh - com.opencapture.monitorui.MonitorLayoutPolicy.landscapeBottomClearance(safeBottom) - 44f,
+                        max(0f, vw - 2 * valuesInset), 44f),
+                    assist = com.opencapture.monitorui.MonitorLayoutPolicy.landscapeAssists(
+                        vh, tablet, edge, safeBottom).let {
                         ChromeRect(it.x, it.y, it.width, it.height)
                     },
                 )

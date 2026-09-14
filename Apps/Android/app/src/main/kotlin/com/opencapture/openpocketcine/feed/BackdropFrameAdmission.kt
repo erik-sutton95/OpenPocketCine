@@ -21,7 +21,7 @@ internal class BackdropFrameAdmission {
     @Synchronized fun hasDemand(value: Any): Boolean = active && producer === value
     @Synchronized fun acquire(value: Any, nowNs: Long, thermal: Double): Ticket? {
         if (!hasDemand(value) || busy != null) return null
-        val interval = (200_000_000L * thermal.coerceAtLeast(1.0)).toLong()
+        val interval = com.opencapture.monitorui.MonitorBackdropPolicy.intervalNs(thermal)
         if (lastCaptureNs?.let { nowNs - it < interval } == true) return null
         return Ticket(value, epoch).also { busy = it; lastCaptureNs = nowNs }
     }

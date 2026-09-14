@@ -19,10 +19,10 @@ write the exception in the table in the same PR.
 | Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops (DJI spec): Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 / 3 1×/2×/4× (Pocket 3 4K Video max 2×); Nano 1×. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset. Gamepad Triangle/Y tracks the AF-C face in frame, or cancels if already tracking. | Vision vs ML Kit Face Detection | **physical** both |
 | Motion Control speed | No operator rate calibration. No artificial speed ceiling; duration controls retain a 0.5 s floor. Native maximum repeatable speed is not yet qualified. | Both shells | **physical** both |
-| Head tracking | iOS: Controls **Head Tracking (Experimental)**, off by default. **Calibrate Head Lock** captures shared forward from a still head and fresh native camera pose. Nose direction maps to native pan/tilt targets; the native command horizon is 100 ms. Roll is readout only. STOP clears Head Lock. Manual control, Motion Control takes and inactive scenes take priority. Stale measurements and callbacks cannot keep driving. One motion request owns permission-pending startup; missing samples show motion/permission guidance and an explicit retry. Scopes may sit beneath Calibrate/STOP in either orientation. | Android has no AirPods IMU — no Controls row. Native head response remains under physical qualification; [contract](head-tracking.md). | **physical** iOS |
+| Head tracking | iOS: Controls **Head Tracking (Experimental)**, off by default. A Lucide compass above the right-side joystick cluster is **Calibrate Head Lock** (VoiceOver / settings keep that name). It captures shared forward from a still head and fresh native camera pose. The same 44 pt control becomes a square STOP. Nose direction maps to native pan/tilt targets; the native command horizon is 100 ms. Roll is readout only. STOP clears Head Lock. Manual control, Motion Control takes and inactive scenes take priority. Stale measurements and callbacks cannot keep driving. One motion request owns permission-pending startup; missing samples show motion/permission guidance and an explicit retry. Scopes may sit beneath the compass in either orientation. | Android has no AirPods IMU — no Controls row and no live compass. Layout helpers still park a `headTrack` region above the cluster. Native head response remains under physical qualification; [contract](head-tracking.md). | **physical** iOS |
 | Watch companion | Apple Watch: live preview, timecode, storage, camera battery, rec/shutter. Phone is the radio. Rec on the wrist skips Record Confirmation (same as gamepad Cross/A). | iOS only. Wear OS later. No complication, no phone battery on the wrist, no Digital Crown gimbal. | **physical** iOS + Watch |
 | Operator Setup | Seven tabs (Link, Sharing, View Assist, Controls, Display, Storage, System); Field Monitor solid cards; bundled Sora and tabular digits; landscape navigation rail / portrait scrolling tabs; NOTICE legal | Frame.io row is “Not configured” until iOS keys exist. Sharing browse / advertise / join / control is **iOS-only** (Bonjour `_opc-mon._tcp` on the same camera Wi-Fi, no peer-to-peer discovery or streaming; host Wi-Fi QR join code). iOS uses bounded encode admission and independent per-watcher video windows ([relay performance](watcher-relay.md)). iOS watcher now reuses local monitor assists/scopes, telemetry, REC tally, fitted focus, token-gated camera controls, and bounded reconnect. Android Sharing stays Coming soon until its relay, monitor, and join flow are implemented. | **physical** iOS for Sharing; both for the other six tabs |
-| Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, independent playback assist rail, LUT / PEAK / FALSE / ZEBRA grade that proxy (identity player + overlay/replace feed), live HEVC held while library or Operator Setup covers the monitor (do not drop pktType `0x02` ingest — #177; Android keeps the SurfaceView attached under that overlay — #248). Next/prev keeps the processed-feed host so an armed LUT rebakes the new item without cycling the chip. Shot color lives in the media cache (`color.json`) so Auto LUT works disconnected. **Proxy** tag when only the 720p sidecar is on the phone. Storage **Full Resolution Caching** (on by default) also caches the original on open. Playback LUT replace hides the identity player once the GPU owns the cube (live already does). Pocket 3 `/v2` is always storage 0 (single microSD), even when the list handle has the internal bit. Newest catalog page lists even if `0x02/0x0c` ACKs E0 after a take; older pages still need playback. | Frame.io upload and LUT bake on export: iOS only. iOS Share **Bake LUT** has **Bake exposure** (on by default) so the LUT exposure pull is written into the file; off keeps the cube at 0.0. iOS Share **Convert log** (off by default) is a technical D-Log ↔ D-Log2 transform, exclusive with Bake LUT; Rec.709 display stays Bake LUT. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback uses the shared UI 2.0 header/footer and a separate 82% metadata drawer; Android does not capture a backdrop for glass. GPU backends: iOS `CIFeedView` vs Android GLES. iOS playback stacks `AVPlayerLayer` and `CIFeedView` as siblings — Metal nested in `AVPlayerLayer` is a black LUT plate. Android playback already matches live: ExoPlayer writes an OES surface and `LiveFeedEffectsSession` grades LUT/FALSE/PEAK/ZEBRA in GLES (`PlaybackFeedView`); TextureView is only the window. | **physical** both |
+| Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, View Assist parked on the live Field Monitor assist slot, LUT / PEAK / FALSE / ZEBRA grade that proxy (identity player + overlay/replace feed), live HEVC held while library or Operator Setup covers the monitor (do not drop pktType `0x02` ingest — #177; Android keeps the SurfaceView attached under that overlay — #248). Next/prev keeps the processed-feed host so an armed LUT rebakes the new item without cycling the chip. Shot color lives in the media cache (`color.json`) so Auto LUT works disconnected. **Proxy** tag when only the 720p sidecar is on the phone. Storage **Full Resolution Caching** (on by default) also caches the original on open. Playback LUT replace hides the identity player once the GPU owns the cube (live already does). Pocket 3 `/v2` is always storage 0 (single microSD), even when the list handle has the internal bit. Newest catalog page lists even if `0x02/0x0c` ACKs E0 after a take; older pages still need playback. | Frame.io upload and LUT bake on export: iOS only. iOS Share **Bake LUT** has **Bake exposure** (on by default) so the LUT exposure pull is written into the file; off keeps the cube at 0.0. iOS Share **Convert log** (off by default) is a technical D-Log ↔ D-Log2 transform, exclusive with Bake LUT; Rec.709 display stays Bake LUT. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback uses the shared UI 2.0 header/footer and a separate 82% metadata drawer; Android does not capture a backdrop for glass. GPU backends: iOS `CIFeedView` vs Android GLES. iOS playback stacks `AVPlayerLayer` and `CIFeedView` as siblings — Metal nested in `AVPlayerLayer` is a black LUT plate. Android playback already matches live: ExoPlayer writes an OES surface and `LiveFeedEffectsSession` grades LUT/FALSE/PEAK/ZEBRA in GLES (`PlaybackFeedView`); TextureView is only the window. | **physical** both |
 | Present path | `FeedPresentPolicy`: skip duplicate timestamps, latest-wins bake, freeze ≠ flush (2 s keep last sample), unhide replace-grade before the drawable, offscreen `isEnabled = false`, one `0x09/0xa8` in flight (`SerialSessionGate`), one Metal/GLES present in flight (`maxInFlightMetalPresents`). LUT 50/50 is a cube option, not a decoder/swapchain tear — split without a cube must not cover identity. LUT cubes at the 720p feed raster then stretches Rec.709 (`bakeSize` then bilinear). | iOS Metal / `CIFeedView` vs Android Vulkan / GLES `LiveFeedEffectsSession`; debug line is `control-live.log` / logcat, not operator chrome. Extra-mirror commits on the feed host at present (TT180) after holding the last picture 3 frames / 120 ms so the current orientation is not X-flipped in place. iOS `CAMetalLayer.allowsNextDrawableTimeout` (no MainActor block). Android already gates GPU split on a loaded cube. | **physical** both |
 | Diagnostics | Operator Setup → System **and** Connection setup (first pair) → **Share Diagnostics** (redacted report). Journal in app documents. No analytics upload. | iOS copies a compact paste on screenshot for TestFlight feedback (Apple cannot attach files to that form). Android has no TestFlight screenshot hook — Share only. MetricKit is iOS. | **physical** both |
 | Multiview prototype | Experimental shared Wi-Fi with independent per-camera BLE provisioning, bounded identity-verified LAN discovery, normal UDP preview, per-camera and group recording with fresh status confirmation. | iOS only; Android deferred. Pocket 3/4/4 Pro and Nano have preview profiles. Action/360 and unprofiled Osmo can attempt network-only setup. Audio, phone hotspot, unprofiled models and four-camera thermal behavior remain unverified. | Physical iPhone: Pocket 4 Pro, Pocket 3 and Nano preview together, automatic discovery, all three record starts/stops and tally borders confirmed. Dedicated parallel-setup, saved-stage restoration and AP-return checks remain pending. |
@@ -52,8 +52,15 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   a cyan center mark and fading edges.
   Camera-derived options remain authoritative; settle commits through existing
   command handlers. Width caps: 480 phone / 620 tablet, also bounded by viewport.
+  Detent haptics are a medium impact on coarse neighbors (shutter 172° → 180°)
+  and on dense-list majors (Kelvin 5600K, ISO 400, 1/50). The zoom disc pulses
+  on whole stops (2× / 3× / 4× / 6× / 9× / 12×); duration dials pulse on whole
+  seconds. Hundredths, 0.5 s duration steps, and in-between Kelvin stay silent.
+  Gated by Haptics.
 - Camera-value pickers (ISO, shutter/EV, exposure, WB, focus, audio) grow from
-  bottom-center. FORMAT, COLOR and shooting mode hang from the top well of those
+  bottom-center. Auto-exposure EV keeps the compensation as the value and shows
+  the camera-chosen shutter in the caption (`EV 1/200s`); a missing denom stays
+  `EV`. FORMAT, COLOR and shooting mode hang from the top well of those
   controls: portrait details sit under the info bar and keep Format / Color / Mode
   category tabs; landscape attaches to the screen top with no extra category row.
   Portrait floating lower corners are 16; landscape attached bottom edges stay
@@ -82,10 +89,17 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Share card hugs; max height 520 dp so portrait Back stays off the status bar.
 - Floating chrome follows the reference tint RGB `(20,22,24)`: 0.52 compact,
   0.62 expanded, 0.82 info and 0.86 delivery. Text and icons use tighter,
-  darker local black shadows, independently of the plate tint.
+  darker local black shadows, independently of the plate tint. Readout
+  halos fade instead of clipping at the glyph or tile bounds. Compact
+  hold/drag camera-value popups use the same detent haptics as the full drums.
+  Landscape camera values and the assist plate sit
+  `max(home-indicator, 14) + 10` pt/dp above the physical bottom so they
+  clear Apple's home bar.
   iOS honors Reduce Transparency with a solid near-black plate.
-  Android uses translucent compositing to avoid copying the live picture for blur;
-  it does not approximate blur by adding a more opaque drawer.
+  Floating glass tracks the visible picture at up to 60 Hz on a 320 px
+  (Android 213×120 tap) GPU blur; it does not screenshot the window or start a
+  second decoder. Android uses that sampled tap plus RenderEffect, not a more
+  opaque drawer.
 - Lock, Settings and Media share their visible size and 14 pt/dp corners.
   On cutout phones in landscape, their top positions move down by 2.5% of
   viewport height to clear rounded screen corners. Lock and Settings share a
@@ -96,9 +110,17 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   readings show a dash. Only level-based inputs use battery bars.
 - `ScopeMiniChrome`: 0.72 rounded plate, hairline, 16 dp corner, 16 dp shadow.
 - View Assist favorites use the live system-button side: 54 pt/dp phone, 48 tablet,
-  with proportional 29/54 icons. Palette rows use that same height. The landscape
+  with proportional 29/54 icons. Palette rows use that same height. The expanded
+  catalog keeps those same cells and icons; labels fade over the glyph without
+  changing the tap target. Tap the arrow to open or close; press and drag it so
+  the plate follows the finger, then snaps. The landscape
   expand lane adds 12 pt/dp of hit area to the right of its original 15 pt/dp lane;
-  the glyph and the palette's bottom-leading anchor stay in place.
+  the glyph and the palette's bottom-leading anchor stay in place. Collapsed
+  shows the frecency favorites (frequency × recency, 36-hour half-life,
+  persisted): two in landscape, one in portrait under the chevron on the compact
+  plate; extra glyphs fade in opacity so the arrow reads first. The open plate
+  keeps that order until it fully collapses. Press-drag keeps
+  the expanding edge under the finger; a flick coasts open or closed.
 - Settings and Media keep full-height landscape navigation with brand/title at
   its top and Back outside to the left. Portrait retains Back beside the title.
   Back uses the live control's material, shape, size and press response. iOS shares
@@ -107,7 +129,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Grid/list
   is two 32×28 cells; sizes are 28×28 cells with 7/10/13 rounded-square dots. Pull-to-refresh replaces the Refresh toolbar button and
   works with grid, list and empty catalogs. Filter uses the same chip chrome as
-  Sort (icon plus Filter label). Date is a start–end range through the native
+  Sort (icon plus Filter label). The filter card hangs from the trailing Filter
+  chip, clears the larger landscape island/cutout lane even when the page zeros
+  the clean-edge inset, and shrinks above the home indicator instead of clipping
+  a 420 pt/dp plate. Date is a start–end range through the native
   calendar (iOS graphical DatePicker sheet, Android DatePickerDialog), not a
   per-day chip list. Colour filters known log/display profiles from cached shot
   colour. Sorting, filters and selection persist
@@ -143,6 +168,7 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   system buttons until closed. Minor ticks are equally spaced on the log ring;
   labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. A very slow turn
   can rest on whole stops (2×, 3×, 4×, 6×, 9×, 12×); a faster turn does not.
+  Those whole stops also fire the same detent haptic as capture drums.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
   last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
   amber as the disc ticks.
@@ -470,6 +496,9 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   and lint run in this change; physical Android qualification remains an exception
   because no device was attached.
 - Media filter restyle: Filter uses the same chip as Sort (icon plus Filter).
+  The filter card uses the larger landscape island lane (including when the
+  Media page zeros the clean-edge inset) and shrinks above the home indicator
+  instead of clipping a 420 pt/dp plate.
   Start and End open the native calendar; colour chips list cached shot
   profiles. iPhone 16 Pro simulator: Filter matched Sort height and vertical
   center in both orientations. iPhone 16 Pro Max Release install launched.
@@ -537,7 +566,8 @@ this document apply to those earlier builds; they do not qualify the new chrome.
 - Both shells use the reference's fixed heavy blur, saturation and tint when a
   passive displayed-look source is available. These surfaces have no Liquid Glass
   lens or refraction effects. Foreground controls stay sharp. Low-resolution source
-  work is shared and bounded to 5 Hz with thermal backoff; no full-resolution
+  work is shared, latest-wins, and capped at 60 Hz with thermal backoff so the
+  plates track live and playback motion; no full-resolution
   backdrop capture or additional decoder is introduced. Scope/guide/chrome graphics
   drawn above the video are not included in this passive video source, so overlapping
   overlays do not establish exact whole-window backdrop parity.

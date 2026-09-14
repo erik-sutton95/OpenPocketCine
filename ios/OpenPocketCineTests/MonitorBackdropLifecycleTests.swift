@@ -8,6 +8,7 @@ import XCTest
 
 @MainActor
 final class MonitorBackdropLifecycleTests: XCTestCase {
+    private let step = MonitorBackdropPolicy.minimumIntervalNanoseconds
     func testUnchangedInputSkipsNativeWorkAndPublicationWithoutResettingCadence() async throws {
         let clock = InspectorPreviewTestClock()
         let calls = BackdropTestCounter()
@@ -25,12 +26,12 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
             [source]
         }
         XCTAssertFalse(try XCTUnwrap(first).isUnchanged)
-        clock.now = 100_000_000
+        clock.now = step / 2
         let early = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
         XCTAssertNil(early)
-        clock.now = 200_000_000
+        clock.now = step
         let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -39,7 +40,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         XCTAssertTrue(reused.snapshot?.image(for: .compact) === snapshot.image(for: .compact))
         XCTAssertTrue(renderer.isCurrent(reused))
         XCTAssertEqual(calls.value, 1)
-        clock.now = 399_999_999
+        clock.now = step * 2 - 1
         var prepared = false
         let afterHit = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             prepared = true
@@ -69,7 +70,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         var surround: UInt32 = 0x08090A
         var expectedCalls = 0
         func checkChanged(_ label: String) async throws {
-            clock.now += 200_000_000
+            clock.now += step
             let changed = await renderer.render(
                 owner: owner, canvasSize: canvas, surroundRGB: surround
             ) {
@@ -78,7 +79,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
             XCTAssertFalse(try XCTUnwrap(changed).isUnchanged, label)
             expectedCalls += 1
             XCTAssertEqual(calls.value, expectedCalls, label)
-            clock.now += 200_000_000
+            clock.now += step
             let repeated = await renderer.render(
                 owner: owner, canvasSize: canvas, surroundRGB: surround
             ) {
@@ -135,12 +136,12 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         renderer.activate(owner)
         _ = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { [source] }
         source.effects.peaking = true
-        clock.now += 200_000_000
+        clock.now += step
         let failure = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
         XCTAssertNil(try XCTUnwrap(failure).snapshot)
-        clock.now += 200_000_000
+        clock.now += step
         let retry = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -148,7 +149,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         XCTAssertNotNil(retry?.snapshot, "A failed result must not be cached")
         XCTAssertEqual(calls.value, 3)
         source = original
-        clock.now += 200_000_000
+        clock.now += step
         let restored = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -156,20 +157,20 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         XCTAssertEqual(calls.value, 4, "Returning to an earlier input must rerender")
         renderer.deactivate(owner)
         renderer.activate(owner)
-        clock.now += 200_000_000
+        clock.now += step
         let restarted = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
         XCTAssertFalse(try XCTUnwrap(restarted).isUnchanged)
         let nextOwner = UUID()
         renderer.activate(nextOwner)
-        clock.now += 200_000_000
+        clock.now += step
         let remounted = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
             [source]
         }
         XCTAssertFalse(try XCTUnwrap(remounted).isUnchanged)
         renderer.deactivate(owner)
-        clock.now += 200_000_000
+        clock.now += step
         let repeated = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -203,7 +204,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         pending.cancel()
         let nextOwner = UUID()
         renderer.activate(nextOwner)
-        clock.now += 200_000_000
+        clock.now += step
         let overlap = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -216,7 +217,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         }
         XCTAssertFalse(try XCTUnwrap(fresh).isUnchanged)
         XCTAssertEqual(calls.value, 2, "Cancelled successful native output must not seed a cache")
-        clock.now += 200_000_000
+        clock.now += step
         let repeated = await renderer.render(owner: nextOwner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -243,7 +244,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         _ = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) { [source] }
         // The real producer overwrites this output while our source retains it.
         XCTAssertTrue(FeedWorkingRaster.prepared(large) === reusable)
-        clock.now += 200_000_000
+        clock.now += step
         let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [source]
         }
@@ -269,7 +270,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
             source.effects.falseColor = falseColor
             source.effects.zebra = !falseColor
             for _ in 0..<2 {
-                clock.now += 200_000_000
+                clock.now += step
                 let result = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
                     [stable, source]
                 }
@@ -282,12 +283,12 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         }
         XCTAssertEqual(calls.value, 4)
         source.effects.zebra = false
-        clock.now += 200_000_000
+        clock.now += step
         let restored = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [stable, source]
         }
         XCTAssertFalse(try XCTUnwrap(restored).isUnchanged)
-        clock.now += 200_000_000
+        clock.now += step
         let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
             [stable, source]
         }

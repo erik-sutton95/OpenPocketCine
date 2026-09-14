@@ -1552,12 +1552,16 @@ public enum GimbalStick {
 
     public static func shouldHoldWatchdog(
         secondsSinceThrow: TimeInterval?,
-        lastVideoPacketAge: TimeInterval? = nil
+        lastVideoPacketAge: TimeInterval? = nil,
+        stickHeld: Bool = false
     ) -> Bool {
+        // Finger still on the stick: throw / a phone roll can pause HEVC.
+        // GOP-cutting or rebuilding UDP mid-hold is the dropped-connection look.
+        if stickHeld { return true }
         guard let secondsSinceThrow else { return false }
         guard secondsSinceThrow >= 0, secondsSinceThrow < videoGrace else { return false }
-        // Held analog/head-track refreshes throw every 40 ms. Do not block
-        // recover forever: once HEVC has been dead stall+grace, lift the hold.
+        // Held analog/head-track refreshes throw every 40 ms. After lift, do
+        // not block recover forever: once HEVC has been dead stall+grace, go.
         if let video = lastVideoPacketAge,
             video >= FeedWatchdog.stallThreshold + videoGrace
         {

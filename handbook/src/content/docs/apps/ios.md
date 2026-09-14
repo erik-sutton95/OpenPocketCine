@@ -16,7 +16,8 @@ format, color and shooting options from the top of the monitor. Portrait keeps
 Format / Color / Mode tabs on the details drawer; landscape has no extra
 category row, and shooting mode is its own top control (not FORMAT). ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
-visible while a top picker is open. Tap a value for the full details drawer;
+visible while a top picker is open. Auto exposure keeps EV as the value and
+shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value.
 Hold Record to open shooting mode.
 In portrait, Settings and Media remain usable with a picker open; returning to
@@ -32,11 +33,13 @@ The live signal indicator uses the Link Health colors from Settings: red for
 Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 
 Floating controls use blurred translucent panels with sharp labels and icons.
-Reduce Transparency uses solid panels. Some live-video paths use the system's
-blur treatment until decoded picture samples are available.
+The blur tracks the live or playback picture. Reduce Transparency uses solid
+panels. Some live-video paths use the system's blur treatment until decoded
+picture samples are available.
 
 The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
+Playback uses that same live-view slot.
 Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
@@ -54,8 +57,9 @@ landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
 these controls stay at the bottom of the page. Filter uses the same chip as Sort.
-Set a start and end date with the calendar, and filter by log/colour profile when
-that profile is known for a clip. Pull down on the library to refresh.
+The filter card stays fully on screen, including next to the island and above
+the home indicator. Set a start and end date with the calendar, and filter by
+log/colour profile when that profile is known for a clip. Pull down on the library to refresh.
 Hold a clip to begin selecting, then drag across clips to select a range. In
 selection mode, swipe up or down to scroll without changing the selection, or
 drag sideways to select a range. Hold a clip to sweep in any direction, including
@@ -69,7 +73,12 @@ On iPad, the interface reflows as you resize the app window. System window butto
 stay clear of the monitor controls. Camera-connected use while resizing is still
 under physical iPad validation.
 
-View Assist favorites match the live system-button size. The landscape expand
+View Assist favorites match the live system-button size and remember which
+tools you actually use (saved on the phone). Collapsed, landscape keeps two
+favorites and portrait keeps one, under the arrow. The expanded catalog
+uses those same cells. Tap the arrow to open or close, or press and drag it
+so the expanding edge stays under your finger; a flick finishes the motion.
+The landscape expand
 arrow accepts taps farther to its right, with the toolbar anchored in place.
 
 ## Moving scopes
@@ -146,16 +155,16 @@ space after rotation or resizing, including saved positions. Long-press a View A
   Lock Gimbal behavior remains under investigation and is not available in the app.
   Ramp smooths joystick-input changes: Off is immediate, Soft eases more gradually
   than Medium. Releasing the stick still stops immediately. Head tracking is experimental (Operator Setup → Controls,
-  off by default). With AirPods that report motion, Calibrate Head Lock —
-  centered above the bottom bars — is shared forward: that head pose and
-  that gimbal pose are zero. A head turn pans the Pocket; a nod tilts.
+  off by default). With AirPods that report motion, the compass above the
+  joystick on the right is Calibrate Head Lock: that head pose and that
+  gimbal pose are shared forward. A head turn pans the Pocket; a nod tilts.
   The gimbal follows that direction using direct angle targets. Roll is shown,
-  not driven. STOP clears the lock. Manual controls and Motion Control takes take
+  not driven. The same control becomes STOP and clears the lock. Manual controls and Motion Control takes take
   priority; lost head motion pauses tracking. Allow Motion & Fitness when
   prompted. If motion never arrives, Calibrate offers an explicit retry;
   a Bluetooth connection alone does not confirm motion delivery.
   Scopes can be moved beneath the
-  Calibrate Head Lock / STOP button in either orientation. Responsiveness remains
+  compass Head Lock control in either orientation. Responsiveness remains
   experimental. A connected game controller's left stick drives the same path.
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
@@ -163,7 +172,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   A toast says Gamepad connected or disconnected; unplug rests the
   stick. Operator Setup → Controls → Gamepad shows Connected / Not
   connected. A gimbal stop pulses only after the head moves then stalls
-  (Haptics setting). Stick
+  (Haptics setting). Capture drums, the zoom disc, and duration
+  dials pulse on coarse snaps (172° → 180°, 3×, whole seconds),
+  not on every hundredth or half-second tick. Stick
   pan stays picture-relative. The rotate-180 button inverts pan at the
   end of the rotation (like Mimo). Extra-mirror live view when that 180
   lands and Selfie Flip is off; Flip on skips extra-mirror. The last

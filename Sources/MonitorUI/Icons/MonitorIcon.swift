@@ -24,6 +24,7 @@
         case circleQuestionMark = "circle-question-mark"
         case circlePlay = "circle-play"
         case circlePlus = "circle-plus"
+        case compass
         case contrast
         case copy
         case crosshair

@@ -452,8 +452,8 @@ internal class LiveVulkanSession(
                             appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                         PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
                     }.getOrDefault(1.0)
-                intervalNs =
-                    if (policy.activeScopeCount == 0) (200_000_000L * thermal).toLong() else policy.minIntervalNs(thermal)
+                intervalNs = PocketScopeSampler.chromeSampleIntervalNs(
+                    policy.activeScopeCount, thermal, backdrop?.hasDemand(this) == true)
                 if (now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)) {
                     previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback = false, now)
                     backdropTicket = backdrop?.acquire(this, now, thermal)

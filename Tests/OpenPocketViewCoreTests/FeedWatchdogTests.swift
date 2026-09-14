@@ -137,6 +137,23 @@ import Testing
             "25 Hz throw stamp must not freeze recover after 5s of dead HEVC")
     }
 
+    @Test func gimbalStickHoldDoesNotGopCutWhileHeld() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(
+            now: 10, frameAge: 8, videoAge: 8, statusAge: 0.3, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        snap.secondsSinceGimbalThrow = 8
+        snap.gimbalStickHeld = true
+        #expect(
+            dog.tick(snap) == .none,
+            "finger on the stick: encoder pause must not GOP-cut or rebuild UDP")
+        #expect(dog.stage == .idle)
+        snap.gimbalStickHeld = false
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "after lift, past gimbal grace is an encoder pause")
+    }
+
     @Test func encoderPauseWithFreshStatusResendsEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(

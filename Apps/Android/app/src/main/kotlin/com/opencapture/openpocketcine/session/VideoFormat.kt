@@ -324,6 +324,50 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
 data class FormatPin(val expected: VideoFormat, val deadlineElapsedRealtime: Long)
 
 /** iOS `CameraSession.colorPin` — hold the SET color until subscribe matches. */
+/** iOS `CameraSession.ExpoPin` — hold SET ISO / shutter / EV / mode until subscribe matches. */
+data class ExpoPin(
+    val isoIndex: Int? = null,
+    val shutterDenom: Int? = null,
+    val evComp: Int? = null,
+    val expoMode: Int? = null,
+    val deadlineElapsedRealtime: Long,
+) {
+    fun isEmpty(): Boolean =
+        isoIndex == null && shutterDenom == null && evComp == null && expoMode == null
+
+    fun absorb(
+        incoming: CameraStatus,
+        current: CameraStatus,
+        nowElapsedRealtime: Long,
+    ): Pair<CameraStatus, ExpoPin?> {
+        if (nowElapsedRealtime >= deadlineElapsedRealtime) return incoming to null
+        var next = incoming
+        var isoIndex = this.isoIndex
+        var shutterDenom = this.shutterDenom
+        var evComp = this.evComp
+        var expoMode = this.expoMode
+        if (isoIndex != null) {
+            if (incoming.isoIndex == isoIndex) isoIndex = null
+            else next = next.copy(isoIndex = current.isoIndex, iso = current.iso)
+        }
+        if (shutterDenom != null) {
+            if (incoming.shutterDenom == shutterDenom) shutterDenom = null
+            else if (incoming.shutterDenom > 0) next = next.copy(shutterDenom = current.shutterDenom)
+        }
+        if (evComp != null) {
+            if (incoming.evComp == evComp) evComp = null
+            else if (incoming.evComp >= 0) next = next.copy(evComp = current.evComp)
+        }
+        if (expoMode != null) {
+            if (incoming.expoMode == expoMode) expoMode = null
+            else if (incoming.expoMode >= 0) next = next.copy(expoMode = current.expoMode)
+        }
+        val remaining =
+            ExpoPin(isoIndex, shutterDenom, evComp, expoMode, deadlineElapsedRealtime)
+        return next to if (remaining.isEmpty()) null else remaining
+    }
+}
+
 data class ColorPin(val expected: Int, val deadlineElapsedRealtime: Long) {
     companion object {
         fun absorbStale(

@@ -29,12 +29,13 @@ class BackdropFrameAdmissionTest {
         val first = assertNotNull(gate.acquire(producer, 0, 1.0))
         gate.invalidate(producer)
         assertFalse(gate.isCurrent(first)); gate.complete(first)
-        assertNull(gate.acquire(producer, 199_999_999, 1.0))
-        val second = assertNotNull(gate.acquire(producer, 200_000_000, 1.0)); gate.complete(second)
-        assertNull(gate.acquire(producer, 799_999_999, 3.0))
-        val serious = assertNotNull(gate.acquire(producer, 800_000_000, 3.0)); gate.complete(serious)
-        assertNull(gate.acquire(producer, 1_799_999_999, 5.0))
-        assertNotNull(gate.acquire(producer, 1_800_000_000, 5.0))
+        val step = com.opencapture.monitorui.MonitorBackdropPolicy.MINIMUM_INTERVAL_NS
+        assertNull(gate.acquire(producer, step - 1, 1.0))
+        val second = assertNotNull(gate.acquire(producer, step, 1.0)); gate.complete(second)
+        assertNull(gate.acquire(producer, step * 4 - 1, 3.0))
+        val serious = assertNotNull(gate.acquire(producer, step * 4, 3.0)); gate.complete(serious)
+        assertNull(gate.acquire(producer, step * 9 - 1, 5.0))
+        assertNotNull(gate.acquire(producer, step * 9, 5.0))
     }
 
     @Test fun retiredProducerCannotInvalidateReplacement() {

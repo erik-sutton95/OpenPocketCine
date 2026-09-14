@@ -148,8 +148,9 @@ fun MonitorDurationDial(
         if (!MonitorDurationDialMetrics.accept(token, generation, enabled)) return
         val snapped = scale.snap(next)
         if (snapped == lastEmitted) return
+        val previous = lastEmitted
         lastEmitted = snapped
-        stepFeedback()
+        if (MonitorDialHaptic.shouldTick(previous, snapped)) stepFeedback()
         update(snapped)
     }
     Box(

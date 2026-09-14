@@ -1,6 +1,5 @@
 package com.opencapture.monitorui
 
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -66,16 +65,65 @@ object MonitorLayoutPolicy {
         )
     }
 
+    /** Landscape camera values sit above the home indicator instead of overlapping it. */
+    fun landscapeBottomClearance(safeBottom: Float): Float =
+        if (safeBottom > 0f) max(safeBottom, 14f) + 10f else 14f
+
     /** Two stacked system buttons with 38 total horizontal insets, including the 27-wide expansion lane. */
-    fun landscapeAssists(viewportHeight: Float, tablet: Boolean, leading: Float = 14f): MonitorRect {
+    fun landscapeAssists(
+        viewportHeight: Float, tablet: Boolean, leading: Float = 14f, safeBottom: Float = 0f,
+    ): MonitorRect {
         val side = systemButtonSize(tablet)
         val height = side * 2f + 11f
+        val bottom = landscapeBottomClearance(safeBottom)
         return MonitorRect(
             leading,
-            max(0f, viewportHeight - 14f - height),
+            max(0f, viewportHeight - bottom - height),
             side + ASSIST_HORIZONTAL_INSETS,
             height,
         )
+    }
+
+    /** Live and playback share this Field Monitor assist slot. */
+    fun fieldMonitorAssists(
+        width: Float, height: Float, safeTop: Float, safeBottom: Float,
+    ): MonitorRect {
+        val portrait = height > width
+        val tablet = min(width, height) >= 600f
+        return if (portrait) {
+            val layout = portrait(width, height, safeTop, safeBottom, false, true, 16f / 9f)
+            portraitAssists(layout.controlsFloor, tablet)
+        } else {
+            landscapeAssists(height, tablet, 14f, safeBottom)
+        }
+    }
+
+    const val MEDIA_FILTER_WIDTH = 320f
+    const val MEDIA_FILTER_PREFERRED_HEIGHT = 420f
+    const val MEDIA_FILTER_EDGE = 12f
+    const val MEDIA_FILTER_BELOW_PAGE_TOP = 56f
+
+    /**
+     * Media filter card on an edge-to-edge canvas. Clears cutout and home indicator.
+     * Uses the larger short-edge inset so a page that zeros the clean-edge island
+     * still keeps this trailing card out of the cutout.
+     */
+    fun mediaFilterPopup(
+        viewportWidth: Float, viewportHeight: Float,
+        safeTop: Float, safeLeading: Float, safeBottom: Float, safeTrailing: Float,
+        topControlInset: Float = 0f,
+    ): MonitorRect {
+        val pageTop = max(0f, safeTop) + max(0f, topControlInset) + 10f
+        val top = pageTop + MEDIA_FILTER_BELOW_PAGE_TOP
+        val bottomPad = max(0f, safeBottom) + MEDIA_FILTER_EDGE
+        val hanging = maxOf(0f, safeLeading, safeTrailing, 14f)
+        val trailingPad = hanging + MEDIA_FILTER_EDGE
+        val leadingPad = MEDIA_FILTER_EDGE
+        val maxX = max(leadingPad, viewportWidth - trailingPad)
+        val cardWidth = min(MEDIA_FILTER_WIDTH, max(160f, maxX - leadingPad))
+        val x = max(leadingPad, maxX - cardWidth)
+        val maxHeight = max(140f, viewportHeight - top - bottomPad)
+        return MonitorRect(x, top, cardWidth, min(MEDIA_FILTER_PREFERRED_HEIGHT, maxHeight))
     }
 
     fun portraitAspect(width: Float, floor: Float): MonitorRect =
@@ -90,6 +138,10 @@ object MonitorLayoutPolicy {
 
     fun portraitGimbal(stick: MonitorRect, zoom: MonitorRect): MonitorRect =
         MonitorRect(stick.maxX - 36f, zoom.y, 36f, 36f)
+
+    /** 44 dp compass above the zoom row, trailing-aligned with the stick. */
+    fun headTrack(stick: MonitorRect, zoom: MonitorRect): MonitorRect =
+        MonitorRect(stick.maxX - 44f, zoom.y - 8f - 44f, 44f, 44f)
 
     /** Landscape readouts share the format row's center and stay inside the picture. */
     fun recordingReadoutTrailingInset(statusRight: Float, pictureRight: Float): Float =
@@ -109,7 +161,7 @@ object MonitorLayoutPolicy {
 
     fun assistButtonSize(tablet: Boolean): Float = systemButtonSize(tablet)
 
-    fun assistIconSize(tablet: Boolean): Float = if (tablet) 24f else 20f
+    fun assistIconSize(tablet: Boolean): Float = assistCompactIconSize(tablet)
 
     fun assistCompactIconSize(tablet: Boolean): Float = systemButtonSize(tablet) * 29f / 54f
 
@@ -126,7 +178,7 @@ object MonitorLayoutPolicy {
     }
 
     fun assistCellWidth(screenWidth: Float, portrait: Boolean, tablet: Boolean, cornerRadius: Float = 42f): Float =
-        max(44f, floor((assistAvailableWidth(screenWidth, portrait, tablet, cornerRadius) - 44f) / 7f))
+        assistButtonSize(tablet)
 
     data class Panel(val x: Float, val y: Float, val width: Float, val maxHeight: Float)
 

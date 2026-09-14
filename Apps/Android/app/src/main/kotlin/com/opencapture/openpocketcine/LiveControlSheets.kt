@@ -909,7 +909,16 @@ private fun CheckedRows(
     enabled: Boolean,
     onSelect: (String) -> Unit,
 ) {
-    CaptureDrumWheel(options, selected.orEmpty(), interactive = enabled, onSelect = onSelect)
+    var shown by remember(options) { mutableStateOf(selected.orEmpty()) }
+    LaunchedEffect(selected) {
+        if (!selected.isNullOrEmpty() && selected != shown) shown = selected
+    }
+    CaptureDrumWheel(options, shown, interactive = enabled, onSelect = { value ->
+        if (value != shown) {
+            shown = value
+            onSelect(value)
+        }
+    })
 }
 
 
@@ -1011,8 +1020,8 @@ private fun CaptureDrumWheel(
         preview?.control?.options ?: options, preview?.selection ?: selection,
         markedValues = preview?.control?.marked ?: markedValues,
         interactive = interactive && preview == null, displayPosition = preview?.position,
-        dimDisabled = preview == null,
-        onSelect = { value -> if (interactive && preview == null) { haptics.selection(); onSelect(value) } },
+        dimDisabled = preview == null, onDetent = { haptics.confirm() },
+        onSelect = { value -> if (interactive && preview == null) onSelect(value) },
     )
 }
 

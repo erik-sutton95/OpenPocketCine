@@ -35,7 +35,8 @@ format, color and shooting options from the top of the monitor. Portrait keeps
 Format / Color / Mode tabs on the details drawer; landscape has no extra
 category row, and shooting mode is its own top control (not FORMAT). ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
-visible while a top picker is open. Tap a value for the full details drawer;
+visible while a top picker is open. Auto exposure keeps EV as the value and
+shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value.
 Hold Record to open shooting mode. In portrait, Settings and Media remain usable
 with a picker open; returning to the monitor restores that picker. Physical Android proof of this Field
@@ -43,6 +44,7 @@ Monitor chrome remains outstanding.
 
 The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
+Playback uses that same live-view slot.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions
@@ -59,8 +61,9 @@ landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
 these controls stay at the bottom of the page. Filter uses the same chip as Sort.
-Set a start and end date with the calendar, and filter by log/colour profile when
-that profile is known for a clip. Pull down on the library to refresh.
+The filter card stays fully on screen, including next to a display cutout and
+above the navigation bar. Set a start and end date with the calendar, and filter
+by log/colour profile when that profile is known for a clip. Pull down on the library to refresh.
 Hold a clip to begin selecting, then drag across clips to select a range. In
 selection mode, swipe up or down to scroll without changing the selection, or
 drag sideways to select a range. Hold a clip to sweep in any direction, including
@@ -70,7 +73,12 @@ Selection circles appear only while selecting.
 Media retains favorites, cache state,
 playback assists and the existing delivery actions.
 
-View Assist favorites match the live system-button size. The landscape expand
+View Assist favorites match the live system-button size and remember which
+tools you actually use (saved on the phone). Collapsed, landscape keeps two
+favorites and portrait keeps one, under the arrow. The expanded catalog
+uses those same cells. Tap the arrow to open or close, or press and drag it
+so the expanding edge stays under your finger; a flick finishes the motion.
+The landscape expand
 arrow accepts taps farther to its right, with the toolbar anchored in place.
 
 ## Moving scopes
@@ -151,7 +159,9 @@ in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
 says Gamepad connected or disconnected; unplug rests the stick.
 Operator Setup → Controls → Gamepad shows Connected / Not connected.
 A gimbal stop pulses only after the head moves then stalls (Haptics
-setting). AirPods head tracking is iPhone-only (no headphone IMU
+setting). Capture drums, the zoom disc, and duration dials pulse on
+coarse snaps (172° → 180°, 3×, whole seconds), not on every hundredth
+or half-second tick. AirPods head tracking is iPhone-only (no headphone IMU)
 on Android). Stick pan stays
 picture-relative. Stick triple-tap 180 inverts pan at the end of the
 rotation (like Mimo). Extra-mirror live view when that 180 lands and
@@ -215,7 +225,8 @@ Live picture: Vulkan when the device can init it; GLES fallback. Live LUT /
 PEAK / FALSE / ZEBRA grade the decoded 720p raster with a 3D cube (same lattice
 as iOS), then bilinear-fit the panel (peaking is the same 3-pass as GLES).
 Floating controls use blurred translucent panels with sharp labels and icons.
-Devices or sources that cannot supply the blur use solid readable panels.
+The blur tracks the live or playback picture. Devices or sources that cannot
+supply the blur use solid readable panels.
 Page cards are solid. Assist inspectors show the selected scope or image effect
 without requiring that tool on the main picture. Image previews reuse the existing
 small source sample and effect shaders, with at most one job at 5 Hz while visible.

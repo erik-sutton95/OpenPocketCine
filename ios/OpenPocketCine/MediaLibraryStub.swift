@@ -276,6 +276,7 @@ struct MediaLibraryView: View {
     var onClose: (() -> Void)? = nil
 
     @Environment(AppModel.self) private var model
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
     @State private var category: MediaCategoryTab = .all
     @State private var layout: MediaBrowserLayout = .grid
     @State private var thumbnailSize: MediaThumbnailSize = .medium
@@ -627,54 +628,66 @@ struct MediaLibraryView: View {
     }
 
     private var filterPopup: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.18)
-                .ignoresSafeArea()
-                .onTapGesture { isFilterPopupPresented = false }
+        GeometryReader { proxy in
+            let physical = windowGeometry.safeArea
+            let card = MonitorMediaFilterPopupLayout.card(
+                viewportWidth: proxy.size.width, viewportHeight: proxy.size.height,
+                safeTop: max(safeArea.top, physical.top),
+                safeLeading: max(safeArea.leading, physical.leading),
+                safeBottom: max(safeArea.bottom, physical.bottom),
+                safeTrailing: max(safeArea.trailing, physical.trailing),
+                topControlInset: windowGeometry.topControlInset)
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { isFilterPopupPresented = false }
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("FILTER")
-                        .font(MonitorTheme.font(10, weight: .bold)).monospacedDigit()
-                        .kerning(0.8)
-                        .foregroundStyle(LiveDesign.muted)
-                    Spacer()
-                    CloseButton(action: { isFilterPopupPresented = false }, size: 26)
-                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("FILTER")
+                            .font(MonitorTheme.font(10, weight: .bold)).monospacedDigit()
+                            .kerning(0.8)
+                            .foregroundStyle(LiveDesign.muted)
+                        Spacer()
+                        CloseButton(action: { isFilterPopupPresented = false }, size: 26)
+                    }
 
-                ScrollView {
-                    MonitorMediaFilterForm(
-                        formats: formatOptions, resolutions: resolutionOptions,
-                        colors: colorOptions.map {
-                            MonitorMediaFilterForm.ColorOption(id: $0.rawValue, label: $0.label)
-                        },
-                        formatSelection: formatFilters, resolutionSelection: resolutionFilters,
-                        colorSelection: colorFilters,
-                        dateStartLabel: dateStartKey.map(MediaClipPresentation.dateLabel),
-                        dateEndLabel: dateEndKey.map(MediaClipPresentation.dateLabel),
-                        hasDates: dateBounds != nil,
-                        onToggleFormat: { toggle($0, in: &formatFilters) },
-                        onToggleResolution: { toggle($0, in: &resolutionFilters) },
-                        onToggleColor: { toggle($0, in: &colorFilters) },
-                        onPickStart: { pickingDate = .start },
-                        onPickEnd: { pickingDate = .end },
-                        onClear: {
-                            formatFilters.removeAll()
-                            resolutionFilters.removeAll()
-                            colorFilters.removeAll()
-                            dateStartKey = nil
-                            dateEndKey = nil
-                        })
+                    ScrollView {
+                        MonitorMediaFilterForm(
+                            formats: formatOptions, resolutions: resolutionOptions,
+                            colors: colorOptions.map {
+                                MonitorMediaFilterForm.ColorOption(id: $0.rawValue, label: $0.label)
+                            },
+                            formatSelection: formatFilters, resolutionSelection: resolutionFilters,
+                            colorSelection: colorFilters,
+                            dateStartLabel: dateStartKey.map(MediaClipPresentation.dateLabel),
+                            dateEndLabel: dateEndKey.map(MediaClipPresentation.dateLabel),
+                            hasDates: dateBounds != nil,
+                            onToggleFormat: { toggle($0, in: &formatFilters) },
+                            onToggleResolution: { toggle($0, in: &resolutionFilters) },
+                            onToggleColor: { toggle($0, in: &colorFilters) },
+                            onPickStart: { pickingDate = .start },
+                            onPickEnd: { pickingDate = .end },
+                            onClear: {
+                                formatFilters.removeAll()
+                                resolutionFilters.removeAll()
+                                colorFilters.removeAll()
+                                dateStartKey = nil
+                                dateEndKey = nil
+                            })
+                    }
                 }
+                .padding(16)
+                .frame(width: card.width, height: card.height, alignment: .topLeading)
+                .liquidGlass(
+                    in: RoundedRectangle(
+                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                )
+                .offset(x: card.x, y: card.y)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("monitor.media.filter.popup")
             }
-            .padding(16)
-            .frame(width: 320, alignment: .leading)
-            .frame(maxHeight: 420, alignment: .top)
-            .liquidGlass(
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
-            )
-            .padding(.top, 88)
-            .padding(.trailing, 20)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
     }
 

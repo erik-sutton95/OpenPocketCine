@@ -1332,10 +1332,15 @@ final class CameraSession {
     }
 
     func setExpoMode(_ mode: ExpoMode) {
+        let previous = status.expoMode
         pinExpo(mode: mode)
+        status.expoMode = mode
         fireCamera(
             Commands.setExpoMode(mode), name: "ExpoMode", expect: .expo(mode),
-            onFail: { [weak self] in self?.clearExpoPin(mode: true) })
+            onFail: { [weak self] in
+                self?.clearExpoPin(mode: true)
+                self?.status.expoMode = previous
+            })
     }
 
     /// Journal `cam_expo_param` only when decoded fields move (not every 1–5 Hz push).
@@ -3709,7 +3714,8 @@ final class CameraSession {
         }
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
-            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) },
+            stickHeld: gimbalStickHeld)
         {
             log.info("control: SET timeouts during gimbal grace — leave UDP")
             return
@@ -3750,7 +3756,8 @@ final class CameraSession {
         }
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
-            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) })
+            lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) },
+            stickHeld: gimbalStickHeld)
         {
             return false
         }
@@ -4040,6 +4047,7 @@ final class CameraSession {
             secondsSinceZoomSet: secondsSinceZoomSet,
             zoomPinchActive: zoomPinchPreview != nil,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
+            gimbalStickHeld: gimbalStickHeld,
             secondsSinceCameraSet: datalink?.secondsSinceLastCommand
         )
         let action = feedWatchdog.tick(snap)
@@ -4101,10 +4109,11 @@ final class CameraSession {
             } else if !FeedWatchdog.udpReceiveAlive(snap),
                 GimbalStick.shouldHoldWatchdog(
                     secondsSinceThrow: snap.secondsSinceGimbalThrow,
-                    lastVideoPacketAge: snap.lastVideoPacketAge)
+                    lastVideoPacketAge: snap.lastVideoPacketAge,
+                    stickHeld: snap.gimbalStickHeld)
             {
                 ControlLiveLog.line(
-                    "feed: hold enable — gimbal grace lastThrow=\(String(format: "%.1f", snap.secondsSinceGimbalThrow ?? -1))s"
+                    "feed: hold enable — gimbal stick held=\(snap.gimbalStickHeld ? 1 : 0) lastThrow=\(String(format: "%.1f", snap.secondsSinceGimbalThrow ?? -1))s"
                 )
                 logFeedObserve(snap: snap, watchdog: action)
             } else if !FeedWatchdog.udpReceiveAlive(snap),

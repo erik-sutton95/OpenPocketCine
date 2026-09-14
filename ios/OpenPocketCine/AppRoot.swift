@@ -1,4 +1,5 @@
 import CoreVideo
+import MonitorPresentation
 import Observation
 import OpenPocketViewCore
 import SwiftUI
@@ -51,6 +52,9 @@ final class AppModel {
     }
     var hapticsEnabled: Bool = OperatorPrefs.hapticsEnabled {
         didSet { OperatorPrefs.hapticsEnabled = hapticsEnabled }
+    }
+    var assistToolUsage: MonitorToolUsage = OperatorPrefs.assistToolUsage {
+        didSet { OperatorPrefs.assistToolUsage = assistToolUsage }
     }
     var headTrackingEnabled: Bool = OperatorPrefs.headTrackingEnabled {
         didSet { OperatorPrefs.headTrackingEnabled = headTrackingEnabled }

@@ -17,6 +17,7 @@
         private let label: (Double) -> String
         private let onEditing: (Bool) -> Void
         private let onClose: () -> Void
+        private let haptics: Bool
         @Binding private var value: Double
         @State private var drag = MonitorZoomDrag()
         @State private var radial: MonitorZoomRadialGesture?
@@ -24,6 +25,7 @@
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.scenePhase) private var scenePhase
         @State private var appeared = false
+        @State private var detentTick = 0
 
         public init(
             viewport: CGSize, safeArea: EdgeInsets = EdgeInsets(),
@@ -32,7 +34,8 @@
             scale: MonitorZoomScale,
             marks: [Double], opticalStops: [Double] = [1], caption: String = "",
             value: Binding<Double>, label: @escaping (Double) -> String,
-            onEditing: @escaping (Bool) -> Void, onClose: @escaping () -> Void
+            onEditing: @escaping (Bool) -> Void, onClose: @escaping () -> Void,
+            haptics: Bool = true
         ) {
             self.viewport = viewport
             self.safeArea = safeArea
@@ -47,6 +50,7 @@
             self.label = label
             self.onEditing = onEditing
             self.onClose = onClose
+            self.haptics = haptics
         }
 
         private var geometry: MonitorZoomGeometry {
@@ -181,6 +185,17 @@
             .onChange(of: safeArea) { _, _ in cancelPointer() }
             .onChange(of: scale) { _, _ in cancelPointer() }
             .onChange(of: pointerActive) { _, active in if !active { finishEditing() } }
+            .onChange(of: value) { old, new in
+                guard pointerActive || drag.anchor != nil else { return }
+                if MonitorDialHaptic.shouldTick(
+                    previous: old, next: new, majors: MonitorZoomScale.wholeStops)
+                {
+                    detentTick += 1
+                }
+            }
+            .sensoryFeedback(.impact(weight: .medium), trigger: detentTick) { _, _ in
+                haptics && acceptsInput && detentTick > 0
+            }
             .onDisappear {
                 cancelPointer()
                 appeared = false

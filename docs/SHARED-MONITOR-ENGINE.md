@@ -356,6 +356,10 @@ Agents: prefer extending existing `Frameio*Tests` / parity docs over new paralle
 
 | Date | Decision |
 | --- | --- |
+| 2026-09-14 | Playback View Assist uses the live Field Monitor assist slot (`MonitorAssistPaletteLayout.fieldMonitor` / `MonitorLayoutPolicy.fieldMonitorAssists`). |
+| 2026-09-14 | Auto-exposure EV caption is shared `MonitorExposureReadout.autoEvCaption` (`EV 1/Ns`). |
+| 2026-09-14 | Head Lock chrome is a 44 pt Lucide compass trailing-aligned above the stick/zoom cluster (`FieldMonitorLayout.headTrack` / `GimbalCluster.headTrack`). iOS-only AirPods IMU; Android keeps the layout region and no live control. |
+| 2026-09-14 | Floating glass tracks the visible picture on a bounded GPU product (≤60 Hz, 320 px / 213×120 tap). Still no window capture, second decoder, or Liquid Glass. |
 | 2026-09-14 | Shared `MonitorCapabilities` is one snapshot (gimbal/zoom/focus/iris/audio/headTracking/clipDelete/clipStar/requiresInternetHop/timecode). Adapters fill it; UI must not read `session.hasGimbal`. Zoom tap groups and WIDE/TELE captions live in presentation. Media filter body is `MonitorMediaFilterForm`. `MediaLibraryQuery` stays next to `MediaFile` (core / Android app) until that catalog record moves into the engine. Android Your cameras uses PAIRED = saved and NEARBY = unsaved BLE, matching `CamerasPage`. Production live chrome consumes `FieldMonitorLayout`; `LiveMonitorLayout.fit` is assist-test geometry only. |
 | 2026-09-13 | UI 2.0 uses shared heavy-blur, saturation and tint tokens across native iOS/Android presentation; no Liquid Glass lens or refraction treatment. Rendering belongs to reusable UI components and passive platform presentation sources, never camera adapters. |
 | 2026-09-06 | Keep separate brand apps for partnership optics |

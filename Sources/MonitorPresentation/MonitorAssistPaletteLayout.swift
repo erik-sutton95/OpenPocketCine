@@ -23,7 +23,7 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
     private let maximumHeight: Double
 
     public var iconSide: Double {
-        expanded ? (tablet ? 24 : 20) : MonitorSystemButtonMetrics.iconSide(tablet: tablet)
+        MonitorSystemButtonMetrics.iconSide(tablet: tablet)
     }
 
     public init(
@@ -40,16 +40,20 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
         let limitH = max(1, maximumHeight.isFinite ? maximumHeight : 1)
         let count = max(0, toolCount)
         cellHeight = MonitorSystemButtonMetrics.side(tablet: tablet)
-        // The reference shares seven landscape columns with the portrait rail.
-        // Narrow canvases keep 44pt cells and scroll instead of shrinking taps.
-        cellWidth = expanded ? max(44, floor((limitW - 44) / 7)) : cellHeight
+        // Expanded catalog cells match the collapsed favorites, including icon
+        // size. Narrow canvases scroll instead of shrinking the tap target.
+        cellWidth = cellHeight
         columns = max(1, (count + 1) / 2)
         let collapsedCount = min(count, portrait ? 1 : 2)
         let rowsHeight =
             Double(collapsedCount) * cellHeight
             + Double(max(0, collapsedCount - 1)) * Self.spacing
         if expanded {
-            width = min(limitW, portrait ? cellWidth + 8 : limitW)
+            let catalogWidth =
+                Double(columns) * cellWidth + Double(max(0, columns - 1)) * Self.spacing
+                + Self.horizontalInsets
+            width = min(
+                limitW, portrait ? cellWidth + 8 : max(cellHeight + Self.horizontalInsets, catalogWidth))
             let desiredHeight =
                 portrait
                 ? Double(count) * cellHeight + Double(max(0, count - 1)) * Self.spacing + 35
@@ -65,6 +69,28 @@ public struct MonitorAssistPaletteLayout: Equatable, Sendable {
 
     public func anchored(leading: Double, bottom: Double) -> MonitorRect {
         MonitorRect(x: leading, y: bottom - height, width: width, height: height)
+    }
+
+    /// Live and playback share this Field Monitor slot. Collapsed chrome equals
+    /// `geometry.assists`; expansion grows up and trailing from that anchor.
+    public static func fieldMonitor(
+        _ geometry: FieldMonitorLayout, toolCount: Int, safeTop: Double
+    ) -> (layout: Self, frame: MonitorRect) {
+        let ceiling = max(8, safeTop.isFinite ? safeTop : 0)
+        let maximumWidth =
+            geometry.portrait
+            ? geometry.viewport.width - (geometry.tablet ? 140 : 126)
+            : geometry.values.maxX - geometry.assists.x
+        let maximumHeight =
+            geometry.portrait
+            ? min(geometry.viewport.height * 0.62, geometry.assists.maxY - ceiling)
+            : geometry.assists.maxY - ceiling
+        let layout = Self(
+            portrait: geometry.portrait, tablet: geometry.tablet, expanded: true,
+            toolCount: toolCount, maximumWidth: maximumWidth, maximumHeight: maximumHeight)
+        return (
+            layout,
+            layout.anchored(leading: geometry.assists.x, bottom: geometry.assists.maxY))
     }
 
     /// Both states use the same viewport limits during a clipped reveal.

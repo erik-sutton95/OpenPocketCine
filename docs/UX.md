@@ -99,7 +99,7 @@ Movable scopes and the LIGHTS / ND panels use direct touch-drag. Their corner
 grips resize directly too. Scopes may sit partly under top and bottom readout /
 assist bars and underneath the entire joystick/zoom/gimbal-controls cluster in
 portrait or landscape. The cluster remains above scopes, and its visibility does
-not change their placement boundary. The iOS Calibrate Head Lock / STOP button
+not change their placement boundary. The iOS Head Lock compass (above the joystick cluster on the right)
 also draws above scopes without restricting where they can move. Focus reset and audio meters do not fence
 off a whole side of the screen.
 Reserve the record/media/settings rail and portrait system button row with

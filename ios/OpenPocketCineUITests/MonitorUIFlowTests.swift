@@ -79,6 +79,8 @@ final class MonitorUIFlowTests: XCTestCase {
         expand.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         let wave = app.buttons["monitor.assist.WAVE"]
         XCTAssertTrue(wave.waitForExistence(timeout: 5))
+        XCTAssertEqual(wave.frame.width, systemFrame.width, accuracy: 1)
+        XCTAssertEqual(wave.frame.height, systemFrame.height, accuracy: 1)
         wave.tap()
         capture("assist-palette")
         app.buttons["Collapse View Assist tools"].tap()
@@ -95,8 +97,13 @@ final class MonitorUIFlowTests: XCTestCase {
             NSPredicate(format: "label IN %@", ["Fill frame with feed", "Fit feed in frame"])
         ).firstMatch
         XCTAssertTrue(aspect.waitForExistence(timeout: 10))
+        let peak = app.buttons["monitor.assist.PEAK"]
+        XCTAssertTrue(peak.waitForExistence(timeout: 5))
+        XCTAssertTrue(peak.isHittable, "Portrait collapsed View Assist must show a favorite tool")
+        XCTAssertGreaterThanOrEqual(peak.frame.height, 50)
         let tools = [
             app.buttons["monitor.assists.expand"],
+            peak,
             app.buttons["monitor.system.zoom"],
             app.buttons["monitor.system.gimbalControls"],
             app.descendants(matching: .any)["monitor.system.gimbal"].firstMatch,
@@ -503,6 +510,15 @@ final class MonitorUIFlowTests: XCTestCase {
                     XCTAssertTrue(sort.isHittable)
                     XCTAssertEqual(filter.frame.height, sort.frame.height, accuracy: 1)
                     XCTAssertEqual(filter.frame.midY, sort.frame.midY, accuracy: 1)
+                    filter.tap()
+                    let popup = app.otherElements["monitor.media.filter.popup"]
+                    XCTAssertTrue(popup.waitForExistence(timeout: 2))
+                    XCTAssertGreaterThanOrEqual(popup.frame.minX, -0.5)
+                    XCTAssertGreaterThanOrEqual(popup.frame.minY, -0.5)
+                    XCTAssertLessThanOrEqual(popup.frame.maxX, app.frame.width + 0.5)
+                    XCTAssertLessThanOrEqual(popup.frame.maxY, app.frame.height + 0.5)
+                    app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap()
+                    XCTAssertTrue(popup.waitForNonExistence(timeout: 2))
                     let grid = app.buttons["monitor.media.layout.grid"]
                     let list = app.buttons["monitor.media.layout.list"]
                     XCTAssertTrue(grid.isHittable)

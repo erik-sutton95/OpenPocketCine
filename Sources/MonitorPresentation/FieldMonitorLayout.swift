@@ -54,6 +54,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
     public let stick: MonitorRect
     public let zoom: MonitorRect
     public let gimbal: MonitorRect
+    /// Compass Head Lock control, trailing-aligned above the stick/zoom cluster.
+    public let headTrack: MonitorRect
     public let aspectToggle: MonitorRect
     public let focusReset: MonitorRect
     public let portrait: Bool
@@ -127,6 +129,7 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 y: floor - 104, width: 88, height: 88)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
+            headTrack = Self.headTrack(stick: stick, zoom: zoom)
             aspectToggle = .init(
                 x: w / 2 - 24, y: floor - 56, width: 48, height: 48)
         } else {
@@ -173,23 +176,35 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 width: settings.x - max(77, picture.x + 12) - 12, height: tablet ? 46 : 44)
             let side = 14 + rec + 28
             let valuesH = showsValues ? 43.0 : 0
+            let bottomPad = Self.landscapeBottomClearance(safeBottom: safeArea.bottom)
             values = .init(
-                x: side, y: h - (hasHome ? 14 : 8) - valuesH,
+                x: side, y: h - bottomPad - valuesH,
                 width: w - side * 2, height: valuesH)
             floor = values.y - 8
             let assistHeight = button * 2 + 11
             assists = .init(
-                x: 18, y: h - (hasHome ? 14 : 8) - assistHeight,
+                x: 18, y: h - bottomPad - assistHeight,
                 width: button + MonitorAssistPaletteLayout.horizontalInsets, height: assistHeight)
             stick = .init(
                 x: w - max(16 + rec + 12, safeArea.trailing + 6) - 88,
                 y: floor - 88, width: 88, height: 88)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
+            headTrack = Self.headTrack(stick: stick, zoom: zoom)
             aspectToggle = .init()
         }
         focusReset = .init(
             x: max(safeArea.leading + 8, stick.x - 50),
             y: stick.maxY - 40, width: 40, height: 40)
+    }
+
+    /// Landscape camera values sit above the home indicator instead of overlapping it.
+    public static func landscapeBottomClearance(safeBottom: Double) -> Double {
+        safeBottom > 0 ? max(safeBottom, 14) + 10 : 8
+    }
+
+    /// 44 pt compass above the zoom row, trailing-aligned with the stick.
+    public static func headTrack(stick: MonitorRect, zoom: MonitorRect) -> MonitorRect {
+        MonitorRect(x: stick.maxX - 44, y: zoom.y - 8 - 44, width: 44, height: 44)
     }
 }

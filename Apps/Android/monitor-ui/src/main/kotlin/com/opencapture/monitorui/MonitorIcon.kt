@@ -32,6 +32,7 @@ enum class MonitorIcon(
     CIRCLE_QUESTION_MARK("circle-question-mark", R.drawable.opc_lucide_circle_question_mark),
     CIRCLE_PLAY("circle-play", R.drawable.opc_lucide_circle_play),
     CIRCLE_PLUS("circle-plus", R.drawable.opc_lucide_circle_plus),
+    COMPASS("compass", R.drawable.opc_lucide_compass),
     CONTRAST("contrast", R.drawable.opc_lucide_contrast),
     COPY("copy", R.drawable.opc_lucide_copy),
     CROSSHAIR("crosshair", R.drawable.opc_lucide_crosshair),

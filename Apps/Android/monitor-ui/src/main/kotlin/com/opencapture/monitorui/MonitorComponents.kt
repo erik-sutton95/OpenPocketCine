@@ -99,19 +99,21 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                             if (quickPreview == null) null else { preview, maxHeight -> quickPreview(item.id, preview, maxHeight) }
                         Column(Modifier.then(if (grid) Modifier.weight(1f) else Modifier.width(intrinsic[rowIndex * columns + column].dp))
                             .heightIn(min = if (grid) 32.dp else 44.dp)
-                            .then(itemModifier(item.id)).clip(RoundedCornerShape(8.dp))
-                            .background(if (item.selected) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent)
+                            .then(itemModifier(item.id))
+                            .background(if (item.selected) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent, RoundedCornerShape(8.dp))
                             .monitorReadoutGesture(quickControl(item.id), enabled && (gestureOwner.owner == null || gestureOwner.owner == item.id),
                                 { onOpen(item.id) }, { source, value -> onQuickCommit(item.id, source, value) },
                                 quickBottomClearanceDp, gestureOwner, item.id,
                                 renderPreview, onPreviewBegin = { notifyQuickActive(true) })
                             .semantics { contentDescription = "${item.label} ${item.value}${item.annotation?.let { ", $it" }.orEmpty()}" }
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                             Text(item.value, color = if (item.selected) MonitorPalette.accent else MonitorPalette.text,
-                                style = valueStyle, maxLines = 1, softWrap = false)
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
+                                style = valueStyle, maxLines = 1, softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom,
+                                modifier = Modifier.padding(horizontal = 8.dp)) {
                                 Text(item.label, color = if (item.selected) MonitorPalette.accent else MonitorPalette.muted,
                                     style = labelStyle, maxLines = 1)
                                 item.annotation?.let { Text(it, style = MonitorTypography.readout(7.5f), color = MonitorPalette.muted, maxLines = 1) }

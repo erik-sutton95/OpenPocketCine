@@ -40,6 +40,7 @@
         }
         private let context = CIContext(options: [
             .workingColorSpace: NSNull(), .cacheIntermediates: false,
+            .useSoftwareRenderer: false,
         ])
 
         public init() {}

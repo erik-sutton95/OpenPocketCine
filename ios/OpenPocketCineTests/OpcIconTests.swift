@@ -27,6 +27,7 @@ final class OpcIconTests: XCTestCase {
                 "circle-question-mark",
                 "circle-play",
                 "circle-plus",
+                "compass",
                 "contrast",
                 "copy",
                 "crosshair",

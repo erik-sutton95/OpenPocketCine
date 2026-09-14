@@ -41,6 +41,7 @@ public enum LinkDiagnoser {
         secondsSinceZoomSet: TimeInterval? = nil,
         zoomPinchActive: Bool = false,
         secondsSinceGimbalThrow: TimeInterval? = nil,
+        gimbalStickHeld: Bool = false,
         presentAge: TimeInterval? = nil,
         secondsSinceCameraSet: TimeInterval? = nil
     ) -> LinkFailure {
@@ -69,7 +70,8 @@ public enum LinkDiagnoser {
         }
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
-            lastVideoPacketAge: videoAge)
+            lastVideoPacketAge: videoAge,
+            stickHeld: gimbalStickHeld)
         {
             return .none
         }
@@ -125,6 +127,7 @@ public enum LinkDiagnoser {
             secondsSinceZoomSet: snap.secondsSinceZoomSet,
             zoomPinchActive: snap.zoomPinchActive,
             secondsSinceGimbalThrow: snap.secondsSinceGimbalThrow,
+            gimbalStickHeld: snap.gimbalStickHeld,
             presentAge: snap.lastDecodedFrameAge,
             secondsSinceCameraSet: snap.secondsSinceCameraSet
         )

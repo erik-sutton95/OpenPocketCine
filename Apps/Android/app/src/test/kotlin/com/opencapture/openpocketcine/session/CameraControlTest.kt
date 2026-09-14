@@ -452,6 +452,28 @@ class CameraControlTest {
     }
 
     @Test
+    fun expoPinHoldsOptimisticModeUntilSubscribeMatches() {
+        val pin =
+            ExpoPin(expoMode = CameraCommands.EXPO_AUTO, deadlineElapsedRealtime = 2_000L)
+        val current = CameraStatus(expoMode = CameraCommands.EXPO_AUTO)
+        val stale = CameraStatus(expoMode = CameraCommands.EXPO_MANUAL)
+        val held = pin.absorb(stale, current, nowElapsedRealtime = 500L)
+        assertEquals(CameraCommands.EXPO_AUTO, held.first.expoMode)
+        assertEquals(pin.expoMode, held.second?.expoMode)
+        val matched =
+            pin.absorb(
+                CameraStatus(expoMode = CameraCommands.EXPO_AUTO),
+                current,
+                nowElapsedRealtime = 500L,
+            )
+        assertNull(matched.second)
+        assertEquals(CameraCommands.EXPO_AUTO, matched.first.expoMode)
+        val expired = pin.absorb(stale, current, nowElapsedRealtime = 2_000L)
+        assertNull(expired.second)
+        assertEquals(CameraCommands.EXPO_MANUAL, expired.first.expoMode)
+    }
+
+    @Test
     fun colorPinHoldsOptimisticUntilSubscribeMatches() {
         val pin = ColorPin(CameraCommands.COLOR_DLOG, deadlineElapsedRealtime = 2_000L)
         val stale = CameraStatus(colorMode = CameraCommands.COLOR_DLOG2)
@@ -1190,6 +1212,7 @@ class CameraControlTest {
         assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(null))
         assertTrue(CameraCommands.shouldHoldGimbalWatchdog(0.1, 4.2))
         assertTrue(!CameraCommands.shouldHoldGimbalWatchdog(0.1, 5.1))
+        assertTrue(CameraCommands.shouldHoldGimbalWatchdog(8.0, 8.0, stickHeld = true))
     }
 
     @Test

@@ -11,10 +11,11 @@
                 .shadow(color: .black, radius: 1.5)
                 .shadow(color: .black.opacity(0.92), radius: 3)
                 .shadow(color: .black.opacity(0.85), radius: 1, y: 1)
-                // Resolve the complete glyph/shadow stack together. Otherwise
-                // Core Animation repeats its shadow passes on HUD redraws.
-                // This boundary contains only readouts, never native video.
+                // Rasterize with bloom padding so the halo fades instead of
+                // clipping at the glyph bounds. Negative pad keeps layout.
+                .padding(10)
                 .drawingGroup()
+                .padding(-10)
         }
 
         /// A complete bright/dim/bright cycle, suspended while covered, offscreen,

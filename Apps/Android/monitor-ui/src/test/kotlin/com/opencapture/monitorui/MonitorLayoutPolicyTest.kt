@@ -101,6 +101,19 @@ class MonitorLayoutPolicyTest {
         assertEquals(phoneSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landPhone.width)
         assertEquals(phoneSide * 2f + 11f, landPhone.height)
         assertEquals(390f - 14f, landPhone.maxY, .01f)
+        val filter = MonitorLayoutPolicy.mediaFilterPopup(956f, 440f, 0f, 59f, 21f, 59f)
+        assertTrue(filter.maxY <= 440f - 21f)
+        assertTrue(filter.maxX <= 956f - 59f)
+        val zeroedTrailing = MonitorLayoutPolicy.mediaFilterPopup(956f, 440f, 0f, 59f, 21f, 0f)
+        assertTrue(zeroedTrailing.maxX <= 956f - 59f)
+        assertTrue(zeroedTrailing.maxY <= 440f - 21f)
+        val compact = MonitorLayoutPolicy.mediaFilterPopup(852f, 393f, 0f, 59f, 21f, 0f)
+        assertTrue(compact.maxX <= 852f - 59f)
+        assertTrue(compact.maxY <= 393f - 21f)
+        assertTrue(compact.height < MonitorLayoutPolicy.MEDIA_FILTER_PREFERRED_HEIGHT)
+        assertEquals(31f, MonitorLayoutPolicy.landscapeBottomClearance(21f))
+        val landHome = MonitorLayoutPolicy.landscapeAssists(390f, false, safeBottom = 21f)
+        assertEquals(390f - 31f, landHome.maxY, .01f)
         val landTablet = MonitorLayoutPolicy.landscapeAssists(744f, true)
         assertEquals(tabletSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landTablet.width)
         assertEquals(tabletSide * 2f + 11f, landTablet.height)
@@ -174,9 +187,23 @@ class MonitorLayoutPolicyTest {
         val stick = MonitorLayoutPolicy.portraitStick(393f, 700f)
         val zoom = MonitorLayoutPolicy.portraitZoom(stick)
         val gimbal = MonitorLayoutPolicy.portraitGimbal(stick, zoom)
+        val headTrack = MonitorLayoutPolicy.headTrack(stick, zoom)
         assertEquals(MonitorRect(289f, 596f, 88f, 88f), stick)
         assertEquals(MonitorRect(289f, 552f, 44f, 36f), zoom)
         assertEquals(MonitorRect(341f, 552f, 36f, 36f), gimbal)
+        assertEquals(MonitorRect(333f, 500f, 44f, 44f), headTrack)
+    }
+
+    @Test
+    fun playbackAssistsUseTheLiveFieldMonitorSlot() {
+        val portrait = MonitorLayoutPolicy.fieldMonitorAssists(393f, 852f, 59f, 34f)
+        val portraitLive = MonitorLayoutPolicy.portraitAssists(
+            MonitorLayoutPolicy.portrait(393f, 852f, 59f, 34f, false, true, 16f / 9f).controlsFloor,
+            false,
+        )
+        assertEquals(portraitLive, portrait)
+        val landscape = MonitorLayoutPolicy.fieldMonitorAssists(852f, 393f, 0f, 21f)
+        assertEquals(MonitorLayoutPolicy.landscapeAssists(393f, false, 14f, 21f), landscape)
     }
 
     @Test fun tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {

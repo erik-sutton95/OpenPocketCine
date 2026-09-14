@@ -164,13 +164,14 @@ class MonitorFeedbackPolicyTest {
         assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(true))
         assertEquals(54f, MonitorLayoutPolicy.assistButtonSize(false))
         assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(true))
-        assertEquals(20f, MonitorLayoutPolicy.assistIconSize(false))
-        assertEquals(24f, MonitorLayoutPolicy.assistIconSize(true))
+        assertEquals(29f, MonitorLayoutPolicy.assistIconSize(false), .01f)
+        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistIconSize(true), .01f)
         assertEquals(29f, MonitorLayoutPolicy.assistCompactIconSize(false), .01f)
         assertEquals(27f, MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH)
         assertEquals(38f, MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS)
-        assertTrue(MonitorLayoutPolicy.assistCellWidth(874f, false, false) >= 44f)
-        assertEquals(44f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
+        assertEquals(54f, MonitorLayoutPolicy.assistCellWidth(874f, false, false))
+        assertEquals(54f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
+        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(1024f, false, true))
     }
 
     @Test fun glassPlatesUseMockupRgbAndAlphas() {

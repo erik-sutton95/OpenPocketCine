@@ -84,6 +84,15 @@
             curve(easeOutCubic, duration: drawerDuration, reduceMotion: reduceMotion)
         }
 
+        /// Sheet-style settle: flicks keep their velocity into the spring.
+        public static func drawerSpring(
+            _ reduceMotion: Bool, velocity: Double = 0, span: Double = 1
+        ) -> Animation? {
+            if reduceMotion { return nil }
+            let initial = span > 1 ? velocity / span : 0
+            return .interpolatingSpring(stiffness: 220, damping: 28, initialVelocity: initial)
+        }
+
         public static func fade(_ reduceMotion: Bool) -> Animation? {
             reduceMotion ? nil : .easeOut(duration: fadeDuration)
         }

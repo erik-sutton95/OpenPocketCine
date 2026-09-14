@@ -117,7 +117,9 @@
             .onChange(of: range) { _, _ in cancel() }
             .onChange(of: step) { _, _ in cancel() }
             .onChange(of: pointerActive) { _, active in if !active { finish() } }
-            .sensoryFeedback(.selection, trigger: value) { _, _ in haptics && acceptsInput }
+            .sensoryFeedback(.impact(weight: .medium), trigger: value) { old, new in
+                haptics && acceptsInput && MonitorDialHaptic.shouldTick(previous: old, next: new)
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Duration")
             .accessibilityValue(format(value))

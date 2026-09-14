@@ -144,6 +144,7 @@ fun LiveGimbalSheetHost(
         onDispose { revision += 1 }
     }
     val context = GimbalInteractionContext(cameraId, phase, selectedTab, revision, canApply)
+    val haptics = LocalOperatorHaptics.current
     fun applyIfCurrent(block: () -> Unit) {
         if (!context.matches(model, selectedTab, revision)) return
         block()
@@ -190,6 +191,7 @@ fun LiveGimbalSheetHost(
                             MonitorValueDrum(
                                 GimbalMode.pickerOrder.map { it.label }, mode.label,
                                 interactive = canApply,
+                                onDetent = { haptics.confirm() },
                             ) { label ->
                                 applyIfCurrent {
                                     GimbalMode.pickerOrder.firstOrNull { it.label == label }
@@ -200,6 +202,7 @@ fun LiveGimbalSheetHost(
                             MonitorValueDrum(
                                 GimbalSpeed.pickerOrder.map { it.label }, speed.label,
                                 interactive = canApply,
+                                onDetent = { haptics.confirm() },
                             ) { label ->
                                 applyIfCurrent {
                                     GimbalSpeed.pickerOrder.firstOrNull { it.label == label }
@@ -210,6 +213,7 @@ fun LiveGimbalSheetHost(
                             MonitorValueDrum(
                                 GimbalRamp.pickerOrder.map { it.label }, model.gimbalRamp.label,
                                 interactive = canApply,
+                                onDetent = { haptics.confirm() },
                             ) { label ->
                                 applyIfCurrent {
                                     GimbalRamp.pickerOrder.firstOrNull { it.label == label }
@@ -596,7 +600,7 @@ private fun waypointRow(
                     modifier = Modifier.testTag("motion.duration.${slot.letter}"),
                     source = listOf(slot, floor, running, cameraId, phase, LiveGimbalPanel.EDITOR),
                     enabled = !running,
-                    onStep = { haptics.selection() },
+                    onStep = { haptics.confirm() },
                 )
             }
         }

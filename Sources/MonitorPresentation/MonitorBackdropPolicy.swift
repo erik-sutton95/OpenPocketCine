@@ -40,10 +40,17 @@ public enum MonitorGlassDensity: CaseIterable, Hashable, Sendable {
 
 public enum MonitorBackdropPolicy {
     public static let maximumDimension = 320
-    public static let minimumInterval: Double = 0.2
+    /// Display-locked cap. Live SoftAP is ~25 fps; one job in flight is the
+    /// real limiter. Do not sample a second decoder or a window capture.
+    public static let minimumInterval: Double = 1.0 / 60.0
+    public static let minimumIntervalNanoseconds: UInt64 = 16_666_667
 
     /// Native owners map their thermal state to this platform-neutral multiplier.
     public static func interval(serious: Bool, critical: Bool) -> Double {
         minimumInterval * (critical ? 5 : serious ? 3 : 1)
+    }
+
+    public static func intervalNanoseconds(serious: Bool, critical: Bool) -> UInt64 {
+        minimumIntervalNanoseconds * (critical ? 5 : serious ? 3 : 1)
     }
 }
