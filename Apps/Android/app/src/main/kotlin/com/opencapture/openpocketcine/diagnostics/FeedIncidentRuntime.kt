@@ -18,21 +18,34 @@ internal object FeedIncidentRuntime {
     private var store: FeedIncidentStore? = null
     @Volatile private var latestSnapshot: FeedIncidentSnapshot? = null
     private val snapshotScheduled = AtomicBoolean(false)
+    private var sessionContext: FeedIncidentSessionContext? = null
+    private var lastSummaryCheckpoint = 0.0
 
     fun install(directory: File) {
         writer.execute {
             val created = FeedIncidentStore(File(directory, "incidents"))
             store = created
             created.markInterrupted()
+            FeedSessionSummaryStore.markInterrupted(created.directory)
         }
     }
 
     fun beginSession(context: FeedIncidentSessionContext) {
-        writer.execute { persist(recorder.beginSession(context)) }
+        writer.execute {
+            persist(recorder.beginSession(context))
+            sessionContext = context
+            lastSummaryCheckpoint = 0.0
+            persistSessionSummary("live")
+        }
     }
 
     fun endSession(nowSeconds: Double) {
-        writer.execute { persist(recorder.endSession(nowSeconds)) }
+        writer.execute {
+            persist(recorder.endSession(nowSeconds))
+            persistSessionSummary(summaryOutcome(recorder.incidentCount, recorder.healthyExposure))
+            sessionContext = null
+            ReliabilityReporting.enqueueFinalizedFromSpool()
+        }
     }
 
     fun ingestSnapshot(snapshot: FeedIncidentSnapshot) {
@@ -77,15 +90,64 @@ internal object FeedIncidentRuntime {
         return runCatching { future.get(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrDefault(emptyList())
     }
 
+    fun loadFinalized(): List<FeedIncidentBundle> {
+        val future =
+            writer.submit<List<FeedIncidentBundle>> {
+                store?.loadAll()?.filter { ReliabilityReporting.isFinalized(it) }.orEmpty()
+            }
+        return runCatching { future.get(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrDefault(emptyList())
+    }
+
+    fun loadSessionSummaries(): List<FeedIncidentSessionSummary> {
+        val future =
+            writer.submit<List<FeedIncidentSessionSummary>> {
+                val root = store?.directory ?: return@submit emptyList()
+                FeedSessionSummaryStore.load(root).filter { it.outcome != "live" }
+            }
+        return runCatching { future.get(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrDefault(emptyList())
+    }
+
+    fun summaryOutcome(incidentCount: Int, exposure: Double): String {
+        if (incidentCount > 0) return "ended"
+        if (exposure > 0.0) return "healthy"
+        return "no-exposure"
+    }
+
     private fun drainSnapshot() {
         val snapshot = latestSnapshot
         latestSnapshot = null
         snapshotScheduled.set(false)
-        if (snapshot != null) persist(recorder.recordSnapshot(snapshot))
+        if (snapshot != null) {
+            persist(recorder.recordSnapshot(snapshot))
+            if (snapshot.monotonicNow - lastSummaryCheckpoint >= 30.0) {
+                lastSummaryCheckpoint = snapshot.monotonicNow
+                persistSessionSummary("live")
+            }
+        }
+    }
+
+    private fun persistSessionSummary(outcome: String) {
+        val context = sessionContext ?: return
+        val summary =
+            FeedIncidentSessionSummary(
+                sessionID = context.sessionId,
+                healthyExposureSeconds = recorder.healthyExposure,
+                incidentCount = recorder.incidentCount,
+                outcome = outcome,
+                sourceRevision = context.sourceRevision,
+                appVersion = context.appVersion,
+                appBuild = context.appBuild,
+            )
+        val root = store?.directory ?: return
+        FeedSessionSummaryStore.persist(summary, root)
+        if (summary.outcome != "live") ReliabilityReporting.noteSessionSummary(summary)
     }
 
     private fun persist(job: FeedIncidentPersistenceJob?) {
         if (job == null) return
         runCatching { store?.persist(job) }
+        if (ReliabilityReporting.isFinalized(job.bundle)) {
+            ReliabilityReporting.enqueueFinalized(job.bundle)
+        }
     }
 }

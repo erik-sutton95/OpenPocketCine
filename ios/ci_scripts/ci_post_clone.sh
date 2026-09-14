@@ -1,9 +1,10 @@
 #!/bin/sh
-# Xcode Cloud: generate the Xcode project and inject Frame.io PKCE values.
-# The xcodeproj is gitignored and produced by XcodeGen; this script must run
-# before xcodebuild. Frameio.local.xcconfig is gitignored; without this the
-# archive ships with an empty FrameioClientID. Empty-safe: missing vars
-# reproduce the default (Frame.io login disabled, non-fatal).
+# Xcode Cloud: generate the Xcode project and inject Frame.io PKCE values
+# plus an optional Sentry DSN. The xcodeproj is gitignored and produced by
+# XcodeGen; this script must run before xcodebuild. Frameio.local.xcconfig
+# and Reliability.local.xcconfig are gitignored. Empty-safe: missing vars
+# reproduce the default (Frame.io login disabled, Sentry DSN empty, non-fatal)
+# unless SENTRY_UPLOAD_ENABLED=true, which requires a DSN.
 set -eu
 
 cd "$CI_PRIMARY_REPOSITORY_PATH"
@@ -21,4 +22,13 @@ EOF
 
 if [ -z "${FRAMEIO_CLIENT_ID:-}" ]; then
   echo "warning: FRAMEIO_CLIENT_ID not set — Frame.io login will be disabled in this build."
+fi
+
+# Sentry public DSN for the Cocoa SDK. xcconfig encoding lives in
+# tools/sentry-dsn-xcconfig.py so https:// is not treated as a comment.
+# Prefer SENTRY_DSN_IOS; SENTRY_DSN is the fallback. Never echo the value.
+if [ "${SENTRY_UPLOAD_ENABLED:-}" = "true" ]; then
+  python3 ./tools/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig --require
+else
+  python3 ./tools/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig
 fi

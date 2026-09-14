@@ -43,6 +43,15 @@ enum ReliabilityReporting {
     static var isOptedIn: Bool { ReliabilityReportingConsent.isOptedIn }
     static var isAvailable: Bool { ReliabilityReportingDSN.isAvailable }
 
+    static func noteBreadcrumb(_ source: FeedIncidentBreadcrumb) {
+        guard isOptedIn, SentrySDK.isEnabled else { return }
+        let breadcrumb = Breadcrumb(level: .info, category: "feed")
+        breadcrumb.message = source.kind.rawValue
+        // Only the enum crosses into the SDK. The richer, redacted details stay
+        // in the bounded incident attachment, never automatic UI breadcrumbs.
+        SentrySDK.addBreadcrumb(breadcrumb)
+    }
+
     static func install() {
         ReliabilityReportingURLProtocol.gate = ReliabilityReportingGate.shared
         ReliabilityReportingURLProtocol.onEnvelopeAccepted = { eventID in
@@ -135,6 +144,10 @@ enum ReliabilityReporting {
     static func makeOptions(dsn: String, urlSession: URLSession) -> Options {
         let options = Options()
         options.dsn = dsn
+        options.releaseName = ReliabilityReportingConfiguration.release()
+        // Cocoa overwrites event.dist when this option is set. Queued reports
+        // retain their original build; native events use the SDK bundle fallback.
+        options.environment = ReliabilityReportingConfiguration.environment
         options.urlSession = urlSession
         options.maxCacheItems = 30
         options.maxAttachmentSize = 256 * 1_024
@@ -152,6 +165,7 @@ enum ReliabilityReporting {
         options.enableMetricKit = false
         options.enableMetricKitRawPayload = false
         options.attachScreenshot = false
+        options.attachStacktrace = false
         options.attachViewHierarchy = false
         options.reportAccessibilityIdentifier = false
         options.enableUserInteractionTracing = false
@@ -168,7 +182,8 @@ enum ReliabilityReporting {
         options.enableWatchdogTerminationTracking = true
         options.sessionReplay.sessionSampleRate = 0
         options.sessionReplay.onErrorSampleRate = 0
-        options.beforeBreadcrumb = { _ in nil }
+        options.maxBreadcrumbs = 32
+        options.beforeBreadcrumb = { ReliabilityReportingPrivacy.scrubBreadcrumb($0) }
         options.beforeSend = { event in
             guard ReliabilityReportingConsent.isOptedIn else { return nil }
             return ReliabilityReportingPrivacy.scrub(event)
@@ -186,7 +201,9 @@ enum ReliabilityReporting {
         if consent, let dsn {
             scheduleIdlePoll()
             observeInternetIfNeeded()
-            if !ReliabilityReportingGate.shared.shouldBlockUpload { startSDK(dsn: dsn) }
+            // Install local crash/hang capture even when launching on camera Wi-Fi.
+            // The dedicated transport independently blocks every upload.
+            startSDK(dsn: dsn)
         } else {
             stopAndPurgeSDKOwned()
         }
@@ -229,12 +246,17 @@ enum ReliabilityReporting {
             try? FileManager.default.createDirectory(
                 at: sdkCacheRoot, withIntermediateDirectories: true)
             DispatchQueue.main.async {
-                guard capturedEpoch == currentEpoch(), ReliabilityReportingConsent.isOptedIn,
-                    !ReliabilityReportingGate.shared.shouldBlockUpload
+                guard capturedEpoch == currentEpoch(), ReliabilityReportingConsent.isOptedIn
                 else { return }
                 if !sdkStarted {
                     sdkSession = session
                     SentrySDK.start(options: options)
+                    SentrySDK.configureScope { scope in
+                        scope.setTag(
+                            value: Bundle.main.object(
+                                forInfoDictionaryKey: "OPCSourceRevision") as? String ?? "unknown",
+                            key: "sourceRevision")
+                    }
                     sdkStarted = true
                 }
                 enqueueFinalizedFromSpool()
@@ -274,6 +296,14 @@ enum ReliabilityReporting {
         guard let json = ReliabilityReportingPrivacy.typedJSON(from: bundle) else { return }
         let eventID = ReliabilityReportingPrivacy.eventID(fromIncidentID: envelope.incidentID)
         let event = makeEvent(envelope: envelope, eventID: eventID)
+        event.timestamp = bundle.header.startedAtWallClock
+        event.releaseName = ReliabilityReportingConfiguration.release(
+            version: bundle.header.appVersion, build: bundle.header.appBuild)
+        event.dist = bundle.header.appBuild
+        event.tags?["sourceRevision"] = bundle.header.sourceRevision
+        event.tags?["cameraFamily"] = bundle.header.cameraFamily
+        event.tags?["cameraFirmware"] = bundle.header.cameraFirmware ?? "unknown"
+        event.tags?["hardwareClass"] = bundle.header.hardwareClass
         capturePayload(event: event, json: json, id: envelope.incidentID, epoch: capturedEpoch)
     }
 
@@ -285,9 +315,20 @@ enum ReliabilityReporting {
         else { return }
         let event = Event(level: .info)
         event.eventId = ReliabilityReportingPrivacy.eventID(fromIncidentID: summary.sessionID)
+        event.timestamp = summary.recordedAt
+        if let version = summary.appVersion, let build = summary.appBuild {
+            event.releaseName = ReliabilityReportingConfiguration.release(
+                version: version, build: build)
+            event.dist = build
+        } else {
+            event.releaseName = "legacy-session-unknown-release"
+        }
         event.message = SentryMessage(formatted: "Feed session summary")
         event.fingerprint = ["feed-session", "schema:1"]
-        event.tags = ["kind": "sessionSummary", "outcome": summary.outcome]
+        event.tags = [
+            "kind": "sessionSummary", "outcome": summary.outcome,
+            "sourceRevision": summary.sourceRevision,
+        ]
         event.extra = [
             "healthyExposureSeconds": summary.healthyExposureSeconds,
             "incidentCount": summary.incidentCount, "sourceRevision": summary.sourceRevision,

@@ -80,6 +80,7 @@ import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.feed.MonitorTransfer
@@ -136,6 +137,10 @@ object SettingsHelpCopy {
     const val REPORT = "Opens a public issue form on GitHub for this project."
     const val SHARE_DIAGNOSTICS =
         "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Paste the copied text into a bug report."
+    const val RELIABILITY_REPORTS =
+        "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
+    const val RELIABILITY_UNAVAILABLE =
+        "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
     const val FEATURE = "Start an idea in this project's feature-request discussion."
     const val SOURCE =
         "View the OpenPocketCine project on GitHub. Opening this may leave the camera Wi-Fi if that is the only network."
@@ -1476,6 +1481,8 @@ private fun StorageRows(model: AppModel, onClearCache: () -> Unit) {
 @Composable
 private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
+    var reliabilityOptIn by remember { mutableStateOf(ReliabilityReporting.isOptedIn) }
     SettingsRowCard(title = "Help & Feedback") {
         SettingsInlineRow("Support", SettingsHelpCopy.SUPPORT, showTopDivider = false) {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SUPPORT) }
@@ -1484,6 +1491,27 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
             SettingsActionPill("Share") {
                 DiagnosticCenter.shareReport(context, model.session)
             }
+        }
+        if (ReliabilityReporting.isAvailable) {
+            SettingsSwitchInlineRow(
+                title = "Automatic reliability reports",
+                help = SettingsHelpCopy.RELIABILITY_REPORTS,
+                isOn = reliabilityOptIn,
+            ) {
+                operatorHaptic(view, model.hapticsEnabled)
+                reliabilityOptIn = !reliabilityOptIn
+                ReliabilityReporting.setConsent(reliabilityOptIn)
+            }
+        } else {
+            SettingsInlineRow(
+                title = "Automatic reliability reports",
+                help = SettingsHelpCopy.RELIABILITY_UNAVAILABLE,
+            ) {
+                SettingsValueText("Off")
+            }
+        }
+        SettingsInlineRow("Reporting Privacy", "What reports contain, retention, and how to request deletion.") {
+            SettingsActionPill("Read") { onLegal(LegalKind.PRIVACY) }
         }
         SettingsInlineRow("Report a Problem", SettingsHelpCopy.REPORT) {
             SettingsActionPill("Report") { openUrl(context, OpenPocketCineLinks.REPORT_PROBLEM) }
@@ -1497,7 +1525,7 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.SOURCE) }
         }
         SettingsInlineRow("Privacy", "What this app stores on this phone.") {
-            SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.PRIVACY) }
+            SettingsActionPill("Open") { onLegal(LegalKind.PRIVACY) }
         }
         SettingsInlineRow("Terms", "How you can use OpenPocketCine.") {
             SettingsActionPill("Open") { openUrl(context, OpenPocketCineLinks.TERMS) }

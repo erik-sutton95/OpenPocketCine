@@ -23,6 +23,7 @@ import com.opencapture.openpocketcine.diagnostics.FeedIncidentLifecycle
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentQueue
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentRates
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime
+import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentSessionContext
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentSnapshot
 import com.opencapture.openpocketcine.diagnostics.FeedRepairPhase
@@ -475,6 +476,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         reconnectTarget = null
         _connectionTargetId.value = camera.id
         _isReconnecting.value = false
+        ReliabilityReporting.setCameraSessionActive(true)
         LocalVPNFilter.noteIfActive(appContext)
         connectJob?.cancel()
         if (!holdsMonitor) publishPhase(ConnectionPhase.CONNECTING_GATT)
@@ -509,6 +511,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     override fun disconnect() {
+        ReliabilityReporting.setCameraSessionActive(false)
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
         _connectionTargetId.value = null

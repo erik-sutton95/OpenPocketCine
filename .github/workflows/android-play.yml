@@ -149,12 +149,21 @@ jobs:
           echo "VERSION_CODE=$((base + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$(sed -n 's/^openpocketcine.versionName=//p' Apps/Android/gradle.properties)" >> "$GITHUB_ENV"
 
+      - name: Require Sentry Android DSN
+        # Presence only. Invalid DSN shape is handled in Apps/Android Gradle/SDK.
+        # Contract: docs/sentry-deployment.md
+        env:
+          SENTRY_UPLOAD_ENABLED: ${{ vars.SENTRY_UPLOAD_ENABLED }}
+          SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
+        run: bash ./tools/sentry-require-android-dsn.sh
+
       - name: Bundle release
         working-directory: Apps/Android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
         run: ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
 
       - name: Attach signed AAB
@@ -164,6 +173,26 @@ jobs:
           path: Apps/Android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload Sentry debug files
+        # No-op unless SENTRY_UPLOAD_ENABLED is exactly true. Fail closed when
+        # enabled: missing token/project/symbols or a sentry-cli failure stops
+        # the Play upload. Contract: docs/sentry-deployment.md
+        env:
+          SENTRY_UPLOAD_ENABLED: ${{ vars.SENTRY_UPLOAD_ENABLED }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
+        run: |
+          set -euo pipefail
+          if [ "${SENTRY_UPLOAD_ENABLED:-}" != "true" ]; then
+            echo "Sentry symbol upload skipped (SENTRY_UPLOAD_ENABLED is not true)."
+            exit 0
+          fi
+          bash ./tools/sentry-install.sh --install-dir "${RUNNER_TEMP}/sentry-cli"
+          export PATH="${RUNNER_TEMP}/sentry-cli:${PATH}"
+          python3 tools/sentry-upload.py --platform android
 
       - name: Upload to Play
         if: ${{ steps.creds.outputs.play_api == 'true' }}

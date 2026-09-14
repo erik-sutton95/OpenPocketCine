@@ -66,6 +66,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/opc_media_file_paths" />
         </provider>
+        <!-- Manual Sentry init only after consent + DSN. Never auto-start. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
     </application>
 
 </manifest>

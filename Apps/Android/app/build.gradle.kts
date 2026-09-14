@@ -25,6 +25,11 @@ android {
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SOURCE_REVISION", "\"unknown\"")
+        val sentryDsnAndroid =
+            System.getenv("SENTRY_DSN_ANDROID").orEmpty().trim()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+        buildConfigField("String", "SENTRY_DSN_ANDROID", "\"$sentryDsnAndroid\"")
 
         ndk {
             abiFilters += supportedAndroidAbi
@@ -185,6 +190,7 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.okhttp)
     implementation(libs.mlkit.face.detection)
+    implementation(libs.sentry.android)
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:core:1.7.0")
@@ -194,4 +200,5 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.json)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }

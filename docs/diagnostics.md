@@ -1,10 +1,18 @@
 # Diagnostics
 
 On-device logging and tester reports. Share Diagnostics is local and redacted.
-The app does not send footage, names, or locations. There is **no production
-upload setup in this tree**: no Sentry DSN is supplied, Automatic reliability
-reports stay Off / unavailable, and no delivery has been proven. Optional
-consent+DSN wiring exists on iOS only; it must not start a camera-time network.
+The app does not send footage, names, or locations. Automatic reports require
+a configured Sentry project and explicit operator consent; they are off by
+default. SDK adapters live in the platform shells, outside the portable core.
+Local crash capture and internet upload have separate gates: starting on camera
+Wi-Fi must still install crash capture, while every upload waits until the camera
+session and camera network are inactive. See [deployment](sentry-deployment.md).
+
+Physical iOS verification on 2026-09-14 delivered a typed incident attachment and
+a symbolicated deliberate crash. A subsequent received event verified recursive
+server-side removal of user geography as well as identity and IP. This is
+development-build proof; release CI credentials and Android physical delivery
+remain separate rollout requirements.
 
 ## What testers can send
 
@@ -13,7 +21,7 @@ consent+DSN wiring exists on iOS only; it must not start a camera-time network.
 | Connection setup (first pair) → **Share Diagnostics** | Same redacted report, available before a camera is saved |
 | Operator Setup → System → **Share Diagnostics** | Redacted report (`report.txt`) plus a compact paste. Includes a local typed incident summary when one was captured (`incidents.txt`) |
 | Operator Setup → System → **Saved Reports** | Share stored typed freeze bundles from this phone |
-| Operator Setup → System → **Automatic reliability reports** | iOS only, off by default, shown only if a https DSN is compiled in. This tree has none, so the row reads Off. Android has no Sentry adapter |
+| Operator Setup → System → **Automatic reliability reports** | Off by default. Available only when the build contains a valid HTTPS reporting destination. Consent can be revoked without deleting locally saved reports |
 | TestFlight screenshot feedback | iOS copies that compact paste to the clipboard — paste it into the TestFlight comment. Apple does not let an app attach files to TestFlight feedback. |
 | Finder / Files (iOS) | `Documents/control-live.log` and `Documents/diagnostics/` (file sharing on) |
 | USB | `tools/pull-control-log.sh` |
@@ -87,9 +95,9 @@ These rows are counters, not scanout. Cached FPS cannot satisfy them.
 Share Diagnostics can attach the local extra; keep the app open briefly
 after a dropout so aftermath can land. No camera-time network: iOS
 ReliabilityReporting cancels SDK traffic while a live session is active or
-the camera IPv4 path is up. Queued automatic send, if a DSN and consent
-ever exist, waits until the operator leaves the camera Wi-Fi. That path is
-unproven here.
+the camera IPv4 path is up. Queued automatic send waits until the operator leaves the camera Wi-Fi.
+A local receipt distinguishes queued from HTTP-confirmed delivery; an SDK event
+ID alone is not a delivery confirmation.
 
 ## Motion stutter and recovery capture
 
@@ -165,20 +173,24 @@ access and server-side IP handling, update store privacy disclosures, and upload
 matching release dSYMs through the release pipeline. Verify a synthetic incident
 and a symbolicated test crash on a non-camera network. Check that a matching
 HTTP success changes the local receipt from queued to confirmed, that camera
-activation cancels transfers, and that opt-out prevents cached uploads. None of
-those remote deployment checks has been performed for this branch.
+activation cancels transfers, and that opt-out prevents cached uploads. Physical iOS delivery and symbolication have been verified in the isolated
+`verification` environment. Repeat the checks for each enabled release pipeline.
+IP scrubbing alone does not prevent server-derived geography: the deployment
+guide includes the verified recursive user-field rule.
 
-Use separate views for incident stage/error/build and session exposure. iOS
-keeps up to 20 session summaries (4 KiB each, seven days) alongside incidents;
+Use separate views for incident stage/error/build and session exposure. Both shells
+keep up to 20 session summaries (4 KiB each, seven days) alongside incidents;
 30-second checkpoints let a later launch mark an unfinished session interrupted.
 These summaries include incident count and observable healthy seconds, including
 sessions without incidents. Do not infer a failure rate from incident count
-alone. Android currently has local reports only, so a cloud dashboard would
-represent opted-in iOS sessions, not the entire installed population.
+alone. A cloud dashboard represents reporting-enabled, opted-in installations only,
+not the entire installed population. Keep Android qualification and session
+exposure coverage explicit when comparing platforms.
 
 The SDK sends typed incident attachments and small session summaries. Native
 crash/hang events preserve diagnostic stack information but scrub user, request,
-breadcrumb, message and exception-value fields. Replay, screenshots, view
+automatic breadcrumb, message and exception-value fields. Only bounded, typed
+feed breadcrumb enum names are retained by the iOS SDK; arbitrary UI text is not. Replay, screenshots, view
 hierarchy, tracing, profiling and automatic network breadcrumbs are disabled.
 SDK close uses no flush timeout on the UI thread; consent is rechecked by the
 transport, and cache deletion follows close on a utility queue. Idle retry checks
@@ -186,5 +198,31 @@ run every 30 seconds while opted in, without sending on the camera path.
 
 Configure alerts for a new failing-stage/error fingerprint or a release increase
 in incidents per observable session-hour. Keep the alert threshold provisional
-until real exposure data establishes the baseline. The adapter and local tests
-are implemented; this is not a claim that a hosted monitoring service is live.
+until real exposure data establishes the baseline. The hosted projects and dashboard are configured, with alerts for new/regressed
+error-level failures excluding development and verification. Alert notification
+delivery has not been tested. Release enablement is described in the deployment
+guide; no store release is implied.
+
+## Development verification
+
+Debug builds accept `OPV_RELIABILITY_VERIFY=incident|gatedIncident|crash|hang|resume` at launch.
+This opens an isolated verification screen, uses a separate consent suite/cache,
+and never constructs the camera UI. `incident` drives the real portable recorder
+with synthetic stage counters; `crash` deliberately terminates through the SDK;
+`hang` deliberately blocks the main thread for five seconds;
+`resume` allows the next launch to deliver the stored crash. `gatedIncident`
+keeps the real upload gate closed for 31 seconds before releasing it; this is
+a simulated camera-session gate on a physical phone, not an RF test.
+`OPV_RELIABILITY_VERIFY_ID` can provide a UUID for correlating an incident.
+The bounded run writes `Documents/reliability-verification.json` with SDK state,
+upload gate and receipt state. These entry points do not exist in Release builds.
+Return to an ordinary launch afterward.
+
+Build with `just ios-device-build DEBUG_INFORMATION_FORMAT=dwarf-with-dsym`
+for local crash symbolication. Upload only that build's dSYMs, then verify the
+received crash has app symbols and no missing-debug-file processing errors.
+Queued incidents keep their original occurrence time, app version/build and source
+revision across updates. Old session summaries without version metadata are
+explicitly marked as having an unknown legacy release.
+
+See [privacy operations](sentry-privacy-operations.md) for controller contact, DPA, retention, access controls, deletion verification and store-disclosure readiness.

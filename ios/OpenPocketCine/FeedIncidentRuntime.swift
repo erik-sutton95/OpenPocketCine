@@ -23,6 +23,8 @@ struct FeedIncidentSessionSummary: Equatable, Codable {
     var outcome: String
     var sourceRevision: String
     var recordedAt: Date? = Date()
+    var appVersion: String? = nil
+    var appBuild: String? = nil
 }
 
 enum FeedIncidentRuntime {
@@ -99,7 +101,10 @@ enum FeedIncidentRuntime {
     }
 
     static func recordBreadcrumb(_ breadcrumb: FeedIncidentBreadcrumb) {
-        queue.async { recorder.recordBreadcrumb(breadcrumb) }
+        queue.async {
+            recorder.recordBreadcrumb(breadcrumb)
+            ReliabilityReporting.noteBreadcrumb(breadcrumb)
+        }
     }
 
     static func recordRepair(_ repair: FeedRepairRecord) {
@@ -233,7 +238,8 @@ enum FeedIncidentRuntime {
                 ?? summaryOutcome(
                     incidentCount: recorder.incidentCount,
                     exposure: recorder.healthyExposureSeconds),
-            sourceRevision: sessionContext.sourceRevision)
+            sourceRevision: sessionContext.sourceRevision,
+            appVersion: sessionContext.appVersion, appBuild: sessionContext.appBuild)
     }
 
     private static func refreshExtrasCache() {

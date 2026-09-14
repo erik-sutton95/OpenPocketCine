@@ -62,6 +62,8 @@ internal enum class FeedIncidentFailingStage(val wire: String) {
 
     companion object {
         fun fromWire(raw: String) = entries.firstOrNull { it.wire == raw } ?: PACKET
+
+        fun isKnown(raw: String): Boolean = entries.any { it.wire == raw }
     }
 }
 
@@ -438,6 +440,82 @@ internal object FeedIncidentClassifier {
         val errorAge = decoder.errorAge ?: return false
         val success = decoder.lastSuccessfulOutputAge
         return if (success != null) errorAge < success else true
+    }
+}
+
+internal data class FeedIncidentGrouping(
+    val schemaVersion: Int,
+    val failingStage: String,
+    val errorClass: String,
+    val outcome: String,
+    val release: String,
+    val os: String,
+    val hardwareClass: String,
+    val cameraFirmware: String,
+    val assistState: String,
+)
+
+internal data class FeedIncidentVendorEnvelope(
+    val schemaVersion: Int,
+    val eventName: String,
+    val grouping: FeedIncidentGrouping,
+    val incidentID: String,
+    val sessionID: String,
+    val kind: String,
+    val worstGapSeconds: Double,
+    val healthyExposureSeconds: Double,
+    val decoderGeneration: Int,
+    val socketGeneration: Int,
+    val startedAtWallClockMs: Long,
+    val sourceRevision: String,
+    val appVersion: String,
+    val appBuild: String,
+    val cameraFamily: String,
+)
+
+internal data class FeedIncidentSessionSummary(
+    val sessionID: String,
+    val healthyExposureSeconds: Double,
+    val incidentCount: Int,
+    val outcome: String,
+    val sourceRevision: String,
+    val recordedAtMs: Long = System.currentTimeMillis(),
+    val appVersion: String? = null,
+    val appBuild: String? = null,
+)
+
+internal object FeedIncidentExport {
+    fun envelope(from: FeedIncidentBundle): FeedIncidentVendorEnvelope {
+        val header = from.header
+        val grouping =
+            FeedIncidentGrouping(
+                schemaVersion = header.schemaVersion,
+                failingStage = header.failingStage.wire,
+                errorClass = header.errorClass ?: "none",
+                outcome = header.outcome.wire,
+                release = "${header.appVersion}(${header.appBuild})",
+                os = "${header.osName} ${header.osVersion}",
+                hardwareClass = header.hardwareClass,
+                cameraFirmware = header.cameraFirmware ?: "none",
+                assistState = header.assistState,
+            )
+        return FeedIncidentVendorEnvelope(
+            schemaVersion = header.schemaVersion,
+            eventName = "feed.incident",
+            grouping = grouping,
+            incidentID = header.incidentId,
+            sessionID = header.sessionId,
+            kind = header.kind.wire,
+            worstGapSeconds = header.worstGapSeconds,
+            healthyExposureSeconds = header.healthyExposureSeconds,
+            decoderGeneration = header.decoderGeneration,
+            socketGeneration = header.socketGeneration,
+            startedAtWallClockMs = header.startedAtWallClockMs,
+            sourceRevision = header.sourceRevision,
+            appVersion = header.appVersion,
+            appBuild = header.appBuild,
+            cameraFamily = header.cameraFamily,
+        )
     }
 }
 

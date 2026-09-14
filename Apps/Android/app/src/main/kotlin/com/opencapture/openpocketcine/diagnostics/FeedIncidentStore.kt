@@ -5,7 +5,7 @@ import java.util.Locale
 
 /** On-device incident spool. Journal-independent. No upload. Atomic writes. */
 internal class FeedIncidentStore(
-    private val directory: File,
+    val directory: File,
     private val limits: FeedIncidentLimits = FeedIncidentLimits(),
 ) {
     init {

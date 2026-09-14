@@ -41,9 +41,18 @@ Share Diagnostics can include a local freeze summary (packet, decoder, and
 presentation counters, recovery attempts, Settings enter/exit) when one was
 captured. Keep the app open briefly after a dropout so that summary can finish.
 The last held picture is not live video. Opening Settings is a reported trigger
-from testers; it is not a proven decoder error. Automatic internet reports are
-off unless a future build ships a report destination and you turn them on;
-they do not run while you are on the camera Wi-Fi.
+from testers; it is not a proven decoder error. In builds with reporting configured, **Operator Setup → System → Automatic
+reliability reports** lets you opt in to crash, hang and feed-incident reports.
+It is off by default. Reports include recent feed measurements and recovery
+actions, not footage, camera credentials or operator identity. Uploads wait
+until you leave the camera Wi-Fi. Turning it off clears pending automatic
+uploads; locally saved reports remain available through **Share Diagnostics**.
+An Off-only row means this build has no automatic reporting destination.
+You can use every camera feature without opting in. **Reporting Privacy** opens
+the [privacy policy](https://openpocketcine.app/privacy/) with retention and rights
+information. Turning reporting off does not delete reports already received.
+Contact [OpenCapture support](mailto:support@openpocketcine.app) privately for
+access or deletion requests; never post personal details or reports publicly.
 
 Recovery shows its current step and keeps **Retry connection** and **Operator
 menu** available. It waits for a new picture before clearing the recovery card.

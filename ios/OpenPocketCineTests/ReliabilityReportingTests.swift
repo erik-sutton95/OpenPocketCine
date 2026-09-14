@@ -79,8 +79,33 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertNil(ReliabilityReportingDSN.validated(""))
         XCTAssertNil(ReliabilityReportingDSN.validated("http://key@host/1"))
         XCTAssertNil(ReliabilityReportingDSN.validated("https://ingest.sentry.io/1"))
+        XCTAssertNil(ReliabilityReportingDSN.validated("https://key:secret@ingest.sentry.io/1"))
+        XCTAssertNil(
+            ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/1?token=value"))
+        XCTAssertNil(
+            ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/not-a-project"))
         XCTAssertNotNil(
             ReliabilityReportingDSN.validated("https://publickey@o0.ingest.sentry.io/0"))
+    }
+
+    func testColdStartOnCameraNetworkStillInstallsCrashCapture() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(true)
+        let previousDSN = ProcessInfo.processInfo.environment["SENTRY_DSN"]
+        setenv("SENTRY_DSN", "https://publickey@o0.ingest.sentry.io/0", 1)
+        defer {
+            if let previousDSN {
+                setenv("SENTRY_DSN", previousDSN, 1)
+            } else {
+                unsetenv("SENTRY_DSN")
+            }
+            ReliabilityReporting.setConsent(false)
+        }
+        ReliabilityReporting.install()
+        let installed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in SentrySDK.isEnabled }, object: nil)
+        wait(for: [installed], timeout: 3)
+        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
     }
 
     func testCameraGateBlocksEvenWithInternetAndCancelsPending() {
@@ -202,6 +227,73 @@ final class ReliabilityReportingTests: XCTestCase {
             prints,
             ["feed-incident", "schema:1", "stage:decodedOutput", "errorClass:invalidSession"]
         )
+    }
+
+    func testOnlyTypedFeedBreadcrumbsSurviveScrubbing() {
+        let event = Event(level: .error)
+        let typed = Breadcrumb(level: .info, category: "feed")
+        typed.message = "settingsEnter"
+        typed.data = ["password": "must-not-leave-phone"]
+        let arbitrary = Breadcrumb(level: .info, category: "feed")
+        arbitrary.message = "arbitrary operator text"
+        event.breadcrumbs = [typed, arbitrary, Breadcrumb(level: .info, category: "http")]
+        _ = ReliabilityReportingPrivacy.scrub(event)
+        XCTAssertEqual(event.breadcrumbs?.count, 1)
+        XCTAssertEqual(event.breadcrumbs?.first?.message, "settingsEnter")
+        XCTAssertNil(event.breadcrumbs?.first?.data)
+    }
+
+    func testVerificationUsesTheRealRecorderAndProducesRecoveredIncident() throws {
+        let id = UUID().uuidString
+        let bundle = try XCTUnwrap(ReliabilityReportingVerification.syntheticIncident(id: id))
+        XCTAssertEqual(bundle.header.incidentID, id)
+        XCTAssertEqual(bundle.header.outcome, .recovered)
+        XCTAssertEqual(bundle.header.failingStage, .decodedOutput)
+        XCTAssertEqual(bundle.header.cameraFamily, "synthetic")
+        XCTAssertFalse(bundle.prelude.isEmpty)
+        XCTAssertEqual(bundle.breadcrumbs.first?.kind, .settingsEnter)
+    }
+
+    func testSDKCapturePreservesOriginalBuildAfterUpgrade() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        let options = ReliabilityReporting.makeOptions(
+            dsn: "https://publickey@o0.ingest.sentry.io/0",
+            urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
+        let prepared = expectation(description: "SDK prepared original provenance")
+        options.beforeSend = { event in
+            XCTAssertEqual(event.releaseName, "com.opencapture.openpocketcine@0.1.0+107")
+            XCTAssertEqual(event.dist, "107")
+            prepared.fulfill()
+            return nil
+        }
+        SentrySDK.start(options: options)
+        defer { SentrySDK.close() }
+        let event = Event(level: .error)
+        event.releaseName = "com.opencapture.openpocketcine@0.1.0+107"
+        event.dist = "107"
+        SentrySDK.capture(event: event)
+        wait(for: [prepared], timeout: 3)
+    }
+
+    func testQueuedIncidentKeepsOriginalReleaseAndOccurrenceTime() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        var bundle = try stallBundle(id: UUID().uuidString)
+        bundle.header.outcome = .recovered
+        bundle.header.appVersion = "0.1.0"
+        bundle.header.appBuild = "107"
+        bundle.header.sourceRevision = String(repeating: "a", count: 40)
+        bundle.header.startedAtWallClock = Date(timeIntervalSince1970: 1_780_000_000)
+        let captured = expectation(description: "original provenance")
+        let expectedTime = bundle.header.startedAtWallClock
+        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
+            XCTAssertEqual(event.releaseName, "com.opencapture.openpocketcine@0.1.0+107")
+            XCTAssertEqual(event.dist, "107")
+            XCTAssertEqual(event.timestamp, expectedTime)
+            XCTAssertEqual(event.tags?["sourceRevision"], String(repeating: "a", count: 40))
+            captured.fulfill()
+        }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        wait(for: [captured], timeout: 2)
     }
 
     func testScrubRemovesUserRequestBreadcrumbsAndPaths() {

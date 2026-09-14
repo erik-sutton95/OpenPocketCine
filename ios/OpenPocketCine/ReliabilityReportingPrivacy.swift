@@ -43,7 +43,10 @@ enum ReliabilityReportingDSN {
         }
         guard let host = url.host, !host.isEmpty else { return nil }
         guard let user = url.user, !user.isEmpty else { return nil }
-        guard url.path.count > 1 else { return nil }
+        guard url.password == nil, url.query == nil, url.fragment == nil,
+            let project = url.path.split(separator: "/").last,
+            !project.isEmpty, project.allSatisfy({ $0.isASCII && $0.isNumber })
+        else { return nil }
         return trimmed
     }
 
@@ -104,12 +107,22 @@ enum ReliabilityReportingPrivacy {
 
     static let tagAllowlist: Set<String> = [
         "failingStage", "errorClass", "outcome", "kind",
+        "sourceRevision", "cameraFamily", "cameraFirmware", "hardwareClass",
     ]
+
+    static func scrubBreadcrumb(_ breadcrumb: Breadcrumb) -> Breadcrumb? {
+        guard breadcrumb.category == "feed",
+            let message = breadcrumb.message,
+            FeedIncidentBreadcrumbKind(rawValue: message) != nil
+        else { return nil }
+        breadcrumb.data = nil
+        return breadcrumb
+    }
 
     static func scrub(_ event: Event) -> Event {
         event.user = nil
         event.request = nil
-        event.breadcrumbs = []
+        event.breadcrumbs = Array((event.breadcrumbs ?? []).compactMap(scrubBreadcrumb).suffix(32))
         event.serverName = nil
         event.transaction = nil
         if let formatted = event.message?.formatted {
@@ -123,7 +136,8 @@ enum ReliabilityReportingPrivacy {
         if var tags = event.tags {
             tags = tags.filter { tagAllowlist.contains($0.key) }
             for key in tags.keys {
-                tags[key] = FeedIncidentPrivacyToken.token(tags[key] ?? "")
+                let limit = key == "sourceRevision" ? 64 : 32
+                tags[key] = PrivacyRedactor.redact(String((tags[key] ?? "").prefix(limit)))
             }
             event.tags = tags.isEmpty ? nil : tags
         }

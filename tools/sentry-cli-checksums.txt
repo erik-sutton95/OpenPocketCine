@@ -1,0 +1,10 @@
+# SHA-256 of sentry-cli 3.7.0 binaries from the official release registry.
+# https://release-registry.services.sentry.io/apps/sentry-cli/3.7.0
+# Pin documented at https://docs.sentry.io/cli/installation/ (SENTRY_CLI_VERSION="3.7.0").
+Darwin-universal 10ccaaa39e6eee2b52034546f5f617533fdc76c64aa75c3038887045da1a367d
+Darwin-arm64 c66564094fbe56ee3b359f7574541f858b8d1df0328a0a759da972fbf1886048
+Darwin-x86_64 fcd74786b4d95c6b7531662607897aadd5ab5d64c5d0468a6f4bd97ad04bedb8
+Linux-aarch64 69cc0e951f663a332fd3bb3069e443cb3748abbfce497ae2caac6d5a9ec7ae65
+Linux-x86_64 cec71d46a7cc394c94b6e75f1601985c710d457376c546ef3975567b3671563b
+Linux-armv7 2131a93688800965abe550e029d19993038352f788bc3eeecf4582947154121b
+Linux-i686 1d57c92d15265425dbf43df9b9e6395ff9bb5c2eaf60adb541dadc3f866715fa

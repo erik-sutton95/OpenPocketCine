@@ -22,8 +22,8 @@ import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * On-device journal, exceptions, and a shareable report. Nothing is uploaded.
- * Person name, location, device name, and Wi-Fi passwords are stripped.
+ * On-device journal, exceptions, and a shareable report. Optional uploads belong
+ * to ReliabilityReporting. Person name, location, device name, and Wi-Fi passwords are stripped.
  */
 object DiagnosticCenter {
     private const val TAG = "opc.diagnostics"
@@ -54,6 +54,7 @@ object DiagnosticCenter {
             persistBatch(exceptionFile(), batch, EXCEPTION_CAP, exceptionWritten, exceptionJournal)
         }
         filesDir()?.let { FeedIncidentRuntime.install(it) }
+        ReliabilityReporting.install(context.applicationContext)
         log("notice", "diagnostics", "boot", "diagnostics installed")
     }
 

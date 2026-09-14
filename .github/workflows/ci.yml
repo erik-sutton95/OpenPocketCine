@@ -48,6 +48,9 @@ jobs:
       - name: Repository hygiene
         run: ./scripts/check-repository-hygiene.sh
 
+      - name: Sentry release configuration
+        run: bash ./tools/sentry-test.sh
+
       - name: Landing-page assets
         run: ./scripts/check-site.sh
 

@@ -187,6 +187,10 @@ class OperatorSetupContractTest {
         assertTrue(LegalKind.PRIVACY.body.contains("Android Keystore"))
         assertFalse(LegalKind.PRIVACY.body.contains("iOS Keychain"))
         assertTrue(LegalKind.PRIVACY.body.contains("Android may ask for location"))
+        assertTrue(LegalKind.PRIVACY.body.contains("OpenCapture is the data controller"))
+        assertTrue(LegalKind.PRIVACY.body.contains("support@openpocketcine.app"))
+        assertTrue(LegalKind.PRIVACY.body.contains("optional and off by default"))
+        assertFalse(LegalKind.PRIVACY.body.contains("does not send analytics, crash reports"))
         assertTrue(LegalKind.NOTICE.body.contains("Apache License, Version 2.0"))
         assertTrue(LegalKind.LICENSES.body.contains("No DJI SDK is included or required."))
     }
@@ -223,6 +227,13 @@ class OperatorSetupContractTest {
         assertEquals("DISP 1 · Live", PocketDispMode.LIVE.settingsTitle)
         assertEquals("DISP 2 · Clean", PocketDispMode.CLEAN.settingsTitle)
         assertEquals(17, PocketDispSection.entries.size)
+    }
+
+    @Test
+    fun reliabilityReportsCopyMatchesIos() {
+        assertTrue(SettingsHelpCopy.RELIABILITY_REPORTS.contains("Off by default"))
+        assertTrue(SettingsHelpCopy.RELIABILITY_REPORTS.contains("leave camera Wi-Fi"))
+        assertTrue(SettingsHelpCopy.RELIABILITY_UNAVAILABLE.contains("cannot send automatic reports"))
     }
 
     @Test

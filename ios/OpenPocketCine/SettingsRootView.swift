@@ -57,7 +57,7 @@ enum SettingsHelpCopy {
     static let shareDiagnostics =
         "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Take a screenshot for TestFlight and paste the copied text into the feedback."
     static let reliabilityReports =
-        "Send crash, hang and live-feed reports, plus session health counts. Off by default. Reports wait until you leave the camera Wi-Fi. No name, location, or video."
+        "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
     static let reliabilityUnavailable =
         "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
     static let savedReports =
@@ -885,6 +885,14 @@ struct SettingsRootView: View {
                     SettingsValueText(value: "Off")
                 }
             }
+            SettingsInlineRow(
+                title: "Reporting Privacy",
+                help: "What reports contain, retention, and how to request deletion."
+            ) {
+                SettingsActionPill(title: "Read") {
+                    legalKind = .privacy
+                }
+            }
             SettingsInlineRow(title: "Saved Reports", help: SettingsHelpCopy.savedReports) {
                 SettingsActionPill(title: "Share") {
                     FeedIncidentRuntime.exportVendorBundles { url in
@@ -926,7 +934,7 @@ struct SettingsRootView: View {
             }
             SettingsInlineRow(title: "Privacy", help: "What this app stores on this phone.") {
                 SettingsActionPill(title: "Open") {
-                    if let url = OpenPocketCineLinks.privacy { openURL(url) }
+                    legalKind = .privacy
                 }
             }
             SettingsInlineRow(title: "Terms", help: "How you can use OpenPocketCine.") {

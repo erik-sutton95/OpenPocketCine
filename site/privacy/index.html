@@ -67,7 +67,9 @@
       <p>
         OpenPocketCine is an open-source field monitor for DJI Osmo Pocket cameras.
         <strong>The app has no account. Automatic reliability reports are off by default.</strong>
-        This page is the canonical privacy text.
+        OpenCapture is the data controller for the processing described here.
+        Contact <a href="mailto:support@openpocketcine.app">support@openpocketcine.app</a>
+        privately about privacy or deletion. This page is the canonical privacy text.
       </p>
 
       <h2>What the app does with data</h2>
@@ -102,12 +104,14 @@
           provide crash reports to the developer under their terms.
         </li>
         <li>
-          <strong>Sentry (optional iOS reliability reports).</strong> In builds configured for
+          <strong>Sentry (optional reliability reports).</strong> In builds configured for
           this service, you can enable Automatic reliability reports in Operator Setup.
           Reports include app/build and OS versions, hardware class, camera family, ephemeral
           session identifiers, frame timing, recovery attempts, session duration measurements,
           and crash or hang diagnostics. They exclude footage, screenshots, raw camera packets,
-          camera Wi-Fi passwords, personal device names and location. Reports wait while a
+          camera Wi-Fi passwords and personal device names. We do not collect GPS location;
+          stored event IP addresses and IP-derived geography are removed. Sentry necessarily
+          receives your IP address while accepting the network connection. Reports wait while a
           camera session or camera Wi-Fi path is active. Turning the option off stops reporting
           and clears the pending reporting cache on this phone; it does not retract reports
           already received by the service. Local diagnostic reports remain available to share
@@ -152,10 +156,89 @@
       <h2>What the app does not do</h2>
       <ul>
         <li>No automatic reliability uploads without opt-in and a configured reporting service.</li>
-        <li>No advertising or tracking of any kind.</li>
+        <li>No advertising or tracking across apps or websites.</li>
         <li>No account with us &mdash; the app has no sign-up.</li>
         <li>No sale of personal data.</li>
       </ul>
+
+      <h2>Your choice and legal basis</h2>
+      <p>
+        Optional reliability reporting relies on your consent (GDPR Article 6(1)(a)).
+        It helps OpenCapture diagnose crashes, hangs and live-feed interruptions and measure
+        recovery. It is off by default. You can use every camera feature without consenting.
+        Withdraw consent at any time by turning off Automatic reliability reports in
+        Operator Setup. This stops further reporting and clears pending SDK uploads;
+        withdrawal does not change the lawfulness of processing before withdrawal.
+        Reports already received can be the subject of a deletion request.
+      </p>
+      <p>
+        Reports use random incident and session identifiers rather than an account or
+        advertising identifier. Technical reports can still be personal data; we do not
+        promise that removing names makes them anonymous. We do not use reports to make
+        automated decisions about you or to profile you for advertising.
+      </p>
+
+      <h2>Where reports are processed</h2>
+      <p>
+        Sentry (Functional Software, Inc., United States) processes optional reports for
+        OpenCapture. Our Sentry organization uses the Germany region for event storage.
+        Some account, integration and organization metadata may be processed in the United
+        States, and international access or transfers may occur. Sentry describes its
+        available transfer safeguards, including standard contractual clauses, in its
+        <a href="https://sentry.io/legal/dpa/">Data Processing Addendum</a>, and publishes its
+        <a href="https://sentry.io/legal/subprocessors/">subprocessors</a> and
+        <a href="https://www.sentry.help/en/articles/13964378-sentry-s-eu-region-faq">EU storage details</a>.
+      </p>
+
+      <h2>How long data is kept</h2>
+      <p>
+        Sentry event and attachment retention depends on the plan in effect when a report
+        arrives: normally 30 days on Developer or 90 days on Team and Business plans.
+        Issue summaries may remain after individual events expire. Sentry rotates backups
+        separately, within 30 or 90 days depending on data type. See
+        <a href="https://docs.sentry.io/security-legal-pii/security/data-retention-periods/">Sentry retention periods</a>.
+        Deletion requests also cover any identifiable copies we have exported for support.
+      </p>
+      <p>
+        On-device diagnostic storage is bounded and older reports are rotated. You can delete
+        saved reports in Operator Setup. Turning off reporting clears pending SDK uploads;
+        it does not clear separately saved local diagnostics. Preferences remain until you
+        change them or remove the app, subject to platform backup and secure-storage behavior.
+      </p>
+      <p>
+        Waitlist information is kept while needed to administer your beta access, or until
+        you withdraw. Private support correspondence is kept while needed to resolve the
+        request and follow up. We review these records and remove information no longer needed;
+        legal obligations may require specific records to be retained longer.
+      </p>
+
+      <h2>Your privacy rights</h2>
+      <p>
+        Depending on the circumstances, you may request access, correction, erasure,
+        restriction or portability of your personal data, object to processing based on
+        legitimate interests, and withdraw consent. You may complain to your local data
+        protection authority. Email
+        <a href="mailto:support@openpocketcine.app">support@openpocketcine.app</a> privately.
+        We normally respond within one month; if a lawful extension is needed, we explain it.
+      </p>
+      <p>
+        We do not attach a name or email address to reliability reports. If available,
+        include an incident identifier from a saved report, the approximate time and app
+        build to help locate your data. We may need limited additional information to locate
+        a report or verify a request. Do not post personal details or diagnostic attachments
+        in public GitHub issues or discussions.
+      </p>
+
+      <h2>Visiting this website</h2>
+      <p>
+        GitHub Pages serves this website and receives technical connection information,
+        including your IP address, to deliver and secure it. Pages that load Google Fonts
+        also make a connection to Google. These providers process connection data under
+        their own policies. We do not use advertising cookies. Optional external services
+        such as the beta form receive data when you use them. Necessary site delivery and
+        handling support requests are based on our legitimate interests in operating and
+        supporting OpenPocketCine; you may object where this basis applies.
+      </p>
 
       <h2>Website waitlist</h2>
       <p>
@@ -166,9 +249,9 @@
         It is not a newsletter, not an app account, and not sold.
       </p>
       <p>
-        To ask that a waitlist row be deleted, open a
-        <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a" target="_blank" rel="noopener">GitHub Discussion</a>
-        with the email you used. Do not post camera passwords or private media there.
+        The waitlist relies on your consent. To withdraw or request deletion, email
+        <a href="mailto:support@openpocketcine.app">support@openpocketcine.app</a>
+        from the address you used. Do not publish your email in GitHub Discussions.
       </p>
 
       <h2>Changes and contact</h2>
@@ -176,8 +259,8 @@
         Changes to this policy are published on this page and in the project's public repository.
         Bugs:
         <a href="https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml" target="_blank" rel="noopener">GitHub Issues</a>.
-        Questions:
-        <a href="https://github.com/erik-sutton95/OpenPocketCine/discussions/new?category=q-a" target="_blank" rel="noopener">GitHub Discussions</a>.
+        Privacy and private support:
+        <a href="mailto:support@openpocketcine.app">support@openpocketcine.app</a>.
       </p>
     </div>
   </main>
