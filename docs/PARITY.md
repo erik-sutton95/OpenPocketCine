@@ -629,3 +629,21 @@ payload. Physical iPhone validation passed opening and cancelling the system ima
 including first-launch consent and support navigation. Image normalization and
 envelope contents have automated test coverage; no Android device is attached.
 Hosted image attachment validation is pending.
+
+### Playback polish and centered camera home
+
+Both shells use equal landscape gutters on Your cameras, based on the larger
+physical side inset, so the page stays centered in either orientation. Playback
+uses the Settings/Media Back control, consistent rounded action buttons and
+inset header actions. Assist inspectors reserve the full cutout clearance for
+their navigation tabs. Video framing and playback transport remain unchanged.
+
+Share lists Google Drive, Dropbox, NAS (SMB), LucidLink, Backblaze B2 and
+Vimeo Review as noninteractive Coming soon destinations. These rows do not
+start authentication, exports or uploads. Existing destinations retain their
+current behavior. Simulator UI checks passed both landscape orientations and
+portrait, centered camera-home bounds, 54 pt Back, on-screen header actions,
+cutout-clear assist tabs, scrolling future destinations and return from Share
+to the same player. Physical iPhone automation could not initialize because
+Xcode returned authentication canceled; physical validation remains pending.
+Physical Android remains unavailable because no device is attached.

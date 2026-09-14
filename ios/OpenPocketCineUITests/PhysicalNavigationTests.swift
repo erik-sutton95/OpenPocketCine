@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 /// Opt-in real-device navigation. This does not manufacture telemetry, start a
@@ -121,6 +122,78 @@ final class PhysicalNavigationTests: XCTestCase {
         media.tap()
         XCTAssertTrue(app.staticTexts["Media"].firstMatch.waitForExistence(timeout: 10))
         attach(app, "physical-media")
+    }
+
+    func testPhysicalPlaybackChromeAndCenteredHome() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
+            throw XCTSkip("Requires an attached review device")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = .portrait
+        }
+        let media = app.buttons["cameras.media"]
+        XCTAssertTrue(media.waitForExistence(timeout: 20))
+        Thread.sleep(forTimeInterval: 3)
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+            XCUIDevice.shared.orientation = orientation
+            Thread.sleep(forTimeInterval: 2)
+            let pair = app.buttons["cameras.pair"]
+            XCTAssertTrue(pair.isHittable)
+            XCTAssertEqual(pair.frame.midX, app.frame.midX, accuracy: 2)
+            attach(app, "centered-home-\(orientation.rawValue)")
+        }
+        media.tap()
+        let clip = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "monitor.media.clip.")
+        ).firstMatch
+        XCTAssertTrue(clip.waitForExistence(timeout: 10), "A cached clip is required")
+        clip.tap()
+        let back = app.buttons["Back to media"]
+        XCTAssertTrue(back.waitForExistence(timeout: 15))
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            Thread.sleep(forTimeInterval: 2)
+            XCTAssertTrue(back.isHittable)
+            XCTAssertEqual(back.frame.width, 54, accuracy: 1)
+            for title in [
+                "Favorite clip", "Clip information", "Share clip", "Delete clip from camera",
+            ] {
+                let button = app.buttons[title]
+                XCTAssertTrue(button.isHittable, title)
+                XCTAssertGreaterThanOrEqual(button.frame.minX, app.frame.minX + 12)
+                XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX - 12)
+            }
+            attach(app, "playback-chrome-\(orientation.rawValue)")
+        }
+        XCUIDevice.shared.orientation = .landscapeLeft
+        Thread.sleep(forTimeInterval: 2)
+        let expand = app.buttons["monitor.assists.expand"]
+        if expand.exists { expand.tap() }
+        app.buttons["monitor.assist.LUT"].press(forDuration: 0.6)
+        let inspector = app.otherElements["monitor.inspector"]
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+        let lut = inspector.buttons["LUT"].firstMatch
+        XCTAssertTrue(lut.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(lut.frame.minX, 55)
+        attach(app, "playback-assist-safe-area")
+        app.buttons["Close LUT"].tap()
+        app.buttons["Share clip"].tap()
+        let scroll = app.scrollViews["monitor.share.optionsScroll"]
+        for name in [
+            "Google Drive", "Dropbox", "NAS (SMB)", "LucidLink", "Backblaze B2", "Vimeo Review",
+        ] {
+            let row = app.descendants(matching: .any)["monitor.share.upcoming.\(name)"].firstMatch
+            for _ in 0..<5 where !row.isHittable { scroll.swipeUp() }
+            XCTAssertTrue(row.exists, name)
+        }
+        attach(app, "playback-share-upcoming")
+        app.buttons["monitor.share.close"].tap()
+        back.tap()
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {

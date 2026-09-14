@@ -486,9 +486,30 @@ internal object PlaybackChromeMetrics {
     const val bottomScrimDp = 200f
     const val SAMPLE_MS = 80L
     const val SAMPLE_MAX_SIDE = 480f
+    const val actionChipSize = 44f
+    const val actionChipSpacing = 8f
+    const val actionChipIcon = 18f
+    const val actionChipCorner = 14f
+    const val headerGutterBase = 28f
+
+    fun headerLeadingPadding(
+        safeLeading: Float,
+        safeTrailing: Float,
+        backStart: Float,
+        backSize: Float = 54f,
+        backGap: Float = 12f,
+    ): Float = max(headerGutter(safeLeading, safeTrailing), max(0f, backStart) + backSize + backGap)
     val hideChromeIcon = OpcIcon.MAXIMIZE
     val showChromeIcon = OpcIcon.MINIMIZE
     val viewAssistIcon = OpcIcon.MONITOR
+
+    fun headerGutter(safeLeading: Float, safeTrailing: Float, base: Float = headerGutterBase): Float =
+        max(max(0f, safeLeading), max(0f, safeTrailing)) + base
+
+    fun headerTopPadding(safeTop: Float, base: Float = 12f): Float = max(0f, safeTop) + base
+
+    fun portraitActionRowWidth(actionCount: Int = 4): Float =
+        actionChipSize * actionCount + actionChipSpacing * max(0, actionCount - 1)
 
     fun usesDarkenedBars(tier: GlassTier): Boolean = tier == GlassTier.FLAT
 
@@ -501,6 +522,63 @@ internal object PlaybackChromeMetrics {
         val buttons = 38f * transportCount + 32f * actionCount
         val gaps = transportRowSpacing * (transportCount + actionCount - 1)
         return buttons + gaps + barPaddingH * 2 + minimumSpacer
+    }
+}
+
+@Composable
+fun PlaybackActionChip(
+    icon: OpcIcon,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    active: Boolean = false,
+    destructive: Boolean = false,
+    filled: Boolean = false,
+    enabled: Boolean = true,
+    tint: Color = if (!enabled) LiveDesign.faint else if (destructive) LiveDesign.rec else if (active) LiveDesign.accent else LiveDesign.text.copy(alpha = 0.86f),
+) {
+    val shape = RoundedCornerShape(PlaybackChromeMetrics.actionChipCorner.dp)
+    Row(
+        modifier
+            .height(PlaybackChromeMetrics.actionChipSize.dp)
+            .then(if (title == null) Modifier.width(PlaybackChromeMetrics.actionChipSize.dp) else Modifier)
+            .clip(shape)
+            .then(
+                when {
+                    destructive -> Modifier.background(LiveDesign.rec.copy(alpha = 0.12f), shape)
+                    active -> Modifier.background(LiveDesign.accent.copy(alpha = 0.22f), shape)
+                    else -> Modifier
+                },
+            )
+            .mediaGlass(shape)
+            .then(
+                when {
+                    destructive -> Modifier.border(1.dp, LiveDesign.rec.copy(alpha = 0.4f), shape)
+                    active -> Modifier.border(1.dp, LiveDesign.accent.copy(alpha = 0.5f), shape)
+                    else -> Modifier
+                },
+            )
+            .chromeClickable(enabled = enabled, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription }
+            .padding(horizontal = if (title == null) 13.dp else 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        OpcIcon(
+            icon = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(PlaybackChromeMetrics.actionChipIcon.dp),
+            filled = filled,
+        )
+        if (title != null) {
+            Text(
+                title,
+                color = tint,
+                style = LiveType.ui(12f, FontWeight.SemiBold),
+            )
+        }
     }
 }
 

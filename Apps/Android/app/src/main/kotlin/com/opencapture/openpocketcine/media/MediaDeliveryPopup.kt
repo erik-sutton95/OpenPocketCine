@@ -47,6 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +77,18 @@ enum class MediaDeliveryDestination(
         subtitle = "Nearby Share, Files, and other apps",
         actionTitle = "Share",
     ),
+}
+
+/** Listed on the Share sheet; never selectable and never starts auth or upload. */
+internal object MediaDeliveryUpcoming {
+    val titles = listOf(
+        "Google Drive",
+        "Dropbox",
+        "NAS (SMB)",
+        "LucidLink",
+        "Backblaze B2",
+        "Vimeo Review",
+    )
 }
 
 enum class MediaDeliveryPostExportAction {
@@ -266,6 +280,9 @@ fun MediaDeliveryPopup(
                                 step = DeliveryStep.OPTIONS
                             },
                         )
+                        MediaDeliveryUpcoming.titles.forEach { title ->
+                            UpcomingDestinationRow(title)
+                        }
                     }
                     DeliveryStep.OPTIONS -> {
                         if (files.size == 1) {
@@ -415,6 +432,40 @@ private fun OptionsHeader(title: String, onBack: () -> Unit) {
             Text(title, style = LiveType.ui(12.5f, FontWeight.SemiBold), color = LiveDesign.text)
             Text("Options", style = LiveType.ui(11f, FontWeight.Medium), color = LiveDesign.muted)
         }
+    }
+}
+
+@Composable
+private fun UpcomingDestinationRow(title: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MediaCornerShape)
+            .background(LiveDesign.hairline.copy(alpha = 0.2f), MediaCornerShape)
+            .padding(horizontal = 12.dp, vertical = 14.dp)
+            .semantics { contentDescription = "$title, Coming soon" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OpcIcon(
+            OpcIcon.FOLDER,
+            contentDescription = null,
+            tint = LiveDesign.muted,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            style = LiveType.ui(14f, FontWeight.SemiBold),
+            color = LiveDesign.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "Coming soon",
+            style = LiveType.ui(11f, FontWeight.Medium),
+            color = LiveDesign.muted,
+        )
     }
 }
 

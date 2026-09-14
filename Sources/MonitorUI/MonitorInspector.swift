@@ -68,7 +68,7 @@
         /// Fixed columns prevent a selected menu's ideal width from expanding
         /// the shell; only the content's vertical scroll extent may change.
         private var contentWidth: CGFloat {
-            let edge = portrait ? 0 : min(44, trailing ? safeArea.trailing : safeArea.leading)
+            let edge = portrait ? 0 : max(0, trailing ? safeArea.trailing : safeArea.leading)
             return max(1, width - edge - (!portrait && hasNavigation ? 109 : 0))
         }
 
@@ -106,7 +106,7 @@
                 .padding(.bottom, portrait && trailing ? 4 : max(4, safeArea.bottom))
                 .padding(
                     trailing ? .trailing : .leading,
-                    portrait ? 0 : min(44, trailing ? safeArea.trailing : safeArea.leading)
+                    portrait ? 0 : max(0, trailing ? safeArea.trailing : safeArea.leading)
                 )
                 .frame(width: width, height: max(1, height))
                 .frame(

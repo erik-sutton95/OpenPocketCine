@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,8 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -270,18 +274,39 @@ private fun LinkExperience(
         )
     val context = LocalContext.current
     val density = LocalDensity.current
+    val layoutDir = LocalLayoutDirection.current
+    val configuration = LocalConfiguration.current
+    val camerasHome = !model.shouldShowWizard
+    val landscapeHome = configuration.screenWidthDp > configuration.screenHeightDp
     val bar = LocalImmersiveBarInsets.current
     val barStart by animateDpAsState(with(density) { bar.left.toDp() }, label = "barStart")
     val barTop by animateDpAsState(with(density) { bar.top.toDp() }, label = "barTop")
     val barEnd by animateDpAsState(with(density) { bar.right.toDp() }, label = "barEnd")
     val barBottom by animateDpAsState(with(density) { bar.bottom.toDp() }, label = "barBottom")
+    val homeSide = with(density) {
+        val leading = WindowInsets.safeDrawing.getLeft(this, layoutDir).toDp()
+        val trailing = WindowInsets.safeDrawing.getRight(this, layoutDir).toDp()
+        com.opencapture.monitorui.MonitorLayoutPolicy.pageSideInsets(
+            landscape = true, safeLeading = leading.value, safeTrailing = trailing.value,
+        ).first.dp
+    }
     Column(
         Modifier
             .fillMaxSize()
             // Two insets, and they never both apply. Setup keeps the bars up, so safeDrawing
             // carries the real status-bar height; the monitor hides them, so safeDrawing is
             // empty there and the transient swipe-reveal lanes below do the work instead.
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            // Cameras landscape mirrors the larger cutout onto both sides so the list stays
+            // centered; pairing and live chrome keep their own edges.
+            .then(
+                if (camerasHome && landscapeHome) {
+                    Modifier
+                        .padding(start = homeSide, end = homeSide)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
+                } else {
+                    Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+                },
+            )
             .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
     ) {
         if (model.shouldShowWizard) Box(Modifier.padding(horizontal = 20.dp)) {

@@ -56,7 +56,9 @@
         public var body: some View {
             GeometryReader { proxy in
                 let tablet = min(proxy.size.width, proxy.size.height) >= 600
-                let fullLabels = proxy.size.width > proxy.size.height || tablet
+                let landscape = proxy.size.width > proxy.size.height
+                let sideInset = max(safeArea.leading, safeArea.trailing)
+                let fullLabels = landscape || tablet
                 VStack(spacing: 12) {
                     header(tablet: tablet, fullLabels: fullLabels)
                     ScrollView(showsIndicators: false) {
@@ -105,8 +107,8 @@
                     .accessibilityIdentifier("cameras.pair")
                 }
                 .padding(.top, safeArea.top + windowGeometry.topControlInset + 14)
-                .padding(.leading, safeArea.leading + 18)
-                .padding(.trailing, safeArea.trailing + 18)
+                .padding(.leading, (landscape ? sideInset : safeArea.leading) + 18)
+                .padding(.trailing, (landscape ? sideInset : safeArea.trailing) + 18)
                 .padding(.bottom, safeArea.bottom + 12)
                 .frame(width: proxy.size.width, height: proxy.size.height)
             }

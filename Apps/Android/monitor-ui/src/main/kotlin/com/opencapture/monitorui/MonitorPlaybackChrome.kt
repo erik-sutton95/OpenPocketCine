@@ -2,6 +2,7 @@ package com.opencapture.monitorui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +31,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+/** Android five-button transport 228 + two 200 action clusters + 20 gap. */
+const val FOOTER_SINGLE_ROW_MIN_WIDTH = 648f
+
 /** File metadata comes from the media adapter; the monitor never infers a source. */
 @Composable
 fun MonitorPlaybackHeader(title: String, subtitle: String, source: String, portrait: Boolean,
@@ -45,10 +49,23 @@ fun MonitorPlaybackHeader(title: String, subtitle: String, source: String, portr
     }
     if (portrait) Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = identity)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), content = actions)
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                content = actions,
+            )
+        }
     } else Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)) { identity(); actions() }
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        identity()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            content = actions,
+        )
+    }
 }
 
 @Composable
@@ -56,7 +73,7 @@ fun MonitorPlaybackFooter(position: String, duration: String, portrait: Boolean,
     modifier: Modifier = Modifier, scrubber: @Composable () -> Unit,
     transport: @Composable () -> Unit, options: @Composable () -> Unit) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
-    val stacked = portrait || maxWidth < 760.dp
+    val stacked = portrait || maxWidth < FOOTER_SINGLE_ROW_MIN_WIDTH.dp
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

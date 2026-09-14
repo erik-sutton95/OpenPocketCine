@@ -37,6 +37,7 @@ fun MonitorAssistInspector(
     safeTop: Float, safeBottom: Float, controlsFloor: Float,
     onDismiss: () -> Unit,
     playback: Boolean = false,
+    safeTrailing: Float = 0f,
 ) {
     MonitorInspector(
         title = tool.title.uppercase(),
@@ -45,6 +46,7 @@ fun MonitorAssistInspector(
         onDismiss = onDismiss,
         trailing = false,
         safeLeading = safeLeading,
+        safeTrailing = safeTrailing,
         safeTop = safeTop,
         safeBottom = safeBottom,
         navigation = { portrait ->

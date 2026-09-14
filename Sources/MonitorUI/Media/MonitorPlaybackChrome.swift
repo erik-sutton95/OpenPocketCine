@@ -21,31 +21,32 @@
 
         public var body: some View {
             HStack(spacing: 7) {
-                icon.frame(width: 14, height: 14)
+                icon.frame(width: 18, height: 18)
                 if let title {
-                    Text(title).font(MonitorTheme.font(10.5, weight: .semibold)).tracking(0.4)
+                    Text(title).font(MonitorTheme.font(12, weight: .semibold)).tracking(0.4)
                 }
             }
             .foregroundStyle(
                 destructive
-                    ? MonitorTheme.recording : active ? MonitorTheme.text : MonitorTheme.secondary
+                    ? MonitorTheme.recording
+                    : active ? MonitorTheme.accent : MonitorTheme.text.opacity(0.86)
             )
-            .padding(.horizontal, 11).frame(height: 38)
+            .padding(.horizontal, title == nil ? 13 : 14).frame(height: 44)
             .background(
                 destructive
                     ? MonitorTheme.recording.opacity(0.12)
                     : active ? MonitorTheme.accent.opacity(0.22) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 10)
+                in: RoundedRectangle(cornerRadius: 14)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(
                         destructive
                             ? MonitorTheme.recording.opacity(0.4)
-                            : active ? MonitorTheme.accent.opacity(0.5) : Color.white.opacity(0.08),
+                            : active ? MonitorTheme.accent.opacity(0.5) : Color.clear,
                         lineWidth: 1)
             )
-            .monitorGlass(in: RoundedRectangle(cornerRadius: 10), density: .compact)
+            .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }

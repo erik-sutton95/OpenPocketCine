@@ -206,6 +206,23 @@ class PlaybackChromeTest {
     }
 
     @Test
+    fun headerGuttersMirrorTheLargerCutoutAndActionsFitNarrowPortrait() {
+        assertEquals(87f, PlaybackChromeMetrics.headerGutter(59f, 0f), 0.01f)
+        assertEquals(87f, PlaybackChromeMetrics.headerGutter(0f, 59f), 0.01f)
+        assertEquals(28f, PlaybackChromeMetrics.headerGutter(0f, 0f), 0.01f)
+        assertEquals(71f, PlaybackChromeMetrics.headerTopPadding(59f), 0.01f)
+        assertEquals(44f, PlaybackChromeMetrics.actionChipSize, 0.01f)
+        assertEquals(8f, PlaybackChromeMetrics.actionChipSpacing, 0.01f)
+        val backStart = 59f + 12f
+        assertEquals(137f, PlaybackChromeMetrics.headerLeadingPadding(59f, 0f, backStart), 0.01f)
+        val actions = PlaybackChromeMetrics.portraitActionRowWidth(4)
+        val usable = PlaybackChromeMetrics.narrowestScreenWidth - PlaybackChromeMetrics.headerGutter(0f, 0f) * 2
+        assertEquals(200f, actions, 0.01f)
+        assertTrue(actions <= usable, "actions=$actions usable=$usable")
+        assertEquals(54f, com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(false), 0.01f)
+    }
+
+    @Test
     fun flatPlaybackUsesDarkenedBarsAndFullDoesNot() {
         assertTrue(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FLAT))
         assertFalse(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FULL))

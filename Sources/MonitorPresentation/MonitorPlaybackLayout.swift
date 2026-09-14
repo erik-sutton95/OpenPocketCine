@@ -6,7 +6,7 @@ public struct MonitorPlaybackLayout: Equatable, Sendable {
     public static let transportSize: Double = 48
     public static let transportSpacing: Double = 8
     public static let actionSize: Double = 44
-    public static let actionSpacing: Double = 3
+    public static let actionSpacing: Double = 8
     public static var transportWidth: Double { transportSize * 3 + transportSpacing * 2 }
     public static var actionsWidth: Double { actionSize * 4 + actionSpacing * 3 }
 

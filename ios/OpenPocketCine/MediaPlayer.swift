@@ -474,12 +474,29 @@ struct MediaPlayerView: View {
                     width: geometry.size.width, height: geometry.size.height,
                     tablet: UIDevice.current.userInterfaceIdiom == .pad)
                 let portrait = layout.portrait
+                let safe = LiveMonitorLayout.resolvedSafeArea(
+                    geometry.safeAreaInsets, scene: windowGeometry.safeArea)
+                let sideInset = max(safe.leading, safe.trailing)
+                let corner = FieldMonitorLayout(
+                    width: geometry.size.width, height: geometry.size.height,
+                    safeArea: MonitorSafeArea(
+                        top: safe.top, leading: safe.leading,
+                        bottom: safe.bottom, trailing: safe.trailing),
+                    topControlInset: windowGeometry.topControlInset
+                ).lock
+                let backX = portrait ? safe.leading + 22 : CGFloat(corner.x)
+                let backY =
+                    portrait ? safe.top + windowGeometry.topControlInset + 20 : CGFloat(corner.y)
                 ZStack(alignment: .bottomLeading) {
                     VStack(spacing: 0) {
                         if chromeVisible {
                             topBar(portrait: portrait)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 10 + windowGeometry.topControlInset)
+                                .padding(
+                                    .leading,
+                                    max(sideInset + 28, backX + CGFloat(corner.width) + 12)
+                                )
+                                .padding(.trailing, sideInset + 28)
+                                .padding(.top, backY)
                                 .padding(.bottom, 18)
                                 .background(
                                     LinearGradient(
@@ -488,15 +505,32 @@ struct MediaPlayerView: View {
                         }
                         Spacer(minLength: 0)
                         if chromeVisible, let toastMessage { toastView(toastMessage) }
-                        if chromeVisible { bottomBar(portrait: portrait) }
+                        if chromeVisible {
+                            bottomBar(portrait: portrait)
+                                .padding(.horizontal, sideInset)
+                                .padding(.bottom, safe.bottom)
+                        }
                         if !chromeVisible {
                             HStack {
                                 Spacer()
                                 restoreChromeButton
-                            }.padding(12)
+                            }
+                            .padding(.trailing, sideInset + 12)
+                            .padding(.bottom, safe.bottom + 12)
                         }
                     }
                     if chromeVisible {
+                        MonitorChromeButton(
+                            "Back to media",
+                            size: CGSize(width: corner.width, height: corner.height),
+                            action: dismissPlayback
+                        ) {
+                            MonitorIcon.chevronLeft.frame(
+                                width: corner.width * 29 / 54, height: corner.height * 29 / 54)
+                        }
+                        .position(
+                            x: backX + CGFloat(corner.width) / 2,
+                            y: backY + CGFloat(corner.height) / 2)
                         if isConformPresented {
                             conformPanel
                                 .frame(maxWidth: min(480, geometry.size.width - 24))
@@ -508,6 +542,9 @@ struct MediaPlayerView: View {
                     if isInfoPresented {
                         MonitorClipInfoPanel(rows: clipInfoRows) { isInfoPresented = false }
                             .frame(width: layout.inspectorWidth)
+                            .padding(.trailing, sideInset + 12)
+                            .padding(.top, safe.top + windowGeometry.topControlInset + 12)
+                            .padding(.bottom, safe.bottom + 12)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
@@ -516,6 +553,7 @@ struct MediaPlayerView: View {
                 .animation(.easeInOut(duration: 0.22), value: isConformPresented)
                 .animation(.easeInOut(duration: 0.22), value: chromeVisible)
             }
+            .ignoresSafeArea()
             .zIndex(2)
             if chromeVisible {
                 playbackAssistOverlay
@@ -633,6 +671,8 @@ struct MediaPlayerView: View {
                         anchor: playbackAssistToolbarFrame,
                         toolbar: playbackBarFrame,
                         viewport: geo.size,
+                        safeArea: LiveMonitorLayout.resolvedSafeArea(
+                            geo.safeAreaInsets, scene: windowGeometry.safeArea),
                         onDismiss: { model.assist.configureTool = nil }
                     )
                     .environment(\.audioInspectorLevels, playbackAudioLevels)
@@ -668,12 +708,6 @@ struct MediaPlayerView: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
         return arrangement {
             HStack(alignment: .top, spacing: 10) {
-                Button {
-                    dismissPlayback()
-                } label: {
-                    MediaCircleIconButton(icon: .chevronLeft, size: 34)
-                }
-                .buttonStyle(.zcTapTarget).accessibilityLabel("Back to media")
                 VStack(alignment: .leading, spacing: 4) {
                     Text(active.filename).font(MonitorTheme.font(13, weight: .semibold))
                         .foregroundStyle(MonitorTheme.text).lineLimit(1)
@@ -690,7 +724,7 @@ struct MediaPlayerView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 3) {
+            HStack(spacing: 8) {
                 Button {
                     session.toggleFavorite(active)
                 } label: {
@@ -708,7 +742,7 @@ struct MediaPlayerView: View {
                     MonitorPlaybackChip(active: isInfoPresented) { OpcIcon.info }
                 }
                 .buttonStyle(.zcTapTarget).accessibilityLabel("Clip information")
-                shareTransportButton
+                shareTransportButton(compact: portrait)
                 deleteButton
             }
             .frame(maxWidth: portrait ? .infinity : nil, alignment: .trailing)
@@ -883,7 +917,7 @@ struct MediaPlayerView: View {
                     transportButton(.skipForward) { seek(by: 15) }
                         .accessibilityLabel("Forward 15 seconds")
                 }
-                HStack(spacing: 3) {
+                HStack(spacing: 8) {
                     conformButton
                     actionToggle(.volumeX, .volume2, on: isMuted) { toggleMute() }
                         .accessibilityLabel(isMuted ? "Unmute" : "Mute")
@@ -1042,7 +1076,8 @@ struct MediaPlayerView: View {
         .position(x: frame.midX, y: frame.midY)
         .frame(
             width: presentation.viewport.width, height: presentation.viewport.height,
-            alignment: .topLeading)
+            alignment: .topLeading
+        )
         .onAppear {
             playbackAssistToolbarFrame = frame.cgRect
         }
@@ -1206,7 +1241,7 @@ struct MediaPlayerView: View {
         .buttonStyle(.zcTapTarget).accessibilityLabel("Show playback controls")
     }
 
-    private var shareTransportButton: some View {
+    private func shareTransportButton(compact: Bool) -> some View {
         Button {
             if isPlaying {
                 player.pause()
@@ -1214,7 +1249,7 @@ struct MediaPlayerView: View {
             }
             deliveryPresentation = MediaDeliveryPresentation(files: [active])
         } label: {
-            MonitorPlaybackChip(title: "SHARE", active: true) { OpcIcon.share }
+            MonitorPlaybackChip(title: compact ? nil : "SHARE", active: true) { OpcIcon.share }
         }
         .buttonStyle(.zcTapTarget).accessibilityLabel("Share clip")
     }

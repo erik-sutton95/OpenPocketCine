@@ -206,6 +206,14 @@ class MonitorLayoutPolicyTest {
         assertEquals(MonitorLayoutPolicy.landscapeAssists(393f, false, 14f, 21f), landscape)
     }
 
+    @Test
+    fun landscapePageMirrorsTheLargerCutoutOntoBothSides() {
+        assertEquals(59f to 59f, MonitorLayoutPolicy.pageSideInsets(true, 59f, 0f))
+        assertEquals(59f to 59f, MonitorLayoutPolicy.pageSideInsets(true, 0f, 59f))
+        assertEquals(0f to 34f, MonitorLayoutPolicy.pageSideInsets(false, 0f, 34f))
+        assertEquals(0f to 0f, MonitorLayoutPolicy.pageSideInsets(false, 0f, 0f))
+    }
+
     @Test fun tallPhonePicturesCenterInsideViewportWhenChromeCannotFit() {
         listOf(Triple(375f, 667f, 20f), Triple(393f, 852f, 59f), Triple(320f, 600f, 20f))
             .forEach { (width, height, safeTop) ->

@@ -307,6 +307,27 @@ struct MediaDeliveryPopup: View {
                 ForEach(MediaDeliveryDestination.allCases) { candidate in
                     destinationRow(candidate)
                 }
+                ForEach(
+                    [
+                        "Google Drive", "Dropbox", "NAS (SMB)", "LucidLink", "Backblaze B2",
+                        "Vimeo Review",
+                    ], id: \.self
+                ) { title in
+                    HStack(spacing: 12) {
+                        OpcIcon.folder.frame(width: 24, height: 24)
+                        Text(title).font(LiveType.ui(size: 14, weight: .semibold))
+                        Spacer(minLength: 8)
+                        Text("Coming soon").font(LiveType.ui(size: 11))
+                    }
+                    .foregroundStyle(LiveDesign.muted)
+                    .padding(.horizontal, 12).padding(.vertical, 14)
+                    .background(
+                        LiveDesign.hairline.opacity(0.2),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("monitor.share.upcoming.\(title)")
+                }
             }
         }
     }

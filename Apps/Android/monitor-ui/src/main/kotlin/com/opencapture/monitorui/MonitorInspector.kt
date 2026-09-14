@@ -45,7 +45,6 @@ object MonitorInspectorPolicy {
     const val PORTRAIT_TRAILING_FRACTION = 0.52f
     const val PORTRAIT_TRAILING_MAX = 620f
     const val NAV_WIDTH = 108f
-    const val EDGE_INSET_CAP = 44f
 
     data class Frame(
         val width: Float,
@@ -67,11 +66,13 @@ object MonitorInspectorPolicy {
         return Frame(width(viewportWidth), height(viewportHeight, portrait, trailing), portrait, trailing)
     }
 
+    /** Landscape cutout is used in full — do not cap notch clearance. */
     fun edgeInset(portrait: Boolean, trailing: Boolean, safeLeading: Float, safeTrailing: Float): Float {
         if (portrait) return 0f
         val safe = if (trailing) safeTrailing else safeLeading
-        return min(EDGE_INSET_CAP, max(0f, safe))
+        return max(0f, safe)
     }
+
 }
 
 /**

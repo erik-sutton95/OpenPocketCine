@@ -260,3 +260,9 @@ approximation for D-Log M; the scope fix did not calibrate those controls. This
 limitation concerns exposure math, not the choice of the official D-Log M
 conversion cube. See the
 [D-Log M investigation](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/pocket3-dlogm-curve.md).
+
+### Upcoming share destinations
+
+Share shows Google Drive, Dropbox, NAS (SMB), LucidLink, Backblaze B2 and
+Vimeo Review as **Coming soon**. These destinations are previews of planned
+support and cannot be selected yet. Use the available destinations to share now.

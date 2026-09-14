@@ -537,14 +537,17 @@ final class MonitorUIFlowTests: XCTestCase {
                         XCTAssertEqual(button.frame.height, 28, accuracy: 1)
                     }
                     let originalGrid = grid.frame
-                    XCTAssertTrue((grid.value as? String)?.contains("Selected") == true
-                        || grid.isSelected)
+                    XCTAssertTrue(
+                        (grid.value as? String)?.contains("Selected") == true
+                            || grid.isSelected)
                     list.tap()
-                    XCTAssertTrue(list.isSelected || (list.value as? String)?.contains("Selected") == true)
+                    XCTAssertTrue(
+                        list.isSelected || (list.value as? String)?.contains("Selected") == true)
                     XCTAssertEqual(grid.frame.minX, originalGrid.minX, accuracy: 1)
                     XCTAssertEqual(grid.frame.width, originalGrid.width, accuracy: 1)
                     grid.tap()
-                    XCTAssertTrue(grid.isSelected || (grid.value as? String)?.contains("Selected") == true)
+                    XCTAssertTrue(
+                        grid.isSelected || (grid.value as? String)?.contains("Selected") == true)
                 }
                 capture("\(control)-page-header-\(orientation.rawValue)")
                 back.tap()
@@ -628,7 +631,8 @@ final class MonitorUIFlowTests: XCTestCase {
             let gallery = app.scrollViews["monitor.media.gallery"]
             XCTAssertTrue(gallery.waitForExistence(timeout: 5))
             mediaClipCenter("Review_001.MP4").press(
-                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_002.MP4"), withVelocity: .slow,
+                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_002.MP4"),
+                withVelocity: .slow,
                 thenHoldForDuration: 0)
             XCTAssertTrue(app.staticTexts["2 selected"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["Clear selection"].exists)
@@ -671,7 +675,8 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertFalse(app.buttons["Back to media"].exists)
 
             origin.press(
-                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_004.MP4"), withVelocity: .slow,
+                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_004.MP4"),
+                withVelocity: .slow,
                 thenHoldForDuration: 0)
             XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["Clear selection"].exists)
@@ -763,6 +768,57 @@ final class MonitorUIFlowTests: XCTestCase {
         restore.tap()
         XCTAssertTrue(info.isHittable)
         XCTAssertEqual(loop.value as? String, "On")
+    }
+
+    func testPlaybackChromeAndCameraHomeSafeAreas() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+            rotate(orientation)
+            let pair = app.buttons["cameras.pair"]
+            XCTAssertTrue(pair.waitForExistence(timeout: 10))
+            XCTAssertEqual(pair.frame.midX, app.frame.midX, accuracy: 2)
+            capture("centered-cameras-\(orientation.rawValue)")
+        }
+        app.terminate()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "playback"
+        app.launch()
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
+            rotate(orientation)
+            let back = app.buttons["Back to media"]
+            XCTAssertTrue(back.waitForExistence(timeout: 10))
+            XCTAssertTrue(back.isHittable)
+            XCTAssertEqual(back.frame.width, 54, accuracy: 1)
+            for title in [
+                "Favorite clip", "Clip information", "Share clip", "Delete clip from camera",
+            ] {
+                let button = app.buttons[title]
+                XCTAssertTrue(button.isHittable, title)
+                XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX - 12, title)
+                XCTAssertGreaterThanOrEqual(button.frame.minX, 12, title)
+            }
+            capture("polished-playback-\(orientation.rawValue)")
+        }
+        rotate(.landscapeLeft)
+        app.buttons["monitor.assists.expand"].tap()
+        app.buttons["monitor.assist.LUT"].press(forDuration: 0.6)
+        let inspector = app.otherElements["monitor.inspector"]
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+        let lut = inspector.buttons["LUT"].firstMatch
+        XCTAssertTrue(lut.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(lut.frame.minX, 55)
+        capture("playback-assist-cutout-clearance")
+        app.buttons["Close LUT"].tap()
+        app.buttons["Share clip"].tap()
+        let scroll = app.scrollViews["monitor.share.optionsScroll"]
+        for name in [
+            "Google Drive", "Dropbox", "NAS (SMB)", "LucidLink", "Backblaze B2", "Vimeo Review",
+        ] {
+            let row = app.descendants(matching: .any)["monitor.share.upcoming.\(name)"].firstMatch
+            for _ in 0..<5 where !row.isHittable { scroll.swipeUp() }
+            XCTAssertTrue(row.exists, name)
+        }
+        capture("share-upcoming-destinations")
     }
 
     private func reveal(_ tab: XCUIElement, in rail: XCUIElement, portrait: Bool) {

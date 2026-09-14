@@ -231,6 +231,19 @@ object MonitorLayoutPolicy {
     fun showsCaptureGrabber(compact: Boolean, fromTop: Boolean): Boolean =
         !compact && !fromTop
 
+    /**
+     * Landscape page chrome mirrors the larger cutout onto both sides so the
+     * cameras list and playback gutters stay centered. Portrait keeps each edge.
+     * Live HUD must not use this — it parks controls against the physical notch.
+     */
+    fun pageSideInsets(landscape: Boolean, safeLeading: Float, safeTrailing: Float): Pair<Float, Float> {
+        val leading = max(0f, safeLeading)
+        val trailing = max(0f, safeTrailing)
+        if (!landscape) return leading to trailing
+        val side = max(leading, trailing)
+        return side to side
+    }
+
     fun cameraPageTitleSize(tablet: Boolean): Float = if (tablet) 24f else 19f
     const val CAMERA_CARD_CORNER = 13f
     const val SETTINGS_TITLE_CONTENT_GAP = 8f

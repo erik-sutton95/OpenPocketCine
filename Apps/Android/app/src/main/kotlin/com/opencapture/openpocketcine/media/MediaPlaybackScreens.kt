@@ -29,7 +29,9 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -71,6 +73,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -98,6 +101,7 @@ import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
+import com.opencapture.openpocketcine.monitor.MonitorPageBackButton
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.AudioAssist
 import com.opencapture.openpocketcine.assists.AssistAudioOverlay
@@ -135,6 +139,17 @@ fun MediaPhotoViewer(
     var confirmDelete by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
     val photoConfig = LocalConfiguration.current
+    val photoDensity = LocalDensity.current
+    val photoLayoutDir = LocalLayoutDirection.current
+    val photoPortrait = photoConfig.screenHeightDp > photoConfig.screenWidthDp
+    val photoSafeLeading = with(photoDensity) {
+        WindowInsets.safeDrawing.getLeft(this, photoLayoutDir).toDp().value
+    }
+    val photoSafeTrailing = with(photoDensity) {
+        WindowInsets.safeDrawing.getRight(this, photoLayoutDir).toDp().value
+    }
+    val photoSafeTop = with(photoDensity) { WindowInsets.safeDrawing.getTop(this).toDp().value }
+    val photoGutter = PlaybackChromeMetrics.headerGutter(photoSafeLeading, photoSafeTrailing)
     val favorite = controller.isFavorite(file)
     val glass = rememberPlaybackMonitorGlass()
 
@@ -235,19 +250,41 @@ fun MediaPhotoViewer(
             PlaybackDarkenedBars()
         }
 
+        val photoBackStart = photoSafeLeading + 12f
         com.opencapture.monitorui.MonitorPlaybackHeader(file.filename,
             listOfNotNull(file.resolution, file.fileExtension).joinToString(" · "),
             if (controller.isDownloaded(file)) "ORIGINAL" else "PREVIEW",
-            photoConfig.screenHeightDp > photoConfig.screenWidthDp,
-            Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp),
-            back = { MediaTransportIconButton(OpcIcon.CHEVRON_LEFT, "Back to media", action = true, onClick = onClose) },
+            photoPortrait,
+            Modifier.padding(
+                start = PlaybackChromeMetrics.headerLeadingPadding(
+                    photoSafeLeading, photoSafeTrailing, photoBackStart,
+                ).dp,
+                end = photoGutter.dp,
+                top = PlaybackChromeMetrics.headerTopPadding(photoSafeTop).dp,
+                bottom = 12.dp,
+            ),
+            back = {},
             actions = {
-                MediaTransportIconButton(OpcIcon.INFO, "Photo info", action = true, highlighted = infoOpen, onClick = { infoOpen = !infoOpen })
-                MediaTransportIconButton(OpcIcon.STAR, "Favorite photo", action = true, highlighted = favorite,
-                    onClick = { controller.toggleFavorite(file) })
-                if (controller.canDelete(file)) MediaTransportIconButton(OpcIcon.TRASH, "Delete photo", action = true, onClick = { confirmDelete = true })
-                MediaTransportIconButton(OpcIcon.SHARE, "Share photo", action = true, onClick = { onDeliver(file) })
+                PlaybackActionChip(OpcIcon.INFO, "Photo info", { infoOpen = !infoOpen }, active = infoOpen)
+                PlaybackActionChip(
+                    OpcIcon.STAR, "Favorite photo", { controller.toggleFavorite(file) },
+                    filled = favorite, tint = if (favorite) LiveDesign.amber else LiveDesign.text.copy(alpha = 0.86f),
+                )
+                if (controller.canDelete(file)) {
+                    PlaybackActionChip(OpcIcon.TRASH, "Delete photo", { confirmDelete = true }, destructive = true)
+                }
+                PlaybackActionChip(
+                    OpcIcon.SHARE, "Share photo", { onDeliver(file) },
+                    title = if (photoPortrait) null else "SHARE", active = true,
+                )
             })
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = photoBackStart.dp, top = (photoSafeTop + 10f).dp),
+        ) {
+            MonitorPageBackButton(onClick = onClose)
+        }
         if (infoOpen) {
             Box(Modifier.fillMaxSize().chromeClickable { infoOpen = false }) {
                 com.opencapture.monitorui.MonitorMetadataDrawer(
@@ -603,12 +640,26 @@ fun MediaPlayerScreen(
             val overlayHeightPx = constraints.maxHeight
             val viewportWidth = maxWidth.value
             val viewportHeight = maxHeight.value
+            val layoutDir = LocalLayoutDirection.current
             val safeTop = with(density) {
                 maxOf(
                     WindowInsets.displayCutout.getTop(this),
                     WindowInsets.statusBars.getTop(this),
                 ).toDp().value
             }
+            val safeLeading = with(density) {
+                maxOf(
+                    WindowInsets.displayCutout.getLeft(this, layoutDir),
+                    WindowInsets.systemBars.getLeft(this, layoutDir),
+                ).toDp().value
+            }
+            val safeTrailing = with(density) {
+                maxOf(
+                    WindowInsets.displayCutout.getRight(this, layoutDir),
+                    WindowInsets.systemBars.getRight(this, layoutDir),
+                ).toDp().value
+            }
+            val headerGutter = PlaybackChromeMetrics.headerGutter(safeLeading, safeTrailing)
             val safeBottom = monitorBottomInsetDp(
                 rawInsetDp = with(density) {
                     maxOf(
@@ -841,22 +892,46 @@ fun MediaPlayerScreen(
             val overlayWidth = with(density) { overlayWidthPx.toDp() }
             val panelClicks = remember { MutableInteractionSource() }
             if (chromeVisible) {
+                val backStart = safeLeading + 12f
                 com.opencapture.monitorui.MonitorPlaybackHeader(
                     title = active.filename,
                     subtitle = listOfNotNull(active.resolution, active.fps?.let { "${it}p" }, active.fileExtension).joinToString(" · "),
                     source = playbackSource, portrait = portraitPlayback,
-                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 14.dp, vertical = 12.dp),
-                    back = { MediaBackButton(onClose, size = 37.dp) },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(
+                        start = PlaybackChromeMetrics.headerLeadingPadding(
+                            safeLeading, safeTrailing, backStart,
+                        ).dp,
+                        end = headerGutter.dp,
+                        top = PlaybackChromeMetrics.headerTopPadding(safeTop).dp,
+                        bottom = 12.dp,
+                    ),
+                    back = {},
                     actions = {
-                        MediaTransportIconButton(OpcIcon.INFO, "Clip info", action = true, highlighted = infoOpen, onClick = { infoOpen = !infoOpen })
-                        MediaFavoriteButton(favorite, size = 37.dp) { controller.toggleFavorite(active) }
-                        if (controller.canDelete(active)) MediaTransportIconButton(OpcIcon.TRASH, "Delete clip", action = true, onClick = { confirmDelete = true })
-                        MediaTransportIconButton(OpcIcon.SHARE, "Share clip", action = true, onClick = { player.pause(); onDeliver(active) })
+                        PlaybackActionChip(OpcIcon.INFO, "Clip info", { infoOpen = !infoOpen }, active = infoOpen)
+                        PlaybackActionChip(
+                            OpcIcon.STAR, "Favorite clip", { controller.toggleFavorite(active) },
+                            filled = favorite, tint = if (favorite) LiveDesign.amber else LiveDesign.text.copy(alpha = 0.86f),
+                        )
+                        if (controller.canDelete(active)) {
+                            PlaybackActionChip(OpcIcon.TRASH, "Delete clip", { confirmDelete = true }, destructive = true)
+                        }
+                        PlaybackActionChip(
+                            OpcIcon.SHARE, "Share clip", { player.pause(); onDeliver(active) },
+                            title = if (portraitPlayback) null else "SHARE", active = true,
+                        )
                     },
                 )
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = backStart.dp, top = (safeTop + 10f).dp),
+                ) {
+                    MonitorPageBackButton(onClick = onClose)
+                }
                 com.opencapture.monitorui.MonitorPlaybackFooter(
                     position = conformedLabel(currentTime), duration = conformedLabel(duration), portrait = portraitPlayback,
                     modifier = Modifier.align(Alignment.BottomCenter).width(overlayWidth)
+                        .padding(horizontal = max(safeLeading, safeTrailing).dp)
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     scrubber = {
@@ -912,14 +987,15 @@ fun MediaPlayerScreen(
                         }
                     },
                     options = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MediaTransportIconButton(if (isMuted) OpcIcon.VOLUME_X else OpcIcon.VOLUME_2,
-                                if (isMuted) "Unmute" else "Mute", action = true, highlighted = isMuted, onClick = { isMuted = !isMuted })
-                            MediaTransportIconButton(OpcIcon.REPEAT, "Loop clip", action = true, highlighted = looping, onClick = { looping = !looping })
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PlaybackActionChip(
+                                if (isMuted) OpcIcon.VOLUME_X else OpcIcon.VOLUME_2,
+                                if (isMuted) "Unmute" else "Mute", { isMuted = !isMuted }, active = isMuted,
+                            )
+                            PlaybackActionChip(OpcIcon.REPEAT, "Loop clip", { looping = !looping }, active = looping)
                             PlaybackConformButton(conformAvailability, conformSource.captureRate ?: 0.0, conformTarget,
                                 conformMenu, { conformMenu = it }, { conformTarget = it })
-                            MediaTransportIconButton(PlaybackChromeMetrics.hideChromeIcon, "Hide playback controls",
-                                action = true, onClick = { chromeVisible = false })
+                            PlaybackActionChip(PlaybackChromeMetrics.hideChromeIcon, "Hide playback controls", { chromeVisible = false })
                         }
                     },
                 )
@@ -934,13 +1010,14 @@ fun MediaPlayerScreen(
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
+                        .padding(end = max(safeLeading, safeTrailing).dp)
                         .navigationBarsPadding()
                         .padding(16.dp),
                 ) {
-                    MediaCircleIconButton(
-                        icon = PlaybackChromeMetrics.showChromeIcon,
-                        contentDescription = "Show playback controls",
-                        onClick = { chromeVisible = true },
+                    PlaybackActionChip(
+                        PlaybackChromeMetrics.showChromeIcon,
+                        "Show playback controls",
+                        { chromeVisible = true },
                     )
                 }
             }
@@ -959,21 +1036,23 @@ fun MediaPlayerScreen(
                         row("Favorite", if (favorite) "Yes" else "No")
                     }
                     com.opencapture.monitorui.MonitorMetadataDrawer(rows,
-                        modifier = Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding().chromeClickable { },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                            .padding(end = max(safeLeading, safeTrailing).dp)
+                            .statusBarsPadding().navigationBarsPadding().chromeClickable { },
                         close = { MediaCircleIconButton(OpcIcon.X, "Close clip info", { infoOpen = false }, size = 34.dp) })
                 }
             }
 
-            val reviewConfiguration = LocalConfiguration.current
             val configure = assist.configureTool
             if (configure != null) {
                 com.opencapture.openpocketcine.assists.MonitorAssistInspector(
                     configure, assist, model,
                     PlaybackLutColor.resolve(clip = clipColorMode, live = status.colorMode,
                         last = OperatorPrefs.lastMonitorColorMode(context)),
-                    reviewConfiguration.screenWidthDp.toFloat(), reviewConfiguration.screenHeightDp.toFloat(),
-                    0f, 0f, 0f, (reviewConfiguration.screenHeightDp - 120).toFloat(),
+                    viewportWidth, viewportHeight,
+                    safeLeading, safeTop, safeBottom, viewportHeight - 120f,
                     onDismiss = { assist.configureTool = null }, playback = true,
+                    safeTrailing = safeTrailing,
                 )
             }
 
@@ -1116,13 +1195,12 @@ private fun PlaybackConformButton(
     onSelect: (Double?) -> Unit,
 ) {
     Box {
-        MediaTransportIconButton(
+        PlaybackActionChip(
             OpcIcon.TIMER,
             "Conform preview",
-            action = true,
+            { onMenuOpenChange(true) },
+            active = selected != null,
             enabled = availability.isAvailable,
-            highlighted = selected != null,
-            onClick = { onMenuOpenChange(true) },
         )
         if (menuOpen) {
             val config = LocalConfiguration.current
