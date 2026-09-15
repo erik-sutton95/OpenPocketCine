@@ -431,8 +431,9 @@ claim of seamless foreground return.
 
 Multiview shows reported camera timecode below each tile name, including compact
 side tiles; Nano has no timecode readout. It follows the existing 5 Hz settings
-updates. The bottom bar contains Layout, Wi-Fi, and Fit/Fill, with Add camera retained in
-the tiles. Enlarged one/two-camera grids put Add in a tile header so adding the
+updates. The floating controls provide Layout and FIT/FILL, with a dedicated WI-FI
+button directly below FIT/FILL. Add camera remains in the tiles. Enlarged
+one/two-camera grids put Add in a tile header so adding the
 next camera remains available without the bottom-bar shortcut.
 
 ### Multiview portrait composition (iOS)
@@ -629,8 +630,9 @@ this document apply to those earlier builds; they do not qualify the new chrome.
 - iPad supports native window resizing across supported iPadOS versions. On iPadOS
   26, system-reported window-control exclusions keep the top controls reachable.
   Physical iPad resizing and camera-connected session qualification remain pending.
-- iOS Multiview Layout switches Grid/Center stage directly; hold Layout for Shared
-  Wi-Fi. Clean hides session controls and the assist palette; DISP restores them.
+- iOS Multiview Layout switches Grid/Center stage directly. A dedicated WI-FI
+  button below FIT/FILL opens Shared Wi-Fi in portrait and landscape. Clean hides
+  session controls, assists and WI-FI; DISP restores them.
 - Watch companion and watcher transport remain unchanged. Nikon/backend migration,
   shared delivery extraction and additional cloud destinations remain later phases
   of [the shared-engine plan](SHARED-MONITOR-ENGINE.md).
@@ -826,3 +828,12 @@ The active-link status card is visible in both orientations. Supported settings
 retain their existing actions and saved values; Android still uses system Back.
 Sharing and platform-specific hardware/settings remain capability differences.
 iOS is unchanged in this Android visual correction.
+
+## Multiview network and grid layout (in validation)
+
+The dedicated Multiview network button is iOS-only under the existing Android
+Multiview exception. Physical verification of this button is pending.
+
+The iOS 2×2 Multiview grid fills the space between floating controls with four
+equal tiles. Tile shapes follow the viewport; FIT preserves the full picture and
+FILL crops inside the tile. Physical verification of this layout is pending.

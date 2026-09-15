@@ -7,6 +7,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let tiles: [MonitorRect]
     public let sessionControls: MonitorRect
     public let assists: MonitorRect
+    public let network: MonitorRect
     public let display: MonitorRect
     public let record: MonitorRect
     public let portrait: Bool
@@ -17,7 +18,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
 
     public init(
         width: Double, height: Double, safeArea: MonitorSafeArea = .init(),
-        arrangement: Arrangement, selected: Int
+        arrangement: Arrangement, selected: Int, topControlInset: Double = 0
     ) {
         let w = max(1, width.isFinite ? width : 1)
         let h = max(1, height.isFinite ? height : 1)
@@ -50,33 +51,55 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             width: displaySize, height: displaySize)
         let sessionX = banded || portrait ? leading : 18.0
         let sessionY = banded ? max(8, round((band - button - 8) / 2)) : portrait ? top + 10 : top
+        let controlInset = topControlInset.isFinite ? max(0, topControlInset) : 0
         sessionControls = .init(
-            x: sessionX, y: sessionY, width: banded ? 2 * button + 11 : button + 8,
+            x: sessionX, y: sessionY + controlInset, width: banded ? 2 * button + 11 : button + 8,
             height: banded ? button + 8 : 2 * button + 11)
         let assistsBottom =
             banded
             ? max(8, round((band - button - 8) / 2))
             : portrait ? nominalRecord + safeArea.bottom + 18 : 14
         let assistsHeight = assistsHorizontal ? button + 8 : button * 2 + 11
+        // Keep a separate network button directly below FIT, including when
+        // LUT and FIT share a row. Reserve its full touch target above the edge.
+        let assistsY = min(
+            h - assistsBottom - assistsHeight,
+            h - bottom - button - 3 - assistsHeight)
         assists = .init(
-            x: banded ? leading : 18, y: max(0, h - assistsBottom - assistsHeight),
+            x: banded ? leading : 18, y: max(0, assistsY),
             width: assistsHorizontal ? button * 2 + 11 : button + 8, height: assistsHeight)
 
+        network = .init(
+            x: assists.x + 4 + (assistsHorizontal ? button + 3 : 0),
+            y: assists.maxY + 3, width: button, height: button)
+
         if arrangement == .grid {
-            let availableHeight = max(
-                1, banded ? h - 2 * band : h - top - bottom - nominalRecord - gap)
-            let tileWidth = max(1, min(gridWidth, floor((availableHeight - gap) / 2 * 16 / 9)))
-            let tileHeight = tileWidth * 9 / 16
-            let x = max(leading, (w - 2 * tileWidth - gap) / 2)
-            let y =
-                banded
-                ? max(band, (h - 2 * tileHeight - gap) / 2)
-                : max(top, (h - nominalRecord - gap - 2 * tileHeight - gap) / 2)
+            // Grid cells use the available viewport, not a fixed picture aspect.
+            // Fit/Fill controls the image inside each cell. Phone landscape uses
+            // the space between the floating side controls; taller layouts use
+            // the space between the top and bottom controls.
+            let gridLeft: Double
+            let gridRight: Double
+            let gridTop: Double
+            let gridBottom: Double
+            if !portrait && !tablet {
+                gridLeft = max(leading, sessionControls.maxX + gap, assists.maxX + gap)
+                gridRight = min(w - trailing, display.x - gap, record.x - gap)
+                gridTop = top
+                gridBottom = h - bottom
+            } else {
+                gridLeft = leading
+                gridRight = w - trailing
+                gridTop = max(top, sessionControls.maxY + gap)
+                gridBottom = min(assists.y, network.y, display.y, record.y) - gap
+            }
+            let tileWidth = max(1, (gridRight - gridLeft - gap) / 2)
+            let tileHeight = max(1, (gridBottom - gridTop - gap) / 2)
             tiles = (0..<4).map { index in
                 .init(
-                    x: x + Double(index % 2) * (tileWidth + gap),
-                    y: y + Double(index / 2) * (tileHeight + gap), width: tileWidth,
-                    height: tileHeight)
+                    x: gridLeft + Double(index % 2) * (tileWidth + gap),
+                    y: gridTop + Double(index / 2) * (tileHeight + gap),
+                    width: tileWidth, height: tileHeight)
             }
         } else {
             let selectedIndex = min(3, max(0, selected))

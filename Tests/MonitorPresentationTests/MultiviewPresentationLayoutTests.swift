@@ -28,7 +28,7 @@ struct MultiviewPresentationLayoutTests {
                             #expect(layout.tiles.count == 4)
                             for frame in layout.tiles + [
                                 layout.record, layout.display, layout.sessionControls,
-                                layout.assists,
+                                layout.assists, layout.network,
                             ] {
                                 #expect(frame.x >= 0 && frame.y >= 0)
                                 #expect(frame.width > 0 && frame.height > 0)
@@ -38,7 +38,7 @@ struct MultiviewPresentationLayoutTests {
                                 for second in (first + 1)..<4 {
                                     #expect(!overlaps(layout.tiles[first], layout.tiles[second]))
                                 }
-                                if arrangement == .grid || first != selected {
+                                if arrangement == .centerStage && first != selected {
                                     #expect(
                                         abs(
                                             layout.tiles[first].width / layout.tiles[first].height
@@ -46,7 +46,26 @@ struct MultiviewPresentationLayoutTests {
                                     #expect(!overlaps(layout.tiles[first], layout.record))
                                 }
                             }
+                            if arrangement == .grid {
+                                for tile in layout.tiles {
+                                    for control in [
+                                        layout.sessionControls, layout.assists,
+                                        layout.network, layout.record, layout.display,
+                                    ] {
+                                        #expect(!overlaps(tile, control))
+                                    }
+                                }
+                            }
                             #expect(!overlaps(layout.record, layout.display))
+                            #expect(!overlaps(layout.network, layout.record))
+                            #expect(!overlaps(layout.network, layout.display))
+                            #expect(layout.network.y > layout.assists.maxY)
+                            #expect(layout.network.width >= 44 && layout.network.height >= 44)
+                            let fitCenterX =
+                                layout.assistsHorizontal
+                                ? layout.assists.maxX - 4 - layout.controlCellSize / 2
+                                : layout.assists.midX
+                            #expect(layout.network.midX == fitCenterX)
                         }
                     }
                 }
@@ -95,6 +114,32 @@ struct MultiviewPresentationLayoutTests {
                 // Two square controls, a 3pt gap, and 4pt glass padding per edge.
                 #expect(frame.width == (horizontal ? cell * 2 + 11 : cell + 8))
                 #expect(frame.height == (horizontal ? cell + 8 : cell * 2 + 11))
+            }
+        }
+    }
+
+    @Test func landscapeGridUsesHeightAndWidthBetweenControls() {
+        let layout = MultiviewPresentationLayout(
+            width: 956, height: 440,
+            safeArea: .init(leading: 62, bottom: 21), arrangement: .grid, selected: 0)
+        let left = layout.tiles[0]
+        let right = layout.tiles[1]
+        let bottom = layout.tiles[2]
+        #expect(left.width > 350)
+        #expect(left.height > 190)
+        #expect(left.y == 12)
+        #expect(bottom.maxY == 409)
+        #expect(right.maxX == layout.display.x - 10)
+    }
+
+    @Test func tabletGridReservesWindowControlInset() {
+        for (width, height) in [(744.0, 1133.0), (1133, 744)] {
+            let layout = MultiviewPresentationLayout(
+                width: width, height: height, arrangement: .grid, selected: 0,
+                topControlInset: 28)
+            #expect(layout.tiles[0].y == layout.sessionControls.maxY + 10)
+            for tile in layout.tiles {
+                #expect(!overlaps(tile, layout.sessionControls))
             }
         }
     }

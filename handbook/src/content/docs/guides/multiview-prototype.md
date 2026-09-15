@@ -84,10 +84,12 @@ See [BLE provisioning](https://openpocketcine.app/docs/protocol/ble/) for the ob
 
 ## Layout and per-camera monitoring
 
-The layout menu in the bottom strip switches between **2 × 2 grid** and
-**Center stage**. In landscape, Center stage shows one large feed with three
+The Layout button switches between **2 × 2 grid** and **Center stage**. Grid
+tiles fill the available area between the floating controls rather than keeping
+a fixed 16:9 shape. FIT preserves the complete picture inside each tile; FILL
+crops to fill the tile. In landscape, Center stage shows one large feed with three
 smaller 16:9 tiles stacked on the right. In portrait, the 16:9 main tile sits
-above a two-column secondary grid. Tap a smaller tile to promote it. Fit shows
+above a centered vertical strip of secondary tiles. Tap a smaller tile to promote it. Fit shows
 the complete picture; Fill crops to the available tile without stretching it.
 Switching layouts keeps the existing video hosts and camera sessions alive.
 
@@ -237,8 +239,10 @@ the tile when you no longer want that camera.
 
 Multiview shows reported camera timecode below each tile name, including compact
 side tiles; Nano has no timecode readout. It follows the existing 5 Hz settings
-updates. The bottom bar contains Layout, Wi-Fi, and Fit/Fill, with Add camera retained in
-the tiles. Enlarged one/two-camera grids put Add in a tile header so adding the
+updates. Tap the dedicated **WI-FI** button directly below **FIT/FILL** to reopen network
+setup in either orientation. Layout switches Grid/Center stage; network setup
+does not require holding it. Add camera remains in the tiles. Enlarged
+one/two-camera grids put Add in a tile header so adding the
 next camera remains available without the bottom-bar shortcut.
 
 In portrait, Center stage keeps the main camera tile at 16:9 above the other
