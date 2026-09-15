@@ -314,4 +314,5 @@ On the first launch with automatic reporting available, the app asks whether to
 send optional crash, error and feed-dropout reports. This also applies after an
 update if you have never made that choice. Enable or Not now is remembered;
 updates do not ask again after a decision. You can change the choice in
-**Operator Setup → System → Automatic error reports**.
+**Operator Setup → System → Automatic error reports**. The prompt keeps both
+choices in a vertical button stack and scrolls when screen space is limited.

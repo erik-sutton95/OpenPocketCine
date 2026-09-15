@@ -754,3 +754,17 @@ Validation: `just check` and `just android-check` passed, including 30 reporting
 tests covering absent, accepted and declined saved choices. The no-environment
 Android build contained the configured destination. iOS production behavior is
 unchanged; its existing local configuration and consent gate already apply.
+
+### Android reporting prompt layout
+
+Android uses a compact, scrollable consent card with explicit typography and
+full-width Enable automatic reports / Not now buttons in one vertical stack.
+This avoids the default alert action wrapping and excess spacing seen on the
+Galaxy S25. Reporting privacy remains a separate action, and consent callbacks
+are unchanged. iOS uses its existing scrollable vertical sheet.
+
+Physical Galaxy S25 screenshots verify portrait and landscape with both actions
+fully visible. The card widens up to 560 dp in landscape and remains scrollable
+for limited space. A Debug-only preview displays the production prompt with
+no-op callbacks, allowing review after consent without changing the saved choice.
+Repository and Android build/test/lint gates passed.

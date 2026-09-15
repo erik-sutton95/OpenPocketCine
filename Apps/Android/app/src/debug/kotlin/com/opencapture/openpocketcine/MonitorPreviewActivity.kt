@@ -47,6 +47,17 @@ class MonitorPreviewActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getStringExtra("surface") == "reporting-consent") {
+            // Preview the real layout without reading or changing reporting consent.
+            setContent {
+                OpenPocketCineTheme {
+                    com.opencapture.openpocketcine.diagnostics.AutomaticReportsPrompt(
+                        onPrivacy = {}, onEnable = {}, onNotNow = {},
+                    )
+                }
+            }
+            return
+        }
         enableEdgeToEdge()
         WindowCompat.getInsetsController(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -83,7 +94,7 @@ class MonitorPreviewActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        model.close()
+        if (::model.isInitialized) model.close()
         super.onDestroy()
     }
 }

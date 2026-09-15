@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,11 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,8 +41,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.openpocketcine.LiveDesign
@@ -402,26 +407,88 @@ internal fun AutomaticReportsPrompt(
     onEnable: () -> Unit,
     onNotNow: () -> Unit,
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = {},
-        title = { Text("Help improve OpenPocketCine", color = LiveDesign.text) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .widthIn(max = 560.dp)
+                .fillMaxWidth(),
+            shape = ChromeShape,
+            color = LiveDesign.surface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Help improve OpenPocketCine",
+                    style = LiveType.ui(21f, FontWeight.SemiBold),
+                    color = LiveDesign.text,
+                )
                 Text(
                     "Optional crash, error and feed-dropout reports are used only to improve app stability and reliability. Sent to OpenCapture through Sentry. Automatic reports exclude all images. No footage, screenshots or GPS location. You can change this in System.",
+                    style = LiveType.ui(14f, FontWeight.Normal),
                     color = LiveDesign.muted,
                 )
-                TextButton(onClick = onPrivacy) {
-                    Text("Reporting privacy", color = LiveDesign.accent)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .settingsClickable(role = Role.Button, onClick = onPrivacy),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        "Reporting privacy",
+                        style = LiveType.ui(14f, FontWeight.Normal),
+                        color = LiveDesign.accent,
+                    )
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .background(LiveDesign.accent.copy(alpha = 0.08f), ChromeShape)
+                            .border(1.dp, LiveDesign.accent.copy(alpha = 0.35f), ChromeShape)
+                            .settingsClickable(role = Role.Button, onClick = onEnable)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "Enable automatic reports",
+                            style = LiveType.ui(14f, FontWeight.SemiBold),
+                            color = LiveDesign.accent,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .background(LiveDesign.muted.copy(alpha = 0.08f), ChromeShape)
+                            .border(1.dp, LiveDesign.muted.copy(alpha = 0.35f), ChromeShape)
+                            .settingsClickable(role = Role.Button, onClick = onNotNow)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "Not now",
+                            style = LiveType.ui(14f, FontWeight.SemiBold),
+                            color = LiveDesign.muted,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onEnable) { Text("Enable automatic reports", color = LiveDesign.accent) }
-        },
-        dismissButton = {
-            TextButton(onClick = onNotNow) { Text("Not now", color = LiveDesign.muted) }
-        },
-        containerColor = LiveDesign.surface,
-    )
+        }
+    }
 }
