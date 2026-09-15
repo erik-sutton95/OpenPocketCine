@@ -13,7 +13,7 @@ New and changed
 - Share this feed lets iPhones and iPads on the camera Wi-Fi watch with local assists, request controls and reconnect. Hold Multiview on Your cameras to browse feeds.
 - Apple Watch shows live preview, timecode, storage, battery and shutter controls. The paired iPhone stays connected to the camera.
 - Convert log on Share matches D-Log and D-Log2 during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.
-- Your cameras shows connection progress and Cancel per row. Share Diagnostics from pairing or Operator Setup > System to report problems.
+- Your cameras shows connection progress and Cancel per row. Share Diagnostics from pairing or Operator Setup > System to report a problem.
 
 Fixes
 

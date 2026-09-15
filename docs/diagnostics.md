@@ -162,7 +162,7 @@ own crash reports regardless.
 
 ## Optional iOS reporting deployment
 
-Sentry Cocoa is pinned to 9.24.0 in `ios/project.yml`. Copy
+Sentry Cocoa is pinned to 9.24.0 in `ios/project.yml` and `ios/Package.resolved`. Copy
 `ios/OpenPocketCine/Reliability.local.xcconfig.example` to its gitignored
 `Reliability.local.xcconfig` counterpart and supply the project's public HTTPS
 DSN. Keep upload credentials out of the app and repository. The operator must

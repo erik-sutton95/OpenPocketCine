@@ -113,6 +113,12 @@ ios-version:
 ios-generate:
     cd ios && xcodegen generate
 
+# Refresh ios/Package.resolved from the generated project, then copy it back.
+# Run this after changing remote packages in ios/project.yml.
+ios-resolve: ios-generate
+    xcodebuild -resolvePackageDependencies -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine
+    cp ios/OpenPocketCine.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved ios/Package.resolved
+
 # Build the native iOS app for the simulator.
 ios-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

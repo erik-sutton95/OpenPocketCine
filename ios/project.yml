@@ -5,6 +5,9 @@ options:
     iOS: "17.0"
     watchOS: "10.0"
   createIntermediateGroups: true
+  # Xcode Cloud disables SPM auto-resolution; copy ios/Package.resolved into
+  # the generated (gitignored) workspace after every xcodegen run.
+  postGenCommand: sh sync-package-resolved.sh
 
 packages:
   Sentry:

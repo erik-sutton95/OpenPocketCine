@@ -5,9 +5,11 @@ Xcode Cloud DSN injection for the Cocoa SDK. Upload and DSN-require are **off**
 until `SENTRY_UPLOAD_ENABLED=true`. Absent that flag, Xcode Cloud and Android
 Play CI behave as they do today.
 
-The iOS shell pins Sentry Cocoa **9.24.0**. Operator-visible reporting, consent,
-and camera-path gating stay in [`diagnostics.md`](diagnostics.md). This document
-is the release/CI contract.
+The iOS shell pins Sentry Cocoa **9.24.0** in `ios/project.yml` and
+[`ios/Package.resolved`](../ios/Package.resolved). Xcode Cloud requires that
+lockfile in the generated workspace; see [TestFlight CI](testflight-ci.md).
+Operator-visible reporting, consent, and camera-path gating stay in
+[`diagnostics.md`](diagnostics.md). This document is the release/CI contract.
 
 Hosted organization: **opencapture**. Projects:
 

@@ -10,6 +10,7 @@ Public join link: <https://testflight.apple.com/join/1tmt3aEB>
 | Step | Where it lives |
 | --- | --- |
 | Generate `ios/OpenPocketCine.xcodeproj` | [`ios/ci_scripts/ci_post_clone.sh`](../ios/ci_scripts/ci_post_clone.sh) (`xcodegen`) |
+| Install `Package.resolved` into the generated workspace | same script + [`ios/Package.resolved`](../ios/Package.resolved) (Xcode Cloud disables automatic SPM resolution) |
 | Frame.io xcconfig injection | same script + optional Xcode Cloud environment variables |
 | Archive + TestFlight upload | Xcode Cloud Archive action, deployment **TestFlight and App Store** |
 | Build number | Xcode Cloud's own counter (stamped automatically) |
@@ -18,6 +19,12 @@ Public join link: <https://testflight.apple.com/join/1tmt3aEB>
 
 `ios/ci_scripts/` sits next to the generated `OpenPocketCine.xcodeproj`, which is how Xcode Cloud
 finds the hooks.
+
+The xcodeproj is gitignored. Remote Swift packages (currently Sentry Cocoa **9.24.0**) are locked
+in [`ios/Package.resolved`](../ios/Package.resolved). `xcodegen generate` copies that file into
+`OpenPocketCine.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` so Cloud's
+`-disableAutomaticPackageResolution` build can fetch the pin. After changing `packages:` in
+[`ios/project.yml`](../ios/project.yml), run `just ios-resolve` and commit the updated lockfile.
 
 One-time App Store Connect / Xcode setup is the wizard:
 
@@ -126,6 +133,7 @@ prompt (the app only uses Apple ATS/HTTPS).
 | Symptom | Likely cause |
 | --- | --- |
 | Cloud build cannot open `OpenPocketCine.xcodeproj` | `ci_post_clone.sh` did not run or `xcodegen` failed |
+| `a resolved file is required when automatic dependency resolution is disabled` / `dependencies were added: 'sentry-cocoa'` | `ios/Package.resolved` is missing, stale, or not copied into the generated workspace. Run `just ios-resolve`, commit the lockfile, and confirm `ci_post_clone.sh` still copies it after `xcodegen` |
 | Export cannot register the Watch bundle ID and finds no profiles | Check identifier registration, team alignment and provisioning access; see [Watch companion signing](#watch-companion-signing) |
 | Frame.io login missing in the build | Add the three `FRAMEIO_*` environment variables on the workflow |
 | “Build number already used” | Raise the workflow's next build number above the App Store Connect high-water mark |

@@ -29,6 +29,10 @@ Generate and open the iOS app (needs [`xcodegen`](https://github.com/yonaskolov/
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
+Remote Swift packages are locked in `ios/Package.resolved` (required by Xcode Cloud).
+After changing `packages:` in `ios/project.yml`, run `just ios-resolve` and commit
+the lockfile.
+
 The Simulator has no Bluetooth or camera Wi-Fi, so pairing and live view need a physical iPhone
 and an Osmo Pocket 4 / 4 Pro. Protocol and depacketizer changes in
 `Sources/OpenPocketViewCore/` are covered by package tests (`just test`) that run without hardware.
