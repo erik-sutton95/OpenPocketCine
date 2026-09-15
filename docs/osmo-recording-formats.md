@@ -101,11 +101,14 @@ make it a legal pair on every model or mode.
 | `07` | 120 | only from the current SlowMo capability table |
 | `08` | 240 | only from the current SlowMo capability table |
 | `0A` | 100 | only from the current SlowMo capability table |
+| `13` | 200 | Pocket 4 Pro SlowMo physical SET + status; current-mode capability required |
 | `0B` | 96 | Osmosis; not on current Pocket/Nano spec sheets |
 | `1D` | 15 | Osmosis; not on current Pocket/Nano spec sheets |
 
-**200 fps** (Pocket 4 / 4 Pro SlowMo 4K, Action 1080p) has **no labeled
-index**. Do not SET it until a SlowMo take names the byte.
+**200 fps** is index `13` on the physically surveyed Pocket 4 Pro. Mimo sent
+`10 13 00 04 00` for 4K/200, with success reply and matching status. See the
+[mode survey](../handbook/src/content/docs/protocol/pocket4-pro.md). Other bodies
+remain unqualified by this take.
 
 ### Resolution byte (aspect is this byte)
 
@@ -435,8 +438,9 @@ Original **Osmo Action**: 4K 16:9 24–60, 4K 4:3 24–30, 2.7K, 1080p to 240,
 4. **Illegal examples to keep in tests** (from specs, not guesses):
    Nano 4K 4:3 × 60; Pocket 4 Video 2.7K; Pocket 3 Video 4:3; Pocket 4 Pro
    med-tele SlowMo 4K 240.
-5. **SlowMo:** switch `0x02/0xE1` `00` first; SET 100/120/240 only from
-   that mode’s camcap. Index `07`/`08`/`0A` are known; **200 is not**.
+5. **SlowMo:** switch `0x02/0xE1` `00` first; SET rates only from
+   that mode’s camcap. Index `07`/`08`/`0A` are known; Pocket 4 Pro 200 uses
+   `13` with observed trailer `00 04 00` (not the 240 fps trailer).
 6. **Zoom** already keys off resolution + shooting mode. 2.7K / 3K /
    9:16 need the same `activeZoomStops` treatment as 4K (Pocket 3 2.7K is
    3× per DJI, 4K is 2×).
@@ -447,7 +451,8 @@ Original **Osmo Action**: 4K 16:9 24–60, 4K 4:3 24–30, 2.7K, 1080p to 240,
    - Pocket 3 Video selections at 16:9, 1:1 and 9:16: preserve capability
      rejections as well as successful status replies, and inspect originals.
    - Pocket 4 / 4 Pro 9:16 SET + resulting camcap.
-   - Pocket 4 Pro SlowMo 4K 200 (wide and tele) for the missing fps index.
+   - Pocket 4 Pro tele SlowMo format restrictions; wide 4K/200 index `13` is now
+     physically documented in the mode survey.
 
 FORMAT preserves pairs reported by the live capability table, including
 unlabeled bytes. The specification tables above are expected matrices, not a

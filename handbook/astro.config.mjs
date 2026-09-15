@@ -57,6 +57,7 @@ export default defineConfig({
             { label: 'DUML transport', slug: 'protocol/duml-transport' },
             { label: 'Command catalog', slug: 'protocol/commands' },
             { label: 'Pocket 3 findings', slug: 'protocol/pocket3' },
+            { label: 'Pocket 4 Pro modes', slug: 'protocol/pocket4-pro' },
             { label: 'Live view', slug: 'protocol/live-view' },
             { label: 'HTTP media', slug: 'protocol/media' },
             { label: 'iOS notes', slug: 'protocol/ios' },
