@@ -2423,7 +2423,8 @@ final class CameraSession {
     /// 180, XOR MIRROR assist).
     func updateGimbalStick(
         x: Double, y: Double, sensitivity: Int = GimbalStick.defaultSensitivity,
-        assistMirror: Bool = false, linear: Bool = false
+        assistMirror: Bool = false, linear: Bool = false,
+        mapping: GimbalStick.Mapping = .defaults
     ) {
         guard !isLocked else { return }
         guard datalink != nil else { return }
@@ -2433,13 +2434,14 @@ final class CameraSession {
             endGimbalStick(cancelMove: true)
             return
         }
-        if !linear, hypot(x, y) > GimbalStick.deadzone { cancelNativeHeadTrack() }
+        let restZone = linear ? GimbalStick.deadzone : mapping.deadzone
+        if !linear, hypot(x, y) > restZone { cancelNativeHeadTrack() }
         if isLiveVideoStale, !moveDriving {
             endGimbalStick(cancelMove: true)
             return
         }
         if gimbalMoveRunning, !linear {
-            if hypot(x, y) > GimbalStick.deadzone {
+            if hypot(x, y) > restZone {
                 cancelProgrammedMove()
             } else {
                 return
@@ -2463,7 +2465,8 @@ final class CameraSession {
             ? false
             : GimbalStick.liveInvertPan(poseInvert: gimbalPoseInvertPan, assistMirror: assistMirror)
         let axes = GimbalStick.encode(
-            x: throwX, y: throwY, invertPan: invert, sensitivity: sensitivity, linear: linear)
+            x: throwX, y: throwY, invertPan: invert, sensitivity: sensitivity, linear: linear,
+            mapping: linear ? .defaults : mapping)
         pendingGimbalAxes = axes
         lastGimbalCommand = (x, y)
         lastGimbalStickAt = Date()

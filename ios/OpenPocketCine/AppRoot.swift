@@ -119,6 +119,34 @@ final class AppModel {
             OperatorPrefs.gimbalStickSensitivity = clamped
         }
     }
+    var virtualJoystickInvertPan: Bool = OperatorPrefs.virtualJoystickInvertPan {
+        didSet { OperatorPrefs.virtualJoystickInvertPan = virtualJoystickInvertPan }
+    }
+    var virtualJoystickInvertTilt: Bool = OperatorPrefs.virtualJoystickInvertTilt {
+        didSet { OperatorPrefs.virtualJoystickInvertTilt = virtualJoystickInvertTilt }
+    }
+    var virtualJoystickDeadzonePercent: Int = OperatorPrefs.virtualJoystickDeadzonePercent {
+        didSet {
+            let clamped = GimbalStick.clampedDeadzonePercent(virtualJoystickDeadzonePercent)
+            if clamped != virtualJoystickDeadzonePercent {
+                virtualJoystickDeadzonePercent = clamped
+                return
+            }
+            OperatorPrefs.virtualJoystickDeadzonePercent = clamped
+        }
+    }
+    var virtualJoystickResponseCurve: GimbalStick.ResponseCurve =
+        OperatorPrefs.virtualJoystickResponseCurve
+    {
+        didSet { OperatorPrefs.virtualJoystickResponseCurve = virtualJoystickResponseCurve }
+    }
+    var virtualJoystickMapping: GimbalStick.Mapping {
+        GimbalStick.Mapping(
+            invertPan: virtualJoystickInvertPan,
+            invertTilt: virtualJoystickInvertTilt,
+            deadzone: GimbalStick.deadzoneFromPercent(virtualJoystickDeadzonePercent),
+            curve: virtualJoystickResponseCurve)
+    }
     var dispLive = OperatorPrefs.dispLive {
         didSet { OperatorPrefs.dispLive = dispLive }
     }

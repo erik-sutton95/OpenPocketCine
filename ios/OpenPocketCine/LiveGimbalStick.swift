@@ -88,7 +88,8 @@ struct LiveGimbalStick: View {
                     let ny = Double(-limited.height / max(travel, 1))
                     model.session.updateGimbalStick(
                         x: nx, y: ny, sensitivity: model.gimbalStickSensitivity,
-                        assistMirror: model.assist.isVisible(.mirror))
+                        assistMirror: model.assist.isVisible(.mirror),
+                        mapping: model.virtualJoystickMapping)
                 }
             }
             .onEnded { _ in

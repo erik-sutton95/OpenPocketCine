@@ -3616,14 +3616,16 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         sensitivity: Int = CameraCommands.GIMBAL_STICK_DEFAULT_SENSITIVITY,
         assistMirror: Boolean = false,
         linear: Boolean = false,
+        mapping: CameraCommands.VirtualJoystickMapping = CameraCommands.VirtualJoystickMapping.DEFAULT,
     ) {
         if ((_phase.value != ConnectionPhase.LIVE || needsForegroundRecover || holdsMonitor ||
                 !firstPictureSettled || isLiveVideoStale()) && !moveDriving) {
             endGimbalStick()
             return
         }
+        val restZone = if (linear) CameraCommands.GIMBAL_STICK_DEADZONE else mapping.deadzone
         if (_gimbalMoveRunning.value && !linear) {
-            if (hypot(x.toDouble(), y.toDouble()) > CameraCommands.GIMBAL_STICK_DEADZONE) {
+            if (hypot(x.toDouble(), y.toDouble()) > restZone) {
                 cancelProgrammedMove()
             } else {
                 return
@@ -3644,7 +3646,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         lastAssistMirror = assistMirror
         lastGimbalStickAt = SystemClock.elapsedRealtime()
         lastGimbalCommand = throwX to throwY
-        pendingGimbalAxes = encodedGimbalAxes(throwX, throwY, sensitivity, linear)
+        pendingGimbalAxes = encodedGimbalAxes(throwX, throwY, sensitivity, linear, mapping)
         val axes = pendingGimbalAxes
         if (axes.first == CameraCommands.GIMBAL_STICK_CENTER &&
             axes.second == CameraCommands.GIMBAL_STICK_CENTER
@@ -3974,14 +3976,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         y: Float,
         sensitivity: Int,
         linear: Boolean = false,
+        mapping: CameraCommands.VirtualJoystickMapping = CameraCommands.VirtualJoystickMapping.DEFAULT,
     ): Pair<Int, Int> {
         val invertPan =
-            CameraCommands.liveInvertPan(gimbalStickMapping.invertPan, lastAssistMirror)
-        if (linear) {
-            // Linear callers (programmed move) speak `0x04/0x05` space: no screen invert.
-            return CameraCommands.gimbalAxisLinear(y) to CameraCommands.gimbalAxisLinear(x)
-        }
-        if (SwiftCore.isAvailable) {
+            if (linear) false
+            else CameraCommands.liveInvertPan(gimbalStickMapping.invertPan, lastAssistMirror)
+        val applied = if (linear) CameraCommands.VirtualJoystickMapping.DEFAULT else mapping
+        if (applied.isDefault && !linear && SwiftCore.isAvailable) {
             val packed =
                 SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), invertPan, sensitivity)
             if (packed != null) {
@@ -3993,7 +3994,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
             }
         }
-        return CameraCommands.gimbalAxes(x, y, invertPan = invertPan, sensitivity = sensitivity)
+        return CameraCommands.gimbalAxes(
+            x,
+            y,
+            invertPan = invertPan,
+            sensitivity = sensitivity,
+            mapping = applied,
+            linear = linear,
+        )
     }
 
     private fun syncGimbalPose() {

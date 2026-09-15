@@ -701,3 +701,21 @@ Physical controller and spacing verification is pending: the paired iPhone was
 unavailable and no Android device was attached. These changes are not covered
 by earlier physical passes. Changed Swift files pass formatting; the full Swift
 formatting gate still reports pre-existing violations in unrelated files.
+
+### Virtual joystick mapping
+
+Both shells expose saved on-screen joystick pan/tilt inversion, a 0–25% dead
+zone, and Linear / Standard / Fine response. Defaults remain uninverted, 8%,
+and Standard (the existing squared response). Sensitivity keeps its current
+shared on-screen/gamepad meaning; the new mapping controls apply only to touch.
+Picture-relative pan inversion composes once with the operator's pan choice.
+The wire bounds, rest packet, tap gestures, and transport cadence are unchanged.
+
+The repository gate passed (984 core tests). Android assemble, 858 unit tests,
+and lint passed. The iOS suite passed (659 tests,
+one skipped), and a simulator UI test verified
+inversion persistence across relaunch and restoration. The settings screenshot
+was reviewed. A signed device build was installed and launched on the iPhone.
+Physical UI verification remains pending: Xcode timed out enabling automation
+before the test started. No physical Android device was attached; live gimbal
+feel and cadence under the new non-default mappings remain unqualified.

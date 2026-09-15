@@ -1779,31 +1779,129 @@ public enum GimbalStick {
         Swift.min(Swift.max(value, sensitivityRange.lowerBound), sensitivityRange.upperBound)
     }
 
+    /// Operator on-screen stick rest, 0…25%. 8 is the captured 0.08 feel.
+    public static let deadzonePercentRange: ClosedRange<Int> = 0...25
+    public static let defaultDeadzonePercent = 8
+
+    public static func clampedDeadzone(_ value: Double) -> Double {
+        guard value.isFinite else { return deadzone }
+        return Swift.min(Swift.max(value, 0), 0.25)
+    }
+
+    public static func clampedDeadzonePercent(_ value: Int) -> Int {
+        Swift.min(
+            Swift.max(value, deadzonePercentRange.lowerBound), deadzonePercentRange.upperBound)
+    }
+
+    /// Percent slider → unit rest. 8 maps to the exact captured `deadzone`.
+    public static func deadzoneFromPercent(_ percent: Int) -> Double {
+        let p = clampedDeadzonePercent(percent)
+        if p == defaultDeadzonePercent { return deadzone }
+        return Double(p) / 100
+    }
+
+    public static func deadzonePercent(_ value: Double) -> Int {
+        let zone = clampedDeadzone(value)
+        if abs(zone - deadzone) < 0.0005 { return defaultDeadzonePercent }
+        return Int((zone * 100).rounded())
+    }
+
+    /// On-screen stick response after the deadzone. Gamepad keeps `standard`.
+    public enum ResponseCurve: String, Sendable, CaseIterable {
+        case linear
+        case standard
+        case fine
+
+        public var expo: Double {
+            switch self {
+            case .linear: 1
+            case .standard: GimbalStick.analogExpo
+            case .fine: 3
+            }
+        }
+
+        public var label: String {
+            switch self {
+            case .linear: "Linear"
+            case .standard: "Standard"
+            case .fine: "Fine"
+            }
+        }
+
+        public static func parse(_ raw: String?) -> ResponseCurve {
+            switch raw?.lowercased() {
+            case ResponseCurve.linear.rawValue: .linear
+            case ResponseCurve.fine.rawValue: .fine
+            default: .standard
+            }
+        }
+
+        public static func fromLabel(_ label: String) -> ResponseCurve {
+            Self.allCases.first { $0.label == label } ?? .standard
+        }
+    }
+
+    /// Virtual (on-screen) stick extras. Defaults match the existing analog map.
+    public struct Mapping: Equatable, Sendable {
+        public var invertPan: Bool
+        public var invertTilt: Bool
+        public var deadzone: Double
+        public var curve: ResponseCurve
+
+        public static let defaults = Mapping()
+
+        public init(
+            invertPan: Bool = false,
+            invertTilt: Bool = false,
+            deadzone: Double = GimbalStick.deadzone,
+            curve: ResponseCurve = .standard
+        ) {
+            self.invertPan = invertPan
+            self.invertTilt = invertTilt
+            self.deadzone = GimbalStick.clampedDeadzone(deadzone)
+            self.curve = curve
+        }
+
+        public var isDefault: Bool { self == .defaults }
+    }
+
     /// 4 = 1.0 (current). 5 saturates earlier; 1–3 never reach full throw.
     public static func sensitivityGain(_ value: Int) -> Double {
         Double(clampedSensitivity(value)) / Double(defaultSensitivity)
     }
 
     /// Deadzone, then linear remainder onto −1…1. Zoom stick uses this (no expo).
-    public static func linearThrow(_ normalized: Double) -> Double {
+    public static func linearThrow(
+        _ normalized: Double, deadzone zone: Double = deadzone
+    ) -> Double {
         let n = Swift.min(Swift.max(normalized, -1), 1)
         let magnitude = abs(n)
-        if magnitude < deadzone { return 0 }
-        let t = (magnitude - deadzone) / (1 - deadzone)
+        let rest = clampedDeadzone(zone)
+        if magnitude < rest { return 0 }
+        let span = 1 - rest
+        if span <= 0 { return 0 }
+        let t = (magnitude - rest) / span
         return n < 0 ? -t : t
     }
 
     /// Deadzone, then expo ease-in onto −1…1. Full throw stays 1. Rest stays 0.
-    public static func analogCurve(_ normalized: Double) -> Double {
-        let t = linearThrow(normalized)
+    public static func analogCurve(
+        _ normalized: Double, deadzone zone: Double = deadzone, expo: Double = analogExpo
+    ) -> Double {
+        let t = linearThrow(normalized, deadzone: zone)
         if t == 0 { return 0 }
-        let curved = pow(abs(t), analogExpo)
+        let power = expo.isFinite && expo > 0 ? expo : analogExpo
+        let curved = pow(abs(t), power)
         return t < 0 ? -curved : curved
     }
 
     /// Clamp a unit axis (−1…1) onto 1024 ± 550, then apply sensitivity.
-    public static func axis(_ normalized: Double, sensitivity: Int = defaultSensitivity) -> UInt16 {
-        let curved = analogCurve(normalized)
+    public static func axis(
+        _ normalized: Double, sensitivity: Int = defaultSensitivity,
+        mapping: Mapping = .defaults
+    ) -> UInt16 {
+        let curved = analogCurve(
+            normalized, deadzone: mapping.deadzone, expo: mapping.curve.expo)
         if curved == 0 { return center }
         let scaled = Swift.min(Swift.max(curved * sensitivityGain(sensitivity), -1), 1)
         let raw = Double(center) + scaled * Double(travel)
@@ -1905,15 +2003,24 @@ public enum GimbalStick {
     /// `x` −1…1 left…right → pan (axis1). `y` −1…1 down…up → tilt (axis0).
     /// Tracking uses the same pan invert as the free stick. `linear` skips expo
     /// (head-tracking look-at; expo is why that path crawled).
+    /// `mapping` is the on-screen stick extras; defaults preserve the analog map.
+    /// Picture invert (`invertPan`) XORs operator invert pan once. `linear`
+    /// ignores mapping so head-track / motion keep their wire.
     public static func encode(
         x: Double, y: Double, invertPan: Bool = false,
-        sensitivity: Int = defaultSensitivity, linear: Bool = false
+        sensitivity: Int = defaultSensitivity, linear: Bool = false,
+        mapping: Mapping = .defaults
     ) -> (axis0: UInt16, axis1: UInt16) {
-        let pan = invertPan ? -x : x
         if linear {
+            let pan = invertPan ? -x : x
             return (axisLinear(y), axisLinear(pan))
         }
-        return (axis(y, sensitivity: sensitivity), axis(pan, sensitivity: sensitivity))
+        let pan = (invertPan != mapping.invertPan) ? -x : x
+        let tilt = mapping.invertTilt ? -y : y
+        return (
+            axis(tilt, sensitivity: sensitivity, mapping: mapping),
+            axis(pan, sensitivity: sensitivity, mapping: mapping)
+        )
     }
 
     public static func encode(

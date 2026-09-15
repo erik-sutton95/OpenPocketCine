@@ -34,6 +34,14 @@ enum SettingsHelpCopy {
         "Experimental. The compass above the joystick on the right is Calibrate Head Lock: that AirPods pose and that gimbal pose are shared forward. Head turns set matching pan and tilt angles within the gimbal’s range. Roll is shown only. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. The same control becomes STOP and clears the lock. On-screen stick, a game controller, and Motion Control takes priority."
     static let joystickSensitivity =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    static let virtualJoystickInvertPan =
+        "Reverse left and right on the on-screen stick. Off is the default. A game controller is unchanged."
+    static let virtualJoystickInvertTilt =
+        "Reverse up and down on the on-screen stick. Off is the default. A game controller is unchanged."
+    static let virtualJoystickDeadzone =
+        "Ignore small movements near the center. The default is 8%. Increase it to make the center less sensitive."
+    static let virtualJoystickResponse =
+        "Standard keeps the current feel. Linear responds evenly. Fine makes small movements gentler."
     static let gimbalJoystick =
         "Which analog stick pans and tilts. Left is the default. The other stick does not move the gimbal."
     static let gamepad =
@@ -604,6 +612,39 @@ struct SettingsRootView: View {
                         title: "Head Tracking (Experimental)", help: SettingsHelpCopy.headTracking,
                         isOn: model.headTrackingEnabled
                     ) { model.headTrackingEnabled.toggle() }
+                }
+            }
+            SettingsRowCard(title: "On-screen joystick") {
+                SettingsSwitchInlineRow(
+                    title: "Invert pan", help: SettingsHelpCopy.virtualJoystickInvertPan,
+                    showTopDivider: false, isOn: model.virtualJoystickInvertPan,
+                    identifier: "gimbal.virtual.invertPan"
+                ) { model.virtualJoystickInvertPan.toggle() }
+                SettingsSwitchInlineRow(
+                    title: "Invert tilt", help: SettingsHelpCopy.virtualJoystickInvertTilt,
+                    isOn: model.virtualJoystickInvertTilt,
+                    identifier: "gimbal.virtual.invertTilt"
+                ) { model.virtualJoystickInvertTilt.toggle() }
+                SettingsInlineRow(
+                    title: "Dead zone", help: SettingsHelpCopy.virtualJoystickDeadzone,
+                    stacked: true
+                ) {
+                    VirtualJoystickDeadzoneSlider(
+                        value: Bindable(model).virtualJoystickDeadzonePercent)
+                }
+                SettingsInlineRow(
+                    title: "Response curve", help: SettingsHelpCopy.virtualJoystickResponse,
+                    stacked: true
+                ) {
+                    SettingsSegmented(
+                        options: GimbalStick.ResponseCurve.allCases.map(\.label),
+                        selected: model.virtualJoystickResponseCurve.label,
+                        compact: true
+                    ) { value in
+                        model.virtualJoystickResponseCurve =
+                            GimbalStick.ResponseCurve.fromLabel(value)
+                    }
+                    .accessibilityIdentifier("gimbal.virtual.response")
                 }
             }
         }

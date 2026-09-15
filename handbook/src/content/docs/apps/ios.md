@@ -346,3 +346,16 @@ not the choice of the official D-Log M conversion cube. See the
 Share shows Google Drive, Dropbox, NAS (SMB), LucidLink, Backblaze B2 and
 Vimeo Review as **Coming soon**. These destinations are previews of planned
 support and cannot be selected yet. Use the available destinations to share now.
+
+### On-screen joystick feel
+
+In **Controls → On-screen joystick**, tune the virtual gimbal stick:
+
+- **Invert pan** and **Invert tilt** reverse each direction independently.
+- **Dead zone** ignores small movements near the center. The default is 8%.
+- **Response curve** changes how movement grows with stick travel: Linear is
+  direct, Standard keeps the current feel, and Fine gives gentler small moves.
+
+Both inversion options default to off and the response defaults to Standard.
+These settings are saved and affect the on-screen joystick. The existing
+sensitivity setting continues to control overall speed.

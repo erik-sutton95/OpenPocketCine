@@ -776,6 +776,12 @@ enum OperatorPrefs {
     private static let hapticsKey = "OpenPocketCine.HapticsEnabled"
     private static let headTrackingKey = "OpenPocketCine.HeadTrackingEnabled"
     private static let gimbalStickSensitivityKey = "OpenPocketCine.GimbalStickSensitivity"
+    private static let virtualJoystickInvertPanKey = "OpenPocketCine.VirtualJoystickInvertPan"
+    private static let virtualJoystickInvertTiltKey = "OpenPocketCine.VirtualJoystickInvertTilt"
+    private static let virtualJoystickDeadzonePercentKey =
+        "OpenPocketCine.VirtualJoystickDeadzonePercent"
+    private static let virtualJoystickResponseCurveKey =
+        "OpenPocketCine.VirtualJoystickResponseCurve"
     private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
     private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
     private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
@@ -890,6 +896,50 @@ enum OperatorPrefs {
             UserDefaults.standard.set(
                 GimbalStick.clampedSensitivity(newValue), forKey: gimbalStickSensitivityKey)
         }
+    }
+
+    static var virtualJoystickInvertPan: Bool {
+        get { UserDefaults.standard.bool(forKey: virtualJoystickInvertPanKey) }
+        set { UserDefaults.standard.set(newValue, forKey: virtualJoystickInvertPanKey) }
+    }
+
+    static var virtualJoystickInvertTilt: Bool {
+        get { UserDefaults.standard.bool(forKey: virtualJoystickInvertTiltKey) }
+        set { UserDefaults.standard.set(newValue, forKey: virtualJoystickInvertTiltKey) }
+    }
+
+    static var virtualJoystickDeadzonePercent: Int {
+        get {
+            guard UserDefaults.standard.object(forKey: virtualJoystickDeadzonePercentKey) != nil
+            else {
+                return GimbalStick.defaultDeadzonePercent
+            }
+            return GimbalStick.clampedDeadzonePercent(
+                UserDefaults.standard.integer(forKey: virtualJoystickDeadzonePercentKey))
+        }
+        set {
+            UserDefaults.standard.set(
+                GimbalStick.clampedDeadzonePercent(newValue),
+                forKey: virtualJoystickDeadzonePercentKey)
+        }
+    }
+
+    static var virtualJoystickResponseCurve: GimbalStick.ResponseCurve {
+        get {
+            GimbalStick.ResponseCurve.parse(
+                UserDefaults.standard.string(forKey: virtualJoystickResponseCurveKey))
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: virtualJoystickResponseCurveKey)
+        }
+    }
+
+    static var virtualJoystickMapping: GimbalStick.Mapping {
+        GimbalStick.Mapping(
+            invertPan: virtualJoystickInvertPan,
+            invertTilt: virtualJoystickInvertTilt,
+            deadzone: GimbalStick.deadzoneFromPercent(virtualJoystickDeadzonePercent),
+            curve: virtualJoystickResponseCurve)
     }
 
     static var dispLive: PocketDispChrome {

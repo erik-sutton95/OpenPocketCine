@@ -573,8 +573,53 @@ object CameraCommands {
     const val GIMBAL_STICK_MAX = 1574
     const val GIMBAL_STICK_DEADZONE = 0.08f
     const val GIMBAL_STICK_ANALOG_EXPO = 2.0
+    const val GIMBAL_STICK_DEFAULT_DEADZONE_PERCENT = 8
 
     const val GIMBAL_STICK_DEFAULT_SENSITIVITY = 4
+
+    enum class VirtualJoystickCurve(val raw: String, val expo: Double, val label: String) {
+        LINEAR("linear", 1.0, "Linear"),
+        STANDARD("standard", GIMBAL_STICK_ANALOG_EXPO, "Standard"),
+        FINE("fine", 3.0, "Fine"),
+        ;
+
+        companion object {
+            fun parse(raw: String?): VirtualJoystickCurve =
+                entries.firstOrNull { it.raw.equals(raw, ignoreCase = true) } ?: STANDARD
+
+            fun fromLabel(label: String): VirtualJoystickCurve =
+                entries.firstOrNull { it.label == label } ?: STANDARD
+        }
+    }
+
+    data class VirtualJoystickMapping(
+        val invertPan: Boolean = false,
+        val invertTilt: Boolean = false,
+        val deadzone: Float = GIMBAL_STICK_DEADZONE,
+        val curve: VirtualJoystickCurve = VirtualJoystickCurve.STANDARD,
+    ) {
+        val isDefault: Boolean
+            get() = this == DEFAULT
+
+        companion object {
+            val DEFAULT = VirtualJoystickMapping()
+
+            fun clampedDeadzone(value: Float): Float =
+                if (value.isFinite()) value.coerceIn(0f, 0.25f) else GIMBAL_STICK_DEADZONE
+
+            fun clampedDeadzonePercent(value: Int): Int = value.coerceIn(0, 25)
+
+            fun deadzoneFromPercent(percent: Int): Float {
+                val p = clampedDeadzonePercent(percent)
+                return if (p == GIMBAL_STICK_DEFAULT_DEADZONE_PERCENT) GIMBAL_STICK_DEADZONE
+                else p / 100f
+            }
+
+            fun resolvedDeadzonePercent(stored: Int?): Int =
+                if (stored == null) GIMBAL_STICK_DEFAULT_DEADZONE_PERCENT
+                else clampedDeadzonePercent(stored)
+        }
+    }
     const val GIMBAL_STICK_TAP_SLOP = 0.18f
     /** iOS `GimbalStick.streamInterval` — ACK pump emits while held. */
     const val GIMBAL_STICK_STREAM_INTERVAL_MS = 40L
@@ -695,19 +740,30 @@ object CameraCommands {
         sensitivity.coerceIn(1, 5) / GIMBAL_STICK_DEFAULT_SENSITIVITY.toFloat()
 
     /** Deadzone, then linear remainder onto −1…1. Zoom stick uses this (no expo). */
-    fun gimbalLinearThrow(normalized: Float): Float {
+    fun gimbalLinearThrow(
+        normalized: Float,
+        deadzone: Float = GIMBAL_STICK_DEADZONE,
+    ): Float {
         val n = normalized.coerceIn(-1f, 1f)
         val magnitude = kotlin.math.abs(n)
-        if (magnitude < GIMBAL_STICK_DEADZONE) return 0f
-        val t = (magnitude - GIMBAL_STICK_DEADZONE) / (1f - GIMBAL_STICK_DEADZONE)
+        val rest = VirtualJoystickMapping.clampedDeadzone(deadzone)
+        if (magnitude < rest) return 0f
+        val span = 1f - rest
+        if (span <= 0f) return 0f
+        val t = (magnitude - rest) / span
         return if (n < 0f) -t else t
     }
 
     /** Deadzone, then expo ease-in onto −1…1. Full throw stays 1. Rest stays 0. */
-    fun gimbalAnalogCurve(normalized: Float): Float {
-        val t = gimbalLinearThrow(normalized)
+    fun gimbalAnalogCurve(
+        normalized: Float,
+        deadzone: Float = GIMBAL_STICK_DEADZONE,
+        expo: Double = GIMBAL_STICK_ANALOG_EXPO,
+    ): Float {
+        val t = gimbalLinearThrow(normalized, deadzone)
         if (t == 0f) return 0f
-        val curved = kotlin.math.abs(t).toDouble().pow(GIMBAL_STICK_ANALOG_EXPO).toFloat()
+        val power = if (expo.isFinite() && expo > 0.0) expo else GIMBAL_STICK_ANALOG_EXPO
+        val curved = kotlin.math.abs(t).toDouble().pow(power).toFloat()
         return if (t < 0f) -curved else curved
     }
 
@@ -720,8 +776,12 @@ object CameraCommands {
             .coerceIn(GIMBAL_STICK_MIN, GIMBAL_STICK_MAX)
     }
 
-    fun gimbalAxis(normalized: Float, sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY): Int {
-        val curved = gimbalAnalogCurve(normalized)
+    fun gimbalAxis(
+        normalized: Float,
+        sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY,
+        mapping: VirtualJoystickMapping = VirtualJoystickMapping.DEFAULT,
+    ): Int {
+        val curved = gimbalAnalogCurve(normalized, mapping.deadzone, mapping.curve.expo)
         if (curved == 0f) return GIMBAL_STICK_CENTER
         val scaled = (curved * gimbalSensitivityGain(sensitivity)).coerceIn(-1f, 1f)
         return (GIMBAL_STICK_CENTER + scaled * GIMBAL_STICK_TRAVEL)
@@ -735,8 +795,17 @@ object CameraCommands {
         y: Float,
         invertPan: Boolean = false,
         sensitivity: Int = GIMBAL_STICK_DEFAULT_SENSITIVITY,
-    ): Pair<Int, Int> =
-        gimbalAxis(y, sensitivity) to gimbalAxis(if (invertPan) -x else x, sensitivity)
+        mapping: VirtualJoystickMapping = VirtualJoystickMapping.DEFAULT,
+        linear: Boolean = false,
+    ): Pair<Int, Int> {
+        if (linear) {
+            val pan = if (invertPan) -x else x
+            return gimbalAxisLinear(y) to gimbalAxisLinear(pan)
+        }
+        val pan = if (invertPan != mapping.invertPan) -x else x
+        val tilt = if (mapping.invertTilt) -y else y
+        return gimbalAxis(tilt, sensitivity, mapping) to gimbalAxis(pan, sensitivity, mapping)
+    }
 
     /** `0x04/0x01` payload: two u16-LE axes + trailer `00 80 22 00`. */
     fun gimbalStickPayload(axis0: Int, axis1: Int): ByteArray {

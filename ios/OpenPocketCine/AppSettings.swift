@@ -544,6 +544,7 @@ struct SettingsSwitchInlineRow: View {
     var showTopDivider = true
     var stacked: Bool = false
     let isOn: Bool
+    var identifier: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -557,6 +558,26 @@ struct SettingsSwitchInlineRow: View {
                 SettingsSwitchGraphic(isOn: isOn)
             }
             .buttonStyle(.zcTapTarget)
+            .modifier(SettingsSwitchAccess(identifier: identifier, title: title, isOn: isOn))
+        }
+    }
+}
+
+private struct SettingsSwitchAccess: ViewModifier {
+    let identifier: String?
+    let title: String
+    let isOn: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let identifier {
+            content
+                .accessibilityIdentifier(identifier)
+                .accessibilityLabel(title)
+                .accessibilityValue(isOn ? "On" : "Off")
+                .accessibilityAddTraits(.isButton)
+        } else {
+            content
         }
     }
 }
@@ -631,6 +652,39 @@ struct GimbalStickSensitivitySlider: View {
                 .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
                 .foregroundStyle(LiveDesign.text)
                 .frame(width: 24, alignment: .trailing)
+                .monospacedDigit()
+        }
+    }
+}
+
+struct VirtualJoystickDeadzoneSlider: View {
+    @Binding var value: Int
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Slider(
+                value: Binding(
+                    get: { Double(value) },
+                    set: {
+                        let next = GimbalStick.clampedDeadzonePercent(Int($0.rounded()))
+                        guard next != value else { return }
+                        OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
+                        value = next
+                    }),
+                in: Double(
+                    GimbalStick.deadzonePercentRange.lowerBound)...Double(
+                        GimbalStick.deadzonePercentRange.upperBound),
+                step: 1
+            )
+            .tint(LiveDesign.accent)
+            .accessibilityIdentifier("gimbal.virtual.deadzone")
+            .accessibilityLabel("Dead zone")
+            .accessibilityValue("\(value)%")
+            Text("\(value)%")
+                .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
+                .foregroundStyle(LiveDesign.text)
+                .frame(width: 40, alignment: .trailing)
                 .monospacedDigit()
         }
     }

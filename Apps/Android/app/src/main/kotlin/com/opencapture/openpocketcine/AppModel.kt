@@ -16,6 +16,7 @@ import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.GimbalRamp
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.PocketCameraSession
@@ -56,6 +57,28 @@ class AppModel(context: Context) {
         private set
     var gimbalStickSensitivity by mutableStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
         private set
+    var virtualJoystickInvertPan by mutableStateOf(OperatorPrefs.virtualJoystickInvertPan(appContext))
+        private set
+    var virtualJoystickInvertTilt by mutableStateOf(OperatorPrefs.virtualJoystickInvertTilt(appContext))
+        private set
+    var virtualJoystickDeadzonePercent by mutableStateOf(
+        OperatorPrefs.virtualJoystickDeadzonePercent(appContext),
+    )
+        private set
+    var virtualJoystickResponseCurve by mutableStateOf(
+        OperatorPrefs.virtualJoystickResponseCurve(appContext),
+    )
+        private set
+    val virtualJoystickMapping: CameraCommands.VirtualJoystickMapping
+        get() =
+            CameraCommands.VirtualJoystickMapping(
+                invertPan = virtualJoystickInvertPan,
+                invertTilt = virtualJoystickInvertTilt,
+                deadzone = CameraCommands.VirtualJoystickMapping.deadzoneFromPercent(
+                    virtualJoystickDeadzonePercent,
+                ),
+                curve = virtualJoystickResponseCurve,
+            )
     var gimbalRamp by mutableStateOf(OperatorPrefs.gimbalRamp(appContext))
         private set
     var liveGimbalPanel by mutableStateOf(LiveGimbalPanel.NONE)
@@ -189,6 +212,27 @@ class AppModel(context: Context) {
         OperatorPrefs.setGimbalStickSensitivity(appContext, clamped)
     }
 
+    fun updateVirtualJoystickInvertPan(value: Boolean) {
+        virtualJoystickInvertPan = value
+        OperatorPrefs.setVirtualJoystickInvertPan(appContext, value)
+    }
+
+    fun updateVirtualJoystickInvertTilt(value: Boolean) {
+        virtualJoystickInvertTilt = value
+        OperatorPrefs.setVirtualJoystickInvertTilt(appContext, value)
+    }
+
+    fun updateVirtualJoystickDeadzonePercent(value: Int) {
+        val clamped = CameraCommands.VirtualJoystickMapping.clampedDeadzonePercent(value)
+        virtualJoystickDeadzonePercent = clamped
+        OperatorPrefs.setVirtualJoystickDeadzonePercent(appContext, clamped)
+    }
+
+    fun updateVirtualJoystickResponseCurve(value: CameraCommands.VirtualJoystickCurve) {
+        virtualJoystickResponseCurve = value
+        OperatorPrefs.setVirtualJoystickResponseCurve(appContext, value)
+    }
+
     fun updatePortraitFeedAspect(value: PortraitFeedAspect) {
         portraitFeedAspect = value
         OperatorPrefs.setPortraitFeedAspect(appContext, value)
@@ -315,6 +359,17 @@ class AppModel(context: Context) {
     fun tapFocus(x: Float, y: Float) = session.tapFocus(x, y)
 
     fun updateGimbalStick(x: Float, y: Float) {
+        if (uiLocked) return
+        session.updateGimbalStick(
+            x,
+            y,
+            gimbalStickSensitivity,
+            assist.mirror,
+            mapping = virtualJoystickMapping,
+        )
+    }
+
+    fun updateGimbalPadStick(x: Float, y: Float) {
         if (uiLocked) return
         session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirror)
     }

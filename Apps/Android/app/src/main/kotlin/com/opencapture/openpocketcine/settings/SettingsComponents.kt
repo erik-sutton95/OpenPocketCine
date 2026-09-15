@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
@@ -345,6 +346,7 @@ fun SettingsSwitchRow(
     help: String? = null,
     showTopDivider: Boolean = true,
     stacked: Boolean = false,
+    testTag: String? = null,
     onToggle: () -> Unit,
 ) {
     SettingsInlineRow(
@@ -353,10 +355,13 @@ fun SettingsSwitchRow(
         showTopDivider = showTopDivider,
         stacked = stacked,
     ) {
-        Box(Modifier.settingsClickable(role = Role.Switch, onClick = onToggle).semantics {
-            contentDescription = title
-            toggleableState = if (isOn) ToggleableState.On else ToggleableState.Off
-        }) {
+        val access =
+            Modifier.settingsClickable(role = Role.Switch, onClick = onToggle).semantics {
+                contentDescription = title
+                toggleableState = if (isOn) ToggleableState.On else ToggleableState.Off
+                stateDescription = if (isOn) "On" else "Off"
+            }.then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+        Box(access) {
             SettingsSwitchGraphic(isOn = isOn)
         }
     }
@@ -370,6 +375,7 @@ fun SettingsSwitchInlineRow(
     help: String? = null,
     showTopDivider: Boolean = true,
     stacked: Boolean = false,
+    testTag: String? = null,
     onToggle: () -> Unit,
 ) {
     SettingsSwitchRow(
@@ -378,6 +384,7 @@ fun SettingsSwitchInlineRow(
         help = help,
         showTopDivider = showTopDivider,
         stacked = stacked,
+        testTag = testTag,
         onToggle = onToggle,
     )
 }
@@ -436,10 +443,12 @@ fun SettingsSegmented(
     selected: String,
     compact: Boolean = true,
     accentSelection: Boolean = false,
+    testTag: String? = null,
     onSelect: (String) -> Unit,
 ) {
     Row(
         Modifier
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
             .then(if (compact) Modifier.fillMaxWidth() else Modifier)
             .background(LiveDesign.background.copy(alpha = 0.5f), ChromeShape)
             .border(1.dp, LiveDesign.hairline, ChromeShape)

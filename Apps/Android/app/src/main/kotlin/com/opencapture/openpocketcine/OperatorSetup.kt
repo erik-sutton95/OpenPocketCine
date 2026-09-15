@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,6 +132,14 @@ object SettingsHelpCopy {
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     const val JOYSTICK_SENSITIVITY =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    const val VIRTUAL_JOYSTICK_INVERT_PAN =
+        "Reverse left and right on the on-screen stick. Off is the default. A game controller is unchanged."
+    const val VIRTUAL_JOYSTICK_INVERT_TILT =
+        "Reverse up and down on the on-screen stick. Off is the default. A game controller is unchanged."
+    const val VIRTUAL_JOYSTICK_DEADZONE =
+        "Ignore small movements near the center. The default is 8%. Increase it to make the center less sensitive."
+    const val VIRTUAL_JOYSTICK_RESPONSE =
+        "Standard keeps the current feel. Linear responds evenly. Fine makes small movements gentler."
     const val GIMBAL_JOYSTICK =
         "Which analog stick pans and tilts. Left is the default. The other stick does not move the gimbal."
     const val GAMEPAD =
@@ -1327,6 +1336,65 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
         ) {
             operatorHaptic(view, model.hapticsEnabled)
             model.updateKeepScreenAwake(!model.keepScreenAwake)
+        }
+    }
+    if (model.monitorCapabilities(status).gimbal) {
+        SettingsRowCard(title = "On-screen joystick") {
+            SettingsSwitchInlineRow(
+                title = "Invert pan",
+                help = SettingsHelpCopy.VIRTUAL_JOYSTICK_INVERT_PAN,
+                showTopDivider = false,
+                isOn = model.virtualJoystickInvertPan,
+                testTag = "gimbal.virtual.invertPan",
+            ) {
+                operatorHaptic(view, model.hapticsEnabled)
+                model.updateVirtualJoystickInvertPan(!model.virtualJoystickInvertPan)
+            }
+            SettingsSwitchInlineRow(
+                title = "Invert tilt",
+                help = SettingsHelpCopy.VIRTUAL_JOYSTICK_INVERT_TILT,
+                isOn = model.virtualJoystickInvertTilt,
+                testTag = "gimbal.virtual.invertTilt",
+            ) {
+                operatorHaptic(view, model.hapticsEnabled)
+                model.updateVirtualJoystickInvertTilt(!model.virtualJoystickInvertTilt)
+            }
+            SettingsInlineRow(
+                title = "Dead zone",
+                help = SettingsHelpCopy.VIRTUAL_JOYSTICK_DEADZONE,
+                stacked = true,
+            ) {
+                Box(Modifier.testTag("gimbal.virtual.deadzone")) {
+                    SettingsPercentSlider(
+                        value = model.virtualJoystickDeadzonePercent,
+                        range = 0..25,
+                        onChange = { next ->
+                            if (next != model.virtualJoystickDeadzonePercent) {
+                                operatorHaptic(view, model.hapticsEnabled)
+                                model.updateVirtualJoystickDeadzonePercent(next)
+                            }
+                        },
+                    )
+                }
+            }
+            SettingsInlineRow(
+                title = "Response curve",
+                help = SettingsHelpCopy.VIRTUAL_JOYSTICK_RESPONSE,
+                stacked = true,
+            ) {
+                SettingsSegmented(
+                    options = CameraCommands.VirtualJoystickCurve.entries.map { it.label },
+                    selected = model.virtualJoystickResponseCurve.label,
+                    compact = true,
+                    testTag = "gimbal.virtual.response",
+                ) { label ->
+                    val next = CameraCommands.VirtualJoystickCurve.fromLabel(label)
+                    if (next != model.virtualJoystickResponseCurve) {
+                        operatorHaptic(view, model.hapticsEnabled)
+                        model.updateVirtualJoystickResponseCurve(next)
+                    }
+                }
+            }
         }
     }
 }

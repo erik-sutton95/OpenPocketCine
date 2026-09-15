@@ -250,7 +250,7 @@ class GimbalGamepadDriver {
             }
         } else {
             padActive = true
-            model.updateGimbalStick(x, y)
+            model.updateGimbalPadStick(x, y)
         }
         zoomY = GimbalGamepad.zoomAxisFrom(event)
         if (GimbalGamepad.isZoomRest(zoomY)) {

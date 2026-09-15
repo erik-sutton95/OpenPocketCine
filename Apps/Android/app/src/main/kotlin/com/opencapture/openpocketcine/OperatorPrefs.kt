@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import android.content.Context
+import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.lut.LutCatalog
@@ -205,6 +206,10 @@ object OperatorPrefs {
     private const val RECORD_CONFIRM = "OpenPocketCine.RecordConfirmation"
     private const val HAPTICS = "OpenPocketCine.HapticsEnabled"
     private const val GIMBAL = "OpenPocketCine.GimbalStickSensitivity"
+    private const val VIRTUAL_INVERT_PAN = "OpenPocketCine.VirtualJoystickInvertPan"
+    private const val VIRTUAL_INVERT_TILT = "OpenPocketCine.VirtualJoystickInvertTilt"
+    private const val VIRTUAL_DEADZONE_PERCENT = "OpenPocketCine.VirtualJoystickDeadzonePercent"
+    private const val VIRTUAL_RESPONSE_CURVE = "OpenPocketCine.VirtualJoystickResponseCurve"
     private const val GIMBAL_RAMP = "OpenPocketCine.GimbalRamp"
     private const val DISP_LIVE = "OpenPocketCine.DispChrome.Live"
     private const val DISP_CLEAN = "OpenPocketCine.DispChrome.Clean"
@@ -267,6 +272,57 @@ object OperatorPrefs {
     fun setGimbalStickSensitivity(context: Context, value: Int) {
         prefs(context).edit().putInt(GIMBAL, value.coerceIn(1, 5)).apply()
     }
+
+    fun virtualJoystickInvertPan(context: Context): Boolean =
+        prefs(context).getBoolean(VIRTUAL_INVERT_PAN, false)
+
+    fun setVirtualJoystickInvertPan(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(VIRTUAL_INVERT_PAN, value).apply()
+    }
+
+    fun virtualJoystickInvertTilt(context: Context): Boolean =
+        prefs(context).getBoolean(VIRTUAL_INVERT_TILT, false)
+
+    fun setVirtualJoystickInvertTilt(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(VIRTUAL_INVERT_TILT, value).apply()
+    }
+
+    fun virtualJoystickDeadzonePercent(context: Context): Int {
+        val stored = prefs(context)
+        val raw =
+            if (stored.contains(VIRTUAL_DEADZONE_PERCENT)) stored.getInt(VIRTUAL_DEADZONE_PERCENT, 8)
+            else null
+        return CameraCommands.VirtualJoystickMapping.resolvedDeadzonePercent(raw)
+    }
+
+    fun setVirtualJoystickDeadzonePercent(context: Context, value: Int) {
+        prefs(context).edit().putInt(
+            VIRTUAL_DEADZONE_PERCENT,
+            CameraCommands.VirtualJoystickMapping.clampedDeadzonePercent(value),
+        ).apply()
+    }
+
+    fun virtualJoystickResponseCurve(context: Context): CameraCommands.VirtualJoystickCurve =
+        CameraCommands.VirtualJoystickCurve.parse(
+            prefs(context).getString(VIRTUAL_RESPONSE_CURVE, null),
+        )
+
+    fun setVirtualJoystickResponseCurve(
+        context: Context,
+        value: CameraCommands.VirtualJoystickCurve,
+    ) {
+        prefs(context).edit().putString(VIRTUAL_RESPONSE_CURVE, value.raw).apply()
+    }
+
+    fun virtualJoystickMapping(context: Context): CameraCommands.VirtualJoystickMapping =
+        CameraCommands.VirtualJoystickMapping(
+            invertPan = virtualJoystickInvertPan(context),
+            invertTilt = virtualJoystickInvertTilt(context),
+            deadzone = CameraCommands.VirtualJoystickMapping.deadzoneFromPercent(
+                virtualJoystickDeadzonePercent(context),
+            ),
+            curve = virtualJoystickResponseCurve(context),
+        )
 
     fun gimbalRamp(context: Context): com.opencapture.openpocketcine.session.GimbalRamp =
         com.opencapture.openpocketcine.session.GimbalRamp.fromRaw(prefs(context).getInt(GIMBAL_RAMP, 0))
