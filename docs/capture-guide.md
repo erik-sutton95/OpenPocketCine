@@ -279,3 +279,29 @@ actual physical proof or pending platform exception. Remove temporary live-path
 probes. Run `just check` and the relevant native checks. Never add repeated
 `09/a8` enables to mask a decoder problem: the [watchdog](feed-watchdog.md) retains
 ownership of stream repair.
+
+## Automated Mimo mode surveys
+
+The [Pocket 4 Pro survey](../handbook/src/content/docs/protocol/pocket4-pro.md)
+used XCTest/WebDriverAgent with W3C viewport pointer actions, screenshots and
+RVI captures. Use one phone operator at a time; decoding closed takes can run
+separately. Keep the action journal and raw files in the ignored capture folder.
+
+In this session, querying the accessibility source while a Mimo popover was
+open dismissed it and produced misleading evidence that taps had failed.
+Screenshot-only observation preserved the menu. Direct W3C touch actions worked
+for rotated menus where the native drag route had not changed the setting.
+These are observed automation limitations, not guarantees about every Mimo build.
+
+Read coordinates from a fresh screenshot after layout changes. Selecting Auto
+ISO inserted an ISO-limit row and moved the shutter control. Wait for camera
+settings and image writes to settle before the next action. Verify the selected
+value, command reply and resulting status; never infer success from a script's
+intended-action label. Distinguish picker neighbors from the selected value.
+
+Close each take before decoding it. Record receiver, full payload, request and
+reply packet numbers, retry ambiguity, and independent status. Retain unknown
+bytes rather than assigning a meaning from timing alone. Export reviewed facts
+to the handbook and list remaining gaps; do not commit the raw worker report.
+Restore the camera's observed starting state and stop task-owned capture,
+forwarding and XCTest processes when finished.

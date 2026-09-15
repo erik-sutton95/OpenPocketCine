@@ -23,6 +23,21 @@ network endpoints. Where identical retransmissions prevent attribution to one
 individual request, the repeated payload, replies and resulting status are
 reported explicitly.
 
+### Capture inventory
+
+All four takes used automated XCTest/WebDriverAgent input in Mimo and an
+RVI network capture. Packet numbering restarts for each take.
+
+| Take | Recorded interval (UTC, 15 September 2026) | Coverage |
+| --- | --- | --- |
+| S01 | 08:51:00–09:10:59 | Slow Motion entry, six wide formats, 1080p/120 recording |
+| S02 | 09:13:53–09:26:37 | Slow Motion settings and 4K/240 recording |
+| P01 | 09:26:38–09:40:37 | Photo submodes, storage, timers, exposure and captures |
+| S03 | 09:41:32–09:43:10 | Slow Motion ISO limit, manual ISO and shutter endpoints |
+
+Action timestamps, screenshots and decoded request/reply records were compared;
+a gesture label alone was not accepted as proof that a setting changed.
+
 ## Slow Motion
 
 ### Mode and available formats
@@ -62,6 +77,10 @@ At entry, the camera initially reported `10 08 00 00 04 02 01 00 11 01` for
 Do not blindly copy a whole status payload into a SET or treat its initial
 trailing fields as the command layout.
 
+A subsequent S02 4K/240 write has a unique successful pair, **387971/388211**,
+with matching format status at **388437**. This supplements the retransmitted
+S01 selection above.
+
 ### Comparison with Pocket 3
 
 The [Pocket 3 survey](../pocket3/#shooting-modes-and-formats) confirms matching
@@ -99,6 +118,11 @@ Recording status independently became active at packet 471357 and inactive at
 473853. The recorded interval was about four seconds. Mimo displayed the timer
 and resulting thumbnail; original-file cadence and audio were not inspected.
 
+S01 also recorded about three seconds at 1080p/120. `02/02 [01]` was
+retransmitted in packets 687665 and 688036, with reply `00` at 688414;
+recording status became active at 688643. Stop `02/02 [00]` has a unique
+successful pair 690942/690954, followed by inactive status at 691191.
+
 The Slow Motion color capability contains only `3F 17`. Mimo offers **Normal
 10bit** and **D-Log 10bit** at both inspected 4K rates. Pocket 3's D-Log M / HLG
 choices and normal Video's D-Log2 must not be reused for this mode.
@@ -112,6 +136,16 @@ Stereo `02`; Vocal Boost parameter `004C` accepted `01` and `00` through
 `02/8E`. Wind, Audio Zoom and direction changes used **27-byte `02/9F` SETs**.
 These are combined settings blobs; do not send a shortened prefix or treat
 an observed byte change as a universal bit mask.
+
+The corresponding S02 parameter writes were:
+
+| Control | Complete command | Request / reply packets |
+| --- | --- | --- |
+| Vocal Boost on | `02/8E [01 01 4C 00 01 01]` | 425904 / 425919 |
+| Vocal Boost off | `02/8E [01 01 4C 00 01 00]` | 426543 / 426549 |
+| Mono | `02/8E [01 01 20 00 01 01]` | 444411 / 444427 |
+| Spatial Audio | `02/8E [01 01 20 00 01 03]` | 445662 / 445688 |
+| Stereo | `02/8E [01 01 20 00 01 02]` | 454107 / 454115 |
 
 The complete observed audio SETs are retained here as hex byte strings:
 
@@ -240,6 +274,24 @@ screenshot at its exact selection; value `06` corresponds to 3200 in the
 Slow Motion follow-up. Parameter `000F` uses a separate enum from manual ISO
 `02/2A`; for example, 25600 is limit value `09` but manual ISO value `0B`.
 
+Photo-specific successful pairs for the shared controls:
+
+| Control | Complete command | Request / reply packets |
+| --- | --- | --- |
+| Single AF | `02/24 [01]` | 154048 / 154061 |
+| Continuous AF | `02/24 [02]` | 155373 / 155398 |
+| Subject Lock | `02/8E [01 01 3B 00 02 01 02]` | 156882 / 156906 |
+| Registered Subject Priority | `02/8E [01 01 3B 00 02 01 03]` | 158165 / 158188 |
+| Default tracking | `02/8E [01 01 3B 00 02 01 00]` | 159488 / 159503 |
+| WB Custom 2000K | `02/2C [06 14 00 0F 00]` | 161968 / 161970 |
+| WB Custom 10000K | `02/2C [06 64 00 0F 00]` | 163365 / 163382 |
+| WB Auto | `02/2C [00 00 00 0F 00]` | 164337 / 164352 |
+| EV −3 | `02/2E [07]` | 191552 / 191572 |
+| EV +3 | `02/2E [19]` | 203601 / 203607 |
+| EV zero | `02/2E [10]` | 209613 / 209627 |
+| Manual exposure | `02/1E [04 00]` | 210260 / 210289 |
+| Auto exposure | `02/1E [01 00]` | 427410 / 427426 |
+
 Photo's shutter menu reached **1/16000–4 seconds**. The seven-byte SET begins
 with `01`; the next little-endian 16-bit word uses bit `8000` for reciprocal
 seconds, with the remaining bits holding the denominator. Direct whole seconds
@@ -247,6 +299,40 @@ omit that bit. Fractional samples `01 06 80 19 00 00 40` and
 `01 02 00 05 00 00 40` contain additional nonzero precision bytes; preserve
 those bytes rather than rounding or discarding them. Their exact fractional
 interpretation was not independently qualified here.
+
+Additional accepted P01 shutter samples:
+
+| Control | Complete command | Request / reply packets |
+| --- | --- | --- |
+| 1/4000 | `02/28 [01 A0 8F 00 00 00 40]` | 395005 / 395009 |
+| 1/1600 | `02/28 [01 40 86 00 00 00 40]` | 396037 / 396042 |
+| 1/640 | `02/28 [01 80 82 00 00 00 40]` | 397151 / 397153 |
+| 1/240 | `02/28 [01 F0 80 00 00 00 40]` | 413221 / 413222 |
+| 1/100 | `02/28 [01 64 80 00 00 00 40]` | 414311 / 414314 |
+| 1/40 | `02/28 [01 28 80 00 00 00 40]` | 415365 / 415369 |
+| 1/15 | `02/28 [01 0F 80 00 00 00 40]` | 416357 / 416359 |
+| Fractional reciprocal; precision retained | `02/28 [01 06 80 19 00 00 40]` | 417381 / 417384 |
+| Fractional direct seconds; precision retained | `02/28 [01 02 00 05 00 00 40]` | 419281 / 419285 |
+
+## Application follow-up
+
+The survey establishes Mimo behavior. It does not mark these controls as
+implemented or physically verified in OpenPocketCine. Before completing the
+shooting-mode UI on both shells:
+
+- Add frame-rate index `13` and the verified Pocket 4 Pro Slow Motion trailers,
+  while retaining current-mode capability filtering.
+- Represent Standard/SuperPhoto separately from shooting mode `17`, and Live
+  Photo as `4D`. Select the shutter command from the confirmed submode.
+- Add the tested aspect ratios, storage choices and six-byte timer values;
+  allow countdown cancellation. Standard non-Live shutter still needs a take.
+- Apply mode-specific color and exposure choices. Keep ISO-limit values
+  separate from the manual ISO enum.
+- Revalidate the selected mode/submode after camera-side changes or pending
+  confirmation, and prove resulting controls on real devices.
+
+Regular Pocket 4 compatibility remains an assumption requiring qualification;
+the Pocket 3 and Pocket 4 Pro captures already demonstrate differences.
 
 ## Coverage limits
 
