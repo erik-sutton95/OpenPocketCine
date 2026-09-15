@@ -383,8 +383,8 @@ fun MediaPlaybackScrubber(
     val widthPx = remember { mutableFloatStateOf(1f) }
     val dragProgress = remember { mutableFloatStateOf(-1f) }
     val density = LocalDensity.current
-    val trackHeight = with(density) { 3.dp.toPx() }
-    val thumbSize = with(density) { 12.dp.toPx() }
+    val trackHeight = with(density) { 4.dp.toPx() }
+    val thumbSize = with(density) { 13.dp.toPx() }
     val hairline = LiveDesign.hairline
     val accent = LiveDesign.accent
     val display = if (dragProgress.floatValue >= 0f) dragProgress.floatValue else progressSeconds
@@ -398,7 +398,7 @@ fun MediaPlaybackScrubber(
     Canvas(
         modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(22.dp)
             .semantics {
                 contentDescription = "Playback position"
                 progressBarRangeInfo = ProgressBarRangeInfo(display.coerceIn(0f, duration), 0f..duration)
@@ -465,7 +465,7 @@ fun MediaPlaybackScrubber(
             cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f),
         )
         val thumbX = (size.width * fraction).coerceIn(0f, size.width)
-        drawCircle(color = accent, radius = thumbSize / 2f, center = Offset(thumbX, cy))
+        drawCircle(color = Color.White, radius = thumbSize / 2f, center = Offset(thumbX, cy))
     }
 }
 

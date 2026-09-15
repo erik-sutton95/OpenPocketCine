@@ -26,6 +26,9 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
@@ -313,17 +316,18 @@ fun LiveViewScreen(model: AppModel) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(if (useVulkan) Color.Transparent else LiveDesign.background),
+            .background(if (useVulkan) Color.Transparent else LiveDesign.background)
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
         val density = LocalDensity.current
         val layoutDir = LocalLayoutDirection.current
         val cutout = WindowInsets.displayCutout
-        val barInsets = LocalImmersiveBarInsets.current
         val portrait = maxHeight > maxWidth
         val chromeScale =
             monitorChromeScale(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
         LiveChromeMetrics.scale = chromeScale
-        // Live safe area: punch-hole cutout plus applied system-bar lanes.
+        // Navigation is consumed by the outer viewport. Only cutouts and a
+        // temporarily revealed status bar remain inside the live safe area.
         // Landscape leading is floored at the iPhone island lane so the 16:9
         // feed sits right of lock/battery (OpenZCine `monitorLeadingInsetDp`).
         // Trailing gets no floor; `feedFrame` yields a RAIL_W lane so the
@@ -331,14 +335,11 @@ fun LiveViewScreen(model: AppModel) {
         fun edgeDp(cutoutPx: Int, barPx: Int): Float =
             with(density) { maxOf(cutoutPx, barPx).toDp().value }
         val safeTop by animateFloatAsState(
-            edgeDp(cutout.getTop(density), barInsets.top),
+            edgeDp(cutout.getTop(density), WindowInsets.systemBars.getTop(density)),
             label = "safeTop",
         )
         val safeBottom by animateFloatAsState(
-            monitorBottomInsetDp(
-                rawInsetDp = edgeDp(cutout.getBottom(density), barInsets.bottom),
-                isPortrait = portrait,
-            ),
+            edgeDp(cutout.getBottom(density), 0),
             label = "safeBottom",
         )
         val safeLeading by animateFloatAsState(
@@ -349,7 +350,7 @@ fun LiveViewScreen(model: AppModel) {
                 } else {
                     monitorLeadingInsetDp(
                         cutoutDp = cutoutDp,
-                        transientBarDp = barInsets.left.toDp().value,
+                        transientBarDp = 0f,
                         chromeScale = chromeScale,
                     )
                 }
@@ -357,17 +358,7 @@ fun LiveViewScreen(model: AppModel) {
             label = "safeLeading",
         )
         val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }
-        val navLane by animateFloatAsState(
-            if (portrait) {
-                0f
-            } else {
-                with(density) {
-                    maxOf(0, barInsets.right - cutout.getRight(this, layoutDir)).toDp().value
-                }
-            },
-            label = "navLane",
-        )
-        val vw = maxWidth.value - navLane
+        val vw = maxWidth.value
         val vh = maxHeight.value
         val fill =
             if (verticalPicture) true else model.portraitFeedAspect == PortraitFeedAspect.FILL

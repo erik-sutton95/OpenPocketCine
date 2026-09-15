@@ -16,7 +16,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -79,13 +78,6 @@ class MainActivity : ComponentActivity() {
     private val composeFirstFrameDrawn = AtomicBoolean(false)
     private lateinit var model: AppModel
 
-    /**
-     * Only the live monitor hides the system bars. Setup and pairing keep them so
-     * their chrome gets a real status-bar inset instead of drawing under the clock.
-     * [onWindowFocusChanged] reasserts whichever mode the current screen asked for.
-     */
-    @Volatile var wantsImmersive = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition { !composeFirstFrameDrawn.get() }
@@ -113,7 +105,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus) return
-        if (wantsImmersive) applyImmersiveSystemBars(window) else showSystemBars(window)
+        applyMonitorSystemBars(window)
     }
 
     override fun onPause() {
@@ -196,19 +188,10 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
-    // Only the monitor itself runs immersive. Media library and settings open as
-    // full-screen panels *over* live, and they are ordinary chrome: their
-    // statusBarsPadding() measures zero while the bars are hidden, so the header
-    // rides under the clock. Bring the bars back for as long as a panel is up.
-    val immersive = showLive && model.liveOperatorPanel == null
-
-    LaunchedEffect(activity, immersive) {
-        val window = activity?.window ?: return@LaunchedEffect
-        (activity as? MainActivity)?.wantsImmersive = immersive
-        if (immersive) applyImmersiveSystemBars(window) else showSystemBars(window)
+    LaunchedEffect(activity) {
+        activity?.window?.let(::applyMonitorSystemBars)
     }
 
-    ImmersiveSystemBarCycle(enabled = immersive) {
     Box(Modifier.fillMaxSize().startupBackdrop()) {
         if (showLive) {
             LiveViewScreen(model)
@@ -241,7 +224,6 @@ private fun OpenPocketCineApp(model: AppModel) {
             )
         }
     }
-    }
 }
 
 private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
@@ -261,11 +243,6 @@ private fun LinkExperience(
     val configuration = LocalConfiguration.current
     val camerasHome = !model.shouldShowWizard
     val landscapeHome = configuration.screenWidthDp > configuration.screenHeightDp
-    val bar = LocalImmersiveBarInsets.current
-    val barStart by animateDpAsState(with(density) { bar.left.toDp() }, label = "barStart")
-    val barTop by animateDpAsState(with(density) { bar.top.toDp() }, label = "barTop")
-    val barEnd by animateDpAsState(with(density) { bar.right.toDp() }, label = "barEnd")
-    val barBottom by animateDpAsState(with(density) { bar.bottom.toDp() }, label = "barBottom")
     val homeSide = with(density) {
         val leading = WindowInsets.safeDrawing.getLeft(this, layoutDir).toDp()
         val trailing = WindowInsets.safeDrawing.getRight(this, layoutDir).toDp()
@@ -276,9 +253,6 @@ private fun LinkExperience(
     Column(
         Modifier
             .fillMaxSize()
-            // Two insets, and they never both apply. Setup keeps the bars up, so safeDrawing
-            // carries the real status-bar height; the monitor hides them, so safeDrawing is
-            // empty there and the transient swipe-reveal lanes below do the work instead.
             // Cameras landscape mirrors the larger cutout onto both sides so the list stays
             // centered; pairing and live chrome keep their own edges.
             .then(
@@ -290,7 +264,7 @@ private fun LinkExperience(
                     Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
                 },
             )
-            .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
+            .padding(vertical = 16.dp),
     ) {
         Box(Modifier.weight(1f).padding(
             start = if (model.shouldShowWizard) 14.dp else 18.dp,

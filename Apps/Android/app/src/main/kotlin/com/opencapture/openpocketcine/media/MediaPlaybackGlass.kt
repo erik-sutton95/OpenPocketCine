@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,7 @@ fun BoxScope.PlaybackDarkenedBars(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(PlaybackChromeMetrics.topScrimDp.dp)
+                .clipToBounds()
                 .background(
                     Brush.verticalGradient(
                         listOf(LiveDesign.playbackScrim, Color.Transparent),
@@ -66,6 +68,7 @@ fun BoxScope.PlaybackDarkenedBars(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(PlaybackChromeMetrics.bottomScrimDp.dp)
+                .clipToBounds()
                 .background(
                     Brush.verticalGradient(
                         listOf(Color.Transparent, LiveDesign.playbackScrim),

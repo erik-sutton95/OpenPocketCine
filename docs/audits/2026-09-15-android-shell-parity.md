@@ -118,3 +118,34 @@ native window position and allowing input/window publication delay. Five palette
 cases pass, including compact touch footprint, landscape, tap and cancel/lock.
 Four capture-input cases also pass, including Record hold versus tap and lock.
 No app data was cleared during these follow-up checks.
+
+## Follow-up: playback and Android system bars
+
+Android keeps the phone's configured system navigation visible and hides the
+status bar on home, live, settings, media and playback. Full-screen delivery uses
+the same policy. Native insets replace the custom swipe/reveal timer, so opening
+an operator panel does not change the live composition slot. Live reserves the
+navigation area before placing controls, including reverse landscape where
+Android puts its buttons on the left.
+
+Shooting-mode placement remains the iOS baseline: portrait REC SETUP → Mode,
+Photo's top mode readout, a separate mode readout on wide landscape, and holding
+Record or Photo shutter. No additional Android-only mode button was added.
+
+Video playback now uses the iOS header action order and source badge below
+metadata, three plain transport icons for ±15-second seeking and play/pause,
+a low timeline, and trailing landscape options. A production footer calculation
+keeps transport and options disjoint at narrow widths; a regression checks
+370–860 dp and centering on wider screens. Clip arrows remain at the picture
+edges. The info inspector retains its trailing position with rounded margins.
+Photo review matches the iOS filename/actions header and bottom Favorite button.
+
+Physical Galaxy S25 checks cover photo/video portrait and both landscape
+layouts, header/transport placement, Info and Share dismissal, system Back to
+Media/live, and status-hidden/navigation-visible window state. Reverse-landscape
+checks caught and fixed navigation overlap at the live Lock/assist rail and the
+playback assist slot. Comparison used the iOS simulator captures and current
+SwiftUI layout source; native material rendering and different device safe areas
+remain platform-specific. The final playback pass also matches iOS header/footer
+scrims and the 22 dp scrubber with a white thumb. App data was preserved with
+replacement installs; no media was deleted and no camera capture was triggered.

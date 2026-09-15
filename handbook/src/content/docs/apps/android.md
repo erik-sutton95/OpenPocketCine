@@ -27,12 +27,16 @@ Lock matches the Settings and Media button size.
 The live signal indicator uses the Link Health colors from Settings: red for
 Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 
-The native UI uses Sora typography, cyan controls and dark panels. Portrait
+The native UI uses Sora typography, cyan controls and dark panels.
+The Android status bar stays hidden. System Home, Back and Recents remain available
+when your phone uses button navigation; gesture navigation follows your phone settings.
+Controls leave room for the navigation bar and camera cutout. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
 format, color and shooting options from the top of the monitor. Portrait keeps
 Format / Color / Mode tabs on the details drawer; landscape has no extra
-category row, and shooting mode is its own top control (not FORMAT). ISO,
+category row. As on iOS, wide landscape shows the shooting mode in the top row;
+narrow landscape uses the Record hold shortcut. Photo shows its mode in the top row. ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
 shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
@@ -64,6 +68,11 @@ LUT exposure and split comparison remain pinned below the scrolling catalog.
 The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
 Playback uses that same live-view slot.
+Video playback places its filename, metadata and source label above Favorite,
+Info, Share and Delete (when available). The timeline sits above Back 15 seconds,
+Play/Pause and Forward 15 seconds; landscape places the other playback options
+in that same row. Side arrows change clips. Photo review keeps Share/Delete at
+the top and Favorite at the bottom, matching iOS.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions

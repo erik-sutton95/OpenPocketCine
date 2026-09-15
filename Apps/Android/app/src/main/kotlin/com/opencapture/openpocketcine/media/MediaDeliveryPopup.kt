@@ -209,10 +209,7 @@ fun MediaDeliveryPopup(
         val window = (dialogView.parent as? DialogWindowProvider)?.window
         window?.setDimAmount(0f)
         window?.let {
-            androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).apply {
-                hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
+            com.opencapture.openpocketcine.applyMonitorSystemBars(it)
         }
         onDispose { }
     }
