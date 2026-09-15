@@ -78,6 +78,50 @@ final class CaptureListTests: XCTestCase {
             CaptureLists.isoDrumLabels(from: rec709), CaptureLists.isoDrumLabels(from: dlog2))
     }
 
+    func testPhotoDoesNotInheritVideoIsoStars() {
+        var status = CameraStatus()
+        status.colorMode = .dLog2
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        XCTAssertEqual(CaptureLists.isoMarkedLabels(from: status), ["1600"])
+        status.shootingMode = Int(ShootingMode.photo.rawValue)
+        XCTAssertTrue(CaptureLists.isoMarkedLabels(from: status).isEmpty)
+        status.shootingMode = Int(ShootingMode.livePhoto.rawValue)
+        XCTAssertTrue(status.isPhoto)
+        XCTAssertTrue(CaptureLists.isoMarkedLabels(from: status).isEmpty)
+        XCTAssertEqual(CaptureLists.recordingCategories(isPhoto: true), [.mode])
+        XCTAssertEqual(
+            CaptureLists.recordingCategories(isPhoto: false), [.resolution, .color, .mode])
+        XCTAssertFalse(
+            CaptureLists.operatorShootingModes().contains(.livePhoto),
+            "Live Photo is camera-reported stills, not an unqualified MODE SET")
+        var live = CameraStatus()
+        live.shootingMode = Int(ShootingMode.livePhoto.rawValue)
+        XCTAssertEqual(
+            CaptureLists.operatorShootingModes(from: live).last { $0 == .livePhoto },
+            .livePhoto)
+        var leftover = CameraStatus()
+        leftover.colorMode = .dLog2
+        leftover.shootingMode = Int(ShootingMode.photo.rawValue)
+        leftover.availableIsoIndices = [.auto, .iso100, .iso200, .iso400]
+        leftover.isoLimit = .max1600
+        XCTAssertTrue(CaptureLists.offersIsoAuto(from: leftover))
+        XCTAssertEqual(
+            CaptureLists.isoAutoLabels(from: leftover).first, "100–200",
+            "Photo Auto ISO must not inherit leftover D-Log2")
+        XCTAssertEqual(CaptureLists.isoAutoLabel(from: leftover), "100–1600")
+        leftover.availableIsoIndices = []
+        leftover.isoIndex = .iso400
+        XCTAssertTrue(
+            CaptureLists.offersIsoAuto(from: leftover),
+            "Empty Photo camcap keeps Normal Auto fallback, including Pocket 3")
+        XCTAssertEqual(CaptureLists.isoIndices(from: leftover), ColorMode.normal.isoIndices)
+        leftover.colorMode = .dLog
+        leftover.availableIsoIndices = [.auto, .iso400]
+        XCTAssertEqual(
+            CaptureLists.isoLimit(from: "100–800", status: leftover), .max800,
+            "Photo ISO-limit labels ignore leftover D-Log 400-base")
+    }
+
     func testIsoStarFollowsStatusTransferNotTeleHopGuess() {
         var status = CameraStatus()
         status.colorMode = .dLog2

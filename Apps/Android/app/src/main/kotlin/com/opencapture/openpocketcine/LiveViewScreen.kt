@@ -159,6 +159,14 @@ fun LiveViewScreen(model: AppModel) {
         assist.clean = model.assistClean
         if (model.assistClean || model.chromeEditorMode != null) assist.configureTool = null
     }
+    LaunchedEffect(status.shootingMode) {
+        sheet = CaptureShutterPolicy.retainedSheet(sheet, status.shootingMode)
+        if (!CaptureShutterPolicy.showsAudioControls(status.shootingMode) &&
+            assist.configureTool == LiveAssistTool.AUDIO
+        ) {
+            assist.configureTool = null
+        }
+    }
     LaunchedEffect(
         sheet,
         model.session.connectedCamera?.model?.supportsFocusMode,
@@ -616,6 +624,7 @@ fun LiveViewScreen(model: AppModel) {
                     audioPlacementFrame = scopePlacement.copy(x = layout.safeLeading,
                         width = maxOf(0f, scopePlacement.maxX - layout.safeLeading)),
                     pictureMirrored = liveViewFlip,
+                    showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame
                         assist.configureTool = tool
@@ -1284,7 +1293,12 @@ internal fun LandscapeChrome(
                     active = sheet,
                     showStorageDuration = showStorageDuration,
                     onToggleStorage = onToggleStorage,
-                    onOpen = { if (!uiLocked && hits) onSheet(if (sheet == it) null else it) },
+                    onOpen = {
+                        if (!uiLocked && hits) {
+                            val next = CaptureShutterPolicy.opening(it, status.shootingMode)
+                            onSheet(if (sheet == next) null else next)
+                        }
+                    },
                     maxWidth = layout.topDeck.width,
                     readoutTrailingInset = com.opencapture.monitorui.MonitorLayoutPolicy.recordingReadoutTrailingInset(
                         layout.topDeck.maxX, layout.picture.maxX),
@@ -1435,6 +1449,7 @@ internal fun LandscapeChrome(
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
+                    showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
                 )
             }
         }
@@ -1449,7 +1464,10 @@ internal fun LandscapeChrome(
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
-                    onOpen = { onSheet(if (sheet == it) null else it) }, onTileFrame = onTileFrame)
+                    onOpen = {
+                        val next = CaptureShutterPolicy.opening(it, status.shootingMode)
+                        onSheet(if (sheet == next) null else next)
+                    }, onTileFrame = onTileFrame)
             }
         }
     }
@@ -1486,7 +1504,7 @@ private fun LiveTopDeck(
     fun Modifier.topCapture(sheet: LiveSheet): Modifier = monitorReadoutGesture(
         captureQuickControl(sheet, status, model, context, quickLifetime),
         interactive && quickLifetime.active && (gestureOwner.owner == null || gestureOwner.owner == sheet.name),
-        { onOpen(sheet) },
+        { onOpen(CaptureShutterPolicy.opening(sheet, status.shootingMode)) },
         { source, value ->
             releaseCaptureQuickControl(sheet, source, value, model, context, quickLifetime, interactive)
         },
@@ -1525,11 +1543,15 @@ private fun LiveTopDeck(
                     style = LiveType.mono(15f, FontWeight.SemiBold).monitorReadoutGlow(), maxLines = 1)
             }
         }
-        if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
+        if (model.chromeSectionMounts(PocketDispSection.FORMAT) &&
+            !CameraCommands.isPhotoMode(status.shootingMode)
+        ) {
             Text(CaptureLists.recFormatChipLabel(status), style = LiveType.mono(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = chipMod(PocketDispSection.FORMAT, LiveSheet.FORMAT).topCapture(LiveSheet.FORMAT))
         }
-        if (model.chromeSectionMounts(PocketDispSection.COLOR)) {
+        if (model.chromeSectionMounts(PocketDispSection.COLOR) &&
+            CaptureShutterPolicy.showsColorReadout(status.shootingMode)
+        ) {
             Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR).topCapture(LiveSheet.COLOR))
         }
@@ -1542,10 +1564,14 @@ private fun LiveTopDeck(
         androidx.compose.foundation.layout.Row(Modifier.padding(end = readoutTrailingInset.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
-        if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
+        if (CaptureShutterPolicy.showsVideoTransport(status.shootingMode) &&
+            model.chromeSectionMounts(PocketDispSection.REC_READOUT)
+        ) {
             Box(chipMod(PocketDispSection.REC_READOUT)) { RecChip(status.isRecording, status.recordElapsedSec) }
         }
-        if (showsTimecode && model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
+        if (CaptureShutterPolicy.showsVideoTransport(status.shootingMode) &&
+            showsTimecode && model.chromeSectionMounts(PocketDispSection.TIMECODE)
+        ) {
             Box(chipMod(PocketDispSection.TIMECODE)) { TimecodeReadout(status.timecode) }
         }
         }

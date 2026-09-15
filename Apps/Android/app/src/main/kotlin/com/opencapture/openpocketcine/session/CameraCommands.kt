@@ -209,8 +209,10 @@ object CameraCommands {
      */
     fun slowMoFormatTrailer(fpsIndex: Int): ByteArray? =
         when (fpsIndex) {
-            VideoFrameRate.FPS100.rawValue, VideoFrameRate.FPS120.rawValue ->
-                byteArrayOf(0x00, 0x04, 0x00)
+            VideoFrameRate.FPS100.rawValue,
+            VideoFrameRate.FPS120.rawValue,
+            VideoFrameRate.FPS200.rawValue,
+            -> byteArrayOf(0x00, 0x04, 0x00)
             VideoFrameRate.FPS240.rawValue -> byteArrayOf(0x00, 0x08, 0x00)
             else -> null
         }
@@ -227,9 +229,9 @@ object CameraCommands {
     }
 
     /**
-     * JNI extra for video-format SET. Third field is shooting-mode raw, and only
-     * Pocket 3 SlowMo includes it so the facade can emit 4X/8X trailers. Other
-     * bodies omit it and keep the Video `00 00 00` trailer.
+     * JNI extra for video-format SET. Third field is shooting-mode raw for
+     * Pocket 3 and Pocket 4 Pro SlowMo so the facade can emit 4X/8X trailers
+     * (200 fps still uses `00 04 00`). Regular Pocket 4 omits it.
      */
     fun formatCommandExtra(
         res: Int,
@@ -237,7 +239,9 @@ object CameraCommands {
         shootingMode: Int = SHOOT_VIDEO,
         cameraName: String? = null,
     ): String {
-        if (shootingMode == SHOOT_SLOWMO && CameraModel.looksLikePocket3(cameraName.orEmpty())) {
+        if (shootingMode == SHOOT_SLOWMO &&
+            CameraModel.supportsSlowMoFormatTrailer(cameraName.orEmpty())
+        ) {
             return "$res\u001f$fpsIndex\u001f$shootingMode"
         }
         return "$res\u001f$fpsIndex"
@@ -377,10 +381,14 @@ object CameraCommands {
     const val SHOOT_HYPERLAPSE = 0x0A
     const val SHOOT_PHOTO_POCKET4 = 0x17
     const val SHOOT_SUPER_NIGHT = 0x28
+    /** Pocket 4 Pro Live Photo, physically observed in Mimo. */
+    const val SHOOT_LIVE_PHOTO = 0x4D
 
-    /** Still capture: Photo `0x05` / Pocket 4 `0x17` only. SuperNight `0x28` is video. */
+    /** Still capture: Photo `0x05` / Pocket 4 `0x17` / Live Photo `0x4D`. SuperNight `0x28` is video. */
     fun isPhotoMode(shootingMode: Int): Boolean =
-        shootingMode == SHOOT_PHOTO || shootingMode == SHOOT_PHOTO_POCKET4
+        shootingMode == SHOOT_PHOTO ||
+            shootingMode == SHOOT_PHOTO_POCKET4 ||
+            shootingMode == SHOOT_LIVE_PHOTO
 
     /**
      * Label for a tabled `0x02/0xE1` value, or null when the camera reports one we do not know.
@@ -393,6 +401,7 @@ object CameraCommands {
             SHOOT_VIDEO -> "Video"
             SHOOT_TIMELAPSE -> "TimeLapse"
             SHOOT_PHOTO, SHOOT_PHOTO_POCKET4 -> "Photo"
+            SHOOT_LIVE_PHOTO -> "Live Photo"
             SHOOT_HYPERLAPSE -> "HyperLapse"
             SHOOT_SUPER_NIGHT ->
                 if (CameraModel.looksLikePocket3(cameraName.orEmpty())) "Low-Light" else "SuperNight"
@@ -757,21 +766,7 @@ object CameraCommands {
      * including SlowMo 100/120/240. FORMAT SET still only writes a pair
      * the body advertised (or Video 24–60 when camcap is empty).
      */
-    fun fpsFromSubscribeIndex(index: Int): Int? =
-        when (index) {
-            1 -> 24
-            2 -> 25
-            3 -> 30
-            4 -> 48
-            5 -> 50
-            6 -> 60
-            7 -> 120
-            8 -> 240
-            10 -> 100
-            11 -> 96
-            29 -> 15
-            else -> null
-        }
+    fun fpsFromSubscribeIndex(index: Int): Int? = VideoFrameRate.fps(index)
 
     fun resolutionLabel(code: Int): String = VideoResolution.fromRaw(code)?.label ?: "—"
 

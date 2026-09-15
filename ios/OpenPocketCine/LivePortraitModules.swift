@@ -71,12 +71,18 @@ struct LivePortraitRecOptionsButton: View {
 
     private var recOptionsMenu: some View {
         VStack(alignment: .leading, spacing: 0) {
-            menuItem(title: "Resolution · Framerate") {
-                model.captureSheet = .resolution
-            }
-            Divider().overlay(LiveDesign.hairline)
-            menuItem(title: "Color") {
-                model.captureSheet = .color
+            if model.session.status.isPhoto {
+                menuItem(title: "Shooting mode") {
+                    model.captureSheet = .mode
+                }
+            } else {
+                menuItem(title: "Resolution · Framerate") {
+                    model.captureSheet = .resolution
+                }
+                Divider().overlay(LiveDesign.hairline)
+                menuItem(title: "Color") {
+                    model.captureSheet = .color
+                }
             }
         }
         .frame(width: 220)
@@ -187,12 +193,14 @@ struct LivePortraitAssistRail: View {
                             onPresent: presentOptions
                         )
                     }
-                    AssistBarButton(
-                        tool: .audioMeters,
-                        assist: model.assist,
-                        isLocked: isLocked,
-                        onPresent: presentOptions
-                    )
+                    if !model.session.status.isPhoto {
+                        AssistBarButton(
+                            tool: .audioMeters,
+                            assist: model.assist,
+                            isLocked: isLocked,
+                            onPresent: presentOptions
+                        )
+                    }
                 }
                 .padding(.vertical, 4)
             }

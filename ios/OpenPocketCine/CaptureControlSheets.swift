@@ -212,6 +212,7 @@ struct CapturePickerPanel: View {
                     }
                     if !modeTabs.isEmpty { modeBar }
                     if let onSelectRecordingCategory,
+                        recordingCategories.count > 1,
                         MonitorCapturePopupChrome.showsRecordingCategoryTabs(
                             portrait: showsRecordingCategories, kind: .details)
                     {
@@ -313,11 +314,10 @@ struct CapturePickerPanel: View {
             seed()
         }
         .onChange(of: isPhoto) { _, photo in
-            guard photo else { return }
-            if sheet == .resolution, let onSelectRecordingCategory {
+            if photo, sheet == .resolution || sheet == .color, let onSelectRecordingCategory {
                 onSelectRecordingCategory(.mode)
             }
-            if sheet == .shutter, !isEvSheet {
+            if photo, sheet == .shutter, !isEvSheet {
                 selectedMode = 0
                 reseatShutterOrEv()
             }
@@ -390,14 +390,17 @@ struct CapturePickerPanel: View {
             audioBody
         case .mode:
             choiceDrum(
-                ShootingMode.allCases.map { $0.label(for: connectedBody) },
+                CaptureLists.operatorShootingModes(from: model.session.status, model: connectedBody)
+                    .map { $0.label(for: connectedBody) },
                 selected: model.session.currentShootingMode?.label(for: connectedBody),
                 isInteractive: !model.session.status.isRecording
             ) { label in
                 guard !model.session.status.isRecording else { return }
-                if let mode = ShootingMode.allCases.first(where: {
+                if let mode = CaptureLists.operatorShootingModes(
+                    from: model.session.status, model: connectedBody
+                ).first(where: {
                     $0.label(for: connectedBody) == label
-                }) {
+                }), mode != .livePhoto {
                     model.session.setShootingMode(mode)
                 }
             }
@@ -568,7 +571,7 @@ struct CapturePickerPanel: View {
     private var isPhoto: Bool { model.session.status.isPhoto }
 
     private var recordingCategories: [CaptureSheet] {
-        isPhoto ? [.color, .mode] : [.resolution, .color, .mode]
+        CaptureLists.recordingCategories(isPhoto: isPhoto)
     }
 
     private var modeTabs: [String] {
@@ -652,7 +655,7 @@ struct CapturePickerPanel: View {
         case .iso:
             reseatIso()
             guard preview == nil,
-                IsoLimit.shouldGet(colorMode: model.session.status.colorMode)
+                CaptureLists.shouldGetIsoLimit(from: model.session.status)
             else { return }
             Task {
                 await model.session.refreshIsoLimit()
@@ -1110,6 +1113,25 @@ extension EnvironmentValues {
 }
 
 enum CaptureLists {
+    /// Operator MODE drum. Live Photo is current-only when the camera reports `4D`;
+    /// it is never offered as a new SET on other modes or bodies.
+    static func operatorShootingModes(
+        from status: CameraStatus = CameraStatus(), model: CameraModel? = nil
+    ) -> [ShootingMode] {
+        ShootingMode.allCases.filter {
+            $0 != .livePhoto || ShootingMode.fromStatus(status.shootingMode) == .livePhoto
+        }
+    }
+
+    static func recordingCategories(isPhoto: Bool) -> [CaptureSheet] {
+        isPhoto ? [.mode] : [.resolution, .color, .mode]
+    }
+
+    /// Photo must not reuse leftover Video color for Auto ISO / fallback wheels.
+    static func isoPresentationColor(from status: CameraStatus) -> ColorMode {
+        status.isPhoto ? .normal : (status.colorMode ?? .normal)
+    }
+
     static func shutterDenoms(from status: CameraStatus) -> [Int] {
         CamCapShutter.wheelDenoms(
             available: status.availableShutterDenoms, current: status.shutterDenom)
@@ -1122,7 +1144,7 @@ enum CaptureLists {
     static func isoIndices(from status: CameraStatus) -> [IsoIndex] {
         CamCapIso.wheelIndices(
             available: status.availableIsoIndices,
-            fallback: (status.colorMode ?? .normal).isoIndices
+            fallback: isoPresentationColor(from: status).isoIndices
         )
     }
 
@@ -1131,15 +1153,15 @@ enum CaptureLists {
     }
 
     static func offersIsoAuto(from status: CameraStatus) -> Bool {
-        (status.colorMode ?? .normal).offersIsoAuto
+        isoPresentationColor(from: status).offersIsoAuto
     }
 
     static func isoAutoLabels(from status: CameraStatus, model: CameraModel? = nil) -> [String] {
-        (status.colorMode ?? .normal).isoAutoLabels(for: model)
+        isoPresentationColor(from: status).isoAutoLabels(for: model)
     }
 
     static func isoAutoLabel(from status: CameraStatus, model: CameraModel? = nil) -> String {
-        guard let base = (status.colorMode ?? .normal).isoAutoBase(for: model),
+        guard let base = isoPresentationColor(from: status).isoAutoBase(for: model),
             let limit = status.isoLimit
         else { return "" }
         return limit.label(base: base)
@@ -1148,16 +1170,22 @@ enum CaptureLists {
     static func isoLimit(from label: String, status: CameraStatus, model: CameraModel? = nil)
         -> IsoLimit?
     {
-        let color = status.colorMode ?? .normal
+        let color = isoPresentationColor(from: status)
         guard let base = color.isoAutoBase(for: model) else { return nil }
         return color.isoAutoLimits.first { $0.label(base: base) == label }
+    }
+
+    static func shouldGetIsoLimit(from status: CameraStatus) -> Bool {
+        IsoLimit.shouldGet(colorMode: isoPresentationColor(from: status))
     }
 
     static let evLabels = EvComp.allCases.map(\.label)
 
     /// Star markers only. List stays `camcap_iso`; transfer is `status.monitorTransfer`.
+    /// Photo must not inherit video D-Log / D-Log2 native-ISO stars from leftover color.
     static func isoMarkedLabels(from status: CameraStatus) -> Set<String> {
-        CamCapIso.markedLabels(transfer: status.monitorTransfer)
+        if status.isPhoto { return [] }
+        return CamCapIso.markedLabels(transfer: status.monitorTransfer)
     }
 
     static func focusOption(from status: CameraStatus) -> FocusOption? {

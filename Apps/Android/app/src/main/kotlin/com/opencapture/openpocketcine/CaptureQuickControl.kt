@@ -50,7 +50,10 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
                 context = "${status.wbMode}:${CaptureLists.currentKelvin(status)}:${CaptureLists.currentTint(status)}"))
         LiveSheet.FOCUS -> chrome(captureQuickFocusControl(status))
         LiveSheet.EXPO -> chrome(MonitorQuickControl(CaptureLists.expoLabels, CaptureLists.expoLabel(status.expoMode)))
-        LiveSheet.AUDIO -> chrome(MonitorQuickControl(CaptureLists.audioChannelLabels, CaptureLists.audioChannelLabel(status.audioChannel).orEmpty()))
+        LiveSheet.AUDIO -> {
+            if (CameraCommands.isPhotoMode(status.shootingMode)) null
+            else chrome(MonitorQuickControl(CaptureLists.audioChannelLabels, CaptureLists.audioChannelLabel(status.audioChannel).orEmpty()))
+        }
         LiveSheet.FORMAT, LiveSheet.COLOR, LiveSheet.MODE -> {
             val family = model.session.connectedCamera?.model?.family ?: "pocket"
             recordingCategoryQuickControl(sheet, status, body, family)?.let(::chrome)
@@ -94,18 +97,21 @@ internal fun recordingCategoryQuickControl(
             }
         }
         LiveSheet.COLOR -> {
-            val options = CaptureLists.colorWheelLabels(status, family, bodyName)
-            if (options.isEmpty()) null
+            if (CameraCommands.isPhotoMode(status.shootingMode)) null
             else {
-                val live = CameraCommands.colorLabel(status.colorMode, family)
-                MonitorQuickControl(
-                    options, if (live in options) live else "",
-                    context = "$family:${options.joinToString()}:${status.isRecording}",
-                )
+                val options = CaptureLists.colorWheelLabels(status, family, bodyName)
+                if (options.isEmpty()) null
+                else {
+                    val live = CameraCommands.colorLabel(status.colorMode, family)
+                    MonitorQuickControl(
+                        options, if (live in options) live else "",
+                        context = "$family:${options.joinToString()}:${status.isRecording}",
+                    )
+                }
             }
         }
         LiveSheet.MODE -> {
-            val options = CaptureLists.shootingModeLabels(bodyName)
+            val options = CaptureLists.shootingModeLabels(bodyName, status.shootingMode)
             val live = CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
             MonitorQuickControl(options, if (live in options) live else "", enabled = !status.isRecording,
                 context = "${status.shootingMode}:$bodyName:${status.isRecording}")

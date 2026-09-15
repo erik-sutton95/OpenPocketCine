@@ -30,15 +30,27 @@ struct LiveCameraControlBar: View {
             .onChange(of: model.session.supportsFocusMode) { _, on in
                 if !on, model.captureSheet == .focus { model.captureSheet = nil }
             }
+            .onChange(of: model.session.status.isPhoto) { _, photo in
+                if photo, model.captureSheet == .audio { model.captureSheet = nil }
+                if photo, model.captureDrum?.sheet == .audio { model.captureDrum = nil }
+            }
     }
 
     private var tilesLocked: Bool {
         interfaceLocked || model.session.isLocked
     }
 
+    private var showsAudio: Bool { !model.session.status.isPhoto }
+
+    private var visibleTileCount: Int {
+        4 + (model.session.supportsFocusMode ? 1 : 0) + (showsAudio ? 1 : 0)
+    }
+
+    private var gridColumns: Int { columns == 3 ? 3 : max(visibleTileCount, 1) }
+
     private var tileStrip: some View {
         MonitorControlGrid(
-            columns: columns, spacing: columns == 3 ? 6 : 10, equalColumns: columns == 3
+            columns: gridColumns, spacing: columns == 3 ? 6 : 10, equalColumns: columns == 3
         ) {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
@@ -60,7 +72,9 @@ struct LiveCameraControlBar: View {
             if model.session.supportsFocusMode {
                 tile(.focus, label: "FOCUS", value: focusValue, widest: "Showcase")
             }
-            tile(.audio, label: "AUDIO", value: audioValue, widest: "Spatial")
+            if showsAudio {
+                tile(.audio, label: "AUDIO", value: audioValue, widest: "Spatial")
+            }
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())

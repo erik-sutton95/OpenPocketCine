@@ -171,36 +171,41 @@ private fun RecordingSetupPanel(
 ) {
     val preview = LocalCapturePreview.current
     val enabled = !locked && preview == null
-    var tab by remember(initial) {
+    val tabNames = CaptureShutterPolicy.recordingCategoryTabs(status.shootingMode)
+    var tab by remember(initial, tabNames) {
         mutableStateOf(
-            when (initial) {
-                LiveSheet.COLOR -> "Color"
-                LiveSheet.MODE -> "Mode"
-                else -> "Format"
+            when {
+                "Mode" in tabNames && (initial == LiveSheet.MODE || tabNames == listOf("Mode")) -> "Mode"
+                initial == LiveSheet.COLOR && "Color" in tabNames -> "Color"
+                else -> tabNames.firstOrNull() ?: "Format"
             },
         )
     }
     val categories: @Composable () -> Unit = {
-        ModeBar(listOf("Format", "Color", "Mode"), listOf("Format", "Color", "Mode").indexOf(tab), enabled) {
-            tab = listOf("Format", "Color", "Mode")[it]
+        if (tabNames.size > 1) {
+            ModeBar(tabNames, tabNames.indexOf(tab).coerceAtLeast(0), enabled) {
+                tab = tabNames[it]
+            }
         }
     }
     androidx.compose.runtime.key(tab) {
-        if (tab == "Mode") {
-            val modes = CameraCommands.shootingModeCarousel(model.session.connectedCamera?.model?.name)
+        if (tab == "Mode" || tabNames == listOf("Mode")) {
             Column(Modifier.fillMaxWidth().then(if (maxHeightDp != null) Modifier.heightIn(max = maxHeightDp.dp) else Modifier)
                 .pickerPanelGlass(capturePanelShape(fromTop = true, portrait = viewportIsPortrait()))
                 .verticalScroll(rememberScrollState(), enabled = preview == null).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetHeader("SHOOTING MODE", "Capture mode", onDismiss)
                 val bodyName = model.session.connectedCamera?.model?.name
-                val labels = modes.map { CameraCommands.shootingModeLabel(it, bodyName).orEmpty() }
-                CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty(),
+                val labels = CaptureLists.shootingModeLabels(bodyName, status.shootingMode)
+                CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
+                    .takeIf { it in labels }.orEmpty(),
                     interactive = enabled && !status.isRecording) { label ->
                     applyCaptureShootingMode(label, model.session.status.value,
                         model.session.connectedCamera?.model?.name, model::setShootingMode)
                 }
-                if (com.opencapture.monitorui.MonitorLayoutPolicy.showsRecordingCategoryTabs(viewportIsPortrait(), preview != null)) {
+                if (tabNames.size > 1 &&
+                    com.opencapture.monitorui.MonitorLayoutPolicy.showsRecordingCategoryTabs(viewportIsPortrait(), preview != null)
+                ) {
                     categories()
                 }
                 if (status.isRecording) Text("Stop recording to change mode.", color = LiveDesign.muted, style = LiveType.text(11f))
@@ -356,7 +361,7 @@ private fun LiveControlSheetContent(
             LiveSheet.COLOR -> reseatColor()
             LiveSheet.MODE -> {
                 val live = CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
-                val labels = CaptureLists.shootingModeLabels(bodyName)
+                val labels = CaptureLists.shootingModeLabels(bodyName, status.shootingMode)
                 drumSelection = if (live in labels) live else ""
                 lastApplied = drumSelection
             }
@@ -740,7 +745,7 @@ private fun LiveControlSheetContent(
                         )
                     }
                 LiveSheet.MODE -> {
-                    val labels = CaptureLists.shootingModeLabels(bodyName)
+                    val labels = CaptureLists.shootingModeLabels(bodyName, status.shootingMode)
                     CaptureDrumWheel(
                         options = labels,
                         selection = CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
@@ -1748,8 +1753,16 @@ object CaptureLists {
 
     fun isoFallback(colorMode: Int): List<Int> = CameraCommands.isoChoices(colorMode).map { it.first }
 
+    /** Photo must not reuse leftover Video color for Auto ISO / fallback wheels. */
+    fun isoPresentationColor(status: CameraStatus): Int =
+        if (CameraCommands.isPhotoMode(status.shootingMode)) CameraCommands.COLOR_NORMAL
+        else status.colorMode
+
     fun isoIndices(status: CameraStatus): List<Int> =
-        CameraCommands.isoWheelIndices(status.availableIsoIndices, isoFallback(status.colorMode))
+        CameraCommands.isoWheelIndices(
+            status.availableIsoIndices,
+            isoFallback(isoPresentationColor(status)),
+        )
 
     fun isoDrumLabels(status: CameraStatus): List<String> =
         isoIndices(status)
@@ -1760,11 +1773,12 @@ object CaptureLists {
     fun isoIndexFromLabel(label: String): Int? =
         CameraCommands.ISO_INDEX_BYTES.firstOrNull { CameraCommands.isoLabel(it) == label }
 
-    fun offersIsoAuto(status: CameraStatus): Boolean = CameraCommands.offersIsoAuto(status.colorMode)
+    fun offersIsoAuto(status: CameraStatus): Boolean =
+        CameraCommands.offersIsoAuto(isoPresentationColor(status))
 
     /** GET `0x8E` pid `0x000F` only when Auto ISO exists. Unknown color = Normal. */
     fun shouldGetIsoLimit(status: CameraStatus): Boolean =
-        CameraCommands.shouldGetIsoLimit(status.colorMode)
+        CameraCommands.shouldGetIsoLimit(isoPresentationColor(status))
 
     fun isoAutoBase(colorMode: Int, bodyName: String = ""): Int? =
         when (colorMode) {
@@ -1792,22 +1806,26 @@ object CaptureLists {
         }
 
     fun isoAutoLabels(status: CameraStatus, bodyName: String = ""): List<String> {
-        val base = isoAutoBase(status.colorMode, bodyName) ?: return emptyList()
-        return isoAutoLimits(status.colorMode).map { it.label(base) }
+        val color = isoPresentationColor(status)
+        val base = isoAutoBase(color, bodyName) ?: return emptyList()
+        return isoAutoLimits(color).map { it.label(base) }
     }
 
     fun isoAutoLabel(status: CameraStatus, bodyName: String = ""): String {
-        val base = isoAutoBase(status.colorMode, bodyName) ?: return ""
+        val color = isoPresentationColor(status)
+        val base = isoAutoBase(color, bodyName) ?: return ""
         val limit = IsoLimit.entries.firstOrNull { it.rawValue == status.isoLimit } ?: return ""
         return limit.label(base)
     }
 
     fun isoLimit(fromLabel: String, status: CameraStatus, bodyName: String = ""): IsoLimit? {
-        val base = isoAutoBase(status.colorMode, bodyName) ?: return null
-        return isoAutoLimits(status.colorMode).firstOrNull { it.label(base) == fromLabel }
+        val color = isoPresentationColor(status)
+        val base = isoAutoBase(color, bodyName) ?: return null
+        return isoAutoLimits(color).firstOrNull { it.label(base) == fromLabel }
     }
 
     fun isoMarkedLabels(status: CameraStatus): Set<String> {
+        if (CameraCommands.isPhotoMode(status.shootingMode)) return emptySet()
         val base = CameraCommands.markedIsoLabel(status.colorMode) ?: return emptySet()
         return setOf(base)
     }
@@ -1908,10 +1926,23 @@ object CaptureLists {
         return ranked.ifEmpty { order }
     }
 
-    fun shootingModeLabels(name: String?): List<String> =
-        CameraCommands.shootingModeCarousel(name).map { CameraCommands.shootingModeLabel(it, name).orEmpty() }
+    fun shootingModeLabels(name: String?, shootingMode: Int = -1): List<String> {
+        val labels =
+            CameraCommands.shootingModeCarousel(name).map {
+                CameraCommands.shootingModeLabel(it, name).orEmpty()
+            }
+        val live = CameraCommands.shootingModeLabel(shootingMode, name) ?: return labels
+        if (shootingMode != CameraCommands.SHOOT_LIVE_PHOTO || live in labels) return labels
+        val photoIdx = labels.indexOf("Photo")
+        return if (photoIdx >= 0) {
+            labels.take(photoIdx + 1) + live + labels.drop(photoIdx + 1)
+        } else {
+            labels + live
+        }
+    }
 
     fun shootingModeRaw(label: String, name: String?): Int? {
+        if (label == "Live Photo") return null
         val modes = CameraCommands.shootingModeCarousel(name)
         val labels = modes.map { CameraCommands.shootingModeLabel(it, name).orEmpty() }
         val index = labels.indexOf(label)
@@ -1973,7 +2004,7 @@ object CaptureLists {
 
     /** Remaining storage. Source order is `storage*` then `sd*`, matching iOS. */
     fun storageLabel(status: CameraStatus, showDuration: Boolean): String {
-        if (showDuration) {
+        if (showDuration && !CameraCommands.isPhotoMode(status.shootingMode)) {
             return if (status.recordRemainingSec > 0) {
                 "${status.recordRemainingSec / 60} Min"
             } else {

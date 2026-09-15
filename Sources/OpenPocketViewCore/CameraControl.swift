@@ -31,6 +31,8 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
     case timeLapse = 0x02
     case photo = 0x17  // Pocket 4 / 4 Pro SET. Pocket 3 / Nano Photo is `photoRawPocket3AndNano`.
     case hyperLapse = 0x0A
+    /// Pocket 4 Pro Live Photo, physically observed in Mimo.
+    case livePhoto = 0x4D
     /// Pocket 3 Mimo Low-Light **video**. Not a stills mode — `isPhoto` is false.
     case superNight = 0x28
 
@@ -45,6 +47,7 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
         case .video: "Video"
         case .timeLapse: "TimeLapse"
         case .photo: "Photo"
+        case .livePhoto: "Live Photo"
         case .hyperLapse: "HyperLapse"
         case .superNight: "SuperNight"
         }
@@ -55,7 +58,7 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
     }
 
     /// Stills only. SuperNight / Low-Light is video (`0x28`).
-    public var isPhoto: Bool { self == .photo }
+    public var isPhoto: Bool { self == .photo || self == .livePhoto }
 
     /// Video FORMAT / fps apply. Photo has no `0x02/0x18` pair.
     public var offersVideoFormat: Bool { !isPhoto }
@@ -99,6 +102,7 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
         0x0A,  // HyperLapse
         0x17,  // Photo (Pocket 4 / 4 Pro)
         0x28,  // SuperNight / Low-Light video
+        0x4D,  // Live Photo (Pocket 4 Pro)
     ]
 }
 
@@ -1114,6 +1118,7 @@ public struct VideoFrameRate: Equatable, Hashable, Sendable {
     public static let fps240 = Self(rawValue: 0x08)
     public static let fps100 = Self(rawValue: 0x0A)
     public static let fps96 = Self(rawValue: 0x0B)
+    public static let fps200 = Self(rawValue: 0x13)
     public static let fps15 = Self(rawValue: 0x1D)
 
     public var fps: Int { Self.fps(index: rawValue) ?? 0 }
@@ -1133,12 +1138,12 @@ public struct VideoFrameRate: Equatable, Hashable, Sendable {
         catalog.first { $0.fps == fps }
     }
 
-    /// Video-mode SET 24–60. SlowMo 100/120/240 from that mode's camcap.
+    /// Video-mode SET 24–60. SlowMo 100/120/200/240 from that mode's camcap.
     public static let labeledVideo: [VideoFrameRate] = [
         .fps24, .fps25, .fps30, .fps48, .fps50, .fps60,
     ]
 
-    /// Osmosis index table (Nano / Pocket share it). 200 fps is still unlabeled.
+    /// Osmosis index table, plus Pocket 4 Pro 200 fps from the physical mode survey.
     public static func fps(index: UInt8) -> Int? {
         switch index {
         case 1: 24
@@ -1151,21 +1156,22 @@ public struct VideoFrameRate: Equatable, Hashable, Sendable {
         case 8: 240
         case 10: 100
         case 11: 96
+        case 19: 200
         case 29: 15
         default: nil
         }
     }
 
     private static let catalog: [VideoFrameRate] = [
-        .fps24, .fps25, .fps30, .fps48, .fps50, .fps60, .fps120, .fps240, .fps100, .fps96,
+        .fps24, .fps25, .fps30, .fps48, .fps50, .fps60, .fps120, .fps240, .fps100, .fps96, .fps200,
         .fps15,
     ]
 }
 
 /// One 5-byte SET: `[res][fps_idx]` plus a 3-byte trailer. No GET — `cam_video_param_v2` `@0–1`.
 ///
-/// Normal / Video / Low-Light trailer is `00 00 00`. Pocket 3 SlowMo (accepted Mimo):
-/// 100/120 uses `00 04 00` (4X); 240 uses `00 08 00` (8X). Default API is the zero trailer.
+/// Normal / Video / Low-Light trailer is `00 00 00`. Captured Pocket 3 / 4 Pro SlowMo:
+/// 100/120/200 uses `00 04 00`; 240 uses `00 08 00`. Default API is the zero trailer.
 public struct VideoFormat: Equatable, Hashable, Sendable {
     public var resolution: VideoResolution
     public var frameRate: VideoFrameRate
@@ -1186,25 +1192,26 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
                 frameRate: frameRate, shootingMode: shootingMode)
     }
 
-    /// SlowMo 100/120 → `00 04 00`; SlowMo 240 → `00 08 00`; every other mode/rate → `00 00 00`.
-    /// Call sites pass `.slowMo` only for Pocket 3 until a Pocket 4 / 4 Pro survey.
+    /// SlowMo 100/120/200 → `00 04 00`; 240 → `00 08 00`; other modes/rates → `00 00 00`.
+    /// Mimo labels 200 as 8X, but its captured SET still uses the `00 04 00` trailer.
     public static func trailer(
         frameRate: VideoFrameRate, shootingMode: ShootingMode?
     ) -> [UInt8] {
         guard shootingMode == .slowMo else { return [0x00, 0x00, 0x00] }
         switch frameRate.rawValue {
         case VideoFrameRate.fps240.rawValue: return [0x00, 0x08, 0x00]
-        case VideoFrameRate.fps100.rawValue, VideoFrameRate.fps120.rawValue:
+        case VideoFrameRate.fps100.rawValue, VideoFrameRate.fps120.rawValue,
+            VideoFrameRate.fps200.rawValue:
             return [0x00, 0x04, 0x00]
         default: return [0x00, 0x00, 0x00]
         }
     }
 
-    /// iOS / JNI call sites: SlowMo trailer context is Pocket 3 only.
+    /// iOS / JNI call sites: captured SlowMo trailer context for Pocket 3 and Pocket 4 Pro.
     public static func formatSetMode(
         model: CameraModel?, statusMode: ShootingMode?
     ) -> ShootingMode? {
-        model?.isPocket3 == true ? statusMode : nil
+        (model?.isPocket3 == true || model?.isPocket4Pro == true) ? statusMode : nil
     }
 
     /// Top-deck chip, OpenZCine `resolutionFrameRate` shape (`4K · 25p`).

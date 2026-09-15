@@ -181,7 +181,9 @@ final class CaptureQuickSnapshotTests: XCTestCase {
 
         status.shootingMode = Int(ShootingMode.video.rawValue)
         let mode = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
-        XCTAssertEqual(mode.options, ShootingMode.allCases.map(\.label))
+        XCTAssertEqual(
+            mode.options, CaptureLists.operatorShootingModes(from: status).map(\.label))
+        XCTAssertFalse(mode.options.contains(ShootingMode.livePhoto.label))
         XCTAssertEqual(mode.selection, "Video")
         XCTAssertNil(mode.changedValue(translation: 0, current: mode))
         XCTAssertEqual(mode.changedValue(translation: -56, current: mode), "TimeLapse")
@@ -236,6 +238,55 @@ final class CaptureQuickSnapshotTests: XCTestCase {
         XCTAssertNotEqual(lowLightFormat.selection, "Photo")
     }
 
+    func testLivePhotoUsesStillChromeAndHidesVideoColorAudio() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.livePhoto.rawValue)
+        status.colorMode = .dLogM
+        status.audioChannel = .stereo
+        status.videoFormat = VideoFormat(resolution: .p4K, frameRate: .fps25)
+        status.availableVideoFormats = [
+            VideoFormat(resolution: .p4K, frameRate: .fps24)
+        ]
+        XCTAssertTrue(status.isPhoto)
+        XCTAssertNil(CaptureQuickSnapshot.primary(.color, status: status))
+        XCTAssertNil(CaptureQuickSnapshot.primary(.audio, status: status))
+        let format = try XCTUnwrap(CaptureQuickSnapshot.primary(.resolution, status: status))
+        XCTAssertEqual(format.selection, "Photo")
+        XCTAssertFalse(format.enabled)
+        let mode = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertTrue(mode.options.contains(ShootingMode.livePhoto.label))
+        XCTAssertEqual(mode.selection, ShootingMode.livePhoto.label)
+        XCTAssertNil(mode.changedValue(translation: 0, current: mode))
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        let videoMode = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertFalse(videoMode.options.contains(ShootingMode.livePhoto.label))
+    }
+
+    func testSlowMo200UsesAdvertisedCapabilityNotInvented240() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.slowMo.rawValue)
+        let tele200 = VideoFormat(resolution: .p4K, frameRate: .fps200)
+        status.videoFormat = tele200
+        status.availableVideoFormats = [tele200]
+        let pro = CameraModel.resolve(modelId: 0x0022, name: "Osmo Pocket 4 Pro")
+        let snapshot = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.resolution, status: status, cameraModel: pro))
+        XCTAssertEqual(snapshot.options, ["200p"])
+        XCTAssertEqual(snapshot.selection, "200p")
+        XCTAssertTrue(snapshot.enabled)
+        XCTAssertNil(snapshot.changedValue(translation: -56, current: snapshot))
+        XCTAssertEqual(tele200.frameRate.drumLabel, "200p")
+        XCTAssertEqual(VideoFrameRate(drumLabel: "200p"), .fps200)
+        XCTAssertEqual(VideoFrameRate.fps(index: 0x13), 200)
+
+        status.availableVideoFormats = []
+        let empty = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.resolution, status: status, cameraModel: pro))
+        XCTAssertFalse(empty.enabled)
+        XCTAssertEqual(empty.options, ["200p"])
+        XCTAssertNil(empty.changedValue(translation: -56, current: empty))
+    }
+
     func testEmptyFormatTableIsReadOnlyCurrentPairOnUnsurveyedBodies() throws {
         var status = CameraStatus()
         status.shootingMode = Int(ShootingMode.slowMo.rawValue)
@@ -253,8 +304,15 @@ final class CaptureQuickSnapshotTests: XCTestCase {
     func testPhotoFormatTapOpensModeInsteadOfResolution() {
         XCTAssertEqual(CaptureReadoutAdmission.opening(.resolution, isPhoto: true), .mode)
         XCTAssertEqual(CaptureReadoutAdmission.opening(.resolution, isPhoto: false), .resolution)
-        XCTAssertEqual(CaptureReadoutAdmission.opening(.color, isPhoto: true), .color)
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.color, isPhoto: true), .mode)
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.audio, isPhoto: true), .audio)
         XCTAssertEqual(CaptureReadoutAdmission.opening(.mode, isPhoto: true), .mode)
+        XCTAssertEqual(CaptureReadoutAdmission.retained(.color, isPhoto: true), .mode)
+        XCTAssertEqual(CaptureReadoutAdmission.retained(.resolution, isPhoto: true), .mode)
+        XCTAssertNil(CaptureReadoutAdmission.retained(.audio, isPhoto: true))
+        XCTAssertEqual(CaptureReadoutAdmission.retained(.iso, isPhoto: true), .iso)
+        XCTAssertNil(CaptureReadoutAdmission.retainedDrum(.color, isPhoto: true))
+        XCTAssertEqual(CaptureReadoutAdmission.retained(.color, isPhoto: false), .color)
     }
 
     func testTopFullPickerSwitchesDirectlyToLowerControlAndViceVersa() {

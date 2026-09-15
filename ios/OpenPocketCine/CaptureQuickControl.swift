@@ -138,6 +138,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                 kind: .exposure, title: "EXPOSURE", options: ExpoMode.allCases.map(\.label),
                 selection: status.expoMode?.label ?? "")
         case .audio:
+            guard !status.isPhoto else { return nil }
             return Self(
                 kind: .audio, title: "AUDIO", options: AudioChannel.allCases.map(\.label),
                 selection: status.audioChannel?.label ?? "")
@@ -148,7 +149,9 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                     enabled: false)
             }
             return formatSnapshot(status: status, cameraModel: cameraModel)
-        case .color: return colorSnapshot(status: status, cameraModel: cameraModel)
+        case .color:
+            guard !status.isPhoto else { return nil }
+            return colorSnapshot(status: status, cameraModel: cameraModel)
         case .mode: return shootingModeSnapshot(status: status, cameraModel: cameraModel)
         }
     }
@@ -195,7 +198,9 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     private static func shootingModeSnapshot(status: CameraStatus, cameraModel: CameraModel?)
         -> Self
     {
-        let options = ShootingMode.allCases.map { $0.label(for: cameraModel) }
+        let options = CaptureLists.operatorShootingModes(from: status, model: cameraModel).map {
+            $0.label(for: cameraModel)
+        }
         let live = ShootingMode.fromStatus(status.shootingMode)?.label(for: cameraModel) ?? ""
         return Self(
             kind: .shootingMode, title: "MODE", options: options,
@@ -290,9 +295,11 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             }
         case .shootingMode:
             guard !status.isRecording else { return }
-            if let mode = ShootingMode.allCases.first(where: {
+            if let mode = CaptureLists.operatorShootingModes(
+                from: status, model: model.session.connectedCamera?.model
+            ).first(where: {
                 $0.label(for: model.session.connectedCamera?.model) == value
-            }) {
+            }), mode != .livePhoto {
                 model.session.setShootingMode(mode)
             }
         }
@@ -416,9 +423,34 @@ enum CaptureReadoutAdmission {
         current == next ? nil : next
     }
 
-    /// Photo has no video FORMAT sheet. Open shooting mode instead so the slot stays useful.
+    /// Photo has no video FORMAT / COLOR sheet. Open shooting mode instead so the slot stays useful.
     static func opening(_ sheet: CaptureSheet, isPhoto: Bool) -> CaptureSheet {
-        isPhoto && sheet == .resolution ? .mode : sheet
+        guard isPhoto else { return sheet }
+        switch sheet {
+        case .resolution, .color: return .mode
+        default: return sheet
+        }
+    }
+
+    /// Persistent pickers follow the live mode. Video-only AUDIO closes; FORMAT / COLOR become MODE.
+    static func retained(_ sheet: CaptureSheet?, isPhoto: Bool) -> CaptureSheet? {
+        guard let sheet else { return nil }
+        if !isPhoto { return sheet }
+        switch sheet {
+        case .resolution, .color: return .mode
+        case .audio: return nil
+        default: return sheet
+        }
+    }
+
+    /// A held video drum cannot remap to MODE mid-gesture; drop it on stills.
+    static func retainedDrum(_ sheet: CaptureSheet?, isPhoto: Bool) -> CaptureSheet? {
+        guard let sheet else { return nil }
+        if !isPhoto { return sheet }
+        switch sheet {
+        case .resolution, .color, .audio: return nil
+        default: return sheet
+        }
     }
 
     static func hidesLowerCaptureValues(sheet: CaptureSheet?, drum: CaptureSheet?) -> Bool {

@@ -67,6 +67,31 @@ internal object CaptureShutterPolicy {
     fun portraitSetupSheet(shootingMode: Int): LiveSheet =
         if (portraitSetupOpensMode(shootingMode)) LiveSheet.MODE else LiveSheet.FORMAT
 
+    fun showsVideoTransport(shootingMode: Int): Boolean = !isStillCapture(shootingMode)
+
+    fun showsColorReadout(shootingMode: Int): Boolean = !isStillCapture(shootingMode)
+
+    fun showsAudioControls(shootingMode: Int): Boolean = !isStillCapture(shootingMode)
+
+    fun opening(sheet: LiveSheet, shootingMode: Int): LiveSheet =
+        if (!isStillCapture(shootingMode)) sheet
+        else when (sheet) {
+            LiveSheet.FORMAT, LiveSheet.COLOR -> LiveSheet.MODE
+            else -> sheet
+        }
+
+    fun retainedSheet(sheet: LiveSheet?, shootingMode: Int): LiveSheet? {
+        if (sheet == null || !isStillCapture(shootingMode)) return sheet
+        return when (sheet) {
+            LiveSheet.FORMAT, LiveSheet.COLOR -> LiveSheet.MODE
+            LiveSheet.AUDIO -> null
+            else -> sheet
+        }
+    }
+
+    fun recordingCategoryTabs(shootingMode: Int): List<String> =
+        if (isStillCapture(shootingMode)) listOf("Mode") else listOf("Format", "Color", "Mode")
+
     /** A FORMAT SET failure from a previous mode must not rewrite the new mode HUD. */
     fun canRevertFormatFailure(liveShootingMode: Int, modeAtSet: Int): Boolean =
         liveShootingMode == modeAtSet

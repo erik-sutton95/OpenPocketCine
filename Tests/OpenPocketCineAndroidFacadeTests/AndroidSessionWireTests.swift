@@ -176,6 +176,10 @@ struct AndroidSessionWireTests {
             kind: .setVideoFormat, seq: 1, extra: "16\(unit)7\(unit)0")
         #expect(slow120?.payload == [0x10, 0x07, 0x00, 0x04, 0x00])
 
+        let slow200 = AndroidSessionWire.encodeCommand(
+            kind: .setVideoFormat, seq: 1, extra: "16\(unit)19\(unit)0")
+        #expect(slow200?.payload == [0x10, 0x13, 0x00, 0x04, 0x00])
+
         let slow240 = AndroidSessionWire.encodeCommand(
             kind: .setVideoFormat, seq: 1, extra: "10\(unit)8\(unit)0")
         #expect(slow240?.payload == [0x0A, 0x08, 0x00, 0x08, 0x00])

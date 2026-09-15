@@ -63,6 +63,12 @@ public struct CameraModel: Equatable, Sendable {
         return n.contains("pocket3") || n.contains("muse")
     }
 
+    /// Pocket 4 Pro, including its compact advertised model name.
+    public var isPocket4Pro: Bool {
+        let compactName = name.lowercased().replacingOccurrences(of: " ", with: "")
+        return compactName.contains("pocket4p")
+    }
+
     /// Pocket 3 first picture needs a 1080→boot-4K `0x02/0x18` after enable.
     /// Pocket 4 / 4 Pro first picture is captured — do not GOP-cut them.
     public var needsFirstPictureFormatPoke: Bool { isPocket3 }

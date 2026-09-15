@@ -3,6 +3,40 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct ShootingModeTests {
+    @Test func livePhotoStatusUsesStillControlsAndShutter() {
+        var status = CameraStatus()
+        status.applyShootingMode(0x4D)
+        #expect(status.isPhoto)
+        #expect(status.shootingModeLabel == "Live Photo")
+        #expect(ShootingMode.fromStatus(0x4D) == .livePhoto)
+        #expect(!ShootingMode.livePhoto.offersVideoFormat)
+        let command = CaptureCommand.frame(mode: .livePhoto, model: nil, isRecording: false)
+        #expect(command.cmdId == 0x01)
+        #expect(command.payload == [0x01])
+    }
+
+    @Test func observed200FpsRoundTripsThroughCapabilitySelection() {
+        let bytes: [UInt8] = [0x01, 0x04, 0x00, 0x01, 0x10, 0x13, 0x00]
+        let formats = CamCapVideoFormat.parse(bytes)
+        let expected = VideoFormat(resolution: .p4K, frameRate: .fps200)
+        #expect(formats == [expected])
+        #expect(expected.frameRate.fps == 200)
+        #expect(expected.frameRate.label == "200")
+        #expect(expected.frameRate.drumLabel == "200p")
+        #expect(VideoFrameRate(drumLabel: "200p") == .fps200)
+        #expect(VideoFrameRate.fromFps(200) == .fps200)
+        #expect(expected.setPayload(shootingMode: .slowMo) == [0x10, 0x13, 0, 4, 0])
+        #expect(expected.setPayload(shootingMode: .video) == [0x10, 0x13, 0, 0, 0])
+        let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
+        #expect(
+            CamCapVideoFormat.allowsOperatorSet(
+                expected, available: formats, model: pro, shootingMode: 0))
+        #expect(
+            !CamCapVideoFormat.allowsOperatorSet(
+                VideoFormat(resolution: .p4K, frameRate: .fps240),
+                available: formats, model: pro, shootingMode: 0))
+    }
+
     @Test func photoExcludesSuperNightLowLightVideo() {
         #expect(ShootingMode.photo.isPhoto)
         #expect(!ShootingMode.video.isPhoto)
@@ -46,28 +80,43 @@ import Testing
     @Test func captureCommandRoutesPhotoVideoAndPocket3Timelapse() {
         let pocket3 = CameraModel.resolve(modelId: 0x0020, name: "Osmo Pocket 3")
         let pro = CameraModel.resolve(modelId: 0x0022, name: "Osmo Pocket 4 Pro")
-        #expect(CaptureCommand.frame(mode: .photo, model: pocket3, isRecording: false).cmdId == 0x01)
-        #expect(CaptureCommand.frame(mode: .photo, model: pocket3, isRecording: false).payload == [0x01])
-        #expect(CaptureCommand.frame(mode: .video, model: pocket3, isRecording: false).cmdId == 0x02)
-        #expect(CaptureCommand.frame(mode: .video, model: pocket3, isRecording: false).payload == [0x01])
-        #expect(CaptureCommand.frame(mode: .video, model: pocket3, isRecording: true).payload == [0x00])
-        #expect(CaptureCommand.frame(mode: .superNight, model: pocket3, isRecording: false).cmdId == 0x02)
-        let p3lapseStart = CaptureCommand.frame(mode: .timeLapse, model: pocket3, isRecording: false)
+        #expect(
+            CaptureCommand.frame(mode: .photo, model: pocket3, isRecording: false).cmdId == 0x01)
+        #expect(
+            CaptureCommand.frame(mode: .photo, model: pocket3, isRecording: false).payload == [0x01]
+        )
+        #expect(
+            CaptureCommand.frame(mode: .video, model: pocket3, isRecording: false).cmdId == 0x02)
+        #expect(
+            CaptureCommand.frame(mode: .video, model: pocket3, isRecording: false).payload == [0x01]
+        )
+        #expect(
+            CaptureCommand.frame(mode: .video, model: pocket3, isRecording: true).payload == [0x00])
+        #expect(
+            CaptureCommand.frame(mode: .superNight, model: pocket3, isRecording: false).cmdId
+                == 0x02)
+        let p3lapseStart = CaptureCommand.frame(
+            mode: .timeLapse, model: pocket3, isRecording: false)
         #expect(p3lapseStart.cmdId == 0x01)
         #expect(p3lapseStart.payload == [0x01])
-        #expect(CaptureCommand.frame(mode: .timeLapse, model: pocket3, isRecording: true).payload == [0x00])
+        #expect(
+            CaptureCommand.frame(mode: .timeLapse, model: pocket3, isRecording: true).payload == [
+                0x00
+            ])
         let proLapse = CaptureCommand.frame(mode: .timeLapse, model: pro, isRecording: false)
         #expect(proLapse.cmdId == 0x02)
         #expect(proLapse.payload == [0x01])
         #expect(Commands.shutterTrigger(start: false).payload == [0x00])
     }
 
-    @Test func pocket3OnlyCallSitePassesSlowMoTrailerContext() {
+    @Test func surveyedBodiesPassSlowMoTrailerContext() {
         let pocket3 = CameraModel.resolve(modelId: 0x0020, name: "Osmo Pocket 3")
         let pro = CameraModel.resolve(modelId: 0x0022, name: "Osmo Pocket 4 Pro")
         #expect(VideoFormat.formatSetMode(model: pocket3, statusMode: .slowMo) == .slowMo)
-        #expect(VideoFormat.formatSetMode(model: pro, statusMode: .slowMo) == nil)
+        #expect(VideoFormat.formatSetMode(model: pro, statusMode: .slowMo) == .slowMo)
         #expect(VideoFormat.formatSetMode(model: nil, statusMode: .slowMo) == nil)
+        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
+        #expect(VideoFormat.formatSetMode(model: pocket4, statusMode: .slowMo) == nil)
     }
 
     @Test func modeTransitionClearsStaleCapabilitiesWithoutTouchingLiveFormat() {

@@ -11,7 +11,7 @@ struct LivePortraitTopBar: View {
                 LivePortraitStorageReadout()
             }
             HStack(spacing: 10) {
-                if model.chromeSectionMounts(.timecode) {
+                if model.chromeSectionMounts(.timecode), !model.session.status.isPhoto {
                     LivePortraitTimecode()
                 }
                 Spacer(minLength: 8)
@@ -59,7 +59,7 @@ private struct LivePortraitStorageReadout: View {
             let pct = Int((Double(max(0, free)) / Double(total) * 100).rounded())
             return "\(gb) GB · \(pct)%"
         }
-        if s.recordRemainingSec > 0 { return "\(s.recordRemainingSec / 60) Min" }
+        if !s.isPhoto, s.recordRemainingSec > 0 { return "\(s.recordRemainingSec / 60) Min" }
         return "—"
     }
 }

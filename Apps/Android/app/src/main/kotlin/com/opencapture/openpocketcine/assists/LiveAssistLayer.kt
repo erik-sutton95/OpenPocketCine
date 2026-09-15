@@ -96,6 +96,7 @@ fun LiveAssistLayer(
     /** Live 180 / MIRROR compose. Defaults to the MIRROR chip. */
     pictureMirrored: Boolean = state.mirror,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
+    showsAudio: Boolean = true,
 ) {
     val density = LocalDensity.current
     val shown: (LiveAssistTool) -> Boolean =
@@ -191,7 +192,7 @@ fun LiveAssistLayer(
                 }
             }
         }
-        if (!playback && shown(LiveAssistTool.AUDIO)) {
+        if (!playback && showsAudio && shown(LiveAssistTool.AUDIO)) {
             val channels = audioOverlayChannels(status)
             val audioPlacement = audioPlacementFrame?.let { frame -> with(density) {
                 val inset = 8.dp.toPx()

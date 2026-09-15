@@ -18,11 +18,13 @@ import com.opencapture.openpocketcine.OperatorPrefs
 @Composable
 fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTool) -> Boolean,
     onToggle: (LiveAssistTool) -> Unit, onLongPress: (LiveAssistTool) -> Unit,
-    modifier: Modifier = Modifier, requestExpand: Boolean = false, onExpansionHandled: () -> Unit = {}) {
+    modifier: Modifier = Modifier, requestExpand: Boolean = false, onExpansionHandled: () -> Unit = {},
+    showsAudio: Boolean = true) {
     val context = LocalContext.current
     var usage by remember { mutableStateOf(OperatorPrefs.assistToolUsage(context)) }
+    val tools = if (showsAudio) LiveAssistTool.settingsCases else LiveAssistTool.toolbarCases
     com.opencapture.monitorui.MonitorAssistPalette(
-        tools = LiveAssistTool.settingsCases, usageSeed = ASSIST_USAGE_SEED,
+        tools = tools, usageSeed = ASSIST_USAGE_SEED,
         portrait = portrait, locked = locked, isOn = isOn, title = { it.title }, label = { it.chipLabel },
         hasOptions = { it.hasConfiguration }, onToggle = onToggle, onOptions = onLongPress,
         glyph = { tool, tint, iconModifier -> AssistToolGlyph(tool, tint, iconModifier) },

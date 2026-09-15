@@ -261,8 +261,12 @@ fun LivePortraitChrome(
             LaunchedEffect(recOwner.active) { notifyTop(recOwner.active != null) }
             DisposableEffect(Unit) { onDispose { notifyTop(false) } }
             Box(Modifier.liveModuleFrame(readoutFrame), contentAlignment = Alignment.Center) {
-                if (capabilities.timecode && model.chromeSectionMounts(PocketDispSection.TIMECODE)) TimecodeReadout(status.timecode)
-                if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
+                if (CaptureShutterPolicy.showsVideoTransport(status.shootingMode) &&
+                    capabilities.timecode && model.chromeSectionMounts(PocketDispSection.TIMECODE)
+                ) TimecodeReadout(status.timecode)
+                if (CaptureShutterPolicy.showsVideoTransport(status.shootingMode) &&
+                    model.chromeSectionMounts(PocketDispSection.REC_READOUT)
+                ) {
                     Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp)) { RecChip(status.isRecording, status.recordElapsedSec) }
                 }
                 val setupSheet = CaptureShutterPolicy.portraitSetupSheet(status.shootingMode)
@@ -299,6 +303,7 @@ fun LivePortraitChrome(
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = true, locked = uiLocked || !chromeInteractive,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
+                    showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
                 )
             }
         }
@@ -327,7 +332,12 @@ fun LivePortraitChrome(
                         capabilities.focus,
                     facePriority = model.facePriorityExposureEnabled,
                     shutterUsesAngle = model.shutterUsesAngle,
-                    onOpen = { if (!uiLocked) onSheet(if (sheet == it) null else it) },
+                    onOpen = {
+                        if (!uiLocked) {
+                            val next = CaptureShutterPolicy.opening(it, status.shootingMode)
+                            onSheet(if (sheet == next) null else next)
+                        }
+                    },
                     onTileFrame = onTileFrame,
                 )
             }
@@ -645,7 +655,9 @@ fun LiveCaptureStrip(
         add(value(LiveSheet.EXPO, "EXPOSURE", if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))
         add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status)))
         if (showFocus) add(value(LiveSheet.FOCUS, "FOCUS", status.focusLabel))
-        add(value(LiveSheet.AUDIO, "AUDIO", status.audioLabel))
+        if (CaptureShutterPolicy.showsAudioControls(status.shootingMode)) {
+            add(value(LiveSheet.AUDIO, "AUDIO", status.audioLabel))
+        }
     }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val quickLifetime = rememberCaptureQuickLifetime(model)
@@ -695,6 +707,7 @@ fun LivePortraitAssistRail(
     locked: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onLongPress: (LiveAssistTool) -> Unit,
+    showsAudio: Boolean = true,
 ) {
     if (!expanded) {
         Box(
@@ -736,7 +749,9 @@ fun LivePortraitAssistRail(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            val tools = LiveAssistTool.toolbarCases + LiveAssistTool.AUDIO
+            val tools =
+                if (showsAudio) LiveAssistTool.toolbarCases + LiveAssistTool.AUDIO
+                else LiveAssistTool.toolbarCases
             tools.forEach { tool ->
                 LivePortraitRailTool(
                     tool = tool,
@@ -757,6 +772,7 @@ fun LivePortraitRecOptionsButton(
     locked: Boolean,
     modifier: Modifier = Modifier,
     onOpen: (LiveSheet) -> Unit,
+    isPhoto: Boolean = false,
 ) {
     var open by remember { mutableStateOf(false) }
     val menuOffset = with(LocalDensity.current) { IntOffset(0, 8.dp.roundToPx()) }
@@ -779,14 +795,21 @@ fun LivePortraitRecOptionsButton(
                 onDismissRequest = { open = false },
             ) {
                 Column(Modifier.width(220.dp).monitorMaterial(MonitorMaterial.Expanded)) {
-                    RecOptionsRow("Resolution · Framerate") {
-                        open = false
-                        onOpen(LiveSheet.FORMAT)
-                    }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
-                    RecOptionsRow("Color") {
-                        open = false
-                        onOpen(LiveSheet.COLOR)
+                    if (isPhoto) {
+                        RecOptionsRow("Shooting mode") {
+                            open = false
+                            onOpen(LiveSheet.MODE)
+                        }
+                    } else {
+                        RecOptionsRow("Resolution · Framerate") {
+                            open = false
+                            onOpen(LiveSheet.FORMAT)
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
+                        RecOptionsRow("Color") {
+                            open = false
+                            onOpen(LiveSheet.COLOR)
+                        }
                     }
                 }
             }

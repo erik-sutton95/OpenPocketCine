@@ -63,6 +63,15 @@ data class CameraModel(
             return n.contains("pocket3") || n.contains("muse")
         }
 
+        fun looksLikePocket4Pro(name: String): Boolean {
+            val n = name.lowercase().replace(" ", "")
+            return n.contains("pocket4p")
+        }
+
+        /** SlowMo `0x02/0x18` trailer context. Regular Pocket 4 stays unqualified. */
+        fun supportsSlowMoFormatTrailer(name: String): Boolean =
+            looksLikePocket3(name) || looksLikePocket4Pro(name)
+
         fun looksLikeNano(name: String, family: String = ""): Boolean {
             if (family == "nano") return true
             return name.lowercase().contains("nano")

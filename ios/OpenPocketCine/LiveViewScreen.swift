@@ -1142,7 +1142,9 @@ private struct LiveScopeOverlays: View {
                 chromeClearance: clearance
             )
         }
-        if !model.isWatchingFeed, model.assist.isVisible(.audioMeters) {
+        if !model.isWatchingFeed, !model.session.status.isPhoto,
+            model.assist.isVisible(.audioMeters)
+        {
             LiveAudioMeterOverlay(bounds: canvas, chromeClearance: clearance)
         }
         if model.assist.isVisible(.falseColor), model.assist.falseColorReference {

@@ -94,7 +94,11 @@ data class VideoFrameRate(val rawValue: Int) {
         val FPS240 = VideoFrameRate(0x08)
         val FPS100 = VideoFrameRate(0x0A)
         val FPS96 = VideoFrameRate(0x0B)
+        val FPS200 = VideoFrameRate(0x13)
         val FPS15 = VideoFrameRate(0x1D)
+
+        private val catalog =
+            listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60, FPS120, FPS240, FPS100, FPS96, FPS200, FPS15)
 
         fun fromRaw(raw: Int): VideoFrameRate? =
             if (raw in 0..255) VideoFrameRate(raw) else null
@@ -111,17 +115,15 @@ data class VideoFrameRate(val rawValue: Int) {
                 8 -> 240
                 10 -> 100
                 11 -> 96
+                19 -> 200
                 29 -> 15
                 else -> null
             }
 
-        fun fromFps(fps: Int): VideoFrameRate? =
-            listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60, FPS120, FPS240, FPS100, FPS96, FPS15)
-                .firstOrNull { it.fps == fps }
+        fun fromFps(fps: Int): VideoFrameRate? = catalog.firstOrNull { it.fps == fps }
 
         fun fromDrumLabel(label: String): VideoFrameRate? =
-            listOf(FPS24, FPS25, FPS30, FPS48, FPS50, FPS60, FPS120, FPS240, FPS100, FPS96, FPS15)
-                .firstOrNull { it.drumLabel == label }
+            catalog.firstOrNull { it.drumLabel == label }
 
         val drumLabels: List<String> get() = labeledVideo.map { it.drumLabel }
 

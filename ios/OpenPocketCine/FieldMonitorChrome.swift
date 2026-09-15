@@ -18,7 +18,7 @@ struct FieldMonitorStatusChrome: View {
         Group {
             if portrait {
                 ZStack {
-                    if model.chromeSectionMounts(.timecode) {
+                    if model.chromeSectionMounts(.timecode), !model.session.status.isPhoto {
                         MonitorClock(
                             model.session.status.timecodeClock,
                             fontSize: layout.presentation?.tablet == true ? 25 : 23
@@ -54,7 +54,7 @@ struct FieldMonitorStatusChrome: View {
                                 value: model.session.status.videoFormat?.chipLabel ?? "—")
                         }
                     }
-                    if model.chromeSectionMounts(.color) {
+                    if model.chromeSectionMounts(.color), !model.session.status.isPhoto {
                         topButton(.color, value: model.session.status.colorMode?.label ?? "—")
                     }
                     if layout.viewport.width >= 800, !model.session.status.isPhoto {
@@ -68,7 +68,7 @@ struct FieldMonitorStatusChrome: View {
                     Spacer(minLength: 4)
                     HStack(spacing: 10) {
                         tally
-                        if model.chromeSectionMounts(.timecode) {
+                        if model.chromeSectionMounts(.timecode), !model.session.status.isPhoto {
                             MonitorClock(
                                 model.session.status.timecodeClock,
                                 fontSize: layout.presentation?.tablet == true ? 25 : 23)
@@ -94,15 +94,21 @@ struct FieldMonitorStatusChrome: View {
             }
         }
         .onChange(of: model.session.status.isPhoto) { _, photo in
-            if photo {
-                if model.captureSheet == .resolution { model.captureSheet = .mode }
-                if model.captureDrum?.sheet == .resolution { model.captureDrum = nil }
+            model.captureSheet = CaptureReadoutAdmission.retained(
+                model.captureSheet, isPhoto: photo)
+            if CaptureReadoutAdmission.retainedDrum(model.captureDrum?.sheet, isPhoto: photo)
+                == nil
+            {
+                model.captureDrum = nil
+            }
+            if photo, model.assist.configureTool == .audioMeters {
+                model.assist.configureTool = nil
             }
         }
     }
 
     @ViewBuilder private var tally: some View {
-        if model.chromeSectionMounts(.recReadout) {
+        if model.chromeSectionMounts(.recReadout), !model.session.status.isPhoto {
             let status = model.session.status
             HStack(spacing: 5) {
                 Text(status.isRecording ? "REC" : "STBY").foregroundStyle(
@@ -289,7 +295,12 @@ struct FieldMonitorAssistPalette: View {
     var isLocked: Bool
     var otherOverlayPresented = false
     @Binding var expanded: Bool
-    private var tools: [LiveAssistTool] { LiveAssistTool.toolbarCases + [.audioMeters] }
+    private var tools: [LiveAssistTool] {
+        if model.session.status.isPhoto {
+            return LiveAssistTool.toolbarCases
+        }
+        return LiveAssistTool.toolbarCases + [.audioMeters]
+    }
 
     private var shouldCollapse: Bool {
         isLocked || otherOverlayPresented || model.captureSheet != nil
