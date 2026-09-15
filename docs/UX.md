@@ -152,3 +152,8 @@ Enable and Not now are explicit choices; neither is preselected. Declining leave
 manual reporting and all camera features available. The System toggle permits
 a later change. An update asks if no reporting choice was previously saved;
 existing Enable and Not now decisions are respected.
+
+Multiview begins each session with Local Wi-Fi or this phone's Personal Hotspot,
+then network name and password. Done confirms the network before cameras are
+added to tiles. Saved credentials never bypass this choice. Local Wi-Fi includes
+a router or another device's hotspot. Camera-based network scanning is optional.

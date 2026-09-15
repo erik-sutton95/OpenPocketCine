@@ -103,7 +103,7 @@ struct MultiviewView: View {
             in: viewport.size,
             safeArea: .init(
                 top: safe.top, leading: safe.leading, bottom: safe.bottom, trailing: safe.trailing),
-            selected: session.focusedIndex)
+            selected: session.focusedIndex, topControlInset: windowGeometry.topControlInset)
         return ZStack(alignment: .topLeading) {
             MonitorTheme.canvas
             ForEach(Array(session.tiles.enumerated()), id: \.element.id) { index, tile in
@@ -121,12 +121,15 @@ struct MultiviewView: View {
                 .frame(width: layout.sessionControls.width, height: layout.sessionControls.height)
                 .position(
                     x: layout.sessionControls.midX,
-                    y: layout.sessionControls.midY + windowGeometry.topControlInset)
+                    y: layout.sessionControls.midY)
                 stageAssistPalette(
                     horizontal: layout.assistsHorizontal, cellSize: layout.controlCellSize
                 )
                 .frame(width: layout.assists.width, height: layout.assists.height)
                 .position(x: layout.assists.midX, y: layout.assists.midY)
+                networkButton
+                    .frame(width: layout.network.width, height: layout.network.height)
+                    .position(x: layout.network.midX, y: layout.network.midY)
             }
             displayButton
                 .frame(width: layout.display.width, height: layout.display.height)
@@ -177,13 +180,8 @@ struct MultiviewView: View {
                     .frame(width: cellSize, height: cellSize)
                     .contentShape(Rectangle())
             }
-            .contextMenu {
-                Button("Shared Wi-Fi") { showNetwork = true }
-                    .disabled(session.busy || session.connectingCameras)
-            }
             .accessibilityLabel(session.layout == .grid ? "Show Center stage" : "Show 2 by 2 grid")
             .accessibilityValue(session.layout.rawValue)
-            .accessibilityHint("Touch and hold for Shared Wi-Fi")
             .accessibilityIdentifier("multiview.layout")
         }
         return Group {
@@ -243,6 +241,26 @@ struct MultiviewView: View {
         .padding(4)
         .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
         .buttonStyle(.plain)
+    }
+
+    private var networkButton: some View {
+        Button {
+            showNetwork = true
+        } label: {
+            VStack(spacing: 2) {
+                OpcIcon.wifi.frame(width: 20, height: 20)
+                Text("WI-FI")
+                    .font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .foregroundStyle(MonitorTheme.secondary)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
+        .buttonStyle(.plain)
+        .disabled(session.busy || session.connectingCameras)
+        .accessibilityLabel("Shared Wi-Fi")
+        .accessibilityIdentifier("multiview.network")
     }
 
     private var displayButton: some View {

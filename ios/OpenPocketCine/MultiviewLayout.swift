@@ -7,11 +7,15 @@ enum MultiviewLayout: String, CaseIterable {
     case grid = "2 × 2 grid"
     case centerStage = "Center stage"
 
-    func presentation(in size: CGSize, safeArea: MonitorSafeArea = .init(), selected: Int)
+    func presentation(
+        in size: CGSize, safeArea: MonitorSafeArea = .init(), selected: Int,
+        topControlInset: CGFloat = 0
+    )
         -> MultiviewPresentationLayout
     {
         MultiviewPresentationLayout(
             width: size.width, height: size.height, safeArea: safeArea,
-            arrangement: self == .grid ? .grid : .centerStage, selected: selected)
+            arrangement: self == .grid ? .grid : .centerStage, selected: selected,
+            topControlInset: topControlInset)
     }
 }
