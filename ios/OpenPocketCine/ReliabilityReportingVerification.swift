@@ -98,7 +98,9 @@
                     sourceRevision: Bundle.main.object(forInfoDictionaryKey: "OPCSourceRevision")
                         as? String ?? "unknown",
                     osName: "iOS", osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-                    hardwareClass: "verification", cameraFamily: "synthetic"))
+                    hardwareClass: "verification", cameraFamily: "synthetic",
+                    testSource: .verification,
+                    buildIdentity: FeedIncidentOrigin.currentBuildIdentity()))
             let now = Date()
             func snapshot(_ time: Double, healthy: Bool) -> FeedIncidentSnapshot {
                 FeedIncidentSnapshot(

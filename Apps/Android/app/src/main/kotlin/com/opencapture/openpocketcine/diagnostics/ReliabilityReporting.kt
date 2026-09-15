@@ -56,6 +56,44 @@ internal object ReliabilityReporting {
     val isAvailable: Boolean
         get() = ReliabilityReportingDSN.isAvailable
 
+    fun noteBreadcrumb(source: FeedIncidentBreadcrumb) {
+        if (!isOptedIn) return
+        val breadcrumb = Breadcrumb()
+        breadcrumb.category = "feed"
+        breadcrumb.message = source.kind.wire
+        val details = FeedIncidentNativeBreadcrumb.details(source.kind, source.detail)
+        for ((key, value) in details) {
+            breadcrumb.setData(key, value)
+        }
+        Sentry.addBreadcrumb(breadcrumb)
+    }
+
+    fun noteRepair(repair: FeedRepairRecord) {
+        if (!isOptedIn) return
+        val breadcrumb = Breadcrumb()
+        breadcrumb.category = "feed"
+        breadcrumb.message = "repair"
+        val details = FeedIncidentNativeBreadcrumb.details(repair)
+        for ((key, value) in details) {
+            breadcrumb.setData(key, value)
+        }
+        Sentry.addBreadcrumb(breadcrumb)
+    }
+
+    fun applyOriginalTags(tags: Map<String, String>?, scope: io.sentry.IScope) {
+        if (tags == null) return
+        for ((key, value) in tags) {
+            scope.setTag(key, value)
+        }
+    }
+
+    fun noteCurrentTestSource(source: FeedIncidentTestSource) {
+        if (!isOptedIn) return
+        postOnMain {
+            Sentry.configureScope { scope -> scope.setTag("testSource", source.wire) }
+        }
+    }
+
     fun install(context: Context) {
         val app = context.applicationContext
         appContext = app
@@ -178,7 +216,7 @@ internal object ReliabilityReporting {
         options.shutdownTimeoutMillis = 0
         options.connectionTimeoutMillis = 20_000
         options.readTimeoutMillis = 20_000
-        options.maxBreadcrumbs = 0
+        options.maxBreadcrumbs = 32
         options.isEnableUserInteractionTracing = false
         options.isEnableUserInteractionBreadcrumbs = false
         options.isEnableAutoActivityLifecycleTracing = false
@@ -201,7 +239,9 @@ internal object ReliabilityReporting {
         options.sessionReplay.sessionSampleRate = 0.0
         options.sessionReplay.onErrorSampleRate = 0.0
         options.tracesSampleRate = 0.0
-        options.setBeforeBreadcrumb { _: Breadcrumb, _ -> null }
+        options.setBeforeBreadcrumb { breadcrumb, _ ->
+            ReliabilityReportingPrivacy.scrubBreadcrumb(breadcrumb)
+        }
         options.setBeforeSend { event, _ ->
             if (!ReliabilityReportingConsent.isOptedIn) return@setBeforeSend null
             ReliabilityReportingPrivacy.scrub(event)
@@ -297,6 +337,11 @@ internal object ReliabilityReporting {
                             applyPrivacyOptions(configured)
                             configured.isForceInit = true
                         }
+                        Sentry.configureScope { scope ->
+                            scope.setTag("sourceRevision", BuildConfig.SOURCE_REVISION)
+                            scope.setTag("testSource", FeedIncidentOrigin.currentTestSource().wire)
+                            scope.setTag("buildIdentity", FeedIncidentOrigin.currentBuildIdentity())
+                        }
                     }
                 }
                 enqueueFinalizedFromSpool()
@@ -384,9 +429,13 @@ internal object ReliabilityReporting {
         event.setTag("kind", "sessionSummary")
         event.setTag("outcome", summary.outcome)
         event.setTag("sourceRevision", summary.sourceRevision)
+        event.setTag("testSource", (summary.testSource ?: FeedIncidentTestSource.UNKNOWN).wire)
+        event.setTag("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity))
         event.setExtra("healthyExposureSeconds", summary.healthyExposureSeconds)
         event.setExtra("incidentCount", summary.incidentCount)
         event.setExtra("sourceRevision", summary.sourceRevision)
+        event.setExtra("testSource", (summary.testSource ?: FeedIncidentTestSource.UNKNOWN).wire)
+        event.setExtra("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity))
         capturePayload(
             ReliabilityReportingPrivacy.scrub(event),
             json,
@@ -451,6 +500,7 @@ internal object ReliabilityReporting {
                 Sentry.captureEvent(event) { scope ->
                     scope.clearAttachments()
                     scope.addAttachment(Attachment(json, "$id.json", "application/json"))
+                    applyOriginalTags(event.tags, scope)
                 }
                 executor.execute {
                     if (capturedEpoch != currentEpoch() || !ReliabilityReportingConsent.isOptedIn) {
@@ -492,6 +542,7 @@ internal object ReliabilityReporting {
         event.fingerprints =
             ReliabilityReportingPrivacy.fingerprint(
                 envelope.schemaVersion,
+                envelope.kind,
                 envelope.grouping.failingStage,
                 envelope.grouping.errorClass,
             )
@@ -503,6 +554,8 @@ internal object ReliabilityReporting {
         event.setTag("cameraFamily", envelope.cameraFamily)
         event.setTag("cameraFirmware", envelope.grouping.cameraFirmware)
         event.setTag("hardwareClass", envelope.grouping.hardwareClass)
+        event.setTag("testSource", envelope.testSource)
+        event.setTag("buildIdentity", envelope.buildIdentity)
         event.setExtra("schemaVersion", envelope.schemaVersion)
         event.setExtra("failingStage", envelope.grouping.failingStage)
         event.setExtra("errorClass", envelope.grouping.errorClass)
@@ -516,6 +569,8 @@ internal object ReliabilityReporting {
         event.setExtra("worstGapSeconds", envelope.worstGapSeconds)
         event.setExtra("healthyExposureSeconds", envelope.healthyExposureSeconds)
         event.setExtra("sourceRevision", envelope.sourceRevision)
+        event.setExtra("testSource", envelope.testSource)
+        event.setExtra("buildIdentity", envelope.buildIdentity)
         event.contexts["feed"] =
             mapOf(
                 "schemaVersion" to envelope.schemaVersion,
@@ -525,6 +580,8 @@ internal object ReliabilityReporting {
                 "kind" to envelope.kind,
                 "assistState" to envelope.grouping.assistState,
                 "hardwareClass" to envelope.grouping.hardwareClass,
+                "testSource" to envelope.testSource,
+                "buildIdentity" to envelope.buildIdentity,
             )
         return ReliabilityReportingPrivacy.scrub(event)
     }

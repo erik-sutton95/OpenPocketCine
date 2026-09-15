@@ -119,6 +119,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             LiveHeadTrackCalibrateButton.calibrateTitle,
             "Head Tracking (Experimental)",
             SettingsHelpCopy.joystickSensitivity,
+            SettingsHelpCopy.gimbalJoystick,
             SettingsHelpCopy.gamepad,
             SettingsHelpCopy.keepScreenAwake,
             CaptureLists.nativeIsoHopTitle,

@@ -50,7 +50,7 @@ object MonitorLayoutPolicy {
             max(ceiling, min(ideal, floor - h))
         }
         return MonitorPortraitLayout(status, MonitorRect((vw - w) / 2f, y, w, h),
-            MonitorRect(14f, valuesY, max(0f, vw - 28f), valuesH), system, floor)
+            MonitorRect(14f, valuesY + 4f, max(0f, vw - 28f), valuesH), system, floor)
     }
 
     /** Portrait tools follow the lower controls floor, independently of picture crop. */

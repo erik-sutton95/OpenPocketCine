@@ -56,3 +56,45 @@ object GamepadOperatorMap {
             GamepadDpad.RIGHT -> GamepadOperatorAction.SHUTTER_CLOSE
         }
 }
+
+/** Controls Gimbal joystick. Default Left. The other analog stick must not drive. */
+enum class GamepadGimbalStick(val raw: String, val label: String) {
+    LEFT("left", "Left"),
+    RIGHT("right", "Right"),
+    ;
+
+    fun axes(leftX: Float, leftY: Float, rightX: Float, rightY: Float): Pair<Float, Float> =
+        if (this == LEFT) leftX to leftY else rightX to rightY
+
+    companion object {
+        val DEFAULT = LEFT
+
+        fun parse(raw: String?): GamepadGimbalStick =
+            if (raw.equals(RIGHT.raw, ignoreCase = true)) RIGHT else LEFT
+
+        fun fromLabel(label: String): GamepadGimbalStick =
+            if (label == RIGHT.label) RIGHT else LEFT
+
+        fun restHeldMotion(
+            previous: GamepadGimbalStick,
+            current: GamepadGimbalStick,
+            driving: Boolean,
+        ): Boolean = previous != current && driving
+    }
+}
+
+/** Angle HUD and D-pad 1/N steps share this resolution. Stepping stays camcap shutter. */
+object GamepadShutterSync {
+    fun angleLabel(denom: Int, fps: Int, available: List<Int>, preferredAngle: Double): String {
+        val preferred = ShutterAngle.label(ShutterAngle.nearestDegrees(preferredAngle))
+        if (denom <= 0) return preferred
+        val mapped = ShutterAngle.denom(preferredAngle, fps, available)
+        return if (mapped == denom) preferred else ShutterAngle.nearestLabel(denom, fps)
+    }
+
+    fun shouldPersistPreferredAngle(usesAngle: Boolean, isPhoto: Boolean, expoIsAuto: Boolean): Boolean =
+        usesAngle && !isPhoto && !expoIsAuto
+
+    fun preferredAngle(afterDenom: Int, fps: Int): Double =
+        ShutterAngle.nearestDegrees(ShutterAngle.degrees(afterDenom, fps))
+}

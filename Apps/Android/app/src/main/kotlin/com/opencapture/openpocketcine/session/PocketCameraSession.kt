@@ -7,6 +7,7 @@ import android.view.Surface
 import com.opencapture.openpocketcine.CaptureLists
 import com.opencapture.openpocketcine.CaptureShutterPolicy
 import com.opencapture.openpocketcine.GamepadOperatorAction
+import com.opencapture.openpocketcine.GamepadShutterSync
 import com.opencapture.openpocketcine.EvComp
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.bridge.SwiftCore
@@ -23,6 +24,7 @@ import com.opencapture.openpocketcine.diagnostics.FeedIncidentDecoder
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentLifecycle
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentQueue
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentRates
+import com.opencapture.openpocketcine.diagnostics.FeedIncidentOrigin
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentSessionContext
@@ -1019,6 +1021,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 cameraFamily = connectedCamera?.model?.family ?: "none",
                 decoderGeneration = decoder.randomAccess.generation,
                 socketGeneration = socketGeneration,
+                testSource = FeedIncidentOrigin.currentTestSource(),
+                buildIdentity = FeedIncidentOrigin.currentBuildIdentity(),
             ),
         )
     }
@@ -2648,12 +2652,24 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun nudgeGamepadShutter(steps: Int) {
+        val status = _status.value
         val next =
             CameraCommands.shutterSteppedDenom(
-                _status.value.shutterDenom,
+                status.shutterDenom,
                 steps,
-                _status.value.availableShutterDenoms,
+                status.availableShutterDenoms,
             ) ?: return
+        if (GamepadShutterSync.shouldPersistPreferredAngle(
+                OperatorPrefs.shutterUsesAngle(appContext),
+                CameraCommands.isPhotoMode(status.shootingMode),
+                status.expoMode == CameraCommands.EXPO_AUTO,
+            )
+        ) {
+            OperatorPrefs.setShutterAngleDegrees(
+                appContext,
+                GamepadShutterSync.preferredAngle(next, status.fps),
+            )
+        }
         setShutterDenom(next)
     }
 

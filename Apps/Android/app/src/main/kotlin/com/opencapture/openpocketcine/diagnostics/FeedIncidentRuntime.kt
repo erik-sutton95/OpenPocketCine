@@ -68,11 +68,27 @@ internal object FeedIncidentRuntime {
     }
 
     fun recordBreadcrumb(breadcrumb: FeedIncidentBreadcrumb) {
-        writer.execute { recorder.recordBreadcrumb(breadcrumb) }
+        writer.execute {
+            recorder.recordBreadcrumb(breadcrumb)
+            ReliabilityReporting.noteBreadcrumb(breadcrumb)
+        }
     }
 
     fun recordRepair(repair: FeedRepairRecord) {
-        writer.execute { persist(recorder.recordRepair(repair)) }
+        writer.execute {
+            persist(recorder.recordRepair(repair))
+            ReliabilityReporting.noteRepair(repair)
+        }
+    }
+
+    fun noteTestSource(source: FeedIncidentTestSource) {
+        writer.execute {
+            recorder.noteTestSource(source)
+            val context = sessionContext
+            if (context != null && source.rank > context.testSource.rank) {
+                context.testSource = source
+            }
+        }
     }
 
     fun noteDecoderGeneration(generation: Int) {
@@ -164,6 +180,8 @@ internal object FeedIncidentRuntime {
                 sourceRevision = context.sourceRevision,
                 appVersion = context.appVersion,
                 appBuild = context.appBuild,
+                testSource = context.testSource,
+                buildIdentity = context.buildIdentity,
             )
         val root = store?.directory ?: return
         FeedSessionSummaryStore.persist(summary, root)

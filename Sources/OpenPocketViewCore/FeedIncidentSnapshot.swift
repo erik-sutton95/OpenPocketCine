@@ -5,6 +5,54 @@ public enum FeedIncidentSchema {
     public static let version = 1
 }
 
+/// Bounded origin of a feed session. Legacy records without the field are `unknown`.
+public enum FeedIncidentTestSource: String, Equatable, Sendable, Codable {
+    case manual
+    case automation
+    case faultInjection
+    case verification
+    case unknown
+
+    public var rank: Int {
+        switch self {
+        case .unknown: return 0
+        case .manual: return 1
+        case .automation: return 2
+        case .faultInjection: return 3
+        case .verification: return 4
+        }
+    }
+
+    public static func parse(_ raw: String?) -> FeedIncidentTestSource {
+        guard let raw else { return .unknown }
+        return FeedIncidentTestSource(rawValue: raw) ?? .unknown
+    }
+
+    /// Current-run derivation only. Never apply this to cached reports.
+    public static func derive(
+        verification: Bool,
+        injectionActivated: Bool,
+        automation: Bool
+    ) -> FeedIncidentTestSource {
+        if verification { return .verification }
+        if injectionActivated { return .faultInjection }
+        if automation { return .automation }
+        return .manual
+    }
+}
+
+/// Artifact identity distinct from marketing version/build. Token length holds
+/// `ios-`/`android-` plus 32 hex characters.
+public enum FeedIncidentBuildIdentity {
+    public static let maxLength = 64
+
+    public static func parse(_ raw: String?) -> String {
+        let trimmed = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "unknown" }
+        return FeedIncidentPrivacy.token(trimmed, max: maxLength)
+    }
+}
+
 /// Bounds for the incident recorder. These are capture limits, not live budgets.
 public enum FeedIncidentBounds {
     public static let preludeSeconds: TimeInterval = 60
@@ -53,6 +101,8 @@ public struct FeedIncidentSessionContext: Equatable, Sendable {
     public var cameraFirmware: String?
     public var decoderGeneration: Int
     public var socketGeneration: Int
+    public var testSource: FeedIncidentTestSource
+    public var buildIdentity: String
 
     public init(
         sessionID: String,
@@ -65,7 +115,9 @@ public struct FeedIncidentSessionContext: Equatable, Sendable {
         cameraFamily: String,
         cameraFirmware: String? = nil,
         decoderGeneration: Int = 0,
-        socketGeneration: Int = 0
+        socketGeneration: Int = 0,
+        testSource: FeedIncidentTestSource = .unknown,
+        buildIdentity: String = "unknown"
     ) {
         self.sessionID = FeedIncidentPrivacy.token(sessionID)
         self.appVersion = FeedIncidentPrivacy.token(appVersion, max: 32)
@@ -78,6 +130,8 @@ public struct FeedIncidentSessionContext: Equatable, Sendable {
         self.cameraFirmware = cameraFirmware.map { FeedIncidentPrivacy.token($0, max: 32) }
         self.decoderGeneration = max(0, decoderGeneration)
         self.socketGeneration = max(0, socketGeneration)
+        self.testSource = testSource
+        self.buildIdentity = FeedIncidentBuildIdentity.parse(buildIdentity)
     }
 }
 
@@ -379,6 +433,55 @@ public struct FeedIncidentBreadcrumb: Equatable, Sendable, Codable {
     }
 }
 
+/// Typed native SDK breadcrumb payload. Unknown values are dropped, not coerced.
+public enum FeedIncidentNativeBreadcrumb: Sendable {
+    public static let allowedValues: [String: Set<String>] = [
+        "sceneState": ["active", "inactive"],
+        "assistState": ["off", "identity", "replacement"],
+        "path": ["unexpectedDisconnect"],
+        "repairPhase": [
+            "requested", "blocked", "locallySent", "peerResponse", "pictureRestored",
+        ],
+        "repairAction": ["decoder", "enable", "session", "endpoint", "rejoin"],
+    ]
+
+    public static func isAllowedMessage(_ message: String) -> Bool {
+        FeedIncidentBreadcrumbKind(rawValue: message) != nil || message == "repair"
+    }
+
+    public static func details(kind: FeedIncidentBreadcrumbKind, detail: String) -> [String: String]
+    {
+        switch kind {
+        case .sceneActivity:
+            return sanitized(["sceneState": detail])
+        case .assistChange:
+            return sanitized(["assistState": detail])
+        case .pathChange:
+            return sanitized(["path": detail])
+        case .settingsEnter, .settingsExit, .surfaceAttach, .surfaceDetach,
+            .decoderCreate, .decoderInvalidate, .cameraCommand:
+            return [:]
+        }
+    }
+
+    public static func details(repair: FeedRepairRecord) -> [String: String] {
+        sanitized([
+            "repairPhase": repair.phase.rawValue,
+            "repairAction": repair.action,
+        ])
+    }
+
+    public static func sanitized(_ raw: [String: String]) -> [String: String] {
+        var out: [String: String] = [:]
+        for (key, value) in raw {
+            let token = FeedIncidentPrivacy.token(value, max: 32)
+            guard let allowed = allowedValues[key], allowed.contains(token) else { continue }
+            out[key] = token
+        }
+        return out
+    }
+}
+
 public struct FeedRepairRecord: Equatable, Sendable, Codable {
     public var monotonicAt: TimeInterval
     public var action: String
@@ -434,8 +537,15 @@ public struct FeedIncidentHeader: Equatable, Sendable, Codable {
     public var evictions: Int
     public var assistState: String
     public var healthyExposureSeconds: TimeInterval
+    /// Absent on legacy bundles. Do not fill from the current process.
+    public var testSource: FeedIncidentTestSource? = nil
+    public var buildIdentity: String? = nil
 
     public var processInterrupted: Bool { outcome == .interrupted }
+
+    public var resolvedTestSource: FeedIncidentTestSource { testSource ?? .unknown }
+
+    public var resolvedBuildIdentity: String { FeedIncidentBuildIdentity.parse(buildIdentity) }
 }
 
 public struct FeedIncidentBundle: Equatable, Sendable, Codable {
@@ -472,6 +582,8 @@ public struct FeedIncidentVendorEnvelope: Equatable, Sendable, Codable {
     public var healthyExposureSeconds: TimeInterval
     public var decoderGeneration: Int
     public var socketGeneration: Int
+    public var testSource: String
+    public var buildIdentity: String
 }
 
 public struct FeedIncidentVerdict: Equatable, Sendable {

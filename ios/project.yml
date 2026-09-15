@@ -41,6 +41,8 @@ targets:
         # keep the prototype moving; the core package stays Swift 6 strict-concurrency and fully tested.
         # ponytail: tighten to Swift 6 once the I/O layer is validated on hardware.
         SWIFT_VERSION: "5.0"
+        # Internal device builds need symbols just as distributed builds do.
+        DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
         # Same App ID as Android and the App Store Connect record. Enable Hotspot
         # Configuration on this identifier in the Developer portal.
         PRODUCT_BUNDLE_IDENTIFIER: com.opencapture.openpocketcine

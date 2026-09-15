@@ -188,13 +188,15 @@ space after rotation or resizing, including saved positions. Long-press a View A
   a Bluetooth connection alone does not confirm motion delivery.
   Scopes can be moved beneath the
   compass Head Lock control in either orientation. Responsiveness remains
-  experimental. A connected game controller's left stick drives the same path.
+  experimental. A connected game controller's selected stick drives the same path (Left by default).
   Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
   hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter.
   A toast says Gamepad connected or disconnected; unplug rests the
   stick. Operator Setup → Controls → Gamepad shows Connected / Not
-  connected. A gimbal stop pulses only after the head moves then stalls
+  connected. Choose **Gimbal joystick → Left / Right** in the same Controls tab.
+  D-pad shutter changes also update the shutter-angle readout when angle display is selected.
+  A gimbal stop pulses only after the head moves then stalls
   (Haptics setting). Capture drums, the zoom disc, and duration
   dials pulse on coarse snaps (172° → 180°, 3×, whole seconds),
   not on every hundredth or half-second tick. Stick

@@ -98,7 +98,7 @@
             if !equalColumns, subviews.count <= columns {
                 let widths = subviews.map { max(44, $0.sizeThatFits(.unspecified).width) }
                 let total = widths.reduce(0, +)
-                let gap = min(32, max(14, (bounds.width - total) / CGFloat(max(1, count - 1))))
+                let gap = min(34, max(16, (bounds.width - total) / CGFloat(max(1, count - 1))))
                 let proposedWidth = total + CGFloat(max(0, count - 1)) * gap
                 // Compress only when the actual labels exceed the available band.
                 let scale = min(1, bounds.width / max(1, proposedWidth))

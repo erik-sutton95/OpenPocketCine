@@ -50,7 +50,7 @@ struct LiveCameraControlBar: View {
 
     private var tileStrip: some View {
         MonitorControlGrid(
-            columns: gridColumns, spacing: columns == 3 ? 6 : 10, equalColumns: columns == 3
+            columns: gridColumns, spacing: columns == 3 ? 8 : 12, equalColumns: columns == 3
         ) {
             tile(.iso, label: "ISO", value: isoValue, widest: "25600")
             if model.session.status.expoMode == .auto {
@@ -141,11 +141,10 @@ struct LiveCameraControlBar: View {
     }
 
     private var shutterValue: String {
-        if OperatorPrefs.shutterUsesAngle, !model.session.status.isPhoto {
-            return ShutterAngle.label(OperatorPrefs.shutterAngleDegrees)
-        }
-        let d = model.session.status.shutterDenom
-        return d > 0 ? "1/\(d)" : "—"
+        CaptureQuickSnapshot.shutterReadout(
+            status: model.session.status,
+            shutterUsesAngle: OperatorPrefs.shutterUsesAngle,
+            shutterAngleDegrees: OperatorPrefs.shutterAngleDegrees)
     }
 
     private var evValue: String {

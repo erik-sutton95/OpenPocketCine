@@ -38,6 +38,7 @@ class ReliabilityReportingTest {
         ReliabilityReporting.setCaptureHandlerForTests(null)
         ReliabilityReportingConsent.resetForTests()
         ReliabilityReportingGate.resetForTests()
+        FeedIncidentOrigin.resetForTests()
         cacheRoot.deleteRecursively()
     }
 
@@ -181,13 +182,82 @@ class ReliabilityReportingTest {
         val prints =
             ReliabilityReportingPrivacy.fingerprint(
                 schema = 1,
+                kind = "freshInputStaleOutput",
                 stage = "decodedOutput",
                 errorClass = "invalidSession",
             )
         assertEquals(
-            listOf("feed-incident", "schema:1", "stage:decodedOutput", "errorClass:invalidSession"),
+            listOf(
+                "feed-incident",
+                "schema:1",
+                "kind:freshInputStaleOutput",
+                "stage:decodedOutput",
+                "errorClass:invalidSession",
+            ),
             prints,
         )
+    }
+
+    @Test
+    fun unknownBreadcrumbTokensAreRejected() {
+        val event = SentryEvent()
+        val scene = Breadcrumb()
+        scene.category = "feed"
+        scene.message = "sceneActivity"
+        scene.setData("sceneState", "Erik")
+        scene.setData("assistState", "private_project")
+        event.breadcrumbs = mutableListOf(scene)
+        ReliabilityReportingPrivacy.scrub(event)
+        assertEquals(1, event.breadcrumbs?.size)
+        assertNull(event.breadcrumbs?.first()?.data?.get("sceneState"))
+        assertNull(event.breadcrumbs?.first()?.data?.get("assistState"))
+    }
+
+    @Test
+    fun scrubDoesNotStampCurrentOriginOntoLegacyEvents() {
+        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
+        val event = SentryEvent()
+        event.level = SentryLevel.FATAL
+        event.setTag("failingStage", "decodedOutput")
+        ReliabilityReportingPrivacy.scrub(event)
+        assertNull(event.tags?.get("testSource"))
+        event.setTag("testSource", "manual")
+        event.setTag("buildIdentity", "android-priorrun0123456789abcdef")
+        ReliabilityReportingPrivacy.scrub(event)
+        assertEquals("manual", event.tags?.get("testSource"))
+        assertEquals("android-priorrun0123456789abcdef", event.tags?.get("buildIdentity"))
+    }
+
+    @Test
+    fun onlyTypedFeedBreadcrumbsSurviveScrubbing() {
+        val event = SentryEvent()
+        val typed = Breadcrumb()
+        typed.category = "feed"
+        typed.message = "settingsEnter"
+        typed.setData("password", "must-not-leave-phone")
+        val scene = Breadcrumb()
+        scene.category = "feed"
+        scene.message = "sceneActivity"
+        scene.setData("sceneState", "inactive")
+        scene.setData("password", "must-not-leave-phone")
+        val repair = Breadcrumb()
+        repair.category = "feed"
+        repair.message = "repair"
+        repair.setData("repairAction", "decoder")
+        repair.setData("repairPhase", "requested")
+        val arbitrary = Breadcrumb()
+        arbitrary.category = "feed"
+        arbitrary.message = "arbitrary operator text"
+        event.breadcrumbs = mutableListOf(typed, scene, repair, arbitrary, Breadcrumb())
+        ReliabilityReportingPrivacy.scrub(event)
+        assertEquals(3, event.breadcrumbs?.size)
+        assertEquals("settingsEnter", event.breadcrumbs?.get(0)?.message)
+        assertTrue(event.breadcrumbs?.get(0)?.data.isNullOrEmpty())
+        assertEquals("sceneActivity", event.breadcrumbs?.get(1)?.message)
+        assertEquals("inactive", event.breadcrumbs?.get(1)?.data?.get("sceneState"))
+        assertNull(event.breadcrumbs?.get(1)?.data?.get("password"))
+        assertEquals("repair", event.breadcrumbs?.get(2)?.message)
+        assertEquals("decoder", event.breadcrumbs?.get(2)?.data?.get("repairAction"))
     }
 
     @Test
@@ -202,6 +272,8 @@ class ReliabilityReportingTest {
         event.breadcrumbs = mutableListOf(Breadcrumb())
         event.setTag("failingStage", "decodedOutput")
         event.setTag("email", "tester@example.com")
+        event.setTag("testSource", "automation")
+        event.setTag("buildIdentity", "android-0123456789abcdef0123456789ab")
         event.setExtra("password", "hunter2")
         event.setExtra("failingStage", "decodedOutput")
         event.contexts["device"] = mapOf("name" to "Example Phone", "model" to "Pixel 9")
@@ -216,6 +288,8 @@ class ReliabilityReportingTest {
         assertTrue(event.breadcrumbs.isNullOrEmpty())
         assertNull(event.tags?.get("email"))
         assertEquals("decodedOutput", event.tags?.get("failingStage"))
+        assertEquals("automation", event.tags?.get("testSource"))
+        assertEquals("android-0123456789abcdef0123456789ab", event.tags?.get("buildIdentity"))
         assertNull(event.extras?.get("password"))
         assertEquals("decodedOutput", event.extras?.get("failingStage"))
         val device = event.contexts["device"] as? Map<*, *>
@@ -238,7 +312,12 @@ class ReliabilityReportingTest {
         bundle.header.appVersion = "0.1.0"
         bundle.header.appBuild = "107"
         bundle.header.sourceRevision = "a".repeat(40)
+        bundle.header.testSource = FeedIncidentTestSource.FAULT_INJECTION
+        bundle.header.buildIdentity = "android-0123456789abcdef0123456789ab"
+        bundle.header.kind = FeedIncidentKind.TRANSPORT_STALL
         bundle.header.startedAtWallClockMs = 1_780_000_000_000L
+        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
+        FeedIncidentOrigin.overrideBuildIdentityForTests = "android-current-run-identity-value"
         var captured = false
         ReliabilityReporting.setCaptureHandlerForTests { event, _ ->
             captured = true
@@ -246,8 +325,46 @@ class ReliabilityReportingTest {
             assertEquals("107", event.dist)
             assertEquals(java.util.Date(1_780_000_000_000L), event.timestamp)
             assertEquals("a".repeat(40), event.tags?.get("sourceRevision"))
+            assertEquals("faultInjection", event.tags?.get("testSource"))
+            assertEquals("android-0123456789abcdef0123456789ab", event.tags?.get("buildIdentity"))
+            assertTrue(event.fingerprints?.contains("kind:transportStall") == true)
+            assertTrue(event.tags?.get("testSource") != "verification")
         }
         ReliabilityReporting.enqueueFinalized(bundle)
+        waitUntil { captured }
+        assertTrue(captured)
+    }
+
+    @Test
+    fun queuedReplayOriginSurvivesJsonReloadAndCurrentRunOverride() {
+        ReliabilityReportingConsent.setOptedIn(true)
+        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
+        ReliabilityReportingGate.setCameraSessionActive(false)
+        val original = stallBundle("14141414141414141414141414141414")
+        original.header.testSource = FeedIncidentTestSource.FAULT_INJECTION
+        original.header.buildIdentity = "android-queuedorigin0123456789abcd"
+        original.header.kind = FeedIncidentKind.TRANSPORT_STALL
+        val encoded = FeedIncidentJson.encode(original)
+        val json = org.json.JSONObject(String(encoded, Charsets.UTF_8))
+        json.getJSONObject("header").remove("testSource")
+        json.getJSONObject("header").remove("buildIdentity")
+        val legacy = FeedIncidentJson.decode(json.toString().toByteArray(Charsets.UTF_8))
+        assertNotNull(legacy)
+        assertEquals(FeedIncidentTestSource.UNKNOWN, legacy.header.testSource)
+        assertEquals("unknown", legacy.header.buildIdentity)
+        val restored = FeedIncidentJson.decode(encoded)
+        assertNotNull(restored)
+        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
+        FeedIncidentOrigin.overrideBuildIdentityForTests = "android-current-run-identity-value"
+        var captured = false
+        ReliabilityReporting.setCaptureHandlerForTests { event, _ ->
+            captured = true
+            assertEquals("faultInjection", event.tags?.get("testSource"))
+            assertEquals("android-queuedorigin0123456789abcd", event.tags?.get("buildIdentity"))
+            assertTrue(event.fingerprints?.contains("kind:transportStall") == true)
+            assertTrue(event.tags?.get("testSource") != "verification")
+        }
+        ReliabilityReporting.enqueueFinalized(restored)
         waitUntil { captured }
         assertTrue(captured)
     }
@@ -285,6 +402,7 @@ class ReliabilityReportingTest {
             captured += 1
             assertEquals("12c2d058d58442709aa2eca08bf20986", event.eventId.toString())
             assertEquals("feed-incident", event.fingerprints?.first())
+            assertTrue(event.fingerprints?.contains("kind:freshInputStaleOutput") == true)
             assertNull(event.user)
             val text = String(data, Charsets.UTF_8)
             assertTrue(text.contains("prelude"))
@@ -340,9 +458,16 @@ class ReliabilityReportingTest {
         assertEquals("decodedOutput", envelope.grouping.failingStage)
         assertEquals("invalidSession", envelope.grouping.errorClass)
         assertEquals(
-            listOf("feed-incident", "schema:1", "stage:decodedOutput", "errorClass:invalidSession"),
+            listOf(
+                "feed-incident",
+                "schema:1",
+                "kind:freshInputStaleOutput",
+                "stage:decodedOutput",
+                "errorClass:invalidSession",
+            ),
             ReliabilityReportingPrivacy.fingerprint(
                 envelope.schemaVersion,
+                envelope.kind,
                 envelope.grouping.failingStage,
                 envelope.grouping.errorClass,
             ),

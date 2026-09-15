@@ -1,4 +1,5 @@
 import Foundation
+import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
@@ -9,7 +10,8 @@ final class FeedSessionSummaryStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let healthy = FeedIncidentSessionSummary(
             sessionID: UUID().uuidString, healthyExposureSeconds: 600,
-            incidentCount: 0, outcome: "healthy", sourceRevision: "test")
+            incidentCount: 0, outcome: "healthy", sourceRevision: "test",
+            testSource: .manual, buildIdentity: "ios-0123456789abcdef0123456789abcd")
         let live = FeedIncidentSessionSummary(
             sessionID: UUID().uuidString, healthyExposureSeconds: 30,
             incidentCount: 1, outcome: "live", sourceRevision: "test")
@@ -20,7 +22,13 @@ final class FeedSessionSummaryStoreTests: XCTestCase {
         XCTAssertEqual(loaded.count, 2)
         XCTAssertEqual(
             loaded.first { $0.sessionID == healthy.sessionID }?.healthyExposureSeconds, 600)
+        XCTAssertEqual(
+            loaded.first { $0.sessionID == healthy.sessionID }?.testSource, .manual)
+        XCTAssertEqual(
+            loaded.first { $0.sessionID == healthy.sessionID }?.buildIdentity,
+            "ios-0123456789abcdef0123456789abcd")
         XCTAssertEqual(loaded.first { $0.sessionID == live.sessionID }?.outcome, "interrupted")
+        XCTAssertNil(loaded.first { $0.sessionID == live.sessionID }?.testSource)
         FeedSessionSummaryStore.deleteAll(root: root)
         XCTAssertTrue(FeedSessionSummaryStore.load(root: root).isEmpty)
     }

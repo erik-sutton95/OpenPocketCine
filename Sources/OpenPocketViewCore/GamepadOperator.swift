@@ -58,3 +58,69 @@ public enum GamepadOperatorMap {
         }
     }
 }
+
+/// Controls **Gimbal joystick**. Default Left. The other analog stick must not drive.
+public enum GamepadGimbalStick: String, CaseIterable, Sendable {
+    case left
+    case right
+
+    public static let `default`: Self = .left
+
+    public var label: String {
+        switch self {
+        case .left: "Left"
+        case .right: "Right"
+        }
+    }
+
+    public static func parse(_ raw: String?) -> Self {
+        switch raw?.lowercased() {
+        case right.rawValue: .right
+        default: .left
+        }
+    }
+
+    public static func fromLabel(_ label: String) -> Self {
+        label == right.label ? .right : .left
+    }
+
+    public func axes(
+        leftX: Double, leftY: Double, rightX: Double, rightY: Double
+    ) -> (x: Double, y: Double) {
+        switch self {
+        case .left: (leftX, leftY)
+        case .right: (rightX, rightY)
+        }
+    }
+
+    /// Changing selection must rest a held throw from the previously selected stick.
+    public static func restHeldMotion(from previous: Self, to current: Self, driving: Bool) -> Bool
+    {
+        previous != current && driving
+    }
+}
+
+/// Angle HUD and D-pad 1/N steps share this resolution. Stepping stays `camcap_shutter`.
+public enum GamepadShutterSync: Sendable {
+    /// Preferred angle only when it maps to the live 1/N; otherwise the nearest live label.
+    public static func angleLabel(
+        denom: Int, fps: Int, available: [Int], preferredAngle: Double
+    ) -> String {
+        let preferred = ShutterAngle.label(ShutterAngle.nearestDegrees(preferredAngle))
+        guard denom > 0 else { return preferred }
+        let mapped = ShutterAngle.denom(
+            degrees: preferredAngle, fps: fps, available: available)
+        return mapped == denom ? preferred : ShutterAngle.nearestLabel(denom: denom, fps: fps)
+    }
+
+    public static func shouldPersistPreferredAngle(
+        usesAngle: Bool, isPhoto: Bool, expoIsAuto: Bool
+    ) -> Bool {
+        usesAngle && !isPhoto && !expoIsAuto
+    }
+
+    /// After a legal 1/N step, persist this so fps rematch keeps the displayed angle.
+    public static func preferredAngle(afterDenom denom: Int, fps: Int) -> Double {
+        ShutterAngle.nearestDegrees(ShutterAngle.degrees(denom: denom, fps: fps))
+    }
+}

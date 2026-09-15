@@ -47,9 +47,29 @@ enum ReliabilityReporting {
         guard isOptedIn, SentrySDK.isEnabled else { return }
         let breadcrumb = Breadcrumb(level: .info, category: "feed")
         breadcrumb.message = source.kind.rawValue
-        // Only the enum crosses into the SDK. The richer, redacted details stay
-        // in the bounded incident attachment, never automatic UI breadcrumbs.
+        let details = FeedIncidentNativeBreadcrumb.details(kind: source.kind, detail: source.detail)
+        breadcrumb.data = details.isEmpty ? nil : details
         SentrySDK.addBreadcrumb(breadcrumb)
+    }
+
+    static func noteRepair(_ repair: FeedRepairRecord) {
+        guard isOptedIn, SentrySDK.isEnabled else { return }
+        let breadcrumb = Breadcrumb(level: .info, category: "feed")
+        breadcrumb.message = "repair"
+        let details = FeedIncidentNativeBreadcrumb.details(repair: repair)
+        breadcrumb.data = details.isEmpty ? nil : details
+        SentrySDK.addBreadcrumb(breadcrumb)
+    }
+
+    /// Once-only current-run scope upgrade. Does not rewrite queued/fatal tags.
+    static func noteCurrentTestSource(_ source: FeedIncidentTestSource) {
+        guard isOptedIn else { return }
+        DispatchQueue.main.async {
+            guard SentrySDK.isEnabled else { return }
+            SentrySDK.configureScope { scope in
+                scope.setTag(value: source.rawValue, key: "testSource")
+            }
+        }
     }
 
     static func install() {
@@ -186,6 +206,9 @@ enum ReliabilityReporting {
         options.beforeBreadcrumb = { ReliabilityReportingPrivacy.scrubBreadcrumb($0) }
         options.beforeSend = { event in
             guard ReliabilityReportingConsent.isOptedIn else { return nil }
+            // Fatal/watchdog events from a prior run already carry persisted
+            // tags; Cocoa skips applyToEvent for isFatalEvent. Never fill
+            // current-run origin onto missing tags.
             return ReliabilityReportingPrivacy.scrub(event)
         }
         return options
@@ -256,6 +279,12 @@ enum ReliabilityReporting {
                             value: Bundle.main.object(
                                 forInfoDictionaryKey: "OPCSourceRevision") as? String ?? "unknown",
                             key: "sourceRevision")
+                        scope.setTag(
+                            value: FeedIncidentOrigin.currentTestSource().rawValue,
+                            key: "testSource")
+                        scope.setTag(
+                            value: FeedIncidentOrigin.currentBuildIdentity(),
+                            key: "buildIdentity")
                     }
                     sdkStarted = true
                 }
@@ -304,6 +333,8 @@ enum ReliabilityReporting {
         event.tags?["cameraFamily"] = bundle.header.cameraFamily
         event.tags?["cameraFirmware"] = bundle.header.cameraFirmware ?? "unknown"
         event.tags?["hardwareClass"] = bundle.header.hardwareClass
+        event.tags?["testSource"] = bundle.header.resolvedTestSource.rawValue
+        event.tags?["buildIdentity"] = bundle.header.resolvedBuildIdentity
         capturePayload(event: event, json: json, id: envelope.incidentID, epoch: capturedEpoch)
     }
 
@@ -328,10 +359,14 @@ enum ReliabilityReporting {
         event.tags = [
             "kind": "sessionSummary", "outcome": summary.outcome,
             "sourceRevision": summary.sourceRevision,
+            "testSource": (summary.testSource ?? .unknown).rawValue,
+            "buildIdentity": FeedIncidentBuildIdentity.parse(summary.buildIdentity),
         ]
         event.extra = [
             "healthyExposureSeconds": summary.healthyExposureSeconds,
             "incidentCount": summary.incidentCount, "sourceRevision": summary.sourceRevision,
+            "testSource": (summary.testSource ?? .unknown).rawValue,
+            "buildIdentity": FeedIncidentBuildIdentity.parse(summary.buildIdentity),
         ]
         capturePayload(event: event, json: json, id: "session-" + summary.sessionID, epoch: epoch)
     }
@@ -377,6 +412,7 @@ enum ReliabilityReporting {
                     scope.addAttachment(
                         Attachment(
                             data: json, filename: id + ".json", contentType: "application/json"))
+                    applyOriginalTags(event.tags, to: scope)
                 }
             }
             queue.async {
@@ -435,6 +471,7 @@ enum ReliabilityReporting {
             formatted: "feed incident \(envelope.grouping.failingStage)")
         event.fingerprint = ReliabilityReportingPrivacy.fingerprint(
             schema: envelope.schemaVersion,
+            kind: envelope.kind,
             stage: envelope.grouping.failingStage,
             errorClass: envelope.grouping.errorClass)
         event.tags = [
@@ -442,6 +479,8 @@ enum ReliabilityReporting {
             "errorClass": envelope.grouping.errorClass,
             "outcome": envelope.grouping.outcome,
             "kind": envelope.kind,
+            "testSource": envelope.testSource,
+            "buildIdentity": envelope.buildIdentity,
         ]
         event.extra = [
             "schemaVersion": envelope.schemaVersion,
@@ -456,6 +495,8 @@ enum ReliabilityReporting {
             "socketGeneration": envelope.socketGeneration,
             "worstGapSeconds": envelope.worstGapSeconds,
             "healthyExposureSeconds": envelope.healthyExposureSeconds,
+            "testSource": envelope.testSource,
+            "buildIdentity": envelope.buildIdentity,
         ]
         event.context = [
             "feed": [
@@ -466,9 +507,19 @@ enum ReliabilityReporting {
                 "kind": envelope.kind,
                 "assistState": envelope.grouping.assistState,
                 "hardwareClass": envelope.grouping.hardwareClass,
+                "testSource": envelope.testSource,
+                "buildIdentity": envelope.buildIdentity,
             ]
         ]
         return ReliabilityReportingPrivacy.scrub(event)
+    }
+
+    /// Capture-scope tags from the current run must not replace persisted origin.
+    static func applyOriginalTags(_ tags: [String: String]?, to scope: Scope) {
+        guard let tags else { return }
+        for (key, value) in tags {
+            scope.setTag(value: value, key: key)
+        }
     }
 
     private static func scheduleIdlePoll() {

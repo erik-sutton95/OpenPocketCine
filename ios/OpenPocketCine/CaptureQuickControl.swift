@@ -57,6 +57,29 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             fallbackIndex: index)
     }
 
+    var chipValue: String { selection.isEmpty ? "—" : selection }
+
+    /// Angle HUD: preferred only when it maps to live 1/N, else the nearest live label.
+    static func shutterReadout(
+        status: CameraStatus, shutterUsesAngle: Bool, shutterAngleDegrees: Double,
+        facePriorityExposureEnabled: Bool = false
+    ) -> String {
+        primary(
+            .shutter, status: status, facePriorityExposureEnabled: facePriorityExposureEnabled,
+            shutterUsesAngle: shutterUsesAngle, shutterAngleDegrees: shutterAngleDegrees
+        )?.chipValue ?? "—"
+    }
+
+    static func persistPreferredAngle(
+        afterDenom denom: Int, fps: Int, usesAngle: Bool, isPhoto: Bool, expoIsAuto: Bool
+    ) -> Double? {
+        guard
+            GamepadShutterSync.shouldPersistPreferredAngle(
+                usesAngle: usesAngle, isPhoto: isPhoto, expoIsAuto: expoIsAuto)
+        else { return nil }
+        return GamepadShutterSync.preferredAngle(afterDenom: denom, fps: fps)
+    }
+
     func changedValue(translation: Double, current: Self?) -> String? {
         guard self == current, enabled else { return nil }
         return display.changedValue(at: display.position(translation: translation))

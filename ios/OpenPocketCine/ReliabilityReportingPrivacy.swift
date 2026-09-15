@@ -61,6 +61,7 @@ enum ReliabilityReportingPrivacy {
         "incidentCount", "sourceRevision", "hardwareClass", "cameraFirmware", "assistState",
         "decoderGeneration",
         "socketGeneration", "worstGapSeconds", "healthyExposureSeconds", "incidentCount",
+        "testSource", "buildIdentity",
     ]
 
     static let contextAllowlist: [String: Set<String>] = [
@@ -69,7 +70,7 @@ enum ReliabilityReportingPrivacy {
         "app": ["app_version", "app_build", "build_type"],
         "feed": [
             "schemaVersion", "failingStage", "errorClass", "outcome", "kind",
-            "assistState", "hardwareClass",
+            "assistState", "hardwareClass", "testSource", "buildIdentity", "cameraFamily",
         ],
     ]
 
@@ -87,10 +88,13 @@ enum ReliabilityReportingPrivacy {
         return SentryId(uuidString: String(padded.prefix(32)))
     }
 
-    static func fingerprint(schema: Int, stage: String, errorClass: String) -> [String] {
+    static func fingerprint(schema: Int, kind: String, stage: String, errorClass: String)
+        -> [String]
+    {
         [
             "feed-incident",
             "schema:\(schema)",
+            "kind:\(FeedIncidentPrivacyToken.token(kind))",
             "stage:\(FeedIncidentPrivacyToken.token(stage))",
             "errorClass:\(FeedIncidentPrivacyToken.token(errorClass))",
         ]
@@ -110,14 +114,22 @@ enum ReliabilityReportingPrivacy {
     static let tagAllowlist: Set<String> = [
         "failingStage", "errorClass", "outcome", "kind",
         "sourceRevision", "cameraFamily", "cameraFirmware", "hardwareClass",
+        "testSource", "buildIdentity",
     ]
 
     static func scrubBreadcrumb(_ breadcrumb: Breadcrumb) -> Breadcrumb? {
         guard breadcrumb.category == "feed",
             let message = breadcrumb.message,
-            FeedIncidentBreadcrumbKind(rawValue: message) != nil
+            FeedIncidentNativeBreadcrumb.isAllowedMessage(message)
         else { return nil }
-        breadcrumb.data = nil
+        var strings: [String: String] = [:]
+        if let data = breadcrumb.data {
+            for (key, value) in data {
+                if let text = value as? String { strings[key] = text }
+            }
+        }
+        let kept = FeedIncidentNativeBreadcrumb.sanitized(strings)
+        breadcrumb.data = kept.isEmpty ? nil : kept
         return breadcrumb
     }
 
@@ -138,7 +150,7 @@ enum ReliabilityReportingPrivacy {
         if var tags = event.tags {
             tags = tags.filter { tagAllowlist.contains($0.key) }
             for key in tags.keys {
-                let limit = key == "sourceRevision" ? 64 : 32
+                let limit = (key == "sourceRevision" || key == "buildIdentity") ? 64 : 32
                 tags[key] = PrivacyRedactor.redact(String((tags[key] ?? "").prefix(limit)))
             }
             event.tags = tags.isEmpty ? nil : tags

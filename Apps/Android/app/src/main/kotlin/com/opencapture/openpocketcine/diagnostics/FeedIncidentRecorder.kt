@@ -56,6 +56,12 @@ internal class FeedIncidentRecorder(
         open?.header?.socketGeneration = generation.coerceAtLeast(0)
     }
 
+    fun noteTestSource(source: FeedIncidentTestSource) {
+        val current = session ?: return
+        if (source.rank <= current.testSource.rank) return
+        current.testSource = source
+    }
+
     fun noteExhausted(now: Double): FeedIncidentPersistenceJob? {
         val current = open ?: return null
         if (current.header.outcome != FeedIncidentOutcome.OPEN &&
@@ -175,6 +181,8 @@ internal class FeedIncidentRecorder(
                 socketGeneration = session.socketGeneration,
                 assistState = snapshot.lifecycle.assistState,
                 healthyExposureSeconds = healthyExposure,
+                testSource = session.testSource,
+                buildIdentity = session.buildIdentity,
             )
         val incident =
             OpenIncident(header, ring.toMutableList()).also {

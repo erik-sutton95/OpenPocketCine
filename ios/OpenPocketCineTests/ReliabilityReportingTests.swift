@@ -44,6 +44,7 @@ final class ReliabilityReportingTests: XCTestCase {
         ReliabilityReportingConsent.resetForTests()
         ReliabilityReportingConsent.defaults = .standard
         ReliabilityReporting.setCaptureHandlerForTests(nil)
+        FeedIncidentOrigin.resetForTests()
         try? FileManager.default.removeItem(at: cacheRoot)
         super.tearDown()
     }
@@ -215,6 +216,56 @@ final class ReliabilityReportingTests: XCTestCase {
         }()
     }
 
+    func testLaunchEnvironmentMarksAutomationWithoutXCTestClass() {
+        XCTAssertTrue(
+            FeedIncidentOrigin.isAutomationLaunch(["OPV_PHYSICAL_UI_REVIEW": "1"]))
+        XCTAssertTrue(
+            FeedIncidentOrigin.isAutomationLaunch(["OPV_UI_REVIEW_SCREEN": "live"]))
+        XCTAssertTrue(
+            FeedIncidentOrigin.isAutomationLaunch(["OPV_FEED_STRESS": "1"]))
+        XCTAssertFalse(
+            FeedIncidentOrigin.isAutomationLaunch(["OPV_UI_REVIEW_SCREEN": ""]))
+        XCTAssertFalse(FeedIncidentOrigin.isAutomationLaunch([:]))
+        FeedIncidentOrigin.overrideTestSourceForTests = nil
+        XCTAssertEqual(
+            FeedIncidentOrigin.currentTestSource(
+                environment: ["OPV_PHYSICAL_UI_REVIEW": "1"], injectionActivated: false),
+            .automation)
+        XCTAssertEqual(
+            FeedIncidentOrigin.currentTestSource(
+                environment: [:], injectionActivated: true),
+            .faultInjection)
+    }
+
+    func testScrubDoesNotStampCurrentOriginOntoLegacyOrFatalEvents() {
+        FeedIncidentOrigin.overrideTestSourceForTests = .verification
+        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
+        let event = Event(level: .fatal)
+        event.tags = ["failingStage": "decodedOutput"]
+        _ = ReliabilityReportingPrivacy.scrub(event)
+        XCTAssertNil(event.tags?["testSource"])
+        XCTAssertNil(event.tags?["buildIdentity"])
+        event.tags = ["testSource": "manual", "buildIdentity": "ios-priorrun0123456789abcdefab"]
+        _ = ReliabilityReportingPrivacy.scrub(event)
+        XCTAssertEqual(event.tags?["testSource"], "manual")
+        XCTAssertEqual(event.tags?["buildIdentity"], "ios-priorrun0123456789abcdefab")
+    }
+
+    func testUnknownBreadcrumbTokensAreRejected() {
+        let event = Event(level: .error)
+        let scene = Breadcrumb(level: .info, category: "feed")
+        scene.message = "sceneActivity"
+        scene.data = ["sceneState": "Erik", "assistState": "private_project"]
+        let assist = Breadcrumb(level: .info, category: "feed")
+        assist.message = "assistChange"
+        assist.data = ["assistState": "private_project"]
+        event.breadcrumbs = [scene, assist]
+        _ = ReliabilityReportingPrivacy.scrub(event)
+        XCTAssertEqual(event.breadcrumbs?.count, 2)
+        XCTAssertNil(event.breadcrumbs?[0].data?["sceneState"])
+        XCTAssertNil(event.breadcrumbs?[1].data?["assistState"])
+    }
+
     func testEventIDAndFingerprintAreStable() {
         let id = "12c2d058-d584-4270-9aa2-eca08bf20986"
         let first = ReliabilityReportingPrivacy.eventID(fromIncidentID: id)
@@ -222,10 +273,14 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(first, second)
         XCTAssertEqual(first.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
         let prints = ReliabilityReportingPrivacy.fingerprint(
-            schema: 1, stage: "decodedOutput", errorClass: "invalidSession")
+            schema: 1, kind: "freshInputStaleOutput", stage: "decodedOutput",
+            errorClass: "invalidSession")
         XCTAssertEqual(
             prints,
-            ["feed-incident", "schema:1", "stage:decodedOutput", "errorClass:invalidSession"]
+            [
+                "feed-incident", "schema:1", "kind:freshInputStaleOutput",
+                "stage:decodedOutput", "errorClass:invalidSession",
+            ]
         )
     }
 
@@ -234,13 +289,26 @@ final class ReliabilityReportingTests: XCTestCase {
         let typed = Breadcrumb(level: .info, category: "feed")
         typed.message = "settingsEnter"
         typed.data = ["password": "must-not-leave-phone"]
+        let scene = Breadcrumb(level: .info, category: "feed")
+        scene.message = "sceneActivity"
+        scene.data = ["sceneState": "inactive", "password": "must-not-leave-phone"]
+        let repair = Breadcrumb(level: .info, category: "feed")
+        repair.message = "repair"
+        repair.data = ["repairAction": "decoder", "repairPhase": "requested"]
         let arbitrary = Breadcrumb(level: .info, category: "feed")
         arbitrary.message = "arbitrary operator text"
-        event.breadcrumbs = [typed, arbitrary, Breadcrumb(level: .info, category: "http")]
+        event.breadcrumbs = [
+            typed, scene, repair, arbitrary, Breadcrumb(level: .info, category: "http"),
+        ]
         _ = ReliabilityReportingPrivacy.scrub(event)
-        XCTAssertEqual(event.breadcrumbs?.count, 1)
-        XCTAssertEqual(event.breadcrumbs?.first?.message, "settingsEnter")
-        XCTAssertNil(event.breadcrumbs?.first?.data)
+        XCTAssertEqual(event.breadcrumbs?.count, 3)
+        XCTAssertEqual(event.breadcrumbs?[0].message, "settingsEnter")
+        XCTAssertNil(event.breadcrumbs?[0].data)
+        XCTAssertEqual(event.breadcrumbs?[1].message, "sceneActivity")
+        XCTAssertEqual(event.breadcrumbs?[1].data?["sceneState"] as? String, "inactive")
+        XCTAssertNil(event.breadcrumbs?[1].data?["password"])
+        XCTAssertEqual(event.breadcrumbs?[2].message, "repair")
+        XCTAssertEqual(event.breadcrumbs?[2].data?["repairAction"] as? String, "decoder")
     }
 
     func testVerificationUsesTheRealRecorderAndProducesRecoveredIncident() throws {
@@ -282,7 +350,11 @@ final class ReliabilityReportingTests: XCTestCase {
         bundle.header.appVersion = "0.1.0"
         bundle.header.appBuild = "107"
         bundle.header.sourceRevision = String(repeating: "a", count: 40)
+        bundle.header.testSource = .faultInjection
+        bundle.header.buildIdentity = "ios-0123456789abcdef0123456789abcd"
         bundle.header.startedAtWallClock = Date(timeIntervalSince1970: 1_780_000_000)
+        FeedIncidentOrigin.overrideTestSourceForTests = .verification
+        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
         let captured = expectation(description: "original provenance")
         let expectedTime = bundle.header.startedAtWallClock
         ReliabilityReporting.setCaptureHandlerForTests { event, _ in
@@ -290,10 +362,56 @@ final class ReliabilityReportingTests: XCTestCase {
             XCTAssertEqual(event.dist, "107")
             XCTAssertEqual(event.timestamp, expectedTime)
             XCTAssertEqual(event.tags?["sourceRevision"], String(repeating: "a", count: 40))
+            XCTAssertEqual(event.tags?["testSource"], "faultInjection")
+            XCTAssertEqual(event.tags?["buildIdentity"], "ios-0123456789abcdef0123456789abcd")
+            XCTAssertNotEqual(event.tags?["testSource"], "verification")
             captured.fulfill()
         }
         ReliabilityReporting.enqueueFinalized(bundle)
         wait(for: [captured], timeout: 2)
+    }
+
+    func testQueuedReplayOriginSurvivesActualSDKScopeMerge() throws {
+        ReliabilityReportingConsent.setOptedIn(true)
+        var bundle = try stallBundle(id: UUID().uuidString)
+        bundle.header.outcome = .recovered
+        bundle.header.kind = .transportStall
+        bundle.header.testSource = .faultInjection
+        bundle.header.buildIdentity = "ios-queuedorigin0123456789abcdef"
+        FeedIncidentOrigin.overrideTestSourceForTests = .verification
+        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
+        let options = ReliabilityReporting.makeOptions(
+            dsn: "https://publickey@o0.ingest.sentry.io/0",
+            urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
+        let prepared = expectation(description: "SDK beforeSend original origin")
+        options.beforeSend = { event in
+            let scrubbed = ReliabilityReportingPrivacy.scrub(event)
+            guard scrubbed.fingerprint?.first == "feed-incident" else { return nil }
+            XCTAssertEqual(scrubbed.tags?["testSource"], "faultInjection")
+            XCTAssertEqual(scrubbed.tags?["buildIdentity"], "ios-queuedorigin0123456789abcdef")
+            XCTAssertTrue(scrubbed.fingerprint?.contains("kind:transportStall") == true)
+            XCTAssertNotEqual(scrubbed.tags?["testSource"], "verification")
+            XCTAssertNotEqual(scrubbed.tags?["buildIdentity"], "ios-current-run-identity-value")
+            prepared.fulfill()
+            return nil
+        }
+        SentrySDK.start(options: options)
+        defer { SentrySDK.close() }
+        SentrySDK.configureScope { scope in
+            scope.setTag(value: "verification", key: "testSource")
+            scope.setTag(value: "ios-current-run-identity-value", key: "buildIdentity")
+        }
+        let constructed = expectation(description: "constructed event")
+        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
+            XCTAssertEqual(event.tags?["testSource"], "faultInjection")
+            XCTAssertTrue(event.fingerprint?.contains("kind:transportStall") == true)
+            SentrySDK.capture(event: event) { scope in
+                ReliabilityReporting.applyOriginalTags(event.tags, to: scope)
+            }
+            constructed.fulfill()
+        }
+        ReliabilityReporting.enqueueFinalized(bundle)
+        wait(for: [constructed, prepared], timeout: 3)
     }
 
     func testScrubRemovesUserRequestBreadcrumbsAndPaths() {
@@ -304,7 +422,11 @@ final class ReliabilityReportingTests: XCTestCase {
         event.user = user
         event.request = SentryRequest()
         event.breadcrumbs = [Breadcrumb(level: .info, category: "http")]
-        event.tags = ["failingStage": "decodedOutput", "email": "tester@example.com"]
+        event.tags = [
+            "failingStage": "decodedOutput", "email": "tester@example.com",
+            "testSource": "automation",
+            "buildIdentity": "ios-0123456789abcdef0123456789abcd",
+        ]
         event.extra = ["password": "hunter2", "failingStage": "decodedOutput"]
         event.context = [
             "device": ["name": "Example Phone", "model": "iPhone17,2"],
@@ -319,6 +441,8 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(event.breadcrumbs?.count ?? 0, 0)
         XCTAssertNil(event.tags?["email"])
         XCTAssertEqual(event.tags?["failingStage"], "decodedOutput")
+        XCTAssertEqual(event.tags?["testSource"], "automation")
+        XCTAssertEqual(event.tags?["buildIdentity"], "ios-0123456789abcdef0123456789abcd")
         XCTAssertNil(event.extra?["password"])
         XCTAssertEqual(event.extra?["failingStage"] as? String, "decodedOutput")
         XCTAssertNil(event.context?["device"]?["name"])
@@ -367,6 +491,7 @@ final class ReliabilityReportingTests: XCTestCase {
         ReliabilityReporting.setCaptureHandlerForTests { event, data in
             XCTAssertEqual(event.eventId.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
             XCTAssertEqual(event.fingerprint?.first, "feed-incident")
+            XCTAssertTrue(event.fingerprint?.contains("kind:freshInputStaleOutput") == true)
             XCTAssertNil(event.user)
             let text = String(data: data, encoding: .utf8) ?? ""
             XCTAssertTrue(text.contains("prelude"))

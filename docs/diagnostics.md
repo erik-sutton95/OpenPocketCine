@@ -190,7 +190,7 @@ exposure coverage explicit when comparing platforms.
 The SDK sends typed incident attachments and small session summaries. Native
 crash/hang events preserve diagnostic stack information but scrub user, request,
 automatic breadcrumb, message and exception-value fields. Only bounded, typed
-feed breadcrumb enum names are retained by the iOS SDK; arbitrary UI text is not. Replay, screenshots, view
+feed breadcrumb names and validated details are retained by the SDK; arbitrary UI text is not. Replay, screenshots, view
 hierarchy, tracing, profiling and automatic network breadcrumbs are disabled.
 SDK close uses no flush timeout on the UI thread; consent is rechecked by the
 transport, and cache deletion follows close on a utility queue. Idle retry checks
@@ -218,12 +218,25 @@ The bounded run writes `Documents/reliability-verification.json` with SDK state,
 upload gate and receipt state. These entry points do not exist in Release builds.
 Return to an ordinary launch afterward.
 
-Build with `just ios-device-build DEBUG_INFORMATION_FORMAT=dwarf-with-dsym`
+Build with `just ios-device-build`; ordinary Debug builds generate dSYMs
 for local crash symbolication. Upload only that build's dSYMs, then verify the
 received crash has app symbols and no missing-debug-file processing errors.
 Queued incidents keep their original occurrence time, app version/build and source
 revision across updates. Old session summaries without version metadata are
 explicitly marked as having an unknown legacy release.
+
+Internal reports carry a bounded `testSource`: `manual`, `automation`,
+`faultInjection`, `verification`, or `unknown`. Merely configuring a fault does
+not establish that it fired. `buildIdentity` distinguishes selected source/build
+inputs even when development builds share the same version, build number and
+dirty Git revision. Persisted reports retain their original origin and identity
+when uploaded by a later build; older records remain unknown.
+
+Feed grouping includes incident kind as well as stage and error class, separating
+transport stalls from fresh-input/stale-output incidents at the same stage. New
+fingerprints do not regroup historical events. Use the separate
+[Internal Testing dashboard](https://opencapture.sentry.io/dashboard/6027232/)
+for development and verification; production alert filters stay unchanged.
 
 See [privacy operations](sentry-privacy-operations.md) for controller contact, DPA, retention, access controls, deletion verification and store-disclosure readiness.
 

@@ -25,6 +25,8 @@ struct FeedIncidentSessionSummary: Equatable, Codable {
     var recordedAt: Date? = Date()
     var appVersion: String? = nil
     var appBuild: String? = nil
+    var testSource: FeedIncidentTestSource? = nil
+    var buildIdentity: String? = nil
 }
 
 enum FeedIncidentRuntime {
@@ -108,7 +110,20 @@ enum FeedIncidentRuntime {
     }
 
     static func recordRepair(_ repair: FeedRepairRecord) {
-        queue.async { persist(recorder.recordRepair(repair)) }
+        queue.async {
+            persist(recorder.recordRepair(repair))
+            ReliabilityReporting.noteRepair(repair)
+        }
+    }
+
+    static func noteTestSource(_ source: FeedIncidentTestSource) {
+        queue.async {
+            recorder.noteTestSource(source)
+            if var context = sessionContext, source.rank > context.testSource.rank {
+                context.testSource = source
+                sessionContext = context
+            }
+        }
     }
 
     static func noteDecoderGeneration(_ generation: Int) {
@@ -239,7 +254,9 @@ enum FeedIncidentRuntime {
                     incidentCount: recorder.incidentCount,
                     exposure: recorder.healthyExposureSeconds),
             sourceRevision: sessionContext.sourceRevision,
-            appVersion: sessionContext.appVersion, appBuild: sessionContext.appBuild)
+            appVersion: sessionContext.appVersion, appBuild: sessionContext.appBuild,
+            testSource: sessionContext.testSource,
+            buildIdentity: sessionContext.buildIdentity)
     }
 
     private static func refreshExtrasCache() {

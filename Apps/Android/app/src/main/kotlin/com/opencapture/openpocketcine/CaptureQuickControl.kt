@@ -269,3 +269,24 @@ internal fun releaseCaptureQuickControl(sheet: LiveSheet, expected: MonitorQuick
         applyCaptureQuickControl(sheet, value, currentStatus, model, context)
     }
 }
+
+/** Angle HUD: preferred only when it maps to live 1/N, else the nearest live label. */
+internal fun captureShutterReadout(
+    status: CameraStatus,
+    shutterUsesAngle: Boolean,
+    preferredAngle: Double,
+): String {
+    if (status.expoMode == CameraCommands.EXPO_AUTO) {
+        return EvComp.fromRaw(status.evComp)?.label ?: "—"
+    }
+    if (shutterUsesAngle && !CameraCommands.isPhotoMode(status.shootingMode)) {
+        if (status.shutterDenom <= 0) return "—"
+        return GamepadShutterSync.angleLabel(
+            status.shutterDenom,
+            status.fps,
+            CaptureLists.shutterDenoms(status),
+            preferredAngle,
+        )
+    }
+    return if (status.shutterDenom > 0) CaptureLists.shutterLabel(status.shutterDenom) else "—"
+}

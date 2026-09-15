@@ -92,7 +92,7 @@ internal class FeedIncidentStore(
                 lines +=
                     "session=${header.sessionId} started=${FeedIncidentJson.formatWall(header.startedAtWallClockMs)} gap=${"%.3f".format(Locale.US, header.worstGapSeconds)}s"
                 lines +=
-                    "release=${header.appVersion}(${header.appBuild}) rev=${header.sourceRevision} os=${header.osName} ${header.osVersion} hw=${header.hardwareClass}"
+                    "release=${header.appVersion}(${header.appBuild}) rev=${header.sourceRevision} identity=${header.buildIdentity} source=${header.testSource.wire} os=${header.osName} ${header.osVersion} hw=${header.hardwareClass}"
                 lines +=
                     "camera=${header.cameraFamily} fw=${header.cameraFirmware ?: "none"} decoderGen=${header.decoderGeneration} socketGen=${header.socketGeneration} assist=${header.assistState}"
                 header.errorClass?.let { lines += "errorClass=$it" }

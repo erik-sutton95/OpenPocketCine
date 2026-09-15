@@ -638,9 +638,11 @@ fun LiveCaptureStrip(
 ) {
     val context = LocalContext.current
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
-    val shutter = if (shutterUsesAngle) {
-        ShutterAngle.label(ShutterAngle.nearestDegrees(OperatorPrefs.shutterAngleDegrees(context)))
-    } else status.shutterLabel
+    val shutter = captureShutterReadout(
+        status,
+        shutterUsesAngle,
+        OperatorPrefs.shutterAngleDegrees(context),
+    )
     fun value(sheet: LiveSheet, label: String, readout: String, annotation: String? = null) =
         com.opencapture.openpocketcine.monitor.MonitorValue(
             sheet.name, label, readout, selected = active == sheet, annotation = annotation,

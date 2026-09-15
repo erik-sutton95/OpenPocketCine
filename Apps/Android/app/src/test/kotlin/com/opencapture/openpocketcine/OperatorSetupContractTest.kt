@@ -253,6 +253,8 @@ class OperatorSetupContractTest {
         assertFalse(SettingsHelpCopy.KEEP_SCREEN_AWAKE.contains("iOS may still dim"))
         assertTrue(SettingsHelpCopy.GAMEPAD.contains("Cross/A records"))
         assertTrue(SettingsHelpCopy.GAMEPAD.contains("D-pad"))
+        assertTrue(SettingsHelpCopy.GIMBAL_JOYSTICK.contains("Left is the default"))
+        assertEquals(GamepadGimbalStick.DEFAULT, GamepadGimbalStick.LEFT)
     }
 
     @Test

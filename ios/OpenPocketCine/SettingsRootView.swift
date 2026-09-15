@@ -34,8 +34,10 @@ enum SettingsHelpCopy {
         "Experimental. The compass above the joystick on the right is Calibrate Head Lock: that AirPods pose and that gimbal pose are shared forward. Head turns set matching pan and tilt angles within the gimbal’s range. Roll is shown only. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. The same control becomes STOP and clears the lock. On-screen stick, a game controller, and Motion Control takes priority."
     static let joystickSensitivity =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    static let gimbalJoystick =
+        "Which analog stick pans and tilts. Left is the default. The other stick does not move the gimbal."
     static let gamepad =
-        "A connected game controller. Left stick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
+        "A connected game controller. The selected gimbal joystick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     static let keepScreenAwake =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. iOS may still dim when the device overheats."
     static let themeHelp =
@@ -92,6 +94,7 @@ struct SettingsRootView: View {
     @State private var showDiagnosticOptions = false
     @State private var supportError = false
     @State private var reliabilityOptIn = ReliabilityReporting.isOptedIn
+    @State private var gimbalGamepadStick = OperatorPrefs.gimbalGamepadStick
 
     var body: some View {
         MonitorPage(
@@ -606,7 +609,25 @@ struct SettingsRootView: View {
         }
         SettingsRowCard(title: "Controller") {
             SettingsInlineRow(
-                title: "Gamepad", help: SettingsHelpCopy.gamepad, showTopDivider: false
+                title: "Gimbal joystick", help: SettingsHelpCopy.gimbalJoystick,
+                showTopDivider: false, stacked: true
+            ) {
+                SettingsSegmented(
+                    options: GamepadGimbalStick.allCases.map(\.label),
+                    selected: gimbalGamepadStick.label,
+                    compact: true
+                ) { value in
+                    let next = GamepadGimbalStick.fromLabel(value)
+                    if next != OperatorPrefs.gimbalGamepadStick {
+                        OperatorPrefs.gimbalGamepadStick = next
+                        gimbalGamepadStick = next
+                        model.gimbalPadHeld = false
+                        model.session.endGimbalStick()
+                    }
+                }
+            }
+            SettingsInlineRow(
+                title: "Gamepad", help: SettingsHelpCopy.gamepad
             ) {
                 SettingsValueText(value: model.gamepadConnected ? "Connected" : "Not connected")
             }

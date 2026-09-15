@@ -85,8 +85,9 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             let systemY = max(0, h - max(0, safeArea.bottom - 14) - systemH)
             system = .init(y: systemY, width: w, height: h - systemY)
             let valuesH = showsValues ? (tablet ? 43.0 : 74.0) : 0
-            values = .init(x: edge, y: systemY - 8 - valuesH, width: w - 28, height: valuesH)
-            floor = values.y - (showsValues ? 8 : 0)
+            let valuesY = systemY - 8 - valuesH
+            values = .init(x: edge, y: valuesY + 4, width: w - 28, height: valuesH)
+            floor = valuesY - (showsValues ? 8 : 0)
             fillsPicture = fill || aspect < 1
             let ratio = fillsPicture ? min(aspect, 9 / 16) : aspect
             // STBY / clock / REC SETUP sit just below the notch, independent of the feed.
@@ -177,10 +178,11 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             let side = 14 + rec + 28
             let valuesH = showsValues ? 43.0 : 0
             let bottomPad = Self.landscapeBottomClearance(safeBottom: safeArea.bottom)
+            let valuesY = h - bottomPad - valuesH
             values = .init(
-                x: side, y: h - bottomPad - valuesH,
+                x: side, y: valuesY + 4,
                 width: w - side * 2, height: valuesH)
-            floor = values.y - 8
+            floor = valuesY - 8
             let assistHeight = button * 2 + 11
             assists = .init(
                 x: 18, y: h - bottomPad - assistHeight,

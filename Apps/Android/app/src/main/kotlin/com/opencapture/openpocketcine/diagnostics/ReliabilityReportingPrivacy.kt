@@ -106,6 +106,8 @@ internal object ReliabilityReportingPrivacy {
             "socketGeneration",
             "worstGapSeconds",
             "healthyExposureSeconds",
+            "testSource",
+            "buildIdentity",
         )
 
     val contextAllowlist: Map<String, Set<String>> =
@@ -122,6 +124,9 @@ internal object ReliabilityReportingPrivacy {
                     "kind",
                     "assistState",
                     "hardwareClass",
+                    "testSource",
+                    "buildIdentity",
+                    "cameraFamily",
                 ),
         )
 
@@ -135,6 +140,8 @@ internal object ReliabilityReportingPrivacy {
             "cameraFamily",
             "cameraFirmware",
             "hardwareClass",
+            "testSource",
+            "buildIdentity",
         )
 
     fun eventId(fromIncidentId: String): SentryId {
@@ -146,10 +153,11 @@ internal object ReliabilityReportingPrivacy {
         return SentryId(hex.padEnd(32, '0').take(32))
     }
 
-    fun fingerprint(schema: Int, stage: String, errorClass: String): List<String> =
+    fun fingerprint(schema: Int, kind: String, stage: String, errorClass: String): List<String> =
         listOf(
             "feed-incident",
             "schema:$schema",
+            "kind:${FeedIncidentPrivacyToken.token(kind, 32)}",
             "stage:${FeedIncidentPrivacyToken.token(stage, 32)}",
             "errorClass:${FeedIncidentPrivacyToken.token(errorClass, 32)}",
         )
@@ -167,7 +175,11 @@ internal object ReliabilityReportingPrivacy {
     fun scrub(event: SentryEvent): SentryEvent {
         event.user = null
         event.request = null
-        event.breadcrumbs = mutableListOf()
+        event.breadcrumbs =
+            event.breadcrumbs
+                ?.mapNotNull { scrubBreadcrumb(it) }
+                ?.takeLast(32)
+                ?.toMutableList()
         event.serverName = null
         event.transaction = null
         val formatted = event.message?.formatted
@@ -184,7 +196,7 @@ internal object ReliabilityReportingPrivacy {
         if (tags != null) {
             val kept = tags.filterKeys { tagAllowlist.contains(it) }.toMutableMap()
             for (key in kept.keys) {
-                val limit = if (key == "sourceRevision") 64 else 32
+                val limit = if (key == "sourceRevision" || key == "buildIdentity") 64 else 32
                 kept[key] = FeedIncidentPrivacyToken.token(kept[key].orEmpty(), limit)
             }
             event.tags = if (kept.isEmpty()) null else kept
@@ -219,6 +231,23 @@ internal object ReliabilityReportingPrivacy {
             redact(thread.stacktrace?.frames)
         }
         return event
+    }
+
+    fun scrubBreadcrumb(breadcrumb: io.sentry.Breadcrumb): io.sentry.Breadcrumb? {
+        if (breadcrumb.category != "feed") return null
+        val message = breadcrumb.message ?: return null
+        if (!FeedIncidentNativeBreadcrumb.isAllowedMessage(message)) return null
+        val strings = mutableMapOf<String, String>()
+        val data = breadcrumb.data
+        data.forEach { (key, value) ->
+            if (value is String) strings[key] = value
+        }
+        val kept = FeedIncidentNativeBreadcrumb.sanitized(strings)
+        data.clear()
+        for ((key, value) in kept) {
+            breadcrumb.setData(key, value)
+        }
+        return breadcrumb
     }
 
     private fun redact(frames: List<SentryStackFrame>?) {

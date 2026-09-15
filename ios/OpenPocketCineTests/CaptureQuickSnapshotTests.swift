@@ -341,4 +341,51 @@ final class CaptureQuickSnapshotTests: XCTestCase {
         XCTAssertTrue(CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: .iso, drum: nil))
         XCTAssertTrue(CaptureReadoutAdmission.hidesLowerCaptureValues(sheet: nil, drum: .wb))
     }
+
+    func testShutterReadoutUsesLiveDenomWhenPreferredAngleDoesNotMap() {
+        var status = CameraStatus()
+        status.expoMode = .manual
+        status.fps = 24
+        status.shutterDenom = 48
+        status.availableShutterDenoms = [24, 48, 50, 60, 120]
+        XCTAssertEqual(
+            CaptureQuickSnapshot.shutterReadout(
+                status: status, shutterUsesAngle: true, shutterAngleDegrees: 180),
+            "180°")
+        status.shutterDenom = 120
+        XCTAssertEqual(
+            CaptureQuickSnapshot.shutterReadout(
+                status: status, shutterUsesAngle: true, shutterAngleDegrees: 180),
+            "72°",
+            "HUD must not keep painting saved 180° after a 1/N step")
+        let next = CamCapShutter.steppedDenom(
+            from: 48, steps: -1, available: [16_000, 120, 60, 50, 48, 24])
+        XCTAssertEqual(next, 50)
+        let synced = CaptureQuickSnapshot.persistPreferredAngle(
+            afterDenom: 50, fps: 24, usesAngle: true, isPhoto: false, expoIsAuto: false)
+        XCTAssertEqual(synced, 172)
+        status.shutterDenom = 50
+        XCTAssertEqual(
+            CaptureQuickSnapshot.shutterReadout(
+                status: status, shutterUsesAngle: true, shutterAngleDegrees: synced ?? 180),
+            "172°")
+        status.shootingMode = Int(ShootingMode.photoRawPocket3AndNano)
+        XCTAssertEqual(
+            CaptureQuickSnapshot.shutterReadout(
+                status: status, shutterUsesAngle: true, shutterAngleDegrees: 180),
+            "1/50")
+        XCTAssertNil(
+            CaptureQuickSnapshot.persistPreferredAngle(
+                afterDenom: 50, fps: 24, usesAngle: true, isPhoto: true, expoIsAuto: false))
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        status.expoMode = .auto
+        status.evComp = .zero
+        XCTAssertEqual(
+            CaptureQuickSnapshot.shutterReadout(
+                status: status, shutterUsesAngle: true, shutterAngleDegrees: 180),
+            "0.0")
+        XCTAssertNil(
+            CaptureQuickSnapshot.persistPreferredAngle(
+                afterDenom: 50, fps: 24, usesAngle: true, isPhoto: false, expoIsAuto: true))
+    }
 }

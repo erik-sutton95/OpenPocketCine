@@ -33,8 +33,8 @@ struct FieldMonitorLayoutTests {
             width: 852, height: 393, safeArea: .init(bottom: 21, trailing: 59))
         let clearance = FieldMonitorLayout.landscapeBottomClearance(safeBottom: 21)
         #expect(clearance == 31)
-        #expect(layout.values.maxY == 393 - clearance)
-        #expect(layout.assists.maxY == layout.values.maxY)
+        #expect(layout.values.maxY == 393 - clearance + 4)
+        #expect(layout.assists.maxY + 4 == layout.values.maxY)
         #expect(layout.values.maxY <= 393 - 21)
     }
 
@@ -171,7 +171,9 @@ struct FieldMonitorLayoutTests {
         #expect(layout.gimbal.x == layout.stick.maxX - 36)
         #expect(layout.gimbal.y == layout.zoom.y)
         #expect(layout.gimbal.width == 36 && layout.gimbal.height == 36)
-        #expect(layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom))
+        #expect(
+            layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom)
+        )
         #expect(layout.headTrack.x == layout.stick.maxX - 44)
         #expect(layout.headTrack.y == layout.zoom.y - 8 - 44)
         #expect(layout.headTrack.width == 44 && layout.headTrack.height == 44)
@@ -187,7 +189,9 @@ struct FieldMonitorLayoutTests {
                     top: portrait ? 59 : 0,
                     leading: portrait ? 0 : 59, bottom: 34,
                     trailing: portrait ? 0 : 59))
-            #expect(layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom))
+            #expect(
+                layout.headTrack
+                    == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom))
             #expect(layout.headTrack.maxX == layout.stick.maxX)
             #expect(layout.headTrack.maxY == layout.zoom.y - 8)
             #expect(layout.headTrack.width == 44 && layout.headTrack.height == 44)

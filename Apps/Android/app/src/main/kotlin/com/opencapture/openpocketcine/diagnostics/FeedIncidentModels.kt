@@ -4,6 +4,52 @@ internal object FeedIncidentSchema {
     const val VERSION = 1
 }
 
+internal enum class FeedIncidentTestSource(val wire: String) {
+    MANUAL("manual"),
+    AUTOMATION("automation"),
+    FAULT_INJECTION("faultInjection"),
+    VERIFICATION("verification"),
+    UNKNOWN("unknown"),
+    ;
+
+    val rank: Int
+        get() =
+            when (this) {
+                UNKNOWN -> 0
+                MANUAL -> 1
+                AUTOMATION -> 2
+                FAULT_INJECTION -> 3
+                VERIFICATION -> 4
+            }
+
+    companion object {
+        fun fromWire(raw: String?): FeedIncidentTestSource =
+            entries.firstOrNull { it.wire == raw } ?: UNKNOWN
+
+        fun derive(
+            verification: Boolean,
+            injectionActivated: Boolean,
+            automation: Boolean,
+        ): FeedIncidentTestSource =
+            when {
+                verification -> VERIFICATION
+                injectionActivated -> FAULT_INJECTION
+                automation -> AUTOMATION
+                else -> MANUAL
+            }
+    }
+}
+
+internal object FeedIncidentBuildIdentity {
+    const val MAX_LENGTH = 64
+
+    fun parse(raw: String?): String {
+        val trimmed = raw?.trim().orEmpty()
+        if (trimmed.isEmpty()) return "unknown"
+        return FeedIncidentPrivacy.token(trimmed, MAX_LENGTH)
+    }
+}
+
 internal object FeedIncidentBounds {
     const val PRELUDE_SECONDS = 60.0
     const val AFTERMATH_SECONDS = 30.0
@@ -35,6 +81,8 @@ internal data class FeedIncidentSessionContext(
     val cameraFirmware: String? = null,
     var decoderGeneration: Int = 0,
     var socketGeneration: Int = 0,
+    var testSource: FeedIncidentTestSource = FeedIncidentTestSource.UNKNOWN,
+    var buildIdentity: String = "unknown",
 )
 
 internal enum class FeedIncidentKind(val wire: String) {
@@ -208,6 +256,50 @@ internal data class FeedIncidentBreadcrumb(
     val detail: String = "",
 )
 
+internal object FeedIncidentNativeBreadcrumb {
+    val allowedValues: Map<String, Set<String>> =
+        mapOf(
+            "sceneState" to setOf("active", "inactive"),
+            "assistState" to setOf("off", "identity", "replacement"),
+            "path" to setOf("unexpectedDisconnect"),
+            "repairPhase" to
+                setOf("requested", "blocked", "locallySent", "peerResponse", "pictureRestored"),
+            "repairAction" to setOf("decoder", "enable", "session", "endpoint", "rejoin"),
+        )
+
+    fun isAllowedMessage(message: String): Boolean =
+        FeedIncidentBreadcrumbKind.entries.any { it.wire == message } || message == "repair"
+
+    fun details(kind: FeedIncidentBreadcrumbKind, detail: String): Map<String, String> =
+        when (kind) {
+            FeedIncidentBreadcrumbKind.SCENE_ACTIVITY -> sanitized(mapOf("sceneState" to detail))
+            FeedIncidentBreadcrumbKind.ASSIST_CHANGE -> sanitized(mapOf("assistState" to detail))
+            FeedIncidentBreadcrumbKind.PATH_CHANGE -> sanitized(mapOf("path" to detail))
+            FeedIncidentBreadcrumbKind.SETTINGS_ENTER,
+            FeedIncidentBreadcrumbKind.SETTINGS_EXIT,
+            FeedIncidentBreadcrumbKind.SURFACE_ATTACH,
+            FeedIncidentBreadcrumbKind.SURFACE_DETACH,
+            FeedIncidentBreadcrumbKind.DECODER_CREATE,
+            FeedIncidentBreadcrumbKind.DECODER_INVALIDATE,
+            FeedIncidentBreadcrumbKind.CAMERA_COMMAND,
+            -> emptyMap()
+        }
+
+    fun details(repair: FeedRepairRecord): Map<String, String> =
+        sanitized(mapOf("repairPhase" to repair.phase.wire, "repairAction" to repair.action))
+
+    fun sanitized(raw: Map<String, String>): Map<String, String> {
+        val out = mutableMapOf<String, String>()
+        for ((key, value) in raw) {
+            val token = FeedIncidentPrivacy.token(value, 32)
+            val allowed = allowedValues[key] ?: continue
+            if (token !in allowed) continue
+            out[key] = token
+        }
+        return out
+    }
+}
+
 internal data class FeedRepairRecord(
     val monotonicAt: Double,
     val action: String,
@@ -246,6 +338,8 @@ internal data class FeedIncidentHeader(
     var evictions: Int = 0,
     var assistState: String = "off",
     var healthyExposureSeconds: Double = 0.0,
+    var testSource: FeedIncidentTestSource = FeedIncidentTestSource.UNKNOWN,
+    var buildIdentity: String = "unknown",
 ) {
     val processInterrupted: Boolean get() = outcome == FeedIncidentOutcome.INTERRUPTED
 }
@@ -471,6 +565,8 @@ internal data class FeedIncidentVendorEnvelope(
     val appVersion: String,
     val appBuild: String,
     val cameraFamily: String,
+    val testSource: String,
+    val buildIdentity: String,
 )
 
 internal data class FeedIncidentSessionSummary(
@@ -482,6 +578,8 @@ internal data class FeedIncidentSessionSummary(
     val recordedAtMs: Long = System.currentTimeMillis(),
     val appVersion: String? = null,
     val appBuild: String? = null,
+    val testSource: FeedIncidentTestSource? = null,
+    val buildIdentity: String? = null,
 )
 
 internal object FeedIncidentExport {
@@ -515,6 +613,8 @@ internal object FeedIncidentExport {
             appVersion = header.appVersion,
             appBuild = header.appBuild,
             cameraFamily = header.cameraFamily,
+            testSource = header.testSource.wire,
+            buildIdentity = header.buildIdentity,
         )
     }
 }

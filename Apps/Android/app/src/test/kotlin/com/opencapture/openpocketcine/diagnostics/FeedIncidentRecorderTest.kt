@@ -95,6 +95,24 @@ class FeedIncidentRecorderTest {
     }
 
     @Test
+    fun sessionOriginIsCopiedAndDoesNotDowngrade() {
+        val recorder = FeedIncidentRecorder { "inc-origin" }
+        recorder.beginSession(
+            session().copy(
+                testSource = FeedIncidentTestSource.AUTOMATION,
+                buildIdentity = "android-0123456789abcdef0123456789ab",
+            ),
+        )
+        val job = recorder.recordSnapshot(staleOutput(monotonic = 3.0))
+        assertEquals(FeedIncidentTestSource.AUTOMATION, job?.bundle?.header?.testSource)
+        assertEquals("android-0123456789abcdef0123456789ab", job?.bundle?.header?.buildIdentity)
+        recorder.noteTestSource(FeedIncidentTestSource.MANUAL)
+        assertEquals(FeedIncidentTestSource.AUTOMATION, recorder.openHeader?.testSource)
+        recorder.noteTestSource(FeedIncidentTestSource.FAULT_INJECTION)
+        assertEquals(FeedIncidentTestSource.AUTOMATION, recorder.openHeader?.testSource)
+    }
+
+    @Test
     fun playbackSuppressesRecording() {
         val recorder = FeedIncidentRecorder { "inc-none" }
         recorder.beginSession(session())

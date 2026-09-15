@@ -58,6 +58,8 @@ internal object FeedSessionSummaryStore {
             .also { json ->
                 summary.appVersion?.let { json.put("appVersion", it) }
                 summary.appBuild?.let { json.put("appBuild", it) }
+                summary.testSource?.let { json.put("testSource", it.wire) }
+                summary.buildIdentity?.let { json.put("buildIdentity", it) }
             }
             .toString()
 
@@ -76,6 +78,10 @@ internal object FeedSessionSummaryStore {
             .put("recordedAtMs", summary.recordedAtMs)
             .put("appVersion", summary.appVersion)
             .put("appBuild", summary.appBuild)
+            .also { json ->
+                summary.testSource?.let { json.put("testSource", it.wire) }
+                summary.buildIdentity?.let { json.put("buildIdentity", it) }
+            }
             .toString()
             .toByteArray(Charsets.UTF_8)
 
@@ -90,6 +96,10 @@ internal object FeedSessionSummaryStore {
             recordedAtMs = json.optLong("recordedAtMs"),
             appVersion = json.optString("appVersion").takeIf { it.isNotBlank() },
             appBuild = json.optString("appBuild").takeIf { it.isNotBlank() },
+            testSource =
+                if (json.has("testSource")) FeedIncidentTestSource.fromWire(json.optString("testSource"))
+                else null,
+            buildIdentity = json.optString("buildIdentity").takeIf { it.isNotBlank() },
         )
     }
 

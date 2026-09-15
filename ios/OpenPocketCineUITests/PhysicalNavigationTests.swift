@@ -11,6 +11,7 @@ final class PhysicalNavigationTests: XCTestCase {
         let originalOrientation = XCUIDevice.shared.orientation
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
+        app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1"
         app.launchEnvironment["OPV_CONSENT_REVIEW_ID"] = UUID().uuidString
         app.launch()
         let decline = app.buttons["reliability.consent.decline"]
@@ -74,6 +75,7 @@ final class PhysicalNavigationTests: XCTestCase {
             throw XCTSkip("Run just ios-physical-ui-test with a connected test device")
         }
         let app = XCUIApplication()
+        app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1"
         app.launch()
         defer { app.terminate() }
         let expand = app.buttons["monitor.assists.expand"]
@@ -104,6 +106,7 @@ final class PhysicalNavigationTests: XCTestCase {
             throw XCTSkip("Run just ios-physical-ui-test with a connected test device")
         }
         let app = XCUIApplication()
+        app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1"
         app.launch()
         defer { app.terminate() }
         let homeSettings = app.buttons["cameras.settings"]
@@ -130,6 +133,7 @@ final class PhysicalNavigationTests: XCTestCase {
         }
         continueAfterFailure = false
         let app = XCUIApplication()
+        app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1"
         XCUIDevice.shared.orientation = .landscapeLeft
         app.launch()
         defer {

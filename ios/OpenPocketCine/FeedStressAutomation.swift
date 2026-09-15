@@ -12,6 +12,17 @@ import os
 /// `noteMetalPresent` = Metal GPU completion; `notePresent()` splits by `#fileID`.
 enum FeedStressAutomation {
     private static let enabled = ProcessInfo.processInfo.environment["OPV_FEED_STRESS"] == "1"
+
+    static var isEnabled: Bool { enabled }
+
+    static var injectionDidActivate: Bool {
+        #if DEBUG
+            return FeedStressRuntime.shared.injectionDidActivate
+        #else
+            return false
+        #endif
+    }
+
     static func installIfRequested() {
         #if DEBUG
             guard enabled else { return }
@@ -214,6 +225,7 @@ enum FeedStressAutomation {
         private var prevDecoded = 0
         private var prevPresents = 0
         private var reconnectAttempted = false
+        private var didNotifyInjection = false
         @MainActor private var originalIdleTimerDisabled: Bool?
 
         private init() {
@@ -320,9 +332,13 @@ enum FeedStressAutomation {
             }
         }
 
+        var injectionDidActivate: Bool {
+            lock.withLock { $0.injectDrops > 0 || $0.injectSilences > 0 || $0.silenceConsumed }
+        }
+
         func shouldDropPacket(seq: UInt64) -> Bool {
             let now = ProcessInfo.processInfo.systemUptime
-            return lock.withLock { state in
+            let dropped = lock.withLock { state -> Bool in
                 guard plan.configured, injectActive(state, now: now) else { return false }
                 state.packetIndex &+= 1
                 if state.burstLeft > 0 {
@@ -344,10 +360,12 @@ enum FeedStressAutomation {
                 _ = seq
                 return false
             }
+            if dropped { notifyInjectionActivated() }
+            return dropped
         }
 
         func shouldSilenceOutput(now: TimeInterval) -> Bool {
-            lock.withLock { state in
+            let silenced = lock.withLock { state -> Bool in
                 guard plan.configured, injectActive(state, now: now) else { return false }
                 guard plan.outputSilenceMs > 0 else { return false }
                 if state.silenceUntil == nil, !state.silenceConsumed {
@@ -360,6 +378,19 @@ enum FeedStressAutomation {
                 }
                 return false
             }
+            if silenced { notifyInjectionActivated() }
+            return silenced
+        }
+
+        private func notifyInjectionActivated() {
+            let first: Bool = lock.withLock { _ in
+                if didNotifyInjection { return false }
+                didNotifyInjection = true
+                return true
+            }
+            guard first else { return }
+            FeedIncidentRuntime.noteTestSource(.faultInjection)
+            ReliabilityReporting.noteCurrentTestSource(.faultInjection)
         }
 
         func snapshotLine() -> String {

@@ -381,6 +381,106 @@ import Testing
     }
 }
 
+@Suite struct FeedIncidentOriginTests {
+    @Test func deriveUsesVerificationThenInjectionThenAutomation() {
+        #expect(
+            FeedIncidentTestSource.derive(
+                verification: true, injectionActivated: true, automation: true) == .verification)
+        #expect(
+            FeedIncidentTestSource.derive(
+                verification: false, injectionActivated: true, automation: true) == .faultInjection)
+        #expect(
+            FeedIncidentTestSource.derive(
+                verification: false, injectionActivated: false, automation: true) == .automation)
+        #expect(
+            FeedIncidentTestSource.derive(
+                verification: false, injectionActivated: false, automation: false) == .manual)
+        #expect(FeedIncidentTestSource.parse(nil) == .unknown)
+        #expect(FeedIncidentTestSource.parse("not-a-source") == .unknown)
+        #expect(FeedIncidentTestSource.parse("faultInjection") == .faultInjection)
+    }
+
+    @Test func recorderCopiesSessionOriginAndDoesNotDowngrade() {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-origin" })
+        _ = recorder.beginSession(
+            Fixture.context(
+                sessionID: "session-origin",
+                testSource: .automation,
+                buildIdentity: "ios-0123456789abcdef0123456789abcd"))
+        let job = recorder.recordSnapshot(Fixture.stall(now: 4, outputAge: 3))
+        #expect(job?.bundle.header.resolvedTestSource == .automation)
+        #expect(job?.bundle.header.resolvedBuildIdentity == "ios-0123456789abcdef0123456789abcd")
+        recorder.noteTestSource(.manual)
+        #expect(recorder.openHeader?.resolvedTestSource == .automation)
+        recorder.noteTestSource(.faultInjection)
+        #expect(recorder.openHeader?.resolvedTestSource == .automation)
+        _ = recorder.recordSnapshot(Fixture.healthy(now: 8))
+        _ = recorder.endSession(now: 40)
+        _ = recorder.beginSession(
+            Fixture.context(
+                sessionID: "session-origin-2",
+                testSource: .faultInjection,
+                buildIdentity: "ios-0123456789abcdef0123456789abcd"))
+        let next = recorder.recordSnapshot(Fixture.stall(now: 44, outputAge: 3))
+        #expect(next?.bundle.header.resolvedTestSource == .faultInjection)
+    }
+
+    @Test func legacyJSONWithoutOriginDecodesUnknown() throws {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-legacy" })
+        _ = recorder.beginSession(Fixture.context())
+        let job = recorder.recordSnapshot(Fixture.stall(now: 4, outputAge: 3))
+        let encoded = try FeedIncidentCoding.encoder().encode(try #require(job?.bundle))
+        var json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var header = try #require(json["header"] as? [String: Any])
+        header.removeValue(forKey: "testSource")
+        header.removeValue(forKey: "buildIdentity")
+        json["header"] = header
+        let stripped = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try FeedIncidentCoding.decoder().decode(
+            FeedIncidentBundle.self, from: stripped)
+        #expect(decoded.header.testSource == nil)
+        #expect(decoded.header.buildIdentity == nil)
+        #expect(decoded.header.resolvedTestSource == .unknown)
+        #expect(decoded.header.resolvedBuildIdentity == "unknown")
+    }
+
+    @Test func nativeBreadcrumbDetailsKeepOnlyTypedTokens() {
+        let scene = FeedIncidentNativeBreadcrumb.details(kind: .sceneActivity, detail: "inactive")
+        #expect(scene == ["sceneState": "inactive"])
+        let leaked = FeedIncidentNativeBreadcrumb.details(
+            kind: .sceneActivity, detail: "password=hunter2")
+        #expect(leaked.isEmpty)
+        let assist = FeedIncidentNativeBreadcrumb.details(
+            kind: .assistChange, detail: "replacement")
+        #expect(assist == ["assistState": "replacement"])
+        #expect(
+            FeedIncidentNativeBreadcrumb.details(kind: .assistChange, detail: "private_project")
+                .isEmpty)
+        let repair = FeedIncidentNativeBreadcrumb.details(
+            repair: FeedRepairRecord(
+                monotonicAt: 1, action: "decoder", phase: .requested, reason: "outputSilence"))
+        #expect(repair["repairPhase"] == "requested")
+        #expect(repair["repairAction"] == "decoder")
+        #expect(
+            FeedIncidentNativeBreadcrumb.details(
+                repair: FeedRepairRecord(
+                    monotonicAt: 1, action: "Erik", phase: .requested))["repairAction"] == nil)
+        #expect(
+            FeedIncidentNativeBreadcrumb.sanitized([
+                "sceneState": "active",
+                "password": "secret",
+                "free": "text with spaces",
+            ]) == ["sceneState": "active"])
+        #expect(FeedIncidentNativeBreadcrumb.sanitized(["sceneState": "Erik"]).isEmpty)
+        #expect(FeedIncidentNativeBreadcrumb.sanitized(["sceneState": "private_project"]).isEmpty)
+        #expect(FeedIncidentNativeBreadcrumb.sanitized(["assistState": "Erik"]).isEmpty)
+        #expect(
+            FeedIncidentNativeBreadcrumb.details(kind: .cameraCommand, detail: "format").isEmpty)
+        #expect(FeedIncidentNativeBreadcrumb.isAllowedMessage("repair"))
+        #expect(!FeedIncidentNativeBreadcrumb.isAllowedMessage("arbitrary operator text"))
+    }
+}
+
 @Suite struct FeedIncidentNamingTests {
     @Test func metricKitNamesAreUniquePerDelivery() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
@@ -396,7 +496,11 @@ import Testing
 }
 
 private enum Fixture {
-    static func context(sessionID: String = "session-1") -> FeedIncidentSessionContext {
+    static func context(
+        sessionID: String = "session-1",
+        testSource: FeedIncidentTestSource = .unknown,
+        buildIdentity: String = "unknown"
+    ) -> FeedIncidentSessionContext {
         FeedIncidentSessionContext(
             sessionID: sessionID,
             appVersion: "0.1.0",
@@ -406,7 +510,9 @@ private enum Fixture {
             osVersion: "27.0",
             hardwareClass: "iPhone17,2",
             cameraFamily: "pocket",
-            cameraFirmware: "1.2.3")
+            cameraFirmware: "1.2.3",
+            testSource: testSource,
+            buildIdentity: buildIdentity)
     }
 
     static func snap(

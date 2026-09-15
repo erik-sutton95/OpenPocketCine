@@ -191,4 +191,38 @@ class CaptureQuickControlTest {
         assertTrue(LiveSheet.FORMAT.isRecordingSetup)
         assertTrue(!LiveSheet.MODE.isRecordingSetup)
     }
+
+    @Test fun shutterReadoutUsesLiveDenomWhenPreferredAngleDoesNotMap() {
+        val status = CameraStatus(
+            expoMode = CameraCommands.EXPO_MANUAL,
+            fps = 24,
+            shutterDenom = 48,
+            availableShutterDenoms = listOf(24, 48, 50, 60, 120),
+            shootingMode = CameraCommands.SHOOT_VIDEO,
+        )
+        assertEquals("180°", captureShutterReadout(status, true, 180.0))
+        assertEquals(
+            "72°",
+            captureShutterReadout(status.copy(shutterDenom = 120), true, 180.0),
+        )
+        val synced = GamepadShutterSync.preferredAngle(50, 24)
+        assertEquals(172.0, synced)
+        assertEquals("172°", captureShutterReadout(status.copy(shutterDenom = 50), true, synced))
+        assertEquals(
+            "1/50",
+            captureShutterReadout(
+                status.copy(shutterDenom = 50, shootingMode = CameraCommands.SHOOT_PHOTO),
+                true,
+                180.0,
+            ),
+        )
+        assertEquals(
+            "0.0",
+            captureShutterReadout(
+                status.copy(expoMode = CameraCommands.EXPO_AUTO, evComp = EvComp.ZERO.rawValue),
+                true,
+                180.0,
+            ),
+        )
+    }
 }

@@ -2947,6 +2947,14 @@ final class CameraSession {
             let next = CamCapShutter.steppedDenom(
                 from: current, steps: steps, available: status.availableShutterDenoms)
         else { return }
+        if GamepadShutterSync.shouldPersistPreferredAngle(
+            usesAngle: OperatorPrefs.shutterUsesAngle,
+            isPhoto: status.isPhoto,
+            expoIsAuto: status.expoMode == .auto)
+        {
+            OperatorPrefs.shutterAngleDegrees = GamepadShutterSync.preferredAngle(
+                afterDenom: next, fps: status.fps)
+        }
         setShutterDenom(next)
     }
 
@@ -3669,7 +3677,9 @@ final class CameraSession {
                 sourceRevision: info["OPCSourceRevision"] as? String ?? "unknown",
                 osName: "iOS", osVersion: UIDevice.current.systemVersion,
                 hardwareClass: DiagnosticCenter.machineIdentifier,
-                cameraFamily: cameraFamily))
+                cameraFamily: cameraFamily,
+                testSource: FeedIncidentOrigin.currentTestSource(),
+                buildIdentity: FeedIncidentOrigin.currentBuildIdentity()))
     }
 
     func recordFeedBreadcrumb(_ kind: FeedIncidentBreadcrumbKind, detail: String = "") {

@@ -131,8 +131,10 @@ object SettingsHelpCopy {
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     const val JOYSTICK_SENSITIVITY =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    const val GIMBAL_JOYSTICK =
+        "Which analog stick pans and tilts. Left is the default. The other stick does not move the gimbal."
     const val GAMEPAD =
-        "A connected game controller. Left stick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
+        "A connected game controller. The selected gimbal joystick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     const val KEEP_SCREEN_AWAKE =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. Android may still dim when the device overheats."
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
@@ -1240,7 +1242,11 @@ private fun ShootingModeRow(model: AppModel, view: View) {
 @Composable
 private fun ControlsRows(model: AppModel, isLive: Boolean) {
     val view = LocalView.current
+    val context = LocalContext.current
     val status by model.session.status.collectAsState()
+    var gimbalGamepadStick by remember {
+        mutableStateOf(OperatorPrefs.gimbalGamepadStick(context))
+    }
     if (isLive) {
         SettingsRowCard(title = "Capture") {
             ShootingModeRow(model, view)
@@ -1293,6 +1299,21 @@ private fun ControlsRows(model: AppModel, isLive: Boolean) {
                         color = LiveDesign.text,
                         modifier = Modifier.width(24.dp),
                     )
+                }
+            }
+        }
+        SettingsInlineRow("Gimbal joystick", SettingsHelpCopy.GIMBAL_JOYSTICK, stacked = true) {
+            SettingsSegmented(
+                options = GamepadGimbalStick.entries.map { it.label },
+                selected = gimbalGamepadStick.label,
+                compact = true,
+            ) { label ->
+                val next = GamepadGimbalStick.fromLabel(label)
+                if (next != gimbalGamepadStick) {
+                    operatorHaptic(view, model.hapticsEnabled)
+                    OperatorPrefs.setGimbalGamepadStick(context, next)
+                    gimbalGamepadStick = next
+                    model.gimbalGamepad.noteStickSelectionChanged(model)
                 }
             }
         }

@@ -63,6 +63,13 @@ public struct FeedIncidentRecorder: Sendable {
         open?.header.socketGeneration = max(0, generation)
     }
 
+    /// Upgrade session origin for later incidents. An open incident keeps the
+    /// origin captured when it started.
+    public mutating func noteTestSource(_ source: FeedIncidentTestSource) {
+        guard source.rank > (session?.testSource.rank ?? -1) else { return }
+        session?.testSource = source
+    }
+
     public mutating func noteExhausted(now: TimeInterval) -> FeedIncidentPersistenceJob? {
         guard var open, open.header.outcome == .open || open.header.outcome == .exhausted else {
             return nil
@@ -181,7 +188,9 @@ public struct FeedIncidentRecorder: Sendable {
             socketGeneration: session.socketGeneration,
             evictions: 0,
             assistState: snapshot.lifecycle.assistState,
-            healthyExposureSeconds: healthyExposure)
+            healthyExposureSeconds: healthyExposure,
+            testSource: session.testSource,
+            buildIdentity: session.buildIdentity)
         var incident = OpenIncident(header: header, prelude: ring)
         incident.breadcrumbs = breadcrumbs
         incident.repairs = repairs

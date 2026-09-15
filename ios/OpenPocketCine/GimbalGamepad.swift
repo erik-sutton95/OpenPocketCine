@@ -3,7 +3,7 @@ import GameController
 import OpenPocketViewCore
 import UIKit
 
-/// Live-monitor gamepad: discussion #159 map. Left stick gimbal, L2/R2 analog
+/// Live-monitor gamepad: discussion #159 map. Selected stick gimbal, L2/R2 analog
 /// zoom, L1/R1 zoom-chip, Cross records, Circle recenters, Square 180,
 /// Triangle tracks, D-pad ISO/shutter.
 @MainActor
@@ -11,6 +11,7 @@ final class GimbalGamepadBridge {
     private weak var model: AppModel?
     private var observers: [NSObjectProtocol] = []
     private var padActive = false
+    private var lastStick = OperatorPrefs.gimbalGamepadStick
     private var zoomActive = false
     private var zoomAnchor = 1.0
     private var zoomCurrent = 1.0
@@ -169,8 +170,20 @@ final class GimbalGamepadBridge {
             pad.dpad.right.isPressed, was: &dpadRight, action: GamepadOperatorMap.dpad(.right),
             on: model)
 
-        let x = Double(pad.leftThumbstick.xAxis.value)
-        let y = Double(pad.leftThumbstick.yAxis.value)
+        let stick = OperatorPrefs.gimbalGamepadStick
+        if GamepadGimbalStick.restHeldMotion(from: lastStick, to: stick, driving: padActive) {
+            padActive = false
+            model.gimbalPadHeld = false
+            model.session.endGimbalStick()
+        }
+        lastStick = stick
+        let axes = stick.axes(
+            leftX: Double(pad.leftThumbstick.xAxis.value),
+            leftY: Double(pad.leftThumbstick.yAxis.value),
+            rightX: Double(pad.rightThumbstick.xAxis.value),
+            rightY: Double(pad.rightThumbstick.yAxis.value))
+        let x = axes.x
+        let y = axes.y
         let rest =
             GimbalStick.analogCurve(x) == 0 && GimbalStick.analogCurve(y) == 0
         if rest {
@@ -311,5 +324,16 @@ private final class GamepadLimitHaptics {
                 with: CHHapticPattern(events: [event], parameters: []))
             try player.start(atTime: 0)
         } catch {}
+    }
+}
+
+extension OperatorPrefs {
+    private static let gimbalGamepadStickKey = "OpenPocketCine.GimbalGamepadStick"
+
+    static var gimbalGamepadStick: GamepadGimbalStick {
+        get {
+            GamepadGimbalStick.parse(UserDefaults.standard.string(forKey: gimbalGamepadStickKey))
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gimbalGamepadStickKey) }
     }
 }

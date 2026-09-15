@@ -89,8 +89,8 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
         val rowWidth = maxWidth
         val columns = MonitorLayoutPolicy.valueColumns(maxWidth.value, portrait, values.size)
         val grid = portrait && !tablet
-        val gap = if (grid) 12f else ((maxWidth.value - intrinsic.sum()) / (values.size - 1).coerceAtLeast(1)).coerceIn(14f, 32f)
-        Column(verticalArrangement = Arrangement.spacedBy(if (grid) 10.dp else 8.dp)) {
+        val gap = if (grid) 14f else ((maxWidth.value - intrinsic.sum()) / (values.size - 1).coerceAtLeast(1)).coerceIn(16f, 34f)
+        Column(verticalArrangement = Arrangement.spacedBy(if (grid) 12.dp else 8.dp)) {
             values.chunked(columns).forEachIndexed { rowIndex, row ->
                 Row(Modifier.then(if (grid) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState()).widthIn(min = rowWidth)),
                     horizontalArrangement = Arrangement.spacedBy(gap.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.Bottom) {

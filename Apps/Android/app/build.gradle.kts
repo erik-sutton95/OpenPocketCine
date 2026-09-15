@@ -139,6 +139,21 @@ val sourceRevisionField =
 androidComponents {
     onVariants { variant ->
         variant.buildConfigFields?.put("SOURCE_REVISION", sourceRevisionField)
+        // Exec output participates in configuration-cache validation, so dirty
+        // source edits cannot silently retain the preceding build identity.
+        val identity = providers.exec {
+            workingDir = repositoryRoot
+            commandLine(
+                "python3", repositoryRoot.resolve("tools/build-identity.py").absolutePath,
+                "--platform", "android", "--configuration",
+                "${variant.name}-$resolvedVersionName-$resolvedVersionCode-${gradle.gradleVersion}",
+            )
+        }.standardOutput.asText.map { value ->
+            com.android.build.api.variant.BuildConfigField(
+                "String", "\"${value.trim()}\"", "content identity of build inputs",
+            )
+        }
+        variant.buildConfigFields?.put("BUILD_IDENTITY", identity)
     }
 }
 

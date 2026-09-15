@@ -169,12 +169,14 @@ another mode to release it. The separate joystick-hold Lock Gimbal behavior
 remains under investigation and is not available in the app. Ramp smooths
 joystick-input changes: Off is immediate, Soft eases more gradually than Medium.
 Releasing the stick still stops immediately. A connected
-game controller's left stick drives the same path. Cross/A records.
+game controller's selected stick drives the same path (Left by default). Cross/A records.
 Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
 in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
 (deeper is faster). D-pad up/down ISO, left/right shutter. A toast
 says Gamepad connected or disconnected; unplug rests the stick.
 Operator Setup → Controls → Gamepad shows Connected / Not connected.
+Choose **Gimbal joystick → Left / Right** in the same Controls tab. D-pad shutter
+changes also update the shutter-angle readout when angle display is selected.
 A gimbal stop pulses only after the head moves then stalls (Haptics
 setting). Capture drums, the zoom disc, and duration dials pulse on
 coarse snaps (172° → 180°, 3×, whole seconds), not on every hundredth

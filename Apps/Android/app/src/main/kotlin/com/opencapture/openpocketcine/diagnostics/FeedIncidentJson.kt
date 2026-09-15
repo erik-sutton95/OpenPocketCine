@@ -56,6 +56,8 @@ internal object FeedIncidentJson {
             .put("evictions", header.evictions)
             .put("assistState", header.assistState)
             .put("healthyExposureSeconds", header.healthyExposureSeconds)
+            .put("testSource", header.testSource.wire)
+            .put("buildIdentity", header.buildIdentity)
             .also {
                 header.errorClass?.let { value -> it.put("errorClass", value) }
                 header.endedAtMonotonic?.let { value -> it.put("endedAtMonotonic", value) }
@@ -220,6 +222,8 @@ internal object FeedIncidentJson {
             evictions = json.optInt("evictions"),
             assistState = json.optString("assistState", "off"),
             healthyExposureSeconds = json.optDouble("healthyExposureSeconds", 0.0),
+            testSource = FeedIncidentTestSource.fromWire(json.optStringOrNull("testSource")),
+            buildIdentity = FeedIncidentBuildIdentity.parse(json.optStringOrNull("buildIdentity")),
         )
 
     private fun parseSnapshots(array: JSONArray?): List<FeedIncidentSnapshot> {

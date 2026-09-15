@@ -24,7 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Live-monitor gamepad: discussion #159 map. Left stick gimbal, L2/R2 analog zoom. */
+/** Live-monitor gamepad: discussion #159 map. Selected stick gimbal, L2/R2 analog zoom. */
 object GimbalGamepad {
     fun isJoystickMotion(event: MotionEvent): Boolean {
         val source = event.source
@@ -48,7 +48,17 @@ object GimbalGamepad {
         return x to y
     }
 
-    fun analogFrom(event: MotionEvent): Pair<Float, Float> = analogLeftFrom(event)
+    fun analogRightFrom(event: MotionEvent): Pair<Float, Float> {
+        val x = event.getAxisValue(MotionEvent.AXIS_Z)
+        val y = -event.getAxisValue(MotionEvent.AXIS_RZ)
+        return x to y
+    }
+
+    fun analogFrom(event: MotionEvent, stick: GamepadGimbalStick = GamepadGimbalStick.DEFAULT): Pair<Float, Float> {
+        val left = analogLeftFrom(event)
+        val right = analogRightFrom(event)
+        return stick.axes(left.first, left.second, right.first, right.second)
+    }
 
     /** Left trigger, right trigger in 0…1. DualSense L2/R2. */
     fun triggersFrom(event: MotionEvent): Pair<Float, Float> {
@@ -149,6 +159,8 @@ object GimbalGamepad {
 class GimbalGamepadDriver {
     var lastDevice: InputDevice? = null
         private set
+    private var appContext: Context? = null
+    private var lastStick = GamepadGimbalStick.DEFAULT
     private var padActive = false
     private var zoomActive = false
     private var zoomAnchor = 1.0
@@ -179,6 +191,8 @@ class GimbalGamepadDriver {
 
     fun ensureListening(context: Context, model: AppModel) {
         this.model = model
+        appContext = context.applicationContext
+        lastStick = OperatorPrefs.gimbalGamepadStick(context)
         if (inputManager == null) {
             val im = context.applicationContext.getSystemService(InputManager::class.java)
             im.registerInputDeviceListener(deviceListener, Handler(Looper.getMainLooper()))
@@ -223,7 +237,12 @@ class GimbalGamepadDriver {
             fireDpad(model, GamepadOperatorMap.dpad(hat))
         }
         hatHeld = hat
-        val (x, y) = GimbalGamepad.analogLeftFrom(event)
+        val stick = appContext?.let(OperatorPrefs::gimbalGamepadStick) ?: GamepadGimbalStick.DEFAULT
+        if (GamepadGimbalStick.restHeldMotion(lastStick, stick, padActive)) {
+            restGimbalPad(model)
+        }
+        lastStick = stick
+        val (x, y) = GimbalGamepad.analogFrom(event, stick)
         if (GimbalGamepad.isRest(x, y)) {
             if (padActive) {
                 padActive = false
@@ -273,11 +292,23 @@ class GimbalGamepadDriver {
         model.session.handleGamepadAction(action)
     }
 
-    fun noteBlocked(model: AppModel) {
+    fun noteStickSelectionChanged(model: AppModel) {
+        val stick = appContext?.let(OperatorPrefs::gimbalGamepadStick) ?: GamepadGimbalStick.DEFAULT
+        if (GamepadGimbalStick.restHeldMotion(lastStick, stick, padActive)) {
+            restGimbalPad(model)
+        }
+        lastStick = stick
+    }
+
+    private fun restGimbalPad(model: AppModel) {
         if (padActive) {
             padActive = false
             model.endGimbalStick()
         }
+    }
+
+    fun noteBlocked(model: AppModel) {
+        restGimbalPad(model)
         stopZoomPump()
         if (zoomActive) {
             zoomActive = false

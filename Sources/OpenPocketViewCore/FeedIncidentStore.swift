@@ -172,7 +172,7 @@ public enum FeedIncidentExport: Sendable {
                 "session=\(header.sessionID) started=\(ISO8601DateFormatter().string(from: header.startedAtWallClock)) gap=\(String(format: "%.3f", header.worstGapSeconds))s"
             )
             lines.append(
-                "release=\(header.appVersion)(\(header.appBuild)) rev=\(header.sourceRevision) os=\(header.osName) \(header.osVersion) hw=\(header.hardwareClass)"
+                "release=\(header.appVersion)(\(header.appBuild)) rev=\(header.sourceRevision) identity=\(header.resolvedBuildIdentity) source=\(header.resolvedTestSource.rawValue) os=\(header.osName) \(header.osVersion) hw=\(header.hardwareClass)"
             )
             lines.append(
                 "camera=\(header.cameraFamily) fw=\(header.cameraFirmware ?? "none") decoderGen=\(header.decoderGeneration) socketGen=\(header.socketGeneration) assist=\(header.assistState)"
@@ -212,6 +212,8 @@ public enum FeedIncidentExport: Sendable {
             worstGapSeconds: header.worstGapSeconds,
             healthyExposureSeconds: header.healthyExposureSeconds,
             decoderGeneration: header.decoderGeneration,
-            socketGeneration: header.socketGeneration)
+            socketGeneration: header.socketGeneration,
+            testSource: header.resolvedTestSource.rawValue,
+            buildIdentity: header.resolvedBuildIdentity)
     }
 }

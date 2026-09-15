@@ -12,7 +12,7 @@ class MonitorLayoutPolicyTest {
             for (fill in listOf(false, true)) for (visible in listOf(false, true)) {
                 val result = MonitorLayoutPolicy.portrait(width, height, if (width < 600) 44f else 0f, 34f,
                     fill, visible, aspect)
-                assertTrue(result.values.maxY <= result.system.y - 8f + .01f)
+                assertTrue(result.values.maxY <= result.system.y - 4f + .01f)
                 assertTrue(result.system.maxY <= height)
                 assertEquals(width / 2f, result.picture.midX, .01f)
                 assertTrue(result.picture.width <= width + .01f)
@@ -178,7 +178,7 @@ class MonitorLayoutPolicyTest {
         val toggle = MonitorLayoutPolicy.portraitAspect(440f, layout.controlsFloor)
         assertTrue(layout.picture.maxY < assists.y)
         assertTrue(layout.picture.maxY < toggle.y)
-        assertEquals(layout.values.y - 8f, layout.controlsFloor, .01f)
+        assertEquals(layout.values.y - 12f, layout.controlsFloor, .01f)
         assertEquals(220f, toggle.midX, .01f)
     }
 

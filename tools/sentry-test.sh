@@ -17,4 +17,5 @@ chmod +x \
 bash "${script_dir}/sentry-install-test.sh"
 python3 "${script_dir}/sentry-upload-test.py"
 python3 "${script_dir}/sentry-dsn-test.py"
+python3 "${script_dir}/build-identity-test.py"
 printf 'sentry-test: ok\n'

@@ -214,6 +214,7 @@ object OperatorPrefs {
     private const val FACE_PRIORITY = "OpenPocketCine.FacePriorityExposure"
     private const val SHUTTER_ANGLE = "OpenPocketCine.ShutterUsesAngle"
     private const val SHUTTER_DEGREES = "OpenPocketCine.ShutterAngleDegrees"
+    private const val GIMBAL_GAMEPAD_STICK = "OpenPocketCine.GimbalGamepadStick"
     private const val LUT_SELECTION = "OpenPocketCine.LUTSelection"
     private const val LAST_MONITOR_COLOR = "OpenPocketCine.LastMonitorColorMode"
     private const val CLIP_SHOT_COLOR = "OpenPocketCine.ClipShotColor"
@@ -327,6 +328,13 @@ object OperatorPrefs {
 
     fun setFacePriorityExposureEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(FACE_PRIORITY, value).apply()
+    }
+
+    fun gimbalGamepadStick(context: Context): GamepadGimbalStick =
+        GamepadGimbalStick.parse(prefs(context).getString(GIMBAL_GAMEPAD_STICK, null))
+
+    fun setGimbalGamepadStick(context: Context, value: GamepadGimbalStick) {
+        prefs(context).edit().putString(GIMBAL_GAMEPAD_STICK, value.raw).apply()
     }
 
     fun shutterUsesAngle(context: Context): Boolean =
