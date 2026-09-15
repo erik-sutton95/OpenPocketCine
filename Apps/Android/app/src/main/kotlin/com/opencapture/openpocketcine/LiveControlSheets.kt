@@ -1754,9 +1754,7 @@ object CaptureLists {
     fun isoFallback(colorMode: Int): List<Int> = CameraCommands.isoChoices(colorMode).map { it.first }
 
     /** Photo must not reuse leftover Video color for Auto ISO / fallback wheels. */
-    fun isoPresentationColor(status: CameraStatus): Int =
-        if (CameraCommands.isPhotoMode(status.shootingMode)) CameraCommands.COLOR_NORMAL
-        else status.colorMode
+    fun isoPresentationColor(status: CameraStatus): Int = status.monitorColorMode
 
     fun isoIndices(status: CameraStatus): List<Int> =
         CameraCommands.isoWheelIndices(

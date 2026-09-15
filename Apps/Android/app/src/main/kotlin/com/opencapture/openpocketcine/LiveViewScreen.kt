@@ -829,9 +829,10 @@ fun LiveViewScreen(model: AppModel) {
             if (chromeInteractive && configure != null && !uiLocked && model.liveOperatorPanel == null) {
                 Box(Modifier.fillMaxSize().zIndex(8f)) {
                     com.opencapture.openpocketcine.assists.MonitorAssistInspector(
-                        configure, assist, model, status.colorMode, vw, vh,
+                        configure, assist, model, status.monitorColorMode, vw, vh,
                         safeLeading, safeTop, safeBottom, zones?.controls?.minY ?: vh,
                         onDismiss = { assist.configureTool = null },
+                        isPhoto = status.isPhoto,
                     )
                 }
             }

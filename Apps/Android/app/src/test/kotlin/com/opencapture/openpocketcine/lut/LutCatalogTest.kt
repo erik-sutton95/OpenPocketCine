@@ -57,6 +57,12 @@ class LutCatalogTest {
         )
         assertEquals("Auto", dji.first().title)
         assertFalse(dji.any { it.id == "officialDLog" || it.id == "officialDLog2" })
+        val photo = LutCatalog.djiEntries(shipped, isPhotoLive = true)
+        assertEquals(listOf("djiAuto"), photo.map { it.id })
+        assertEquals(
+            LutCatalog.PHOTO_REC709_CAPTION,
+            "Photo live view is Rec.709 — log conversions are off",
+        )
     }
 
     @Test

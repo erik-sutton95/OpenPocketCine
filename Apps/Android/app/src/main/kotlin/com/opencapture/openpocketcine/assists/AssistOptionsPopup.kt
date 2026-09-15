@@ -84,6 +84,7 @@ fun AssistOptionsPopup(
     colorMode: Int = CameraCommands.COLOR_NORMAL,
     embedded: Boolean = false,
     playback: Boolean = false,
+    isPhoto: Boolean = false,
 ) {
     val width = AssistLongPress.preferredWidthDp(tool).dp
     val context = LocalContext.current
@@ -159,6 +160,7 @@ fun AssistOptionsPopup(
                     colorMode = colorMode,
                     family = model?.session?.connectedCamera?.model?.family ?: "pocket",
                     cameraName = model?.session?.connectedCamera?.name,
+                    isPhoto = isPhoto && !playback,
                 )
             }
         } else {

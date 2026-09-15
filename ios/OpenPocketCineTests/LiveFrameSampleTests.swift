@@ -11,6 +11,41 @@ import XCTest
 /// tests pin the plumbing, throttle, layer handoff, and effect compositing.
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
+    func testVideoFallbackStillInfersLogFromTap() async {
+        let engine = LiveAssistEngine()
+        var effects = LiveImageEffects()
+        effects.histogram = true
+        let sampled = expectation(description: "Unknown video scope sample")
+        let buffer = ScopeTestBuffers.makeBGRA { x, _ in x < 64 ? 16 : 247 }
+        engine.updatePolicy(effects: effects, transfer: .rec709)
+        engine.submit(buffer) { result in
+            guard let bundle = result.bundle else { return }
+            XCTAssertEqual(bundle.transfer, .dlog2)
+            sampled.fulfill()
+        }
+        await fulfillment(of: [sampled], timeout: 2)
+    }
+
+    func testPhotoScopesDoNotInferLogFromSceneBrightness() async {
+        let assist = LiveAssistState()
+        assist.syncLUT(to: .dLog2, isPhoto: true)
+        var effects = assist.effects
+        effects.histogram = true
+        effects.waveform = true
+        let engine = LiveAssistEngine()
+        let sampled = expectation(description: "Photo scope sample")
+        let buffer = ScopeTestBuffers.makeBGRA { x, _ in x < 64 ? 16 : 247 }
+        engine.updatePolicy(effects: effects, transfer: .rec709)
+        engine.submit(buffer) { result in
+            guard let bundle = result.bundle else { return }
+            XCTAssertEqual(result.transfer, .rec709)
+            XCTAssertEqual(result.colorMode, .normal)
+            XCTAssertEqual(bundle.transfer, .rec709)
+            sampled.fulfill()
+        }
+        await fulfillment(of: [sampled], timeout: 2)
+    }
+
     func testImageInspectorReceivesLatestRawPictureWithAllScopesOff() async throws {
         let bus = LiveFrameSampleBus()
         let decoder = HevcDecoder()

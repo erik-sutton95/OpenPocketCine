@@ -86,13 +86,15 @@ internal fun rememberLiveFeedEffectsPlan(
         crushClip,
         lutExposureStops,
         status.colorMode,
+        status.shootingMode,
         status.iso,
         family,
         cameraName,
         clipColorMode,
     ) {
         val app = context.applicationContext
-        if (!playback && previewTool == null && status.colorMode >= 0) {
+        val isPhoto = !playback && status.isPhoto
+        if (!playback && previewTool == null && status.colorMode >= 0 && !isPhoto) {
             OperatorPrefs.setLastMonitorColorMode(app, status.colorMode)
         }
         val colorMode =
@@ -103,7 +105,7 @@ internal fun rememberLiveFeedEffectsPlan(
                     last = OperatorPrefs.lastMonitorColorMode(app),
                 )
             } else {
-                status.colorMode
+                status.monitorColorMode
             }
         plan =
             withContext(Dispatchers.Default) {
@@ -117,6 +119,7 @@ internal fun rememberLiveFeedEffectsPlan(
                     cameraName = cameraName,
                     playback = playback,
                     previewTool = previewTool,
+                    isPhoto = isPhoto,
                 )
             }
     }

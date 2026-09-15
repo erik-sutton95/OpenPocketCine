@@ -3,6 +3,68 @@ import XCTest
 
 /// Opt-in real camera proof. Changes shooting mode, zoom and format; never captures media.
 final class PhysicalShootingModeTests: XCTestCase {
+    func testPhotoLUTCatalogAndVideoReturn() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
+            throw XCTSkip("Requires an opted-in physical run with a connected camera")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_FEED_STRESS"] = "1"
+        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] = "600"
+        XCUIDevice.shared.orientation = .landscapeRight
+        app.launch()
+        let mode = app.buttons["monitor.capture.mode"]
+        let connected = mode.waitForExistence(timeout: 60)
+        if !connected {
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "photo-lut-connection-unavailable"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        XCTAssertTrue(connected, "Saved camera must reconnect")
+        XCTAssertEqual(snapshot(app)["rec"], "0", "Camera must be idle")
+        let initialMode = mode.value as? String ?? "Video"
+        defer {
+            let close = app.buttons["Close LUT"]
+            if close.exists { close.tap() }
+            selectMode(initialMode, app: app)
+            XCUIDevice.shared.orientation = .portrait
+            app.terminate()
+        }
+        selectMode("Photo", app: app)
+        let expand = app.buttons["monitor.assists.expand"]
+        if expand.exists { expand.tap() }
+        let lut = app.buttons["monitor.assist.LUT"]
+        XCTAssertTrue(lut.waitForExistence(timeout: 5))
+        lut.press(forDuration: 0.6)
+        let inspector = app.otherElements["monitor.inspector"]
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+        XCTAssertTrue(inspector.buttons["Creative"].isHittable)
+        XCTAssertTrue(inspector.buttons["Custom"].isHittable)
+        let caption = app.staticTexts["Photo live view is Rec.709 — log conversions are off"]
+        XCTAssertTrue(caption.waitForExistence(timeout: 5), "DJI catalog must explain Photo bypass")
+        for title in ["D-Log → Rec.709", "D-Log2 → Rec.709", "D-Log M → Rec.709"] {
+            XCTAssertFalse(inspector.staticTexts[title].exists)
+        }
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "photo-lut-rec709"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.buttons["Close LUT"].tap()
+        let before = Int(snapshot(app)["pres"] ?? "0") ?? 0
+        wait(
+            until: { (Int(self.snapshot(app)["pres"] ?? "0") ?? 0) > before },
+            "Photo picture must keep progressing")
+        Thread.sleep(forTimeInterval: 3)
+        let rates = snapshot(app)
+        print("Photo LUT rates: source=\(rates["srcHz"] ?? "unknown") present=\(rates["presHz"] ?? "unknown") thermal=\(rates["therm"] ?? "unknown")")
+        selectMode("Video", app: app)
+        lut.press(forDuration: 0.6)
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+        XCTAssertFalse(caption.exists, "Video must restore its own LUT catalog")
+        app.buttons["Close LUT"].tap()
+    }
+
     func testPhotoChromeAndTeleSlowMotion200() throws {
         guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
             throw XCTSkip("Requires the connected Pocket 4 Pro and an opted-in physical run")

@@ -90,11 +90,13 @@ struct LUTPicker: View {
             } else {
                 category = .dji
             }
-            assist.bindLUTPicker(
-                live: model.session.status.colorMode,
-                inPlayback: model.session.status.inPlayback,
-                family: model.session.bodyFamily,
-                cameraName: model.session.connectedCamera?.model.name)
+            bindLiveLUT()
+        }
+        .onChange(of: model.session.status.isPhoto) { _, _ in
+            bindLiveLUT()
+        }
+        .onChange(of: model.session.status.colorMode) { _, _ in
+            bindLiveLUT()
         }
         .confirmationDialog(
             pendingDeletion.map { "Clear \(CustomLUTIndex.displayName(fileName: $0))?" }
@@ -135,10 +137,13 @@ struct LUTPicker: View {
         switch category {
         case .dji:
             catalogTab(
-                cases: LUTSelection.djiCases,
-                inCatalog: assist.lutSelection.isDJI,
+                cases: LUTSelection.djiCatalog(isPhotoLive: livePhotoCatalog),
+                inCatalog: assist.lutSelection.isDJI
+                    && LUTSelection.djiCatalog(isPhotoLive: livePhotoCatalog).contains(
+                        assist.lutSelection),
                 fallback: .djiAuto,
-                caption: djiCaption
+                caption: djiCaption,
+                allowsSelection: !livePhotoCatalog
             )
         case .creative:
             catalogTab(
@@ -156,7 +161,8 @@ struct LUTPicker: View {
         cases: [LUTSelection],
         inCatalog: Bool,
         fallback: LUTSelection,
-        caption: String
+        caption: String,
+        allowsSelection: Bool = true
     ) -> some View {
         VStack(spacing: 4) {
             Text(caption)
@@ -171,6 +177,9 @@ struct LUTPicker: View {
                         inCatalog ? assist.lutSelection.title : fallback.title
                     },
                     set: { name in
+                        // A singleton Photo catalog must not overwrite the saved Video look
+                        // when scrollPosition reports its displayed fallback on mount.
+                        guard allowsSelection else { return }
                         guard let selection = cases.first(where: { $0.title == name }) else {
                             return
                         }
@@ -182,7 +191,23 @@ struct LUTPicker: View {
         }
     }
 
+    private var livePhotoCatalog: Bool {
+        model.session.status.isPhoto && !model.session.status.inPlayback && !assist.gradesClip
+            && !model.isWatchingFeed
+    }
+
+    private func bindLiveLUT() {
+        assist.bindLUTPicker(
+            live: model.session.status.colorMode,
+            inPlayback: model.session.status.inPlayback,
+            family: model.session.bodyFamily,
+            cameraName: model.session.connectedCamera?.model.name,
+            isPhoto: model.session.status.isPhoto,
+            isWatching: model.isWatchingFeed)
+    }
+
     private var djiCaption: String {
+        if livePhotoCatalog { return LUTAssist.photoRec709Caption }
         if assist.lutSelection == .djiAuto || assist.lutSelection == .auto {
             return LUTResolver.autoCaption(source: assist.resolvedSource())
         }

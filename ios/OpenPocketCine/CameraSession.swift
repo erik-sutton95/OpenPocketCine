@@ -3128,7 +3128,9 @@ final class CameraSession {
         else { return }
         lastFacePriorityEVAt = now
         let transfer = MonitorTransfer.resolved(
-            status.monitorTransfer, colorMode: status.colorMode)
+            LiveMonitorColorScience.transfer(status: status),
+            colorMode: LiveMonitorColorScience.colorMode(
+                isPhoto: status.isPhoto, colorMode: status.colorMode))
         guard
             let encoded = FacePriorityExposure.medianEncoded(
                 bytes: packed.bytes, width: packed.width, height: packed.height,

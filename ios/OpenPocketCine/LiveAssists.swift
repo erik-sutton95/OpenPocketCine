@@ -297,6 +297,8 @@ final class LiveAssistState {
     /// Media player is grading a clip (connected or not). LUT sheet must not
     /// restamp Auto from the live SET — disconnected has no `inPlayback` flag.
     var gradesClip = false
+    /// Live Photo / Photo. Not persisted. Playback clears this so clip color wins.
+    var liveIsPhoto = false
     /// Inspector-only sampling follows the active scene and its visible source.
     /// Picture effects keep their existing lifetime beneath operator pages.
     var inspectorSceneActive = true
@@ -310,7 +312,10 @@ final class LiveAssistState {
     var lutArmed: Bool { lutEnabled }
 
     var lutStatusLabel: String {
-        LUTResolver.statusLabel(
+        if liveIsPhoto, lutEnabled, lutSelection == .auto || lutSelection == .djiAuto {
+            return "Auto · Rec.709"
+        }
+        return LUTResolver.statusLabel(
             enabled: lutEnabled,
             selection: lutSelection,
             source: resolvedSource()
@@ -318,7 +323,7 @@ final class LiveAssistState {
     }
 
     func resolvedSource() -> LUTSource {
-        LUTResolver.resolve(
+        LiveLUTResolver.resolve(
             selection: lutSelection,
             colorMode: monitorColorMode,
             family: monitorFamily,
@@ -326,7 +331,8 @@ final class LiveAssistState {
             hasCustomDLog: CustomLUTStore.hasCube(.dLog),
             hasCustomDLog2: CustomLUTStore.hasCube(.dLog2),
             hasCustomRec709: CustomLUTStore.hasCube(.rec709),
-            customFileName: OperatorPrefs.selectedCustomFileName
+            customFileName: OperatorPrefs.selectedCustomFileName,
+            isPhoto: liveIsPhoto
         )
     }
 
@@ -355,6 +361,7 @@ final class LiveAssistState {
             zebraHighlightColor: zebraHighlightColor,
             zebraMidtoneColor: zebraMidtoneColor,
             colorMode: monitorColorMode ?? .normal,
+            allowsTransferInference: !liveIsPhoto,
             splitComparison: splitComparison && isVisible(.lut),
             splitVertical: splitVertical,
             mirror: isVisible(.mirror),
@@ -368,6 +375,7 @@ final class LiveAssistState {
     /// Same graph as live, gated by playback-visible tools (OpenZCine `playbackImageEffects`).
     var playbackEffects: LiveImageEffects {
         var fx = effects
+        fx.allowsTransferInference = true
         fx.inspectorSample = false
         fx.peaking = isPlaybackVisible(.peaking)
         fx.zebra = isPlaybackVisible(.zebra)
@@ -533,15 +541,20 @@ final class LiveAssistState {
     }
 
     /// Color / zoom / body changes only swap the cube while an Auto row is selected.
+    /// Photo does not persist Rec.709 over last live log, and does not rewrite LUT prefs.
     func syncLUT(
         to colorMode: ColorMode?,
         family: CameraBodyFamily = .pocket,
-        cameraName: String? = nil
+        cameraName: String? = nil,
+        isPhoto: Bool = false,
+        persistLast: Bool = true
     ) {
-        monitorColorMode = colorMode
+        liveIsPhoto = isPhoto && !gradesClip
+        monitorColorMode = LiveMonitorColorScience.colorMode(
+            isPhoto: liveIsPhoto, colorMode: colorMode)
         monitorFamily = family
         if let cameraName { monitorCameraName = cameraName }
-        if let colorMode {
+        if persistLast, let colorMode, !liveIsPhoto {
             OperatorPrefs.lastMonitorColorMode = colorMode
         }
         refreshLUTCube()
@@ -554,6 +567,7 @@ final class LiveAssistState {
         family: CameraBodyFamily = .pocket,
         cameraName: String? = nil
     ) {
+        liveIsPhoto = false
         monitorColorMode = colorMode
         monitorFamily = family
         if let cameraName { monitorCameraName = cameraName }
@@ -562,17 +576,25 @@ final class LiveAssistState {
 
     /// LUT sheet appear. Live SET must not replace the clip's Auto cube —
     /// including disconnected library playback (`gradesClip`, no camera SET).
+    /// Watcher isolation: do not restamp from the camera session.
     func bindLUTPicker(
         live: ColorMode?,
         inPlayback: Bool,
         family: CameraBodyFamily = .pocket,
-        cameraName: String? = nil
+        cameraName: String? = nil,
+        isPhoto: Bool = false,
+        isWatching: Bool = false
     ) {
         if inPlayback || gradesClip {
+            liveIsPhoto = false
             refreshLUTCube()
             return
         }
-        syncLUT(to: live, family: family, cameraName: cameraName)
+        if isWatching {
+            refreshLUTCube()
+            return
+        }
+        syncLUT(to: live, family: family, cameraName: cameraName, isPhoto: isPhoto)
     }
 
     func refreshLUTCube() {

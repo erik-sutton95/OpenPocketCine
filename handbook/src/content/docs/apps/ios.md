@@ -133,6 +133,11 @@ space after rotation or resizing, including saved positions. Long-press a View A
   Last live D-Log / D-Log2 is the fallback when that atom is missing —
   `colr`/`nclx` is Rec.709 even for log. Opening LUT on a disconnected clip
   keeps that Auto cube (it does not restamp from a missing live SET).
+  In Photo and Live Photo, live monitoring uses Rec.709: DJI log conversions
+  are hidden and bypassed, including a saved manual conversion. Creative and
+  imported Custom looks remain available. Returning to Video restores the
+  saved conversion unless you changed your LUT selection. Opening a recorded
+  clip still uses that clip's color profile.
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
   with 4K max 2×; Nano 1×). Pocket 3's confirmed **2.7K limit is 3×**; its
   generic 4× choice still needs correction ([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)).

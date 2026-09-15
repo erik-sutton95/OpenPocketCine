@@ -38,6 +38,7 @@ fun MonitorAssistInspector(
     onDismiss: () -> Unit,
     playback: Boolean = false,
     safeTrailing: Float = 0f,
+    isPhoto: Boolean = false,
 ) {
     MonitorInspector(
         title = tool.title.uppercase(),
@@ -68,7 +69,7 @@ fun MonitorAssistInspector(
             AssistOptionsPopup(
                 tool, state, onDismiss, model = model,
                 maxHeightDp = (frame.height - 120f).coerceAtLeast(100f),
-                colorMode = colorMode, embedded = true, playback = playback,
+                colorMode = colorMode, embedded = true, playback = playback, isPhoto = isPhoto,
             )
         }
     }

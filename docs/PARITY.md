@@ -5,6 +5,24 @@ unless a row lists an exception. GPU backends, Bluetooth stacks, and OS APIs may
 diverge. Shipping a one-platform operator-visible change without a row here is
 incomplete.
 
+## Photo LUT View Assist
+
+Photo and Live Photo use Normal / Rec.709 for live LUT selection and image
+measurement, even when camera status retains a video log profile. Both shells
+hide manual DJI log conversions and bypass technical conversions, including
+legacy custom log slots. Creative looks, generic imported Custom files and
+the Rec.709 custom slot remain usable. Entering Photo preserves the saved LUT
+selection and enable preference; returning to Video resolves that selection
+against the video profile. Clip playback keeps its own color profile.
+
+The iOS engine regression uses a synthetic scene whose pixel range previously
+triggered D-Log2 inference in Photo; it now retains Rec.709, while the Video
+fallback still infers log. Shell tests also cover saved selections and clip
+playback isolation. Physical verification remains pending: the iPhone build
+launched, but the saved camera did not reconnect during the automated run.
+Android has no attached physical device. Earlier qualification does not cover
+this mode transition or its sustained live-picture budget.
+
 Before changing an operator-visible surface, read this file. Ship both shells or
 write the exception in the table in the same PR.
 

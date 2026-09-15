@@ -814,6 +814,7 @@ fun MediaPlayerScreen(
                     status = status,
                     focus = null,
                     playback = true,
+                    colorMode = effectsPlan.scopeTap.colorMode,
                     modifier = Modifier.fillMaxSize(),
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame

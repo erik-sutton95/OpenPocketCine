@@ -111,6 +111,7 @@ internal object FeedEffectsRenderPlanFactory {
         cameraName: String?,
         playback: Boolean = false,
         previewTool: LiveAssistTool? = null,
+        isPhoto: Boolean = false,
     ): FeedEffectsRenderPlan {
         val shown: (LiveAssistTool) -> Boolean =
             if (previewTool != null) {
@@ -143,6 +144,7 @@ internal object FeedEffectsRenderPlanFactory {
                 colorMode = colorMode,
                 family = family,
                 cameraName = cameraName,
+                isPhoto = isPhoto,
             )
         val lutCube = lutCube(context, look, assist.lutExposureStops, colorMode)
         // Same gate as iOS `FeedPresentPolicy.appliesSplitComparison` (#218).
@@ -213,6 +215,7 @@ internal object FeedEffectsRenderPlanFactory {
                     trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
                     colorMode = colorMode,
                     iso = if (iso in 50..102_400) iso else ScopeExposureCeiling.REFERENCE_EI,
+                    allowsTransferInference = playback || !isPhoto,
                     vectorLut =
                         if (vectorscope) {
                             lutCube
@@ -228,6 +231,7 @@ internal object FeedEffectsRenderPlanFactory {
                                                 colorMode = colorMode,
                                                 family = family,
                                                 cameraName = cameraName,
+                                                isPhoto = isPhoto,
                                             ),
                                             assist.lutExposureStops,
                                             colorMode,

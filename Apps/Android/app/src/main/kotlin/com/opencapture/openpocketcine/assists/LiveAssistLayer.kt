@@ -97,6 +97,8 @@ fun LiveAssistLayer(
     pictureMirrored: Boolean = state.mirror,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
     showsAudio: Boolean = true,
+    /** WAVE / PARADE / FALSE ruler. Playback passes clip color; live uses [CameraStatus.monitorColorMode]. */
+    colorMode: Int = status.monitorColorMode,
 ) {
     val density = LocalDensity.current
     val shown: (LiveAssistTool) -> Boolean =
@@ -149,7 +151,7 @@ fun LiveAssistLayer(
                 state.falseColorReferenceCenter, canvas, placement, AssistPoint(canvas.midX, canvas.midY),
                 enabled = !locked, onStore = { state.storeCenter(LiveAssistTool.FALSE, it) }, fillPlate = false,
                 onOpenOptions = onOpenOptions?.let { open -> { open(LiveAssistTool.FALSE, it) } }) {
-                FalseColorReferenceRuler(state, status.colorMode, Modifier.fillMaxSize())
+                FalseColorReferenceRuler(state, colorMode, Modifier.fillMaxSize())
             }
         }
         if (!playback) {
@@ -181,13 +183,13 @@ fun LiveAssistLayer(
                     StackedScopePanel(
                         tool = tool,
                         state = state,
-                        status = status,
                         canvas = canvas,
                         placementBounds = placement,
                         feed = feed,
                         density = density,
                         locked = locked,
                         onOpenOptions = onOpenOptions,
+                        colorMode = colorMode,
                     )
                 }
             }
@@ -209,13 +211,13 @@ fun LiveAssistLayer(
 private fun StackedScopePanel(
     tool: LiveAssistTool,
     state: LiveAssistState,
-    status: CameraStatus,
     canvas: AssistRect,
     placementBounds: AssistRect,
     feed: AssistRect,
     density: androidx.compose.ui.unit.Density,
     locked: Boolean,
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)?,
+    colorMode: Int,
 ) {
     val (base, scale, stored, onScale) =
         when (tool) {
@@ -289,8 +291,8 @@ private fun StackedScopePanel(
             chip = tool == LiveAssistTool.ND,
         ) {
             when (tool) {
-                LiveAssistTool.WAVE -> WaveformPanel(state, status.colorMode, Modifier.fillMaxSize())
-                LiveAssistTool.PARADE -> ParadePanel(state, status.colorMode, Modifier.fillMaxSize())
+                LiveAssistTool.WAVE -> WaveformPanel(state, colorMode, Modifier.fillMaxSize())
+                LiveAssistTool.PARADE -> ParadePanel(state, colorMode, Modifier.fillMaxSize())
                 LiveAssistTool.VECTOR -> VectorscopePanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.HISTO -> HistogramPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.LIGHTS -> TrafficLightsPanel(state, Modifier.fillMaxSize())

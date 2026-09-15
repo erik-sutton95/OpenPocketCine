@@ -225,7 +225,9 @@ internal class LiveFeedEffectsSession(
                     var transfer = MonitorTransfer.fromColorMode(policy.colorMode)
                     ScopeExposureCeiling.syncISO(policy.iso)
                     val (minC, maxC) = PocketScopeSampler.minMaxRGB(packed)
-                    transfer = MonitorTransfer.inferred(minC, maxC, transfer)
+                    if (policy.allowsTransferInference) {
+                        transfer = MonitorTransfer.inferred(minC, maxC, transfer)
+                    }
                     ScopeExposureCeiling.observeTapMax(maxC, transfer)
                     val sampled =
                         PocketScopeSampler.sample(

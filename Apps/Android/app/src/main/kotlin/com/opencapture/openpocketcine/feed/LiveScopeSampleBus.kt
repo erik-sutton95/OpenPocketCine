@@ -73,6 +73,7 @@ internal data class ScopeTapPolicy(
     val colorMode: Int = com.opencapture.openpocketcine.session.CameraCommands.COLOR_NORMAL,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
     val vectorLut: FeedEffectsCube? = null,
+    val allowsTransferInference: Boolean = true,
 ) {
     val activeScopeCount: Int
         get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter).count { it }

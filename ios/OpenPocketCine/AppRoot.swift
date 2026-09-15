@@ -33,10 +33,30 @@ final class AppModel {
     /// Monitor tools follow the displayed source; watcher scopes must never read the camera bus.
     var monitorSamples: LiveFrameSampleBus { isWatchingFeed ? relayClient.samples : frameSamples }
     var monitorColorMode: ColorMode? {
-        isWatchingFeed ? relayClient.colorMode : session.status.colorMode
+        if isWatchingFeed { return relayClient.colorMode }
+        if assist.gradesClip { return assist.monitorColorMode }
+        return LiveMonitorColorScience.colorMode(
+            isPhoto: session.status.isPhoto, colorMode: session.status.colorMode)
     }
     var monitorTransfer: MonitorTransfer? {
-        isWatchingFeed ? relayClient.transfer : session.status.monitorTransfer
+        if isWatchingFeed { return relayClient.transfer }
+        if assist.gradesClip { return assist.monitorColorMode.map(MonitorTransfer.init) }
+        return LiveMonitorColorScience.transfer(
+            isPhoto: session.status.isPhoto, colorMode: session.status.colorMode)
+    }
+
+    /// Refresh LUT / decoder transfer on color or shooting-mode change. Skips watcher, clip, camera playback.
+    func syncLiveMonitorColor() {
+        guard !isWatchingFeed, !assist.gradesClip, !session.status.inPlayback else { return }
+        let raw = session.status.colorMode
+        let photo = session.status.isPhoto
+        assist.syncLUT(
+            to: raw,
+            family: session.bodyFamily,
+            cameraName: session.connectedCamera?.model.name,
+            isPhoto: photo)
+        session.decoder.incomingColorMode = LiveMonitorColorScience.colorMode(
+            isPhoto: photo, colorMode: raw)
     }
     var homePanel: AppPanel?
     var captureSheet: CaptureSheet?
@@ -395,7 +415,7 @@ final class AppModel {
         let state = WatcherRelayState(
             isRecording: s.isRecording,
             format: s.videoResolution?.label ?? "",
-            color: s.colorMode?.label ?? "",
+            color: (s.isPhoto ? ColorMode.normal : s.colorMode)?.label ?? "",
             zoom: CamFov.displayLabel(factor: session.zoomReadout),
             liveFPS: session.liveFPS,
             batteryPercent: s.batteryPercent,

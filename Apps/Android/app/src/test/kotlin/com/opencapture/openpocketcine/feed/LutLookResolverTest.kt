@@ -161,6 +161,76 @@ class LutLookResolverTest {
     }
 
     @Test
+    fun `photo live view bypasses auto and manual log conversions`() {
+        assertEquals(
+            LutLookSource.Off,
+            LutLookResolver.resolve(
+                LutCatalog.DJI_AUTO,
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG2,
+                family = "pocket",
+                cameraName = "Pocket 4 Pro",
+                isPhoto = true,
+            ),
+        )
+        assertEquals(
+            LutLookSource.Off,
+            LutLookResolver.resolve(
+                "djiDLog2",
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG2,
+                family = "pocket",
+                cameraName = "Pocket 4 Pro",
+                isPhoto = true,
+            ),
+        )
+        assertEquals(
+            LutLookSource.Off,
+            LutLookResolver.resolve(
+                "customDLog",
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG,
+                family = "pocket",
+                cameraName = null,
+                isPhoto = true,
+            ),
+        )
+        assertIs<LutLookSource.Creative>(
+            LutLookResolver.resolve(
+                "creativeWarm",
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG2,
+                family = "pocket",
+                cameraName = null,
+                isPhoto = true,
+            ),
+        )
+        val custom =
+            assertIs<LutLookSource.Custom>(
+                LutLookResolver.resolve(
+                    LutCatalog.customId("Look.cube"),
+                    lutOn = true,
+                    colorMode = CameraCommands.COLOR_DLOG2,
+                    family = "pocket",
+                    cameraName = null,
+                    isPhoto = true,
+                ),
+            )
+        assertEquals("Look.cube", custom.fileName)
+        assertEquals(
+            LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
+            LutLookResolver.resolve(
+                LutCatalog.DJI_AUTO,
+                lutOn = true,
+                colorMode = CameraCommands.COLOR_DLOG2,
+                family = "pocket",
+                cameraName = "Pocket 4 Pro",
+                isPhoto = false,
+            ),
+        )
+    }
+
+    @Test
     fun `identity plan does not split`() {
         assertEquals(false, FeedEffectsRenderPlan.IDENTITY.splitComparison)
         assertEquals(null, FeedEffectsRenderPlan.IDENTITY.lutCube)

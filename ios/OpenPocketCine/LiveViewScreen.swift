@@ -115,15 +115,17 @@ struct LiveViewScreen: View {
                     guard let app else { return LiveImageEffects() }
                     return app.assist.effects.withFaceAF(app.session.wantsFaceAF)
                 },
-                transfer: { [weak app] in app?.session.status.monitorTransfer }
+                transfer: { [weak app] in
+                    guard let app else { return nil }
+                    return LiveMonitorColorScience.transfer(
+                        isPhoto: app.session.status.isPhoto,
+                        colorMode: app.session.status.colorMode)
+                }
             )
             #if targetEnvironment(simulator)
                 model.session.status.colorMode = .dLog2
             #endif
-            model.assist.syncLUT(
-                to: model.session.status.colorMode,
-                family: model.session.bodyFamily,
-                cameraName: model.session.connectedCamera?.model.name)
+            model.syncLiveMonitorColor()
             model.session.decoder.startSimulatorSampleIfNeeded()
             model.session.isLocked = interfaceLocked
             gamepad.attach(model: model)
@@ -879,7 +881,9 @@ private struct LiveFeedPane: View {
             decoder: model.session.decoder,
             effects: liveEffects,
             sampleBus: model.frameSamples,
-            transfer: model.session.status.monitorTransfer,
+            transfer: LiveMonitorColorScience.transfer(
+                isPhoto: model.session.status.isPhoto,
+                colorMode: model.session.status.colorMode),
             pictureFlip: model.livePictureViewFlip
         )
         .onChange(of: model.assist.effects) { _, fx in
@@ -888,13 +892,14 @@ private struct LiveFeedPane: View {
         .onChange(of: model.session.wantsFaceAF) { _, wants in
             model.session.decoder.effects = model.assist.effects.withFaceAF(wants)
         }
-        .onChange(of: model.session.status.colorMode) { _, mode in
-            model.session.decoder.incomingColorMode = mode
-            guard !model.session.status.inPlayback else { return }
-            model.assist.syncLUT(
-                to: mode,
-                family: model.session.bodyFamily,
-                cameraName: model.session.connectedCamera?.model.name)
+        .onChange(of: model.session.status.colorMode) { _, _ in
+            model.syncLiveMonitorColor()
+        }
+        .onChange(of: model.session.status.isPhoto) { _, _ in
+            model.syncLiveMonitorColor()
+        }
+        .onChange(of: model.assist.gradesClip) { _, grading in
+            if !grading { model.syncLiveMonitorColor() }
         }
     }
 }

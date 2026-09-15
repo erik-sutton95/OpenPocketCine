@@ -22,6 +22,7 @@ object LutCatalog {
     const val AUTO = "auto"
     const val OFF = "off"
     const val DJI_AUTO = "djiAuto"
+    const val PHOTO_REC709_CAPTION = "Photo live view is Rec.709 — log conversions are off"
 
     private const val CUSTOM_PREFIX = "custom:"
     private const val ASSET_PREFIX = "asset:"
@@ -118,7 +119,7 @@ object LutCatalog {
         return fileName.takeIf { isSafeFileName(it) }
     }
 
-    fun djiEntries(assetFileNames: Collection<String>): List<LutEntry> {
+    fun djiEntries(assetFileNames: Collection<String>, isPhotoLive: Boolean = false): List<LutEntry> {
         val cubes = assetFileNames.filter(::isCubeFileName)
         val reserved =
             (officialDji + officialBuiltInLooks)
@@ -133,7 +134,9 @@ object LutCatalog {
                 .filter { name -> name.lowercase() !in reserved }
                 .sortedBy { it.lowercase() }
                 .map { extraDji(it) }
-        return listOf(djiAuto) + presentOfficial + extras
+        val all = listOf(djiAuto) + presentOfficial + extras
+        if (!isPhotoLive) return all
+        return all.filter { it.id == DJI_AUTO || it.id.startsWith(ASSET_PREFIX) }
     }
 
     fun storedCustom(fromFileNames: Collection<String>): List<LutEntry> =

@@ -135,7 +135,7 @@ struct WatcherLiveView: View {
         client.decoder.incomingColorMode = client.colorMode
         model.assist.syncLUT(
             to: client.colorMode, family: client.state.isNano == true ? .nano : .pocket,
-            cameraName: client.state.cameraModel)
+            cameraName: client.state.cameraModel, persistLast: false)
     }
 
     private var header: some View {

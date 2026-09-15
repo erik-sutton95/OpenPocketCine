@@ -572,8 +572,9 @@ final class LiveAssistEngine: @unchecked Sendable {
         if let packed {
             let tapMin = LiveFrameTap.minRGB(packed.bytes)
             let tapMax = LiveFrameTap.maxRGB(packed.bytes)
-            let inferred = MonitorTransfer.inferred(
-                minByte: tapMin, maxByte: tapMax, fallback: transfer)
+            let inferred = fx.allowsTransferInference
+                ? MonitorTransfer.inferred(minByte: tapMin, maxByte: tapMax, fallback: transfer)
+                : transfer
             if inferred != transfer {
                 transfer = inferred
                 pendingTransfer = inferred

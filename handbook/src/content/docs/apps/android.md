@@ -195,7 +195,12 @@ stripes over grayscale. EL Zone is 15 contiguous stops from 18% gray
 (+6 white, −6 black). IRE is six video-level zones over grayscale
 (crush, near-black, 18% gray, +1 stop, near clip, clip).
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
-input-referred before the cube). 50/50 log-vs-LUT is monitor-only and must
+input-referred before the cube). Photo and Live Photo use Rec.709 for live
+monitoring. DJI log conversions are hidden and bypassed, including saved manual
+conversions; Creative and imported Custom looks remain available. Returning to
+Video restores the saved conversion unless you changed your LUT selection.
+Recorded clips keep their own color profile.
+50/50 log-vs-LUT is monitor-only and must
 not drop the live picture (GPU split only while a cube is loaded). Next/prev
 with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /

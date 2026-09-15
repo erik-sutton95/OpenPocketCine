@@ -22,8 +22,10 @@ internal object LutLookResolver {
         colorMode: Int,
         family: String,
         cameraName: String?,
+        isPhoto: Boolean = false,
     ): LutLookSource {
         if (!lutOn) return LutLookSource.Off
+        if (isPhoto && isTechnicalLogSelection(selection)) return LutLookSource.Off
         return when (selection) {
             LutCatalog.OFF -> LutLookSource.Off
             LutCatalog.AUTO, LutCatalog.DJI_AUTO -> djiAuto(colorMode, family, cameraName)
@@ -117,4 +119,21 @@ internal object LutLookResolver {
     }
 
     private const val COLOR_DLOG_M = 0x00
+
+    /** DJI/official log conversions and log-specific custom slots. Creative and generic Custom stay. */
+    fun isTechnicalLogSelection(selection: String): Boolean =
+        when (selection) {
+            LutCatalog.AUTO,
+            LutCatalog.DJI_AUTO,
+            "officialDLog",
+            "officialDLog2",
+            "djiDLog",
+            "djiDLog2",
+            "djiDLogM",
+            "djiAction6DLogM",
+            "customDLog",
+            "customDLog2",
+            -> true
+            else -> false
+        }
 }

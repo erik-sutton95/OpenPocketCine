@@ -131,9 +131,10 @@ fun LUTPicker(model: AppModel, onClose: () -> Unit) {
         onSplitVertical = { assist.setSplitComparison(assist.splitComparison, it) },
         onExposure = { assist.updateLutExposure(it) },
         onArmLut = { assist.armLut() },
-        colorMode = status.colorMode,
+        colorMode = status.monitorColorMode,
         family = model.session.connectedCamera?.model?.family ?: "pocket",
         cameraName = model.session.connectedCamera?.name,
+        isPhoto = status.isPhoto,
     )
 }
 
@@ -157,13 +158,14 @@ internal fun LUTPicker(
     colorMode: Int = CameraCommands.COLOR_NORMAL,
     family: String = "pocket",
     cameraName: String? = null,
+    isPhoto: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val djiEntries =
-        remember(context) {
+        remember(context, isPhoto) {
             val names = context.assets.list(LutCatalog.ASSET_DIRECTORY)?.toList().orEmpty()
-            LutCatalog.djiEntries(names)
+            LutCatalog.djiEntries(names, isPhotoLive = isPhoto)
         }
     val creativeEntries = remember { LutCatalog.creative }
     var tab by remember {
@@ -245,6 +247,7 @@ internal fun LUTPicker(
                 colorMode = colorMode,
                 family = family,
                 cameraName = cameraName,
+                isPhoto = isPhoto,
             )
         }
 
@@ -339,6 +342,7 @@ private fun LUTPickerBody(
     colorMode: Int,
     family: String,
     cameraName: String?,
+    isPhoto: Boolean,
 ) {
     BoxWithConstraints(
         modifier
@@ -367,7 +371,7 @@ private fun LUTPickerBody(
             when (tab) {
                 LutTab.DJI ->
                     CatalogTab(
-                        caption = djiCaption(selection, colorMode, family, cameraName),
+                        caption = djiCaption(selection, colorMode, family, cameraName, isPhoto),
                         entries = djiEntries,
                         selection = selection,
                         fallbackId = LutCatalog.DJI_AUTO,
@@ -376,7 +380,7 @@ private fun LUTPickerBody(
                     )
                 LutTab.CREATIVE ->
                     CatalogTab(
-                        caption = creativeCaption(selection, colorMode, family, cameraName),
+                        caption = creativeCaption(selection, colorMode, family, cameraName, isPhoto),
                         entries = creativeEntries,
                         selection = selection,
                         fallbackId = "creativeMono",
@@ -774,10 +778,11 @@ private fun creativeCaption(
     colorMode: Int,
     family: String,
     cameraName: String?,
+    isPhoto: Boolean,
 ): String =
     if (LutCatalog.categoryOf(selection) == LutCategory.CREATIVE) {
         LutLookResolver.autoCaption(
-            LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
+            LutLookResolver.resolve(selection, true, colorMode, family, cameraName, isPhoto),
         )
     } else {
         "Looks for the displayed picture"
@@ -788,11 +793,14 @@ private fun djiCaption(
     colorMode: Int,
     family: String,
     cameraName: String?,
+    isPhoto: Boolean,
 ): String =
-    when (selection) {
+    if (isPhoto) {
+        LutCatalog.PHOTO_REC709_CAPTION
+    } else when (selection) {
         LutCatalog.AUTO, LutCatalog.DJI_AUTO ->
             LutLookResolver.autoCaption(
-                LutLookResolver.resolve(selection, true, colorMode, family, cameraName),
+                LutLookResolver.resolve(selection, true, colorMode, family, cameraName, isPhoto),
             )
         else ->
             if (LutCatalog.categoryOf(selection) == LutCategory.DJI) {

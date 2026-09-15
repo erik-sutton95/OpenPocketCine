@@ -12,6 +12,8 @@ enum LUTAssist {
     static let longPressPanelWidth: CGFloat = 400
     static let exposureTitle = "Exposure"
     static let exposureHelp = "Input stops before the cube. Pull 1–2 after ETTR."
+    /// Live Photo / Photo is Rec.709; do not label a stale D-Log conversion.
+    static let photoRec709Caption = "Photo live view is Rec.709 — log conversions are off"
 
     @ViewBuilder
     static func longPressMenu(assist: LiveAssistState) -> some View {

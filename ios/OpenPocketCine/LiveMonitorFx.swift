@@ -32,6 +32,8 @@ struct LiveImageEffects: Equatable, Sendable {
     var zebraMidtoneColor: ZebraPaint = .amber
     /// Sibling / session stamps the camera color mode so D-Log2 IRE does not treat mid-grey as clip.
     var colorMode: ColorMode = .normal
+    /// Photo has an authoritative Rec.709 source; scene brightness cannot identify log.
+    var allowsTransferInference = true
     var splitComparison = false
     var splitVertical = true
     /// Left-to-right monitor flip. Applied in `VideoView`, not this compositor.

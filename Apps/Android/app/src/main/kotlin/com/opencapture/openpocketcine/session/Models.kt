@@ -325,6 +325,14 @@ data class CameraStatus(
     val colorLabel: String
         get() = CameraCommands.colorLabel(colorMode)
 
+    /** Still capture: Photo `05`/`17` and Live Photo `4D`. SuperNight is video. */
+    val isPhoto: Boolean
+        get() = CameraCommands.isPhotoMode(shootingMode)
+
+    /** Live LUT/scope color. Photo/Live Photo is Rec.709 even if `@2` still reports log. */
+    val monitorColorMode: Int
+        get() = if (isPhoto) CameraCommands.COLOR_NORMAL else colorMode
+
     val resolutionLabel: String
         get() = CameraCommands.resolutionLabel(resolutionCode)
 
