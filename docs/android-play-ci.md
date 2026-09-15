@@ -12,7 +12,7 @@ Auto-upload on `main` is gated by the repository variable
 OpenZCine `PLAY_UPLOAD_ENABLED`. Missing `play-closed` secrets **fail the
 job**. They do not skip-succeed.
 
-Join URL (once the first release is live):
+Public beta join URL (Google Play approved open testing):
 <https://play.google.com/apps/testing/com.opencapture.openpocketcine>
 
 One-time Play Console, upload keystore, Play API robot, and GitHub secrets:
@@ -22,13 +22,17 @@ just android-play-setup          # walkthrough (Console + keystore + API robot +
 just android-play-sync-secrets   # non-interactive: keystore + play-closed secrets
 ```
 
-## Why closed testing
+The public website now links directly to open testing; no waitlist is required.
+The CI upload configuration below still describes the existing closed-track
+pipeline. Opening the public beta does not change its track or credentials.
+
+## Original closed-testing setup
 
 | Track | Cap | Review | Use |
 | --- | --- | --- | --- |
 | Internal testing | 100 testers | None | Maintainer smoke |
 | **Closed testing (`alpha`)** | Large email lists | First release of a version | Waitlist (300+) |
-| Open testing | Anyone with the link | Yes | Not yet |
+| Open testing | Anyone with the link | Yes | Public beta |
 
 Internal testing cannot hold the waitlist. Firebase App Distribution would skip
 Play review, but the waitlist copy and privacy policy already promise Play

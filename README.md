@@ -32,8 +32,8 @@ OpenPocketCine is a production monitor and remote for the **DJI Osmo** series. L
 captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (AVC). Other Osmo
 bodies can show up in Bluetooth scan; Action and 360 live view is not captured yet.
 
-iOS (iPhone and iPad) is the daily driver. Android is a Play closed-testing beta
-(waitlist on [openpocketcine.app](https://openpocketcine.app/)).
+iOS (iPhone and iPad) is the daily driver. Android is available as a
+[public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA).
 
 - **Read the image like a colorist.** Waveform, RGB parade, histogram, and vectorscope run live on
   the iOS monitor.
@@ -136,8 +136,8 @@ when Frame.io is configured.
 - Universal iPhone and iPad app (one adaptive monitor; pairing uses a wider two-column layout)
 
 The native Android implementation lives in this repository as a phone shell with live pairing,
-HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Play closed testing is
-the waitlist path on [openpocketcine.app](https://openpocketcine.app/). Clip export LUT bake, Convert log, and
+HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Join the
+[public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). Clip export LUT bake, Convert log, and
 GPU scopes are iOS today.
 
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may

@@ -1,12 +1,11 @@
 ---
 title: Android app
-description: Jetpack Compose phone shell on a cross-compiled Swift core. Play closed testing. arm64-v8a only.
+description: Jetpack Compose phone shell on a cross-compiled Swift core. Google Play public beta. arm64-v8a only.
 ---
 
 The Android app lives in `Apps/Android/`. It is an early phone shell: pairing,
-HEVC/AVC live view, GPU looks, scopes, camera writes, and media. Closed testing on
-Google Play is the TestFlight analog — join from
-[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. arm64
+HEVC/AVC live view, GPU looks, scopes, camera writes, and media. The public beta on
+Google Play is open — [join the Android beta](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). iOS is the daily driver. arm64
 phones, Android 10 or newer.
 
 If pairing or live view fails: Connection setup **Share Diagnostics**, or
