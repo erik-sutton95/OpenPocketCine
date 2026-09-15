@@ -826,3 +826,12 @@ The active-link status card is visible in both orientations. Supported settings
 retain their existing actions and saved values; Android still uses system Back.
 Sharing and platform-specific hardware/settings remain capability differences.
 iOS is unchanged in this Android visual correction.
+
+## Automatic-reporting build configuration
+
+Both shells ask on a configured installation when no Enable / Not now choice
+exists, including after an update introduces reporting. Saved choices persist.
+Xcode Cloud now rejects iOS archives without a packaged reporting destination,
+independently of symbol uploads. Android retains its existing Play configuration
+checks; no shell consent behavior changes. TestFlight verification of the next
+configured build remains pending.

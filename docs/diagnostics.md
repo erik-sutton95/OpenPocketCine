@@ -282,3 +282,9 @@ as a notice: the collection callback stack is not the original crash stack.
 Manual feedback uses the same release/build and environment labels as automatic
 reports so investigators can compare them; a manual description is not proof of
 a captured crash or a direct link to a particular incident.
+
+TestFlight archives must contain a valid Sentry destination even when symbol
+uploads are disabled. The unavailable-build message indicates missing build
+configuration; reinstalling that binary cannot enable the prompt. Configure
+`SENTRY_DSN_IOS` in Xcode Cloud and deliver a new archive. No consent reset is
+needed for installations that have never saved a choice.

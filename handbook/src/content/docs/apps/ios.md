@@ -372,3 +372,8 @@ send optional crash, error and feed-dropout reports. This also applies after an
 update if you have never made that choice. Enable or Not now is remembered;
 updates do not ask again after a decision. You can change the choice in
 **Operator Setup → System → Automatic error reports**.
+
+If System says “This build cannot send automatic reports,” the installed build
+has no reporting destination. A configured TestFlight update is required;
+reinstalling the same build will not enable it. When that update arrives, the
+app asks if you have not previously chosen Enable or Not now.

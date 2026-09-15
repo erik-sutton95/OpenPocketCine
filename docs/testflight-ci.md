@@ -11,6 +11,7 @@ Public join link: <https://testflight.apple.com/join/1tmt3aEB>
 | --- | --- |
 | Generate `ios/OpenPocketCine.xcodeproj` | [`ios/ci_scripts/ci_post_clone.sh`](../ios/ci_scripts/ci_post_clone.sh) (`xcodegen`) |
 | Install `Package.resolved` into the generated workspace | same script + [`ios/Package.resolved`](../ios/Package.resolved) (Xcode Cloud disables automatic SPM resolution) |
+| Sentry destination | `SENTRY_DSN_IOS` (or `SENTRY_DSN`) in workflow environment; every archive verifies the packaged value |
 | Frame.io xcconfig injection | same script + optional Xcode Cloud environment variables |
 | Archive + TestFlight upload | Xcode Cloud Archive action, deployment **TestFlight and App Store** |
 | Build number | Xcode Cloud's own counter (stamped automatically) |
