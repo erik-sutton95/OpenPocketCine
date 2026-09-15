@@ -1329,9 +1329,14 @@ internal fun LandscapeChrome(
                 RecordButton(
                     modifier = Modifier.fillMaxSize(),
                     recording = status.isRecording,
-                    enabled = !controlBusy,
-                    confirm = model.recordConfirmationEnabled,
-                    photo = CameraCommands.isPhotoMode(status.shootingMode),
+                    enabled = !controlBusy && !uiLocked,
+                    confirm = CaptureShutterPolicy.requiresRecordConfirmation(
+                        model.recordConfirmationEnabled, status.shootingMode,
+                    ),
+                    photo = CaptureShutterPolicy.isStillCapture(status.shootingMode),
+                    request = CaptureShutterPolicy.request(
+                        status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
+                    ),
                     onClick = model::pressShutter,
                 )
             }
@@ -1529,7 +1534,7 @@ private fun LiveTopDeck(
                 modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR).topCapture(LiveSheet.COLOR))
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
-            Text(CameraCommands.shootingModeLabel(status.shootingMode) ?: "—",
+            Text(CameraCommands.shootingModeLabel(status.shootingMode, model.session.connectedCamera?.model?.name) ?: "—",
                 color = LiveDesign.accent, style = LiveType.ui(15f, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1,
                 modifier = Modifier.reportChromeFrame { onPickerFrame(LiveSheet.MODE, it) }.topCapture(LiveSheet.MODE))
         }

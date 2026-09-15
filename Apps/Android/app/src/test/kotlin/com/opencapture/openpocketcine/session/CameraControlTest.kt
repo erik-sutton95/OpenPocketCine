@@ -44,7 +44,7 @@ class CameraControlTest {
         assertTrue(!VideoFormat.aspects(formats, null).contains(VideoAspect.FOUR_THREE))
         val reported = listOf(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25))
         assertEquals(reported, VideoFormat.pickerFormats(reported, model, 1))
-        for (mode in listOf(-1, 0, 2, 26)) {
+        for (mode in listOf(-1, 2, 26)) {
             assertTrue(VideoFormat.pickerFormats(emptyList(), model, mode).isEmpty())
         }
         for (name in listOf("Osmo Pocket 4 Pro", "Osmo Nano", "Unknown")) {

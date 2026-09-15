@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.CaptureLists
+import com.opencapture.openpocketcine.CaptureShutterPolicy
 import com.opencapture.openpocketcine.GamepadOperatorAction
 import com.opencapture.openpocketcine.EvComp
 import com.opencapture.openpocketcine.OperatorPrefs
@@ -331,6 +332,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastRecoverSkipAt = 0L
     private var lastRecoverSkipReason = ""
     private var formatPin: FormatPin? = null
+    private var shootingModeRevision: Int = 0
     /** iOS `CameraSession.isFormatPinActive` — FORMAT sheet skips reseat. */
     val isFormatPinActive: Boolean
         get() = formatPin != null
@@ -544,6 +546,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _controlNote.value = null
         _controlBusy.value = false
         formatPin = null
+        shootingModeRevision++
         colorPin = null
         expoPin = null
         gimbalStickMapping = GimbalStickMapping()
@@ -1185,10 +1188,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 "${kick.chipLabel} → ${original.chipLabel} legal=${if (legal) 1 else 0} " +
                 "formats=${live.availableVideoFormats.size}",
         )
-        setVideoFormat(kick)
+        setVideoFormat(kick, fromOperator = false)
         waitForRecordingFormatPokeSettle()
         if (!coroutineContext.isActive) return
-        setVideoFormat(original)
+        setVideoFormat(original, fromOperator = false)
         waitForRecordingFormatPokeSettle()
         if (!coroutineContext.isActive || isBrowsingMedia) return
         sendCapturedLiveView("first-picture format poke")
@@ -2109,17 +2112,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
         var next = if (json != null) CameraStatus.fromJson(json) else prev
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
-        if (next.availableShutterDenoms.isEmpty()) {
-            next = next.copy(availableShutterDenoms = prev.availableShutterDenoms)
-        }
-        if (next.availableIsoIndices.isEmpty()) {
-            next = next.copy(availableIsoIndices = prev.availableIsoIndices)
-        }
-        if (next.availableColorModes.isEmpty()) {
-            next = next.copy(availableColorModes = prev.availableColorModes)
-        }
         val cam = connectedCamera?.model
         next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
+        next = next.mergingModeDependentCaps(prev)
+        if (next.shootingMode != prev.shootingMode) {
+            shootingModeRevision++
+            formatPin = null
+        }
         next = CamFov.absorb(next)
         val formatReported =
             next.resolutionCode != prev.resolutionCode ||
@@ -2220,20 +2219,33 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         )
     }
 
-    /** Rec lamp: still in Photo / SuperNight, else start/stop video. */
+    /** Rec lamp: Photo still; Pocket 3 TimeLapse `0x02/0x01`; else video record. */
     fun pressShutter() {
-        if (CameraCommands.isPhotoMode(_status.value.shootingMode)) {
-            _controlBusy.value = true
-            fireKind(
-                SwiftCore.CMD_SHOOT_PHOTO,
-                null,
-                "Photo",
-                retransmits = false,
-                onSettle = { _controlBusy.value = false },
-            )
-            return
+        val status = _status.value
+        val cameraName = connectedCamera?.model?.name
+        when (CaptureShutterPolicy.captureKind(status.shootingMode, cameraName)) {
+            CaptureShutterPolicy.CaptureKind.PHOTO -> {
+                _controlBusy.value = true
+                fireKind(
+                    SwiftCore.CMD_SHOOT_PHOTO,
+                    CaptureShutterPolicy.shootPhotoExtra(start = true),
+                    "Photo",
+                    retransmits = false,
+                    onSettle = { _controlBusy.value = false },
+                )
+            }
+            CaptureShutterPolicy.CaptureKind.SHUTTER_TRIGGER -> {
+                val starting = !status.isRecording
+                _controlBusy.value = true
+                fireKind(
+                    SwiftCore.CMD_SHOOT_PHOTO,
+                    CaptureShutterPolicy.shootPhotoExtra(start = starting),
+                    if (starting) "TimeLapse" else "Stop",
+                    onSettle = { _controlBusy.value = false },
+                )
+            }
+            CaptureShutterPolicy.CaptureKind.VIDEO_RECORD -> pressRecord()
         }
-        pressRecord()
     }
 
     fun setEv(thirds: Int) {
@@ -2308,15 +2320,31 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         get() = feedRecoveryJob != null
 
     fun setShootingMode(raw: Int) {
-        val previous = _status.value.shootingMode
-        _status.value = _status.value.copy(shootingMode = raw)
+        val previous = _status.value
+        val revision = ++shootingModeRevision
+        _status.value =
+            if (raw != previous.shootingMode) {
+                formatPin = null
+                previous.clearedModeDependentCapabilities().copy(shootingMode = raw)
+            } else {
+                previous.copy(shootingMode = raw)
+            }
         fireKind(
             SwiftCore.CMD_SET_SHOOTING_MODE,
             "$raw",
             "Mode",
             onFail = {
+                if (shootingModeRevision != revision) return@fireKind
                 if (_status.value.shootingMode == raw) {
-                    _status.value = _status.value.copy(shootingMode = previous)
+                    shootingModeRevision++
+                    formatPin = null
+                    _status.value = _status.value.copy(
+                        shootingMode = previous.shootingMode,
+                        availableVideoFormats = previous.availableVideoFormats,
+                        availableShutterDenoms = previous.availableShutterDenoms,
+                        availableIsoIndices = previous.availableIsoIndices,
+                        availableColorModes = previous.availableColorModes,
+                    )
                 }
             },
         )
@@ -2984,13 +3012,21 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
      * `0x02/0x18` via Swift `Commands.setVideoFormat`. Optimistic HUD, pin until
      * `cam_video_param_v2` matches, revert on ACK fail. Unlabeled res/fps do not SET.
      */
-    fun setVideoFormat(format: VideoFormat): Boolean {
+    fun setVideoFormat(format: VideoFormat, fromOperator: Boolean = true): Boolean {
         val previous = _status.value
-        formatPin =
+        if (CameraCommands.isPhotoMode(previous.shootingMode)) return false
+        if (fromOperator &&
+            !VideoFormat.allowsOperatorSet(
+                format, previous.availableVideoFormats, connectedCamera?.model, previous.shootingMode,
+            )
+        ) return false
+        val modeAtSet = previous.shootingMode
+        val pin =
             FormatPin(
                 expected = format,
                 deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
             )
+        formatPin = pin
         _status.value =
             previous.copy(
                 resolutionCode = format.resolution.rawValue,
@@ -3009,11 +3045,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             )
         fireKind(
             SwiftCore.CMD_SET_VIDEO_FORMAT,
-            "${format.resolution.rawValue}\u001f${format.frameRate.rawValue}",
+            format.commandExtra(previous.shootingMode, connectedCamera?.model?.name),
             format.chipLabel,
             onFail = {
+                if (formatPin !== pin) return@fireKind
                 val live = _status.value
-                if (live.resolutionCode == format.resolution.rawValue &&
+                if (CaptureShutterPolicy.canRevertFormatFailure(live.shootingMode, modeAtSet) &&
+                    live.resolutionCode == format.resolution.rawValue &&
                     live.fpsIndex == format.frameRate.rawValue
                 ) {
                     _status.value =

@@ -172,6 +172,7 @@ import Testing
         #expect(CameraReply.parse([0xEE]).message == "camera rejected that value")
         #expect(ShootingMode.photo.isPhoto)
         #expect(!ShootingMode.video.isPhoto)
+        #expect(!ShootingMode.superNight.isPhoto)
     }
 }
 

@@ -58,8 +58,14 @@ The tested Pocket 3 returned a nonzero reply to `camcap_video_format`, while
 the app uses DJI's [Pocket 3 specification](https://www.dji.com/osmo-pocket-3/specs)
 when the capability table is empty: 1080p/2.7K/4K in 16:9, 1080p/2160p/3K in 1:1,
 and 1080p/2.7K/3K in 9:16, at 24/25/30/48/50/60 fps. Camera-reported tables take
-precedence. This fallback is not applied to SlowMo, livestream or an unknown
-shooting mode. Existing `02/18` SET and camera-status confirmation are used.
+precedence. Separate mode-specific fallbacks use the Pocket 3 survey's accepted
+Slow Motion pairs (4K 100/120, 2.7K 120, 1080p 120/240) and Low-Light pairs
+(4K/1080p 24/25/30). Slow Motion requires the mode-specific trailer recorded
+in the [survey](../pocket3/#shooting-modes-and-formats).
+Timelapse, Hyperlapse, livestream and unknown modes have no such fallback.
+Existing `02/18` SET and camera-status confirmation are used. These new fallback
+controls still require physical app qualification; Mimo command evidence alone
+does not establish app behavior.
 
 When the effective format list is still empty, the picker retains a known current
 size such as **3K 9:16** rather than replacing it with the generic 1080p/4K

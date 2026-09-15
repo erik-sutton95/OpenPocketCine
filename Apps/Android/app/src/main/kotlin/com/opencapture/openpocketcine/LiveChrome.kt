@@ -1361,15 +1361,29 @@ fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @
 }
 
 @Composable
-fun RecordButton(
+internal fun RecordButton(
     recording: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier,
     confirm: Boolean = false,
     photo: Boolean = false,
+    request: RecordConfirmationRequest = CaptureShutterPolicy.request(
+        shootingMode = CameraCommands.SHOOT_VIDEO,
+        recording = recording,
+        locked = !enabled,
+        busy = !enabled,
+        phase = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
+    ),
     onClick: () -> Unit,
 ) {
     var confirmOpen by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<RecordConfirmationRequest?>(null) }
+    LaunchedEffect(request) {
+        if (CaptureShutterPolicy.shouldDismiss(pending, request)) {
+            confirmOpen = false
+            pending = null
+        }
+    }
     if (confirmOpen) {
         Dialog(
             onDismissRequest = { confirmOpen = false },
@@ -1403,8 +1417,10 @@ fun RecordButton(
                             Modifier
                                 .fillMaxWidth()
                                 .chromeClickable(onClick = {
+                                    val snap = pending
                                     confirmOpen = false
-                                    onClick()
+                                    pending = null
+                                    if (CaptureShutterPolicy.canCommit(snap, request)) onClick()
                                 })
                                 .padding(vertical = 14.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1429,7 +1445,14 @@ fun RecordButton(
             .size(LiveChromeMetrics.RECORD.dp)
             .then(if (recording && !enabled) Modifier.graphicsLayer { alpha = 0.72f } else Modifier)
             .shadow(2.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.40f))
-            .chromeClickable(enabled = enabled, onClick = { if (confirm) confirmOpen = true else onClick() })
+            .chromeClickable(enabled = enabled, onClick = {
+                if (confirm && request.canConfirm) {
+                    pending = request
+                    confirmOpen = true
+                } else if (!confirm) {
+                    onClick()
+                }
+            })
             .semantics {
                 contentDescription =
                     when {

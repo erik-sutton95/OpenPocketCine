@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenPocketViewCore
 import SwiftUI
 
 /// Idle = Pocket well + thin coral ring. Recording fills that ring. Stopping dims the face.
@@ -9,6 +10,19 @@ enum LiveRecordChromeState: Equatable {
 
     var isRecordingLook: Bool {
         self == .recording || self == .stopping
+    }
+}
+
+/// A confirmation authorizes the capture state visible when it was opened.
+struct RecordConfirmationContext: Equatable {
+    let mode: Int
+    let recording: Bool
+    let locked: Bool
+    let busy: Bool
+    let phase: ConnectionPhase
+
+    var canConfirm: Bool {
+        !locked && !busy && phase == .live && ShootingMode.fromStatus(mode)?.isPhoto != true
     }
 }
 
@@ -26,11 +40,21 @@ struct LiveRecordButton: View {
     }
 
     @State private var confirmRecord = false
+    @State private var pendingRecord: RecordConfirmationContext?
+
+    private var isPhoto: Bool { model.session.status.isPhoto }
+    private var confirmationContext: RecordConfirmationContext {
+        RecordConfirmationContext(
+            mode: model.session.status.shootingMode,
+            recording: model.session.status.isRecording,
+            locked: locked || model.session.isLocked,
+            busy: model.session.controlBusy, phase: model.session.phase)
+    }
 
     var body: some View {
         MonitorRecordLamp(
             diameter: diameter, recording: state.isRecordingLook,
-            photo: model.session.currentShootingMode?.isPhoto == true
+            photo: isPhoto
         )
         .contentShape(Circle())
         .gesture(
@@ -60,9 +84,17 @@ struct LiveRecordButton: View {
                 state.isRecordingLook ? "Stop" : "Start",
                 role: state.isRecordingLook ? .destructive : nil
             ) {
+                guard pendingRecord == confirmationContext, confirmationContext.canConfirm else {
+                    return
+                }
+                pendingRecord = nil
                 model.session.pressShutter()
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .onChange(of: confirmationContext) { _, _ in
+            confirmRecord = false
+            pendingRecord = nil
         }
         .accessibilityLabel(accessibility)
         .accessibilityHidden(false)
@@ -70,14 +102,14 @@ struct LiveRecordButton: View {
         .accessibilityAction { pressShutter() }
         .accessibilityAction(named: "Shooting mode") { if !locked { model.captureSheet = .mode } }
         .accessibilityIdentifier(
-            model.session.currentShootingMode?.isPhoto == true
-                ? "monitor.system.shutter" : "monitor.system.record"
+            isPhoto ? "monitor.system.shutter" : "monitor.system.record"
         )
     }
 
     private func pressShutter() {
-        guard !model.session.controlBusy, !locked else { return }
-        if model.recordConfirmationEnabled {
+        guard !model.session.controlBusy, !locked, !model.session.isLocked else { return }
+        if model.recordConfirmationEnabled, !isPhoto {
+            pendingRecord = confirmationContext
             confirmRecord = true
         } else {
             model.session.pressShutter()
@@ -85,7 +117,7 @@ struct LiveRecordButton: View {
     }
 
     private var accessibility: String {
-        if model.session.currentShootingMode?.isPhoto == true {
+        if isPhoto {
             return "Take photo"
         }
         switch state {

@@ -131,10 +131,9 @@ fun LiveControlSheet(
     maxHeightDp: Float? = null,
     preview: MonitorQuickPreview? = null,
 ) {
-    val formats = VideoFormat.pickerFormats(
-        status.availableVideoFormats, model.session.connectedCamera?.model, status.shootingMode,
+    val availableStatus = CaptureLists.withEffectiveVideoFormats(
+        status, model.session.connectedCamera?.model,
     )
-    val availableStatus = status.copy(availableVideoFormats = formats)
     CompositionLocalProvider(LocalCapturePreview provides preview) {
         if (sheet.isRecordingSetup && viewportIsPortrait()) {
             RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
@@ -194,8 +193,9 @@ private fun RecordingSetupPanel(
                 .verticalScroll(rememberScrollState(), enabled = preview == null).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetHeader("SHOOTING MODE", "Capture mode", onDismiss)
-                val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
-                CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode).orEmpty(),
+                val bodyName = model.session.connectedCamera?.model?.name
+                val labels = modes.map { CameraCommands.shootingModeLabel(it, bodyName).orEmpty() }
+                CaptureDrumWheel(labels, CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty(),
                     interactive = enabled && !status.isRecording) { label ->
                     applyCaptureShootingMode(label, model.session.status.value,
                         model.session.connectedCamera?.model?.name, model::setShootingMode)
@@ -243,7 +243,9 @@ private fun LiveControlSheetContent(
     var lastApplied by remember(sheet) { mutableStateOf("") }
     var preferredAngle by remember(sheet) { mutableStateOf(OperatorPrefs.shutterAngleDegrees(context)) }
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
-    val isAngleSheet = CaptureLists.isAngleSheet(sheet, status.expoMode, selectedMode)
+    val isAngleSheet = CaptureLists.isAngleSheet(
+        sheet, status.expoMode, selectedMode, status.shootingMode,
+    )
     val formatAspects = CaptureLists.formatAspects(status)
     val tabs = CaptureLists.modeTabs(sheet, status, offersIsoAuto, selectedAspect)
     val bodyFamily = model.session.connectedCamera?.model?.family ?: "pocket"
@@ -294,6 +296,11 @@ private fun LiveControlSheetContent(
     }
 
     fun reseatResolution() {
+        if (CameraCommands.isPhotoMode(status.shootingMode)) {
+            drumSelection = CaptureLists.PHOTO_FORMAT_READOUT
+            lastApplied = drumSelection
+            return
+        }
         val format = VideoFormat.current(status)
         selectedAspect = format.resolution.aspect ?: VideoAspect.SIXTEEN_NINE
         val tabs = CaptureLists.formatResolutions(status, selectedAspect)
@@ -304,7 +311,7 @@ private fun LiveControlSheetContent(
     }
 
     fun handleAspectChange(aspect: VideoAspect) {
-        if (!enabled || aspect == selectedAspect) return
+        if (!enabled || aspect == selectedAspect || CameraCommands.isPhotoMode(status.shootingMode)) return
         selectedAspect = aspect
         val sizes = CaptureLists.formatResolutions(status, aspect)
         val match =
@@ -333,7 +340,11 @@ private fun LiveControlSheetContent(
         when (sheet) {
             LiveSheet.ISO -> reseatIso()
             LiveSheet.SHUTTER -> {
-                if (!isEvSheet) selectedMode = if (model.shutterUsesAngle) 1 else 0
+                if (!isEvSheet) {
+                    selectedMode =
+                        if (CameraCommands.isPhotoMode(status.shootingMode) || !model.shutterUsesAngle) 0
+                        else 1
+                }
                 reseatShutterOrEv()
             }
             LiveSheet.WB -> {
@@ -344,7 +355,7 @@ private fun LiveControlSheetContent(
             LiveSheet.FORMAT -> reseatResolution()
             LiveSheet.COLOR -> reseatColor()
             LiveSheet.MODE -> {
-                val live = CameraCommands.shootingModeLabel(status.shootingMode).orEmpty()
+                val live = CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
                 val labels = CaptureLists.shootingModeLabels(bodyName)
                 drumSelection = if (live in labels) live else ""
                 lastApplied = drumSelection
@@ -354,6 +365,7 @@ private fun LiveControlSheetContent(
     }
 
     fun applyVideoFormat(tab: Int, drum: String, fromDrum: Boolean) {
+        if (!CaptureLists.formatPickerEditable(status)) return
         val next = CaptureLists.nextVideoFormat(status, tab, drum, fromDrum, selectedAspect) ?: return
         model.setVideoFormat(next)
     }
@@ -472,7 +484,9 @@ private fun LiveControlSheetContent(
         }
         LaunchedEffect(sheet, status.expoMode) {
             if (sheet == LiveSheet.SHUTTER) {
-                CaptureLists.shutterTabAfterExpoChange(status.expoMode, model.shutterUsesAngle)?.let {
+                CaptureLists.shutterTabAfterExpoChange(
+                    status.expoMode, model.shutterUsesAngle, status.shootingMode,
+                )?.let {
                     selectedMode = it
                 }
                 reseatShutterOrEv()
@@ -481,8 +495,17 @@ private fun LiveControlSheetContent(
         LaunchedEffect(sheet, status.evComp, model.facePriorityExposureEnabled) {
             if (sheet == LiveSheet.SHUTTER && isEvSheet) reseatEv()
         }
-        LaunchedEffect(sheet, status.resolutionCode, status.fpsIndex, status.availableVideoFormats) {
+        LaunchedEffect(
+            sheet, status.shootingMode, status.resolutionCode, status.fpsIndex,
+            status.availableVideoFormats,
+        ) {
             if (sheet == LiveSheet.FORMAT && !model.session.isFormatPinActive) reseatResolution()
+        }
+        LaunchedEffect(sheet, status.shootingMode) {
+            if (sheet == LiveSheet.SHUTTER && CameraCommands.isPhotoMode(status.shootingMode) && !isEvSheet) {
+                selectedMode = 0
+                reseatShutter()
+            }
         }
         LaunchedEffect(sheet, status.colorMode) {
             if (sheet == LiveSheet.COLOR) reseatColor()
@@ -516,7 +539,7 @@ private fun LiveControlSheetContent(
         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
     ) {
             SheetHeader(
-                title = CaptureLists.headerTitle(sheet, status.expoMode),
+                title = CaptureLists.headerTitle(sheet, status.expoMode, status.shootingMode),
                 subtitle =
                     if (compact) "drag to set"
                     else
@@ -525,6 +548,7 @@ private fun LiveControlSheetContent(
                             status.expoMode,
                             selectedMode,
                             model.facePriorityExposureEnabled,
+                            status.shootingMode,
                         ),
                 onClose = onDismiss,
                 showsClose = !compact,
@@ -705,9 +729,9 @@ private fun LiveControlSheetContent(
                 LiveSheet.FORMAT ->
                     androidx.compose.runtime.key(selectedMode) {
                         CaptureDrumWheel(
-                            options = CaptureLists.fpsDrumLabels(status, selectedMode, selectedAspect),
+                            options = CaptureLists.formatDrumLabels(status, selectedMode, selectedAspect),
                             selection = drumSelection,
-                            interactive = enabled,
+                            interactive = enabled && CaptureLists.formatPickerEditable(status),
 
                             onSelect = {
                                 drumSelection = it
@@ -719,7 +743,7 @@ private fun LiveControlSheetContent(
                     val labels = CaptureLists.shootingModeLabels(bodyName)
                     CaptureDrumWheel(
                         options = labels,
-                        selection = CameraCommands.shootingModeLabel(status.shootingMode).orEmpty()
+                        selection = CameraCommands.shootingModeLabel(status.shootingMode, bodyName).orEmpty()
                             .takeIf { it in labels }.orEmpty(),
                         interactive = enabled && !status.isRecording,
                         onSelect = {
@@ -732,7 +756,9 @@ private fun LiveControlSheetContent(
                 }
             }
             if (!compact) {
-                if (sheet == LiveSheet.FORMAT && formatAspects.size > 1) {
+                if (sheet == LiveSheet.FORMAT && formatAspects.size > 1 &&
+                    CaptureLists.formatPickerEditable(status)
+                ) {
                     ModeBar(
                         tabs = formatAspects.map { it.label },
                         selected = formatAspects.indexOf(selectedAspect).coerceAtLeast(0),
@@ -746,7 +772,8 @@ private fun LiveControlSheetContent(
                     ModeBar(
                         tabs = tabs,
                         selected = selectedMode,
-                        enabled = enabled,
+                        enabled = enabled &&
+                            (sheet != LiveSheet.FORMAT || CaptureLists.formatPickerEditable(status)),
                     ) { index ->
                         selectedMode = index
                         handleModeChange(index)
@@ -1034,7 +1061,9 @@ private fun initialSelectedMode(
     when (sheet) {
         LiveSheet.ISO ->
             if (CaptureLists.offersIsoAuto(status) && status.isoIndex != 0) 1 else 0
-        LiveSheet.SHUTTER -> if (!isEvSheet && model.shutterUsesAngle) 1 else 0
+        LiveSheet.SHUTTER ->
+            if (!isEvSheet && model.shutterUsesAngle && !CameraCommands.isPhotoMode(status.shootingMode)) 1
+            else 0
         LiveSheet.WB -> CaptureLists.wbInitialTab(status)
         LiveSheet.FORMAT -> {
             val format = VideoFormat.current(status)
@@ -1300,35 +1329,56 @@ object CaptureLists {
     fun isEvSheet(sheet: LiveSheet, expoMode: Int): Boolean =
         sheet == LiveSheet.SHUTTER && expoMode == CameraCommands.EXPO_AUTO
 
-    fun isAngleSheet(sheet: LiveSheet, expoMode: Int, selectedMode: Int): Boolean =
-        sheet == LiveSheet.SHUTTER && !isEvSheet(sheet, expoMode) && selectedMode == 1
+    fun isAngleSheet(
+        sheet: LiveSheet,
+        expoMode: Int,
+        selectedMode: Int,
+        shootingMode: Int = CameraCommands.SHOOT_VIDEO,
+    ): Boolean =
+        sheet == LiveSheet.SHUTTER &&
+            !isEvSheet(sheet, expoMode) &&
+            selectedMode == 1 &&
+            !CameraCommands.isPhotoMode(shootingMode)
 
     /** iOS onChange expoMode: restore Speed/Angle from prefs when leaving Auto. */
-    fun shutterTabAfterExpoChange(expoMode: Int, shutterUsesAngle: Boolean): Int? =
+    fun shutterTabAfterExpoChange(
+        expoMode: Int,
+        shutterUsesAngle: Boolean,
+        shootingMode: Int = CameraCommands.SHOOT_VIDEO,
+    ): Int? =
         if (expoMode != CameraCommands.EXPO_AUTO) {
-            if (shutterUsesAngle) 1 else 0
+            if (shutterUsesAngle && !CameraCommands.isPhotoMode(shootingMode)) 1 else 0
         } else {
             null
         }
 
-    fun headerTitle(sheet: LiveSheet, expoMode: Int): String =
-        if (sheet == LiveSheet.SHUTTER) shutterHeaderTitle(isEvSheet(sheet, expoMode))
-        else sheet.headerLabel
+    fun headerTitle(
+        sheet: LiveSheet,
+        expoMode: Int,
+        shootingMode: Int = CameraCommands.SHOOT_VIDEO,
+    ): String =
+        when {
+            sheet == LiveSheet.SHUTTER -> shutterHeaderTitle(isEvSheet(sheet, expoMode))
+            sheet == LiveSheet.FORMAT && CameraCommands.isPhotoMode(shootingMode) -> "FORMAT"
+            else -> sheet.headerLabel
+        }
 
     fun headerSubtitle(
         sheet: LiveSheet,
         expoMode: Int,
         selectedMode: Int,
         facePriority: Boolean,
+        shootingMode: Int = CameraCommands.SHOOT_VIDEO,
     ): String =
-        if (sheet == LiveSheet.SHUTTER) {
-            shutterHeaderSubtitle(
-                isEvSheet(sheet, expoMode),
-                isAngleSheet(sheet, expoMode, selectedMode),
-                facePriority,
-            )
-        } else {
-            sheet.subtitle
+        when {
+            sheet == LiveSheet.SHUTTER ->
+                shutterHeaderSubtitle(
+                    isEvSheet(sheet, expoMode),
+                    isAngleSheet(sheet, expoMode, selectedMode, shootingMode),
+                    facePriority,
+                )
+            sheet == LiveSheet.FORMAT && CameraCommands.isPhotoMode(shootingMode) -> PHOTO_FORMAT_READOUT
+            else -> sheet.subtitle
         }
 
     fun modeTabs(sheet: LiveSheet, expoMode: Int, offersIsoAuto: Boolean): List<String> =
@@ -1342,10 +1392,13 @@ object CaptureLists {
     ): List<String> =
         when {
             sheet == LiveSheet.ISO && offersIsoAuto -> listOf("Auto", "Manual")
-            sheet == LiveSheet.SHUTTER -> shutterModeTabs(isEvSheet(sheet, status.expoMode))
+            sheet == LiveSheet.SHUTTER ->
+                shutterModeTabs(isEvSheet(sheet, status.expoMode), status.shootingMode)
             sheet == LiveSheet.WB -> CaptureLists.wbTabs
             sheet == LiveSheet.AUDIO -> CaptureLists.audioTabs
-            sheet == LiveSheet.FORMAT -> formatResolutions(status, selectedAspect).map { it.tabTitle }
+            sheet == LiveSheet.FORMAT ->
+                if (CameraCommands.isPhotoMode(status.shootingMode)) emptyList()
+                else formatResolutions(status, selectedAspect).map { it.tabTitle }
             else -> emptyList()
         }
 
@@ -1359,10 +1412,16 @@ object CaptureLists {
         status: CameraStatus,
         selectedAspect: VideoAspect? = null,
     ): List<VideoResolution> {
+        if (CameraCommands.isPhotoMode(status.shootingMode)) return emptyList()
+        val current = VideoFormat.current(status).resolution
+        if (!formatPickerEditable(status)) {
+            val aspect = selectedAspect
+            return listOf(current).filter { aspect == null || it.aspect == aspect }
+        }
         val aspect = if (formatAspects(status).size > 1) selectedAspect else null
         return VideoFormat.resolutions(
             status.availableVideoFormats,
-            VideoFormat.current(status).resolution,
+            current,
             aspect,
         )
     }
@@ -1372,7 +1431,31 @@ object CaptureLists {
             status.availableVideoFormats,
             resolution,
             VideoFormat.current(status).frameRate,
+            status.shootingMode,
         )
+
+    fun effectiveVideoFormats(status: CameraStatus, model: CameraModel?): List<VideoFormat> {
+        if (CameraCommands.isPhotoMode(status.shootingMode)) return emptyList()
+        return VideoFormat.pickerFormats(status.availableVideoFormats, model, status.shootingMode)
+    }
+
+    fun withEffectiveVideoFormats(status: CameraStatus, model: CameraModel?): CameraStatus =
+        status.copy(availableVideoFormats = effectiveVideoFormats(status, model))
+
+    const val PHOTO_FORMAT_READOUT = "Photo"
+
+    fun formatPickerEditable(status: CameraStatus, model: CameraModel? = null): Boolean {
+        if (CameraCommands.isPhotoMode(status.shootingMode)) return false
+        return effectiveVideoFormats(status, model).isNotEmpty()
+    }
+
+    fun formatDrumLabels(
+        status: CameraStatus,
+        tab: Int,
+        selectedAspect: VideoAspect? = null,
+    ): List<String> =
+        if (CameraCommands.isPhotoMode(status.shootingMode)) listOf(PHOTO_FORMAT_READOUT)
+        else fpsDrumLabels(status, tab, selectedAspect)
 
     fun fpsDrumLabels(status: CameraStatus, tab: Int, selectedAspect: VideoAspect? = null): List<String> {
         val res =
@@ -1388,6 +1471,7 @@ object CaptureLists {
         fromDrum: Boolean,
         selectedAspect: VideoAspect? = null,
     ): VideoFormat? {
+        if (!formatPickerEditable(status)) return null
         val resolutions = formatResolutions(status, selectedAspect)
         val res = resolutions.getOrNull(tab) ?: return null
         val rates = formatRates(status, res)
@@ -1514,11 +1598,15 @@ object CaptureLists {
 
     fun isEvSheet(expoMode: Int): Boolean = expoMode == CameraCommands.EXPO_AUTO
 
-    fun isAngleSheet(expoMode: Int, selectedMode: Int): Boolean =
-        !isEvSheet(expoMode) && selectedMode == 1
+    fun isAngleSheet(expoMode: Int, selectedMode: Int, shootingMode: Int = CameraCommands.SHOOT_VIDEO): Boolean =
+        !isEvSheet(expoMode) && selectedMode == 1 && !CameraCommands.isPhotoMode(shootingMode)
 
-    fun shutterModeTabs(isEvSheet: Boolean): List<String> =
-        if (isEvSheet) emptyList() else listOf("Speed", "Angle")
+    fun shutterModeTabs(
+        isEvSheet: Boolean,
+        shootingMode: Int = CameraCommands.SHOOT_VIDEO,
+    ): List<String> =
+        if (isEvSheet || CameraCommands.isPhotoMode(shootingMode)) emptyList()
+        else listOf("Speed", "Angle")
 
     fun shutterHeaderTitle(isEvSheet: Boolean): String = if (isEvSheet) "EV" else "SHUTTER"
 
@@ -1821,11 +1909,11 @@ object CaptureLists {
     }
 
     fun shootingModeLabels(name: String?): List<String> =
-        CameraCommands.shootingModeCarousel(name).map { CameraCommands.shootingModeLabel(it).orEmpty() }
+        CameraCommands.shootingModeCarousel(name).map { CameraCommands.shootingModeLabel(it, name).orEmpty() }
 
     fun shootingModeRaw(label: String, name: String?): Int? {
         val modes = CameraCommands.shootingModeCarousel(name)
-        val labels = modes.map { CameraCommands.shootingModeLabel(it).orEmpty() }
+        val labels = modes.map { CameraCommands.shootingModeLabel(it, name).orEmpty() }
         val index = labels.indexOf(label)
         if (index < 0) return null
         return modes.getOrNull(index)
@@ -1878,8 +1966,10 @@ object CaptureLists {
     fun nativeIsoHop(from: Int, to: Int, currentIndex: Int, hopEnabled: Boolean): Int? =
         CameraCommands.nativeIsoHop(from, to, currentIndex, hopEnabled)
 
-    /** Top-deck chip, OpenZCine `4K · 25p`. */
-    fun recFormatChipLabel(status: CameraStatus): String = VideoFormat.chipLabel(status)
+    /** Top-deck chip. Photo keeps the slot with a still readout, not leftover video fps. */
+    fun recFormatChipLabel(status: CameraStatus): String =
+        if (CameraCommands.isPhotoMode(status.shootingMode)) PHOTO_FORMAT_READOUT
+        else VideoFormat.chipLabel(status)
 
     /** Remaining storage. Source order is `storage*` then `sd*`, matching iOS. */
     fun storageLabel(status: CameraStatus, showDuration: Boolean): String {

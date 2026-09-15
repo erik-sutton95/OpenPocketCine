@@ -28,26 +28,40 @@ struct FieldMonitorStatusChrome: View {
                         tally
                         Spacer(minLength: 4)
                         topReadout(
-                            .resolution, value: "REC SETUP",
+                            model.session.status.isPhoto ? .mode : .resolution,
+                            value: model.session.status.isPhoto ? "MODE" : "REC SETUP",
                             fontSize: 12, weight: .semibold, alwaysAccent: false
                         )
-                        .accessibilityLabel("Recording options")
+                        .accessibilityLabel(
+                            model.session.status.isPhoto
+                                ? "Shooting mode" : "Recording options")
                     }
                 }
             } else {
                 HStack(spacing: 24) {
                     if model.chromeSectionMounts(.storage) { storageButton }
                     if model.chromeSectionMounts(.format) {
-                        topButton(
-                            .recFormat, value: model.session.status.videoFormat?.chipLabel ?? "—")
+                        if model.session.status.isPhoto {
+                            topReadout(
+                                .mode,
+                                value: model.session.currentShootingMode?.label(
+                                    for: model.session.connectedCamera?.model) ?? "Photo",
+                                fontSize: layout.presentation?.tablet == true ? 18 : 16,
+                                alwaysAccent: true)
+                        } else {
+                            topButton(
+                                .recFormat,
+                                value: model.session.status.videoFormat?.chipLabel ?? "—")
+                        }
                     }
                     if model.chromeSectionMounts(.color) {
                         topButton(.color, value: model.session.status.colorMode?.label ?? "—")
                     }
-                    if layout.viewport.width >= 800 {
+                    if layout.viewport.width >= 800, !model.session.status.isPhoto {
                         topReadout(
                             .mode,
-                            value: model.session.currentShootingMode?.label ?? "Video",
+                            value: model.session.currentShootingMode?.label(
+                                for: model.session.connectedCamera?.model) ?? "Video",
                             fontSize: layout.presentation?.tablet == true ? 18 : 16,
                             alwaysAccent: true)
                     }
@@ -77,6 +91,12 @@ struct FieldMonitorStatusChrome: View {
             if isLocked {
                 model.captureSheet = nil
                 model.captureDrum = nil
+            }
+        }
+        .onChange(of: model.session.status.isPhoto) { _, photo in
+            if photo {
+                if model.captureSheet == .resolution { model.captureSheet = .mode }
+                if model.captureDrum?.sheet == .resolution { model.captureDrum = nil }
             }
         }
     }
@@ -167,7 +187,10 @@ struct FieldMonitorStatusChrome: View {
         guard !locked, model.captureDrum == nil, readoutOwnership.owner == nil else { return }
         menu = nil
         model.captureDrum = nil
-        model.captureSheet = CaptureReadoutAdmission.replacing(model.captureSheet, with: sheet)
+        model.captureSheet = CaptureReadoutAdmission.replacing(
+            model.captureSheet,
+            with: CaptureReadoutAdmission.opening(
+                sheet, isPhoto: model.session.status.isPhoto))
     }
 
     private func topAccessibilityID(_ sheet: CaptureSheet) -> String {
@@ -297,7 +320,8 @@ struct FieldMonitorAssistPalette: View {
             maximumWidth: maximumWidth, maximumHeight: maximumHeight)
         return (
             metrics,
-            metrics.anchored(leading: layout.assist.minX, bottom: layout.assist.maxY))
+            metrics.anchored(leading: layout.assist.minX, bottom: layout.assist.maxY)
+        )
     }
 
     var body: some View {

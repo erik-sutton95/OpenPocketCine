@@ -29,9 +29,15 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
     case slowMo = 0x00
     case video = 0x01
     case timeLapse = 0x02
-    case photo = 0x17  // Pocket 4 (Mimo mimo-settings-1). Nano used 0x05 → 0xEE here.
+    case photo = 0x17  // Pocket 4 / 4 Pro SET. Pocket 3 / Nano Photo is `photoRawPocket3AndNano`.
     case hyperLapse = 0x0A
+    /// Pocket 3 Mimo Low-Light **video**. Not a stills mode — `isPhoto` is false.
     case superNight = 0x28
+
+    /// Pocket 3 / Nano Photo `0x02/0xE1` byte. Pocket 3 survey + Nano capture.
+    public static let photoRawPocket3AndNano: UInt8 = 0x05
+    /// Pocket 4 / 4 Pro Photo `0x02/0xE1` byte (`mimo-settings-1`).
+    public static let photoRawPocket4: UInt8 = 0x17
 
     public var label: String {
         switch self {
@@ -44,7 +50,40 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
         }
     }
 
-    public var isPhoto: Bool { self == .photo || self == .superNight }
+    public func label(for model: CameraModel?) -> String {
+        self == .superNight && model?.isPocket3 == true ? "Low-Light" : label
+    }
+
+    /// Stills only. SuperNight / Low-Light is video (`0x28`).
+    public var isPhoto: Bool { self == .photo }
+
+    /// Video FORMAT / fps apply. Photo has no `0x02/0x18` pair.
+    public var offersVideoFormat: Bool { !isPhoto }
+
+    /// Pocket 3 TimeLapse start/stop is `0x02/0x01`, not Video `0x02/0x02`.
+    public var usesShutterTriggerOnPocket3: Bool { self == .timeLapse }
+
+    /// Map a reported `0x02/0x80` / SET byte onto the tabled case. `0x05` is Photo.
+    public static func fromWire(_ raw: UInt8) -> ShootingMode? {
+        if raw == photoRawPocket3AndNano { return .photo }
+        return ShootingMode(rawValue: raw)
+    }
+
+    public static func fromStatus(_ shootingMode: Int) -> ShootingMode? {
+        guard (0...255).contains(shootingMode) else { return nil }
+        return fromWire(UInt8(shootingMode))
+    }
+
+    /// Photo SET byte for this body. Unknown bodies keep the historic `0x17` default.
+    public static func photoWireByte(for model: CameraModel?) -> UInt8 {
+        guard let model else { return photoRawPocket4 }
+        if model.family == .nano || model.isPocket3 { return photoRawPocket3AndNano }
+        return photoRawPocket4
+    }
+
+    public func wireByte(for model: CameraModel?) -> UInt8 {
+        self == .photo ? Self.photoWireByte(for: model) : rawValue
+    }
 
     /// Every `0x02/0xE1` value a supported body accepts, including the Nano's Photo `0x05`, which
     /// has no case of its own because `photo` carries the Pocket 4 encoding `0x17`.
@@ -56,11 +95,32 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
         0x00,  // SlowMo
         0x01,  // Video
         0x02,  // TimeLapse
-        0x05,  // Photo (Nano)
+        0x05,  // Photo (Pocket 3 / Nano)
         0x0A,  // HyperLapse
         0x17,  // Photo (Pocket 4 / 4 Pro)
-        0x28,  // SuperNight
+        0x28,  // SuperNight / Low-Light video
     ]
+}
+
+/// Choose record vs shutter from the documented mode, not a photo/video boolean.
+///
+/// Pocket 3 TimeLapse start/stop is `0x02/0x01` `01`/`00` (accepted survey). That
+/// mapping is Pocket 3 only — Pocket 4 / 4 Pro TimeLapse stays Video `0x02/0x02`
+/// until a later survey. Motionlapse `0x18` is not tabled.
+public enum CaptureCommand: Sendable {
+    public static func frame(
+        mode: ShootingMode?,
+        model: CameraModel?,
+        isRecording: Bool
+    ) -> Duml.Frame {
+        if mode?.isPhoto == true {
+            return Commands.shootPhoto()
+        }
+        if model?.isPocket3 == true, mode?.usesShutterTriggerOnPocket3 == true {
+            return Commands.shutterTrigger(start: !isRecording)
+        }
+        return isRecording ? Commands.recordStop() : Commands.recordStart()
+    }
 }
 
 /// Osmosis §14 / Mimo 2026-08-14 `0x02/0x8E` pids.
@@ -1102,7 +1162,10 @@ public struct VideoFrameRate: Equatable, Hashable, Sendable {
     ]
 }
 
-/// One 5-byte SET: `[res][fps_idx] 00 00 00`. No GET — `cam_video_param_v2` `@0–1`.
+/// One 5-byte SET: `[res][fps_idx]` plus a 3-byte trailer. No GET — `cam_video_param_v2` `@0–1`.
+///
+/// Normal / Video / Low-Light trailer is `00 00 00`. Pocket 3 SlowMo (accepted Mimo):
+/// 100/120 uses `00 04 00` (4X); 240 uses `00 08 00` (8X). Default API is the zero trailer.
 public struct VideoFormat: Equatable, Hashable, Sendable {
     public var resolution: VideoResolution
     public var frameRate: VideoFrameRate
@@ -1112,8 +1175,36 @@ public struct VideoFormat: Equatable, Hashable, Sendable {
         self.frameRate = frameRate
     }
 
+    /// Historic 5-byte SET. Equivalent to `setPayload(shootingMode: nil)`.
     public var setPayload: [UInt8] {
-        [resolution.rawValue, frameRate.rawValue, 0x00, 0x00, 0x00]
+        setPayload(shootingMode: nil)
+    }
+
+    public func setPayload(shootingMode: ShootingMode?) -> [UInt8] {
+        [resolution.rawValue, frameRate.rawValue]
+            + Self.trailer(
+                frameRate: frameRate, shootingMode: shootingMode)
+    }
+
+    /// SlowMo 100/120 → `00 04 00`; SlowMo 240 → `00 08 00`; every other mode/rate → `00 00 00`.
+    /// Call sites pass `.slowMo` only for Pocket 3 until a Pocket 4 / 4 Pro survey.
+    public static func trailer(
+        frameRate: VideoFrameRate, shootingMode: ShootingMode?
+    ) -> [UInt8] {
+        guard shootingMode == .slowMo else { return [0x00, 0x00, 0x00] }
+        switch frameRate.rawValue {
+        case VideoFrameRate.fps240.rawValue: return [0x00, 0x08, 0x00]
+        case VideoFrameRate.fps100.rawValue, VideoFrameRate.fps120.rawValue:
+            return [0x00, 0x04, 0x00]
+        default: return [0x00, 0x00, 0x00]
+        }
+    }
+
+    /// iOS / JNI call sites: SlowMo trailer context is Pocket 3 only.
+    public static func formatSetMode(
+        model: CameraModel?, statusMode: ShootingMode?
+    ) -> ShootingMode? {
+        model?.isPocket3 == true ? statusMode : nil
     }
 
     /// Top-deck chip, OpenZCine `resolutionFrameRate` shape (`4K · 25p`).
@@ -1325,7 +1416,8 @@ public enum GimbalControl {
     /// A fresh attitude report identifies Direction Lock and FPV even when the
     /// tilt parameter is stale. Follow-family reports retain the last tilt choice
     /// until a fresh parameter reply distinguishes Follow from Tilt locked.
-    public static func modeFromFamily(_ family: GimbalModeFamily, current: GimbalMode) -> GimbalMode {
+    public static func modeFromFamily(_ family: GimbalModeFamily, current: GimbalMode) -> GimbalMode
+    {
         switch family {
         case .directionLock: .directionLock
         case .fpv: .fpv
@@ -2186,8 +2278,9 @@ public enum CamFov {
     public static func readout(
         live: Double?, preview: Double?, fallback: Double, optimistic: Double? = nil
     ) -> Double {
-        displayTenths(continuousReadout(
-            live: live, preview: preview, fallback: fallback, optimistic: optimistic))
+        displayTenths(
+            continuousReadout(
+                live: live, preview: preview, fallback: fallback, optimistic: optimistic))
     }
 
     /// Unrounded lens factor for the zoom disc. The chip still uses `readout`.

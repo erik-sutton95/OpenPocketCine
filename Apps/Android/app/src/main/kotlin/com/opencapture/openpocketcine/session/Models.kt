@@ -397,6 +397,65 @@ data class CameraStatus(
         return if (at2 >= 0) applyingAudioByte2(at2) else copy(audioDspAt2 = at2)
     }
 
+    fun clearedModeDependentCapabilities(): CameraStatus =
+        copy(
+            availableVideoFormats = emptyList(),
+            availableShutterDenoms = emptyList(),
+            availableIsoIndices = emptyList(),
+            availableColorModes = emptyList(),
+        )
+
+    /**
+     * Keep camcap wheels across the first unknown → mode report. A later mode
+     * change must not resurrect the previous mode's ISO / shutter / color / FORMAT lists.
+     */
+    fun droppingStaleModeDependentCaps(previous: CameraStatus): CameraStatus {
+        if (shouldPreserveModeDependentCaps(previous.shootingMode, shootingMode)) return this
+        fun stale(current: List<*>, prior: List<*>): Boolean = current == prior && current.isNotEmpty()
+        return copy(
+            availableVideoFormats =
+                if (stale(availableVideoFormats, previous.availableVideoFormats)) emptyList()
+                else availableVideoFormats,
+            availableShutterDenoms =
+                if (stale(availableShutterDenoms, previous.availableShutterDenoms)) emptyList()
+                else availableShutterDenoms,
+            availableIsoIndices =
+                if (stale(availableIsoIndices, previous.availableIsoIndices)) emptyList()
+                else availableIsoIndices,
+            availableColorModes =
+                if (stale(availableColorModes, previous.availableColorModes)) emptyList()
+                else availableColorModes,
+        )
+    }
+
+    /** First unknown→mode keeps initial wheels; a later mode hop does not restore them. */
+    fun mergingModeDependentCaps(previous: CameraStatus): CameraStatus {
+        if (!shouldPreserveModeDependentCaps(previous.shootingMode, shootingMode)) {
+            return droppingStaleModeDependentCaps(previous)
+        }
+        var next = this
+        if (next.availableShutterDenoms.isEmpty()) {
+            next = next.copy(availableShutterDenoms = previous.availableShutterDenoms)
+        }
+        if (next.availableIsoIndices.isEmpty()) {
+            next = next.copy(availableIsoIndices = previous.availableIsoIndices)
+        }
+        if (next.availableColorModes.isEmpty()) {
+            next = next.copy(availableColorModes = previous.availableColorModes)
+        }
+        if (next.availableVideoFormats.isEmpty()) {
+            next = next.copy(availableVideoFormats = previous.availableVideoFormats)
+        }
+        return next
+    }
+
+    /**
+     * `camcap_video_format` is per shooting mode. Keep a new table from this
+     * apply; drop a leftover Video list when the mode changed without a fresh cap.
+     */
+    fun droppingStaleVideoFormats(previous: CameraStatus): CameraStatus =
+        droppingStaleModeDependentCaps(previous)
+
     fun preservingExtras(prev: CameraStatus): CameraStatus =
         copy(
             expoMode = prev.expoMode,
@@ -525,6 +584,9 @@ data class CameraStatus(
         }
 
     companion object {
+        fun shouldPreserveModeDependentCaps(previousMode: Int, nextMode: Int): Boolean =
+            previousMode < 0 || previousMode == nextMode
+
         fun fromJson(raw: String?): CameraStatus {
             if (raw.isNullOrBlank()) return CameraStatus()
             return runCatching {

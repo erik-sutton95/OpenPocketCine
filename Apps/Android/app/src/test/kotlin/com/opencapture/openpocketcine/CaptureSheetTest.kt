@@ -22,10 +22,9 @@ class CaptureSheetTest {
             listOf("3K"),
             CaptureLists.modeTabs(LiveSheet.FORMAT, status, offersIsoAuto = false),
         )
-        assertEquals(
-            VideoFormat(VideoResolution.P3K_9X16, VideoFrameRate.FPS30),
+        assertNull(
             CaptureLists.nextVideoFormat(status, tab = 0, drum = "30p", fromDrum = true),
-            "changing fps must keep the reported portrait resolution",
+            "empty camcap is read-only; fps change must not invent a SET",
         )
     }
 
@@ -1341,8 +1340,9 @@ class CaptureSheetTest {
         assertEquals(VideoResolution.P4K, VideoResolution.fromTabIndex(1))
         assertEquals(VideoResolution.P1080, VideoResolution.fromTabIndex(0))
         assertEquals(
-            listOf("1080", "4K"),
+            listOf("1080"),
             CaptureLists.modeTabs(LiveSheet.FORMAT, expoMode = -1, offersIsoAuto = false),
+            "empty FORMAT table is the current pair only, not invented 1080/4K tabs",
         )
         val fourKOnly =
             live.copy(

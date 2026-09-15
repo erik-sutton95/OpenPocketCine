@@ -167,6 +167,16 @@ struct WatchRelayProtocolTests {
         let state = WatchRelayState.snapshot(
             status: status, phase: .live, cameraName: "Pocket", feedLive: true)
         #expect(state.isPhotography)
+
+        status.shootingMode = Int(ShootingMode.photoRawPocket3AndNano)
+        let pocket3 = WatchRelayState.snapshot(
+            status: status, phase: .live, cameraName: "Pocket 3", feedLive: true)
+        #expect(pocket3.isPhotography)
+
+        status.shootingMode = Int(ShootingMode.superNight.rawValue)
+        let lowLight = WatchRelayState.snapshot(
+            status: status, phase: .live, cameraName: "Pocket 3", feedLive: true)
+        #expect(!lowLight.isPhotography)
     }
 
     @Test("Wrist-down does not cover a live tally with open-on-iPhone")

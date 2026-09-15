@@ -52,7 +52,8 @@ struct LiveCameraControlBar: View {
             } else {
                 tile(
                     .shutter, label: "SHUTTER", value: shutterValue,
-                    widest: OperatorPrefs.shutterUsesAngle ? "346°" : "1/16000")
+                    widest: OperatorPrefs.shutterUsesAngle
+                        && !model.session.status.isPhoto ? "346°" : "1/16000")
             }
             tile(.exposure, label: "EXPOSURE", value: expoValue, widest: "Manual")
             tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
@@ -113,7 +114,10 @@ struct LiveCameraControlBar: View {
     private func open(_ sheet: CaptureSheet) {
         guard !tilesLocked, model.captureDrum == nil, readoutOwnership.owner == nil else { return }
         model.captureDrum = nil
-        model.captureSheet = CaptureReadoutAdmission.replacing(model.captureSheet, with: sheet)
+        model.captureSheet = CaptureReadoutAdmission.replacing(
+            model.captureSheet,
+            with: CaptureReadoutAdmission.opening(
+                sheet, isPhoto: model.session.status.isPhoto))
     }
 
     private var isoValue: String {
@@ -123,7 +127,7 @@ struct LiveCameraControlBar: View {
     }
 
     private var shutterValue: String {
-        if OperatorPrefs.shutterUsesAngle {
+        if OperatorPrefs.shutterUsesAngle, !model.session.status.isPhoto {
             return ShutterAngle.label(OperatorPrefs.shutterAngleDegrees)
         }
         let d = model.session.status.shutterDenom

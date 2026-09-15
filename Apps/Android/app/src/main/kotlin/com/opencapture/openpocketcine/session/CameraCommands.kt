@@ -200,9 +200,48 @@ object CameraCommands {
     /** iOS `CamFov.shouldRestoreDLog2` — only park back at 1×, not 2.9×. */
     fun shouldRestoreDLog2(factor: Double): Boolean = CamFov.shouldRestoreDLog2(factor)
 
-    /** `[res][fps_idx] 00 00 00`. */
-    fun resolutionFps(res: Int, fpsIndex: Int): ByteArray =
-        byteArrayOf(res.toByte(), fpsIndex.toByte(), 0x00, 0x00, 0x00)
+    /** Video `0x02/0x18` trailer. SlowMo uses [slowMoFormatTrailer] instead. */
+    val VIDEO_FORMAT_TRAILER: ByteArray = byteArrayOf(0x00, 0x00, 0x00)
+
+    /**
+     * Pocket 3 SlowMo `0x02/0x18` trailer, or null when that fps index has no
+     * documented SlowMo request. 4X (100/120) is `00 04 00`; 8X (240) is `00 08 00`.
+     */
+    fun slowMoFormatTrailer(fpsIndex: Int): ByteArray? =
+        when (fpsIndex) {
+            VideoFrameRate.FPS100.rawValue, VideoFrameRate.FPS120.rawValue ->
+                byteArrayOf(0x00, 0x04, 0x00)
+            VideoFrameRate.FPS240.rawValue -> byteArrayOf(0x00, 0x08, 0x00)
+            else -> null
+        }
+
+    /** `[res][fps_idx]` plus Video `00 00 00` or the documented SlowMo trailer. */
+    fun resolutionFps(res: Int, fpsIndex: Int, shootingMode: Int = SHOOT_VIDEO): ByteArray {
+        val trailer =
+            if (shootingMode == SHOOT_SLOWMO) {
+                slowMoFormatTrailer(fpsIndex) ?: VIDEO_FORMAT_TRAILER
+            } else {
+                VIDEO_FORMAT_TRAILER
+            }
+        return byteArrayOf(res.toByte(), fpsIndex.toByte()) + trailer
+    }
+
+    /**
+     * JNI extra for video-format SET. Third field is shooting-mode raw, and only
+     * Pocket 3 SlowMo includes it so the facade can emit 4X/8X trailers. Other
+     * bodies omit it and keep the Video `00 00 00` trailer.
+     */
+    fun formatCommandExtra(
+        res: Int,
+        fpsIndex: Int,
+        shootingMode: Int = SHOOT_VIDEO,
+        cameraName: String? = null,
+    ): String {
+        if (shootingMode == SHOOT_SLOWMO && CameraModel.looksLikePocket3(cameraName.orEmpty())) {
+            return "$res\u001f$fpsIndex\u001f$shootingMode"
+        }
+        return "$res\u001f$fpsIndex"
+    }
 
     fun paramGet(pid: Int): ByteArray =
         byteArrayOf(0x00, 0x01, (pid and 0xFF).toByte(), ((pid shr 8) and 0xFF).toByte())
@@ -339,23 +378,24 @@ object CameraCommands {
     const val SHOOT_PHOTO_POCKET4 = 0x17
     const val SHOOT_SUPER_NIGHT = 0x28
 
+    /** Still capture: Photo `0x05` / Pocket 4 `0x17` only. SuperNight `0x28` is video. */
     fun isPhotoMode(shootingMode: Int): Boolean =
-        shootingMode == SHOOT_PHOTO ||
-            shootingMode == SHOOT_PHOTO_POCKET4 ||
-            shootingMode == SHOOT_SUPER_NIGHT
+        shootingMode == SHOOT_PHOTO || shootingMode == SHOOT_PHOTO_POCKET4
 
     /**
      * Label for a tabled `0x02/0xE1` value, or null when the camera reports one we do not know.
      * Both photo encodings read back as "Photo" — the body decides which it uses.
+     * Pocket 3 presents `0x28` as Low-Light video; other bodies keep SuperNight.
      */
-    fun shootingModeLabel(raw: Int): String? =
+    fun shootingModeLabel(raw: Int, cameraName: String? = null): String? =
         when (raw) {
             SHOOT_SLOWMO -> "SlowMo"
             SHOOT_VIDEO -> "Video"
             SHOOT_TIMELAPSE -> "TimeLapse"
             SHOOT_PHOTO, SHOOT_PHOTO_POCKET4 -> "Photo"
             SHOOT_HYPERLAPSE -> "HyperLapse"
-            SHOOT_SUPER_NIGHT -> "SuperNight"
+            SHOOT_SUPER_NIGHT ->
+                if (CameraModel.looksLikePocket3(cameraName.orEmpty())) "Low-Light" else "SuperNight"
             else -> null
         }
 
@@ -370,8 +410,8 @@ object CameraCommands {
 
     /**
      * The camera's own on-screen carousel order — Video, Photo, TimeLapse, HyperLapse,
-     * SuperNight, SlowMo — which is not the numeric order. The wire enum is sparse and
-     * unordered, so this is tabled and never computed.
+     * SuperNight (Low-Light on Pocket 3), SlowMo — which is not the numeric order. The
+     * wire enum is sparse and unordered, so this is tabled and never computed.
      *
      * Only ever send a value from this table. Sweeping the `0x02/0xE1` value space froze a Nano
      * solid and needed a power cycle, so an unlisted mode must be refused rather than passed

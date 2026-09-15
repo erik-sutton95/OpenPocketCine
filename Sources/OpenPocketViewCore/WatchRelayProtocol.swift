@@ -176,10 +176,7 @@ public struct WatchRelayState: Codable, Equatable, Sendable {
             if case .live = phase { return true }
             return false
         }()
-        let photography: Bool = {
-            guard (0...255).contains(status.shootingMode) else { return false }
-            return ShootingMode(rawValue: UInt8(status.shootingMode))?.isPhoto == true
-        }()
+        let photography = status.isPhoto
         return WatchRelayState(
             isRecording: status.isRecording,
             timecode: status.timecodeClock,

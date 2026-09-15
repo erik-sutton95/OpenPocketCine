@@ -20,6 +20,12 @@ visible while a top picker is open. Auto exposure keeps EV as the value and
 shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value.
 Hold Record to open shooting mode.
+In **Photo**, the capture control becomes a shutter and takes a photo immediately,
+without recording confirmation. Video frame-rate and shutter-angle controls do
+not apply to still photos. **Low-Light / SuperNight** retains start/stop recording.
+Changing modes clears stale format choices. A pending recording confirmation is
+dismissed if the mode, recording state, connection, or interface lock changes.
+Physical qualification of these mode-aware controls is pending.
 In portrait, Settings and Media remain usable with a picker open; returning to
 the monitor restores that picker. The fitted feed is centered vertically; STBY,
 timecode and REC SETUP sit in a separate row below the notch or status area.

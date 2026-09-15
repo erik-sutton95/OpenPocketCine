@@ -22,9 +22,10 @@ has no 60 fps, Pocket 4 Pro SlowMo 200/240 is lens-dependent, and firmware can
 reshape the list.
 
 The tested Pocket 3 rejected the capability subscription while current-format
-status still worked. With an empty table and a confirmed normal Video mode,
-both shells use the documented Pocket 3 Video matrix as a picker fallback.
-This exception does not apply to SlowMo, livestream or an unknown shooting mode.
+status still worked. With an empty table and a confirmed mode, both shells use
+the documented Pocket 3 Video matrix or the physically observed Slow Motion and
+Low-Light pairs as a picker fallback. This exception does not apply to
+Timelapse, Hyperlapse, livestream or an unknown shooting mode.
 It is a source-backed choice list, not proof that every pair has passed physical
 recording/reconnect checks. Physical iPhone build 0.1.0 (99) subsequently passed
 one landscape 2.7K/25 D-Log M record and app-relaunch/reconnect sequence, with
@@ -37,7 +38,7 @@ What still has to live in the app:
 | Layer | Who owns it | Why |
 | --- | --- | --- |
 | Reported `[res][fps]` pairs for the current mode | Camera (`camcap_video_format`) | Combinations are not a cartesian product |
-| Empty-table Pocket 3 normal-Video fallback | `CamCapVideoFormat.pickerFormats`, Kotlin `VideoFormat.pickerFormats` | DJI's documented Video matrix; reported capabilities always override it |
+| Empty-table Pocket 3 mode fallback | `CamCapVideoFormat.pickerFormats`, Kotlin `VideoFormat.pickerFormats` | Documented Video matrix and accepted Slow Motion / Low-Light pairs; reported capabilities always override it |
 | Resolution **byte → label / pixels / aspect** | App dictionary | The wire is one byte, not `"2.7K 4:3"` |
 | Frame-rate **index → fps** | App dictionary | Same: `@1` is an index |
 | Expected matrices (this doc) | DJI specs + physical dumps | Labels, UI grouping, capture checklist |
@@ -60,8 +61,11 @@ Subscribe `camcap_video_format` and `cam_video_param_v2` are already in
 cam_video_param_v2  @0 = res, @1 = fps_idx      # live HUD
 ```
 
-Trailer bytes have been `00` in every labeled take. They are not an aspect
-field.
+The zero trailer above describes normal Video and the surveyed Pocket 3
+Low-Light writes. Pocket 3 Slow Motion instead accepted `00 04 00` at
+100/120 fps and `00 08 00` at 240 fps. These bytes are not an aspect field.
+See the [physical survey](../handbook/src/content/docs/protocol/pocket3.md#shooting-modes-and-formats)
+for the exact accepted pairs; qualify other bodies separately.
 
 ### Capability table
 
@@ -134,18 +138,18 @@ Shooting mode (`0x02/0xE1`, sparse — never sweep):
 | `00` | SlowMo |
 | `01` | Video |
 | `02` | TimeLapse |
-| `05` | Photo (Nano) |
+| `05` | Photo (Pocket 3 / Nano) |
 | `0A` | HyperLapse |
 | `17` | Photo (Pocket 4 / 4 Pro) |
 | `1A` | Live (mimo_settings ledger; not a FORMAT case) |
-| `28` | SuperNight |
+| `28` | Low-Light video (named SuperNight in the core) |
 | `3F` | PanoPhoto (ledger) |
 
 ## What the FORMAT sheet does today
 
 iOS `CaptureControlSheets` and Android `LiveControlSheets` use the effective
-picker formats: reported capabilities first, then the Pocket 3 normal-Video
-exception above. With multiple known aspects, the picker groups by aspect,
+picker formats: reported capabilities first, then the Pocket 3 mode-specific
+exceptions above. With multiple known aspects, the picker groups by aspect,
 resolution and the frame rates available for that resolution. Unknown bytes
 are retained.
 
@@ -216,11 +220,14 @@ Body UI (operator photo, 16:9): aspect chip, then 1080P / 2.7K / 4K, fps
 | 9:16 | 1080p | **1080×1920** |
 
 **SlowMo** (separate mode; body swipe-up has resolution + speed, **no aspect
-chip**): 4K 16:9 120; 2.7K 2688×1512 120; 1080p 120/240. FAQ: 4K/120
-uncropped is SlowMo only. UM v1.0 appendix also listed 4K SlowMo **100/120**;
-the live specs page is **120 only** — do not SET 100 on Pocket 3 until a
-camcap take. SlowMo has no audio in the file (sidecar). Color (Normal / HLG /
-D-Log M) is Video Pro only, not SlowMo / Low-Light / Timelapse.
+chip**): the [physical survey](../handbook/src/content/docs/protocol/pocket3.md#shooting-modes-and-formats)
+confirmed accepted 4K 16:9 **100/120**, 2.7K 2688×1512 120 and 1080p 120/240
+selections. FAQ: 4K/120 uncropped is SlowMo only. The inspected Slow Motion
+originals have no audio track; companions are documented separately. At
+**4K/120**, Mimo offered Normal / HLG / D-Log M and accepted HLG / D-Log M
+changes. Color was absent at the inspected 1080p/240, Low-Light and Fixed Angle
+Timelapse settings. Do not turn that visibility observation into a universal
+Slow Motion color restriction.
 
 **Hyperlapse / Timelapse / Motionlapse:** 4K / 2.7K / 1080p @ 25/30 (aspect
 unspecified in those rows).

@@ -1200,7 +1200,7 @@ private fun ScopeGuideRows(guides: ScopeGuides, onChange: (ScopeGuides) -> Unit)
  * Shooting-mode picker, mirroring the iOS capture sheet.
  *
  * Laid out as two strips of three rather than one six-wide segment so "HyperLapse" and
- * "SuperNight" stay readable, keeping the camera's own carousel order reading left to right,
+ * "SuperNight" / "Low-Light" stay readable, keeping the camera's own carousel order reading left to right,
  * top to bottom. Selection comes from the camera's `0x02/0x80` status push, so it follows a
  * mode changed on the body itself; [CameraCommands.shootingModeCarousel] is the only source of
  * values written back.
@@ -1210,7 +1210,7 @@ private fun ShootingModeRow(model: AppModel, view: View) {
     val status by model.session.status.collectAsState()
     val cameraName = model.session.connectedCamera?.model?.name
     val carousel = remember(cameraName) { CameraCommands.shootingModeCarousel(cameraName) }
-    val selectedLabel = CameraCommands.shootingModeLabel(status.shootingMode)
+    val selectedLabel = CameraCommands.shootingModeLabel(status.shootingMode, cameraName)
     SettingsInlineRow(
         title = "Shooting Mode",
         help = SettingsHelpCopy.SHOOTING_MODE,
@@ -1219,14 +1219,14 @@ private fun ShootingModeRow(model: AppModel, view: View) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             carousel.chunked(3).forEach { row ->
-                val labels = row.mapNotNull { CameraCommands.shootingModeLabel(it) }
+                val labels = row.mapNotNull { CameraCommands.shootingModeLabel(it, cameraName) }
                 SettingsSegmented(
                     options = labels,
                     // Blank keeps the whole strip unselected when the mode lives in the other row.
                     selected = if (selectedLabel in labels) selectedLabel.orEmpty() else "",
                     compact = true,
                 ) { label ->
-                    val raw = row.firstOrNull { CameraCommands.shootingModeLabel(it) == label }
+                    val raw = row.firstOrNull { CameraCommands.shootingModeLabel(it, cameraName) == label }
                     if (raw != null && raw != status.shootingMode) {
                         operatorHaptic(view, model.hapticsEnabled)
                         model.setShootingMode(raw)

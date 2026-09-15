@@ -442,6 +442,8 @@ final class CameraSession {
     @ObservationIgnored private var audioPin: AudioPin?
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
     @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
+    @ObservationIgnored private var captureModeGeneration: UInt64 = 0
+    @ObservationIgnored private var formatRequestGeneration: UInt64 = 0
     /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
     var isFormatPinActive: Bool { formatPin != nil }
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
@@ -1250,38 +1252,68 @@ final class CameraSession {
     // ---- Camera control (Osmosis §10–14) ---------------------------------------------------------
 
     var currentShootingMode: ShootingMode? {
-        guard (0...255).contains(status.shootingMode) else { return nil }
-        return ShootingMode(rawValue: UInt8(status.shootingMode))
+        ShootingMode.fromStatus(status.shootingMode)
     }
 
-    /// Rec lamp: start/stop video, or fire a still in Photo / SuperNight.
+    /// Rec lamp: start/stop video, or fire a still in Photo.
+    /// SuperNight / Low-Light is video. Pocket 3 TimeLapse uses `0x02/0x01`.
     /// The rec button stays disabled (`controlBusy`) until the ACK or the
     /// `rec_state` telemetry confirms — record must never lie.
     func pressShutter() {
-        if currentShootingMode?.isPhoto == true {
-            controlBusy = true
+        let mode = currentShootingMode
+        let starting = !status.isRecording
+        let frame = CaptureCommand.frame(
+            mode: mode, model: connectedCamera?.model, isRecording: status.isRecording)
+        controlBusy = true
+        if mode?.isPhoto == true {
             fireCamera(
-                Commands.shootPhoto(), name: "Photo", retransmits: false,
+                frame, name: "Photo", retransmits: false,
                 onSettle: { [weak self] _ in self?.controlBusy = false })
             return
         }
-        let starting = !status.isRecording
-        controlBusy = true
+        let name: String
+        if connectedCamera?.model.isPocket3 == true, mode?.usesShutterTriggerOnPocket3 == true {
+            name = starting ? "TimeLapse" : "Stop"
+        } else {
+            name = starting ? "Record" : "Stop"
+        }
         fireCamera(
-            starting ? Commands.recordStart() : Commands.recordStop(),
-            name: starting ? "Record" : "Stop",
-            expect: .recording(starting),
+            frame, name: name, expect: .recording(starting),
             onSettle: { [weak self] _ in self?.controlBusy = false }
         )
     }
 
     func setShootingMode(_ mode: ShootingMode) {
-        let previous = status.shootingMode
-        status.shootingMode = Int(mode.rawValue)
+        captureModeGeneration &+= 1
+        let modeGeneration = captureModeGeneration
+        let sessionGeneration = controlGeneration
+        let previousMode = status.shootingMode
+        let previousFormats = status.availableVideoFormats
+        let previousShutter = status.availableShutterDenoms
+        let previousIso = status.availableIsoIndices
+        let previousColor = status.availableColorModes
+        let wire = Int(mode.wireByte(for: connectedCamera?.model))
+        var next = status
+        if previousMode != wire {
+            next.clearModeDependentCapabilities()
+        }
+        next.shootingMode = wire
+        status = next
+        formatPin = nil
         fireCamera(
-            Commands.setShootingMode(mode), name: mode.label,
+            Commands.setShootingMode(mode, model: connectedCamera?.model), name: mode.label,
             onFail: { [weak self] in
-                self?.status.shootingMode = previous
+                guard let self, self.captureModeGeneration == modeGeneration,
+                    self.controlGeneration == sessionGeneration,
+                    self.status.shootingMode == wire
+                else { return }
+                self.captureModeGeneration &+= 1
+                self.formatPin = nil
+                self.status.shootingMode = previousMode
+                self.status.availableVideoFormats = previousFormats
+                self.status.availableShutterDenoms = previousShutter
+                self.status.availableIsoIndices = previousIso
+                self.status.availableColorModes = previousColor
             })
     }
 
@@ -2212,11 +2244,25 @@ final class CameraSession {
     }
 
     /// `0x02/0x18` via `Commands.setVideoFormat(resolution:frameRate:)`.
-    func setVideoFormat(resolution: VideoResolution, frameRate: VideoFrameRate) {
+    func setVideoFormat(
+        resolution: VideoResolution, frameRate: VideoFrameRate, fromOperator: Bool = true
+    ) {
+        guard currentShootingMode?.offersVideoFormat != false else { return }
         let format = VideoFormat(resolution: resolution, frameRate: frameRate)
+        if fromOperator,
+            !CamCapVideoFormat.allowsOperatorSet(
+                format, available: status.availableVideoFormats,
+                model: connectedCamera?.model, shootingMode: status.shootingMode)
+        {
+            return
+        }
         let previousFormat = status.videoFormat
         let previousRes = status.videoResolution
         let previousFps = status.fps
+        formatRequestGeneration &+= 1
+        let requestGeneration = formatRequestGeneration
+        let modeGeneration = captureModeGeneration
+        let sessionGeneration = controlGeneration
         formatPin = (format, Date().addingTimeInterval(2))
         var next = status
         next.videoResolution = format.resolution
@@ -2224,11 +2270,17 @@ final class CameraSession {
         next.fps = format.frameRate.fps
         status = next
         fireCamera(
-            Commands.setVideoFormat(resolution: format.resolution, frameRate: format.frameRate),
+            Commands.setVideoFormat(
+                resolution: format.resolution, frameRate: format.frameRate,
+                shootingMode: VideoFormat.formatSetMode(
+                    model: connectedCamera?.model, statusMode: currentShootingMode)),
             name: format.chipLabel,
             expect: .format(format),
             onFail: { [weak self] in
-                guard let self else { return }
+                guard let self, self.formatRequestGeneration == requestGeneration,
+                    self.captureModeGeneration == modeGeneration,
+                    self.controlGeneration == sessionGeneration
+                else { return }
                 self.status.videoFormat = previousFormat
                 self.status.videoResolution = previousRes
                 self.status.fps = previousFps
@@ -3970,10 +4022,11 @@ final class CameraSession {
         ControlLiveLog.line(
             "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count)"
         )
-        setVideoFormat(resolution: kick.resolution, frameRate: kick.frameRate)
+        setVideoFormat(resolution: kick.resolution, frameRate: kick.frameRate, fromOperator: false)
         await waitForRecordingFormatPokeSettle()
         guard !Task.isCancelled else { return }
-        setVideoFormat(resolution: original.resolution, frameRate: original.frameRate)
+        setVideoFormat(
+            resolution: original.resolution, frameRate: original.frameRate, fromOperator: false)
         await waitForRecordingFormatPokeSettle()
         guard !Task.isCancelled, !isBrowsingMedia else { return }
         guard startCapturedLiveView(reason: "first-picture format poke") else { return }
@@ -5106,7 +5159,12 @@ final class CameraSession {
         let priorFormat = s.videoFormat
         let priorRes = s.videoResolution
         let priorFps = s.fps
+        let priorMode = s.shootingMode
         let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
+        if s.shootingMode != priorMode {
+            captureModeGeneration &+= 1
+            formatPin = nil
+        }
         let flipReply = CameraParam.isSelfieFlipGetReply(
             set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
         if flipReply, let parsed = CameraParam.parseGetReply(frame.payload) {

@@ -214,16 +214,28 @@ public enum Commands {
     public static func recordStop(seq: UInt16 = 0) -> Duml.Frame { camera(0x02, [0x00], seq: seq) }
 
     /// `0x02/0x01` shutter trigger. Payload `[01]`. In Video mode the camera answers `d9`.
-    public static func shootPhoto(seq: UInt16 = 0) -> Duml.Frame { camera(0x01, [0x01], seq: seq) }
+    /// Pocket 3 TimeLapse uses this opcode for start (`01`) and stop (`00`).
+    public static func shootPhoto(seq: UInt16 = 0) -> Duml.Frame {
+        shutterTrigger(start: true, seq: seq)
+    }
+
+    /// `0x02/0x01` start (`01`) or stop (`00`). Photo fires `01`. Pocket 3 TimeLapse uses both.
+    public static func shutterTrigger(start: Bool, seq: UInt16 = 0) -> Duml.Frame {
+        camera(0x01, [start ? 0x01 : 0x00], seq: seq)
+    }
 
     /// `0x02/0xE1` shooting mode. Only send tabled `ShootingMode` values — do not enumerate.
-    public static func setShootingMode(_ mode: ShootingMode, seq: UInt16 = 0) -> Duml.Frame {
-        camera(0xE1, [mode.rawValue], seq: seq)
+    /// Photo is body-specific: Pocket 3 / Nano `0x05`, Pocket 4 / 4 Pro `0x17`. `model: nil`
+    /// keeps the historic Photo `0x17` payload.
+    public static func setShootingMode(
+        _ mode: ShootingMode, model: CameraModel? = nil, seq: UInt16 = 0
+    ) -> Duml.Frame {
+        camera(0xE1, [mode.wireByte(for: model)], seq: seq)
     }
 
     /// `0x02/0xE1` from a raw wire value, for callers that carry the byte rather than the case —
-    /// Photo is body-dependent (`0x17` on a Pocket 4, `0x05` on a Nano), and only one of those
-    /// can be `ShootingMode.photo`.
+    /// Photo is body-dependent (`0x17` on a Pocket 4, `0x05` on a Pocket 3 / Nano), and only one
+    /// of those can be `ShootingMode.photo`.
     ///
     /// Returns nil for anything outside `ShootingMode.tabledRawValues`. That refusal is the point:
     /// sweeping this opcode's value space froze a Nano solid and needed a power cycle, so an
@@ -442,14 +454,19 @@ public enum Commands {
     }
 
     /// `0x02/0x18` res+fps. 5 B `[res][fps_idx] 00 00 00`. No GET.
-    public static func setVideoFormat(_ format: VideoFormat, seq: UInt16 = 0) -> Duml.Frame {
-        camera(0x18, format.setPayload, seq: seq)
+    public static func setVideoFormat(
+        _ format: VideoFormat, shootingMode: ShootingMode? = nil, seq: UInt16 = 0
+    ) -> Duml.Frame {
+        camera(0x18, format.setPayload(shootingMode: shootingMode), seq: seq)
     }
 
     public static func setVideoFormat(
-        resolution: VideoResolution, frameRate: VideoFrameRate, seq: UInt16 = 0
+        resolution: VideoResolution, frameRate: VideoFrameRate,
+        shootingMode: ShootingMode? = nil, seq: UInt16 = 0
     ) -> Duml.Frame {
-        setVideoFormat(VideoFormat(resolution: resolution, frameRate: frameRate), seq: seq)
+        setVideoFormat(
+            VideoFormat(resolution: resolution, frameRate: frameRate),
+            shootingMode: shootingMode, seq: seq)
     }
 
     /// `0x02/0xb8` slider SET. `0A 4E` + u16-LE lens `@14` (217 = 1×, 651 = 3×,

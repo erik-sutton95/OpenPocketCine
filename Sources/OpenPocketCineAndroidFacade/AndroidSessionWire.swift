@@ -511,11 +511,18 @@ public enum AndroidSessionWire {
         case .setVideoFormat:
             let parts = splitExtra(extra)
             guard parts.count >= 2,
-                let resRaw = UInt8(parts[0]), let fpsRaw = UInt8(parts[1])
+                let resRaw = parseUInt8(parts[0]), let fpsRaw = parseUInt8(parts[1])
             else { return nil }
+            let shootingMode: ShootingMode?
+            if parts.count >= 3, let raw = parseUInt8(parts[2]) {
+                shootingMode = ShootingMode.fromWire(raw)
+            } else {
+                shootingMode = nil
+            }
             return Commands.setVideoFormat(
                 resolution: VideoResolution(rawValue: resRaw),
-                frameRate: VideoFrameRate(rawValue: fpsRaw), seq: seq)
+                frameRate: VideoFrameRate(rawValue: fpsRaw),
+                shootingMode: shootingMode, seq: seq)
         case .tapFocusPrepare:
             return Commands.tapFocusPrepare(seq: seq)
         case .tapFocusPoint:
@@ -533,7 +540,13 @@ public enum AndroidSessionWire {
             }
             return Commands.tapFocusCommit(x, y, seq: seq)
         case .shootPhoto:
-            return Commands.shootPhoto(seq: seq)
+            // Empty retains the original Photo trigger. Pocket 3 TimeLapse also
+            // uses this opcode, with an explicit stop byte.
+            switch extra {
+            case nil, "", "1": return Commands.shutterTrigger(start: true, seq: seq)
+            case "0": return Commands.shutterTrigger(start: false, seq: seq)
+            default: return nil
+            }
         case .setShootingMode:
             // Not `ShootingMode(rawValue:)`: the Nano's Photo is 0x05 and has no case, so going
             // through the enum returned nil and the mode never reached the wire.

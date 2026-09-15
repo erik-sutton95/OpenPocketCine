@@ -207,21 +207,25 @@ struct CapturePickerPanel: View {
                         markedValues: held.snapshot.marked, isInteractive: false)
                 } else {
                     content
-                    if sheet == .resolution, formatAspects.count > 1 { aspectBar }
+                    if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
+                        aspectBar
+                    }
                     if !modeTabs.isEmpty { modeBar }
                     if let onSelectRecordingCategory,
                         MonitorCapturePopupChrome.showsRecordingCategoryTabs(
                             portrait: showsRecordingCategories, kind: .details)
                     {
                         MonitorCaptureTabs(
-                            options: [CaptureSheet.resolution, .color, .mode], selection: sheet,
+                            options: recordingCategories, selection: sheet,
                             title: {
                                 $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
                             }
                         ) { category in
                             guard canApplyDrum else { return }
                             cancelDrumSend()
-                            onSelectRecordingCategory(category)
+                            onSelectRecordingCategory(
+                                CaptureReadoutAdmission.opening(
+                                    category, isPhoto: isPhoto))
                         }
                     }
                     if sheet == .iso { nativeIsoHopToggle }
@@ -281,7 +285,8 @@ struct CapturePickerPanel: View {
             guard sheet == .shutter else { return }
             cancelDrumSend()
             if model.session.status.expoMode != .auto {
-                selectedMode = OperatorPrefs.shutterUsesAngle ? 1 : 0
+                selectedMode =
+                    OperatorPrefs.shutterUsesAngle && !isPhoto ? 1 : 0
             }
             reseatShutterOrEv()
         }
@@ -306,6 +311,16 @@ struct CapturePickerPanel: View {
             guard sheet == .resolution else { return }
             guard !model.session.isFormatPinActive else { return }
             seed()
+        }
+        .onChange(of: isPhoto) { _, photo in
+            guard photo else { return }
+            if sheet == .resolution, let onSelectRecordingCategory {
+                onSelectRecordingCategory(.mode)
+            }
+            if sheet == .shutter, !isEvSheet {
+                selectedMode = 0
+                reseatShutterOrEv()
+            }
         }
         .onChange(of: drumSelection) { _, newValue in
             applyDrum(newValue)
@@ -375,20 +390,31 @@ struct CapturePickerPanel: View {
             audioBody
         case .mode:
             choiceDrum(
-                ShootingMode.allCases.map(\.label),
-                selected: model.session.currentShootingMode?.label,
+                ShootingMode.allCases.map { $0.label(for: connectedBody) },
+                selected: model.session.currentShootingMode?.label(for: connectedBody),
                 isInteractive: !model.session.status.isRecording
             ) { label in
                 guard !model.session.status.isRecording else { return }
-                if let mode = ShootingMode.allCases.first(where: { $0.label == label }) {
+                if let mode = ShootingMode.allCases.first(where: {
+                    $0.label(for: connectedBody) == label
+                }) {
                     model.session.setShootingMode(mode)
                 }
             }
         case .resolution:
-            CaptureDrumWheel(
-                options: formatRates.map(\.drumLabel), selection: $drumSelection
-            )
-            .id(selectedMode)
+            if isPhoto {
+                Text("Photo")
+                    .font(MonitorTheme.font(16, weight: .semibold))
+                    .foregroundStyle(MonitorTheme.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel("Photo")
+            } else {
+                CaptureDrumWheel(
+                    options: formatRates.map(\.drumLabel), selection: $drumSelection,
+                    isInteractive: !pickerVideoFormats.isEmpty
+                )
+                .id(selectedMode)
+            }
         case .color:
             CaptureDrumWheel(options: colorWheelLabels, selection: $drumSelection)
         }
@@ -530,17 +556,28 @@ struct CapturePickerPanel: View {
         if isEvSheet {
             return "Compensation"
         }
-        if sheet == .shutter { return "Angle · speed" }
+        if sheet == .shutter {
+            return isPhoto ? "Speed" : "Angle · speed"
+        }
+        if sheet == .resolution, isPhoto {
+            return "Photo"
+        }
         return sheet.subtitle
+    }
+
+    private var isPhoto: Bool { model.session.status.isPhoto }
+
+    private var recordingCategories: [CaptureSheet] {
+        isPhoto ? [.color, .mode] : [.resolution, .color, .mode]
     }
 
     private var modeTabs: [String] {
         switch sheet {
         case .iso where offersIsoAuto: ["Auto", "Manual"]
-        case .shutter where !isEvSheet: ["Speed", "Angle"]
+        case .shutter where !isEvSheet && !isPhoto: ["Speed", "Angle"]
         case .wb: ["Mode", "Kelvin", "Tint"]
         case .audio: ["Channel", "Wind", "Direction", "Vocal"]
-        case .resolution: formatResolutions.map(\.tabTitle)
+        case .resolution where !isPhoto: formatResolutions.map(\.tabTitle)
         default: []
         }
     }
@@ -558,7 +595,7 @@ struct CapturePickerPanel: View {
     }
 
     private var isAngleSheet: Bool {
-        sheet == .shutter && !isEvSheet && selectedMode == 1
+        sheet == .shutter && !isEvSheet && !isPhoto && selectedMode == 1
     }
 
     private var isoIndices: [IsoIndex] {
@@ -623,7 +660,8 @@ struct CapturePickerPanel: View {
             }
         case .shutter:
             if !isEvSheet {
-                selectedMode = OperatorPrefs.shutterUsesAngle ? 1 : 0
+                selectedMode =
+                    OperatorPrefs.shutterUsesAngle && !isPhoto ? 1 : 0
             }
             reseatShutterOrEv()
         case .wb:
@@ -846,7 +884,7 @@ struct CapturePickerPanel: View {
     }
 
     private func applyVideoFormat(resolution: VideoResolution, frameRate: VideoFrameRate) {
-        guard canApplyDrum else { return }
+        guard canApplyDrum, !pickerVideoFormats.isEmpty else { return }
         model.session.setVideoFormat(resolution: resolution, frameRate: frameRate)
     }
 
@@ -1019,7 +1057,8 @@ private struct CaptureChoiceDrum: View {
                     selection = value
                     if canApply, isInteractive { action(value) }
                 }),
-            isInteractive: isInteractive)
+            isInteractive: isInteractive
+        )
         .onAppear { selection = cameraValue ?? "" }
         .onChange(of: cameraValue) { _, new in
             if let new, new != selection { selection = new }

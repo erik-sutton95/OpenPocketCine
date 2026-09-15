@@ -97,7 +97,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                     selection: status.evComp?.label ?? "",
                     enabled: !facePriorityExposureEnabled)
             }
-            if shutterUsesAngle {
+            if shutterUsesAngle, !status.isPhoto {
                 let preferred = shutterAngleDegrees
                 let mapped = ShutterAngle.denom(
                     degrees: preferred, fps: status.fps,
@@ -141,9 +141,15 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             return Self(
                 kind: .audio, title: "AUDIO", options: AudioChannel.allCases.map(\.label),
                 selection: status.audioChannel?.label ?? "")
-        case .resolution: return formatSnapshot(status: status, cameraModel: cameraModel)
+        case .resolution:
+            if status.isPhoto {
+                return Self(
+                    kind: .format, title: "FORMAT", options: [], selection: "Photo",
+                    enabled: false)
+            }
+            return formatSnapshot(status: status, cameraModel: cameraModel)
         case .color: return colorSnapshot(status: status, cameraModel: cameraModel)
-        case .mode: return shootingModeSnapshot(status: status)
+        case .mode: return shootingModeSnapshot(status: status, cameraModel: cameraModel)
         }
     }
 
@@ -165,7 +171,8 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             kind: .format, title: "FORMAT", options: options,
             selection: options.contains(live) ? live : "",
             context:
-                "\(current.resolution.rawValue):\(status.shootingMode):\(options.joined(separator: ","))"
+                "\(current.resolution.rawValue):\(status.shootingMode):\(options.joined(separator: ","))",
+            enabled: !formats.isEmpty
         )
     }
 
@@ -185,10 +192,11 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             context: "\(family):\(options.joined(separator: ",")):\(status.isRecording)")
     }
 
-    private static func shootingModeSnapshot(status: CameraStatus) -> Self {
-        let options = ShootingMode.allCases.map(\.label)
-        let live =
-            ShootingMode(rawValue: UInt8(truncatingIfNeeded: status.shootingMode))?.label ?? ""
+    private static func shootingModeSnapshot(status: CameraStatus, cameraModel: CameraModel?)
+        -> Self
+    {
+        let options = ShootingMode.allCases.map { $0.label(for: cameraModel) }
+        let live = ShootingMode.fromStatus(status.shootingMode)?.label(for: cameraModel) ?? ""
         return Self(
             kind: .shootingMode, title: "MODE", options: options,
             selection: options.contains(live) ? live : "",
@@ -282,7 +290,9 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             }
         case .shootingMode:
             guard !status.isRecording else { return }
-            if let mode = ShootingMode.allCases.first(where: { $0.label == value }) {
+            if let mode = ShootingMode.allCases.first(where: {
+                $0.label(for: model.session.connectedCamera?.model) == value
+            }) {
                 model.session.setShootingMode(mode)
             }
         }
@@ -404,6 +414,11 @@ enum CaptureReadoutAdmission {
 
     static func replacing(_ current: CaptureSheet?, with next: CaptureSheet) -> CaptureSheet? {
         current == next ? nil : next
+    }
+
+    /// Photo has no video FORMAT sheet. Open shooting mode instead so the slot stays useful.
+    static func opening(_ sheet: CaptureSheet, isPhoto: Bool) -> CaptureSheet {
+        isPhoto && sheet == .resolution ? .mode : sheet
     }
 
     static func hidesLowerCaptureValues(sheet: CaptureSheet?, drum: CaptureSheet?) -> Bool {

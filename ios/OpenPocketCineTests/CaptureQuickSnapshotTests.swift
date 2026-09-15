@@ -5,6 +5,33 @@ import XCTest
 @testable import OpenPocketCine
 
 final class CaptureQuickSnapshotTests: XCTestCase {
+    func testRecordingConfirmationIsBoundToOriginalCameraState() {
+        let request = RecordConfirmationContext(
+            mode: 1, recording: false, locked: false, busy: false, phase: .live)
+        XCTAssertTrue(request.canConfirm)
+        let changedStates = [
+            RecordConfirmationContext(
+                mode: 0, recording: false, locked: false, busy: false, phase: .live),
+            RecordConfirmationContext(
+                mode: 1, recording: true, locked: false, busy: false, phase: .live),
+            RecordConfirmationContext(
+                mode: 1, recording: false, locked: true, busy: false, phase: .live),
+            RecordConfirmationContext(
+                mode: 1, recording: false, locked: false, busy: true, phase: .live),
+            RecordConfirmationContext(
+                mode: 1, recording: false, locked: false, busy: false, phase: .idle),
+        ]
+        for changed in changedStates {
+            XCTAssertFalse(request == changed && changed.canConfirm)
+        }
+        for photo in [0x05, 0x17] {
+            XCTAssertFalse(
+                RecordConfirmationContext(
+                    mode: photo, recording: false, locked: false, busy: false, phase: .live
+                ).canConfirm)
+        }
+    }
+
     func testSourceIdentityIgnoresLiveHUDSelection() throws {
         var status = CameraStatus()
         status.expoMode = .manual
@@ -162,11 +189,72 @@ final class CaptureQuickSnapshotTests: XCTestCase {
         status.shootingMode = Int(ShootingMode.photo.rawValue)
         let photo = CaptureQuickSnapshot.primary(.mode, status: status)
         XCTAssertNil(mode.changedValue(translation: -56, current: photo))
+        XCTAssertEqual(photo?.selection, "Photo")
+
+        status.shootingMode = Int(ShootingMode.photoRawPocket3AndNano)
+        let pocket3Photo = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
+        XCTAssertEqual(pocket3Photo.selection, "Photo")
 
         status.shootingMode = -1
         let unknown = try XCTUnwrap(CaptureQuickSnapshot.primary(.mode, status: status))
         XCTAssertEqual(unknown.selection, "")
         XCTAssertNil(unknown.changedValue(translation: 0, current: unknown))
+    }
+
+    func testPhotoHidesVideoFormatAndShutterAngle() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.photoRawPocket3AndNano)
+        status.expoMode = .manual
+        status.shutterDenom = 50
+        status.fps = 30
+        status.availableShutterDenoms = [25, 50, 60]
+        status.videoFormat = VideoFormat(resolution: .p4K, frameRate: .fps25)
+        status.availableVideoFormats = [
+            VideoFormat(resolution: .p4K, frameRate: .fps24),
+            VideoFormat(resolution: .p4K, frameRate: .fps30),
+        ]
+
+        let format = try XCTUnwrap(CaptureQuickSnapshot.primary(.resolution, status: status))
+        XCTAssertEqual(format.kind, .format)
+        XCTAssertEqual(format.selection, "Photo")
+        XCTAssertFalse(format.enabled)
+        XCTAssertTrue(format.options.isEmpty)
+        XCTAssertNil(format.changedValue(translation: -56, current: format))
+
+        let shutter = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(
+                .shutter, status: status, shutterUsesAngle: true, shutterAngleDegrees: 180))
+        XCTAssertEqual(shutter.kind, .shutter)
+        XCTAssertNotEqual(shutter.kind, .angle)
+        XCTAssertEqual(shutter.selection, "1/50")
+
+        status.shootingMode = Int(ShootingMode.superNight.rawValue)
+        let lowLightFormat = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.resolution, status: status))
+        XCTAssertTrue(lowLightFormat.enabled)
+        XCTAssertEqual(lowLightFormat.kind, .format)
+        XCTAssertNotEqual(lowLightFormat.selection, "Photo")
+    }
+
+    func testEmptyFormatTableIsReadOnlyCurrentPairOnUnsurveyedBodies() throws {
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.slowMo.rawValue)
+        status.videoFormat = VideoFormat(resolution: .p1080, frameRate: .fps240)
+        status.availableVideoFormats = []
+        let pro = CameraModel.resolve(modelId: 0x0022, name: "Osmo Pocket 4 Pro")
+        let snapshot = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.resolution, status: status, cameraModel: pro))
+        XCTAssertFalse(snapshot.enabled)
+        XCTAssertEqual(snapshot.options, ["240p"])
+        XCTAssertEqual(snapshot.selection, "240p")
+        XCTAssertNil(snapshot.changedValue(translation: -56, current: snapshot))
+    }
+
+    func testPhotoFormatTapOpensModeInsteadOfResolution() {
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.resolution, isPhoto: true), .mode)
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.resolution, isPhoto: false), .resolution)
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.color, isPhoto: true), .color)
+        XCTAssertEqual(CaptureReadoutAdmission.opening(.mode, isPhoto: true), .mode)
     }
 
     func testTopFullPickerSwitchesDirectlyToLowerControlAndViceVersa() {

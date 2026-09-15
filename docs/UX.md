@@ -78,8 +78,12 @@ tunnel still up, the waiting well uses `LocalVPNFilter.liveHint`. Do not
 name AdGuard / Blokada / sister camera apps in chrome — the handbook FAQ
 does.
 
-Record confirmation is a bottom action sheet, not a centred dialog. Apple
-Watch rec / shutter skips that sheet (the phone may be in a cage), same as
+Record confirmation is a bottom action sheet. It applies to starting and stopping
+recording; **Photo** uses a shutter button and fires immediately without that
+sheet. A pending recording confirmation is dismissed when shooting mode,
+recording state, connection, or interface lock changes.
+Low-Light / SuperNight is a video mode and retains recording controls.
+Apple Watch rec / shutter skips the sheet (the phone may be in a cage), same as
 gamepad Cross/A.
 
 Watch placeholders: **Open OpenPocketCine on iPhone** only when there is

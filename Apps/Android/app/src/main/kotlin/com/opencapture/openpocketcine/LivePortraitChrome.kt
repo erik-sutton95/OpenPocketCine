@@ -265,23 +265,27 @@ fun LivePortraitChrome(
                 if (model.chromeSectionMounts(PocketDispSection.REC_READOUT)) {
                     Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp)) { RecChip(status.isRecording, status.recordElapsedSec) }
                 }
-                Text("REC SETUP", style = LiveType.ui(13f, FontWeight.Medium).monitorReadoutGlow(),
+                val setupSheet = CaptureShutterPolicy.portraitSetupSheet(status.shootingMode)
+                Text(
+                    CaptureShutterPolicy.portraitSetupLabel(status.shootingMode),
+                    style = LiveType.ui(13f, FontWeight.Medium).monitorReadoutGlow(),
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp)
                         .monitorReadoutGesture(
-                            captureQuickControl(LiveSheet.FORMAT, status, model, recContext, recLifetime),
-                            recInteractive && recLifetime.active && (recOwner.owner == null || recOwner.owner == LiveSheet.FORMAT.name),
-                            { onSheet(if (sheet == LiveSheet.FORMAT) null else LiveSheet.FORMAT) },
+                            captureQuickControl(setupSheet, status, model, recContext, recLifetime),
+                            recInteractive && recLifetime.active && (recOwner.owner == null || recOwner.owner == setupSheet.name),
+                            { onSheet(if (sheet == setupSheet) null else setupSheet) },
                             { source, value ->
-                                releaseCaptureQuickControl(LiveSheet.FORMAT, source, value, model, recContext, recLifetime, recInteractive)
+                                releaseCaptureQuickControl(setupSheet, source, value, model, recContext, recLifetime, recInteractive)
                             },
-                            0f, recOwner, LiveSheet.FORMAT.name,
+                            0f, recOwner, setupSheet.name,
                             { preview, maxHeight ->
-                                LiveControlSheet(LiveSheet.FORMAT, model, status, locked = false,
+                                LiveControlSheet(setupSheet, model, status, locked = false,
                                     onDismiss = {}, maxHeightDp = maxHeight, preview = preview)
                             },
                             fromTop = true, ceilingY = readoutFrame.maxY,
                             onPreviewBegin = { notifyTop(true) },
-                        ))
+                        ),
+                )
             }
         }
 
@@ -498,8 +502,14 @@ fun LivePortraitSystemBar(
                     if (!uiLocked) { val clean = !model.assistClean; model.setDisplayMode(clean); assist.clean = clean }
                 })
             }
-            if (showsRecord) RecordButton(status.isRecording, !controlBusy, Modifier.size(84.dp),
-                confirm = model.recordConfirmationEnabled, photo = CameraCommands.isPhotoMode(status.shootingMode),
+            if (showsRecord) RecordButton(status.isRecording, !controlBusy && !uiLocked, Modifier.size(84.dp),
+                confirm = CaptureShutterPolicy.requiresRecordConfirmation(
+                    model.recordConfirmationEnabled, status.shootingMode,
+                ),
+                photo = CaptureShutterPolicy.isStillCapture(status.shootingMode),
+                request = CaptureShutterPolicy.request(
+                    status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
+                ),
                 onClick = model::pressShutter)
             Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -561,9 +571,14 @@ fun LivePortraitSystemBar(
         if (showsRecord) {
             RecordButton(
                 recording = status.isRecording,
-                enabled = !controlBusy,
-                confirm = model.recordConfirmationEnabled,
-                photo = CameraCommands.isPhotoMode(status.shootingMode),
+                enabled = !controlBusy && !uiLocked,
+                confirm = CaptureShutterPolicy.requiresRecordConfirmation(
+                    model.recordConfirmationEnabled, status.shootingMode,
+                ),
+                photo = CaptureShutterPolicy.isStillCapture(status.shootingMode),
+                request = CaptureShutterPolicy.request(
+                    status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
+                ),
                 onClick = model::pressShutter,
             )
         }

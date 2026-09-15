@@ -4,14 +4,15 @@ import Testing
 @testable import OpenPocketViewCore
 
 /// Photo is the one shooting mode whose `0x02/0xE1` value is body-dependent — `0x17` on a
-/// Pocket 4, `0x05` on a Nano — so only one of the two can be `ShootingMode.photo`. Encoding
-/// through the enum dropped the other on the floor and the mode never reached the wire.
+/// Pocket 4, `0x05` on a Pocket 3 / Nano — so only one of the two can be `ShootingMode.photo`.
+/// Encoding through the enum dropped the other on the floor and the mode never reached the wire.
 @Suite struct ShootingModeRawTests {
     @Test func rawEncodesBothPhotoEncodings() {
-        #expect(Commands.setShootingMode(raw: 0x05) != nil)  // Nano
+        #expect(Commands.setShootingMode(raw: 0x05) != nil)  // Pocket 3 / Nano
         #expect(Commands.setShootingMode(raw: 0x17) != nil)  // Pocket 4
-        // The enum only carries the Pocket 4 one, which is the bug this overload exists for.
+        // The enum rawValue only carries Pocket 4; fromWire maps both to `.photo`.
         #expect(ShootingMode(rawValue: 0x05) == nil)
+        #expect(ShootingMode.fromWire(0x05) == .photo)
         #expect(ShootingMode(rawValue: 0x17) == .photo)
     }
 

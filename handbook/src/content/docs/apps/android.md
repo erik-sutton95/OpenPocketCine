@@ -38,7 +38,14 @@ shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
 shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value.
-Hold Record to open shooting mode. In portrait, Settings and Media remain usable
+Hold Record to open shooting mode.
+In **Photo**, the capture control becomes a shutter and takes a photo immediately,
+without recording confirmation. Video frame-rate and shutter-angle controls do
+not apply to still photos. **Low-Light / SuperNight** retains start/stop recording.
+Changing modes clears stale format choices. A pending recording confirmation is
+dismissed if the mode, recording state, connection, or interface lock changes.
+Physical qualification of these mode-aware controls is pending.
+In portrait, Settings and Media remain usable
 with a picker open; returning to the monitor restores that picker. Physical Android proof of this Field
 Monitor chrome remains outstanding.
 
@@ -127,7 +134,8 @@ when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. Pocket 3 normal Video also has a
 [FORMAT fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
 when the camera supplies no capability table. Reported choices take priority;
-this fallback does not apply to SlowMo or unknown shooting modes. The full
+separate Pocket 3 Slow Motion and Low-Light fallbacks use the accepted pairs in
+the survey. Unknown modes have no fallback. The full
 Pocket 3 format/record/reconnect matrix still needs physical Android checks.
 COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /

@@ -164,6 +164,12 @@ final class AppModel {
         }
     }
     var watcherRecordConfirm = false
+    var watcherRecordRequest: RecordConfirmationContext?
+    var watcherRecordContext: RecordConfirmationContext {
+        RecordConfirmationContext(
+            mode: session.status.shootingMode, recording: session.status.isRecording,
+            locked: session.isLocked, busy: session.controlBusy, phase: session.phase)
+    }
     var internetHopActive = false
     @ObservationIgnored private var internetHopSSID: String?
     @ObservationIgnored private var liveChromeArmTask: Task<Void, Never>?
@@ -446,7 +452,9 @@ final class AppModel {
         guard let allowed = relayHost.applyCommand(command, from: watcherID) else { return }
         switch allowed {
         case .toggleRecording:
-            if recordConfirmationEnabled {
+            guard !session.isLocked, !session.controlBusy else { return }
+            if recordConfirmationEnabled, !session.status.isPhoto {
+                watcherRecordRequest = watcherRecordContext
                 watcherRecordConfirm = true
             } else {
                 session.pressShutter()
@@ -623,7 +631,7 @@ final class AppModel {
             return WatchCommandResult(
                 accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
         }
-        let isPhoto = session.currentShootingMode?.isPhoto == true
+        let isPhoto = session.status.isPhoto
         if photo, !isPhoto {
             return WatchCommandResult(
                 accepted: false, isRecording: recording, error: WatchRelayCopy.switchToPhoto)
@@ -777,9 +785,17 @@ struct AppRoot: View {
                 model.session.status.isRecording ? "Stop" : "Start",
                 role: model.session.status.isRecording ? .destructive : nil
             ) {
+                guard model.watcherRecordRequest == model.watcherRecordContext,
+                    model.watcherRecordContext.canConfirm
+                else { return }
+                model.watcherRecordRequest = nil
                 model.session.pressShutter()
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .onChange(of: model.watcherRecordContext) { _, _ in
+            model.watcherRecordConfirm = false
+            model.watcherRecordRequest = nil
         }
         .confirmationDialog(
             "Allow \(model.relayHost.pendingControlRequest?.name ?? "a watcher") to control the camera?",
