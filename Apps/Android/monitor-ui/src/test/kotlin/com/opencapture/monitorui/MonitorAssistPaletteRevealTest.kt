@@ -39,6 +39,27 @@ class MonitorAssistPaletteRevealTest {
         assertEquals(visible + 40f, next)
     }
 
+    @Test fun stillScreenFingerKeepsHeightWhenPopupTopMoves() {
+        val full = 400f
+        val compact = 90f
+        val plateBottom = 1000f
+        val fingerScreen = 922f
+        val finger = MonitorAssistPaletteReveal.paletteFingerY(fingerScreen, plateBottom, full)
+        val grab = MonitorAssistPaletteReveal.portraitGrabOffset(finger, compact, full)
+        val raised = MonitorAssistPaletteReveal.portraitVisibleHeight(
+            MonitorAssistPaletteReveal.paletteFingerY(fingerScreen - 40f, plateBottom, full),
+            grab, compact, full)
+        assertEquals(compact + 40f, raised)
+        val still = MonitorAssistPaletteReveal.portraitVisibleHeight(
+            MonitorAssistPaletteReveal.paletteFingerY(fingerScreen - 40f, plateBottom, full),
+            grab, compact, full)
+        assertEquals(raised, still)
+        val reversed = MonitorAssistPaletteReveal.portraitVisibleHeight(
+            MonitorAssistPaletteReveal.paletteFingerY(fingerScreen - 20f, plateBottom, full),
+            grab, compact, full)
+        assertEquals(compact + 20f, reversed)
+    }
+
     @Test fun dragFromTheArrowScrubsThePlate() {
         assertEquals(0.25f, MonitorAssistPaletteReveal.progress(50f, 200f, false))
         assertEquals(0.75f, MonitorAssistPaletteReveal.progress(-50f, 200f, true))

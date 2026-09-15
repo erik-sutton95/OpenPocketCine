@@ -10,6 +10,7 @@ import com.opencapture.monitorui.monitorMaterial
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -101,7 +102,6 @@ import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.openpocketcine.monitor.MonitorPageBackButton
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.AudioAssist
 import com.opencapture.openpocketcine.assists.AssistAudioOverlay
@@ -152,6 +152,14 @@ fun MediaPhotoViewer(
     val photoGutter = PlaybackChromeMetrics.headerGutter(photoSafeLeading, photoSafeTrailing)
     val favorite = controller.isFavorite(file)
     val glass = rememberPlaybackMonitorGlass()
+
+    BackHandler {
+        when {
+            confirmDelete -> confirmDelete = false
+            infoOpen -> infoOpen = false
+            else -> onClose()
+        }
+    }
 
     LaunchedEffect(file.id) {
         loading = true
@@ -250,20 +258,16 @@ fun MediaPhotoViewer(
             PlaybackDarkenedBars()
         }
 
-        val photoBackStart = photoSafeLeading + 12f
         com.opencapture.monitorui.MonitorPlaybackHeader(file.filename,
             listOfNotNull(file.resolution, file.fileExtension).joinToString(" · "),
             if (controller.isDownloaded(file)) "ORIGINAL" else "PREVIEW",
             photoPortrait,
             Modifier.padding(
-                start = PlaybackChromeMetrics.headerLeadingPadding(
-                    photoSafeLeading, photoSafeTrailing, photoBackStart,
-                ).dp,
+                start = photoGutter.dp,
                 end = photoGutter.dp,
                 top = PlaybackChromeMetrics.headerTopPadding(photoSafeTop).dp,
                 bottom = 12.dp,
             ),
-            back = {},
             actions = {
                 PlaybackActionChip(OpcIcon.INFO, "Photo info", { infoOpen = !infoOpen }, active = infoOpen)
                 PlaybackActionChip(
@@ -278,13 +282,6 @@ fun MediaPhotoViewer(
                     title = if (photoPortrait) null else "SHARE", active = true,
                 )
             })
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .padding(start = photoBackStart.dp, top = (photoSafeTop + 10f).dp),
-        ) {
-            MonitorPageBackButton(onClick = onClose)
-        }
         if (infoOpen) {
             Box(Modifier.fillMaxSize().chromeClickable { infoOpen = false }) {
                 com.opencapture.monitorui.MonitorMetadataDrawer(
@@ -380,6 +377,16 @@ fun MediaPlayerScreen(
     val meterBox = remember { AudioLevelTapBox() }
     val meterSink = remember { PlaybackPcmBufferSink(meterBox) }
     val glass = remember { MonitorGlass(GlassTier.FLAT) }
+
+    fun handlePlaybackBack() {
+        when {
+            confirmDelete -> confirmDelete = false
+            assist.configureTool != null -> assist.configureTool = null
+            infoOpen -> infoOpen = false
+            else -> onClose()
+        }
+    }
+    BackHandler { handlePlaybackBack() }
     val backdrop = rememberMonitorBackdropFeed(active.id, enabled = ready)
     val status by model.session.status.collectAsState()
     var decodeWidth by remember { mutableIntStateOf(1280) }
@@ -697,13 +704,7 @@ fun MediaPlayerScreen(
             }
             Popup(
                 alignment = Alignment.TopStart,
-                onDismissRequest = {
-                    when {
-                        assist.configureTool != null -> assist.configureTool = null
-                        infoOpen -> infoOpen = false
-                        else -> onClose()
-                    }
-                },
+                onDismissRequest = { handlePlaybackBack() },
                 properties =
                     PopupProperties(
                         // This native window owns the playback controls and
@@ -893,20 +894,16 @@ fun MediaPlayerScreen(
             val overlayWidth = with(density) { overlayWidthPx.toDp() }
             val panelClicks = remember { MutableInteractionSource() }
             if (chromeVisible) {
-                val backStart = safeLeading + 12f
                 com.opencapture.monitorui.MonitorPlaybackHeader(
                     title = active.filename,
                     subtitle = listOfNotNull(active.resolution, active.fps?.let { "${it}p" }, active.fileExtension).joinToString(" · "),
                     source = playbackSource, portrait = portraitPlayback,
                     modifier = Modifier.align(Alignment.TopCenter).padding(
-                        start = PlaybackChromeMetrics.headerLeadingPadding(
-                            safeLeading, safeTrailing, backStart,
-                        ).dp,
+                        start = headerGutter.dp,
                         end = headerGutter.dp,
                         top = PlaybackChromeMetrics.headerTopPadding(safeTop).dp,
                         bottom = 12.dp,
                     ),
-                    back = {},
                     actions = {
                         PlaybackActionChip(OpcIcon.INFO, "Clip info", { infoOpen = !infoOpen }, active = infoOpen)
                         PlaybackActionChip(
@@ -922,13 +919,6 @@ fun MediaPlayerScreen(
                         )
                     },
                 )
-                Box(
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = backStart.dp, top = (safeTop + 10f).dp),
-                ) {
-                    MonitorPageBackButton(onClick = onClose)
-                }
                 com.opencapture.monitorui.MonitorPlaybackFooter(
                     position = conformedLabel(currentTime), duration = conformedLabel(duration), portrait = portraitPlayback,
                     modifier = Modifier.align(Alignment.BottomCenter).width(overlayWidth)

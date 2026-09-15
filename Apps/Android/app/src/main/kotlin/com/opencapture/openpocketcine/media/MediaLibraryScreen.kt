@@ -244,7 +244,6 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
                 modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
                 navigationWidth = 206f,
-                back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = ::dismiss) },
                 heading = {
                     com.opencapture.openpocketcine.monitor.MonitorPageHeading(
                         "Media", model.session.connectedCamera?.name ?: "OpenPocketCine")

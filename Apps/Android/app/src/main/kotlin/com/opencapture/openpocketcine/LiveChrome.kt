@@ -1464,6 +1464,7 @@ internal fun RecordButton(
         busy = !enabled,
         phase = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
     ),
+    onShootingMode: () -> Unit,
     onClick: () -> Unit,
 ) {
     var confirmOpen by remember { mutableStateOf(false) }
@@ -1534,7 +1535,7 @@ internal fun RecordButton(
         modifier
             .size(diameter.dp)
             .then(if (recording && !enabled) Modifier.graphicsLayer { alpha = 0.72f } else Modifier)
-            .chromeClickable(enabled = enabled, onClick = {
+            .chromeClickable(enabled = enabled, onLongClick = onShootingMode, onClick = {
                 if (confirm && request.canConfirm) {
                     pending = request
                     confirmOpen = true

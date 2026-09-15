@@ -39,7 +39,8 @@ shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.
-Hold Record to open shooting mode.
+Hold Record (or the Photo shutter) to open shooting modes in portrait or landscape.
+A hold opens the picker without taking a photo or starting/stopping recording.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,
 without recording confirmation. Photo and camera-reported Live Photo hide video color-profile, frame-rate,
 codec/bit-depth, timecode, recording-duration and audio controls. White balance,
@@ -51,8 +52,9 @@ preferences. Pocket 4 Pro Slow Motion labels 200 fps as **200p**, including the
 list rather than a fixed wide-lens maximum. **Low-Light / SuperNight** retains start/stop recording.
 Changing modes clears stale format choices. A pending recording confirmation is
 dismissed if the mode, recording state, connection, or interface lock changes.
-Build, unit tests and lint pass for these mode-aware controls. Physical Android
-qualification remains pending; no Android device was attached for this change.
+Shooting-mode access in both orientations and Video/Photo switching have been
+checked on a Galaxy S25 with Pocket 4 Pro. The full specialty-mode matrix remains
+outside that check.
 In portrait, Settings and Media remain usable
 with a picker open; returning to the monitor restores that picker. Camera values use two
 complete rows in portrait and one row in landscape. Assist palettes stay below Settings,
@@ -73,9 +75,11 @@ without activating the controls behind it. Until dragged, the editor stays cente
 when the screen rotates; a manually placed editor keeps its chosen position.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
-in portrait. Settings and Media place Back outside the full-height sidebar in
-landscape; portrait keeps it beside the brand and title in the header. Back uses
-the same button styling as the live-view controls. The bottom of the Media sidebar
+in portrait. Use Android’s system Back button or back gesture to return from
+Settings, Media, photo/video playback and pairing. These pages omit the large
+in-app Back button, leaving more space for their content. Back dismisses the
+current overlay or selection before leaving its page. Contextual Close and
+Cancel actions remain available. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
 these controls stay at the bottom of the page. Filter uses the same chip as Sort.
 The filter card stays fully on screen, including next to a display cutout and
@@ -95,6 +99,9 @@ tools you actually use (saved on the phone). Collapsed, landscape keeps two
 favorites and portrait keeps one, under the arrow. The expanded catalog
 uses those same cells. Tap the arrow to open or close, or press and drag it
 so the expanding edge stays under your finger; a flick finishes the motion.
+In portrait, drag upward to expand and downward to collapse. Pausing holds the
+edge steady; changing direction moves it back with your finger. Locking the
+monitor cancels a drag and collapses the palette.
 The landscape expand
 arrow accepts taps farther to its right, with the toolbar anchored in place.
 
@@ -159,7 +166,7 @@ trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
 beside zoom (Pocket only). Its trailing drawer has Mode, Speed and Ramp
 tabs, each with its own dial, showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
 and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take (set A and B, choose each
-leg’s duration; long-press-drag the editor). With C set, Smoothness rounds B and shows a dashed curve.
+leg’s duration; drag the editor directly). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total
 duration. There is no artificial speed cap. Moves are experimental: keep
 the camera fixed, rehearse, and check framing before a take. Tilt targets stay

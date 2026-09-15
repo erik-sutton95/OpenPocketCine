@@ -191,7 +191,13 @@ fun MediaDeliveryPopup(
     val canContinue = destination == MediaDeliveryDestination.NATIVE_SHARE && hasDeliverable && !busy
 
     Dialog(
-        onDismissRequest = { if (!busy) onDismiss() },
+        onDismissRequest = {
+            when {
+                busy -> Unit
+                step == DeliveryStep.OPTIONS -> step = DeliveryStep.DESTINATION
+                else -> onDismiss()
+            }
+        },
         properties =
             DialogProperties(
                 usePlatformDefaultWidth = false,

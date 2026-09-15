@@ -1334,6 +1334,7 @@ internal fun LandscapeChrome(
                     request = CaptureShutterPolicy.request(
                         status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
                     ),
+                    onShootingMode = { onSheet(LiveSheet.MODE) },
                     onClick = model::pressShutter,
                 )
             }

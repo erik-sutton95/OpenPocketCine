@@ -40,6 +40,10 @@ object MonitorAssistPaletteReveal {
     fun portraitVisibleHeight(fingerY: Float, grabOffset: Float, compact: Float, full: Float): Float =
         min(full, max(compact, full - (fingerY - grabOffset)))
 
+    /** Top-origin Y in the full plate, matching iOS `assistPalette` space. */
+    fun paletteFingerY(fingerScreenY: Float, plateBottomScreenY: Float, fullHeight: Float): Float =
+        fingerScreenY - (plateBottomScreenY - fullHeight)
+
     fun projectedProgress(progress: Float, velocityAlongExpand: Float, span: Float): Float {
         if (span <= 1f) return progress
         return min(1f, max(0f, progress + velocityAlongExpand * COAST / span))

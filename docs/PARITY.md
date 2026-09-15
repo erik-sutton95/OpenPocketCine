@@ -30,6 +30,7 @@ write the exception in the table in the same PR.
 
 | Surface | Must match | May diverge | Verify |
 | --- | --- | --- | --- |
+| Page navigation | Return through the current overlay, selection or page without triggering camera actions. | User-approved Android exception: Settings, Media, photo/video playback and pairing omit large page-level Back buttons and reclaim their space. Android system Back / back gesture owns return navigation; contextual Close, Cancel and nested workflow actions remain. iOS keeps its page Back buttons. | Android physical navigation checks; iOS unchanged. |
 | Shooting-mode capture | Photo (`05` / `17`) and reported Live Photo (`4D`) use still controls without recording confirmation. Hide video color, FPS/angle, codec/bit-depth, timecode/duration and audio surfaces; retain photographic controls and saved assist preferences. Low-Light / SuperNight (`28`) remains video. Mode, recording, connection or lock changes dismiss stale panels/confirmation; current camera capabilities constrain format selection. Pocket 4 Pro index `13` displays 200p, with its captured Slow Motion trailer. | Native picker rendering. Regular Pocket 4 remains unqualified by the [Pocket 4 Pro Mimo survey](../handbook/src/content/docs/protocol/pocket4-pro.md). Standard/SuperPhoto editing, timers and storage UI remain separate follow-up work. | Physical iPhone + Pocket 4 Pro: Photo chrome in portrait/both landscapes, 3× SlowMo 200p readout and picker ceiling, live-frame progress and return to Video passed automated XCTest (2026-09-15). No capture was triggered. Android physical qualification remains pending: no device attached. |
 | Connection FTUE and spine | BLE → SoftAP → UDP; **enable-once**; ephemeral local port; arm `0x02` on handshake ack (Mimo HEVC at join+17 ms; enable is later PLI); disconnect drops driver + decoder; session recovery holds last frame. Replacement UDP endpoints negotiate a fresh handshake/register/subscribe before one caller-owned enable; socket readiness is not peer migration. Pocket 3 first picture: wait for the legal FORMAT table, one 1080→boot `0x02/0x18` after a black enable, then one `0x09/0xa8`. Not Pocket 4. Xtra rebrands bind UDP **10004** with no TCP-7001 poke. Join Wi-Fi names VPNs / ad blockers on both shells; WAITING FOR LIVE VIEW repeats `LocalVPNFilter.liveHint` after 8 s with no picture when a local VPN is on. | iOS `NEHotspotConfiguration` vs Android `WifiNetworkSpecifier` + `bindProcessToNetwork`; Network.framework vs Android sockets. Android identifies Xtra by BLE MAC OUI `EC:9E:EA`; iOS has no MAC and uses the advertised name (`xtra` / `edge`). Android SoftAP `onLost` starts `SessionRecovery`; iOS samples absent camera path plus stale video at 1 Hz, with an eight-second reassociation grace before full recovery. Android VPN detect is `TRANSPORT_VPN`; iOS is CFNetwork scoped tunnel names (also fires for Private Relay `utun` — live hint still waits 8 s). | **physical** both |
 | Saved camera home | PAIRED and NEARBY groups, full-width camera rows, selected-row progress and Cancel, Pair new camera and global Media/Settings actions. Pairing selection advances with Continue; reported connection phases remain authoritative. | iOS Multiview opens with one tap; hold its header button for Watch a feed. Android sharing and Multiview remain deferred. | UI 2.0 simulator/emulator checks; physical qualification pending. |
@@ -146,10 +147,14 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   persisted): two in landscape, one in portrait under the chevron on the compact
   plate; extra glyphs fade in opacity so the arrow reads first. The open plate
   keeps that order until it fully collapses. Press-drag keeps
-  the expanding edge under the finger; a flick coasts open or closed.
+  the expanding edge under the finger; a flick coasts open or closed. Android
+  portrait tracks native screen coordinates against a fixed origin, so resizing
+  the popup cannot feed back into finger movement. Lock/cancel does not toggle
+  expansion, and the collapsed popup retains its compact touch footprint.
 - Settings and Media keep full-height landscape navigation with brand/title at
-  its top and Back outside to the left. Portrait retains Back beside the title.
-  Back uses the live control's material, shape, size and press response. iOS shares
+  its top. iOS places Back outside to the left in landscape and beside the title
+  in portrait; Android uses system Back and reclaims that space (approved exception).
+  iOS Back uses the live control's material, shape, size and press response. iOS shares
   the live corner geometry; Android uses native safe insets. Media's grid and list
   buttons and all three thumbnail sizes share one horizontal row at the bottom of
   the 206 pt/dp Media sidebar, or pinned at the portrait page bottom. Grid/list

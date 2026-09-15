@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -198,7 +197,6 @@ fun MonitorPageHeading(title: String, kicker: String) {
 fun MonitorPageScaffold(
     modifier: Modifier = Modifier,
     navigationWidth: Float = MonitorPageLayoutPolicy.LANDSCAPE_NAV_WIDTH,
-    back: (@Composable () -> Unit)? = null,
     heading: (@Composable () -> Unit)? = null,
     navigation: @Composable (portrait: Boolean) -> Unit,
     content: @Composable () -> Unit,
@@ -207,65 +205,51 @@ fun MonitorPageScaffold(
         val portrait = MonitorPageLayoutPolicy.portrait(maxWidth.value, maxHeight.value)
         val density = LocalDensity.current
         val landscapeNav = with(density) { navigationWidth.dp.toPx().roundToInt() }
-        Row(
-            Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(MonitorPageLayoutPolicy.GAP.dp),
-        ) {
-            if (!portrait) back?.invoke()
-            Layout(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                content = {
-                    Box(
-                        Modifier.layoutId(MonitorPageLayoutPolicy.NAV)
-                            .background(MonitorPalette.surface, RoundedCornerShape(12.dp))
-                            .border(1.dp, MonitorPalette.border, RoundedCornerShape(12.dp))
-                            .padding(10.dp),
+        Layout(
+            modifier = Modifier.fillMaxSize(),
+            content = {
+                Box(
+                    Modifier.layoutId(MonitorPageLayoutPolicy.NAV)
+                        .background(MonitorPalette.surface, RoundedCornerShape(12.dp))
+                        .border(1.dp, MonitorPalette.border, RoundedCornerShape(12.dp))
+                        .padding(10.dp),
+                ) {
+                    Column(
+                        if (portrait) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        Column(
-                            if (portrait) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(9.dp),
-                        ) {
-                            if (heading != null || (portrait && back != null)) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                                ) {
-                                    if (portrait) back?.invoke()
-                                    Box(Modifier.weight(1f)) { heading?.invoke() }
-                                }
-                            }
-                            Box(
-                                if (portrait) Modifier.fillMaxWidth()
-                                else Modifier.weight(1f).fillMaxWidth(),
-                            ) { navigation(portrait) }
+                        if (heading != null) {
+                            Box(Modifier.fillMaxWidth()) { heading() }
                         }
+                        Box(
+                            if (portrait) Modifier.fillMaxWidth()
+                            else Modifier.weight(1f).fillMaxWidth(),
+                        ) { navigation(portrait) }
                     }
-                    Box(Modifier.layoutId(MonitorPageLayoutPolicy.BODY)) { content() }
-                },
-            ) { measurables, constraints ->
-                val nav = measurables.first { it.layoutId == MonitorPageLayoutPolicy.NAV }
-                val body = measurables.first { it.layoutId == MonitorPageLayoutPolicy.BODY }
-                val navWidth = if (portrait) constraints.maxWidth else landscapeNav.coerceAtMost(constraints.maxWidth)
-                val navPlaceable = nav.measure(Constraints(
-                    minWidth = navWidth, maxWidth = navWidth,
-                    minHeight = if (portrait) 0 else constraints.maxHeight,
-                    maxHeight = constraints.maxHeight,
-                ))
-                val slots = MonitorPageLayoutPolicy.slots(
-                    constraints.maxWidth / density.density,
-                    constraints.maxHeight / density.density,
-                    navPlaceable.height / density.density,
-                    portrait = portrait,
-                    navigationWidth = navigationWidth,
-                )
-                fun pixels(points: Float) = (points * density.density).roundToInt()
-                val bodyPlaceable = body.measure(Constraints.fixed(pixels(slots.bodyW), pixels(slots.bodyH)))
-                layout(constraints.maxWidth, constraints.maxHeight) {
-                    navPlaceable.place(pixels(slots.navX), pixels(slots.navY))
-                    bodyPlaceable.place(pixels(slots.bodyX), pixels(slots.bodyY))
                 }
+                Box(Modifier.layoutId(MonitorPageLayoutPolicy.BODY)) { content() }
+            },
+        ) { measurables, constraints ->
+            val nav = measurables.first { it.layoutId == MonitorPageLayoutPolicy.NAV }
+            val body = measurables.first { it.layoutId == MonitorPageLayoutPolicy.BODY }
+            val navWidth = if (portrait) constraints.maxWidth else landscapeNav.coerceAtMost(constraints.maxWidth)
+            val navPlaceable = nav.measure(Constraints(
+                minWidth = navWidth, maxWidth = navWidth,
+                minHeight = if (portrait) 0 else constraints.maxHeight,
+                maxHeight = constraints.maxHeight,
+            ))
+            val slots = MonitorPageLayoutPolicy.slots(
+                constraints.maxWidth / density.density,
+                constraints.maxHeight / density.density,
+                navPlaceable.height / density.density,
+                portrait = portrait,
+                navigationWidth = navigationWidth,
+            )
+            fun pixels(points: Float) = (points * density.density).roundToInt()
+            val bodyPlaceable = body.measure(Constraints.fixed(pixels(slots.bodyW), pixels(slots.bodyH)))
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                navPlaceable.place(pixels(slots.navX), pixels(slots.navY))
+                bodyPlaceable.place(pixels(slots.bodyX), pixels(slots.bodyY))
             }
         }
     }

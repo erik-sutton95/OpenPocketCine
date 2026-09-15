@@ -492,7 +492,6 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = onClose) },
             heading = { com.opencapture.openpocketcine.monitor.MonitorPageHeading("Operator Setup", "OPENPOCKETCINE") },
             navigation = { portrait ->
                 Column(

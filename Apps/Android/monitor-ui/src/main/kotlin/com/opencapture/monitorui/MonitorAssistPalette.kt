@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.opencapture.monitorui
 
+import android.view.MotionEvent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -27,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,7 +78,9 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     var dragging by remember { mutableStateOf(false) }
     var pinnedIds by remember { mutableStateOf<List<String>>(emptyList()) }
     val progress = remember { Animatable(0f) }
+    var scrub by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
+    val nowLocked by rememberUpdatedState(locked)
     val nowUsage by rememberUpdatedState(usage)
     val liveRanked = remember(tools, usage) {
         MonitorAssistUsage.ranked(tools, idOf, usage, usageSeed)
@@ -116,7 +120,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val fullW = if (portrait) buttonSize + 8.dp else minOf(available, maxOf(buttonSize + horizontalInsets, catalogWidth))
     val fullH = if (portrait) minOf((config.screenHeightDp * .62f).dp,
         buttonSize * tools.size + (maxOf(0, tools.size - 1) * 3 + 35).dp) else buttonSize * 2 + 11.dp
-    val reveal = progress.value
+    val reveal = if (portrait && dragging) scrub else progress.value
     val visibleW = compactW + (fullW - compactW) * reveal
     val visibleH = compactH + (fullH - compactH) * reveal
     val spanPx = with(density) {
@@ -124,7 +128,9 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     }
     val settle = spring<Float>(dampingRatio = 0.84f, stiffness = Spring.StiffnessMedium)
     LaunchedEffect(requestExpand) { if (requestExpand) { expanded = true; onExpansionHandled() } }
-    LaunchedEffect(locked) { if (locked) { expanded = false; dragging = false; progress.snapTo(0f) } }
+    LaunchedEffect(locked) {
+        if (locked) { expanded = false; dragging = false; scrub = 0f; progress.snapTo(0f) }
+    }
     LaunchedEffect(expanded) {
         if (!dragging) progress.animateTo(if (expanded) 1f else 0f, settle)
     }
@@ -166,67 +172,83 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
         val next = ((progress.value * spanPx + delta) / spanPx).coerceIn(0f, 1f)
         scope.launch { progress.snapTo(next) }
     }
-    val plateBottomScreen = remember { FloatArray(1) }
-    val chevronScreen = remember { arrayOf(Offset.Zero) }
+    val slotBottomScreen = remember { FloatArray(1) }
     val compactHPx = with(density) { compactH.toPx() }
     val fullHPx = with(density) { fullH.toPx() }
     val expandHit: @Composable () -> Unit = {
         val open = reveal < 0.5f
         Box(Modifier.size(if (portrait) visibleW - 8.dp else expansionLane, if (portrait) 24.dp else visibleH - 8.dp)
-            .onGloballyPositioned { chevronScreen[0] = it.positionOnScreen() }
             .then(
                 if (portrait) {
-                    Modifier.pointerInput(locked, compactHPx, fullHPx, spanPx) {
+                    Modifier.pointerInput(locked, compactHPx, fullHPx, spanPx, density.density) {
                         if (locked) return@pointerInput
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            val nativeDown = currentEvent.motionEvent ?: return@awaitEachGesture
+                            val nativeId = nativeDown.getPointerId(nativeDown.actionIndex)
+                            val start = Offset(nativeDown.getRawX(nativeDown.actionIndex),
+                                nativeDown.getRawY(nativeDown.actionIndex))
+                            val plateBottom = slotBottomScreen[0]
+                            val wasExpanded = expanded
                             var armed = false
+                            var released = false
                             var grab = 0f
                             val tracker = VelocityTracker()
-                            fun paletteY(local: Offset): Float =
-                                chevronScreen[0].y + local.y - (plateBottomScreen[0] - fullHPx)
-                            tracker.addPosition(down.uptimeMillis, Offset(0f, chevronScreen[0].y + down.position.y))
+                            tracker.addPosition(down.uptimeMillis, start)
                             try {
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!change.pressed) break
-                                    tracker.addPosition(
-                                        change.uptimeMillis,
-                                        Offset(0f, chevronScreen[0].y + change.position.y))
-                                    val distance = (change.position - down.position).getDistance()
-                                    val finger = paletteY(change.position)
+                                    // Relayout can generate pointer events without a physical move.
+                                    // Only native screen coordinates may move this resizing popup.
+                                    val motion = event.motionEvent ?: continue
+                                    if (motion.actionMasked == MotionEvent.ACTION_CANCEL || motion.pointerCount != 1) break
+                                    val index = motion.findPointerIndex(nativeId)
+                                    if (index < 0) break
+                                    val screen = Offset(motion.getRawX(index), motion.getRawY(index))
+                                    tracker.addPosition(change.uptimeMillis, screen)
+                                    if (!change.pressed) {
+                                        released = motion.actionMasked == MotionEvent.ACTION_UP
+                                        break
+                                    }
+                                    val finger = MonitorAssistPaletteReveal.paletteFingerY(
+                                        screen.y, plateBottom, fullHPx)
                                     if (!armed) {
-                                        if (distance < MonitorAssistPaletteReveal.SLOP) {
+                                        if ((screen - start).getDistance() < MonitorAssistPaletteReveal.SLOP * density.density) {
                                             change.consume()
                                             continue
                                         }
+                                        val visible = compactHPx + spanPx * progress.value
+                                        grab = MonitorAssistPaletteReveal.portraitGrabOffset(finger, visible, fullHPx)
+                                        scrub = progress.value
                                         armed = true
                                         dragging = true
-                                        val visible = compactHPx + (fullHPx - compactHPx) * progress.value
-                                        grab = MonitorAssistPaletteReveal.portraitGrabOffset(
-                                            finger, visible, fullHPx)
                                     }
                                     val height = MonitorAssistPaletteReveal.portraitVisibleHeight(
                                         finger, grab, compactHPx, fullHPx)
-                                    val next = MonitorAssistPaletteReveal.progress(
-                                        height, compactHPx, fullHPx)
-                                    scope.launch { progress.snapTo(next) }
+                                    scrub = MonitorAssistPaletteReveal.progress(height, compactHPx, fullHPx)
                                     change.consume()
                                 }
                             } finally {
-                                if (!armed) {
+                                if (!released || nowLocked) {
+                                    // Cancellation/lock must never act like a tap or fling.
+                                    dragging = false
+                                    expanded = if (nowLocked) false else wasExpanded
+                                    scope.launch { progress.animateTo(if (expanded) 1f else 0f, settle) }
+                                } else if (!armed) {
                                     expanded = !expanded
                                 } else {
-                                    val along = -tracker.calculateVelocity().y
-                                    val projected = MonitorAssistPaletteReveal.projectedProgress(
-                                        progress.value, along, spanPx)
+                                    val alongPx = -tracker.calculateVelocity().y
+                                    val projected = MonitorAssistPaletteReveal.projectedProgress(scrub, alongPx, spanPx)
                                     val shouldOpen = MonitorAssistPaletteReveal.shouldOpen(
-                                        progress.value, along, projected)
-                                    dragging = false
-                                    expanded = shouldOpen
+                                        scrub, alongPx / density.density, projected)
+                                    val end = scrub
                                     scope.launch {
-                                        progress.animateTo(if (shouldOpen) 1f else 0f, settle)
+                                        if (nowLocked || !dragging) return@launch
+                                        progress.snapTo(end)
+                                        dragging = false
+                                        if (expanded != shouldOpen) expanded = shouldOpen
+                                        else progress.animateTo(if (shouldOpen) 1f else 0f, settle)
                                     }
                                 }
                             }
@@ -260,9 +282,6 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     }
     @Composable fun plate() {
         Box(Modifier.requiredSize(visibleW, visibleH)
-            .onGloballyPositioned {
-                plateBottomScreen[0] = it.positionOnScreen().y + it.size.height
-            }
             .clip(RoundedCornerShape(14.dp))
             .monitorMaterial(if (reveal > 0.5f) MonitorMaterial.Expanded else MonitorMaterial.Compact)
             .padding(4.dp)) {
@@ -305,6 +324,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
                 bottom = pos.y.roundToInt() + coords.size.height,
             )
             if (next != slotInWindow) slotInWindow = next
+            slotBottomScreen[0] = coords.positionOnScreen().y + coords.size.height
         })
         val anchored = slotInWindow.width > 0 && slotInWindow.height > 0
         if (locked || !anchored) {

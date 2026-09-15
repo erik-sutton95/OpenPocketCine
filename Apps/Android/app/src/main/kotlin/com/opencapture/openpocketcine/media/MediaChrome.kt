@@ -491,14 +491,6 @@ internal object PlaybackChromeMetrics {
     const val actionChipIcon = 18f
     const val actionChipCorner = 14f
     const val headerGutterBase = 28f
-
-    fun headerLeadingPadding(
-        safeLeading: Float,
-        safeTrailing: Float,
-        backStart: Float,
-        backSize: Float = 54f,
-        backGap: Float = 12f,
-    ): Float = max(headerGutter(safeLeading, safeTrailing), max(0f, backStart) + backSize + backGap)
     val hideChromeIcon = OpcIcon.MAXIMIZE
     val showChromeIcon = OpcIcon.MINIMIZE
     val viewAssistIcon = OpcIcon.MONITOR

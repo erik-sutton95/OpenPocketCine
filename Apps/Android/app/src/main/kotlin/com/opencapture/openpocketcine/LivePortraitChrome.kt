@@ -451,6 +451,7 @@ fun LivePortraitChrome(
                 showsMedia = showsMedia,
                 showsSettings = showsSettings,
                 controlBusy = controlBusy,
+                onShootingMode = { onSheet(LiveSheet.MODE) },
             )
         }
     }
@@ -496,6 +497,7 @@ fun LivePortraitSystemBar(
     showsMedia: Boolean,
     showsSettings: Boolean,
     controlBusy: Boolean,
+    onShootingMode: () -> Unit,
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val tablet = min(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
@@ -518,6 +520,7 @@ fun LivePortraitSystemBar(
                 request = CaptureShutterPolicy.request(
                     status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
                 ),
+                onShootingMode = onShootingMode,
                 onClick = model::pressShutter)
             Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -588,6 +591,7 @@ fun LivePortraitSystemBar(
                 request = CaptureShutterPolicy.request(
                     status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
                 ),
+                onShootingMode = onShootingMode,
                 onClick = model::pressShutter,
             )
         }

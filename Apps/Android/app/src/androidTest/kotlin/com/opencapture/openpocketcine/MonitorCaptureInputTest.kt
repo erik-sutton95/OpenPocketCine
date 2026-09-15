@@ -51,6 +51,50 @@ import org.junit.runner.RunWith
 /** Reuses the existing native activity/instrumentation harness; no Compose test dependency. */
 @RunWith(AndroidJUnit4::class)
 class MonitorCaptureInputTest {
+    @Test fun recordHoldOpensModesWithoutShutterAndRespectsLock() {
+        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
+            var modes = 0
+            var shutters = 0
+            var enabled by mutableStateOf(true)
+            var confirm by mutableStateOf(true)
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        RecordButton(recording = false, enabled = enabled, confirm = confirm,
+                            onShootingMode = { modes++ }, onClick = { shutters++ })
+                    }
+                }
+            }
+            settle()
+            val target = nativeControlRect(scenario, "Start recording")
+            fun hold() {
+                val down = SystemClock.uptimeMillis()
+                event(scenario, MotionEvent.ACTION_DOWN, target.center.x, target.center.y, down)
+                SystemClock.sleep(750)
+                event(scenario, MotionEvent.ACTION_UP, target.center.x, target.center.y, down)
+                settle()
+            }
+            hold()
+            scenario.onActivity {
+                assertEquals(1, modes, "Hold opens shooting modes")
+                assertEquals(0, shutters, "Hold must not take a photo or start recording")
+                confirm = false
+            }
+            settle()
+            tap(scenario, target)
+            scenario.onActivity {
+                assertEquals(1, shutters, "Tap still operates shutter; no confirmation was opened by hold")
+                enabled = false
+            }
+            settle()
+            hold()
+            scenario.onActivity {
+                assertEquals(1, modes, "Locked or busy record control cannot open modes")
+                assertEquals(1, shutters)
+            }
+        }
+    }
+
     @Test fun portraitSettingsAndMediaReceiveFirstNativeTapThroughRetainedPicker() {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var model: AppModel? = null
@@ -363,7 +407,8 @@ private fun NavigationFixture(model: AppModel, probe: NavigationProbe, layoutPro
                     LivePortraitSystemBar(model, model.assist, CameraStatus(), uiLocked = false,
                         onLock = {}, chromeInteractive = probe.navigationEnabled, showsLock = true,
                         showsRecord = true, showsMedia = probe.showsNavigation,
-                        showsSettings = probe.showsNavigation, controlBusy = false)
+                        showsSettings = probe.showsNavigation, controlBusy = false,
+                        onShootingMode = { probe.sheet = LiveSheet.MODE })
                 }
             }
             Box(Modifier.offset(2.dp, maxHeight - 6.dp).size(4.dp)

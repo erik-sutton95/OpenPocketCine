@@ -1,7 +1,6 @@
 package com.opencapture.monitorui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,9 +36,8 @@ const val FOOTER_SINGLE_ROW_MIN_WIDTH = 648f
 /** File metadata comes from the media adapter; the monitor never infers a source. */
 @Composable
 fun MonitorPlaybackHeader(title: String, subtitle: String, source: String, portrait: Boolean,
-    modifier: Modifier = Modifier, back: @Composable () -> Unit, actions: @Composable RowScope.() -> Unit) {
+    modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit) {
     val identity: @Composable RowScope.() -> Unit = {
-        back()
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MonitorTypography.text(12.5f, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MonitorTypography.text(9.5f), color = Color(0xFFB6BBBC), maxLines = 1, overflow = TextOverflow.Ellipsis)

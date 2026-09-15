@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.pairing
 
 import android.Manifest
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -102,13 +103,15 @@ fun PairingExperience(
         found = found,
         picked = picked,
         radioReady = radioOn && permissionsGranted,
-        hasSavedCameras = model.savedCameras.isNotEmpty(),
         connectedName = model.session.connectedCamera?.name,
         joinedSSID = model.session.joinedSSID,
         vpnActive = vpnActive,
         bluetoothOn = radioOn,
         permissionsGranted = permissionsGranted,
     )
+    BackHandler(enabled = busy || model.savedCameras.isNotEmpty()) {
+        model.cancelPairing()
+    }
     MonitorPairCameraPage(
         presentation = presentation,
         onSelect = { id -> if (!busy) selectedId = id },
@@ -164,7 +167,6 @@ private fun pairingPresentation(
     found: List<FoundCamera>,
     picked: FoundCamera?,
     radioReady: Boolean,
-    hasSavedCameras: Boolean,
     connectedName: String?,
     joinedSSID: String?,
     vpnActive: Boolean,
@@ -284,11 +286,7 @@ private fun pairingPresentation(
         },
         primaryAction = primary,
         primaryActionEnabled = primaryEnabled,
-        backAction = when {
-            busy -> "Cancel"
-            hasSavedCameras -> "Back"
-            else -> null
-        },
+        backAction = if (busy) "Cancel" else null,
     )
 }
 

@@ -123,7 +123,7 @@ fun MonitorPairCameraPage(
         val railWidth = if (tablet) 268.dp else 210.dp
         if (portrait) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PairingRail(presentation, true, onBack, onDiagnostics, onWatchFeed)
+                PairingRail(presentation, true, onDiagnostics, onWatchFeed)
                 PairingPane(
                     presentation, true, tablet, onSelect, onPrimary, onBack, extra,
                     Modifier.weight(1f),
@@ -136,7 +136,7 @@ fun MonitorPairCameraPage(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PairingRail(
-                    presentation, false, onBack, onDiagnostics, onWatchFeed,
+                    presentation, false, onDiagnostics, onWatchFeed,
                     Modifier.width(railWidth).fillMaxHeight(),
                 )
                 PairingPane(
@@ -152,7 +152,6 @@ fun MonitorPairCameraPage(
 private fun PairingRail(
     presentation: MonitorPairingPresentation,
     portrait: Boolean,
-    onBack: () -> Unit,
     onDiagnostics: () -> Unit,
     onWatchFeed: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -174,21 +173,6 @@ private fun PairingRail(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            if (presentation.backAction != null) {
-                Box(
-                    Modifier.size(44.dp)
-                        .clickable(role = Role.Button, onClick = onBack)
-                        .semantics { contentDescription = presentation.backAction },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        Modifier.size(32.dp).background(MonitorPalette.secondary.copy(alpha = 0.12f), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        MonitorIcon(MonitorIcon.CHEVRON_LEFT, null, Modifier.size(13.dp), MonitorPalette.text)
-                    }
-                }
-            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     "STEP ${current + 1} OF ${presentation.steps.size}",

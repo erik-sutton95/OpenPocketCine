@@ -75,3 +75,46 @@ local settings. The app was reinstalled, reporting consent and the camera link
 were restored from known evidence, and subsequent tests used direct instrumentation
 with an app-data backup. Unknown original preferences/cache could not be recovered.
 Future physical checks must preserve app data and avoid that connected-test cleanup.
+
+## Follow-up: Android navigation and shooting-mode access
+
+Android intentionally omits large page-level Back buttons and uses system Back.
+The approved exception reclaims the button gutters; contextual Close and Cancel
+remain. Settings, Media, playback and pairing are included in this change.
+
+Record lacked the long-press callback in all Android live layouts. Holding it
+opened recording confirmation instead of shooting modes. The callback is now
+required and wired through phone portrait, tablet portrait and landscape chrome.
+A native touch regression covers hold versus tap and disabled input. Physical
+Galaxy S25 checks open the picker in portrait and landscape, switch the Pocket
+4 Pro between Video and Photo, and open the picker from the Photo shutter.
+The original Video format and exposure settings were restored afterward.
+
+Physical Back checks pass for Settings and Media in portrait and landscape,
+Media filters, video Info before player dismissal, video with hidden controls,
+and idle pairing in both orientations. The playback popup retains native Back
+handling: disabling it prevented Back from reaching the Activity handler in a
+physical regression check. Contextual Info Close remains available.
+
+Photo Info/player Back, Media selection, and delivery Options → Destination →
+player also pass physically. Photo and video headers reclaim their former Back
+space in both orientations. First-run busy pairing remains a code-reviewed path;
+the physical pairing checks used the saved camera and idle pairing page.
+
+## Follow-up: portrait assist drag
+
+The Android popup moved under its gesture detector. Combining its last layout
+position with current local touch coordinates created feedback: continuous upward
+input could move the edge downward, then overshoot upward. Per-move animation
+coroutines also delayed the displayed progress. The fix uses native screen touch
+coordinates against a frozen anchor and writes drag progress synchronously.
+Android pointer IDs remain separate from Compose IDs. Cancellation, a second
+pointer, and lock do not toggle expansion; release still snaps or coasts.
+
+A native production-popup fixture on the Galaxy S25 reproduces the old oscillation
+with continuous input (an initial trace drifted up to 179 pixels). The final test
+checks direction, total travel, stationary input and reversal, using the actual
+native window position and allowing input/window publication delay. Five palette
+cases pass, including compact touch footprint, landscape, tap and cancel/lock.
+Four capture-input cases also pass, including Record hold versus tap and lock.
+No app data was cleared during these follow-up checks.
