@@ -150,4 +150,5 @@ strings change. Prove wizard and reconnect **physical**.
 The first configured launch asks once whether to enable automatic error reports.
 Enable and Not now are explicit choices; neither is preselected. Declining leaves
 manual reporting and all camera features available. The System toggle permits
-a later change. Existing saved decisions are respected.
+a later change. An update asks if no reporting choice was previously saved;
+existing Enable and Not now decisions are respected.

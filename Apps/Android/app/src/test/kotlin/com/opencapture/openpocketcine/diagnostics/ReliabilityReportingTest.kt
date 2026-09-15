@@ -20,6 +20,10 @@ import kotlin.test.assertTrue
 class ReliabilityReportingTest {
     private lateinit var cacheRoot: File
 
+    companion object {
+        private const val CONFIGURED_DSN = "https://publickey@o0.ingest.sentry.io/0"
+    }
+
     @BeforeTest
     fun setUp() {
         cacheRoot = File(System.getProperty("java.io.tmpdir"), "opc-rel-${System.nanoTime()}")
@@ -141,6 +145,74 @@ class ReliabilityReportingTest {
         assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
         assertFalse(ReliabilityReportingConsent.isOptedIn)
         assertTrue(ReliabilityReportingConsent.hasDecision)
+    }
+
+    @Test
+    fun absentPersistedChoiceOffersPromptWhenConfiguredWithoutWriting() {
+        val stored = mutableMapOf<String, Boolean>()
+        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = false,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        assertFalse(ReliabilityReportingConsent.hasDecision)
+        assertFalse(ReliabilityReportingConsent.isOptedIn)
+        assertTrue(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        assertTrue(stored.isEmpty())
+    }
+
+    @Test
+    fun unavailableDestinationDoesNotMarkAskedOnAbsentChoice() {
+        val stored = mutableMapOf<String, Boolean>()
+        ReliabilityReportingDSN.buildDsn = null
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = false,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        assertFalse(ReliabilityReportingConsent.hasDecision)
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        assertTrue(stored.isEmpty())
+    }
+
+    @Test
+    fun explicitDeclinePersistsAcrossRestoreAndDoesNotReprompt() {
+        val stored = mutableMapOf<String, Boolean>()
+        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = false,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        ReliabilityReportingConsent.setOptedIn(false)
+        assertEquals(false, stored[ReliabilityReportingConsent.KEY])
+        ReliabilityReportingConsent.resetForTests()
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
+            optedIn = stored[ReliabilityReportingConsent.KEY] == true,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        assertTrue(ReliabilityReportingConsent.hasDecision)
+        assertFalse(ReliabilityReportingConsent.isOptedIn)
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+    }
+
+    @Test
+    fun explicitAcceptPersistsAcrossRestoreAndDoesNotReprompt() {
+        val stored = mutableMapOf<String, Boolean>()
+        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = false,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        ReliabilityReportingConsent.setOptedIn(true)
+        ReliabilityReportingConsent.resetForTests()
+        ReliabilityReportingConsent.restorePersistedChoice(
+            hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
+            optedIn = stored[ReliabilityReportingConsent.KEY] == true,
+            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+        )
+        assertTrue(ReliabilityReportingConsent.hasDecision)
+        assertTrue(ReliabilityReportingConsent.isOptedIn)
+        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
     }
 
     @Test

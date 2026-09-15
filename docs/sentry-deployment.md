@@ -129,6 +129,19 @@ GitHub: variable `SENTRY_UPLOAD_ENABLED=true`, optional `SENTRY_ORG` /
 `SENTRY_DSN_ANDROID`. Missing Sentry secrets do **not** fail Play unless
 upload is enabled.
 
+### Local Android builds
+
+Set `SENTRY_DSN_ANDROID` in the build environment, or put the same key in
+`.local/reliability.properties` at the repository root. The non-empty environment
+value takes precedence. The local file is ignored by Git and is read by both
+Android Studio and the `just android-build` / `just android-install` recipes.
+Use the Android project's public HTTPS DSN, never an upload token.
+
+A build without a valid destination cannot offer automatic reporting. It leaves
+consent undecided, so installing a configured update can offer the prompt without
+clearing app data. Confirm the destination is configured in the generated
+BuildConfig without printing its value, then check the prompt on the device.
+
 ## Server privacy (mandatory)
 
 `scrubIP` is not enough: Sentry can still infer geo from the request. A

@@ -265,8 +265,11 @@ report deletion. The first-pair wizard retains Share Diagnostics.
 
 A one-time prompt after the first configured launch explains the improvement
 purpose and offers Enable automatic reports, Not now and offline privacy.
-Existing decisions persist. Declining does not disable manual reports or prevent
-a later opt-in in System.
+An update also offers it if no choice was saved, including when an earlier build
+had no reporting destination. Existing Enable and Not now decisions persist;
+there is no prompt on every update. Declining does not disable manual reports
+or prevent a later opt-in in System. Local Android builds use the optional
+configuration described in [deployment](sentry-deployment.md#local-android-builds).
 
 ### Compact manual-report evidence
 

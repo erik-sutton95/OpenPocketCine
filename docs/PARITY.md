@@ -735,3 +735,22 @@ passed 659 tests (one existing skip); `just android-check` passed assembly,
 unit tests and lint. Regression tests reproduce early saturation and the missing
 center update before the fix. Physical joystick feel, sustained camera cadence,
 and Android device verification remain pending.
+
+### Automatic reporting on install and upgrade
+
+Both shells offer the automatic-reporting prompt when a reporting destination is
+configured and no explicit choice is saved. An undecided installation remains
+eligible after an update; prior Enable and Not now choices are preserved.
+Android local builds now support an ignored reporting configuration file, matching
+the existing local iOS configuration path. The installed Android build previously
+had an empty destination, which suppressed the prompt without recording a choice.
+
+Physical Galaxy S25 verification: the unconfigured build showed no prompt and
+had no saved consent. Installing a configured build over the same app data
+showed Enable automatic reports, Not now and Reporting privacy. Consent remained
+undecided; no app data was cleared and no choice was made by automation.
+
+Validation: `just check` and `just android-check` passed, including 30 reporting
+tests covering absent, accepted and declined saved choices. The no-environment
+Android build contained the configured destination. iOS production behavior is
+unchanged; its existing local configuration and consent gate already apply.

@@ -307,3 +307,11 @@ The touch range extends 35% beyond the joystick's outer radius while the ring
 and knob keep their existing size. Continue dragging past the ring for full
 input. Returning to the center during a drag respects the dead zone; lifting
 your finger releases the stick.
+
+### Automatic error reports
+
+On the first launch with automatic reporting available, the app asks whether to
+send optional crash, error and feed-dropout reports. This also applies after an
+update if you have never made that choice. Enable or Not now is remembered;
+updates do not ask again after a decision. You can change the choice in
+**Operator Setup → System → Automatic error reports**.

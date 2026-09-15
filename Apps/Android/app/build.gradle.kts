@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -25,11 +27,7 @@ android {
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SOURCE_REVISION", "\"unknown\"")
-        val sentryDsnAndroid =
-            System.getenv("SENTRY_DSN_ANDROID").orEmpty().trim()
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-        buildConfigField("String", "SENTRY_DSN_ANDROID", "\"$sentryDsnAndroid\"")
+        buildConfigField("String", "SENTRY_DSN_ANDROID", "\"\"")
 
         ndk {
             abiFilters += supportedAndroidAbi
@@ -136,9 +134,30 @@ val sourceRevisionField =
             com.android.build.api.variant.BuildConfigField("String", "\"$value\"", "git source revision")
         }
 
+// Non-empty SENTRY_DSN_ANDROID wins; otherwise optional ignored repo-root properties.
+val sentryDsnAndroidField =
+    providers.environmentVariable("SENTRY_DSN_ANDROID")
+        .orElse("")
+        .zip(
+            providers.of(LocalReliabilityDsnValueSource::class.java) {
+                parameters.propertiesFile.set(
+                    repositoryRoot.resolve(".local/reliability.properties"),
+                )
+            },
+        ) { env, file ->
+            val raw = env.trim().ifEmpty { file.trim() }
+            val escaped = raw.replace("\\", "\\\\").replace("\"", "\\\"")
+            com.android.build.api.variant.BuildConfigField(
+                "String",
+                "\"$escaped\"",
+                "optional Sentry Android DSN",
+            )
+        }
+
 androidComponents {
     onVariants { variant ->
         variant.buildConfigFields?.put("SOURCE_REVISION", sourceRevisionField)
+        variant.buildConfigFields?.put("SENTRY_DSN_ANDROID", sentryDsnAndroidField)
         // Exec output participates in configuration-cache validation, so dirty
         // source edits cannot silently retain the preceding build identity.
         val identity = providers.exec {
@@ -216,4 +235,22 @@ dependencies {
     testImplementation(libs.json)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+}
+
+abstract class LocalReliabilityDsnValueSource :
+    ValueSource<String, LocalReliabilityDsnValueSource.Params> {
+    interface Params : ValueSourceParameters {
+        @get:org.gradle.api.tasks.Optional
+        @get:InputFile
+        @get:PathSensitive(PathSensitivity.NONE)
+        val propertiesFile: RegularFileProperty
+    }
+
+    override fun obtain(): String {
+        val file = parameters.propertiesFile.orNull?.asFile ?: return ""
+        if (!file.isFile) return ""
+        val props = Properties()
+        file.inputStream().use { props.load(it) }
+        return props.getProperty("SENTRY_DSN_ANDROID")?.trim().orEmpty()
+    }
 }

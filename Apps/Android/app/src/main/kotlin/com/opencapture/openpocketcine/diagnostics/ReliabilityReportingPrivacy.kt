@@ -37,9 +37,22 @@ internal object ReliabilityReportingConsent {
         ReliabilityReportingDSN.isAvailable && !decided
 
     fun bind(prefs: SharedPreferences) {
-        decided = prefs.contains(KEY)
-        optedIn = prefs.getBoolean(KEY, false)
-        persist = { value -> prefs.edit().putBoolean(KEY, value).apply() }
+        restorePersistedChoice(
+            hasChoice = prefs.contains(KEY),
+            optedIn = prefs.getBoolean(KEY, false),
+            persist = { value -> prefs.edit().putBoolean(KEY, value).apply() },
+        )
+    }
+
+    /** Absence of [KEY] is undecided; a stored false is an explicit decline. */
+    fun restorePersistedChoice(
+        hasChoice: Boolean,
+        optedIn: Boolean = false,
+        persist: ((Boolean) -> Unit)? = null,
+    ) {
+        decided = hasChoice
+        this.optedIn = hasChoice && optedIn
+        this.persist = persist
     }
 
     fun resetForTests() {
