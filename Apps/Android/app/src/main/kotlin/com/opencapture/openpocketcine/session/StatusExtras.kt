@@ -215,6 +215,10 @@ object StatusExtras {
         return status.applyingAudioBlob(blob)
     }
 
+    /** `0x02/0x80` `@57` is the only unsolicited shooting-mode report. */
+    fun reportsShootingMode(frame: DumlFrame): Boolean =
+        frame.cmdSet == 0x02 && frame.cmdId == 0x80 && frame.payload.size >= 58
+
     fun parseSubscribe(payload: ByteArray): SubscribeItem? {
         if (payload.size < 24 || payload[0] != 0x02.toByte() || payload[1] != 0x06.toByte()) return null
         val nameLen = (payload[13].toInt() and 0xFF) or ((payload[14].toInt() and 0xFF) shl 8)

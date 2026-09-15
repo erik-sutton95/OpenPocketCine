@@ -3,6 +3,30 @@ import XCTest
 
 /// Opt-in real camera proof. Changes shooting mode, zoom and format; never captures media.
 final class PhysicalShootingModeTests: XCTestCase {
+    func testShootingModeDialDoesNotBounceAfterRelease() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
+            throw XCTSkip("Requires an opted-in physical run with a connected camera")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_FEED_STRESS"] = "1"
+        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] = "600"
+        XCUIDevice.shared.orientation = .landscapeRight
+        app.launch()
+        let mode = app.buttons["monitor.capture.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 60), "Saved camera must reconnect")
+        XCTAssertEqual(snapshot(app)["rec"], "0", "Camera must be idle")
+        let initialMode = mode.value as? String ?? "Video"
+        defer {
+            selectMode(initialMode, app: app)
+            XCUIDevice.shared.orientation = .portrait
+            app.terminate()
+        }
+        for target in ["Video", "SlowMo", "Video", "Photo", "Video"] {
+            selectMode(target, app: app)
+        }
+    }
+
     func testPhotoLUTCatalogAndVideoReturn() throws {
         guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
             throw XCTSkip("Requires an opted-in physical run with a connected camera")
@@ -57,7 +81,9 @@ final class PhysicalShootingModeTests: XCTestCase {
             "Photo picture must keep progressing")
         Thread.sleep(forTimeInterval: 3)
         let rates = snapshot(app)
-        print("Photo LUT rates: source=\(rates["srcHz"] ?? "unknown") present=\(rates["presHz"] ?? "unknown") thermal=\(rates["therm"] ?? "unknown")")
+        print(
+            "Photo LUT rates: source=\(rates["srcHz"] ?? "unknown") present=\(rates["presHz"] ?? "unknown") thermal=\(rates["therm"] ?? "unknown")"
+        )
         selectMode("Video", app: app)
         lut.press(forDuration: 0.6)
         XCTAssertTrue(inspector.waitForExistence(timeout: 5))
@@ -200,7 +226,8 @@ final class PhysicalShootingModeTests: XCTestCase {
                 XCTFail("Unexpected mode selection: \(current)")
                 return
             }
-            step(drum, direction: to > from ? 1 : -1)
+            let direction = to > from ? 1 : -1
+            step(drum, direction: CGFloat(direction), expected: order[from + direction])
         }
         XCTAssertEqual(drum.value as? String, wanted)
         closePanel(app)
@@ -209,13 +236,20 @@ final class PhysicalShootingModeTests: XCTestCase {
         wait(until: { (mode.value as? String) == wanted }, "Camera must report \(wanted)")
     }
 
-    private func step(_ drum: XCUIElement, direction: CGFloat) {
+    private func step(_ drum: XCUIElement, direction: CGFloat, expected: String? = nil) {
         let center = drum.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         center.press(
             forDuration: 0.1,
             thenDragTo: center.withOffset(
                 CGVector(dx: -direction * 56, dy: 0)))
-        Thread.sleep(forTimeInterval: 1)
+        if let expected {
+            let deadline = Date().addingTimeInterval(1.5)
+            repeat {
+                XCTAssertEqual(drum.value as? String, expected, "Selection bounced after release")
+            } while Date() < deadline
+        } else {
+            Thread.sleep(forTimeInterval: 1)
+        }
     }
 
     private func closePanel(_ app: XCUIApplication) {

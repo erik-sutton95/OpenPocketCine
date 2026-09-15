@@ -447,6 +447,14 @@ final class CameraSession {
     /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
     var isFormatPinActive: Bool { formatPin != nil }
     @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
+    @ObservationIgnored private var gimbalFollowFamilyConfirmed = false
+    @ObservationIgnored private var gimbalModePin: CameraValuePin<GimbalMode>?
+    @ObservationIgnored private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>?
+    @ObservationIgnored private var shootingModePin: CameraValuePin<Int>?
+    @ObservationIgnored private var whiteBalancePin: CameraValuePin<WhiteBalance>?
+    @ObservationIgnored private var focusModePin: CameraValuePin<FocusMode>?
+    @ObservationIgnored private var focusTrackPin: CameraValuePin<FocusTrackMode>?
+    @ObservationIgnored private var isoLimitPin: CameraValuePin<IsoLimit>?
     @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
     @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
     @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
@@ -720,6 +728,13 @@ final class CameraSession {
         audioPin = nil
         formatPin = nil
         colorPin = nil
+        gimbalModePin = nil
+        gimbalSpeedPin = nil
+        shootingModePin = nil
+        whiteBalancePin = nil
+        focusModePin = nil
+        focusTrackPin = nil
+        isoLimitPin = nil
         resetGimbalPoseForNewStream()
         resetGimbalControls()
         controlBusy = false
@@ -1293,6 +1308,8 @@ final class CameraSession {
         let previousIso = status.availableIsoIndices
         let previousColor = status.availableColorModes
         let wire = Int(mode.wireByte(for: connectedCamera?.model))
+        let pin = CameraValuePin(wire, now: Date.timeIntervalSinceReferenceDate)
+        shootingModePin = pin
         var next = status
         if previousMode != wire {
             next.clearModeDependentCapabilities()
@@ -1303,11 +1320,13 @@ final class CameraSession {
         fireCamera(
             Commands.setShootingMode(mode, model: connectedCamera?.model), name: mode.label,
             onFail: { [weak self] in
-                guard let self, self.captureModeGeneration == modeGeneration,
+                guard let self, self.shootingModePin?.id == pin.id,
+                    self.captureModeGeneration == modeGeneration,
                     self.controlGeneration == sessionGeneration,
                     self.status.shootingMode == wire
                 else { return }
                 self.captureModeGeneration &+= 1
+                self.shootingModePin = nil
                 self.formatPin = nil
                 self.status.shootingMode = previousMode
                 self.status.availableVideoFormats = previousFormats
@@ -1319,11 +1338,17 @@ final class CameraSession {
 
     func setIsoLimit(_ limit: IsoLimit) {
         let previous = status.isoLimit
+        let pin = CameraValuePin(limit, now: Date.timeIntervalSinceReferenceDate)
+        isoLimitPin = pin
         status.isoLimit = limit
         let base = (status.colorMode ?? .normal).isoAutoBase(for: connectedCamera?.model) ?? 100
         fireCamera(
             Commands.setIsoLimit(limit), name: "ISO \(limit.label(base: base))",
-            onFail: { [weak self] in self?.status.isoLimit = previous },
+            onFail: { [weak self] in
+                guard let self, self.isoLimitPin?.id == pin.id else { return }
+                self.isoLimitPin = nil
+                self.status.isoLimit = previous
+            },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "iso: limit \(limit.label(base: base)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
@@ -1853,36 +1878,73 @@ final class CameraSession {
         audioPin = audioPinIsEmpty(pin) ? nil : pin
     }
 
-    /// Drop GET / subscribe snapshots that still show the pre-SET audio row.
-    private func absorbStaleAudio(_ incoming: inout CameraStatus) {
+    /// Hold pending choices until their own telemetry confirms them.
+    private func absorbStaleChoices(_ incoming: inout CameraStatus, reported: CameraStatus) {
+        let now = Date.timeIntervalSinceReferenceDate
+        if let held = CameraValuePin.reconcile(
+            &shootingModePin, reported: reported.shootingMode >= 0 ? reported.shootingMode : nil,
+            now: now)
+        {
+            if incoming.shootingMode != held {
+                incoming.availableVideoFormats = status.availableVideoFormats
+                incoming.availableShutterDenoms = status.availableShutterDenoms
+                incoming.availableIsoIndices = status.availableIsoIndices
+                incoming.availableColorModes = status.availableColorModes
+            }
+            incoming.shootingMode = held
+        }
+        if let held = CameraValuePin.reconcile(
+            &whiteBalancePin, reported: reported.whiteBalance, now: now)
+        {
+            incoming.whiteBalance = held
+            incoming.whiteBalanceKelvin = status.whiteBalanceKelvin
+            incoming.whiteBalanceTint = held.tint
+        }
+        if let held = CameraValuePin.reconcile(
+            &focusModePin, reported: reported.focusMode, now: now)
+        {
+            incoming.focusMode = held
+        }
+        if let held = CameraValuePin.reconcile(
+            &focusTrackPin, reported: reported.focusTrack, now: now)
+        {
+            incoming.focusTrack = held
+        }
+        if let held = CameraValuePin.reconcile(&isoLimitPin, reported: reported.isoLimit, now: now)
+        {
+            incoming.isoLimit = held
+        }
+    }
+
+    private func absorbStaleAudio(_ incoming: inout CameraStatus, reported: CameraStatus) {
         guard var pin = audioPin else { return }
         if Date() >= pin.deadline {
             audioPin = nil
             return
         }
         if let expect = pin.channel {
-            if incoming.audioChannel == expect {
+            if reported.audioChannel == expect {
                 pin.channel = nil
             } else if incoming.audioChannel != nil {
                 incoming.audioChannel = status.audioChannel
             }
         }
         if let expect = pin.vocal {
-            if incoming.vocalBoost == expect {
+            if reported.vocalBoost == expect {
                 pin.vocal = nil
             } else if incoming.vocalBoost != nil {
                 incoming.vocalBoost = status.vocalBoost
             }
         }
         if let expect = pin.wind {
-            if incoming.windNR == expect {
+            if reported.windNR == expect {
                 pin.wind = nil
             } else if incoming.windNR != nil {
                 incoming.windNR = status.windNR
             }
         }
         if let expect = pin.directional {
-            if incoming.directionalAudio == expect {
+            if reported.directionalAudio == expect {
                 pin.directional = nil
             } else if incoming.directionalAudio != nil {
                 incoming.directionalAudio = status.directionalAudio
@@ -1929,7 +1991,7 @@ final class CameraSession {
     }
 
     /// Drop `cam_expo_param` snapshots that still show the pre-SET ISO / shutter / EV / mode.
-    private func absorbStaleExpo(_ incoming: inout CameraStatus) {
+    private func absorbStaleExpo(_ incoming: inout CameraStatus, reported: CameraStatus) {
         guard var pin = expoPin else { return }
         if Date() >= pin.deadline {
             expoPin = nil
@@ -1937,8 +1999,8 @@ final class CameraSession {
         }
         if let expectIdx = pin.isoIndex {
             let matched =
-                incoming.isoIndex == expectIdx
-                || (expectIdx.isoValue.map { incoming.iso == $0 } ?? false)
+                reported.isoIndex == expectIdx
+                || (expectIdx.isoValue.map { reported.iso == $0 } ?? false)
             if matched {
                 pin.isoIndex = nil
                 pin.iso = nil
@@ -1948,21 +2010,21 @@ final class CameraSession {
             }
         }
         if let expectShutter = pin.shutter {
-            if incoming.shutterDenom == expectShutter {
+            if reported.shutterDenom == expectShutter {
                 pin.shutter = nil
             } else {
                 incoming.shutterDenom = status.shutterDenom
             }
         }
         if let expectEv = pin.ev {
-            if incoming.evComp == expectEv {
+            if reported.evComp == expectEv {
                 pin.ev = nil
             } else {
                 incoming.evComp = status.evComp
             }
         }
         if let expectMode = pin.mode {
-            if incoming.expoMode == expectMode {
+            if reported.expoMode == expectMode {
                 pin.mode = nil
             } else {
                 incoming.expoMode = status.expoMode
@@ -1984,13 +2046,13 @@ final class CameraSession {
         }
     }
 
-    private func absorbStaleColor(_ incoming: inout CameraStatus) {
+    private func absorbStaleColor(_ incoming: inout CameraStatus, reported: CameraStatus) {
         guard let pin = colorPin else { return }
         if Date() >= pin.deadline {
             colorPin = nil
             return
         }
-        if incoming.colorMode == pin.expected {
+        if reported.colorMode == pin.expected {
             colorPin = nil
             return
         }
@@ -2044,6 +2106,11 @@ final class CameraSession {
     }
 
     private func fireWhiteBalance(_ wb: WhiteBalance) {
+        let previous = status.whiteBalance
+        let previousKelvin = status.whiteBalanceKelvin
+        let previousTint = status.whiteBalanceTint
+        let pin = CameraValuePin(wb, now: Date.timeIntervalSinceReferenceDate)
+        whiteBalancePin = pin
         status.whiteBalance = wb
         if wb.mode == .custom {
             status.whiteBalanceKelvin = wb.kelvin
@@ -2060,6 +2127,13 @@ final class CameraSession {
         fireCamera(
             frame, name: name, expect: .wb(wb),
             coalesce: true,
+            onFail: { [weak self] in
+                guard let self, self.whiteBalancePin?.id == pin.id else { return }
+                self.whiteBalancePin = nil
+                self.status.whiteBalance = previous
+                self.status.whiteBalanceKelvin = previousKelvin
+                self.status.whiteBalanceTint = previousTint
+            },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "wb: SET \(name) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
@@ -2072,10 +2146,16 @@ final class CameraSession {
     func setFocusMode(_ mode: FocusMode) {
         guard supportsFocusMode else { return }
         let previous = status.focusMode
+        let pin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
+        focusModePin = pin
         status.focusMode = mode
         fireCamera(
             Commands.setFocusMode(mode), name: "Focus \(mode.label)", expect: .focus(mode),
-            onFail: { [weak self] in self?.status.focusMode = previous },
+            onFail: { [weak self] in
+                guard let self, self.focusModePin?.id == pin.id else { return }
+                self.focusModePin = nil
+                self.status.focusMode = previous
+            },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "focus: SET \(mode.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
@@ -2085,6 +2165,8 @@ final class CameraSession {
     func setFocusTrack(_ track: FocusTrackMode) {
         guard supportsFocusMode else { return }
         let previous = status.focusTrack
+        let pin = CameraValuePin(track, now: Date.timeIntervalSinceReferenceDate)
+        focusTrackPin = pin
         status.focusTrack = track
         lastFocusTrackAt = Date()
         // Same 0x8E waiter as audio / glamour GETs. fireCamera on this opcode
@@ -2093,7 +2175,10 @@ final class CameraSession {
             self.lastFocusTrackAt = Date()
             let ok = await self.requestCamera(
                 Commands.setFocusTrack(track), name: "AF-C \(track.label)")
-            if !ok { self.status.focusTrack = previous }
+            if !ok, self.focusTrackPin?.id == pin.id {
+                self.focusTrackPin = nil
+                self.status.focusTrack = previous
+            }
             ControlLiveLog.line(
                 "focus: track \(track.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
         }
@@ -2477,6 +2562,8 @@ final class CameraSession {
     func setGimbalMode(_ mode: GimbalMode) {
         guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
+        gimbalFollowFamilyConfirmed = false
+        gimbalModePin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
         gimbalMode = mode
         for frame in GimbalControl.setModeFrames(mode) {
             let seq = datalink?.sendUntracked(frame) ?? 0
@@ -2489,6 +2576,7 @@ final class CameraSession {
     func setGimbalSpeed(_ speed: GimbalSpeed) {
         guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
+        gimbalSpeedPin = CameraValuePin(speed, now: Date.timeIntervalSinceReferenceDate)
         gimbalSpeed = speed
         let frame = Commands.setGimbalSpeed(speed)
         let seq = datalink?.sendUntracked(frame) ?? 0
@@ -3487,15 +3575,16 @@ final class CameraSession {
         late: Bool = false, announce: Bool = true
     ) -> Bool {
         var next = status
-        let priorFormat = next.videoFormat
-        let priorRes = next.videoResolution
-        let priorFps = next.fps
         _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
-        absorbStaleAudio(&next)
+        var reported = CameraStatus()
+        _ = CameraStatusDecoder.apply(reply, to: &reported, model: connectedCamera?.model)
+        absorbStaleChoices(&next, reported: reported)
+        absorbStaleAudio(&next, reported: reported)
+        absorbStaleExpo(&next, reported: reported)
+        absorbStaleColor(&next, reported: reported)
         let formatReported =
-            next.videoFormat != priorFormat
-            || next.videoResolution != priorRes
-            || next.fps != priorFps
+            reported.videoFormat != nil
+            || reported.videoResolution != nil || reported.fps > 0
         absorbStaleFormat(&next, reportedThisFrame: formatReported)
         status = next
         let parsed = CameraReply.parse(reply.payload)
@@ -5148,7 +5237,7 @@ final class CameraSession {
 
     /// Android parity: offer every datalink frame to the opcode waiter.
     /// Restricting to flags == 0xC0 dropped 0x80 / same-opcode ACKs.
-    private func applyIncomingStatus(_ frame: Duml.Frame) {
+    func applyIncomingStatus(_ frame: Duml.Frame) {
         route(frame)
         if frame.cmdSet == 0x00, frame.cmdId == 0x27 {
             if isBrowsingMedia { ingestMediaListFrame(frame) }
@@ -5158,14 +5247,16 @@ final class CameraSession {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
-        let priorFormat = s.videoFormat
-        let priorRes = s.videoResolution
-        let priorFps = s.fps
         let priorMode = s.shootingMode
         let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
-        if s.shootingMode != priorMode {
-            captureModeGeneration &+= 1
-            formatPin = nil
+        // Decode only reported fields while a control is settling. The merged
+        // snapshot already contains optimistic values and cannot confirm a SET.
+        var reported = CameraStatus()
+        if shootingModePin != nil || whiteBalancePin != nil || focusModePin != nil
+            || focusTrackPin != nil || isoLimitPin != nil || expoPin != nil
+            || audioPin != nil || formatPin != nil || colorPin != nil
+        {
+            _ = CameraStatusDecoder.apply(frame, to: &reported, model: connectedCamera?.model)
         }
         let flipReply = CameraParam.isSelfieFlipGetReply(
             set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
@@ -5174,18 +5265,30 @@ final class CameraSession {
             s.selfieFlip = SelfieFlip(rawValue: parsed.value)
         }
         guard applied || flipReply else { return }
-        absorbStaleExpo(&s)
-        absorbStaleAudio(&s)
+        absorbStaleChoices(&s, reported: reported)
+        if s.shootingMode != priorMode {
+            captureModeGeneration &+= 1
+            formatPin = nil
+        }
+        absorbStaleExpo(&s, reported: reported)
+        absorbStaleAudio(&s, reported: reported)
         let formatReported =
-            s.videoFormat != priorFormat
-            || s.videoResolution != priorRes
-            || s.fps != priorFps
+            reported.videoFormat != nil
+            || reported.videoResolution != nil || reported.fps > 0
         absorbStaleFormat(&s, reportedThisFrame: formatReported)
-        absorbStaleColor(&s)
+        absorbStaleColor(&s, reported: reported)
         if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
             requestGimbalParams()
             if frame.payload.count == 50, let family = s.gimbalModeFamily {
-                gimbalMode = GimbalControl.modeFromFamily(family, current: gimbalMode)
+                gimbalFollowFamilyConfirmed = family == .follow
+                let resolved = GimbalControl.modeFromFamily(family, current: gimbalMode)
+                // Follow-family alone cannot confirm the tilt-lock choice.
+                let reportedMode: GimbalMode? = family == .follow ? nil : resolved
+                gimbalMode =
+                    CameraValuePin.reconcile(
+                        &gimbalModePin, reported: reportedMode,
+                        now: Date.timeIntervalSinceReferenceDate
+                    ) ?? resolved
             }
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
             lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
@@ -5248,8 +5351,20 @@ final class CameraSession {
         if frame.cmdSet == 0x04, frame.cmdId == 0x50,
             let params = GimbalParamState.parseGetReply(frame.payload)
         {
-            gimbalMode = GimbalControl.modeFromGet(params, commanded: gimbalMode)
-            if let speed = params.speed { gimbalSpeed = speed }
+            let resolved = GimbalControl.modeFromGet(params, commanded: gimbalMode)
+            let reportedMode: GimbalMode? =
+                gimbalFollowFamilyConfirmed && (gimbalMode == .follow || gimbalMode == .tiltLocked)
+                ? resolved : nil
+            gimbalMode =
+                CameraValuePin.reconcile(
+                    &gimbalModePin, reported: reportedMode, now: Date.timeIntervalSinceReferenceDate
+                ) ?? resolved
+            if let speed = params.speed {
+                gimbalSpeed =
+                    CameraValuePin.reconcile(
+                        &gimbalSpeedPin, reported: speed, now: Date.timeIntervalSinceReferenceDate
+                    ) ?? speed
+            }
         }
         status = s
         confirmZoomColorHopIfReady()

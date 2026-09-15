@@ -37,7 +37,9 @@ category row, and shooting mode is its own top control (not FORMAT). ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
 shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
-hold or drag for a compact dial. Lift to apply the selected value.
+hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
+camera confirms it, so an older status update does not briefly move the dial back.
+A rejected or unconfirmed change returns to the reported camera value after settling.
 Hold Record to open shooting mode.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,
 without recording confirmation. Photo and camera-reported Live Photo hide video color-profile, frame-rate,

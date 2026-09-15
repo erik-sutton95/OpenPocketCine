@@ -338,6 +338,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         get() = formatPin != null
     private var colorPin: ColorPin? = null
     private var expoPin: ExpoPin? = null
+    private var gimbalModePin: CameraValuePin<GimbalMode>? = null
+    private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>? = null
+    private var gimbalFollowFamilyConfirmed = false
+    private var shootingModePin: ShootingModePin? = null
+    private var whiteBalancePin: WhiteBalancePin? = null
+    private var focusPin: FocusPin? = null
+    private var isoLimitPin: IsoLimitPin? = null
     private var gimbalStickMapping = GimbalStickMapping()
     /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
     @Volatile private var lastSelfieFlipReplyElapsed = 0L
@@ -549,6 +556,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         shootingModeRevision++
         colorPin = null
         expoPin = null
+        gimbalModePin = null
+        gimbalSpeedPin = null
+        gimbalFollowFamilyConfirmed = false
+        shootingModePin = null
+        whiteBalancePin = null
+        focusPin = null
+        isoLimitPin = null
         gimbalStickMapping = GimbalStickMapping()
         lastSelfieFlipReplyElapsed = 0L
         lastAssistMirror = false
@@ -2114,19 +2128,21 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
         val cam = connectedCamera?.model
         next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
+        val reported = StatusExtras.apply(frame, CameraStatus(), cam?.name ?: "", cam?.family ?: "")
+        next = absorbStaleShootingMode(next, StatusExtras.reportsShootingMode(frame))
         next = next.mergingModeDependentCaps(prev)
         if (next.shootingMode != prev.shootingMode) {
             shootingModeRevision++
             formatPin = null
         }
         next = CamFov.absorb(next)
-        val formatReported =
-            next.resolutionCode != prev.resolutionCode ||
-                next.fpsIndex != prev.fpsIndex ||
-                next.fps != prev.fps
-        next = absorbStaleFormat(next, formatReported)
-        next = absorbStaleColor(next)
-        next = absorbStaleExpo(next)
+        next = absorbStaleFormat(next, reported.resolutionCode >= 0 && reported.fpsIndex >= 0)
+        next = absorbStaleColor(next, reported)
+        next = absorbStaleExpo(next, reported)
+        next = absorbStaleWhiteBalance(next, reported.wbMode >= 0 &&
+            (reported.wbMode != CameraCommands.WB_CUSTOM || reported.wbKelvin >= 2000))
+        next = absorbStaleFocus(next, reported.focusMode >= 0, reported.focusTrack >= 0)
+        next = absorbStaleIsoLimit(next, reported.isoLimit >= 0)
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
             syncGimbalPose()
@@ -2134,7 +2150,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (frame.cmdSet == 0x04 && frame.cmdId == 0x05) {
             requestGimbalParams()
             if (frame.payload.size == 50 && next.gimbalModeFamily >= 0) {
-                _gimbalMode.value = GimbalControl.modeFromFamily(next.gimbalModeFamily, _gimbalMode.value)
+                gimbalFollowFamilyConfirmed = next.gimbalModeFamily == 2
+                val resolved = GimbalControl.modeFromFamily(next.gimbalModeFamily, _gimbalMode.value)
+                val (held, pin) = CameraValuePin.reconcile(
+                    gimbalModePin, if (gimbalFollowFamilyConfirmed) null else resolved,
+                    SystemClock.elapsedRealtime(),
+                )
+                gimbalModePin = pin
+                _gimbalMode.value = held ?: resolved
             }
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
             if (frame.payload.size >= 22) {
@@ -2183,7 +2206,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
         }
         audioPin?.let { pin ->
-            val (held, nextPin) = pin.absorb(next, _status.value, SystemClock.elapsedRealtime())
+            val (held, nextPin) =
+                pin.absorb(
+                    next,
+                    _status.value,
+                    SystemClock.elapsedRealtime(),
+                    reportedValues = reported,
+                )
             next = held
             audioPin = nextPin
         }
@@ -2194,9 +2223,21 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (frame.cmdSet == 0x04 && frame.cmdId == CameraCommands.CMD_GIMBAL_PARAMS &&
             StatusExtras.isGimbalParamsReply(frame.payload)) {
             if (next.gimbalTiltLock >= 0) {
-                _gimbalMode.value = GimbalControl.modeFromGet(next.gimbalTiltLock == 1, _gimbalMode.value)
+                val current = _gimbalMode.value
+                val resolved = GimbalControl.modeFromGet(next.gimbalTiltLock == 1, current)
+                val confirmsTilt = gimbalFollowFamilyConfirmed &&
+                    (current == GimbalMode.FOLLOW || current == GimbalMode.TILT_LOCKED)
+                val (held, pin) = CameraValuePin.reconcile(
+                    gimbalModePin, if (confirmsTilt) resolved else null, SystemClock.elapsedRealtime(),
+                )
+                gimbalModePin = pin
+                _gimbalMode.value = held ?: resolved
             }
-            GimbalSpeed.fromWire(next.gimbalSpeed)?.let { _gimbalSpeed.value = it }
+            GimbalSpeed.fromWire(next.gimbalSpeed)?.let { speed ->
+                val (held, pin) = CameraValuePin.reconcile(gimbalSpeedPin, speed, SystemClock.elapsedRealtime())
+                gimbalSpeedPin = pin
+                _gimbalSpeed.value = held ?: speed
+            }
         }
         if (next != prev) {
             if (next.inPlayback != prev.inPlayback) {
@@ -2289,6 +2330,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun setIsoLimit(raw: Int) {
         val previous = _status.value.isoLimit
+        isoLimitPin =
+            IsoLimitPin(expected = raw, deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L)
+        val requestPin = isoLimitPin
         _status.value = _status.value.copy(isoLimit = raw)
         fireKind(
             SwiftCore.CMD_SET_ISO_LIMIT,
@@ -2296,7 +2340,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             "ISO limit",
             coalesce = true,
             onFail = {
-                if (_status.value.isoLimit == raw) {
+                if (isoLimitPin === requestPin && _status.value.isoLimit == raw) {
+                    isoLimitPin = null
                     _status.value = _status.value.copy(isoLimit = previous)
                 }
             },
@@ -2322,6 +2367,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setShootingMode(raw: Int) {
         val previous = _status.value
         val revision = ++shootingModeRevision
+        shootingModePin =
+            ShootingModePin(
+                expected = raw,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
+        val requestPin = shootingModePin
         _status.value =
             if (raw != previous.shootingMode) {
                 formatPin = null
@@ -2335,9 +2386,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             "Mode",
             onFail = {
                 if (shootingModeRevision != revision) return@fireKind
-                if (_status.value.shootingMode == raw) {
+                if (shootingModePin === requestPin && _status.value.shootingMode == raw) {
                     shootingModeRevision++
                     formatPin = null
+                    shootingModePin = null
                     _status.value = _status.value.copy(
                         shootingMode = previous.shootingMode,
                         availableVideoFormats = previous.availableVideoFormats,
@@ -2899,24 +2951,58 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setWhiteBalanceAuto(tint: Int? = null) {
+        val previous = _status.value
         val next = (tint ?: _status.value.wbTint).coerceIn(-100, 100)
+        whiteBalancePin =
+            WhiteBalancePin(
+                wbMode = CameraCommands.WB_AUTO,
+                wbKelvin = _status.value.wbKelvin,
+                wbTint = next,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
+        val requestPin = whiteBalancePin
         _status.value = _status.value.copy(wbMode = CameraCommands.WB_AUTO, wbTint = next)
         fireKind(
             SwiftCore.CMD_SET_WB_AUTO,
             "$next",
             "WB Auto tint $next",
             coalesce = true,
+            onFail = {
+                if (whiteBalancePin === requestPin) {
+                    whiteBalancePin = null
+                    _status.value = _status.value.copy(
+                        wbMode = previous.wbMode, wbKelvin = previous.wbKelvin, wbTint = previous.wbTint,
+                    )
+                }
+            },
         )
     }
 
     fun setWhiteBalance(kelvin: Int, tint: Int) {
+        val previous = _status.value
         val (k, t) = CameraCommands.clampWhiteBalanceCustom(kelvin, tint)
+        whiteBalancePin =
+            WhiteBalancePin(
+                wbMode = CameraCommands.WB_CUSTOM,
+                wbKelvin = k,
+                wbTint = t,
+                deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+            )
+        val requestPin = whiteBalancePin
         _status.value = _status.value.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = k, wbTint = t)
         fireKind(
             SwiftCore.CMD_SET_WB_CUSTOM,
             "$k\u001f$t",
             "WB ${k}K tint $t",
             coalesce = true,
+            onFail = {
+                if (whiteBalancePin === requestPin) {
+                    whiteBalancePin = null
+                    _status.value = _status.value.copy(
+                        wbMode = previous.wbMode, wbKelvin = previous.wbKelvin, wbTint = previous.wbTint,
+                    )
+                }
+            },
         )
     }
 
@@ -2925,13 +3011,22 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val next =
             if (continuous) CameraCommands.FOCUS_CONTINUOUS else CameraCommands.FOCUS_SINGLE
         val previous = _status.value.focusMode
+        val now = SystemClock.elapsedRealtime()
+        focusPin =
+            FocusPin(
+                focusMode = next,
+                focusTrack = focusPin?.focusTrack,
+                deadlineElapsedRealtime = now + 2_000L,
+            )
+        val requestPin = focusPin
         _status.value = _status.value.copy(focusMode = next)
         fireKind(
             SwiftCore.CMD_SET_FOCUS_MODE,
             if (continuous) "2" else "1",
             "Focus",
             onFail = {
-                if (_status.value.focusMode == next) {
+                if (focusPin?.requestId == requestPin?.requestId && focusPin?.focusMode != null && _status.value.focusMode == next) {
+                    focusPin = focusPin?.copy(focusMode = null)?.takeIf { it.focusTrack != null }
                     _status.value = _status.value.copy(focusMode = previous)
                 }
             },
@@ -2942,14 +3037,23 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (!supportsFocusMode) return
         val track = FocusTrackMode.fromRaw(mode) ?: return
         val previous = _status.value.focusTrack
-        lastFocusTrackAt = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        lastFocusTrackAt = now
+        focusPin =
+            FocusPin(
+                focusMode = focusPin?.focusMode,
+                focusTrack = mode,
+                deadlineElapsedRealtime = now + 2_000L,
+            )
+        val requestPin = focusPin
         _status.value = _status.value.copy(focusTrack = mode)
         fireKind(
             SwiftCore.CMD_SET_FOCUS_TRACK,
             "$mode",
             "AF-C ${track.label}",
             onFail = {
-                if (_status.value.focusTrack == mode) {
+                if (focusPin?.requestId == requestPin?.requestId && focusPin?.focusTrack != null && _status.value.focusTrack == mode) {
+                    focusPin = focusPin?.copy(focusTrack = null)?.takeIf { it.focusMode != null }
                     _status.value = _status.value.copy(focusTrack = previous)
                 }
             },
@@ -3085,17 +3189,66 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         return next
     }
 
-    private fun absorbStaleColor(incoming: CameraStatus): CameraStatus {
+    private fun absorbStaleColor(incoming: CameraStatus, reported: CameraStatus): CameraStatus {
         val (next, remaining) =
-            ColorPin.absorbStale(incoming, colorPin, SystemClock.elapsedRealtime())
+            ColorPin.absorbStale(incoming, colorPin, SystemClock.elapsedRealtime(), reportedValues = reported)
         colorPin = remaining
         return next
     }
 
-    private fun absorbStaleExpo(incoming: CameraStatus): CameraStatus {
+    private fun absorbStaleExpo(incoming: CameraStatus, reported: CameraStatus): CameraStatus {
         val pin = expoPin ?: return incoming
-        val (next, remaining) = pin.absorb(incoming, _status.value, SystemClock.elapsedRealtime())
+        val (next, remaining) =
+            pin.absorb(incoming, _status.value, SystemClock.elapsedRealtime(), reportedValues = reported)
         expoPin = remaining
+        return next
+    }
+
+    private fun absorbStaleShootingMode(incoming: CameraStatus, reported: Boolean): CameraStatus {
+        val (next, remaining) =
+            ShootingModePin.absorbStale(
+                incoming, shootingModePin, SystemClock.elapsedRealtime(), reported,
+            )
+        shootingModePin = remaining
+        return if (next.shootingMode != incoming.shootingMode) next.copy(
+            availableVideoFormats = _status.value.availableVideoFormats,
+            availableShutterDenoms = _status.value.availableShutterDenoms,
+            availableIsoIndices = _status.value.availableIsoIndices,
+            availableColorModes = _status.value.availableColorModes,
+        ) else next
+    }
+
+    private fun absorbStaleWhiteBalance(incoming: CameraStatus, reported: Boolean): CameraStatus {
+        val (next, remaining) =
+            WhiteBalancePin.absorbStale(
+                incoming, whiteBalancePin, SystemClock.elapsedRealtime(), reported,
+            )
+        whiteBalancePin = remaining
+        return next
+    }
+
+    private fun absorbStaleFocus(
+        incoming: CameraStatus,
+        lensReported: Boolean,
+        trackReported: Boolean,
+    ): CameraStatus {
+        val pin = focusPin ?: return incoming
+        val (next, remaining) =
+            pin.absorb(
+                incoming,
+                _status.value,
+                SystemClock.elapsedRealtime(),
+                lensReported,
+                trackReported,
+            )
+        focusPin = remaining
+        return next
+    }
+
+    private fun absorbStaleIsoLimit(incoming: CameraStatus, reported: Boolean): CameraStatus {
+        val (next, remaining) =
+            IsoLimitPin.absorbStale(incoming, isoLimitPin, SystemClock.elapsedRealtime(), reported)
+        isoLimitPin = remaining
         return next
     }
 
@@ -3515,6 +3668,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setGimbalMode(mode: GimbalMode) {
         if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
+        gimbalFollowFamilyConfirmed = false
+        gimbalModePin = CameraValuePin(mode, SystemClock.elapsedRealtime() + 2_000L)
         _gimbalMode.value = mode
         when (mode) {
             GimbalMode.FOLLOW, GimbalMode.TILT_LOCKED -> {
@@ -3551,6 +3706,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun setGimbalSpeed(speed: GimbalSpeed) {
         if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
+        gimbalSpeedPin = CameraValuePin(speed, SystemClock.elapsedRealtime() + 2_000L)
         _gimbalSpeed.value = speed
         datalink?.sendDuml(
             cmdSet = 0x04,

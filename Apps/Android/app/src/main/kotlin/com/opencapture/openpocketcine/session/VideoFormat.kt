@@ -349,8 +349,8 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
          * Keep the optimistic FORMAT HUD until `cam_video_param_v2` reports the SET.
          *
          * Merged status from an unrelated push still carries the SET pair — that
-         * is not confirmation. [formatReported] is true only when this apply
-         * changed res / fps index / fps.
+         * is not confirmation. [formatReported] is true only when the current
+         * frame actually reports a resolution and frame-rate pair.
          */
         fun absorbStale(
             incoming: CameraStatus,
@@ -393,27 +393,30 @@ data class ExpoPin(
         incoming: CameraStatus,
         current: CameraStatus,
         nowElapsedRealtime: Long,
+        reported: Boolean = true,
+        reportedValues: CameraStatus = incoming,
     ): Pair<CameraStatus, ExpoPin?> {
         if (nowElapsedRealtime >= deadlineElapsedRealtime) return incoming to null
+        if (!reported) return incoming to this
         var next = incoming
         var isoIndex = this.isoIndex
         var shutterDenom = this.shutterDenom
         var evComp = this.evComp
         var expoMode = this.expoMode
         if (isoIndex != null) {
-            if (incoming.isoIndex == isoIndex) isoIndex = null
+            if (reportedValues.isoIndex == isoIndex) isoIndex = null
             else next = next.copy(isoIndex = current.isoIndex, iso = current.iso)
         }
         if (shutterDenom != null) {
-            if (incoming.shutterDenom == shutterDenom) shutterDenom = null
+            if (reportedValues.shutterDenom == shutterDenom) shutterDenom = null
             else if (incoming.shutterDenom > 0) next = next.copy(shutterDenom = current.shutterDenom)
         }
         if (evComp != null) {
-            if (incoming.evComp == evComp) evComp = null
+            if (reportedValues.evComp == evComp) evComp = null
             else if (incoming.evComp >= 0) next = next.copy(evComp = current.evComp)
         }
         if (expoMode != null) {
-            if (incoming.expoMode == expoMode) expoMode = null
+            if (reportedValues.expoMode == expoMode) expoMode = null
             else if (incoming.expoMode >= 0) next = next.copy(expoMode = current.expoMode)
         }
         val remaining =
@@ -428,12 +431,121 @@ data class ColorPin(val expected: Int, val deadlineElapsedRealtime: Long) {
             incoming: CameraStatus,
             pin: ColorPin?,
             nowElapsedRealtime: Long,
+            reported: Boolean = true,
+        reportedValues: CameraStatus = incoming,
         ): Pair<CameraStatus, ColorPin?> {
             if (pin == null) return incoming to null
             if (nowElapsedRealtime >= pin.deadlineElapsedRealtime) return incoming to null
-            if (incoming.colorMode == pin.expected) return incoming to null
+            if (!reported) return incoming to pin
+            if (reportedValues.colorMode == pin.expected) return incoming to null
             return incoming.copy(colorMode = pin.expected) to pin
         }
+    }
+}
+
+/** Hold SET shooting mode until `0x02/0x80` `@57` matches. Unrelated frames cannot confirm. */
+data class ShootingModePin(val expected: Int, val deadlineElapsedRealtime: Long) {
+    companion object {
+        fun absorbStale(
+            incoming: CameraStatus,
+            pin: ShootingModePin?,
+            nowElapsedRealtime: Long,
+            reported: Boolean,
+        ): Pair<CameraStatus, ShootingModePin?> {
+            if (pin == null) return incoming to null
+            if (nowElapsedRealtime >= pin.deadlineElapsedRealtime) return incoming to null
+            if (!reported) return incoming to pin
+            if (incoming.shootingMode == pin.expected) return incoming to null
+            return incoming.copy(shootingMode = pin.expected) to pin
+        }
+    }
+}
+
+data class IsoLimitPin(val expected: Int, val deadlineElapsedRealtime: Long) {
+    companion object {
+        fun absorbStale(
+            incoming: CameraStatus,
+            pin: IsoLimitPin?,
+            nowElapsedRealtime: Long,
+            reported: Boolean,
+        ): Pair<CameraStatus, IsoLimitPin?> {
+            if (pin == null) return incoming to null
+            if (nowElapsedRealtime >= pin.deadlineElapsedRealtime) return incoming to null
+            if (!reported) return incoming to pin
+            if (incoming.isoLimit == pin.expected) return incoming to null
+            return incoming.copy(isoLimit = pin.expected) to pin
+        }
+    }
+}
+
+data class WhiteBalancePin(
+    val wbMode: Int,
+    val wbKelvin: Int,
+    val wbTint: Int,
+    val deadlineElapsedRealtime: Long,
+) {
+    companion object {
+        fun absorbStale(
+            incoming: CameraStatus,
+            pin: WhiteBalancePin?,
+            nowElapsedRealtime: Long,
+            reported: Boolean,
+        ): Pair<CameraStatus, WhiteBalancePin?> {
+            if (pin == null) return incoming to null
+            if (nowElapsedRealtime >= pin.deadlineElapsedRealtime) return incoming to null
+            if (!reported) return incoming to pin
+            if (incoming.wbMode == pin.wbMode &&
+                (pin.wbMode != CameraCommands.WB_CUSTOM || incoming.wbKelvin == pin.wbKelvin) &&
+                incoming.wbTint == pin.wbTint
+            ) {
+                return incoming to null
+            }
+            return incoming.copy(
+                wbMode = pin.wbMode,
+                wbKelvin = pin.wbKelvin,
+                wbTint = pin.wbTint,
+            ) to pin
+        }
+    }
+}
+
+data class FocusPin(
+    val requestId: java.util.UUID = java.util.UUID.randomUUID(),
+    val focusMode: Int? = null,
+    val focusTrack: Int? = null,
+    val deadlineElapsedRealtime: Long,
+) {
+    fun absorb(
+        incoming: CameraStatus,
+        current: CameraStatus,
+        nowElapsedRealtime: Long,
+        lensReported: Boolean,
+        trackReported: Boolean,
+    ): Pair<CameraStatus, FocusPin?> {
+        if (nowElapsedRealtime >= deadlineElapsedRealtime) return incoming to null
+        var next = incoming
+        var focusMode = this.focusMode
+        var focusTrack = this.focusTrack
+        if (focusMode != null) {
+            if (!lensReported) {
+                next = next.copy(focusMode = current.focusMode)
+            } else if (incoming.focusMode == focusMode) {
+                focusMode = null
+            } else {
+                next = next.copy(focusMode = current.focusMode)
+            }
+        }
+        if (focusTrack != null) {
+            if (!trackReported) {
+                next = next.copy(focusTrack = current.focusTrack)
+            } else if (incoming.focusTrack == focusTrack) {
+                focusTrack = null
+            } else if (incoming.focusTrack >= 0) {
+                next = next.copy(focusTrack = current.focusTrack)
+            }
+        }
+        val remaining = copy(focusMode = focusMode, focusTrack = focusTrack)
+        return next to if (focusMode == null && focusTrack == null) null else remaining
     }
 }
 

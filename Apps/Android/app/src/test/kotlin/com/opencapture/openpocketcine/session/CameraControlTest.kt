@@ -491,6 +491,59 @@ class CameraControlTest {
         val expired = ColorPin.absorbStale(stale, pin, nowElapsedRealtime = 2_000L)
         assertNull(expired.second)
         assertEquals(CameraCommands.COLOR_DLOG2, expired.first.colorMode)
+        val merged =
+            ColorPin.absorbStale(
+                CameraStatus(colorMode = CameraCommands.COLOR_DLOG),
+                pin,
+                nowElapsedRealtime = 500L,
+                reported = false,
+            )
+        assertEquals(pin, merged.second)
+        assertEquals(CameraCommands.COLOR_DLOG, merged.first.colorMode)
+    }
+
+    @Test
+    fun shootingModePinIgnoresUnrelatedFramesAndStaleEcho() {
+        val pin =
+            ShootingModePin(
+                expected = CameraCommands.SHOOT_SLOWMO,
+                deadlineElapsedRealtime = 2_000L,
+            )
+        val merged =
+            ShootingModePin.absorbStale(
+                CameraStatus(shootingMode = CameraCommands.SHOOT_SLOWMO),
+                pin,
+                nowElapsedRealtime = 500L,
+                reported = false,
+            )
+        assertEquals(pin, merged.second)
+        val stale =
+            ShootingModePin.absorbStale(
+                CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO),
+                pin,
+                nowElapsedRealtime = 500L,
+                reported = true,
+            )
+        assertEquals(CameraCommands.SHOOT_SLOWMO, stale.first.shootingMode)
+        assertEquals(pin, stale.second)
+        val matched =
+            ShootingModePin.absorbStale(
+                CameraStatus(shootingMode = CameraCommands.SHOOT_SLOWMO),
+                pin,
+                nowElapsedRealtime = 500L,
+                reported = true,
+            )
+        assertNull(matched.second)
+        assertEquals(CameraCommands.SHOOT_SLOWMO, matched.first.shootingMode)
+        val expired =
+            ShootingModePin.absorbStale(
+                CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO),
+                pin,
+                nowElapsedRealtime = 2_000L,
+                reported = true,
+            )
+        assertNull(expired.second)
+        assertEquals(CameraCommands.SHOOT_VIDEO, expired.first.shootingMode)
     }
 
     @Test

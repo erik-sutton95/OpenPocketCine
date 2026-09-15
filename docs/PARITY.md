@@ -18,10 +18,12 @@ against the video profile. Clip playback keeps its own color profile.
 The iOS engine regression uses a synthetic scene whose pixel range previously
 triggered D-Log2 inference in Photo; it now retains Rec.709, while the Video
 fallback still infers log. Shell tests also cover saved selections and clip
-playback isolation. Physical verification remains pending: the iPhone build
-launched, but the saved camera did not reconnect during the automated run.
-Android has no attached physical device. Earlier qualification does not cover
-this mode transition or its sustained live-picture budget.
+playback isolation. The physical iPhone retry passed the Photo catalog checks
+(Creative/Custom available, log conversions absent) and observed picture progress.
+The later return-to-Video check remains pending: the feed stalled and the
+intermediate TimeLapse command received no ACK, so its bounded pin expired back
+to the reported Photo value. Android has no attached physical device. This does
+not qualify sustained live-picture performance.
 
 Before changing an operator-visible surface, read this file. Ship both shells or
 write the exception in the table in the same PR.
@@ -71,7 +73,11 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Capture drums are 86 pt/dp tall with animated horizontal values, a fine tick ruler,
   a cyan center mark and fading edges.
   Camera-derived options remain authoritative; settle commits through existing
-  command handlers. Width caps: 480 phone / 620 tablet, also bounded by viewport.
+  command handlers. Pending camera choices ignore older echoes for up to two
+  seconds; only the corresponding reported field confirms a choice. Unrelated
+  status messages cannot release that protection. Shooting mode, WB, focus,
+  Auto ISO ceiling and gimbal mode/speed share this bounded behavior alongside
+  exposure, audio, format and color. Width caps: 480 phone / 620 tablet, also bounded by viewport.
   Detent haptics are a medium impact on coarse neighbors (shutter 172° → 180°)
   and on dense-list majors (Kelvin 5600K, ISO 400, 1/50). The zoom disc pulses
   on whole stops (2× / 3× / 4× / 6× / 9× / 12×); duration dials pulse on whole
@@ -666,3 +672,17 @@ cutout-clear assist tabs, scrolling future destinations and return from Share
 to the same player. Physical iPhone automation could not initialize because
 Xcode returned authentication canceled; physical validation remains pending.
 Physical Android remains unavailable because no device is attached.
+
+### Dial stale-echo regression
+
+Production iOS status-ingress tests cover shooting mode, white balance, focus
+and parameter dials, including unrelated pushes, rejected commands and subsequent
+external changes. Android tests cover stale mode echoes, partial audio replies,
+unrelated exposure data and bounded gimbal settling. The iPhone 16 Pro Max
+physical run passed Video / SlowMo / Photo / return transitions, repeatedly
+sampling the selected value for 1.5 seconds after each dial release without a
+snapback; the device journal confirms successful mode-command ACKs. A later
+Photo LUT run encountered a stalled feed and an unacknowledged mode command,
+whose two-second expiry correctly restored the reported mode and canceled a
+subsequent drag. Android build, unit tests and lint pass; physical Android qualification
+remains an exception because no device is attached.

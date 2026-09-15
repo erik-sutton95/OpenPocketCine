@@ -1109,8 +1109,11 @@ data class AudioPin(
         incoming: CameraStatus,
         current: CameraStatus,
         nowElapsedMs: Long,
+        reported: Boolean = true,
+        reportedValues: CameraStatus = incoming,
     ): Pair<CameraStatus, AudioPin?> {
         if (nowElapsedMs >= deadlineElapsedMs) return incoming to null
+        if (!reported) return incoming to this
         var next = incoming
         var channel = this.channel
         var vocal = this.vocal
@@ -1118,25 +1121,25 @@ data class AudioPin(
         var directional = this.directional
         if (channel != null) {
             when {
-                incoming.audioChannel == channel -> channel = null
+                reportedValues.audioChannel == channel -> channel = null
                 incoming.audioChannel >= 0 -> next = next.copy(audioChannel = current.audioChannel)
             }
         }
         if (vocal != null) {
             when {
-                incoming.vocalBoost == vocal -> vocal = null
+                reportedValues.vocalBoost == vocal -> vocal = null
                 incoming.vocalBoost >= 0 -> next = next.copy(vocalBoost = current.vocalBoost)
             }
         }
         if (wind != null) {
             when {
-                incoming.windNr == wind -> wind = null
+                reportedValues.windNr == wind -> wind = null
                 incoming.windNr >= 0 -> next = next.copy(windNr = current.windNr)
             }
         }
         if (directional != null) {
             when {
-                incoming.directionalAudio == directional -> directional = null
+                reportedValues.directionalAudio == directional -> directional = null
                 incoming.directionalAudio >= 0 ->
                     next = next.copy(directionalAudio = current.directionalAudio)
             }
