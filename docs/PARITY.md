@@ -719,3 +719,19 @@ was reviewed. A signed device build was installed and launched on the iPhone.
 Physical UI verification remains pending: Xcode timed out enabling automation
 before the test started. No physical Android device was attached; live gimbal
 feel and cadence under the new non-default mappings remain unqualified.
+
+### Virtual joystick touch range
+
+Both shells derive input from raw finger displacement, with full radial input
+at 1.35 times the visible outer radius. The knob still clamps to its original
+visual travel. The 35% extension leaves full-right input reachable from the
+center of the 88-point portrait stick, whose center is 60 points from the edge.
+An engaged drag continues updating inside the tap threshold, so returning to
+center reaches the configured dead zone. Initial tap recognition is unchanged.
+This changes touch normalization only; gamepad mapping and wire limits remain.
+
+Verification: `just check` passed with 990 portable tests; `just ios-test`
+passed 659 tests (one existing skip); `just android-check` passed assembly,
+unit tests and lint. Regression tests reproduce early saturation and the missing
+center update before the fix. Physical joystick feel, sustained camera cadence,
+and Android device verification remain pending.

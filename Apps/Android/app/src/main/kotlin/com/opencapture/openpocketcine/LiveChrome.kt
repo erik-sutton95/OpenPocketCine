@@ -91,7 +91,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -1875,7 +1874,6 @@ fun LiveGimbalStick(
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 val stickPx = min(this.size.width, this.size.height).toFloat()
-                val travel = (stickPx - stickPx * knobRatio) / 2f
                 var taps = 0
                 var lastTap = 0L
                 awaitEachGesture {
@@ -1889,16 +1887,20 @@ fun LiveGimbalStick(
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (change.pressed) {
                                 translation += change.positionChange()
-                                val mag = hypot(translation.x, translation.y)
-                                if (travel > 0f && mag / travel > CameraCommands.GIMBAL_STICK_TAP_SLOP) {
+                                val mapped =
+                                    CameraCommands.mapGimbalStickTouch(
+                                        translation.x,
+                                        translation.y,
+                                        stickPx,
+                                        stickPx * knobRatio,
+                                        dragged,
+                                    )
+                                if (mapped.emit) {
                                     dragged = true
                                     taps = 0
                                     recenterJob?.cancel()
-                                    val limited =
-                                        if (mag > travel && mag > 0f) translation * (travel / mag) else translation
-                                    knobOffset = limited
-                                    val denom = if (travel > 0f) travel else 1f
-                                    onMove(limited.x / denom, -limited.y / denom)
+                                    knobOffset = Offset(mapped.visualX, mapped.visualY)
+                                    onMove(mapped.commandX, mapped.commandY)
                                 }
                                 change.consume()
                             } else {

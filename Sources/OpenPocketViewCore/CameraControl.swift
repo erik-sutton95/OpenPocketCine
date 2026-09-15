@@ -1729,6 +1729,56 @@ public enum GimbalStick {
         normalizedMagnitude < tapSlop
     }
 
+    /// Full command throw as a multiple of the visible outer radius (`stickSize / 2`).
+    /// Knob travel stays `(stickSize - knobSize) / 2`.
+    public static let touchCommandRadiusFactor: Double = 1.35
+
+    /// Visual knob offset plus command axes for one on-screen stick sample.
+    public struct TouchMapping: Equatable, Sendable {
+        public var visualX: Double
+        public var visualY: Double
+        public var commandX: Double
+        public var commandY: Double
+        public var isTap: Bool
+        public var engaged: Bool
+        public var emit: Bool
+    }
+
+    /// Map raw drag translation. Command uses the outer radius, never knob travel.
+    public static func mapTouch(
+        dx: Double, dy: Double, stickSize: Double, knobSize: Double, engaged: Bool
+    ) -> TouchMapping {
+        let size = stickSize.isFinite ? Swift.max(stickSize, 0) : 0
+        let knob = knobSize.isFinite ? Swift.max(knobSize, 0) : 0
+        let rawX = dx.isFinite ? dx : 0
+        let rawY = dy.isFinite ? dy : 0
+        let travel = Swift.max((size - knob) / 2, 0)
+        let commandRadius = touchCommandRadiusFactor * (size / 2)
+        let (visualX, visualY) = radialClamp(rawX, rawY, radius: travel)
+        let visualMag = hypot(visualX, visualY)
+        let visualNorm = travel > 0 ? visualMag / travel : 0
+        let isTap = visualNorm < tapSlop
+        let nowEngaged = engaged || !isTap
+        let (cmdX, cmdY) = radialClamp(rawX, rawY, radius: commandRadius)
+        let commandX = commandRadius > 0 ? cmdX / commandRadius : 0
+        let commandY = commandRadius > 0 ? -cmdY / commandRadius : 0
+        return TouchMapping(
+            visualX: visualX,
+            visualY: visualY,
+            commandX: commandX,
+            commandY: commandY,
+            isTap: isTap,
+            engaged: nowEngaged,
+            emit: nowEngaged)
+    }
+
+    private static func radialClamp(_ x: Double, _ y: Double, radius: Double) -> (Double, Double) {
+        let mag = hypot(x, y)
+        guard radius > 0, mag > radius else { return (x, y) }
+        let scale = radius / mag
+        return (x * scale, y * scale)
+    }
+
     public static func isDoubleTap(secondsSincePreviousTap: TimeInterval?) -> Bool {
         guard let since = secondsSincePreviousTap else { return false }
         return since >= 0 && since < doubleTapWindow

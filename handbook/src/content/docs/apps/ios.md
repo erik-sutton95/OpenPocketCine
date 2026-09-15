@@ -359,3 +359,8 @@ In **Controls → On-screen joystick**, tune the virtual gimbal stick:
 Both inversion options default to off and the response defaults to Standard.
 These settings are saved and affect the on-screen joystick. The existing
 sensitivity setting continues to control overall speed.
+
+The touch range extends 35% beyond the joystick's outer radius while the ring
+and knob keep their existing size. Continue dragging past the ring for full
+input. Returning to the center during a drag respects the dead zone; lifting
+your finger releases the stick.

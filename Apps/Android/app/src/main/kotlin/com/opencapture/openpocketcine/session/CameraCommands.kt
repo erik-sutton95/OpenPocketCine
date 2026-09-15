@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -621,6 +622,58 @@ object CameraCommands {
         }
     }
     const val GIMBAL_STICK_TAP_SLOP = 0.18f
+    /** Full command throw as a multiple of the visible outer radius (`stickSize / 2`). */
+    const val GIMBAL_STICK_TOUCH_COMMAND_RADIUS_FACTOR = 1.35f
+
+    data class GimbalStickTouchMapping(
+        val visualX: Float,
+        val visualY: Float,
+        val commandX: Float,
+        val commandY: Float,
+        val isTap: Boolean,
+        val engaged: Boolean,
+        val emit: Boolean,
+    )
+
+    fun mapGimbalStickTouch(
+        dx: Float,
+        dy: Float,
+        stickSize: Float,
+        knobSize: Float,
+        engaged: Boolean,
+    ): GimbalStickTouchMapping {
+        val size = if (stickSize.isFinite()) maxOf(stickSize, 0f) else 0f
+        val knob = if (knobSize.isFinite()) maxOf(knobSize, 0f) else 0f
+        val rawX = if (dx.isFinite()) dx else 0f
+        val rawY = if (dy.isFinite()) dy else 0f
+        val travel = maxOf((size - knob) / 2f, 0f)
+        val commandRadius = GIMBAL_STICK_TOUCH_COMMAND_RADIUS_FACTOR * (size / 2f)
+        val (visualX, visualY) = radialClamp(rawX, rawY, travel)
+        val visualMag = hypot(visualX, visualY)
+        val visualNorm = if (travel > 0f) visualMag / travel else 0f
+        val isTap = visualNorm <= GIMBAL_STICK_TAP_SLOP
+        val nowEngaged = engaged || !isTap
+        val (cmdX, cmdY) = radialClamp(rawX, rawY, commandRadius)
+        val commandX = if (commandRadius > 0f) cmdX / commandRadius else 0f
+        val commandY = if (commandRadius > 0f) -cmdY / commandRadius else 0f
+        return GimbalStickTouchMapping(
+            visualX = visualX,
+            visualY = visualY,
+            commandX = commandX,
+            commandY = commandY,
+            isTap = isTap,
+            engaged = nowEngaged,
+            emit = nowEngaged,
+        )
+    }
+
+    private fun radialClamp(x: Float, y: Float, radius: Float): Pair<Float, Float> {
+        val mag = hypot(x, y)
+        if (radius <= 0f || mag <= radius) return x to y
+        val scale = radius / mag
+        return x * scale to y * scale
+    }
+
     /** iOS `GimbalStick.streamInterval` — ACK pump emits while held. */
     const val GIMBAL_STICK_STREAM_INTERVAL_MS = 40L
     /** Stick throw can pause HEVC the same way zoom/AF-C do. */

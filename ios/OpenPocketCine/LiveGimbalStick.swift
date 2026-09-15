@@ -18,7 +18,6 @@ struct LiveGimbalStick: View {
 
     private var size: CGFloat { LiveChromeMetrics.gimbalStickSize }
     private var knob: CGFloat { LiveChromeMetrics.gimbalKnobSize }
-    private var travel: CGFloat { (size - knob) / 2 }
     private var opacity: CGFloat { contact ? 0.8 : LiveChromeMetrics.gimbalStickOpacity }
     private var interactive: Bool { enabled && !interfaceLocked }
     private var ink: Color { contact ? LiveDesign.accent : LiveDesign.text }
@@ -75,19 +74,20 @@ struct LiveGimbalStick: View {
                     contact = true
                     hapticPress()
                 }
-                let limited = clamp(value.translation)
-                let mag =
-                    hypot(Double(limited.width), Double(limited.height))
-                    / Double(max(travel, 1))
-                if !GimbalStick.isTap(normalizedMagnitude: mag) {
+                let mapped = GimbalStick.mapTouch(
+                    dx: Double(value.translation.width),
+                    dy: Double(value.translation.height),
+                    stickSize: Double(size),
+                    knobSize: Double(knob),
+                    engaged: dragging)
+                if mapped.emit {
                     cancelTaps()
                     dragging = true
                     model.gimbalScreenHeld = true
-                    knobOffset = limited
-                    let nx = Double(limited.width / max(travel, 1))
-                    let ny = Double(-limited.height / max(travel, 1))
+                    knobOffset = CGSize(width: mapped.visualX, height: mapped.visualY)
                     model.session.updateGimbalStick(
-                        x: nx, y: ny, sensitivity: model.gimbalStickSensitivity,
+                        x: mapped.commandX, y: mapped.commandY,
+                        sensitivity: model.gimbalStickSensitivity,
                         assistMirror: model.assist.isVisible(.mirror),
                         mapping: model.virtualJoystickMapping)
                 }
@@ -153,11 +153,5 @@ struct LiveGimbalStick: View {
         model.gimbalScreenHeld = false
         knobOffset = .zero
         model.session.endGimbalStick()
-    }
-
-    private func clamp(_ raw: CGSize) -> CGSize {
-        let mag = hypot(raw.width, raw.height)
-        guard mag > travel, mag > 0 else { return raw }
-        return CGSize(width: raw.width / mag * travel, height: raw.height / mag * travel)
     }
 }
