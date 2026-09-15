@@ -127,6 +127,45 @@ class VerifyPlistTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class CloudArchiveDsnTests(unittest.TestCase):
+    def test_archive_requires_destination_even_without_symbol_upload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory)
+            plist = archive / "Products/Applications/OpenPocketCine.app/Info.plist"
+            plist.parent.mkdir(parents=True)
+            env = os.environ.copy()
+            for key in ("SENTRY_UPLOAD_ENABLED", "CI_APP_STORE_SIGNED_APP_PATH"):
+                env.pop(key, None)
+            env.update(
+                CI_PRIMARY_REPOSITORY_PATH=str(ROOT.parent),
+                CI_XCODEBUILD_ACTION="archive",
+                CI_XCODEBUILD_EXIT_CODE="0",
+                CI_ARCHIVE_PATH=str(archive),
+            )
+            for destination, expected in (("", 3), (SAMPLE, 0)):
+                with self.subTest(configured=bool(destination)):
+                    plist.write_bytes(plistlib.dumps({"SentryDSN": destination}))
+                    result = subprocess.run(
+                        ["sh", str(ROOT.parent / "ios/ci_scripts/ci_post_xcodebuild.sh")],
+                        env=env, capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertNotIn(SAMPLE, result.stdout + result.stderr)
+
+    def test_non_archive_and_failed_archive_do_not_require_destination(self) -> None:
+        for action, exit_code in (("test", "0"), ("build", "0"), ("archive", "65")):
+            with self.subTest(action=action, exit_code=exit_code):
+                env = os.environ.copy()
+                for key in ("CI_APP_STORE_SIGNED_APP_PATH", "CI_ARCHIVE_PATH"):
+                    env.pop(key, None)
+                env.update(CI_XCODEBUILD_ACTION=action, CI_XCODEBUILD_EXIT_CODE=exit_code)
+                result = subprocess.run(
+                    ["sh", str(ROOT.parent / "ios/ci_scripts/ci_post_xcodebuild.sh")],
+                    env=env, capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class RequireAndroidDsnTests(unittest.TestCase):
     def run_script(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         merged = os.environ.copy()
