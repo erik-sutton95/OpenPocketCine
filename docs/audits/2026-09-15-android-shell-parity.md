@@ -128,9 +128,9 @@ an operator panel does not change the live composition slot. Live reserves the
 navigation area before placing controls, including reverse landscape where
 Android puts its buttons on the left.
 
-Shooting-mode placement remains the iOS baseline: portrait REC SETUP → Mode,
-Photo's top mode readout, a separate mode readout on wide landscape, and holding
-Record or Photo shutter. No additional Android-only mode button was added.
+The final shooting-mode correction shows the mode immediately after color in
+Android's landscape top row at every width. Portrait retains REC SETUP → Mode
+and Photo's MODE readout. Record/Photo shutter no longer opens modes on hold.
 
 Video playback now uses the iOS header action order and source badge below
 metadata, three plain transport icons for ±15-second seeking and play/pause,
@@ -149,3 +149,17 @@ SwiftUI layout source; native material rendering and different device safe areas
 remain platform-specific. The final playback pass also matches iOS header/footer
 scrims and the 22 dp scrubber with a white thumb. App data was preserved with
 replacement installs; no media was deleted and no camera capture was triggered.
+
+### Live-view navigation correction
+
+The final user preference is immersive live view and photo/video playback: hide
+both system bars there, with native edge-swipe reveal. Playback restores its visible
+Back/Close control. Opening Settings or Media library restores navigation while
+hiding the status bar. Window focus
+reapplies the current policy without remounting the live composition.
+
+The correction is verified on the Galaxy S25: landscape mode opens from the
+readout immediately after color; the isolated native shutter/lock test passes.
+Photo and video playback hide both bars, their visible return controls restore
+Media library navigation, and video Back is clear in portrait and landscape.
+`just check` (990 tests), `just android-check`, and the handbook build pass.

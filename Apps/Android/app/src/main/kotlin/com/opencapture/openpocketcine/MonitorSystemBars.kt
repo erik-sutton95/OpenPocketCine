@@ -5,11 +5,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
-/** Keep system navigation available while reserving the top edge for app chrome. */
-fun applyMonitorSystemBars(window: Window) {
+/** Live view hides both bars; pages retain navigation while hiding the status bar. */
+fun applyMonitorSystemBars(window: Window, hideNavigation: Boolean = false) {
     WindowCompat.getInsetsController(window, window.decorView).apply {
         systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        show(WindowInsetsCompat.Type.navigationBars())
+        if (hideNavigation) hide(WindowInsetsCompat.Type.navigationBars())
+        else show(WindowInsetsCompat.Type.navigationBars())
         hide(WindowInsetsCompat.Type.statusBars())
     }
 }

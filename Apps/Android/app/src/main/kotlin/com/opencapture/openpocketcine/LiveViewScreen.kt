@@ -339,7 +339,10 @@ fun LiveViewScreen(model: AppModel) {
             label = "safeTop",
         )
         val safeBottom by animateFloatAsState(
-            edgeDp(cutout.getBottom(density), 0),
+            monitorBottomInsetDp(
+                rawInsetDp = edgeDp(cutout.getBottom(density), 0),
+                isPortrait = portrait && model.liveOperatorPanel == null,
+            ),
             label = "safeBottom",
         )
         val safeLeading by animateFloatAsState(
@@ -1325,7 +1328,6 @@ internal fun LandscapeChrome(
                     request = CaptureShutterPolicy.request(
                         status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
                     ),
-                    onShootingMode = { onSheet(LiveSheet.MODE) },
                     onClick = model::pressShutter,
                 )
             }
@@ -1536,7 +1538,7 @@ private fun LiveTopDeck(
             Text(CameraCommands.colorLabel(status.colorMode, family), style = LiveType.ui(topFont, FontWeight.Medium), maxLines = 1,
                 modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR).topCapture(LiveSheet.COLOR))
         }
-        if (model.chromeSectionMounts(PocketDispSection.FORMAT) && (status.isPhoto || viewportWidth >= 800f)) {
+        if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
             Text(CameraCommands.shootingModeLabel(status.shootingMode, model.session.connectedCamera?.model?.name) ?: "—",
                 color = LiveDesign.accent, style = LiveType.ui(topFont, FontWeight.Medium), maxLines = 1,
                 modifier = Modifier.reportChromeFrame { onPickerFrame(LiveSheet.MODE, it) }.topCapture(LiveSheet.MODE))

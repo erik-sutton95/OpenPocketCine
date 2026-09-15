@@ -28,23 +28,25 @@ The live signal indicator uses the Link Health colors from Settings: red for
 Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 
 The native UI uses Sora typography, cyan controls and dark panels.
-The Android status bar stays hidden. System Home, Back and Recents remain available
-when your phone uses button navigation; gesture navigation follows your phone settings.
+Live view and photo/video playback hide both Android system bars; swipe from an
+edge for temporary access. Playback has a visible Back/Close control to return to Media.
+Other pages hide the status bar but keep Home, Back and Recents available when your
+phone uses button navigation; gesture navigation follows your phone settings.
 Controls leave room for the navigation bar and camera cutout. Portrait
 phones place exposure values in two rows above the system buttons; landscape
 puts those values along the bottom of the picture. **REC SETUP** opens capture
 format, color and shooting options from the top of the monitor. Portrait keeps
 Format / Color / Mode tabs on the details drawer; landscape has no extra
-category row. As on iOS, wide landscape shows the shooting mode in the top row;
-narrow landscape uses the Record hold shortcut. Photo shows its mode in the top row. ISO,
+category row. Landscape shows the shooting mode immediately after the color profile in the top row,
+including narrow phones. Photo shows its mode in the top row. ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
 shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.
-Hold Record (or the Photo shutter) to open shooting modes in portrait or landscape.
-A hold opens the picker without taking a photo or starting/stopping recording.
+Use the top shooting-mode control in landscape or REC SETUP → Mode in portrait.
+Record and the Photo shutter have no shooting-mode long-press shortcut.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,
 without recording confirmation. Photo and camera-reported Live Photo hide video color-profile, frame-rate,
 codec/bit-depth, timecode, recording-duration and audio controls. White balance,
@@ -85,8 +87,8 @@ when the screen rotates; a manually placed editor keeps its chosen position.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
 in portrait. Use Android’s system Back button or back gesture to return from
-Settings, Media, photo/video playback and pairing. These pages omit the large
-in-app Back button, leaving more space for their content. Back dismisses the
+Settings, Media library and pairing. These pages omit the large in-app Back button.
+Photo/video playback hides system navigation and provides its own Back/Close control. Back dismisses the
 current overlay or selection before leaving its page. Contextual Close and
 Cancel actions remain available. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,

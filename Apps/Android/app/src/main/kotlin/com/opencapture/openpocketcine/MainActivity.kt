@@ -77,6 +77,12 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     private val composeFirstFrameDrawn = AtomicBoolean(false)
     private lateinit var model: AppModel
+    var hideSystemNavigation = false
+    var playbackHidesSystemNavigation = false
+
+    fun updateSystemBars() {
+        applyMonitorSystemBars(window, hideSystemNavigation || playbackHidesSystemNavigation)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -105,7 +111,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus) return
-        applyMonitorSystemBars(window)
+        updateSystemBars()
     }
 
     override fun onPause() {
@@ -188,8 +194,10 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
-    LaunchedEffect(activity) {
-        activity?.window?.let(::applyMonitorSystemBars)
+    val hideNavigation = showLive && model.liveOperatorPanel == null
+    LaunchedEffect(activity, hideNavigation) {
+        (activity as? MainActivity)?.hideSystemNavigation = hideNavigation
+        (activity as? MainActivity)?.updateSystemBars()
     }
 
     Box(Modifier.fillMaxSize().startupBackdrop()) {

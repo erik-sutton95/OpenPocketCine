@@ -267,6 +267,7 @@ fun MediaPhotoViewer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                MediaCircleIconButton(OpcIcon.X, "Back to media", onClose)
                 Text(
                     file.filename,
                     color = LiveDesign.text,
@@ -683,6 +684,7 @@ fun MediaPlayerScreen(
                 hasDisplayCutout = max(safeLeading, safeTrailing) > 0f,
             )
             val headerTop = MonitorPlaybackLayout.headerTop(portraitPlayback, safeTop, fieldLayout.lock.y)
+            val backX = if (portraitPlayback) safeLeading + 22f else fieldLayout.lock.x
             val navLeading = with(density) { WindowInsets.navigationBars.getLeft(this, layoutDir).toDp().value }
             val navTrailing = with(density) { WindowInsets.navigationBars.getRight(this, layoutDir).toDp().value }
             val assistFrame = MonitorLayoutPolicy.fieldMonitorAssists(
@@ -910,7 +912,7 @@ fun MediaPlayerScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                         .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
                         .padding(
-                        start = MonitorPlaybackLayout.headerGutter(sideInset).dp,
+                        start = max(MonitorPlaybackLayout.headerGutter(sideInset), backX + fieldLayout.lock.width + 12f).dp,
                         end = MonitorPlaybackLayout.headerGutter(sideInset).dp,
                         top = headerTop.dp,
                         bottom = MonitorPlaybackLayout.HEADER_BOTTOM.dp,
@@ -930,6 +932,16 @@ fun MediaPlayerScreen(
                         }
                     },
                 )
+                com.opencapture.openpocketcine.AuxCircleButton(
+                    modifier = Modifier.align(Alignment.TopStart)
+                        .offset(x = backX.dp, y = headerTop.dp)
+                        .size(fieldLayout.lock.width.dp, fieldLayout.lock.height.dp)
+                        .semantics { contentDescription = "Back to media" },
+                    onClick = onClose,
+                ) { tint ->
+                    OpcIcon(OpcIcon.CHEVRON_LEFT, contentDescription = null, tint = tint,
+                        modifier = Modifier.size(29.dp))
+                }
                 com.opencapture.monitorui.MonitorPlaybackFooter(
                     position = conformedLabel(currentTime), duration = conformedLabel(duration), portrait = portraitPlayback,
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()

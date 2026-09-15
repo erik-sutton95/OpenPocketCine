@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.media
 
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -98,6 +99,16 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     var colorFilters by remember { mutableStateOf(setOf<Int>()) }
     var playing by remember { mutableStateOf<MediaFile?>(null) }
     var viewingPhoto by remember { mutableStateOf<MediaFile?>(null) }
+    val activity = LocalActivity.current as? com.opencapture.openpocketcine.MainActivity
+    val fullscreenPlayback = playing != null || viewingPhoto != null
+    DisposableEffect(activity, fullscreenPlayback) {
+        activity?.playbackHidesSystemNavigation = fullscreenPlayback
+        activity?.updateSystemBars()
+        onDispose {
+            activity?.playbackHidesSystemNavigation = false
+            activity?.updateSystemBars()
+        }
+    }
     var isSelecting by remember { mutableStateOf(false) }
     var selectedIDs by remember { mutableStateOf(setOf<String>()) }
     var deliveryFiles by remember { mutableStateOf<List<MediaFile>?>(null) }
