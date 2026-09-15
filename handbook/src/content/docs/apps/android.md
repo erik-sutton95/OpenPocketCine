@@ -89,7 +89,9 @@ without activating the controls behind it. Until dragged, the editor stays cente
 when the screen rotates; a manually placed editor keeps its chosen position.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
-in portrait. Use Android’s system Back button or back gesture to return from
+in portrait. Settings groups use compact information buttons beside their labels;
+Controls groups touch safety, gimbal options, and the on-screen joystick separately.
+Use Android’s system Back button or back gesture to return from
 Settings, Media library and pairing. These pages omit the large in-app Back button.
 Photo/video playback hides system navigation and provides its own Back/Close control. Back dismisses the
 current overlay or selection before leaving its page. Contextual Close and

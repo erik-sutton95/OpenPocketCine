@@ -1,13 +1,18 @@
 package com.opencapture.openpocketcine.settings
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,8 +38,10 @@ import androidx.compose.runtime.Composable
 import com.opencapture.monitorui.LocalMonitorInspectorHelp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,18 +49,27 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.opencapture.openpocketcine.assists.FalseColorReference
+import com.opencapture.openpocketcine.assists.FalseColorScale
+import com.opencapture.openpocketcine.feed.MonitorTransfer
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
@@ -73,6 +90,10 @@ import kotlin.math.roundToInt
 
 private fun chromeStyle(size: Float, weight: FontWeight, mono: Boolean = false): TextStyle =
     if (mono) LiveType.mono(size, weight) else LiveType.ui(size, weight)
+
+/** iOS `monitorCardSurface`: solid Field Monitor card with a hairline border. */
+private fun Modifier.settingsCardSurface(): Modifier =
+    background(LiveDesign.surface, ChromeShape).border(1.dp, LiveDesign.hairline, ChromeShape)
 
 // Compose ports of the iOS operator-settings primitives (SettingsRootView /
 // AppSettings: SettingsRowCard, SettingsInlineRow, SettingsSwitchInlineRow,
@@ -102,20 +123,28 @@ fun SettingsRowCard(
     onReset: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    com.opencapture.monitorui.MonitorSettingsCard {
-        Column(verticalArrangement = Arrangement.spacedBy(com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP.dp)) {
-            if (title != null) {
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_MIN_HEIGHT.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(title, style = chromeStyle(13f, FontWeight.SemiBold), color = LiveDesign.text)
-                    Spacer(Modifier.weight(1f))
-                    if (onReset != null) SettingsResetButton(onClick = onReset)
-                }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .settingsCardSurface()
+            .padding(horizontal = 13.dp)
+            .padding(top = if (title != null) 0.dp else 8.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP.dp),
+    ) {
+        if (title != null) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 11.dp)
+                    .heightIn(min = com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_TITLE_MIN_HEIGHT.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = chromeStyle(13f, FontWeight.SemiBold), color = LiveDesign.text)
+                Spacer(Modifier.weight(1f))
+                if (onReset != null) SettingsResetButton(onClick = onReset)
             }
-            content()
         }
+        content()
     }
 }
 
@@ -160,7 +189,7 @@ fun SettingsActionPill(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let {
-            OpcIcon(icon = it, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
+            OpcIcon(icon = it, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
         }
         Text(
             title.uppercase(),
@@ -200,7 +229,7 @@ fun SettingsDashScale(title: String, caption: String, score: Int) {
         }
     Column(
         Modifier.fillMaxWidth()
-            .panelGlass(ChromeShape)
+            .settingsCardSurface()
             .padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
@@ -297,6 +326,20 @@ fun SettingsInlineRow(
     trailing: @Composable () -> Unit,
 ) {
     val inspectorHelp = LocalMonitorInspectorHelp.current
+    val label = @Composable {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                style = chromeStyle(12.5f, FontWeight.SemiBold),
+                color = LiveDesign.text,
+                maxLines = if (stacked) 2 else 1,
+            )
+            if (inspectorHelp == null) help?.let { SettingsHelpBadge(it) }
+        }
+    }
     Column {
         if (showTopDivider) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
@@ -306,35 +349,22 @@ fun SettingsInlineRow(
                 Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        title,
-                        style = chromeStyle(11.5f, FontWeight.SemiBold),
-                        color = LiveDesign.text,
-                        maxLines = 2,
-                    )
-                    if (inspectorHelp == null) help?.let { SettingsHelpBadge(it) }
-                }
-                trailing()
+                label()
+                Box(Modifier.fillMaxWidth()) { trailing() }
             }
         } else {
             Row(
                 Modifier.fillMaxWidth().defaultMinSize(minHeight = 50.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    title,
-                    modifier = Modifier.weight(1f),
-                    style = chromeStyle(11.5f, FontWeight.SemiBold),
-                    color = LiveDesign.text,
-                    maxLines = 2,
-                )
-                if (inspectorHelp == null) help?.let { SettingsHelpBadge(it) }
-                trailing()
+                label()
+                Box(
+                    Modifier.weight(1f).padding(start = 4.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    trailing()
+                }
             }
         }
         if (inspectorHelp == true && !help.isNullOrEmpty()) {
@@ -421,20 +451,28 @@ fun SettingsHelpBadge(text: String) {
                 .semantics { contentDescription = description },
             contentAlignment = Alignment.Center,
         ) {
-            OpcIcon(OpcIcon.CIRCLE_QUESTION_MARK, null, Modifier.size(16.dp), LiveDesign.muted)
+            Box(
+                Modifier
+                    .size(16.dp)
+                    .background(LiveDesign.background.copy(alpha = 0.5f), CircleShape)
+                    .border(1.dp, LiveDesign.hairline, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                OpcIcon(OpcIcon.INFO, null, Modifier.size(9.dp), LiveDesign.faint)
+            }
         }
         if (open) {
             Popup(onDismissRequest = { open = false }) {
                 Box(
                     Modifier
-                        .widthIn(max = 280.dp)
+                        .width(248.dp)
                         .background(LiveDesign.surface, ChromeShape)
                         .border(1.dp, LiveDesign.hairline, ChromeShape)
-                        .padding(10.dp),
+                        .padding(12.dp),
                 ) {
                     Text(
                         text,
-                        style = chromeStyle(11f, FontWeight.Normal),
+                        style = chromeStyle(12f, FontWeight.Normal),
                         color = LiveDesign.text,
                     )
                 }
@@ -452,44 +490,48 @@ fun SettingsSegmented(
     options: List<String>,
     selected: String,
     compact: Boolean = true,
+    fillWidth: Boolean = compact,
     accentSelection: Boolean = false,
     testTag: String? = null,
     onSelect: (String) -> Unit,
 ) {
-    Row(
-        Modifier
-            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-            .then(if (compact) Modifier.fillMaxWidth() else Modifier)
-            .background(LiveDesign.background.copy(alpha = 0.5f), ChromeShape)
-            .border(1.dp, LiveDesign.hairline, ChromeShape)
-            .padding(3.dp)
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        options.forEach { option ->
-            val active = option == selected
-            Box(
-                Modifier
-                    .then(if (compact) Modifier.weight(1f) else Modifier)
-                    .defaultMinSize(minHeight = if (compact) 32.dp else 30.dp)
-                    .background(
-                        if (active) { if (accentSelection) LiveDesign.accent else LiveDesign.surface } else Color.Transparent,
-                        ChromeShape,
+    BoxWithConstraints {
+        val labelSize = if (compact && fillWidth && options.size >= 4 && maxWidth < 260.dp) 9.5f else if (compact) 11f else 11.5f
+        Row(
+            Modifier
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+                .background(LiveDesign.background.copy(alpha = 0.5f), ChromeShape)
+                .border(1.dp, LiveDesign.hairline, ChromeShape)
+                .padding(3.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            options.forEach { option ->
+                val active = option == selected
+                Box(
+                    Modifier
+                        .then(if (fillWidth) Modifier.weight(1f) else Modifier)
+                        .defaultMinSize(minHeight = if (compact) 32.dp else 30.dp)
+                        .background(
+                            if (active) { if (accentSelection) LiveDesign.accent else LiveDesign.surface } else Color.Transparent,
+                            ChromeShape,
+                        )
+                        .selectable(
+                            selected = active,
+                            role = Role.RadioButton,
+                            onClick = { if (!active) onSelect(option) },
+                        )
+                        .padding(horizontal = if (compact && fillWidth) 2.dp else if (compact) 8.dp else 11.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        option,
+                        style = chromeStyle(labelSize, if (active) FontWeight.SemiBold else FontWeight.Medium),
+                        color = if (active) { if (accentSelection) Color(0xFF08191F) else LiveDesign.text } else LiveDesign.muted,
+                        maxLines = 1,
                     )
-                    .selectable(
-                        selected = active,
-                        role = Role.RadioButton,
-                        onClick = { if (!active) onSelect(option) },
-                    )
-                    .padding(horizontal = if (compact) 8.dp else 11.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    option,
-                    style = chromeStyle(if (compact) 11f else 11.5f, if (active) FontWeight.SemiBold else FontWeight.Medium),
-                    color = if (active) { if (accentSelection) Color(0xFF08191F) else LiveDesign.text } else LiveDesign.muted,
-                    maxLines = 1,
-                )
+                }
             }
         }
     }
@@ -523,7 +565,7 @@ fun SettingsColorDots(
             ) {
                 Box(
                     Modifier
-                        .size(diameter + 10.dp)
+                        .size(36.dp)
                         .background(LiveDesign.background.copy(alpha = 0.5f), CircleShape)
                         .border(
                             width = if (active) 2.dp else 1.dp,
@@ -646,8 +688,21 @@ fun SettingsPercentSlider(
     range: IntRange,
     onChange: (Int) -> Unit,
 ) {
+    SettingsValueSlider(value = value, range = range, label = "$value%", onChange = onChange)
+}
+
+/** Thin accent track + white thumb, matching iOS `Slider` in Operator Setup. */
+@Composable
+fun SettingsValueSlider(
+    value: Int,
+    range: IntRange,
+    label: String,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    labelWidth: Int = 40,
+) {
     Row(
-        Modifier.fillMaxWidth(),
+        modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -658,21 +713,64 @@ fun SettingsPercentSlider(
             modifier = Modifier.weight(1f),
         )
         Text(
-            "$value%",
+            label,
             style = chromeStyle(12f, FontWeight.Medium, mono = true),
             color = LiveDesign.text,
             textAlign = TextAlign.End,
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(labelWidth.dp),
         )
     }
 }
 
-/** Existing assist values adapt to the shared, frame-independent native slider. */
+/** Existing assist values adapt to a compact iOS-like track rather than the 44dp drum slider. */
 @Composable
 fun GlassPillSlider(value: Int, range: IntRange, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
-    com.opencapture.monitorui.MonitorSlider(value.toFloat(), range.first.toFloat()..range.last.toFloat(), modifier) {
-        val next = it.roundToInt().coerceIn(range)
-        if (next != value) onChange(next)
+    val currentOnChange by rememberUpdatedState(onChange)
+    val start = range.first.toFloat()
+    val endInclusive = range.last.toFloat().coerceAtLeast(start)
+    val span = (endInclusive - start).coerceAtLeast(1f)
+    var widthPx by remember { mutableFloatStateOf(1f) }
+    val density = LocalDensity.current
+    fun atX(x: Float): Int {
+        val inset = with(density) { 10.dp.toPx() }
+        val t = ((x - inset) / (widthPx - 2f * inset).coerceAtLeast(1f)).coerceIn(0f, 1f)
+        return (start + t * span).roundToInt().coerceIn(range)
+    }
+    Canvas(
+        modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .onSizeChanged { widthPx = it.width.toFloat() }
+            .semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), start..endInclusive)
+                setProgress {
+                    val next = it.roundToInt().coerceIn(range)
+                    if (next != value) onChange(next)
+                    true
+                }
+            }
+            .pointerInput(range) { detectTapGestures { currentOnChange(atX(it.x)) } }
+            .pointerInput(range) {
+                detectHorizontalDragGestures { change, _ ->
+                    change.consume()
+                    currentOnChange(atX(change.position.x))
+                }
+            },
+    ) {
+        val y = size.height / 2f
+        val inset = 10.dp.toPx()
+        val track = 2.dp.toPx()
+        val t = ((value.toFloat() - start) / span).coerceIn(0f, 1f)
+        val thumbX = inset + t * (size.width - 2f * inset)
+        drawLine(
+            LiveDesign.hairlineStrong,
+            Offset(inset, y),
+            Offset(size.width - inset, y),
+            track,
+            StrokeCap.Round,
+        )
+        drawLine(LiveDesign.accent, Offset(inset, y), Offset(thumbX, y), track, StrokeCap.Round)
+        drawCircle(Color.White, 10.dp.toPx(), Offset(thumbX, y))
     }
 }
 
@@ -727,9 +825,24 @@ fun SettingsCrushClipSegmented(
     }
 }
 
-/** Shared 38×22 switch; the owning settings row supplies action and semantics. */
+/** iOS `SettingsSwitchGraphic`: 39×22 capsule, cyan thumb on dim track when on. */
 @Composable
-fun SettingsSwitchGraphic(isOn: Boolean) = com.opencapture.monitorui.MonitorSwitchGraphic(isOn)
+fun SettingsSwitchGraphic(isOn: Boolean) {
+    val thumbX by animateFloatAsState(if (isOn) 20.5f else 3.5f, tween(160), label = "settings-switch")
+    Box(
+        Modifier
+            .size(39.dp, 22.dp)
+            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface, CircleShape)
+            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, CircleShape),
+    ) {
+        Box(
+            Modifier
+                .offset(x = thumbX.dp, y = 3.5.dp)
+                .size(15.dp)
+                .background(if (isOn) LiveDesign.accent else LiveDesign.muted, CircleShape),
+        )
+    }
+}
 
 /** Plain monospace value text (iOS `SettingsValueText`). */
 @Composable
@@ -811,8 +924,8 @@ fun SettingsGroupCard(
 ) {
     val isExpanded = expanded ?: true
     Column(
-        Modifier.fillMaxWidth().panelGlass(ChromeShape).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
+        Modifier.fillMaxWidth().settingsCardSurface().padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(
             Modifier.then(
@@ -905,5 +1018,41 @@ fun PanelCloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             tint = LiveDesign.text,
             modifier = Modifier.size(13.dp),
         )
+    }
+}
+
+/** Compact settings key; uses the same transfer-aware bands as the live reference. */
+@Composable
+fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
+    val segments = FalseColorReference.segments(scale, MonitorTransfer.fromColorMode(colorMode))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(11.dp)) {
+            drawRect(Color.White.copy(alpha = 0.5f))
+            segments.forEach { segment ->
+                val lo = segment.lowerFraction.toFloat()
+                val hi = segment.upperFraction.toFloat()
+                drawRect(
+                    Color(segment.band.red.toFloat(), segment.band.green.toFloat(), segment.band.blue.toFloat()),
+                    Offset(size.width * lo, 0f),
+                    Size(maxOf(1f, size.width * (hi - lo)), size.height),
+                )
+            }
+        }
+        if (scale == FalseColorScale.EL_ZONE) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(12.dp)) {
+                val rulerWidth = maxWidth
+                FalseColorReference.elZoneAxisMarkers().forEach { marker ->
+                    Text(marker.label, style = LiveType.mono(7f), color = LiveDesign.muted,
+                        modifier = Modifier.offset(x = (rulerWidth * marker.fraction.toFloat() - 8.dp)
+                            .coerceIn(0.dp, (rulerWidth - 16.dp).coerceAtLeast(0.dp))))
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                FalseColorReference.axisLabels(scale).forEach { label ->
+                    Text(label, style = LiveType.ui(7f), color = LiveDesign.muted)
+                }
+            }
+        }
     }
 }

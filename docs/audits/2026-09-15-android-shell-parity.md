@@ -172,3 +172,34 @@ test verifies shadow outside the content, unchanged target size, and sharp
 foreground color. Live comparison covers portrait and both landscape directions.
 Outer controls move 4–6 dp toward their respective edges with full-size targets;
 telemetry retains its leading clearance. No feed sampling or timers were added.
+
+### Connection startup check
+
+Three normal Disconnect → Connect cycles on Galaxy S25 / Pocket 4 Pro reached
+first presented picture 0.306 s, 0.327 s and 12.704 s after the datalink handshake.
+The slow cycle received a brief burst without establishing a decodable picture,
+then the existing eight-second first-picture grace and endpoint recovery restored
+video. Two recent replacement-install sessions showed the same 12–13 s pattern.
+This is an intermittent startup issue, not evidence that every connection is slow.
+A subsequent 60-window steady run presented 23.9–25.9 frames/s (median 24.9),
+with ACK cadence 38.9–41.9/s and zero decoder errors. This short check does not
+qualify long takes or other cameras. No connection code or recovery timing was
+changed: the initiating cause is unresolved, and shortening the grace could
+interrupt a valid keyframe. Private device traces remain outside the repository.
+
+### Operator Setup follow-up
+
+Compared all seven Settings tabs on Galaxy S25 in portrait and landscape with
+the iOS references and current SwiftUI implementation. Aligned card borders,
+information badges, switch tracks/thumbs, slider tracks, section grouping and
+active-link status. Feed Upscaler now retains its label. Selected tabs scroll
+fully into view; narrow segmented controls reserve room for their labels.
+The compact false-color reference uses the effective monitoring profile.
+
+The direct physical SettingsSliderInputTest passes horizontal adjustment,
+vertical parent scrolling and callback replacement after recomposition without
+changing saved operator values. Android assembly, unit tests and lint, the
+990-test repository check and handbook build pass. Replacement installation
+preserves app data. Settings retains Android system Back with the status bar
+hidden. Sharing, Head Tracking and platform-specific session options remain
+capability differences; this does not qualify tablets or all accessibility sizes.

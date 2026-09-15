@@ -817,3 +817,12 @@ iOS remains the visual baseline and is unchanged in this adjustment.
 
 Android portrait STBY/timecode/REC SETUP sits 6 dp lower at the user’s request;
 the shared frame also moves its tap/hold picker anchor. Landscape is unchanged.
+
+### Android Operator Setup alignment
+
+Android Settings follows the iOS card borders, row spacing, compact information
+buttons, switch treatment, intrinsic-width tabs, and Controls section grouping.
+The active-link status card is visible in both orientations. Supported settings
+retain their existing actions and saved values; Android still uses system Back.
+Sharing and platform-specific hardware/settings remain capability differences.
+iOS is unchanged in this Android visual correction.
