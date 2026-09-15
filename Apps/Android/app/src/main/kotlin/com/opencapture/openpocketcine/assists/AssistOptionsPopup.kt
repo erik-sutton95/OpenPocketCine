@@ -107,7 +107,8 @@ fun AssistOptionsPopup(
                         .then(if (cap != null) Modifier.heightIn(max = cap) else Modifier)
                 },
             )
-            .then(if (embedded) Modifier else Modifier.pickerPanelGlass(CardShape).padding(panelPad)),
+            .then(if (embedded) Modifier else Modifier.pickerPanelGlass(CardShape).padding(panelPad))
+            .then(if (embedded && !isLut) Modifier.verticalScroll(rememberScrollState()) else Modifier),
         verticalArrangement = Arrangement.spacedBy(panelGap),
     ) {
         if (!embedded) {
@@ -126,53 +127,58 @@ fun AssistOptionsPopup(
                 )
             }
         }
-        if (embedded) {
-            AssistInspectorScopePreview(tool, state, colorMode, playback)
-            if (model != null) AssistInspectorImagePreview(tool, state, model, lutSelection, colorMode, playback)
-        }
-        if (isLut) {
-            // iOS pins 50/50 under the catalog. Weight the picker so a short
-            // landscape well scrolls the drum instead of clipping the footer.
-            Box(
-                Modifier
-                    .weight(1f, fill = true)
-                    .fillMaxWidth(),
-            ) {
-                LUTPicker(
-                    selection = lutSelection,
-                    onSelect = { id ->
-                        if (model != null) {
-                            model.updateLutSelection(id)
-                        } else {
-                            fallbackLut = id
-                            OperatorPrefs.setLutSelection(context, id)
-                        }
-                        state.armLut()
-                    },
-                    embedded = true,
-                    splitComparison = state.splitComparison,
-                    splitVertical = state.splitVertical,
-                    lutExposureStops = state.lutExposureStops,
-                    onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
-                    onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
-                    onExposure = { state.updateLutExposure(it) },
-                    onArmLut = { state.armLut() },
-                    colorMode = colorMode,
-                    family = model?.session?.connectedCamera?.model?.family ?: "pocket",
-                    cameraName = model?.session?.connectedCamera?.name,
-                    isPhoto = isPhoto && !playback,
-                )
+        Column(
+            Modifier.then(if (isLut) Modifier.weight(1f).verticalScroll(rememberScrollState()) else Modifier),
+            verticalArrangement = Arrangement.spacedBy(panelGap),
+        ) {
+            if (embedded) {
+                AssistInspectorScopePreview(tool, state, colorMode, playback)
+                if (model != null) AssistInspectorImagePreview(tool, state, model, lutSelection, colorMode, playback)
             }
-        } else {
-            Column(
-                Modifier
-                    .weight(1f, fill = false)
-                    .fillMaxWidth()
-                    .then(if (cap != null) Modifier.verticalScroll(rememberScrollState()) else Modifier),
-            ) {
-                if (tool == LiveAssistTool.WAVE || tool == LiveAssistTool.PARADE) {
-                    AssistOptionsBody(tool, state, colorMode)
-                } else com.opencapture.monitorui.MonitorOptionGroup { AssistOptionsBody(tool, state, colorMode) }
+            if (isLut) {
+                // Keep a usable catalog height while the preview and catalog scroll
+                // together above the pinned exposure / comparison controls.
+                Box(
+                    Modifier
+                        .height(212.dp)
+                        .fillMaxWidth(),
+                ) {
+                    LUTPicker(
+                        selection = lutSelection,
+                        onSelect = { id ->
+                            if (model != null) {
+                                model.updateLutSelection(id)
+                            } else {
+                                fallbackLut = id
+                                OperatorPrefs.setLutSelection(context, id)
+                            }
+                            state.armLut()
+                        },
+                        embedded = true,
+                        splitComparison = state.splitComparison,
+                        splitVertical = state.splitVertical,
+                        lutExposureStops = state.lutExposureStops,
+                        onToggleSplit = { state.setSplitComparison(!state.splitComparison) },
+                        onSplitVertical = { state.setSplitComparison(state.splitComparison, it) },
+                        onExposure = { state.updateLutExposure(it) },
+                        onArmLut = { state.armLut() },
+                        colorMode = colorMode,
+                        family = model?.session?.connectedCamera?.model?.family ?: "pocket",
+                        cameraName = model?.session?.connectedCamera?.name,
+                        isPhoto = isPhoto && !playback,
+                    )
+                }
+            } else {
+                Column(
+                    Modifier
+                        .then(if (embedded) Modifier else Modifier.weight(1f, fill = false))
+                        .fillMaxWidth()
+                        .then(if (!embedded && cap != null) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                ) {
+                    if (tool == LiveAssistTool.WAVE || tool == LiveAssistTool.PARADE) {
+                        AssistOptionsBody(tool, state, colorMode)
+                    } else com.opencapture.monitorui.MonitorOptionGroup { AssistOptionsBody(tool, state, colorMode) }
+                }
             }
         }
         if (isLut) {

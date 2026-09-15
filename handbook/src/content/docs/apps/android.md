@@ -54,8 +54,10 @@ dismissed if the mode, recording state, connection, or interface lock changes.
 Build, unit tests and lint pass for these mode-aware controls. Physical Android
 qualification remains pending; no Android device was attached for this change.
 In portrait, Settings and Media remain usable
-with a picker open; returning to the monitor restores that picker. Physical Android proof of this Field
-Monitor chrome remains outstanding.
+with a picker open; returning to the monitor restores that picker. Camera values use two
+complete rows in portrait and one row in landscape. Assist palettes stay below Settings,
+Media and assist inspectors. In an inspector, scroll the preview and options together;
+LUT exposure and split comparison remain pinned below the scrolling catalog.
 
 The View Assist palette collapses into the lower-left control area. Expand it for the
 full catalog; tap a tool to toggle it or hold to open its options inspector.
@@ -100,7 +102,8 @@ arrow accepts taps farther to its right, with the toolbar anchored in place.
 
 Newly enabled windowed scopes start in the center, ready for you to place them.
 The false-color reference key also starts centered and can be dragged.
-Saved positions remain yours. AUDIO starts on the left at vertical center and
+Portrait and landscape keep separate scope positions. Existing saved positions
+remain the landscape positions. AUDIO starts on the left at vertical center and
 can also be dragged. Hold AUDIO for Vertical / Horizontal bars and optional
 left/right dBFS readings; these affect the meter display, not camera recording.
 
@@ -232,8 +235,8 @@ bottom screen edge.
 The joystick remains usable while the Motion Control editor is open, so you can
 position the camera before saving a point. Other outside taps minimize the editor.
 Motion Control durations use half-second dials up to 120 seconds. Swipe left
-to increase duration and right to decrease it. Move the expanded
-window by holding anywhere, or drag the minimized pill directly. Dragging
+to increase duration and right to decrease it. Drag the expanded window or minimized pill directly; no hold is needed.
+Duration dials and sliders keep their own gestures. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second
 countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the

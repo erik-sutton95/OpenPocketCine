@@ -32,6 +32,10 @@ class LivePopupPlacementTest {
         assertEquals(437f, panel.x + panel.width / 2f, .001f)
         assertEquals(402f, panel.y + 190f, .001f)
         assertEquals(480f, panel.width)
+        val withToolbarFloor = LivePopupPlacement.bottomCapturePanel(
+            190f, 874f, 402f, 59f, 0f, 0f, 0f, floorY = 237f,
+        )
+        assertEquals(panel, withToolbarFloor, "Landscape drawers must not be raised above the assist toolbar")
     }
 
     @Test

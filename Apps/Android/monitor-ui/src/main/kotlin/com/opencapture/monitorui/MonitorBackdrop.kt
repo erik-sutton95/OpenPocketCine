@@ -10,6 +10,7 @@ import android.graphics.RenderNode
 import android.graphics.Shader
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -37,16 +38,26 @@ import kotlin.math.ceil
 
 /** Reference CSS values, in density-independent pixels. Tint is applied after blur/saturation. */
 @Immutable
-data class MonitorMaterial(val tint: Color, val blurDp: Float, val saturation: Float = 1.25f) {
+data class MonitorMaterial(
+    val tint: Color,
+    val blurDp: Float,
+    val saturation: Float = 1.25f,
+    val hairline: Float = 0f,
+) {
     companion object {
+        const val HAIRLINE_WIDTH_DP = 0.75f
         val Compact = MonitorMaterial(Color(20, 22, 24).copy(alpha = .52f), 18f)
         val Expanded = MonitorMaterial(Color(20, 22, 24).copy(alpha = .62f), 20f)
-        val Zoom = MonitorMaterial(Color(18, 20, 22).copy(alpha = .72f), 24f)
-        val Scope = MonitorMaterial(Color(6, 9, 8).copy(alpha = .70f), 8f, 1f)
-        val Info = MonitorMaterial(Color(20, 22, 24).copy(alpha = .82f), 20f)
-        val Delivery = MonitorMaterial(Color(20, 22, 24).copy(alpha = .86f), 20f)
-        val Record = MonitorMaterial(Color.White.copy(alpha = .08f), 18f)
+        val Zoom = MonitorMaterial(Color(18, 20, 22).copy(alpha = .72f), 24f, hairline = .09f)
+        val Scope = MonitorMaterial(Color(6, 9, 8).copy(alpha = .70f), 8f, 1f, hairline = .09f)
+        val Info = MonitorMaterial(Color(20, 22, 24).copy(alpha = .82f), 20f, hairline = .07f)
+        val Delivery = MonitorMaterial(Color(20, 22, 24).copy(alpha = .86f), 20f, hairline = .08f)
+        val Record = MonitorMaterial(Color.White.copy(alpha = .08f), 18f, hairline = .16f)
     }
+
+    /** iOS Reduce Transparency fill: canvas `0x08090A`, except scope keeps its opaque tint. */
+    fun fallbackFill(): Color =
+        if (this == Scope) tint.copy(alpha = 1f) else MonitorPalette.backgroundDeep
 }
 
 /**
@@ -88,7 +99,9 @@ fun Modifier.monitorBackdropSource(source: MonitorBackdropSource, imageRect: Rec
  * Controlled backdrop blur. ONLY image pixels are recorded into the RenderNode; foreground
  * and descendant nodes are never recorded. This structurally excludes backdrop recursion.
  * Each node is panel-sized plus a 3-sigma apron, with no CPU readback or full-window layer.
- * API 29/30, software Canvas, or an unavailable sample use a solid readable fallback.
+ * API 29/30, software Canvas, or an unavailable sample use canvas `0x08090A`
+ * (scope keeps its opaque tint), matching iOS Reduce Transparency. Hairline
+ * width is 0.75 dp at the density alpha, drawn fully inside the clipped plate.
  */
 @Composable
 fun Modifier.monitorMaterial(material: MonitorMaterial = MonitorMaterial.Compact,
@@ -98,17 +111,18 @@ fun Modifier.monitorMaterial(material: MonitorMaterial = MonitorMaterial.Compact
     var origin by remember { mutableStateOf(Offset.Zero) }
     val renderer = remember { if (Build.VERSION.SDK_INT >= 31) MonitorBackdropRenderer() else null }
     DisposableEffect(renderer) { onDispose { if (Build.VERSION.SDK_INT >= 31) renderer?.close() } }
-    return onGloballyPositioned { origin = it.positionOnScreen() }.clip(shape).drawWithContent {
+    val plate = onGloballyPositioned { origin = it.positionOnScreen() }.clip(shape).drawWithContent {
         val canvas = drawContext.canvas.nativeCanvas
         val hasImage = sources.any { it.image != null && !it.bounds.isEmpty && !it.viewport.isEmpty }
-        val rendered = if (Build.VERSION.SDK_INT >= 31 && renderer != null && canvas.isHardwareAccelerated && hasImage) {
-            renderer.draw(canvas, size.width, size.height, origin, sources, material.blurDp.dp.toPx(), material.saturation, surround.toArgb())
-            true
-        } else false
-        drawRect(if (rendered) material.tint else if (material == MonitorMaterial.Record) Color(0xFF303234)
-            else material.tint.copy(alpha = 1f))
+        val rendered = Build.VERSION.SDK_INT >= 31 && renderer != null && canvas.isHardwareAccelerated &&
+            hasImage && renderer.draw(canvas, size.width, size.height, origin, sources,
+                material.blurDp.dp.toPx(), material.saturation, surround.toArgb())
+        drawRect(if (rendered) material.tint else material.fallbackFill())
         drawContent()
     }
+    return if (material.hairline > 0f) {
+        plate.border(MonitorMaterial.HAIRLINE_WIDTH_DP.dp, Color.White.copy(alpha = material.hairline), shape)
+    } else plate
 }
 
 @RequiresApi(31)
@@ -125,11 +139,11 @@ internal class MonitorBackdropRenderer : AutoCloseable {
     private var lastSurround = 0
 
     fun draw(canvas: android.graphics.Canvas, width: Float, height: Float, origin: Offset,
-        sources: List<MonitorBackdropSource>, blurPx: Float, saturation: Float, surround: Int) {
+        sources: List<MonitorBackdropSource>, blurPx: Float, saturation: Float, surround: Int): Boolean {
         val apron = ceil(blurPx * 3f).toInt()
         val w = ceil(width).toInt() + apron * 2
         val h = ceil(height).toInt() + apron * 2
-        if (w <= 0 || h <= 0) return
+        if (w <= 0 || h <= 0) return false
         node.setPosition(-apron, -apron, w - apron, h - apron)
         if (lastBlur != blurPx || lastSaturation != saturation) {
             // Android's public radius is converted to sigma by HWUI as
@@ -149,7 +163,7 @@ internal class MonitorBackdropRenderer : AutoCloseable {
                 source.image === input.image && source.bounds == input.bounds && source.viewport == input.viewport &&
                     source.mirrored == input.mirrored
             }
-        if (unchanged) { canvas.drawRenderNode(node); return }
+        if (unchanged) { canvas.drawRenderNode(node); return true }
         inputs = sources.map { Input(it.image, it.bounds, it.viewport, it.mirrored) }
         lastWidth = w; lastHeight = h; lastOrigin = origin; lastSurround = surround
         val recording = node.beginRecording(w, h)
@@ -168,6 +182,7 @@ internal class MonitorBackdropRenderer : AutoCloseable {
             }
         } finally { node.endRecording() }
         canvas.drawRenderNode(node)
+        return true
     }
 
     override fun close() { node.discardDisplayList() }

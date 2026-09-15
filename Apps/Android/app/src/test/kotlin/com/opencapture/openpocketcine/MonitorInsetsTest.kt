@@ -428,7 +428,7 @@ private fun assertGimbalStickOnCanvas(layout: LiveMonitorLayout) {
         assertFalse(zoom.intersects(layout.disp), "zoom stays clear of DISP")
         assertFalse(layout.topDeck.intersects(layout.settings), "readouts stay clear of settings")
         assertFalse(layout.topDeck.intersects(layout.media), "readouts stay clear of media")
-        assertTrue(layout.assist.maxY <= layout.viewportHeight - 13.5f)
+        assertTrue(layout.assist.maxY <= layout.viewportHeight - 7.5f)
         if (minOf(layout.viewportWidth, layout.viewportHeight) >= 600f) {
             val tabletSide = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(true)
             assertEquals(tabletSide * 2f + 11f, layout.assist.height, 0.05f)

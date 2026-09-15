@@ -89,9 +89,7 @@ fun Modifier.panelGlass(shape: Shape = ChromeShape): Modifier =
     background(LiveDesign.surface, shape).border(1.dp, LiveDesign.hairline, shape)
 
 @Composable
-fun Modifier.glass(shape: Shape = ChromeShape): Modifier =
-    if (com.opencapture.monitorui.LocalMonitorBackdrops.current.isEmpty()) panelGlass(shape)
-    else monitorMaterial(MonitorMaterial.Compact, shape)
+fun Modifier.glass(shape: Shape = ChromeShape): Modifier = liveChromeGlass(shape)
 
 @Composable
 fun Modifier.overlayGlass(shape: Shape = ChromeShape): Modifier = pickerPanelGlass(shape)

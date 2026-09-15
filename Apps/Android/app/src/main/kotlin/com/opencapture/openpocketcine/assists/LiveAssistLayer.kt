@@ -147,9 +147,10 @@ fun LiveAssistLayer(
             CrosshairOverlay(feed)
         }
         if (shown(LiveAssistTool.FALSE) && state.falseColorReference) {
+            val portrait = canvas.height > canvas.width
             MovableAssistPanel(LiveAssistTool.FALSE, ScopePanelSize.falseColorReference, 1.0,
-                state.falseColorReferenceCenter, canvas, placement, AssistPoint(canvas.midX, canvas.midY),
-                enabled = !locked, onStore = { state.storeCenter(LiveAssistTool.FALSE, it) }, fillPlate = false,
+                state.centerFor(LiveAssistTool.FALSE, portrait), canvas, placement, AssistPoint(canvas.midX, canvas.midY),
+                enabled = !locked, onStore = { state.storeCenter(LiveAssistTool.FALSE, it, portrait) }, fillPlate = false,
                 onOpenOptions = onOpenOptions?.let { open -> { open(LiveAssistTool.FALSE, it) } }) {
                 FalseColorReferenceRuler(state, colorMode, Modifier.fillMaxSize())
             }
@@ -219,48 +220,49 @@ private fun StackedScopePanel(
     onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)?,
     colorMode: Int,
 ) {
+    val portrait = canvas.height > canvas.width
     val (base, scale, stored, onScale) =
         when (tool) {
             LiveAssistTool.WAVE ->
                 ScopePanelSpec(
                     ScopePanelSize.waveform,
                     state.waveScale,
-                    state.waveCenter,
+                    state.centerFor(LiveAssistTool.WAVE, portrait),
                     { state.setScale(LiveAssistTool.WAVE, it) },
                 )
             LiveAssistTool.PARADE ->
                 ScopePanelSpec(
                     ScopePanelSize.parade,
                     state.paradeScale,
-                    state.paradeCenter,
+                    state.centerFor(LiveAssistTool.PARADE, portrait),
                     { state.setScale(LiveAssistTool.PARADE, it) },
                 )
             LiveAssistTool.VECTOR ->
                 ScopePanelSpec(
                     ScopePanelSize.vectorscope,
                     state.vectorScale,
-                    state.vectorCenter,
+                    state.centerFor(LiveAssistTool.VECTOR, portrait),
                     { state.setScale(LiveAssistTool.VECTOR, it) },
                 )
             LiveAssistTool.HISTO ->
                 ScopePanelSpec(
                     ScopePanelSize.histogram,
                     state.histoScale,
-                    state.histoCenter,
+                    state.centerFor(LiveAssistTool.HISTO, portrait),
                     { state.setScale(LiveAssistTool.HISTO, it) },
                 )
             LiveAssistTool.LIGHTS ->
                 ScopePanelSpec(
                     ScopePanelSize.trafficLights,
                     state.lightsScale,
-                    state.lightsCenter,
+                    state.centerFor(LiveAssistTool.LIGHTS, portrait),
                     { state.setScale(LiveAssistTool.LIGHTS, it) },
                 )
             LiveAssistTool.ND ->
                 ScopePanelSpec(
                     ScopePanelSize.ndMeter,
                     state.ndScale,
-                    state.ndCenter,
+                    state.centerFor(LiveAssistTool.ND, portrait),
                     { state.setScale(LiveAssistTool.ND, it) },
                 )
             LiveAssistTool.LUT,
@@ -283,7 +285,7 @@ private fun StackedScopePanel(
             placementBounds = placementBounds,
             defaultCenter = AssistPoint(canvas.midX, canvas.midY),
             enabled = !locked,
-            onStore = { state.storeCenter(tool, it) },
+            onStore = { state.storeCenter(tool, it, portrait) },
             onScale = onScale,
             onOpenOptions = onOpenOptions?.let { present -> { frame -> present(tool, frame) } },
             onActivate = { state.bringToFront(tool) },

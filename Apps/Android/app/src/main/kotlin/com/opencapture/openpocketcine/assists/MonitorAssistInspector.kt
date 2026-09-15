@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +17,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.opencapture.monitorui.LocalMonitorInspectorHelp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorInspector
-import com.opencapture.monitorui.MonitorInspectorPolicy
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
@@ -40,8 +46,11 @@ fun MonitorAssistInspector(
     safeTrailing: Float = 0f,
     isPhoto: Boolean = false,
 ) {
+    var helpVisible by remember { mutableStateOf(false) }
     MonitorInspector(
-        title = tool.title.uppercase(),
+        title = tool.title,
+        helpVisible = helpVisible,
+        onToggleHelp = { helpVisible = !helpVisible },
         viewportWidth = viewportWidth,
         viewportHeight = viewportHeight,
         onDismiss = onDismiss,
@@ -65,12 +74,15 @@ fun MonitorAssistInspector(
         },
     ) {
         androidx.compose.runtime.key(tool, playback) {
-            val frame = MonitorInspectorPolicy.frame(viewportWidth, viewportHeight, trailing = false)
-            AssistOptionsPopup(
-                tool, state, onDismiss, model = model,
-                maxHeightDp = (frame.height - 120f).coerceAtLeast(100f),
-                colorMode = colorMode, embedded = true, playback = playback, isPhoto = isPhoto,
-            )
+            BoxWithConstraints(Modifier.fillMaxWidth().fillMaxHeight()) {
+                CompositionLocalProvider(LocalMonitorInspectorHelp provides helpVisible) {
+                    AssistOptionsPopup(
+                        tool, state, onDismiss, model = model,
+                        maxHeightDp = maxHeight.value,
+                        colorMode = colorMode, embedded = true, playback = playback, isPhoto = isPhoto,
+                    )
+                }
+            }
         }
     }
 }

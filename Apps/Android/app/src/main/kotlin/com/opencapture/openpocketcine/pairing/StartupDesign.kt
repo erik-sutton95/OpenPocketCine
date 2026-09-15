@@ -229,42 +229,49 @@ fun StartupHeader(
         )
     val statusColor =
         if (isBusy || statusTitle in busyTitles) StartupColors.accent else StartupColors.ready
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "OPENPOCKETCINE",
-                color = StartupColors.muted,
-                style = startupType(10f, FontWeight.SemiBold).copy(letterSpacing = 1.3.sp),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    "OPENPOCKETCINE",
+                    color = StartupColors.muted,
+                    style = startupType(10f, FontWeight.SemiBold).copy(letterSpacing = 1.3.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     title,
                     color = StartupColors.ink,
                     style = startupType(17f, FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
-                if (onPrivacy != null) {
-                    StartupLegalLink("Privacy", onPrivacy)
-                }
-                if (onTerms != null) {
-                    StartupLegalLink("Terms", onTerms)
-                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier.clip(CircleShape)
+                        .background(StartupColors.surface.copy(alpha = 0.50f))
+                        .border(1.dp, statusColor.copy(alpha = 0.40f), CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
+                Box(Modifier.size(7.dp).background(statusColor, CircleShape))
+                Text(statusTitle, color = statusColor, style = startupType(12f, FontWeight.Medium), maxLines = 1)
             }
         }
-        Spacer(Modifier.width(8.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier =
-                Modifier.clip(CircleShape)
-                    .background(StartupColors.surface.copy(alpha = 0.50f))
-                    .border(1.dp, statusColor.copy(alpha = 0.40f), CircleShape)
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-        ) {
-            Box(Modifier.size(7.dp).background(statusColor, CircleShape))
-            Text(statusTitle, color = statusColor, style = startupType(12f, FontWeight.Medium), maxLines = 1)
+        if (onPrivacy != null || onTerms != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                if (onPrivacy != null) StartupLegalLink("Privacy", onPrivacy)
+                if (onTerms != null) StartupLegalLink("Terms", onTerms)
+            }
         }
     }
 }

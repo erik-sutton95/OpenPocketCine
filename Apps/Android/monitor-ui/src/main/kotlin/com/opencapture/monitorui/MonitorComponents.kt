@@ -77,9 +77,9 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
     val measurer = rememberTextMeasurer()
     val valueSize = MonitorLayoutPolicy.readoutValueSize(tablet)
     val valueStyle = MonitorTypography.readout(valueSize, FontWeight.Medium)
-        .copy(lineHeight = valueSize.sp).monitorReadoutGlow()
+        .copy(lineHeight = valueSize.sp)
     val labelStyle = MonitorTypography.text(MonitorLayoutPolicy.READOUT_LABEL_SIZE, FontWeight.SemiBold)
-        .copy(lineHeight = 10.sp, letterSpacing = MonitorLayoutPolicy.READOUT_LABEL_TRACKING.sp).monitorReadoutGlow()
+        .copy(lineHeight = 10.sp, letterSpacing = MonitorLayoutPolicy.READOUT_LABEL_TRACKING.sp)
     val intrinsic = values.map { item ->
         val valueWidth = measurer.measure(item.value, valueStyle, maxLines = 1).size.width
         val labelWidth = measurer.measure(item.label + item.annotation?.let { "  $it" }.orEmpty(), labelStyle, maxLines = 1).size.width
@@ -90,7 +90,7 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
         val columns = MonitorLayoutPolicy.valueColumns(maxWidth.value, portrait, values.size)
         val grid = portrait && !tablet
         val gap = if (grid) 14f else ((maxWidth.value - intrinsic.sum()) / (values.size - 1).coerceAtLeast(1)).coerceIn(16f, 34f)
-        Column(verticalArrangement = Arrangement.spacedBy(if (grid) 12.dp else 8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(if (grid) 10.dp else 8.dp)) {
             values.chunked(columns).forEachIndexed { rowIndex, row ->
                 Row(Modifier.then(if (grid) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState()).widthIn(min = rowWidth)),
                     horizontalArrangement = Arrangement.spacedBy(gap.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.Bottom) {
@@ -98,7 +98,7 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                         val renderPreview: (@Composable (MonitorQuickPreview, Float) -> Unit)? =
                             if (quickPreview == null) null else { preview, maxHeight -> quickPreview(item.id, preview, maxHeight) }
                         Column(Modifier.then(if (grid) Modifier.weight(1f) else Modifier.width(intrinsic[rowIndex * columns + column].dp))
-                            .heightIn(min = if (grid) 32.dp else 44.dp)
+                            .heightIn(min = if (grid) 32.dp else 34.dp)
                             .then(itemModifier(item.id))
                             .background(if (item.selected) MonitorPalette.accent.copy(alpha = .14f) else Color.Transparent, RoundedCornerShape(8.dp))
                             .monitorReadoutGesture(quickControl(item.id), enabled && (gestureOwner.owner == null || gestureOwner.owner == item.id),
@@ -106,14 +106,13 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                                 quickBottomClearanceDp, gestureOwner, item.id,
                                 renderPreview, onPreviewBegin = { notifyQuickActive(true) })
                             .semantics { contentDescription = "${item.label} ${item.value}${item.annotation?.let { ", $it" }.orEmpty()}" }
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .monitorReadoutShadow()
+                            .padding(horizontal = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                             Text(item.value, color = if (item.selected) MonitorPalette.accent else MonitorPalette.text,
-                                style = valueStyle, maxLines = 1, softWrap = false,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom,
-                                modifier = Modifier.padding(horizontal = 8.dp)) {
+                                style = valueStyle, maxLines = 1, softWrap = false)
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
                                 Text(item.label, color = if (item.selected) MonitorPalette.accent else MonitorPalette.muted,
                                     style = labelStyle, maxLines = 1)
                                 item.annotation?.let { Text(it, style = MonitorTypography.readout(7.5f), color = MonitorPalette.muted, maxLines = 1) }
@@ -219,7 +218,9 @@ fun MonitorPageScaffold(
                 content = {
                     Box(
                         Modifier.layoutId(MonitorPageLayoutPolicy.NAV)
-                            .background(MonitorPalette.surface, RoundedCornerShape(12.dp)).padding(10.dp),
+                            .background(MonitorPalette.surface, RoundedCornerShape(12.dp))
+                            .border(1.dp, MonitorPalette.border, RoundedCornerShape(12.dp))
+                            .padding(10.dp),
                     ) {
                         Column(
                             if (portrait) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
@@ -330,6 +331,6 @@ fun MonitorOptionGroup(content: @Composable () -> Unit) {
 @Composable
 fun MonitorPanelGrabber() {
     Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(36.dp, 4.dp).background(Color.White.copy(alpha = .18f), RoundedCornerShape(2.dp)))
+        Box(Modifier.size(36.dp, 4.dp).background(Color.White.copy(alpha = .28f), RoundedCornerShape(2.dp)))
     }
 }

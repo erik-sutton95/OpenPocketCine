@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material3.AlertDialog
@@ -58,6 +59,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -489,7 +493,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
         com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = onClose) },
-            heading = { com.opencapture.openpocketcine.monitor.MonitorPageHeading("Settings", "OPERATOR SETUP") },
+            heading = { com.opencapture.openpocketcine.monitor.MonitorPageHeading("Operator Setup", "OPENPOCKETCINE") },
             navigation = { portrait ->
                 Column(
                     if (portrait) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
@@ -676,10 +680,9 @@ private fun SettingsTabStrip(
     Row(
         modifier
             .fillMaxWidth()
-            .panelGlass(ChromeShape)
             .horizontalScroll(scroll)
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+            .testTag("monitor.settings.tabs"),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
             SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.widthIn(min = 96.dp))
@@ -699,7 +702,12 @@ private fun SettingsTabButton(
     Row(
         modifier
             .height(44.dp)
-            .background(if (selected) LiveDesign.accentDim else Color.Transparent, ChromeShape)
+            .background(if (selected) Color.White.copy(alpha = .08f) else Color.Transparent, RoundedCornerShape(9.dp))
+            .testTag("monitor.settings.tab.${tab.title}")
+            .semantics {
+                contentDescription = tab.title
+                this.selected = selected
+            }
             .settingsClickable(role = Role.Tab) {
                 if (tab != model.operatorSettingsTab) operatorHaptic(view, hapticsEnabled)
                 model.operatorSettingsTab = tab
@@ -711,24 +719,24 @@ private fun SettingsTabButton(
         Box(
             Modifier
                 .width(4.dp)
-                .height(20.dp)
+                .height(24.dp)
                 .background(
                     if (selected) LiveDesign.accent else LiveDesign.accent.copy(alpha = 0f),
                     CircleShape,
                 ),
         )
-        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 tab.title,
-                style = LiveType.ui(13f, FontWeight.SemiBold),
+                style = LiveType.ui(12.5f, FontWeight.SemiBold),
                 color = if (selected) LiveDesign.text else LiveDesign.muted,
                 maxLines = 1,
             )
             Text(
                 tab.rail,
-                style = LiveType.ui(10.5f),
+                style = LiveType.ui(10f),
                 color = LiveDesign.faint,
-                maxLines = 2,
+                maxLines = 1,
             )
         }
     }

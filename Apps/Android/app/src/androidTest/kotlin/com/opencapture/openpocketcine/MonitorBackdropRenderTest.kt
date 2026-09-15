@@ -86,8 +86,12 @@ class MonitorBackdropRenderTest {
             scenario.onActivity { it.replaceSource(null) }
             image = capture(scenario, "unavailable")
             val cleared = image.getPixel((300 * scale).toInt(), (200 * scale).toInt())
-            assertTrue(abs(Color.red(cleared) - 20) <= 1 && abs(Color.green(cleared) - 22) <= 1,
-                "missing source is an explicit solid fallback")
+            assertTrue(
+                abs(Color.red(cleared) - 8) <= 1 &&
+                    abs(Color.green(cleared) - 9) <= 1 &&
+                    abs(Color.blue(cleared) - 10) <= 1,
+                "missing source is canvas 0x08090A",
+            )
             scenario.onActivity {
                 it.replaceSource(Color.GREEN)
                 it.secondSource.image = Bitmap.createBitmap(100, 80, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLUE) }

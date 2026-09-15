@@ -22,7 +22,7 @@ class CapturePreviewWiringTest {
         assertTrue(host.contains("LiveControlSheet("))
         assertTrue(host.contains("topCapturePanel"))
         assertTrue(host.contains("fromTop = fromTop"))
-        assertTrue(body.contains("CompositionLocalProvider(LocalCapturePreview provides preview)"))
+        assertTrue(body.contains("CompositionLocalProvider(LocalCapturePreview provides preview, LocalViewportPortrait provides isPortrait)"))
         val content = body.substringAfter("private fun LiveControlSheetContent(").substringBefore("fun LivePickerHost(")
         assertTrue(content.contains("val compact = preview != null"))
         assertTrue(content.contains("\"drag to set\""))
@@ -30,7 +30,7 @@ class CapturePreviewWiringTest {
         assertTrue(content.contains("if (!compact)"))
         assertTrue(content.contains("compactCaptureBottomPadding"))
         assertTrue(content.contains("showsRecordingCategoryTabs(portrait, compact)"))
-        assertTrue(body.contains("sheet.isRecordingSetup && viewportIsPortrait()"))
+        assertTrue(body.contains("sheet.isRecordingSetup && isPortrait"))
         assertTrue(body.contains("capturePanelBottomCorner"))
         for (required in listOf("SheetHeader(", "CaptureLists.NATIVE_ISO_HOP_HELP", "CaptureLists.FACE_PRIORITY_HELP",
             "FocusBody(", "AudioBody(status, enabled, selectedMode, model)", "ModeBar(", "MonitorPanelGrabber()")) {

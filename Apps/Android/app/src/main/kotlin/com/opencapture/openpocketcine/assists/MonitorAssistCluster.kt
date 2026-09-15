@@ -14,12 +14,19 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 
-/** Pocket supplies its supported tool inventory and existing live/playback actions. */
+/**
+ * Pocket supplies its supported tool inventory and existing live/playback actions.
+ *
+ * [inspectorOpen] hides the cluster so the palette Popup cannot cover inspector
+ * controls (iOS collapses the palette while `configureTool` is set). Landscape
+ * and portrait chrome should pass `assist.configureTool != null`.
+ */
 @Composable
 fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTool) -> Boolean,
     onToggle: (LiveAssistTool) -> Unit, onLongPress: (LiveAssistTool) -> Unit,
     modifier: Modifier = Modifier, requestExpand: Boolean = false, onExpansionHandled: () -> Unit = {},
-    showsAudio: Boolean = true) {
+    showsAudio: Boolean = true, inspectorOpen: Boolean = false) {
+    if (inspectorOpen) return
     val context = LocalContext.current
     var usage by remember { mutableStateOf(OperatorPrefs.assistToolUsage(context)) }
     val tools = if (showsAudio) LiveAssistTool.settingsCases else LiveAssistTool.toolbarCases

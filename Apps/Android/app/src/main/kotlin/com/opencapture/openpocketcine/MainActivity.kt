@@ -69,7 +69,6 @@ import com.opencapture.openpocketcine.pairing.PairingExperience
 import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
 import com.opencapture.openpocketcine.pairing.StartupColors
 import com.opencapture.openpocketcine.pairing.StartupConnectionCopy
-import com.opencapture.openpocketcine.pairing.StartupHeader
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.pairing.pocketRuntimePermissions
 import com.opencapture.openpocketcine.pairing.startupBackdrop
@@ -257,22 +256,6 @@ private fun LinkExperience(
     onRequestPermissions: () -> Unit,
     onEnableBluetooth: () -> Unit,
 ) {
-    val phase by model.session.phaseFlow.collectAsState()
-    val reconnecting by model.session.isReconnecting.collectAsState()
-    val busy = phase.isBusy() || reconnecting
-    val headerTitle =
-        when {
-            model.shouldShowWizard -> "Connection setup"
-            model.savedCameras.isNotEmpty() -> "Operator Setup"
-            else -> "Find your camera"
-        }
-    val statusTitle =
-        StartupConnectionCopy.statusTitle(
-            phase,
-            isDiscovering = phase == ConnectionPhase.SCANNING || (model.shouldShowWizard && phase != ConnectionPhase.LIVE),
-            isReconnecting = reconnecting,
-        )
-    val context = LocalContext.current
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
     val configuration = LocalConfiguration.current
@@ -309,16 +292,11 @@ private fun LinkExperience(
             )
             .padding(start = barStart, top = 16.dp + barTop, end = barEnd, bottom = 16.dp + barBottom),
     ) {
-        if (model.shouldShowWizard) Box(Modifier.padding(horizontal = 20.dp)) {
-            StartupHeader(
-                title = headerTitle,
-                statusTitle = statusTitle,
-                isBusy = busy,
-                onPrivacy = { openUrl(context, OpenPocketCineLinks.PRIVACY) },
-                onTerms = { openUrl(context, OpenPocketCineLinks.TERMS) },
-            )
-        }
-        Box(Modifier.weight(1f).padding(start = 18.dp, end = 18.dp, top = 8.dp)) {
+        Box(Modifier.weight(1f).padding(
+            start = if (model.shouldShowWizard) 14.dp else 18.dp,
+            end = if (model.shouldShowWizard) 14.dp else 18.dp,
+            top = if (model.shouldShowWizard) 0.dp else 8.dp,
+        )) {
             if (model.shouldShowWizard) {
                 PairingExperience(model, permissionsGranted, onRequestPermissions, onEnableBluetooth)
             } else {

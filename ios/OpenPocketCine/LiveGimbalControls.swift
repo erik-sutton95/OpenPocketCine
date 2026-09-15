@@ -35,6 +35,7 @@ enum LiveGimbalCopy {
     static let accessibilityButton = "Gimbal controls"
     static let accessibilityHint = "Opens follow, speed, ramp, and motion control"
     static let holdDuration: TimeInterval = 0.3
+    static let dragSlop: CGFloat = 8
 }
 
 struct LiveGimbalButton: View {
@@ -148,7 +149,9 @@ struct LiveGimbalOverlay: View {
 
 }
 
-/// Long-press then drag, same hold as movable scopes (0.3 s).
+/// Direct drag like movable scopes. The pill uses a high-priority drag so the
+/// compact chrome follows the finger; the editor uses a regular drag so
+/// waypoint buttons, duration dials and the smoothness slider keep theirs.
 private struct LiveGimbalFloatMove: ViewModifier {
     @Binding var stored: CGPoint?
     var sizeHint: CGSize
@@ -216,8 +219,8 @@ private struct LiveGimbalFloatMove: ViewModifier {
             .onChange(of: pointerActive) { _, active in
                 if !active { cancelDrag() }
             }
-            .simultaneousGesture(drag, including: immediateDrag ? .none : .all)
-            .highPriorityGesture(pillDrag, including: immediateDrag ? .all : .none)
+            .gesture(directDrag, including: immediateDrag ? .none : .all)
+            .highPriorityGesture(directDrag, including: immediateDrag ? .all : .none)
             .sensoryFeedback(trigger: dragging) { _, isDragging in
                 isDragging ? .impact(flexibility: .rigid, intensity: 1) : nil
             }
@@ -228,8 +231,8 @@ private struct LiveGimbalFloatMove: ViewModifier {
         dragging = false
     }
 
-    private var pillDrag: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+    private var directDrag: some Gesture {
+        DragGesture(minimumDistance: LiveGimbalCopy.dragSlop, coordinateSpace: .global)
             .updating($pointerActive) { _, active, _ in active = true }
             .onChanged { value in
                 if !dragging {
@@ -243,31 +246,6 @@ private struct LiveGimbalFloatMove: ViewModifier {
                             x: origin.x + value.translation.width,
                             y: origin.y + value.translation.height)
                     ))
-            }
-            .onEnded { _ in
-                blockedUntil = ProcessInfo.processInfo.systemUptime + 0.15
-                dragging = false
-                placement.end { stored = $0 }
-            }
-            .map { _ in () }
-    }
-
-    private var drag: some Gesture {
-        LongPressGesture(minimumDuration: LiveGimbalCopy.holdDuration)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .updating($pointerActive) { _, active, _ in active = true }
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
-                if !dragging {
-                    dragging = true
-                    placement.begin(at: center)
-                }
-                guard let drag, let origin = placement.origin else { return }
-                guard drag.translation != .zero || placement.preview != nil else { return }
-                let proposed = CGPoint(
-                    x: origin.x + drag.translation.width,
-                    y: origin.y + drag.translation.height)
-                placement.move(to: clampedCenter(proposed))
             }
             .onEnded { _ in
                 blockedUntil = ProcessInfo.processInfo.systemUptime + 0.15

@@ -3,49 +3,69 @@ package com.opencapture.openpocketcine.pairing
 import android.Manifest
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.monitorui.MonitorIcon
+import com.opencapture.monitorui.MonitorPairCameraPage
+import com.opencapture.monitorui.MonitorPairingCheck
+import com.opencapture.monitorui.MonitorPairingCheckState
+import com.opencapture.monitorui.MonitorPairingDevice
+import com.opencapture.monitorui.MonitorPairingInstruction
+import com.opencapture.monitorui.MonitorPairingInstructionIcon
+import com.opencapture.monitorui.MonitorPairingPresentation
+import com.opencapture.monitorui.MonitorPairingStep
+import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 
-private val prepareSteps =
-    listOf(
-        "Turn the camera on and wait until Bluetooth is up.",
-        "Tap the camera in the list when it appears.",
-        "If the Pocket asks you to Approve, tap it on the camera screen.",
-        "Join the camera Wi-Fi when Android prompts, then we open the datalink.",
-    )
+private val pairingSteps = listOf(
+    MonitorPairingStep("Find your camera", "Bluetooth scan"),
+    MonitorPairingStep("Approve on the camera", "Camera prompt"),
+    MonitorPairingStep("Join camera Wi-Fi", "Camera network"),
+    MonitorPairingStep("Open video link", "Video link"),
+)
+
+private val pairingTitles = listOf(
+    "Find your camera",
+    "Approve on the camera",
+    "Join camera Wi-Fi",
+    "Open video link",
+)
+
+private val pairingBodies = listOf(
+    "Turn the camera on and keep the phone nearby. Pocket and Nano both appear — choose the one you want.",
+    "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+    "We read the camera's network over Bluetooth, then join its Wi-Fi for you.",
+    "Exposure, LUTs and scopes go live as soon as the video link is up.",
+)
 
 @Composable
 fun PairingExperience(
@@ -57,402 +77,273 @@ fun PairingExperience(
     val phase by model.session.phaseFlow.collectAsState()
     val failure by model.session.failure.collectAsState()
     val found by model.session.found.collectAsState()
-    val step = StartupConnectionCopy.wizardStep(phase)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxWidth < 640.dp
-        val twoColumn = maxWidth >= 640.dp
-        val introWidth = maxOf(236.dp, maxWidth * 0.28f)
-        if (twoColumn) {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                IntroCard(model, step, Modifier.width(introWidth).fillMaxHeight())
-                StepCard(
-                    model,
-                    phase,
-                    failure,
-                    found,
-                    step,
-                    compact,
-                    permissionsGranted,
-                    onRequestPermissions,
-                    onEnableBluetooth,
-                    Modifier.weight(1f).fillMaxHeight(),
-                )
-            }
-        } else {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                PortraitIntroHeader(model)
-                Text(
-                    "We'll walk you through it — your camera is connected in about a minute.",
-                    color = StartupColors.muted,
-                    style = LiveType.ui(12f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
-                )
-                StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
-                StepCard(
-                    model,
-                    phase,
-                    failure,
-                    found,
-                    step,
-                    true,
-                    permissionsGranted,
-                    onRequestPermissions,
-                    onEnableBluetooth,
-                    Modifier.weight(1f),
-                )
-            }
-        }
+    val radioOn by model.session.radioOn.collectAsState()
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val busy = phase.isBusy()
+    val step = (StartupConnectionCopy.wizardStep(phase) - 1).coerceIn(0, pairingSteps.lastIndex)
+    val scanning = step == 0
+    val picked = found.firstOrNull { it.id == selectedId }
+    val error = if (phase == ConnectionPhase.FAILED && !failure.isNullOrBlank()) {
+        StartupConnectionCopy.friendly(failure.orEmpty())
+    } else {
+        null
     }
-}
-
-@Composable
-private fun PortraitIntroHeader(model: AppModel) {
-    Row(verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "FIRST RUN",
-                color = StartupColors.muted,
-                style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
-            )
-            Text(
-                "Pair your camera.",
-                color = StartupColors.ink,
-                style = LiveType.ui(22f, FontWeight.Bold, LiveTypeDesign.Rounded),
-                maxLines = 1,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        if (model.savedCameras.isNotEmpty()) {
-            Spacer(Modifier.width(12.dp))
-            StartupYourCamerasButton(onClick = model::cancelPairing)
-        }
+    val vpnActive = step == 3 && LocalVPNFilter.isActive(context)
+    LaunchedEffect(phase) {
+        if (phase == ConnectionPhase.OPENING_DATALINK) LocalVPNFilter.noteIfActive(context)
     }
-}
-
-@Composable
-private fun IntroCard(model: AppModel, step: Int, modifier: Modifier) {
-    Column(modifier.startupCard().padding(20.dp)) {
-        Text(
-            "FIRST RUN",
-            color = StartupColors.muted,
-            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
-        )
-        Text(
-            "Pair your camera.",
-            color = StartupColors.ink,
-            style = LiveType.ui(32f, FontWeight.Bold, LiveTypeDesign.Rounded),
-            modifier = Modifier.padding(top = 10.dp),
-        )
-        Text(
-            "We'll walk you through it — your camera is connected in about a minute.",
-            color = StartupColors.muted,
-            style = LiveType.ui(13f, design = LiveTypeDesign.Rounded).copy(lineHeight = 16.sp),
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        Spacer(Modifier.weight(1f))
-        StartupWizardProgress(step, StartupConnectionCopy.WIZARD_STEP_COUNT)
-        if (model.savedCameras.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            StartupYourCamerasButton(onClick = model::cancelPairing, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun StepCard(
-    model: AppModel,
-    phase: ConnectionPhase,
-    failure: String?,
-    found: List<FoundCamera>,
-    step: Int,
-    tight: Boolean,
-    permissionsGranted: Boolean,
-    onRequestPermissions: () -> Unit,
-    onEnableBluetooth: () -> Unit,
-    modifier: Modifier,
-) {
-    val title =
-        when (step) {
-            2 -> "Approve on Pocket"
-            3 -> "Join camera Wi-Fi"
-            4 -> "Open datalink"
-            else -> "Find your camera"
-        }
-    val scroll = rememberScrollState()
-    Column(modifier.startupCard().padding(22.dp)) {
-        Text(
-            "STEP $step OF ${StartupConnectionCopy.WIZARD_STEP_COUNT}",
-            color = StartupColors.muted,
-            style = LiveType.ui(11f, FontWeight.SemiBold, LiveTypeDesign.Rounded).copy(letterSpacing = 1.4.sp),
-        )
-        Text(
-            title,
-            color = StartupColors.ink,
-            style = LiveType.ui(if (tight) 22f else 25f, FontWeight.Bold, LiveTypeDesign.Rounded),
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Column(
-            Modifier.weight(1f).padding(top = 16.dp).fadeOverflowBottom(scroll).verticalScroll(scroll),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when (step) {
-                2 -> ApproveStep(phase, tight)
-                3 -> JoinWifiStep(phase, tight)
-                4 -> DatalinkStep(phase, tight)
-                else ->
-                    ScanStep(
-                        model = model,
-                        phase = phase,
-                        failure = failure,
-                        found = found,
-                        tight = tight,
-                        permissionsGranted = permissionsGranted,
-                        onRequestPermissions = onRequestPermissions,
-                        onEnableBluetooth = onEnableBluetooth,
-                    )
-            }
-        }
-        val busy = phase.isBusy()
-        val showFooter =
-            phase == ConnectionPhase.FAILED ||
-                busy ||
-                ((phase == ConnectionPhase.IDLE || phase == ConnectionPhase.SCANNING) &&
-                    model.savedCameras.isNotEmpty())
-        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (showFooter) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (model.savedCameras.isNotEmpty() || busy) {
-                        StartupOutlineButton(
-                            if (busy) "Cancel" else "Back",
-                            onClick = model::cancelPairing,
-                            leadingChevron = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (phase == ConnectionPhase.FAILED) {
-                        StartupFilledButton(
-                            "Try again",
-                            enabled = true,
-                            onClick = { model.session.startScan() },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+    val presentation = pairingPresentation(
+        phase = phase,
+        step = step,
+        scanning = scanning,
+        busy = busy,
+        error = error,
+        found = found,
+        picked = picked,
+        radioReady = radioOn && permissionsGranted,
+        hasSavedCameras = model.savedCameras.isNotEmpty(),
+        connectedName = model.session.connectedCamera?.name,
+        joinedSSID = model.session.joinedSSID,
+        vpnActive = vpnActive,
+        bluetoothOn = radioOn,
+        permissionsGranted = permissionsGranted,
+    )
+    MonitorPairCameraPage(
+        presentation = presentation,
+        onSelect = { id -> if (!busy) selectedId = id },
+        onPrimary = {
+            when {
+                phase == ConnectionPhase.FAILED -> model.session.startScan()
+                !radioOn -> onEnableBluetooth()
+                !permissionsGranted -> onRequestPermissions()
+                else -> {
+                    val camera = found.firstOrNull { it.id == selectedId }
+                    if (camera != null && !busy) model.session.connect(camera)
                 }
             }
-            StartupShareDiagnosticsButton(model, Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun StartupShareDiagnosticsButton(model: AppModel, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    StartupOutlineButton(
-        StartupConnectionCopy.SHARE_DIAGNOSTICS,
-        onClick = { DiagnosticCenter.shareReport(context, model.session) },
-        modifier = modifier,
+        },
+        onBack = model::cancelPairing,
+        onDiagnostics = { DiagnosticCenter.shareReport(context, model.session) },
+        extra = {
+            if (model.coreVersion == null) {
+                PairingCallout(
+                    title = "Swift core",
+                    body = "Swift core isn't loaded. Build with `just android-core` on an arm64 device.",
+                    icon = MonitorIcon.TRIANGLE_ALERT,
+                )
+            }
+            if (!radioOn) {
+                PairingCallout(
+                    title = "Bluetooth",
+                    body = "Turn Bluetooth on so we can find your Pocket.",
+                    icon = MonitorIcon.RADIO,
+                    action = "Turn on",
+                    onAction = onEnableBluetooth,
+                )
+            }
+            if (!permissionsGranted) {
+                PairingCallout(
+                    title = "Nearby devices",
+                    body = "Allow Bluetooth and nearby devices so we can find your Pocket.",
+                    icon = MonitorIcon.WIFI,
+                    action = "Allow",
+                    onAction = onRequestPermissions,
+                )
+            }
+        },
     )
 }
 
-@Composable
-private fun ScanStep(
-    model: AppModel,
+private fun pairingPresentation(
     phase: ConnectionPhase,
-    failure: String?,
+    step: Int,
+    scanning: Boolean,
+    busy: Boolean,
+    error: String?,
     found: List<FoundCamera>,
-    tight: Boolean,
+    picked: FoundCamera?,
+    radioReady: Boolean,
+    hasSavedCameras: Boolean,
+    connectedName: String?,
+    joinedSSID: String?,
+    vpnActive: Boolean,
+    bluetoothOn: Boolean,
     permissionsGranted: Boolean,
-    onRequestPermissions: () -> Unit,
-    onEnableBluetooth: () -> Unit,
-) {
-    val radioOn by model.session.radioOn.collectAsState()
-    if (!radioOn || !permissionsGranted) {
-        PermissionsCard(
-            radioOn = radioOn,
-            permissionsGranted = permissionsGranted,
-            onEnableBluetooth = onEnableBluetooth,
-            onRequestPermissions = onRequestPermissions,
+): MonitorPairingPresentation {
+    val instructions = when (step) {
+        1 -> listOf(
+            MonitorPairingInstruction(
+                title = "On the camera",
+                icon = MonitorPairingInstructionIcon.CAMERA,
+                lines = listOf("Look for an Approve / pairing prompt", "Tap it on the camera screen"),
+            ),
+            MonitorPairingInstruction(
+                title = "On this phone",
+                icon = MonitorPairingInstructionIcon.PHONE,
+                lines = listOf("Wait here — we keep the Bluetooth link alive", "Don't force-quit the app"),
+            ),
         )
+        2 -> listOf(
+            MonitorPairingInstruction(
+                title = "On the camera",
+                icon = MonitorPairingInstructionIcon.CAMERA,
+                lines = listOf(
+                    "Leave the camera on — it brings up its own Wi-Fi",
+                    "On 5.8 GHz that can take about a minute; we keep trying",
+                ),
+            ),
+            MonitorPairingInstruction(
+                title = "On this phone",
+                icon = MonitorPairingInstructionIcon.PHONE,
+                lines = listOf(
+                    "Tap Join when Android asks to join the camera network",
+                    LocalVPNFilter.JOIN_WIFI_PHONE_STEP,
+                ),
+            ),
+        )
+        3 -> if (vpnActive) {
+            listOf(
+                MonitorPairingInstruction(
+                    title = "Check the connection",
+                    icon = MonitorPairingInstructionIcon.PHONE,
+                    lines = listOf(LocalVPNFilter.WIZARD_BANNER),
+                ),
+            )
+        } else {
+            emptyList()
+        }
+        else -> emptyList()
     }
-    if (model.coreVersion == null) {
-        StartupInfoBanner("Swift core isn't loaded. Build with `just android-core` on an arm64 device.", tight)
-    }
-    if (phase == ConnectionPhase.FAILED && !failure.isNullOrBlank()) {
-        StartupInfoBanner(StartupConnectionCopy.friendly(failure), tight)
-    }
-    if (found.isEmpty() && radioOn && permissionsGranted) {
-        StartupEmptyDiscoveryCard(
-            title = if (phase == ConnectionPhase.SCANNING) "Looking for cameras" else "No cameras yet",
-            hint = "Turn the camera on and keep the phone nearby. Pocket and Nano both appear — tap the one you want.",
-            compact = tight,
-            glyph = StartupGlyphKind.ANTENNA,
+    val checks = if (step >= 2) {
+        listOf(
+            MonitorPairingCheck(
+                title = "Bluetooth link",
+                subtitle = connectedName ?: "Camera connected",
+                state = MonitorPairingCheckState.COMPLETE,
+                stateLabel = "OK",
+            ),
+            MonitorPairingCheck(
+                title = "Camera Wi-Fi",
+                subtitle = joinedSSID ?: "Waiting for the camera network",
+                state = if (step > 2) MonitorPairingCheckState.COMPLETE else MonitorPairingCheckState.ACTIVE,
+                stateLabel = if (step > 2) "OK" else "JOINING",
+            ),
+            MonitorPairingCheck(
+                title = "Live picture",
+                subtitle = if (step > 2) "Opening the video link…" else "Starts after Wi-Fi joins",
+                state = if (step > 2) MonitorPairingCheckState.ACTIVE else MonitorPairingCheckState.WAITING,
+                stateLabel = "WAITING",
+            ),
         )
     } else {
-        found.forEach { camera ->
-            DiscoveredCameraTile(
-                camera = camera,
-                tight = tight,
-                enabled = !phase.isBusy(),
-                onClick = { model.session.connect(camera) },
-            )
-        }
+        emptyList()
     }
-    StartupPrepareCards(prepareSteps, tight)
+    val hint = when {
+        scanning -> picked?.name?.let { "Selected $it" } ?: "Choose the camera that matches your screen"
+        step == 1 -> "Nothing to type — approve it on the camera"
+        step == 2 -> "Android asks to join the camera network"
+        else -> "Monitoring opens when the picture is ready"
+    }
+    val (primary, primaryEnabled) = when {
+        phase == ConnectionPhase.FAILED -> "Try again" to true
+        !bluetoothOn -> "Turn Bluetooth on" to true
+        !permissionsGranted -> "Allow nearby devices" to true
+        scanning -> "Continue" to (picked != null && !busy)
+        else -> null to false
+    }
+    return MonitorPairingPresentation(
+        steps = pairingSteps,
+        currentStep = step,
+        title = pairingTitles[step],
+        body = pairingBodies[step],
+        target = (if (scanning) picked?.name else connectedName) ?: "Nothing selected yet",
+        hint = hint,
+        progress = if (phase != ConnectionPhase.FAILED && (busy || phase == ConnectionPhase.SCANNING)) {
+            StartupConnectionCopy.phaseLabel(phase, null)
+        } else {
+            null
+        },
+        error = error,
+        devices = if (scanning) found.map { device ->
+            MonitorPairingDevice(
+                id = device.id,
+                name = FoundCameraIdentity.listTitle(device.name, device.model.name),
+                subtitle = FoundCameraIdentity.listSubtitle(device.name, device.model.name, device.model.family) +
+                    if (device.model.verified) "" else " · unverified",
+                selected = picked?.id == device.id,
+                busy = busy,
+            )
+        } else emptyList(),
+        instructions = instructions,
+        checks = checks,
+        emptyTitle = if (scanning && radioReady && found.isEmpty()) {
+            if (phase == ConnectionPhase.SCANNING) "Looking for cameras" else "No cameras yet"
+        } else {
+            null
+        },
+        primaryAction = primary,
+        primaryActionEnabled = primaryEnabled,
+        backAction = when {
+            busy -> "Cancel"
+            hasSavedCameras -> "Back"
+            else -> null
+        },
+    )
 }
 
 @Composable
-private fun PermissionsCard(
-    radioOn: Boolean,
-    permissionsGranted: Boolean,
-    onEnableBluetooth: () -> Unit,
-    onRequestPermissions: () -> Unit,
+private fun PairingCallout(
+    title: String,
+    body: String,
+    icon: MonitorIcon,
+    action: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxWidth().startupInstructionCard()) {
-        Row(
-            Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            StartupGlyph(StartupGlyphKind.SHIELD, tint = StartupColors.accent, modifier = Modifier.size(13.dp))
-            Text(
-                "Permissions",
-                color = StartupColors.muted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        StartupPermissionRow(
-            glyph = StartupGlyphKind.PHONE_WAVES,
-            title = "Bluetooth",
-            detail = "Turn Bluetooth on so we can find your Pocket.",
-            granted = radioOn,
-            onRequest = onEnableBluetooth,
-        )
-        Box(
-            Modifier.fillMaxWidth()
-                .padding(start = 42.dp)
-                .height(1.dp)
-                .background(StartupColors.border.copy(alpha = 0.10f)),
-        )
-        StartupPermissionRow(
-            glyph = StartupGlyphKind.WIFI,
-            title = "Nearby devices",
-            detail = "Allow Bluetooth and nearby devices so we can find your Pocket.",
-            granted = permissionsGranted,
-            onRequest = onRequestPermissions,
-        )
-    }
-}
-
-@Composable
-private fun DiscoveredCameraTile(
-    camera: FoundCamera,
-    tight: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
+    val shape = RoundedCornerShape(11.dp)
+    Column(
         Modifier.fillMaxWidth()
-            .startupTile(borderColor = StartupColors.ready.copy(alpha = 0.28f))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = if (tight) 12.dp else 16.dp)
-            .height(if (tight) 64.dp else 84.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (tight) 10.dp else 14.dp),
+            .background(Color.White.copy(alpha = 0.03f), shape)
+            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+            .then(
+                if (onAction != null) Modifier.clickable(role = Role.Button, onClick = onAction)
+                else Modifier,
+            )
+            .padding(13.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        StartupGlyphTile(
-            StartupGlyphKind.CAMERA,
-            size = if (tight) 36.dp else 48.dp,
-        )
-        Column(Modifier.weight(1f)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Box(
+                Modifier.size(26.dp).background(MonitorPalette.accent.copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                MonitorIcon(icon, null, Modifier.size(14.dp), MonitorPalette.accent)
+            }
             Text(
-                FoundCameraIdentity.listTitle(camera.name, camera.model.name),
-                color = StartupColors.ink,
-                fontSize = if (tight) 13.sp else 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                title.uppercase(),
+                color = MonitorPalette.secondary,
+                style = MonitorTypography.text(9f, FontWeight.Bold).copy(letterSpacing = 1.4.sp),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
-            Text(
-                FoundCameraIdentity.listSubtitle(camera.name, camera.model.name, camera.model.family) +
-                    if (camera.model.verified) "" else " · unverified",
-                color = StartupColors.muted,
-                fontSize = if (tight) 10.sp else 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (action != null) {
+                Text(
+                    action,
+                    color = MonitorPalette.accent,
+                    style = MonitorTypography.text(11f, FontWeight.SemiBold),
+                    maxLines = 1,
+                )
+            }
         }
-        StartupGlyph(
-            StartupGlyphKind.WIFI,
-            tint = StartupColors.accent,
-            modifier = Modifier.size(if (tight) 16.dp else 20.dp),
+        Text(
+            body,
+            color = MonitorPalette.secondary,
+            style = MonitorTypography.text(12.5f).copy(lineHeight = 15.5.sp),
         )
     }
-}
-
-@Composable
-private fun ApproveStep(phase: ConnectionPhase, tight: Boolean) {
-    StartupInfoBanner(
-        "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
-        tight,
-    )
-    StartupDeviceInstructionCard(
-        "On the camera",
-        listOf("Look for an Approve / pairing prompt", "Tap it on the camera screen"),
-        tight,
-        glyph = StartupGlyphKind.APERTURE,
-    )
-    StartupDeviceInstructionCard(
-        "On this phone",
-        listOf("Wait here — we keep the Bluetooth link alive", "Don't force-quit the app"),
-        tight,
-        glyph = StartupGlyphKind.PHONE,
-    )
-    StartupConnectionProgress(StartupConnectionCopy.phaseLabel(phase, null), tight = tight)
-}
-
-@Composable
-private fun JoinWifiStep(phase: ConnectionPhase, tight: Boolean) {
-    Text(
-        "We read the camera's SSID and password over Bluetooth, then join its Wi-Fi for you.",
-        color = StartupColors.muted,
-        fontSize = if (tight) 12.sp else 13.sp,
-        lineHeight = 18.sp,
-    )
-    StartupDeviceInstructionCard(
-        "On the camera",
-        listOf(
-            "Leave the camera on — it brings up its own Wi-Fi",
-            "On 5.8 GHz that can take about a minute; we keep trying",
-        ),
-        tight,
-        glyph = StartupGlyphKind.APERTURE,
-    )
-    StartupDeviceInstructionCard(
-        "On this phone",
-        listOf(
-            "Tap Join when Android asks to join the camera network",
-            "Stay on this screen until we open the datalink",
-            LocalVPNFilter.JOIN_WIFI_PHONE_STEP,
-        ),
-        tight,
-        glyph = StartupGlyphKind.PHONE,
-    )
-    StartupConnectionProgress(StartupConnectionCopy.phaseLabel(phase, null), tight = tight)
-}
-
-@Composable
-private fun DatalinkStep(phase: ConnectionPhase, tight: Boolean) {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { LocalVPNFilter.noteIfActive(context) }
-    if (LocalVPNFilter.isActive(context)) {
-        StartupInfoBanner(LocalVPNFilter.WIZARD_BANNER, tight)
-    }
-    StartupConnectionProgress(
-        label = "Opening the video link…",
-        detail = StartupConnectionCopy.phaseLabel(phase, null),
-        glyph = StartupGlyphKind.APERTURE,
-        tight = tight,
-    )
 }
 
 fun pocketRuntimePermissions(): Array<String> {

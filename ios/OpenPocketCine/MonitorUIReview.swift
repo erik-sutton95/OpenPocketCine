@@ -11,6 +11,14 @@
         static var isActive: Bool { screen != nil }
 
         static func prepare(_ model: AppModel) {
+            // Presentation reviews do not send reports or inherit first-run consent.
+            // Keep the operator's real choice and explicit consent reviews separate.
+            if ProcessInfo.processInfo.environment["OPV_CONSENT_REVIEW_ID"] == nil,
+                let defaults = UserDefaults(suiteName: "opc.monitor.presentation.review")
+            {
+                ReliabilityReportingConsent.defaults = defaults
+                ReliabilityReportingConsent.setOptedIn(false)
+            }
             model.showsLaunchSplash = false
             model.assist.lutEnabled = false
             model.assist.peaking = false
@@ -62,6 +70,7 @@
             status.storageFreeMb = 107 * 1024
             status.storageTotalMb = 128 * 1024
             status.shootingMode = 1
+            status.videoResolution = VideoResolution(rawValue: 0x10)
             status.fps = 25
             status.availableIsoIndices = [
                 .iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200, .iso6400,

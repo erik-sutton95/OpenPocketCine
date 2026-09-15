@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,12 +32,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlin.math.max
 import kotlin.math.min
+
+/** Null keeps normal settings help badges; inspectors opt into inline help. */
+val LocalMonitorInspectorHelp = staticCompositionLocalOf<Boolean?> { null }
 
 /** Viewport policy for the shared assist/gimbal inspector. Shells do not recompute this. */
 object MonitorInspectorPolicy {
@@ -93,6 +97,8 @@ fun MonitorInspector(
     safeBottom: Float = 0f,
     hasNavigation: Boolean = true,
     close: (@Composable () -> Unit)? = null,
+    helpVisible: Boolean? = null,
+    onToggleHelp: () -> Unit = {},
     navigation: @Composable (portrait: Boolean) -> Unit = {},
     footer: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
@@ -149,11 +155,22 @@ fun MonitorInspector(
                         Text(
                             title,
                             modifier = Modifier.weight(1f),
-                            style = MonitorTypography.text(9f, FontWeight.SemiBold).copy(
-                                letterSpacing = 1.6.sp,
-                            ),
+                            style = MonitorTypography.text(14f, FontWeight.SemiBold),
                             maxLines = 1,
                         )
+                        if (helpVisible != null) Box(
+                            Modifier.size(44.dp).clickable(onClick = onToggleHelp).semantics {
+                                contentDescription = "Show option help"
+                                stateDescription = if (helpVisible) "On" else "Off"
+                                role = Role.Button
+                            },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            MonitorIcon(
+                                MonitorIcon.CIRCLE_QUESTION_MARK, null, Modifier.size(17.dp),
+                                if (helpVisible) MonitorPalette.accent else MonitorPalette.muted,
+                            )
+                        }
                         if (close != null) close() else Box(
                             Modifier.size(44.dp).clickable(onClick = onDismiss).semantics {
                                 contentDescription = "Close $title"; role = Role.Button

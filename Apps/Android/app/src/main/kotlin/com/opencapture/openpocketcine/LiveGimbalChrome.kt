@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -150,7 +151,7 @@ fun LiveGimbalSheetHost(
         block()
     }
     MonitorInspector(
-        title = "GIMBAL",
+        title = "Gimbal",
         viewportWidth = layout.viewportWidth,
         viewportHeight = layout.viewportHeight,
         onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
@@ -742,7 +743,12 @@ private fun clampCenter(point: Offset, width: Float, height: Float, bounds: Chro
     )
 }
 
-/** Initial-pass ownership cancels child clicks before drag events or the release reach them. */
+/**
+ * Direct drag like movable scopes. Children (SET, duration dial, smoothness)
+ * keep the pointer when they consume it; a started drag consumes so the gimbal
+ * stick under the window never sees the sequence. Pill hold-without-move still
+ * claims so a long press on Start does not fire a click on lift.
+ */
 private suspend fun PointerInputScope.detectHoldThenDragAllowClicks(
     holdMs: Long,
     immediate: Boolean,
@@ -756,38 +762,50 @@ private suspend fun PointerInputScope.detectHoldThenDragAllowClicks(
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val pointerId = down.id
         val downRoot = toRoot(down.position)
-        val gesture = MotionControlDragGesture(immediate, if (immediate) 8.dp.toPx() else viewConfiguration.touchSlop, holdMs)
+        val gesture = MotionControlDragGesture(immediate, 8.dp.toPx(), holdMs)
         var elapsed = 0L
         var started = false
         var released = false
         try {
             while (true) {
-                val event = if (gesture.ownership == MotionControlDragGesture.Ownership.TRACKING) {
-                    withTimeoutOrNull((holdMs - elapsed).coerceAtLeast(1)) { awaitPointerEvent(PointerEventPass.Initial) }
-                } else awaitPointerEvent(PointerEventPass.Initial)
+                val tracking = gesture.ownership == MotionControlDragGesture.Ownership.TRACKING
+                val event = if (tracking && immediate) {
+                    withTimeoutOrNull((holdMs - elapsed).coerceAtLeast(1)) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                    }
+                } else {
+                    awaitPointerEvent(PointerEventPass.Initial)
+                }
                 if (event == null) {
-                    gesture.update(holdMs, 0f)
-                    if (!started) { started = true; onHold() }
+                    gesture.update(holdMs, 0f, childConsumed = false)
+                    if (gesture.ownership == MotionControlDragGesture.Ownership.DRAGGING && !started) {
+                        started = true
+                        onHold()
+                    }
                     continue
                 }
                 val change = event.changes.firstOrNull { it.id == pointerId } ?: break
                 elapsed = change.uptimeMillis - down.uptimeMillis
                 val translation = toRoot(change.position) - downRoot
-                when (gesture.update(elapsed, translation.getDistance())) {
-                    MotionControlDragGesture.Ownership.YIELDED -> break
-                    MotionControlDragGesture.Ownership.DRAGGING -> {
-                        if (!started) { started = true; onHold() }
-                        // Includes the UP event: a completed drag never becomes a child click.
-                        event.changes.forEach { it.consume() }
-                        if (change.pressed) onDrag(translation)
+                if (tracking) {
+                    val final = awaitPointerEvent(PointerEventPass.Final)
+                    val childConsumed = final.changes.any { it.isConsumed }
+                    when (gesture.update(elapsed, translation.getDistance(), childConsumed)) {
+                        MotionControlDragGesture.Ownership.YIELDED -> break
+                        MotionControlDragGesture.Ownership.DRAGGING -> {
+                            if (!started) { started = true; onHold() }
+                            event.changes.forEach { it.consume() }
+                            if (change.pressed) onDrag(translation)
+                        }
+                        MotionControlDragGesture.Ownership.TRACKING -> Unit
                     }
-                    MotionControlDragGesture.Ownership.TRACKING -> Unit
+                } else if (gesture.ownership == MotionControlDragGesture.Ownership.DRAGGING) {
+                    event.changes.forEach { it.consume() }
+                    if (change.pressed) onDrag(translation)
+                } else {
+                    break
                 }
                 if (!change.pressed) { released = true; break }
-                if (!started) {
-                    val final = awaitPointerEvent(PointerEventPass.Final)
-                    if (final.changes.any { it.isConsumed }) break
-                }
             }
         } finally {
             if (started && released) onEnd() else onCancel()

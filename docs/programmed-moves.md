@@ -104,8 +104,8 @@ cancels the path; iOS head tracking is suspended while the path owns the gimbal.
 
 Motion Control uses horizontal duration dials from 0.5 to 120 seconds in
 half-second steps. Swipe left to increase duration and right to decrease it. Drag the
-expanded window by holding anywhere; drag the minimized pill directly. A recognized
-pill drag cancels Start/Pause/Resume/Stop and expand taps. Start counts down 3–2–1 before
+expanded window or minimized pill directly; no hold is needed. Duration dials
+and sliders retain their own gestures. A recognized drag cancels Start/Pause/Resume/Stop and expand taps. Start counts down 3–2–1 before
 automatic preparation and approach; Stop cancels the countdown. The existing
 settle at A remains outside the timed take. The floating motion debug plate
 has been removed.

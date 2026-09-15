@@ -29,7 +29,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,7 +51,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
@@ -61,7 +60,6 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.monitorui.monitorReadoutGlow
 import com.opencapture.openpocketcine.session.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -146,8 +144,15 @@ fun Modifier.liveModuleFrame(rect: ChromeRect): Modifier =
     offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
 
 /** Occupies [rect] and seats wrapping chrome (InfoPill, capture strip) like iOS `alignment`. */
-fun Modifier.liveModuleFrame(rect: ChromeRect, alignment: Alignment): Modifier =
-    liveModuleFrame(rect).wrapContentSize(align = alignment)
+fun Modifier.liveModuleFrame(rect: ChromeRect, alignment: Alignment): Modifier {
+    val vertical =
+        when (alignment) {
+            Alignment.TopStart, Alignment.TopCenter, Alignment.TopEnd -> Alignment.Top
+            Alignment.BottomStart, Alignment.BottomCenter, Alignment.BottomEnd -> Alignment.Bottom
+            else -> Alignment.CenterVertically
+        }
+    return liveModuleFrame(rect).wrapContentHeight(align = vertical, unbounded = true)
+}
 
 /**
  * Measures unbounded then scales down to [maxWidth] — iOS `minimumScaleFactor` for the
@@ -868,11 +873,39 @@ data class LiveMonitorLayout(
     val safeTrailing: Float,
     val safeTop: Float,
     val safeBottom: Float,
+    val usesFieldMonitor: Boolean = false,
 ) {
     val onFeed: ChromeRect
         get() = if (picture.width > 1f) picture else feed
 
     fun gimbalCluster(showGimbalButton: Boolean = false): GimbalCluster {
+        if (usesFieldMonitor) {
+            val portrait = viewportHeight > viewportWidth
+            val floor =
+                when {
+                    capture.height > 1f -> capture.y - 12f
+                    portrait && rail.height > 1f -> rail.y - 8f
+                    else ->
+                        viewportHeight -
+                            com.opencapture.monitorui.MonitorLayoutPolicy.landscapeBottomClearance(safeBottom) - 8f
+                }
+            val stick =
+                if (portrait) {
+                    com.opencapture.monitorui.MonitorLayoutPolicy.portraitStick(viewportWidth, floor)
+                } else {
+                    com.opencapture.monitorui.MonitorLayoutPolicy.landscapeStick(
+                        viewportWidth, floor, record.width, safeTrailing,
+                    )
+                }
+            val zoom = com.opencapture.monitorui.MonitorLayoutPolicy.portraitZoom(stick)
+            val gimbal = com.opencapture.monitorui.MonitorLayoutPolicy.portraitGimbal(stick, zoom)
+            return GimbalCluster(
+                ChromeRect(stick.x, stick.y, stick.width, stick.height),
+                ChromeRect(zoom.x, zoom.y, zoom.width, zoom.height),
+                if (showGimbalButton) ChromeRect(gimbal.x, gimbal.y, gimbal.width, gimbal.height)
+                else ChromeRect(0f, 0f, 0f, 0f),
+            )
+        }
         val inset = LiveChromeMetrics.STICK_INSET
         val gap = LiveChromeMetrics.STICK_GAP
         var barTop = Float.POSITIVE_INFINITY
@@ -910,6 +943,13 @@ data class LiveMonitorLayout(
 
     val focusReset: ChromeRect
         get() {
+            if (usesFieldMonitor) {
+                val stick = gimbalCluster().stick
+                return ChromeRect(
+                    max(safeLeading + 8f, stick.x - 50f),
+                    stick.maxY - 40f, 40f, 40f,
+                )
+            }
             val size = LiveChromeMetrics.FOCUS_RESET
             if (viewportHeight > viewportWidth) {
                 val well = onFeed
@@ -1026,6 +1066,56 @@ data class LiveMonitorLayout(
                 )
             }
             return layout
+        }
+
+        /** Production chrome. `fit` remains the OpenZCine compatibility path for tests. */
+        fun fieldMonitor(
+            viewportWidth: Float,
+            viewportHeight: Float,
+            safeLeading: Float,
+            safeTrailing: Float,
+            safeTop: Float,
+            safeBottom: Float,
+            showsBottomBars: Boolean,
+            chromeScale: Float = 1f,
+            pictureAspect: Float? = null,
+            hasDisplayCutout: Boolean = false,
+            fill: Boolean = false,
+            showsValues: Boolean = true,
+            topControlInset: Float = 0f,
+        ): LiveMonitorLayout {
+            LiveChromeMetrics.scale = chromeScale
+            val p =
+                com.opencapture.monitorui.MonitorLayoutPolicy.fieldMonitor(
+                    viewportWidth, viewportHeight, safeTop, safeLeading, safeBottom, safeTrailing,
+                    pictureAspect ?: LiveChromeMetrics.FEED_ASPECT, fill, showsValues,
+                    topControlInset, hasDisplayCutout,
+                )
+            fun slot(rect: com.opencapture.monitorui.MonitorRect) =
+                ChromeRect(rect.x, rect.y, rect.width, rect.height)
+            return LiveMonitorLayout(
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                feed = slot(p.picture),
+                picture = slot(p.picture),
+                lock = slot(p.lock),
+                battery = slot(p.gauges),
+                topDeck = slot(p.status),
+                assist = slot(p.assists),
+                capture = slot(p.values),
+                rail = slot(p.system),
+                settings = slot(p.settings),
+                media = slot(p.media),
+                record = slot(p.record),
+                disp = slot(p.display),
+                isWidthConstrained = !p.tablet && viewportWidth < 740f,
+                showsBottomBars = showsBottomBars,
+                safeLeading = safeLeading,
+                safeTrailing = safeTrailing,
+                safeTop = safeTop,
+                safeBottom = safeBottom,
+                usesFieldMonitor = true,
+            )
         }
 
         fun isWidthConstrained(vw: Float, vh: Float, aspect: Float = LiveChromeMetrics.FEED_ASPECT): Boolean =
@@ -1366,6 +1456,7 @@ internal fun RecordButton(
     modifier: Modifier = Modifier,
     confirm: Boolean = false,
     photo: Boolean = false,
+    diameter: Float = LiveChromeMetrics.RECORD,
     request: RecordConfirmationRequest = CaptureShutterPolicy.request(
         shootingMode = CameraCommands.SHOOT_VIDEO,
         recording = recording,
@@ -1441,9 +1532,8 @@ internal fun RecordButton(
     }
     Box(
         modifier
-            .size(LiveChromeMetrics.RECORD.dp)
+            .size(diameter.dp)
             .then(if (recording && !enabled) Modifier.graphicsLayer { alpha = 0.72f } else Modifier)
-            .shadow(2.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.40f))
             .chromeClickable(enabled = enabled, onClick = {
                 if (confirm && request.canConfirm) {
                     pending = request
@@ -1463,7 +1553,9 @@ internal fun RecordButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        com.opencapture.monitorui.MonitorRecordLamp(recording = recording)
+        com.opencapture.monitorui.MonitorRecordLamp(
+            recording = recording, photo = photo, modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -1607,7 +1699,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
         Text(
             raw,
             color = LiveDesign.text,
-            style = LiveType.mono(15f, FontWeight.Normal).monitorReadoutGlow(),
+            style = LiveType.mono(15f, FontWeight.Normal),
             maxLines = 1,
             softWrap = false,
             modifier = modifier,
@@ -1620,7 +1712,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             withStyle(SpanStyle(color = LiveDesign.accent)) { append(tail) }
         },
         style = LiveType.mono(if (tablet) 25f else 23f, FontWeight.Medium)
-            .monitorReadoutGlow(),
+            ,
         maxLines = 1,
         softWrap = false,
         modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
@@ -1641,9 +1733,9 @@ fun RecChip(recording: Boolean, elapsedSeconds: Int = 0) {
         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         if (recording) Box(Modifier.size(6.dp).background(Color.White, CircleShape))
         Text(if (recording) "REC" else "STBY", color = LiveDesign.text,
-            style = LiveType.ui(size, FontWeight.Medium).copy(letterSpacing = .6.sp).monitorReadoutGlow(), maxLines = 1)
+            style = LiveType.ui(size, FontWeight.Medium).copy(letterSpacing = .6.sp), maxLines = 1)
         Text(duration, color = Color.White.copy(alpha = .75f),
-            style = LiveType.mono(size, FontWeight.Medium).monitorReadoutGlow(), maxLines = 1)
+            style = LiveType.mono(size, FontWeight.Medium), maxLines = 1)
     }
 }
 

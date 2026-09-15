@@ -107,7 +107,7 @@ final class MotionUIFlowTests: XCTestCase {
         let origin = title.frame
         let start = title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(
-            forDuration: 0.55,
+            forDuration: 0.01,
             thenDragTo: start.withOffset(CGVector(dx: 80, dy: 120)))
         let moved = NSPredicate { _, _ in
             hypot(title.frame.minX - origin.minX, title.frame.minY - origin.minY) > 40

@@ -22,18 +22,32 @@ class MotionControlInteractionTest {
     }
 
     @Test
-    fun editorYieldsEarlyHorizontalSwipeToDurationDial() {
+    fun editorDirectDragStartsWithoutHoldLikeScopes() {
         val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(50, 12f))
-        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(500, 30f))
+        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(40, 2f))
+        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(50, 12f))
+        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(80, 30f))
     }
 
     @Test
-    fun editorLongHoldWinsBeforeDialMovementAndConsumesRelease() {
+    fun editorHoldWithoutMoveDoesNotClaimSoWaypointTapsFire() {
         val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(300, 0f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(450, 30f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(550, 0f))
+        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(300, 0f))
+        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(450, 2f))
+    }
+
+    @Test
+    fun editorYieldsWhenChildConsumesForDurationDialOrSlider() {
+        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
+        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(50, 12f, childConsumed = true))
+        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(500, 30f, childConsumed = true))
+    }
+
+    @Test
+    fun yieldedOwnershipStaysEvenIfChildStopsConsuming() {
+        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
+        drag.update(50, 12f, childConsumed = true)
+        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(80, 0f, childConsumed = false))
     }
 
     @Test
@@ -43,6 +57,7 @@ class MotionControlInteractionTest {
         assertEquals(0.5, motionDurationAfterDrag(5.0, 1000f, 0.5))
         assertEquals(120.0, motionDurationAfterDrag(5.0, -4000f, 0.5))
     }
+
     @Test
     fun mirrorAssistReflectsBothMarkersAndPreviewCoordinates() {
         assertEquals(0.2, motionOverlayX(0.2, false), 1e-9)

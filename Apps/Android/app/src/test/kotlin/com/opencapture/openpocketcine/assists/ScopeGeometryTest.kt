@@ -219,6 +219,31 @@ class ScopeGeometryTest {
     }
 
     @Test
+    fun unplacedWindowedScopeStartsAtCanvasCenterThenClampsToMovement() {
+        val canvas = AssistRect(0f, 0f, 874f, 402f)
+        val movement = AssistRect(8f, 8f, 858f, 386f)
+        val size = ScopePanelSize.histogram
+        val fallback = AssistPoint(canvas.midX, canvas.midY)
+        val raw = MovablePanelMath.resolvedCenter(null, null, fallback, size, canvas)
+        assertEquals(canvas.midX, raw.x, 0.05f)
+        assertEquals(canvas.midY, raw.y, 0.05f)
+        val fitted = MovablePanelMath.clampWithGrip(raw, size, movement, MovablePanelMath.GRIP_EXTERIOR_DP)
+        assertEquals(canvas.midX, fitted.x, 0.05f)
+        assertEquals(canvas.midY, fitted.y, 0.05f)
+        assertTrue(fitted.y + size.height / 2f <= movement.maxY + 0.05f)
+    }
+
+    @Test
+    fun audioFreshMeterStartsAtLeftAndCanvasVerticalCenter() {
+        val canvas = AssistRect(40f, 20f, 844f, 390f)
+        val movement = AssistRect(54f, 70f, 812f, 268f)
+        val size = ScopePanelSize.audio
+        val center = AudioAssist.defaultCenter(canvas, movement, size)
+        assertEquals(movement.minX + size.width / 2f, center.x, 0.05f)
+        assertEquals(canvas.midY, center.y, 0.05f)
+    }
+
+    @Test
     fun trafficLightsCompensationAndNeutralDisplay() {
         assertEquals(listOf("0", "0.25", "0.5", "0.75", "1.0"), CrushClipCompensation.entries.map { it.label })
         assertEquals(listOf(0, 2, 5, 7, 10), CrushClipCompensation.entries.map { it.raw })

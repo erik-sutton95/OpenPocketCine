@@ -59,7 +59,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -130,12 +129,14 @@ fun LiveControlSheet(
     onDismiss: () -> Unit,
     maxHeightDp: Float? = null,
     preview: MonitorQuickPreview? = null,
+    portrait: Boolean? = null,
 ) {
     val availableStatus = CaptureLists.withEffectiveVideoFormats(
         status, model.session.connectedCamera?.model,
     )
-    CompositionLocalProvider(LocalCapturePreview provides preview) {
-        if (sheet.isRecordingSetup && viewportIsPortrait()) {
+    val isPortrait = portrait ?: viewportIsPortrait()
+    CompositionLocalProvider(LocalCapturePreview provides preview, LocalViewportPortrait provides isPortrait) {
+        if (sheet.isRecordingSetup && isPortrait) {
             RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
         } else {
             LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
@@ -144,6 +145,7 @@ fun LiveControlSheet(
 }
 
 private val LocalCapturePreview = staticCompositionLocalOf<MonitorQuickPreview?> { null }
+private val LocalViewportPortrait = staticCompositionLocalOf { true }
 
 /** Mount/reseat work has no authority to write while showing a held preview. */
 internal class CapturePanelEffects(private val preview: Boolean) {
@@ -818,6 +820,7 @@ fun LivePickerHost(
     val density = LocalDensity.current
     var panelHeight by remember(sheet) { mutableFloatStateOf(LiveChromeMetrics.DRUM_PICKER_HEIGHT) }
     val fromTop = sheet.isTopAnchored
+    val portrait = viewportHeight > viewportWidth
     val place = if (fromTop) {
         LivePopupPlacement.topCapturePanel(panelHeight, viewportWidth, viewportHeight,
             safeLeading, safeTrailing, safeTop, safeBottom, ceilingY, floorY)
@@ -848,6 +851,7 @@ fun LivePickerHost(
                         locked,
                         onDismiss = { onSelect(null) },
                         maxHeightDp = place.maxHeight,
+                        portrait = portrait,
                     )
                 }
             }
@@ -856,10 +860,7 @@ fun LivePickerHost(
 }
 
 @Composable
-private fun viewportIsPortrait(): Boolean {
-    val config = LocalConfiguration.current
-    return config.screenHeightDp > config.screenWidthDp
-}
+private fun viewportIsPortrait(): Boolean = LocalViewportPortrait.current
 
 private fun capturePanelShape(fromTop: Boolean, portrait: Boolean): RoundedCornerShape {
     val top = com.opencapture.monitorui.MonitorLayoutPolicy.capturePanelTopCorner(fromTop, portrait).dp

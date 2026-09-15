@@ -87,7 +87,7 @@ class MonitorLayoutPolicyTest {
         val phoneSide = MonitorLayoutPolicy.systemButtonSize(false)
         val tabletSide = MonitorLayoutPolicy.systemButtonSize(true)
         val phone = MonitorLayoutPolicy.portraitAssists(800f, false)
-        assertEquals(10f, phone.x)
+        assertEquals(14f, phone.x)
         assertEquals(phoneSide + 8f, phone.width)
         assertEquals(phoneSide + 35f, phone.height)
         assertEquals(800f - 16f, phone.maxY, .01f)
@@ -100,7 +100,7 @@ class MonitorLayoutPolicyTest {
         assertEquals(14f, landPhone.x)
         assertEquals(phoneSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landPhone.width)
         assertEquals(phoneSide * 2f + 11f, landPhone.height)
-        assertEquals(390f - 14f, landPhone.maxY, .01f)
+        assertEquals(390f - 8f, landPhone.maxY, .01f)
         val filter = MonitorLayoutPolicy.mediaFilterPopup(956f, 440f, 0f, 59f, 21f, 59f)
         assertTrue(filter.maxY <= 440f - 21f)
         assertTrue(filter.maxX <= 956f - 59f)
@@ -117,7 +117,7 @@ class MonitorLayoutPolicyTest {
         val landTablet = MonitorLayoutPolicy.landscapeAssists(744f, true)
         assertEquals(tabletSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landTablet.width)
         assertEquals(tabletSide * 2f + 11f, landTablet.height)
-        assertEquals(744f - 14f, landTablet.maxY, .01f)
+        assertEquals(744f - 8f, landTablet.maxY, .01f)
     }
 
     @Test
@@ -226,6 +226,28 @@ class MonitorLayoutPolicyTest {
                     assertEquals(height / 2f, layout.picture.y + layout.picture.height / 2f, .001f)
                 }
             }
+    }
+
+    @Test
+    fun landscapeFieldMonitorMatchesIosIslandPhone() {
+        val layout = MonitorLayoutPolicy.fieldMonitor(
+            874f, 402f, safeLeading = 59f, showsValues = true,
+        )
+        assertEquals(70f, layout.record.width, .01f)
+        assertEquals(874f - 10f - 70f, layout.record.x, .01f)
+        assertEquals(402f - 12f - 70f, layout.record.y, .01f)
+        assertEquals(43f, layout.values.height, .01f)
+        assertEquals(14f + 70f + 28f, layout.values.x, .01f)
+        assertEquals(layout.values.x, 874f - layout.values.maxX, .01f)
+        assertEquals(18f, layout.lock.x, .01f)
+        assertEquals(49f, layout.gauges.width, .01f)
+        assertEquals(52f, layout.gauges.height, .01f)
+        assertEquals(44f, layout.zoom.width, .01f)
+        assertEquals(36f, layout.zoom.height, .01f)
+        assertEquals(layout.stick.x, layout.zoom.x, .01f)
+        assertEquals(layout.stick.maxX - 36f, layout.gimbal.x, .01f)
+        assertTrue(layout.stick.maxX <= layout.record.x + .05f)
+        assertEquals(8f, MonitorLayoutPolicy.landscapeBottomClearance(0f), .01f)
     }
 
 }

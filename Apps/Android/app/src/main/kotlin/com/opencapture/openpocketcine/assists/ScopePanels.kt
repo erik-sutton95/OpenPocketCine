@@ -4,7 +4,6 @@ import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -841,7 +840,7 @@ private fun zoneColor(db: Double): Color =
 
 @Composable
 internal fun Modifier.scopePanelChrome(): Modifier =
-    monitorMaterial(MonitorMaterial.Scope, PanelShape).border(1.dp, LiveDesign.hairline, PanelShape)
+    monitorMaterial(MonitorMaterial.Scope, PanelShape)
 
 /** Plot origin in root pixels — same rect the Canvas punches, so Vulkan fill matches. */
 private fun Modifier.reportGpuPlot(

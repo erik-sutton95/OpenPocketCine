@@ -266,8 +266,8 @@ Motion Control shows A, B and C with their reported pan, tilt and zoom, or
 **Not set**. The joystick remains usable while the editor is open, so you can
 position the camera before saving a point. Other outside taps minimize the editor
 without activating the controls behind it. Durations use half-second dials up to
-120 seconds. Swipe left to increase duration and right to decrease it. Move the expanded
-window by holding anywhere, or drag the minimized pill directly. Dragging
+120 seconds. Swipe left to increase duration and right to decrease it. Drag the expanded window or minimized pill directly; no hold is needed.
+Duration dials and sliders keep their own gestures. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second
 countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the

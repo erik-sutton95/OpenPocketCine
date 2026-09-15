@@ -19,6 +19,32 @@ data class MonitorPortraitLayout(
     val controlsFloor: Float,
 )
 
+/** Device-independent Field Monitor slots. Matches `FieldMonitorLayout`. */
+data class MonitorFieldLayout(
+    val viewport: MonitorRect,
+    val picture: MonitorRect,
+    val status: MonitorRect,
+    val values: MonitorRect,
+    val system: MonitorRect,
+    val lock: MonitorRect,
+    val gauges: MonitorRect,
+    val settings: MonitorRect,
+    val media: MonitorRect,
+    val record: MonitorRect,
+    val display: MonitorRect,
+    val assists: MonitorRect,
+    val stick: MonitorRect,
+    val zoom: MonitorRect,
+    val gimbal: MonitorRect,
+    val headTrack: MonitorRect,
+    val aspectToggle: MonitorRect,
+    val focusReset: MonitorRect,
+    val portrait: Boolean,
+    val tablet: Boolean,
+    val fillsPicture: Boolean,
+    val controlsFloor: Float,
+)
+
 /** UI 2.0 layout decisions shared by brand apps; native shells retain the feed. */
 object MonitorLayoutPolicy {
     fun portrait(
@@ -58,7 +84,7 @@ object MonitorLayoutPolicy {
         val side = systemButtonSize(tablet)
         val height = side + 35f
         return MonitorRect(
-            if (tablet) 14f else 10f,
+            14f,
             max(0f, floor - 16f - height),
             side + 8f,
             height,
@@ -67,7 +93,7 @@ object MonitorLayoutPolicy {
 
     /** Landscape camera values sit above the home indicator instead of overlapping it. */
     fun landscapeBottomClearance(safeBottom: Float): Float =
-        if (safeBottom > 0f) max(safeBottom, 14f) + 10f else 14f
+        if (safeBottom > 0f) max(safeBottom, 14f) + 10f else 8f
 
     /** Two stacked system buttons with 38 total horizontal insets, including the 27-wide expansion lane. */
     fun landscapeAssists(
@@ -138,6 +164,130 @@ object MonitorLayoutPolicy {
 
     fun portraitGimbal(stick: MonitorRect, zoom: MonitorRect): MonitorRect =
         MonitorRect(stick.maxX - 36f, zoom.y, 36f, 36f)
+
+    fun recordSize(tablet: Boolean): Float = if (tablet) 84f else 70f
+
+    /** FieldMonitorLayout landscape stick: leading of the record well, on the values floor. */
+    fun landscapeStick(width: Float, floor: Float, recordSize: Float, safeTrailing: Float): MonitorRect {
+        val x = max(0f, width) - max(16f + recordSize + 12f, max(0f, safeTrailing) + 6f) - 88f
+        return MonitorRect(x, floor - 88f, 88f, 88f)
+    }
+
+    fun landscapeZoom(stick: MonitorRect): MonitorRect = portraitZoom(stick)
+
+    fun landscapeGimbal(stick: MonitorRect, zoom: MonitorRect): MonitorRect = portraitGimbal(stick, zoom)
+
+    fun landscapeValuesHeight(): Float = 43f
+
+    fun landscapeValuesInset(recordSize: Float): Float = 14f + recordSize + 28f
+
+    /**
+     * Production Field Monitor geometry. Viewport and insets are inputs;
+     * camera brands are absent. Native shells retain the feed.
+     */
+    fun fieldMonitor(
+        width: Float, height: Float,
+        safeTop: Float = 0f, safeLeading: Float = 0f, safeBottom: Float = 0f, safeTrailing: Float = 0f,
+        sourceAspect: Float = 16f / 9f, fill: Boolean = false, showsValues: Boolean = true,
+        topControlInset: Float = 0f, hasDisplayCutout: Boolean = false,
+    ): MonitorFieldLayout {
+        val w = max(1f, width)
+        val h = max(1f, height)
+        val aspect = sourceAspect.takeIf { it.isFinite() && it > 0f } ?: 16f / 9f
+        val controlInset = max(0f, min(h, if (topControlInset.isFinite()) topControlInset else 0f))
+        val viewport = MonitorRect(0f, 0f, w, h)
+        val portrait = h > w
+        val tablet = min(w, h) >= 600f
+        val rec = recordSize(tablet)
+        val button = systemButtonSize(tablet)
+        val edge = 14f
+        if (portrait) {
+            val layout = portrait(w, h, safeTop, safeBottom, fill, showsValues, aspect)
+            val status = MonitorRect(edge, layout.status.y + controlInset, max(0f, w - 28f), layout.status.height)
+            val cy = layout.system.y + layout.system.height / 2f
+            val lock = MonitorRect(edge, cy - button / 2f, button, button)
+            val display = MonitorRect(edge + button + 8f, lock.y, button, button)
+            val record = MonitorRect((w - rec) / 2f, cy - rec / 2f, rec, rec)
+            val media = MonitorRect(w - edge - button, lock.y, button, button)
+            val settings = MonitorRect(media.x - button - 8f, lock.y, button, button)
+            val top = max(0f, safeTop - 24f)
+            val gaugeTop = (if (tablet) 82f else max(4f, top - 16f)) + controlInset
+            val gauges = MonitorRect(
+                if (tablet) edge else w - edge - 104f, gaugeTop,
+                if (tablet) 49f else 104f, if (tablet) 58f else 28f,
+            )
+            val floor = layout.controlsFloor
+            val assists = portraitAssists(floor, tablet)
+            val stick = portraitStick(w, floor)
+            val zoom = portraitZoom(stick)
+            val gimbal = portraitGimbal(stick, zoom)
+            val compass = headTrack(stick, zoom)
+            val aspectToggle = portraitAspect(w, floor)
+            val focusReset = MonitorRect(
+                max(safeLeading + 8f, stick.x - 50f), stick.maxY - 40f, 40f, 40f,
+            )
+            return MonitorFieldLayout(
+                viewport, layout.picture, status, layout.values, layout.system,
+                lock, gauges, settings, media, record, display, assists, stick, zoom, gimbal,
+                compass, aspectToggle, focusReset, true, tablet, fill || aspect < 1f,
+                floor,
+            )
+        }
+        val cut = max(0f, max(safeLeading, safeTrailing) - 14f)
+        val imageW = min(w - 2f * cut, h * aspect)
+        val imageH = imageW / aspect
+        val picture = MonitorRect((w - imageW) / 2f, (h - imageH) / 2f, imageW, imageH)
+        val system = MonitorRect(0f, 0f, 0f, 0f)
+        val hasHome = safeBottom > 0f
+        val bottom = if (hasHome) 16f else 12f
+        val record = MonitorRect(w - 10f - rec, h - bottom - rec, rec, rec)
+        val cutoutHeight = if (safeTrailing >= 55f) 112f else 124f
+        val availableDisplayHeight =
+            if (safeTrailing > 0f && !tablet) record.y - 8f - (h + cutoutHeight) / 2f - 4f else button
+        val dispH = max(36f, min(button, availableDisplayHeight))
+        val display = MonitorRect(record.midX - button / 2f, record.y - 8f - dispH, button, dispH)
+        val hasCutout = max(safeLeading, safeTrailing) > 0f || hasDisplayCutout
+        val cornerClearance = cutoutPhoneCornerInset(h, tablet, hasCutout)
+        val cornerTop = (if (tablet) 12f else if (hasCutout) 8f else 52f) + controlInset + cornerClearance
+        val settings = MonitorRect(
+            if (tablet) w - 14f - button * 2f - 8f else record.midX - button / 2f,
+            cornerTop, button, button,
+        )
+        val media = MonitorRect(
+            if (tablet) settings.maxX + 8f else settings.x,
+            if (tablet) cornerTop else settings.maxY + 8f, button, button,
+        )
+        val lock = MonitorRect(18f, cornerTop, button, button)
+        val gauges = MonitorRect(18f, lock.maxY + 6f, 49f, 52f)
+        val statusX = max(77f, picture.x + 12f)
+        val status = MonitorRect(
+            statusX, (if (tablet) 4f else 0f) + controlInset,
+            max(0f, settings.x - statusX - 12f), if (tablet) 46f else 44f,
+        )
+        val side = landscapeValuesInset(rec)
+        val valuesH = if (showsValues) landscapeValuesHeight() else 0f
+        val bottomPad = landscapeBottomClearance(safeBottom)
+        val valuesY = h - bottomPad - valuesH
+        val values = MonitorRect(side, valuesY + 4f, max(0f, w - side * 2f), valuesH)
+        val floor = valuesY - 8f
+        val assistHeight = button * 2f + 11f
+        val assists = MonitorRect(
+            18f, max(0f, h - bottomPad - assistHeight),
+            button + ASSIST_HORIZONTAL_INSETS, assistHeight,
+        )
+        val stick = landscapeStick(w, floor, rec, safeTrailing)
+        val zoom = landscapeZoom(stick)
+        val gimbal = landscapeGimbal(stick, zoom)
+        val compass = headTrack(stick, zoom)
+        val focusReset = MonitorRect(
+            max(safeLeading + 8f, stick.x - 50f), stick.maxY - 40f, 40f, 40f,
+        )
+        return MonitorFieldLayout(
+            viewport, picture, status, values, system, lock, gauges, settings, media, record, display,
+            assists, stick, zoom, gimbal, compass, MonitorRect(0f, 0f, 0f, 0f), focusReset,
+            false, tablet, false, floor,
+        )
+    }
 
     /** 44 dp compass above the zoom row, trailing-aligned with the stick. */
     fun headTrack(stick: MonitorRect, zoom: MonitorRect): MonitorRect =

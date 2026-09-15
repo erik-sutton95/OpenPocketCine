@@ -1,23 +1,18 @@
 package com.opencapture.openpocketcine.pairing
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -32,18 +27,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.opencapture.monitorui.MonitorCameraCard
+import com.opencapture.monitorui.MonitorCameraPage
+import com.opencapture.monitorui.MonitorCameraSection
+import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.AppPanel
-
-import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.monitor.MonitorIconButton
 import com.opencapture.openpocketcine.session.FoundCamera
 
 @Composable
@@ -58,47 +58,74 @@ fun SavedCamerasExperience(model: AppModel) {
     } else StartupConnectionCopy.phaseLabel(phase, null)
     val savedIds = model.savedCameras.map { it.id }.toSet()
     val unsaved = found.filter { it.id !in savedIds }
+    val latestId = model.savedCameras.maxByOrNull { it.lastConnectedAt }?.id
     val sections = listOf(
-        com.opencapture.monitorui.MonitorCameraSection<HomeCamera>(
-            "PAIRED · ${model.savedCameras.size}",
-            model.savedCameras.map { HomeCamera.Paired(it) }),
-        com.opencapture.monitorui.MonitorCameraSection<HomeCamera>(
-            "NEARBY · ${unsaved.size}",
-            unsaved.map { HomeCamera.Nearby(it) }),
+        MonitorCameraSection<HomeCamera>(
+            title = "PAIRED",
+            note = "tap to reconnect",
+            cameras = model.savedCameras.map { HomeCamera.Paired(it) },
+        ),
+        MonitorCameraSection<HomeCamera>(
+            title = "NEARBY",
+            note = "announcing over Bluetooth",
+            cameras = unsaved.map { HomeCamera.Nearby(it) },
+        ),
     )
-    com.opencapture.monitorui.MonitorCameraPage<HomeCamera>(
-        brand = "OPENPOCKETCINE", sections = sections, key = { it.id },
-        emptyMessage = "Pair a camera to start monitoring.",
+    MonitorCameraPage(
+        brand = "OPENPOCKETCINE",
+        sections = sections,
+        key = { it.id },
+        emptyMessage = "Pair a new camera to start monitoring.",
+        scanning = phase == ConnectionPhase.SCANNING,
         actions = {
-            if (phase == ConnectionPhase.SCANNING) StartupStatusPill("Scanning", StartupColors.accent, pulsing = true)
-            com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.FILM, "Media library",
-                onClick = { model.homePanel = AppPanel.MEDIA })
-            com.opencapture.openpocketcine.monitor.MonitorIconButton(OpcIcon.SETTINGS, "Settings",
-                onClick = { model.homePanel = AppPanel.SETTINGS })
-        }, camera = { item ->
+            MonitorIconButton(
+                OpcIcon.FILM,
+                "Media library",
+                onClick = { model.homePanel = AppPanel.MEDIA },
+            )
+            MonitorIconButton(
+                OpcIcon.SETTINGS,
+                "Settings",
+                onClick = { model.homePanel = AppPanel.SETTINGS },
+            )
+        },
+        camera = { item ->
             when (item) {
                 is HomeCamera.Paired ->
                     SavedCameraRow(
-                        item.camera, found.firstOrNull { it.id == item.camera.id }, phase, busy,
-                        connectingLabel.takeIf { busy && targetId == item.camera.id },
-                        model::cancelPairing, { model.reconnect(item.camera) },
-                        { model.rename(item.camera, it) }, { model.forget(item.camera) })
+                        camera = item.camera,
+                        nearby = found.firstOrNull { it.id == item.camera.id },
+                        primary = item.camera.id == latestId,
+                        phase = phase,
+                        isBusy = busy,
+                        connectionLabel = connectingLabel.takeIf { busy && targetId == item.camera.id },
+                        onCancel = model::cancelPairing,
+                        onConnect = { model.reconnect(item.camera) },
+                        onRename = { model.rename(item.camera, it) },
+                        onRemove = { model.forget(item.camera) },
+                    )
                 is HomeCamera.Nearby ->
                     NearbyCameraRow(
-                        item.camera, phase, busy,
-                        connectingLabel.takeIf { busy && targetId == item.camera.id },
-                        model::cancelPairing, { model.connectDiscovered(item.camera) })
+                        camera = item.camera,
+                        phase = phase,
+                        isBusy = busy,
+                        connectionLabel = connectingLabel.takeIf { busy && targetId == item.camera.id },
+                        onCancel = model::cancelPairing,
+                        onConnect = { model.connectDiscovered(item.camera) },
+                    )
             }
-        }, footer = {
-            StartupQuietButton("+  Pair a new camera", enabled = !busy,
-                onClick = model::pairNewCamera, modifier = Modifier.fillMaxWidth().height(46.dp))
-        })
+        },
+        footer = {
+            PairNewCameraFooter(enabled = !busy, onClick = model::pairNewCamera)
+        },
+    )
 }
 
 @Composable
 private fun SavedCameraRow(
     camera: SavedCamera,
     nearby: FoundCamera?,
+    primary: Boolean,
     phase: ConnectionPhase,
     isBusy: Boolean,
     connectionLabel: String?,
@@ -112,29 +139,52 @@ private fun SavedCameraRow(
     var remove by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf(camera.customName.orEmpty()) }
     val online = nearby != null
-    val availability = if (online) StartupColors.ready else StartupColors.muted
+    val connecting = connectionLabel != null
     val connectLocked =
         phase == ConnectionPhase.JOINING_WIFI ||
             phase == ConnectionPhase.OPENING_DATALINK ||
             phase == ConnectionPhase.LIVE
-    com.opencapture.monitorui.MonitorCameraCard(
+    MonitorCameraCard(
         title = camera.displayName,
         detail = camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
-        enabled = !isBusy && !connectLocked, onOpen = onConnect,
-        glyph = { OpcIcon(OpcIcon.CAMERA, contentDescription = null, tint = availability,
-            modifier = Modifier.size(19.dp)) },
+        status = connectionLabel
+            ?: if (online) "Nearby · ready to connect" else "Not found — power it on to reconnect",
+        actionTitle = if (online) "Connect" else "Reconnect",
+        enabled = !isBusy && !connectLocked,
+        onOpen = onConnect,
+        badge = when {
+            connecting -> "CONNECTING"
+            primary -> "LAST USED"
+            online -> "PAIRED"
+            else -> "OFFLINE"
+        },
+        primary = primary,
+        busy = connecting,
+        available = online,
+        onCancel = onCancel,
+        glyph = {
+            OpcIcon(
+                OpcIcon.CAMERA,
+                contentDescription = null,
+                tint = if (primary) MonitorPalette.accent else MonitorPalette.muted,
+                modifier = Modifier.size(19.dp),
+            )
+        },
         options = {
             Box {
-                OpcIcon(
-                    icon = OpcIcon.ELLIPSIS,
-                    contentDescription = "Camera options",
-                    tint = StartupColors.muted,
-                    modifier =
-                        Modifier.clip(CircleShape)
-                            .clickable(enabled = !isBusy) { menu = true }
-                            .size(44.dp)
-                            .padding(13.dp),
-                )
+                Box(
+                    Modifier.size(36.dp, 44.dp)
+                        .clickable(enabled = !isBusy) { menu = true }
+                        .semantics { contentDescription = "Options for ${camera.displayName}" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    OpcIcon(
+                        icon = OpcIcon.ELLIPSIS,
+                        contentDescription = null,
+                        tint = MonitorPalette.muted,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("Rename") },
@@ -159,26 +209,8 @@ private fun SavedCameraRow(
                     )
                 }
             }
-        }, status = {
-            if (connectionLabel != null) {
-                Box(Modifier.weight(1f)) { StartupConnectionProgress(connectionLabel) }
-                StartupQuietButton("Cancel", onClick = onCancel, modifier = Modifier.height(44.dp))
-            } else {
-                StartupStatusPill(if (online) "Nearby" else "Saved", availability)
-                Spacer(Modifier.weight(1f))
-                Box(
-                    Modifier.heightIn(min = 44.dp)
-                        .clickable(enabled = !isBusy && !connectLocked, onClick = onConnect),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    StartupConnectChrome(
-                        text = if (online) "Connect" else "Reconnect",
-                        filled = online,
-                        enabled = !isBusy && !connectLocked,
-                    )
-                }
-            }
-        })
+        },
+    )
     if (rename) {
         AlertDialog(
             onDismissRequest = { rename = false },
@@ -237,34 +269,56 @@ private fun NearbyCameraRow(
     onCancel: () -> Unit,
     onConnect: () -> Unit,
 ) {
+    val connecting = connectionLabel != null
     val connectLocked =
         phase == ConnectionPhase.JOINING_WIFI ||
             phase == ConnectionPhase.OPENING_DATALINK ||
             phase == ConnectionPhase.LIVE
-    com.opencapture.monitorui.MonitorCameraCard(
-        title = camera.name,
-        detail = camera.model.name,
-        enabled = !isBusy && !connectLocked, onOpen = onConnect,
+    val unverified = if (camera.model.verified) "" else " · unverified"
+    MonitorCameraCard(
+        title = FoundCameraIdentity.listTitle(camera.name, camera.model.name),
+        detail = FoundCameraIdentity.listSubtitle(camera.name, camera.model.name, camera.model.family) + unverified,
+        status = connectionLabel ?: "Needs approval on the camera",
+        actionTitle = "Pair",
+        enabled = !isBusy && !connectLocked,
+        onOpen = onConnect,
+        badge = "NEW",
+        primary = false,
+        busy = connecting,
+        available = true,
+        onCancel = onCancel,
         glyph = {
-            OpcIcon(OpcIcon.CAMERA, contentDescription = null, tint = StartupColors.ready,
-                modifier = Modifier.size(19.dp))
-        },
-        options = {},
-        status = {
-            if (connectionLabel != null) {
-                Box(Modifier.weight(1f)) { StartupConnectionProgress(connectionLabel) }
-                StartupQuietButton("Cancel", onClick = onCancel, modifier = Modifier.height(44.dp))
-            } else {
-                StartupStatusPill("Announcing", StartupColors.ready)
-                Spacer(Modifier.weight(1f))
-                Box(
-                    Modifier.heightIn(min = 44.dp)
-                        .clickable(enabled = !isBusy && !connectLocked, onClick = onConnect),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    StartupConnectChrome(text = "Connect", filled = true, enabled = !isBusy && !connectLocked)
-                }
-            }
+            OpcIcon(
+                OpcIcon.CAMERA,
+                contentDescription = null,
+                tint = MonitorPalette.muted,
+                modifier = Modifier.size(19.dp),
+            )
         },
     )
+}
+
+@Composable
+private fun PairNewCameraFooter(enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(11.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .height(46.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.03f))
+            .border(1.dp, MonitorPalette.secondary.copy(alpha = 0.22f), shape)
+            .clickable(enabled = enabled, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        OpcIcon(OpcIcon.PLUS, contentDescription = null, tint = MonitorPalette.text, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(9.dp))
+        Text(
+            "Pair a new camera",
+            color = MonitorPalette.text,
+            style = MonitorTypography.text(13f, FontWeight.SemiBold),
+            maxLines = 1,
+        )
+    }
 }

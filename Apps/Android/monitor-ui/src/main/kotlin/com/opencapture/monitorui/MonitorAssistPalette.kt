@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /** One palette for live, playback and multi-view, without any camera or tool taxonomy. */
@@ -127,12 +129,20 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
         if (!dragging) progress.animateTo(if (expanded) 1f else 0f, settle)
     }
     val scrollState = rememberScrollState()
-    val popupPosition = remember { object : PopupPositionProvider {
-        override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
-            layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
-            IntOffset(anchorBounds.left.coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width)),
-                (anchorBounds.bottom - popupContentSize.height).coerceAtLeast(0))
-    } }
+    var slotInWindow by remember { mutableStateOf(IntRect.Zero) }
+    val popupPosition = remember(slotInWindow) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+                layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val slot = slotInWindow
+                val left = slot.left.coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width))
+                // Compact liveModuleFrame slot is the bottom-leading rest. Expanded
+                // plate height is popupContentSize, so this grows upward from that edge.
+                val top = (slot.bottom - popupContentSize.height).coerceAtLeast(0)
+                return IntOffset(left, top)
+            }
+        }
+    }
     val labelOpacity = ((reveal - 0.7f) / 0.3f).coerceIn(0f, 1f)
     val extraOpacity = MonitorAssistPaletteReveal.extraToolOpacity(reveal)
     val compactCount = MonitorAssistPaletteReveal.compactToolCount(portrait)
@@ -285,13 +295,24 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             }
         }
     }
-    Box(modifier, contentAlignment = Alignment.BottomStart) {
-        if (locked) {
+    Box(modifier.size(compactW, compactH), contentAlignment = Alignment.BottomStart) {
+        Box(Modifier.matchParentSize().onGloballyPositioned { coords ->
+            val pos = coords.positionInWindow()
+            val next = IntRect(
+                left = pos.x.roundToInt(),
+                top = pos.y.roundToInt(),
+                right = pos.x.roundToInt() + coords.size.width,
+                bottom = pos.y.roundToInt() + coords.size.height,
+            )
+            if (next != slotInWindow) slotInWindow = next
+        })
+        val anchored = slotInWindow.width > 0 && slotInWindow.height > 0
+        if (locked || !anchored) {
             plate()
         } else {
             Popup(popupPositionProvider = popupPosition,
                 onDismissRequest = { if (expanded) expanded = false },
-                properties = PopupProperties(focusable = expanded)) {
+                properties = PopupProperties(focusable = expanded, clippingEnabled = false)) {
                 plate()
             }
         }

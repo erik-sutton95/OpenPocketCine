@@ -28,8 +28,9 @@ internal fun AssistAudioOverlay(state: LiveAssistState, left: AudioMeterReading,
         MonitorAudioMetrics.panelHeight(orientation),
     )
     val portrait = canvas.height > canvas.width
+    val sizePx = AssistSize(base.width * density, base.height * density)
     MovableAssistPanel(LiveAssistTool.AUDIO, base, 1.0, state.audioCenterFor(portrait),
-        canvas, placement, AssistPoint(placement.minX + base.width * density / 2f, canvas.midY),
+        canvas, placement, AudioAssist.defaultCenter(canvas, placement, sizePx),
         enabled = !locked, onStore = { state.storeAudioCenter(it, portrait) },
         onOpenOptions = onOpenOptions) {
         MonitorAudioMeter(left.levelDB, left.peakDB, right.levelDB, right.peakDB,

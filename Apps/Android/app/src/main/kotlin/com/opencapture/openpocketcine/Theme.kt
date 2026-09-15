@@ -22,6 +22,7 @@ object BrandColors {
     val ink: Color = Color.White
     val darkText: Color = com.opencapture.monitorui.MonitorPalette.background
     val muted: Color = com.opencapture.monitorui.MonitorPalette.muted
+    val secondary: Color = com.opencapture.monitorui.MonitorPalette.secondary
     val titan: Color = Color(94 / 255f, 98 / 255f, 98 / 255f)
 }
 
@@ -85,6 +86,7 @@ object LiveDesign {
     val glassBright = Color(94 / 255f, 98 / 255f, 98 / 255f, 0.18f)
     val text = Color.White
     val muted = com.opencapture.monitorui.MonitorPalette.muted
+    val secondary = com.opencapture.monitorui.MonitorPalette.secondary
     val faint = Color(94 / 255f, 98 / 255f, 98 / 255f)
     val accent = com.opencapture.monitorui.MonitorPalette.accent
     val good = Color(0.18f, 0.78f, 0.42f)
@@ -93,7 +95,7 @@ object LiveDesign {
     val amber = Color(0.914f, 0.674f, 0.208f)
     val accentDim = Color(0x2900A3E0)
     val hairlineStrong = Color.White.copy(alpha = 0.10f)
-    val hairline = Color.White.copy(alpha = 0.06f)
+    val hairline = com.opencapture.monitorui.MonitorPalette.border
     val recordWell = Color(44 / 255f, 43 / 255f, 43 / 255f)
     val pocketRing = Color(227 / 255f, 83 / 255f, 70 / 255f)
     val feedWell = Color.Black

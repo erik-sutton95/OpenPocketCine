@@ -247,7 +247,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 back = { com.opencapture.openpocketcine.monitor.MonitorPageBackButton(onClick = ::dismiss) },
                 heading = {
                     com.opencapture.openpocketcine.monitor.MonitorPageHeading(
-                        "Media", if (isLive) "CAMERA LIBRARY" else "LOCAL LIBRARY")
+                        "Media", model.session.connectedCamera?.name ?: "OpenPocketCine")
                 },
                 navigation = { compact ->
                     Column(

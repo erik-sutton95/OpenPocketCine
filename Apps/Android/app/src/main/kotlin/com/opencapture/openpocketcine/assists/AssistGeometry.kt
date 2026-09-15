@@ -162,6 +162,12 @@ object AudioAssist {
     const val RED_FROM_DB = -6.0
     val guideMarks = doubleArrayOf(0.0, -6.0, -18.0, -36.0)
 
+    /** Fresh meter: left of the movement well, vertically centered on the canvas. */
+    fun defaultCenter(canvas: AssistRect, movement: AssistRect, size: AssistSize): AssistPoint {
+        val fallback = AssistPoint(movement.minX + size.width / 2f, canvas.midY)
+        return MovablePanelMath.clamp(fallback, size, movement)
+    }
+
     fun displayedSensitivity(value: String?): String {
         val trimmed = value?.trim().orEmpty()
         return if (trimmed.isEmpty()) "—" else trimmed.uppercase()

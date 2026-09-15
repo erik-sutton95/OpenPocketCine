@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.opencapture.monitorui.LocalMonitorInspectorHelp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -295,6 +296,7 @@ fun SettingsInlineRow(
     stacked: Boolean = false,
     trailing: @Composable () -> Unit,
 ) {
+    val inspectorHelp = LocalMonitorInspectorHelp.current
     Column {
         if (showTopDivider) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
@@ -314,7 +316,7 @@ fun SettingsInlineRow(
                         color = LiveDesign.text,
                         maxLines = 2,
                     )
-                    help?.let { SettingsHelpBadge(it) }
+                    if (inspectorHelp == null) help?.let { SettingsHelpBadge(it) }
                 }
                 trailing()
             }
@@ -331,9 +333,17 @@ fun SettingsInlineRow(
                     color = LiveDesign.text,
                     maxLines = 2,
                 )
-                help?.let { SettingsHelpBadge(it) }
+                if (inspectorHelp == null) help?.let { SettingsHelpBadge(it) }
                 trailing()
             }
+        }
+        if (inspectorHelp == true && !help.isNullOrEmpty()) {
+            Text(
+                help,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                style = chromeStyle(10f, FontWeight.Normal),
+                color = LiveDesign.muted,
+            )
         }
     }
 }

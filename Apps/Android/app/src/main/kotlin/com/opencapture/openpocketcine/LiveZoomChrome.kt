@@ -121,7 +121,7 @@ fun LiveZoomChip(
     val digital = MonitorZoomCaption.isDigital(held, opticalStops)
     Box(
         modifier
-            .size(LiveDesign.ZOOM_CHIP_DP.dp)
+            .fillMaxSize()
             .combinedClickable(enabled = !locked, interactionSource = interaction, indication = null,
                 onClick = { haptics.selection(); onCycle() },
                 onDoubleClick = onDigitalCycle?.let { action -> { haptics.selection(); action() } },

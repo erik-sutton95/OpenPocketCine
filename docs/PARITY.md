@@ -253,8 +253,9 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   full landscape height, at most 52% portrait height, with independently scrolling options.
   Mode / Speed / Ramp tabs each present their dial in the same shared inspector;
   the Motion Control footer remains available in every tab.
-  Motion Control editor is 340 dp wide and moves by holding anywhere (0.3 s); the minimized pill
-  drags immediately after touch slop and suppresses its buttons during the drag.
+  Motion Control editor is 340 dp wide. Both the editor and minimized pill
+  drag directly after touch slop, with no hold required. Duration dials and sliders
+  retain their own gestures; dragging suppresses button activation.
   Duration dials are 180 × 44 dp, with moving ticks, a fixed index, and a
   spring settle. They swipe horizontally in 0.5 s steps (12 dp per step), with
   adjustable accessibility actions. Start shows a cancellable 3–2–1 countdown
@@ -768,3 +769,26 @@ fully visible. The card widens up to 560 dp in landscape and remains scrollable
 for limited space. A Debug-only preview displays the production prompt with
 no-op callbacks, allowing review after consent without changing the saved choice.
 Repository and Android build/test/lint gates passed.
+
+### Android shell comparison (2026-09-15)
+
+The Android Field Monitor now uses the iOS camera-value, record, telemetry,
+zoom and gimbal placement policy. Portrait values retain both rows; landscape
+camera drawers anchor to the bottom instead of jumping above the assist rail.
+Readout shadows preserve layout constraints. The separate assist popup retains
+its slot position and stays hidden behind Settings, Media and assist inspectors.
+Inspector help, scrolling previews and the pinned LUT exposure/comparison footer
+follow the iOS behavior. Camera home and pairing use the shared page treatment,
+with explicit selection before Continue and real session phases driving progress.
+Android Bluetooth permissions, system Wi-Fi approval and unavailable Sharing
+remain platform differences.
+
+Physical Galaxy S25 checks with Pocket 4 Pro cover the live layout, camera
+drawers, operator settings, assist inspectors, populated media and pairing.
+Hardware input tests cover immediate motion drag, capture/zoom ownership,
+media selection and the separate palette window; hardware pixel tests cover
+sampled materials. iOS simulator reference and immediate-motion tests pass.
+The paired iPhone remains locked, so physical iOS verification of the new drag
+is pending. The [coverage ledger](audits/2026-09-15-android-shell-parity.md)
+records remaining limits; this is not a claim of pixel identity or all-device,
+thermal, tablet or accessibility qualification.

@@ -374,7 +374,12 @@ final class MonitorUIFlowTests: XCTestCase {
                 XCTAssertEqual(panel.frame.minY, app.frame.minY, accuracy: 1, id)
                 let iso = app.buttons["monitor.capture.iso"]
                 XCTAssertTrue(iso.isHittable, id)
-                iso.tap()
+                iso.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                let replacement = NSPredicate { _, _ in
+                    panel.exists && panel.frame.minY > self.app.frame.minY
+                }
+                expectation(for: replacement, evaluatedWith: app)
+                waitForExpectations(timeout: 3)
                 // Full ISO details can extend above the midpoint on short
                 // landscape screens; the reference anchors its bottom edge.
                 XCTAssertGreaterThan(panel.frame.minY, app.frame.minY, id)

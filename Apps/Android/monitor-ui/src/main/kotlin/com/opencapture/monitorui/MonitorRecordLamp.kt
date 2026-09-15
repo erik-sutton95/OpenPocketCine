@@ -50,17 +50,21 @@ fun monitorPulsePhase(periodMillis: Int, enabled: Boolean = true): Float {
 
 /** Shared recording artwork. The shell owns confirmation, gestures and commands. */
 @Composable
-fun MonitorRecordLamp(recording: Boolean, modifier: Modifier = Modifier) {
+fun MonitorRecordLamp(recording: Boolean, modifier: Modifier = Modifier, photo: Boolean = false) {
     val morph by animateFloatAsState(if (recording) 1f else 0f,
         tween(MonitorMotion.REC_MORPH_MS, easing = MonitorMotion.Soft), label = "record-shape")
     val pulse = monitorPulsePhase(1600, enabled = recording)
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     Canvas(modifier.fillMaxSize().monitorMaterial(MonitorMaterial.Record, androidx.compose.foundation.shape.CircleShape)) {
         val diameter = size.minDimension
-        val disc = (diameter - 10.dp.toPx()).coerceAtLeast(0f)
-        drawCircle(Color.White.copy(alpha = .16f), radius = diameter / 2 - .5.dp.toPx(),
-            style = Stroke(1.dp.toPx()))
-        drawCircle(MonitorPalette.recording, radius = disc / 2, style = Stroke(4.5.dp.toPx()))
+        val inset = 5.dp.toPx()
+        val stroke = 4.5.dp.toPx()
+        val disc = (diameter - inset * 2).coerceAtLeast(0f)
+        val ringColor = if (photo) Color.White else MonitorPalette.recording
+        drawCircle(ringColor, radius = (disc - stroke).coerceAtLeast(0f) / 2, style = Stroke(stroke))
+        if (photo && morph == 0f) {
+            drawCircle(Color.White, radius = (diameter / 2 - 12.dp.toPx()).coerceAtLeast(0f))
+        }
         val side = round(disc / density * .52f).dp.toPx() * morph
         if (side > 0f) {
             val radius = round(side / density * .24f).dp.toPx()

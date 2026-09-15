@@ -75,12 +75,16 @@ class MonitorMotionInputTest {
                 val originalPanel = panel
                 val down = SystemClock.uptimeMillis()
                 event(scenario, MotionEvent.ACTION_DOWN, panel.center, down)
-                SystemClock.sleep(350)
+                SystemClock.sleep(20)
+                event(scenario, MotionEvent.ACTION_MOVE, originalPanel.center + Offset(0f, 40f), down)
                 settle()
+                scenario.onActivity {
+                    assertTrue(panel.top > originalPanel.top + 20f, "Editor must move before any hold")
+                }
                 val before = editorCompositions
                 repeat(20) { index ->
                     event(scenario, MotionEvent.ACTION_MOVE,
-                        originalPanel.center + Offset(0f, (index + 1) * 3f), down)
+                        originalPanel.center + Offset(0f, 40f + (index + 1) * 3f), down)
                     settle()
                     scenario.onActivity { assertNull(model?.gimbalFloatCenter) }
                 }
@@ -88,7 +92,7 @@ class MonitorMotionInputTest {
                     assertTrue(panel.top > originalPanel.top + 40f, "Window must visibly follow the pointer")
                     assertEquals(before, editorCompositions, "Moving must not recompose editor content")
                 }
-                event(scenario, MotionEvent.ACTION_UP, originalPanel.center + Offset(0f, 60f), down)
+                event(scenario, MotionEvent.ACTION_UP, originalPanel.center + Offset(0f, 100f), down)
                 settle()
                 scenario.onActivity {
                     assertTrue(model?.gimbalFloatCenter != null)

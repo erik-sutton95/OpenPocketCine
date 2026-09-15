@@ -249,6 +249,34 @@ class LiveAssistStateTest {
         assertEquals(com.opencapture.monitorui.MonitorAudioOrientation.HORIZONTAL, restored.audioOrientation)
         assertTrue(restored.audioShowDB)
         assertEquals(null, restored.paradeCenter)
+        assertEquals(null, restored.waveCenterPortrait)
+    }
+
+    @Test
+    fun scopeCentersPersistIndependentlyByOrientationAndLegacyStaysLandscape() {
+        val landscape = StoredCenter(.72, .36)
+        val portrait = StoredCenter(.2, .8)
+        val state = LiveAssistState()
+        state.storeCenter(LiveAssistTool.HISTO, landscape, portrait = false)
+        assertEquals(landscape, state.centerFor(LiveAssistTool.HISTO, false))
+        assertEquals(null, state.centerFor(LiveAssistTool.HISTO, true))
+        state.storeCenter(LiveAssistTool.HISTO, portrait, portrait = true)
+        assertEquals(landscape, state.centerFor(LiveAssistTool.HISTO, false))
+        assertEquals(portrait, state.centerFor(LiveAssistTool.HISTO, true))
+        val restored = LiveAssistState(state.encoded())
+        assertEquals(landscape, restored.histoCenter)
+        assertEquals(portrait, restored.histoCenterPortrait)
+        assertEquals(landscape, restored.centerFor(LiveAssistTool.HISTO, false))
+        assertEquals(portrait, restored.centerFor(LiveAssistTool.HISTO, true))
+
+        val legacy = org.json.JSONObject()
+            .put("histoCenter", org.json.JSONObject().put("xFraction", 0.25).put("yFraction", 0.4))
+            .toString()
+        val migrated = LiveAssistState(legacy)
+        assertEquals(StoredCenter(0.25, 0.4), migrated.histoCenter)
+        assertEquals(null, migrated.histoCenterPortrait)
+        assertEquals(StoredCenter(0.25, 0.4), migrated.centerFor(LiveAssistTool.HISTO, false))
+        assertEquals(null, migrated.centerFor(LiveAssistTool.HISTO, true))
     }
 
     @Test
