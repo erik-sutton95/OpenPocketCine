@@ -814,3 +814,6 @@ layer without changing layout or touch bounds. At the user's request, Android
 live controls move 4–6 dp toward their respective edges, retaining cutout
 clearance and full button sizes. Portrait system controls sit 6 dp lower.
 iOS remains the visual baseline and is unchanged in this adjustment.
+
+Android portrait STBY/timecode/REC SETUP sits 6 dp lower at the user’s request;
+the shared frame also moves its tap/hold picker anchor. Landscape is unchanged.

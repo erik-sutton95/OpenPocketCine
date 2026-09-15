@@ -134,7 +134,7 @@ fun portraitZones(
 
 /** Actual visible status row, shared by tap and hold presentation routes. */
 fun livePortraitReadoutFrame(layout: LiveMonitorLayout, zones: PortraitZones): ChromeRect =
-    ChromeRect(zones.topBar.minX, zones.topBar.minY, layout.viewportWidth, zones.topBar.height)
+    ChromeRect(zones.topBar.minX, zones.topBar.minY + 6f, layout.viewportWidth, zones.topBar.height)
 
 /**
  * iOS `LiveViewScreen` fillCrop: landscape fill over-widens a 16:9 picture to
