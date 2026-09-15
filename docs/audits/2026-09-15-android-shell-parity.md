@@ -163,3 +163,12 @@ readout immediately after color; the isolated native shutter/lock test passes.
 Photo and video playback hide both bars, their visible return controls restore
 Media library navigation, and video Back is clear in portrait and landscape.
 `just check` (990 tests), `just android-check`, and the handbook build pass.
+
+### Readout glow and edge spacing
+
+Android now allocates bloom padding outside the readout's layout bounds and
+composes successive shadows like the SwiftUI baseline. A physical HWUI pixel
+test verifies shadow outside the content, unchanged target size, and sharp
+foreground color. Live comparison covers portrait and both landscape directions.
+Outer controls move 4–6 dp toward their respective edges with full-size targets;
+telemetry retains its leading clearance. No feed sampling or timers were added.

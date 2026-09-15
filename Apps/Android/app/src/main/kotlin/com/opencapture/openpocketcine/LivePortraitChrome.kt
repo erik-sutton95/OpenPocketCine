@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -501,7 +502,7 @@ fun LivePortraitSystemBar(
     val tablet = min(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
     val navigationEnabled = !uiLocked && chromeInteractive && model.liveOperatorPanel == null
     if (tablet) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (showsLock) LockButton(uiLocked, Modifier.size(48.dp), onClick = onLock)
@@ -534,7 +535,7 @@ fun LivePortraitSystemBar(
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.weight(1f).fillMaxHeight(),
+                Modifier.weight(1f).fillMaxHeight().offset(x = (-4).dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))
@@ -558,7 +559,7 @@ fun LivePortraitSystemBar(
             }
             if (showsRecord) Spacer(Modifier.width(LiveChromeMetrics.RECORD.dp))
             Row(
-                Modifier.weight(1f).fillMaxHeight(),
+                Modifier.weight(1f).fillMaxHeight().offset(x = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))

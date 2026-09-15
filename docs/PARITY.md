@@ -805,3 +805,12 @@ in the landscape top row, including widths below 800 dp. Portrait retains
 REC SETUP → Mode (Photo uses MODE). Record/Photo shutter has no mode long-press
 shortcut. This overrides the earlier narrow-landscape fallback copied from iOS;
 iOS is unchanged in this correction.
+
+### Android readout glow and outer margins
+
+Android now builds the readout bloom cumulatively like the iOS shadow chain,
+keeping glyphs sharp over the combined halo. Bloom padding expands the render
+layer without changing layout or touch bounds. At the user's request, Android
+live controls move 4–6 dp toward their respective edges, retaining cutout
+clearance and full button sizes. Portrait system controls sit 6 dp lower.
+iOS remains the visual baseline and is unchanged in this adjustment.

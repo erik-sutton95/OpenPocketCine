@@ -28,6 +28,8 @@ The live signal indicator uses the Link Health colors from Settings: red for
 Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 
 The native UI uses Sora typography, cyan controls and dark panels.
+Camera readouts have a layered dark glow for contrast over bright footage.
+Outer monitor controls sit close to the screen edges while retaining cutout clearance.
 Live view and photo/video playback hide both Android system bars; swipe from an
 edge for temporary access. Playback has a visible Back/Close control to return to Media.
 Other pages hide the status bar but keep Home, Back and Recents available when your

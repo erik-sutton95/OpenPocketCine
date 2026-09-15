@@ -1,5 +1,17 @@
 package com.opencapture.openpocketcine
 
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.dp
+import com.opencapture.monitorui.monitorReadoutShadow
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -27,6 +39,31 @@ import org.junit.runner.RunWith
 /** Pixel evidence from the real HWUI/RenderEffect modifier, not an emulated blur model. */
 @RunWith(AndroidJUnit4::class)
 class MonitorBackdropRenderTest {
+    @Test fun readoutBloomExtendsOutsideContentWithoutChangingLayoutOrForeground() {
+        assumeTrue(Build.VERSION.SDK_INT >= 31)
+        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
+            var bounds = Rect.Zero
+            var density = 1f
+            scenario.onActivity { activity ->
+                density = activity.resources.displayMetrics.density
+                activity.setContent {
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White),
+                        contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(20.dp).onGloballyPositioned { bounds = it.boundsInWindow() }
+                            .monitorReadoutShadow().background(androidx.compose.ui.graphics.Color.Cyan))
+                    }
+                }
+            }
+            val image = capture(scenario)
+            assertEquals(20f * density, bounds.width, 1f, "Bloom must not enlarge the hit target")
+            val halo = image.getPixel((bounds.left - 2f * density).roundToInt(), bounds.center.y.roundToInt())
+            assertTrue(Color.red(halo) < 230, "Shadow must extend outside the content bounds")
+            val foreground = image.getPixel(bounds.center.x.roundToInt(), bounds.center.y.roundToInt())
+            assertTrue(Color.red(foreground) < 5 && Color.green(foreground) > 250 && Color.blue(foreground) > 250,
+                "Foreground stays sharp and keeps its original color")
+        }
+    }
+
     @Test fun referenceMaterialsBlurBackdropAndKeepForegroundSharp() {
         assumeTrue(Build.VERSION.SDK_INT >= 31)
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->

@@ -76,7 +76,7 @@ fun TextStyle.monitorReadoutGlow(): TextStyle = monitorReadoutGlow(LocalDensity.
  * `Paint.setShadowLayer` (native text-shadow) and a single saveLayer.
  */
 fun Modifier.monitorReadoutShadow(): Modifier = this
-    .padding(10.dp)
+    .then(ReadoutBloomLayout)
     .drawWithCache {
         val blurPx = 3.dp.toPx()
         val dy = 1.dp.toPx()
@@ -95,8 +95,13 @@ fun Modifier.monitorReadoutShadow(): Modifier = this
             val halos = arrayOf(shadow(1.5f, 1f, 0f), shadow(3f, .92f, 0f), shadow(1f, .85f, 1f))
             onDrawWithContent {
                 sharp.record { this@onDrawWithContent.drawContent() }
-                for (halo in halos) {
-                    halo.record { drawLayer(sharp) }
+                for ((index, halo) in halos.withIndex()) {
+                    // SwiftUI chains shadow modifiers: each shadow includes the
+                    // preceding bloom, not just the original glyph alpha.
+                    halo.record {
+                        for (previous in 0 until index) drawLayer(halos[previous])
+                        drawLayer(sharp)
+                    }
                     drawLayer(halo)
                 }
                 drawLayer(sharp)
@@ -113,7 +118,7 @@ fun Modifier.monitorReadoutShadow(): Modifier = this
             }
         }
     }
-    .then(ReadoutBloomLayout)
+    .padding(10.dp)
 
 private object ReadoutBloomLayout : LayoutModifier {
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {

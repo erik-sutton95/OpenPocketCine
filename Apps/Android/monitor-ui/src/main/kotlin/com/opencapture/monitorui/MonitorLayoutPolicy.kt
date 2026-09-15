@@ -58,7 +58,7 @@ object MonitorLayoutPolicy {
         val top = max(0f, safeTop - 8f)
         val status = MonitorRect(0f, top, vw, if (tablet) 52f else 44f)
         val systemH = if (tablet) 116f else 100f
-        val systemY = max(0f, vh - max(0f, safeBottom - 14f) - systemH)
+        val systemY = max(0f, vh - max(0f, safeBottom - 20f) - systemH)
         val system = MonitorRect(0f, systemY, vw, systemH)
         val valuesH = if (!valuesVisible) 0f else if (tablet) 43f else 74f
         val valuesY = max(0f, systemY - 8f - valuesH)
@@ -84,7 +84,7 @@ object MonitorLayoutPolicy {
         val side = systemButtonSize(tablet)
         val height = side + 35f
         return MonitorRect(
-            14f,
+            8f,
             max(0f, floor - 16f - height),
             side + 8f,
             height,
@@ -200,7 +200,7 @@ object MonitorLayoutPolicy {
         val tablet = min(w, h) >= 600f
         val rec = recordSize(tablet)
         val button = systemButtonSize(tablet)
-        val edge = 14f
+        val edge = 8f
         if (portrait) {
             val layout = portrait(w, h, safeTop, safeBottom, fill, showsValues, aspect)
             val status = MonitorRect(edge, layout.status.y + controlInset, max(0f, w - 28f), layout.status.height)
@@ -239,8 +239,8 @@ object MonitorLayoutPolicy {
         val picture = MonitorRect((w - imageW) / 2f, (h - imageH) / 2f, imageW, imageH)
         val system = MonitorRect(0f, 0f, 0f, 0f)
         val hasHome = safeBottom > 0f
-        val bottom = if (hasHome) 16f else 12f
-        val record = MonitorRect(w - 10f - rec, h - bottom - rec, rec, rec)
+        val bottom = if (hasHome) 12f else 8f
+        val record = MonitorRect(w - 6f - rec, h - bottom - rec, rec, rec)
         val cutoutHeight = if (safeTrailing >= 55f) 112f else 124f
         val availableDisplayHeight =
             if (safeTrailing > 0f && !tablet) record.y - 8f - (h + cutoutHeight) / 2f - 4f else button
@@ -248,16 +248,16 @@ object MonitorLayoutPolicy {
         val display = MonitorRect(record.midX - button / 2f, record.y - 8f - dispH, button, dispH)
         val hasCutout = max(safeLeading, safeTrailing) > 0f || hasDisplayCutout
         val cornerClearance = cutoutPhoneCornerInset(h, tablet, hasCutout)
-        val cornerTop = (if (tablet) 12f else if (hasCutout) 8f else 52f) + controlInset + cornerClearance
+        val cornerTop = (if (tablet) 12f else if (hasCutout) 8f else 52f) + controlInset + max(0f, cornerClearance - 6f)
         val settings = MonitorRect(
-            if (tablet) w - 14f - button * 2f - 8f else record.midX - button / 2f,
+            if (tablet) w - 8f - button * 2f - 8f else record.midX - button / 2f,
             cornerTop, button, button,
         )
         val media = MonitorRect(
             if (tablet) settings.maxX + 8f else settings.x,
             if (tablet) cornerTop else settings.maxY + 8f, button, button,
         )
-        val lock = MonitorRect(18f, cornerTop, button, button)
+        val lock = MonitorRect(12f, cornerTop, button, button)
         val gauges = MonitorRect(18f, lock.maxY + 6f, 49f, 52f)
         val statusX = max(77f, picture.x + 12f)
         val status = MonitorRect(
@@ -272,7 +272,7 @@ object MonitorLayoutPolicy {
         val floor = valuesY - 8f
         val assistHeight = button * 2f + 11f
         val assists = MonitorRect(
-            18f, max(0f, h - bottomPad - assistHeight),
+            12f, max(0f, h - max(4f, bottomPad - 4f) - assistHeight),
             button + ASSIST_HORIZONTAL_INSETS, assistHeight,
         )
         val stick = landscapeStick(w, floor, rec, safeTrailing)

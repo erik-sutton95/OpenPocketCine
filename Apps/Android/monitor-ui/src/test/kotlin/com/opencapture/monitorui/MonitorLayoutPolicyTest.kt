@@ -87,12 +87,12 @@ class MonitorLayoutPolicyTest {
         val phoneSide = MonitorLayoutPolicy.systemButtonSize(false)
         val tabletSide = MonitorLayoutPolicy.systemButtonSize(true)
         val phone = MonitorLayoutPolicy.portraitAssists(800f, false)
-        assertEquals(14f, phone.x)
+        assertEquals(8f, phone.x)
         assertEquals(phoneSide + 8f, phone.width)
         assertEquals(phoneSide + 35f, phone.height)
         assertEquals(800f - 16f, phone.maxY, .01f)
         val tablet = MonitorLayoutPolicy.portraitAssists(800f, true)
-        assertEquals(14f, tablet.x)
+        assertEquals(8f, tablet.x)
         assertEquals(tabletSide + 8f, tablet.width)
         assertEquals(tabletSide + 35f, tablet.height)
         assertEquals(800f - 16f, tablet.maxY, .01f)
@@ -229,17 +229,17 @@ class MonitorLayoutPolicyTest {
     }
 
     @Test
-    fun landscapeFieldMonitorMatchesIosIslandPhone() {
+    fun landscapeFieldMonitorKeepsValuesWhileMovingOuterControlsTowardEdges() {
         val layout = MonitorLayoutPolicy.fieldMonitor(
             874f, 402f, safeLeading = 59f, showsValues = true,
         )
         assertEquals(70f, layout.record.width, .01f)
-        assertEquals(874f - 10f - 70f, layout.record.x, .01f)
-        assertEquals(402f - 12f - 70f, layout.record.y, .01f)
+        assertEquals(874f - 6f - 70f, layout.record.x, .01f)
+        assertEquals(402f - 8f - 70f, layout.record.y, .01f)
         assertEquals(43f, layout.values.height, .01f)
         assertEquals(14f + 70f + 28f, layout.values.x, .01f)
         assertEquals(layout.values.x, 874f - layout.values.maxX, .01f)
-        assertEquals(18f, layout.lock.x, .01f)
+        assertEquals(12f, layout.lock.x, .01f)
         assertEquals(49f, layout.gauges.width, .01f)
         assertEquals(52f, layout.gauges.height, .01f)
         assertEquals(44f, layout.zoom.width, .01f)
