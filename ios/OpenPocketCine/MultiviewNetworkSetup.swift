@@ -63,7 +63,7 @@ struct MultiviewNetworkSetup: View {
         .alert("Wi-Fi password", isPresented: $passwordPrompt) {
             SecureField("Password", text: $draftPassword).textContentType(.password)
             Button("Cancel", role: .cancel) { draftPassword = "" }
-            Button("Join") {
+            Button("Done") {
                 session.password = draftPassword
                 draftPassword = ""
                 Task { if await session.configureNetwork() { complete() } }
@@ -99,13 +99,17 @@ struct MultiviewNetworkSetup: View {
                 .frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.secondary)
             sourceButton("Local Wi-Fi", icon: .wifi, hotspot: false)
             sourceButton("Personal Hotspot", icon: .radio, hotspot: true)
+            Text(
+                "Local Wi-Fi includes a router or another device’s hotspot. Personal Hotspot uses this phone."
+            )
+            .font(.footnote).foregroundStyle(.secondary)
         }
     }
     private func sourceButton(_ title: String, icon: OpcIcon, hotspot: Bool) -> some View {
         Button {
             session.selectNetworkSource(hotspot: hotspot)
             step = 1
-            if !hotspot && !locked { startScan() }
+            cancelScan()
         } label: {
             HStack {
                 icon.frame(width: 20, height: 20)
@@ -118,7 +122,10 @@ struct MultiviewNetworkSetup: View {
                 LiveDesign.glassBright, in: RoundedRectangle(cornerRadius: LiveDesign.cornerRadius)
             )
             .contentShape(Rectangle())
-        }.buttonStyle(.zcTapTarget).disabled(locked && session.usePhoneHotspot != hotspot)
+        }.buttonStyle(.zcTapTarget)
+            .disabled(session.configuringNetwork || (locked && session.usePhoneHotspot != hotspot))
+            .accessibilityIdentifier(
+                hotspot ? "multiview.network.hotspot" : "multiview.network.local")
     }
     @ViewBuilder private var networkPage: some View {
         if locked {
@@ -170,16 +177,19 @@ struct MultiviewNetworkSetup: View {
                 HStack {
                     ProgressView()
                     Text("Looking for networks…").font(.footnote)
+                    Button("Cancel scan") { cancelScan() }
                 }
             } else {
-                Button("Scan again") { startScan() }.disabled(session.busy)
+                Button("Scan with a camera") { startScan() }.disabled(session.busy)
                 if session.networks.isEmpty {
-                    Text("Turn on a nearby camera to scan for Wi-Fi.").font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("Enter a network name, or turn on a camera to scan for Wi-Fi.").font(
+                        .footnote
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
             Button("Other network…") { otherNetwork = true }.disabled(session.busy)
-            Text("This device will join the selected Wi-Fi before cameras are added.").font(
+            Text("Choose the Wi-Fi all cameras will use. This device joins it first.").font(
                 .footnote
             ).foregroundStyle(.secondary)
         }

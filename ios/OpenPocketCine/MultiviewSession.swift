@@ -173,12 +173,12 @@ final class MultiviewSession {
     private var searches: [UUID: MultiviewDiscovery] = [:]
     private var connectionTasks: [UUID: Task<Void, Never>] = [:]
     private var hostJoin: Task<Void, Error>?
-    private var restoration: Task<Void, Never>?
     private var addressReservations: [String: UUID] = [:]
     private var pendingReset: [MultiviewStageStore.Camera] = []
     private var stationResetTasks: [UUID: Task<Bool, Never>] = [:]
     private let resetCamera: ((MultiviewStageStore.Camera) async -> Bool)?
     private let saveStage: (MultiviewStageStore.Stage?) -> Bool
+    private let loadNetwork: (String, Bool) -> MultiviewNetworkStore.Network?
     private var cleanupJournalWritten = false
     private let ble = BleLink(allowsConcurrentCameras: true)
     private var scanTask: Task<Void, Never>?
@@ -192,10 +192,13 @@ final class MultiviewSession {
 
     init(
         resetCamera: ((MultiviewStageStore.Camera) async -> Bool)? = nil,
-        saveStage: @escaping (MultiviewStageStore.Stage?) -> Bool = MultiviewStageStore.save
+        saveStage: @escaping (MultiviewStageStore.Stage?) -> Bool = MultiviewStageStore.save,
+        loadNetwork: @escaping (String, Bool) -> MultiviewNetworkStore.Network? =
+            MultiviewNetworkStore.load(ssid:hotspot:)
     ) {
         self.resetCamera = resetCamera
         self.saveStage = saveStage
+        self.loadNetwork = loadNetwork
     }
 
     private enum ProvisioningFailure: LocalizedError {
@@ -247,24 +250,22 @@ final class MultiviewSession {
     func start() {
         guard !running else { return }
         running = true
-        host = SharedWiFiPath.address(hotspot: usePhoneHotspot) ?? ""
+        host = ""
+        ready = false
+        networkConfigured = false
+        ssid = ""
+        password = ""
+        usePhoneHotspot = false
         UIApplication.shared.isIdleTimerDisabled = true
-        ready = !host.isEmpty
-        if let saved = MultiviewNetworkStore.load() {
-            ssid = saved.ssid
-            password = saved.password
-            usePhoneHotspot = saved.hotspot ?? false
-        }
         restoreStage()
         Task { [weak self] in
             let current = await WiFiJoiner.currentSSID()
             guard let self, self.running, !self.usePhoneHotspot, let current,
                 !current.lowercased().hasPrefix("osmo")
             else { return }
-            if self.ssid.isEmpty { self.ssid = current }
             if !self.networks.contains(current) { self.networks.append(current) }
         }
-        networks = MultiviewNetworkStore.savedNetworks().map(\.ssid)
+        networks = MultiviewNetworkStore.savedNetworks().filter { $0.hotspot != true }.map(\.ssid)
         scan()
         monitor = Task { [weak self] in
             while !Task.isCancelled {
@@ -468,24 +469,27 @@ final class MultiviewSession {
     }
 
     func selectNetworkSource(hotspot: Bool) {
-        guard !tiles.contains(where: { $0.camera != nil }) else { return }
+        guard !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else { return }
         usePhoneHotspot = hotspot
-        let saved = MultiviewNetworkStore.load()
-        if (saved?.hotspot ?? false) == hotspot {
-            ssid = saved?.ssid ?? ""
-            password = saved?.password ?? ""
-        } else {
-            ssid = ""
-            password = ""
-        }
+        ssid = ""
+        password = ""
+        invalidateNetworkConfirmation()
     }
 
     func selectNetwork(_ name: String) {
+        guard !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else { return }
         if ssid != name {
             ssid = name
-            password =
-                MultiviewNetworkStore.load(ssid: name, hotspot: usePhoneHotspot)?.password ?? ""
+            password = loadNetwork(name, usePhoneHotspot)?.password ?? ""
         }
+        invalidateNetworkConfirmation()
+    }
+
+    private func invalidateNetworkConfirmation() {
+        networkConfigured = false
+        networkSetupError = nil
+        host = ""
+        ready = false
     }
 
     func joinSharedNetwork() async throws {
@@ -537,7 +541,9 @@ final class MultiviewSession {
     }
 
     func configureNetwork() async -> Bool {
-        guard !busy, !configuringNetwork else { return false }
+        guard !busy, !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else {
+            return false
+        }
         configuringNetwork = true
         networkSetupError = nil
         defer { configuringNetwork = false }
@@ -746,7 +752,7 @@ final class MultiviewSession {
             error = "Multiview preview is not available for this camera model yet."
             return
         }
-        guard running, !closing, !busy, !tile.connecting, tile.camera == nil,
+        guard running, networkConfigured, !closing, !busy, !tile.connecting, tile.camera == nil,
             !tiles.contains(where: { $0.camera?.id == camera.id })
         else { return }
         tile.connecting = true
@@ -1173,7 +1179,6 @@ final class MultiviewSession {
     }
     func stop() {
         persistStage()
-        restoration?.cancel()
         hostJoin?.cancel()
         hostJoin = nil
         for task in connectionTasks.values { task.cancel() }
@@ -1234,79 +1239,28 @@ final class MultiviewSession {
             id: saved.id, name: saved.name,
             model: .resolve(modelId: saved.modelId, name: saved.name), modelId: saved.modelId)
     }
+    /// A new Multiview session always asks for a network and starts with empty
+    /// slots. Old Keychain stages supply presentation preferences and cleanup
+    /// obligations only; they must not choose a network or reconnect cameras.
     func restoreStage(_ savedStage: MultiviewStageStore.Stage? = MultiviewStageStore.load()) {
         guard let stage = savedStage else { return }
         pendingReset = stage.pendingReset ?? []
-        if !stage.ssid.isEmpty,
-            let network = MultiviewNetworkStore.load(ssid: stage.ssid, hotspot: stage.hotspot)
-        {
-            ssid = network.ssid
-            password = network.password
-            usePhoneHotspot = stage.hotspot
-            networkConfigured = true
+        if stage.returnedToCameraWiFi != true {
+            pendingReset = MultiviewStageStore.cleanupTargets(
+                pendingReset, including: stage.cameras)
         }
-        cleanupJournalWritten = !networkConfigured
+        cleanupJournalWritten = !pendingReset.isEmpty
         layout = MultiviewLayout(rawValue: stage.layout) ?? .centerStage
         feedAspect = stage.fill == true ? .fill : .fit16x9
         focusedIndex = stage.focusedIndex
-        for saved in stage.cameras where networkConfigured {
-            let tile = tiles[saved.slot]
-            let camera = restoredCamera(saved)
-            guard camera.appearsInMultiview else { continue }
-            tile.camera = camera
-            tile.identity = saved.identity
-            tile.cameraAddress = saved.address
-            tile.experimentalNetwork = saved.experimental
-            tile.lutEnabled = saved.lutEnabled
-            tile.status = "Reconnecting saved camera"
-        }
-        busy = !pendingReset.isEmpty
-        restoration = Task { [weak self] in
-            guard let self else { return }
-            if !pendingReset.isEmpty {
-                await resetStations(pendingReset)
-                busy = false
-                guard running, !Task.isCancelled else { return }
-                persistStage()
-            }
-            let needsProvisioning =
-                stage.returnedToCameraWiFi == true || !(stage.pendingReset ?? []).isEmpty
-            for tile in tiles where tile.camera != nil {
-                connectionTasks[tile.id] = Task {
-                    await self.restoreConnection(tile, needsProvisioning: needsProvisioning)
-                }
-            }
-        }
-    }
-    private func restoreConnection(_ tile: Tile, needsProvisioning: Bool) async {
-        guard running, let camera = tile.camera else { return }
-        tile.connecting = true
-        do {
-            try await joinSharedNetwork()
-            if !needsProvisioning, let identity = tile.identity {
-                try await discoverPreview(tile, camera: camera, identity: identity)
-                tile.connecting = false
-                persistStage()
-                return
-            }
-        } catch {
-            guard running, !Task.isCancelled else {
-                tile.connecting = false
-                return
-            }
-            tile.driver?.close()
-            tile.driver = nil
-        }
-        guard running, !Task.isCancelled else {
-            tile.connecting = false
-            return
-        }
-        tile.connecting = false
-        tile.camera = nil
-        await add(camera, to: tile, experimental: tile.experimentalNetwork)
+        // Migrate unfinished camera cleanup before a new camera is added.
+        // With no cleanup, retain the last preferences even if setup is cancelled.
+        if cleanupJournalWritten { persistStage() }
     }
     func enqueueAdd(_ camera: FoundCamera, to tile: Tile, experimental: Bool = false) {
-        guard running, !closing, tile.camera == nil, !tile.connecting else { return }
+        guard running, networkConfigured, !closing, tile.camera == nil, !tile.connecting else {
+            return
+        }
         connectionTasks[tile.id]?.cancel()
         connectionTasks[tile.id] = Task {
             await self.add(camera, to: tile, experimental: experimental)

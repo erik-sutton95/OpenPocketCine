@@ -5,6 +5,126 @@ import XCTest
 @testable import OpenPocketCine
 
 final class MultiviewStagePersistenceTests: XCTestCase {
+    @MainActor func testSavedHotspotStageCannotSkipSessionNetworkChoiceOrRestoreCameraLocks() {
+        let camera = MultiviewStageStore.Camera(
+            slot: 0, id: UUID(), name: "OsmoPocket3-Test", modelId: 0x20,
+            identity: nil, address: "", experimental: false, lutEnabled: false)
+        let session = MultiviewSession(
+            saveStage: { _ in true },
+            loadNetwork: { name, hotspot in
+                .init(ssid: name, password: "test-password", hotspot: hotspot)
+            })
+        session.restoreStage(
+            .init(
+                ssid: "Old hotspot", hotspot: true, layout: MultiviewLayout.grid.rawValue,
+                focusedIndex: 0, cameras: [camera], pendingReset: [], returnedToCameraWiFi: true))
+        XCTAssertFalse(session.networkConfigured, "Every entry must ask for the session network")
+        XCTAssertTrue(
+            session.tiles.allSatisfy { $0.camera == nil }, "Old slots must not lock setup")
+        session.selectNetworkSource(hotspot: false)
+        XCTAssertFalse(session.usePhoneHotspot, "Local Wi-Fi must remain selectable")
+        session.stop()
+    }
+
+    @MainActor func testChangingNetworkSourceInvalidatesPreviousSessionConfirmation() {
+        let session = MultiviewSession(saveStage: { _ in true })
+        session.networkConfigured = true
+        session.usePhoneHotspot = true
+        session.selectNetworkSource(hotspot: false)
+        XCTAssertFalse(session.networkConfigured)
+        XCTAssertFalse(session.usePhoneHotspot)
+    }
+
+    @MainActor func testCredentialsAreLoadedOnlyAfterAnExplicitNetworkChoice() {
+        var lookups: [(String, Bool)] = []
+        let session = MultiviewSession(
+            saveStage: { _ in true },
+            loadNetwork: { name, hotspot in
+                lookups.append((name, hotspot))
+                return .init(ssid: name, password: "saved-test-password", hotspot: hotspot)
+            })
+        session.selectNetworkSource(hotspot: true)
+        XCTAssertTrue(lookups.isEmpty)
+        session.selectNetwork("Test phone hotspot")
+        XCTAssertEqual(session.password, "saved-test-password")
+        XCTAssertTrue(lookups[0].1)
+        session.networkConfigured = true
+        session.selectNetworkSource(hotspot: false)
+        XCTAssertFalse(session.networkConfigured)
+        XCTAssertEqual(session.ssid, "")
+        XCTAssertEqual(session.password, "")
+        session.selectNetwork("Test local Wi-Fi")
+        XCTAssertEqual(lookups.count, 2)
+        XCTAssertEqual(lookups[1].0, "Test local Wi-Fi")
+        XCTAssertFalse(lookups[1].1)
+        XCTAssertEqual(session.ssid, "Test local Wi-Fi")
+        XCTAssertFalse(session.networkConfigured, "Selecting a name still requires Done")
+    }
+
+    @MainActor func testRemovingLastCameraAllowsChoosingAnotherSessionNetwork() async {
+        let session = MultiviewSession(saveStage: { _ in true }, loadNetwork: { _, _ in nil })
+        session.networkConfigured = true
+        session.ssid = "Old hotspot"
+        session.usePhoneHotspot = true
+        session.tiles[0].camera = FoundCamera(
+            id: UUID(), name: "OsmoPocket3-Test", model: .resolve(modelId: 0x20, name: "Test"),
+            modelId: 0x20)
+        session.selectNetworkSource(hotspot: false)
+        XCTAssertTrue(session.usePhoneHotspot, "An assigned camera still owns the active network")
+        session.selectNetwork("Other network")
+        XCTAssertEqual(session.ssid, "Old hotspot")
+        let configured = await session.configureNetwork()
+        XCTAssertFalse(configured)
+        let removed = await session.remove(session.tiles[0])
+        XCTAssertTrue(removed)
+        session.selectNetworkSource(hotspot: false)
+        session.selectNetwork("New local Wi-Fi")
+        XCTAssertFalse(session.usePhoneHotspot)
+        XCTAssertEqual(session.ssid, "New local Wi-Fi")
+        XCTAssertFalse(session.networkConfigured)
+    }
+
+    @MainActor func testLegacyAssignedCamerasBecomeCleanupOnlyWithoutSelectingTheirNetwork() {
+        let camera = MultiviewStageStore.Camera(
+            slot: 0, id: UUID(), name: "OsmoPocket3-Test", modelId: 0x20,
+            identity: nil, address: "", experimental: false, lutEnabled: false)
+        var journal: MultiviewStageStore.Stage?
+        let session = MultiviewSession(saveStage: {
+            journal = $0
+            return true
+        })
+        session.restoreStage(
+            .init(
+                ssid: "Legacy hotspot", hotspot: true, layout: MultiviewLayout.grid.rawValue,
+                focusedIndex: 0, cameras: [camera], returnedToCameraWiFi: false))
+        XCTAssertFalse(session.networkConfigured)
+        XCTAssertEqual(session.ssid, "")
+        XCTAssertFalse(session.usePhoneHotspot)
+        XCTAssertTrue(session.tiles.allSatisfy { $0.camera == nil })
+        XCTAssertEqual(journal?.ssid, "")
+        XCTAssertEqual(journal?.cameras, [])
+        XCTAssertEqual(journal?.pendingReset, [camera])
+    }
+
+    @MainActor func testCancellingNewSetupDoesNotDeleteLastPresentationPreferences() async {
+        var journal: MultiviewStageStore.Stage? = .init(
+            ssid: "Previous network", hotspot: true, layout: MultiviewLayout.grid.rawValue,
+            focusedIndex: 2, cameras: [], pendingReset: [], returnedToCameraWiFi: true, fill: true)
+        let session = MultiviewSession(saveStage: {
+            journal = $0
+            return true
+        })
+        session.restoreStage(journal)
+        XCTAssertEqual(session.layout, .grid)
+        XCTAssertEqual(session.feedAspect, .fill)
+        XCTAssertFalse(session.networkConfigured)
+        let closed = await session.closeStage()
+        XCTAssertTrue(closed)
+        XCTAssertEqual(journal?.layout, MultiviewLayout.grid.rawValue)
+        XCTAssertEqual(journal?.focusedIndex, 2)
+        XCTAssertEqual(journal?.fill, true)
+    }
+
     func testStageRoundTripPreservesSlotsIdentityAndOperatorChoices() throws {
         let camera = MultiviewStageStore.Camera(
             slot: 2, id: UUID(), name: "OsmoPocket3-Test",
@@ -25,7 +145,8 @@ final class MultiviewStagePersistenceTests: XCTestCase {
             ).isPocket3)
     }
     func testLegacyStageWithoutFitFillStillRestores() throws {
-        let stage = MultiviewStageStore.Stage(ssid: "Test", hotspot: false,
+        let stage = MultiviewStageStore.Stage(
+            ssid: "Test", hotspot: false,
             layout: MultiviewLayout.centerStage.rawValue, focusedIndex: 0, cameras: [])
         let data = try JSONEncoder().encode(stage)
         XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("fill"))
@@ -95,7 +216,10 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 attempts += 1
                 return attempts > 1
             },
-            saveStage: { journal = $0; return true })
+            saveStage: {
+                journal = $0
+                return true
+            })
         let camera = FoundCamera(
             id: UUID(), name: "OsmoPocket3-Test",
             model: .resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
@@ -125,7 +249,10 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 attempts += 1
                 return await withCheckedContinuation { finish = $0 }
             },
-            saveStage: { journal = $0; return true })
+            saveStage: {
+                journal = $0
+                return true
+            })
         let camera = FoundCamera(
             id: UUID(), name: "OsmoPocket3-Test",
             model: .resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
@@ -145,7 +272,8 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         XCTAssertNil(journal)
     }
 
-    @MainActor func testCleanupOnlyRestoreNeedsNoSavedNetworkAndAssignsNoTiles() async throws {
+    @MainActor func testCleanupOnlyRestoreDefersRadioWorkUntilCloseAndAssignsNoTiles() async throws
+    {
         for ssid in ["", "Forgotten test network \(UUID().uuidString)"] {
             await checkCleanupRestoreWithoutNetwork(ssid: ssid)
         }
@@ -160,15 +288,23 @@ final class MultiviewStagePersistenceTests: XCTestCase {
             pendingReset: [camera])
         var restored: [UUID] = []
         let session = MultiviewSession(
-            resetCamera: { restored.append($0.id); return true },
-            saveStage: { journal = $0; return true })
+            resetCamera: {
+                restored.append($0.id)
+                return true
+            },
+            saveStage: {
+                journal = $0
+                return true
+            })
         session.restoreStage(journal)
-        let deadline = Date().addingTimeInterval(2)
-        while session.busy, Date() < deadline { await Task.yield() }
         XCTAssertFalse(session.busy)
-        XCTAssertEqual(restored, [camera.id])
+        XCTAssertTrue(restored.isEmpty, "Entering setup must not change camera networks")
         XCTAssertFalse(session.networkConfigured)
         XCTAssertTrue(session.tiles.allSatisfy { $0.camera == nil })
+        XCTAssertEqual(journal?.pendingReset?.map(\.id), [camera.id])
+        let closed = await session.closeStage()
+        XCTAssertTrue(closed)
+        XCTAssertEqual(restored, [camera.id])
         XCTAssertNil(journal)
     }
 }

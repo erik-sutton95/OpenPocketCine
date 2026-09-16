@@ -9,7 +9,7 @@ New and changed
 - Experimental AirPods head tracking follows calibrated head direction. Manual input wins; changing gimbal mode turns tracking off.
 - Fresh scopes, LIGHTS and ND open centered; drag to place and use a corner to resize. AUDIO adds movable vertical/horizontal meters and optional channel dB readings. Saved placements stay yours.
 - ND suggests a filter strength in Stops, ND factor or optical density. False color adds CineStop, six-zone IRE and EL Zone reference scales.
-- Experimental Multiview adds saved stages, grid/Center stage, per-camera looks and group recording on shared Wi-Fi.
+- Multiview asks for network/password each session. Larger 2×2 tiles; WI-FI below FIT/FILL. Experimental.
 - Share this feed lets iPhones and iPads on the camera Wi-Fi watch with local assists, request controls and reconnect. Hold Multiview on Your cameras to browse feeds.
 - Apple Watch shows live preview, timecode, storage, battery and shutter controls. The paired iPhone stays connected to the camera.
 - Convert log on Share matches D-Log and D-Log2 during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.

@@ -254,7 +254,7 @@ Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add
 cameras. Each camera has its own preview and recording controls; Record all
 requests recording together without frame-accurate synchronization. See the
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) for supported observations,
-setup, saved stages and remaining physical checks. Pocket 3, Pocket 4 Pro and
+session network selection, saved preferences and remaining physical checks. Pocket 3, Pocket 4 Pro and
 Nano preview and recording have been checked together on iPhone. Pocket 3
 recovery after an app switch required a full rejoin and roughly a minute in the
 recorded test. Android Multiview remains unavailable.

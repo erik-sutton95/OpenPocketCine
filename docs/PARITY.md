@@ -341,26 +341,31 @@ freezes remaining time; Resume requires fresh, settled feedback and has no new
 countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
 
-## Multiview saved stage and shutdown (in validation)
+## Multiview session network and shutdown (in validation)
 
-The iOS development shell saves tile assignments, layout, focus, LUT selection,
-experimental setup choice and verified identity/address hints in device-only
-Keychain storage. Network passwords remain in the separate network Keychain
-record. Reopening restores the selected network and starts camera connections
-independently, with per-address reservations during LAN identity verification.
-The standard single-camera BLE path retains exclusive-camera cleanup.
+Every new iOS Multiview session opens the network picker with empty camera slots.
+Choose Local Wi-Fi (including another device's hotspot) or this phone's Personal
+Hotspot, choose or enter its name, supply the password, then tap Done. Local
+Wi-Fi joins and verifies the phone's network before setup completes. Added
+cameras use that confirmed session network. Changing the source or network name
+invalidates confirmation; assigned cameras must be removed before changing it.
+
+Saved credentials are suggestions for an explicitly selected network. Legacy
+Keychain stages no longer choose the network, skip setup or restore assigned
+camera slots. Layout, focus and Fit/Fill preferences remain saved. Returning
+from another app or a tile's Live View retains the current session.
 
 Closing the stage closes monitoring, then attempts the documented AP switch over
-independent BLE links. Failed cleanup remains saved and the operator may close
-anyway; the next Multiview entry retries it. Force quit cannot guarantee cleanup.
-No record-stop command is sent. Camera AP availability, recording continuity,
-concurrent pairing, and restore across app relaunch still require physical proof.
-Network scanning records an unassigned camera in the device-only cleanup ledger
-before requesting station mode, even before a network is configured. Scan completion
-and cancellation attempt AP restoration; failed resets survive closure and relaunch.
-Concurrent scan cancellation and stage closure share one reset task per camera.
-Automated cancellation/retry/persistence tests pass; physical scan-only AP restoration
-still needs verification before release.
+independent BLE links. Failed cleanup remains saved for the next close attempt;
+entering a new session does not reset or reconnect cameras in the background.
+Legacy assigned cameras are migrated into the cleanup ledger when needed.
+Force quit cannot guarantee cleanup. No record-stop command is sent.
+Network scanning is optional; selecting Local Wi-Fi does not start a camera scan.
+An explicit scan records its camera before station mode and restores it after
+completion/cancellation. Failed resets survive closure and relaunch. Concurrent
+scan cancellation and stage closure share one reset task per camera.
+Automated session-choice, cancellation/retry and persistence tests cover these
+transitions. Physical network selection, provisioning and AP return remain pending.
 Android Multiview remains deferred.
 
 ## First-picture random-access gate
@@ -431,8 +436,9 @@ claim of seamless foreground return.
 
 Multiview shows reported camera timecode below each tile name, including compact
 side tiles; Nano has no timecode readout. It follows the existing 5 Hz settings
-updates. The bottom bar contains Layout, Wi-Fi, and Fit/Fill, with Add camera retained in
-the tiles. Enlarged one/two-camera grids put Add in a tile header so adding the
+updates. The floating controls provide Layout and FIT/FILL, with a dedicated WI-FI
+button directly below FIT/FILL. Add camera remains in the tiles. Enlarged
+one/two-camera grids put Add in a tile header so adding the
 next camera remains available without the bottom-bar shortcut.
 
 ### Multiview portrait composition (iOS)
@@ -629,8 +635,9 @@ this document apply to those earlier builds; they do not qualify the new chrome.
 - iPad supports native window resizing across supported iPadOS versions. On iPadOS
   26, system-reported window-control exclusions keep the top controls reachable.
   Physical iPad resizing and camera-connected session qualification remain pending.
-- iOS Multiview Layout switches Grid/Center stage directly; hold Layout for Shared
-  Wi-Fi. Clean hides session controls and the assist palette; DISP restores them.
+- iOS Multiview Layout switches Grid/Center stage directly. A dedicated WI-FI
+  button below FIT/FILL opens Shared Wi-Fi in portrait and landscape. Clean hides
+  session controls, assists and WI-FI; DISP restores them.
 - Watch companion and watcher transport remain unchanged. Nikon/backend migration,
   shared delivery extraction and additional cloud destinations remain later phases
   of [the shared-engine plan](SHARED-MONITOR-ENGINE.md).
@@ -835,3 +842,12 @@ Xcode Cloud now rejects iOS archives without a packaged reporting destination,
 independently of symbol uploads. Android retains its existing Play configuration
 checks; no shell consent behavior changes. TestFlight verification of the next
 configured build remains pending.
+
+## Multiview network and grid layout (in validation)
+
+The dedicated Multiview network button is iOS-only under the existing Android
+Multiview exception. Physical verification of this button is pending.
+
+The iOS 2×2 Multiview grid fills the space between floating controls with four
+equal tiles. Tile shapes follow the viewport; FIT preserves the full picture and
+FILL crops inside the tile. Physical verification of this layout is pending.

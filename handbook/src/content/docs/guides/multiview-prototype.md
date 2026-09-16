@@ -16,9 +16,11 @@ For Nano, use WPA2: the tested network returned join failures on WPA3 and
 a successful join reply after switching to WPA2 with the same credentials. Cameras join your shared Wi-Fi while remaining
 in normal Video mode. This path needs no RTMP stream or external server.
 
-1. Choose **Local Wi-Fi** or **Personal Hotspot** in the entry sheet. Select the
-   network and use its saved password, or enter the password once for a new network.
-2. Tap **Continue**. For local Wi-Fi, approve the phone’s network-join prompt if shown.
+1. Each time you open Multiview, choose **Local Wi-Fi** (a router or another
+   device’s hotspot) or **Personal Hotspot** (this phone). Select or enter the
+   network name, then enter its password; a saved password can fill it in.
+2. Tap **Done** in the password prompt. For local Wi-Fi, approve the phone’s
+   network-join prompt if shown. Then add cameras to the empty tiles.
 3. Set each camera to Video mode, stop recording and close other camera apps.
 4. Tap **Add camera**, choose a nearby camera and approve pairing if asked.
    The app provisions the selected network and verifies the camera’s identity
@@ -84,10 +86,12 @@ See [BLE provisioning](https://openpocketcine.app/docs/protocol/ble/) for the ob
 
 ## Layout and per-camera monitoring
 
-The layout menu in the bottom strip switches between **2 × 2 grid** and
-**Center stage**. In landscape, Center stage shows one large feed with three
+The Layout button switches between **2 × 2 grid** and **Center stage**. Grid
+tiles fill the available area between the floating controls rather than keeping
+a fixed 16:9 shape. FIT preserves the complete picture inside each tile; FILL
+crops to fill the tile. In landscape, Center stage shows one large feed with three
 smaller 16:9 tiles stacked on the right. In portrait, the 16:9 main tile sits
-above a two-column secondary grid. Tap a smaller tile to promote it. Fit shows
+above a centered vertical strip of secondary tiles. Tap a smaller tile to promote it. Fit shows
 the complete picture; Fill crops to the available tile without stretching it.
 Switching layouts keeps the existing video hosts and camera sessions alive.
 
@@ -115,9 +119,10 @@ or shows hotspot details without a network picker. Selecting Wi-Fi or continuing
 from hotspot details opens a native password alert. Saved passwords are prefilled
 and kept in this device’s Keychain. The hotspot page reports interface detection;
 iOS does not provide a reliable hotspot-enabled flag, and the interface may
-appear only after a camera joins. Continue joins the selected local network and verifies
+appear only after a camera joins. Done joins the selected local network and verifies
 the phone’s network name and address before allowing camera setup. The current
-network name and app-saved networks are offered automatically. Credentials entered
+network name and app-saved local networks are offered as choices. Scanning with
+a camera is optional; selecting Local Wi-Fi does not start a scan. Credentials entered
 here are kept in this device’s Keychain and reused for later cameras and sessions.
 iOS does not let an app extract Wi-Fi passwords stored by Settings. For a network
 not previously saved in OpenPocketCine, enter its password once. Personal Hotspot
@@ -206,26 +211,26 @@ result without network credentials. Use **Operator Setup → System → Share
 Diagnostics** to share a redacted report; nothing is uploaded automatically.
 Android Multiview and physical testing on unprofiled models remain pending.
 
-## Saved stages and concurrent setup (development validation)
+## Session setup and saved preferences
 
-The stage remembers its network, camera slots, layout, selected main camera,
-LUT choices and experimental setup choices on this device. A configured stage
-reopens without repeating the network wizard. Each camera connects independently;
-a missing camera remains assigned with Reconnect. Cached addresses are hints and
-must still pass camera identity verification.
+Each new Multiview session asks for its network and starts with empty camera
+slots. A saved network or an old stage cannot skip that choice or lock the app
+to Personal Hotspot. Passwords remain in this device's Keychain and are loaded
+only after you select a network. Layout, selected main slot and Fit/Fill are
+remembered. Brief app switches and returning from a tile's Live View keep the
+current session; they do not restart setup.
 
-Closing Multiview attempts to return assigned cameras to their own Wi-Fi after
-closing their monitor connections. Approve a camera connection if prompted.
-If a camera is unavailable, cleanup is saved and you can close anyway; the next
-Multiview entry retries it. Force-quitting iOS cannot reliably send cleanup
-commands. Removing a tile does not reset that camera's network. No stop-recording
-command is sent, but recording continuity during the AP switch is not yet verified.
-Saved-stage restoration, parallel setup and AP return still need dedicated physical
-regression testing. A camera used only to scan nearby networks is saved for cleanup
-before its Wi-Fi mode changes, even if you have not selected a network or added a
-tile. Finishing or cancelling the scan attempts to return it to its own Wi-Fi.
-Failed restores remain saved for retry when closing or reopening Multiview.
-This scan-only restoration path still needs physical camera verification.
+After Done, each added camera joins the selected network independently. Remove
+all assigned cameras before changing the network using **WI-FI** below FIT/FILL.
+
+Closing Multiview attempts to return cameras to their own Wi-Fi after closing
+monitor connections. Approve a camera connection if prompted. Unfinished cleanup
+remains saved for another close attempt, including cleanup from older builds;
+opening setup does not reconnect old cameras or change their networks. Force
+quitting cannot reliably run cleanup. No stop-recording command is sent.
+A camera used for an optional Wi-Fi scan is also tracked before its role changes;
+finishing or cancelling the scan attempts to restore its own Wi-Fi.
+Physical checks of this revised setup, provisioning and AP return remain pending.
 
 ### Reconnecting a camera
 
@@ -237,8 +242,10 @@ the tile when you no longer want that camera.
 
 Multiview shows reported camera timecode below each tile name, including compact
 side tiles; Nano has no timecode readout. It follows the existing 5 Hz settings
-updates. The bottom bar contains Layout, Wi-Fi, and Fit/Fill, with Add camera retained in
-the tiles. Enlarged one/two-camera grids put Add in a tile header so adding the
+updates. Tap the dedicated **WI-FI** button directly below **FIT/FILL** to reopen network
+setup in either orientation. Layout switches Grid/Center stage; network setup
+does not require holding it. Add camera remains in the tiles. Enlarged
+one/two-camera grids put Add in a tile header so adding the
 next camera remains available without the bottom-bar shortcut.
 
 In portrait, Center stage keeps the main camera tile at 16:9 above the other
