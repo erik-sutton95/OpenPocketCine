@@ -272,6 +272,9 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- iOS 17 no longer crashes at launch when Live View releases AirPods head
+  tracking. The connection-status calls introduced in iOS 18 are now
+  availability-gated; iOS 17 keeps motion updates without them.
 - Connection reliability audit on iOS and Android: finite handshakes and recovery
   episodes, canceled-work ownership, camera-network checks on app return, and
   fresh-picture proof before recovery clears. Gimbal input is gated during

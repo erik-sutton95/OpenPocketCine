@@ -1,37 +1,16 @@
-Since open beta build 63
-
 New and changed
 
 - UI 2.0: Sora/Lucide, consistent buttons, Media footer, pull-refresh and hold/sideways selection. Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×; hold for dial.
-- Tap a camera value for the full details drawer; hold or drag for a compact 128-point dial. FORMAT, COLOR and shooting mode hang from the top; landscape has no extra category tabs.
 - Gimbal Mode, Speed and Ramp each have a tab in the wider panel. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
-- Direction Lock holds the camera's pointing direction as its body rotates. Select another mode to release it.
-- Experimental AirPods head tracking follows calibrated head direction. Manual input wins; changing gimbal mode turns tracking off.
-- Fresh scopes, LIGHTS and ND open centered; drag to place and use a corner to resize. AUDIO adds movable vertical/horizontal meters and optional channel dB readings. Saved placements stay yours.
-- ND suggests a filter strength in Stops, ND factor or optical density. False color adds CineStop, six-zone IRE and EL Zone reference scales.
-- Experimental Multiview adds saved stages, grid/Center stage, per-camera looks and group recording on shared Wi-Fi.
-- Share this feed lets iPhones and iPads on the camera Wi-Fi watch with local assists, request controls and reconnect. Hold Multiview on Your cameras to browse feeds.
-- Apple Watch shows live preview, timecode, storage, battery and shutter controls. The paired iPhone stays connected to the camera.
-- Convert log on Share matches D-Log and D-Log2 during export, separately from Bake LUT. Originals stay untouched; D-Log M conversion is excluded.
-- Your cameras shows connection progress and Cancel per row. Share Diagnostics from pairing or Operator Setup > System to report a problem.
+- Fresh scopes, LIGHTS and ND open centered; drag to place and use a corner to resize. Saved placements stay yours.
 
 Fixes
 
-- Lock matches Settings/Media; Osmo battery uses %. Portrait feed centers with STBY/timecode/REC SETUP below the cutout. View Assist, FIT/FILL and joystick stay fixed above camera values.
-- Blurred panels clear corners; shadows are tighter and audio meters slim. Signal colors match Settings. View Assist previews use the raw picture with scopes off.
-- Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
-- Pocket 3 fixes cover live view, reconnects, settings and newly recorded clips on its memory card.
-- Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.
-- Normal-color Auto ISO starts at 50 on Pocket 3 and Pocket 4, and 100 on Pocket 4 Pro.
-- Nano COLOR matches Normal 8-bit, Normal 10-bit and D-Log M. Live view handles larger Nano frames more reliably.
-- D-Log M scopes use their own scale. Scene-stop values remain estimates; sensor clipping limits are not calibrated.
-- Renamed camera Wi-Fi uses its current name. Failed joins clear stale details; setup warns when a VPN or ad blocker may block live view.
-- Live-view stability improves around zoom, settings, LUT 50/50 and clip playback. Recovery retains the last picture. False color stays visible through Auto ISO changes.
+- iPhone and iPad on iOS 17 no longer crash at launch. Experimental AirPods head tracking stays available on iOS 18 and later.
+- Live-view stability improves around zoom, settings, LUT 50/50 and clip playback. Recovery retains the last picture.
 
 What to test
 
-- Compare panel blur over bright/dark footage. Rotate pages and drawers; tap versus hold drums; open FORMAT in both orientations. Try View Assist, zoom, lock, Media selection, and playback.
-- On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
-- Drag Motion Control, move the joystick with it open, then set points. Check the larger zoom dial covers controls and reaches the screen edge. Try Direction Lock, false-color scales and ND units.
+- On an iPhone or iPad running iOS 17, launch the app, open Live View and return to Your cameras. Confirm the app stays open.
+- Compare panel blur over bright/dark footage. Rotate pages and drawers; tap versus hold drums; open FORMAT in both orientations.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.
-- Check Multiview, feed sharing, Apple Watch and Convert log. Motion Control, Multiview and AirPods head tracking remain experimental.

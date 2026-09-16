@@ -311,7 +311,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             return
         }
         guard !motionFailed else { return }
-        if !motion.isConnectionStatusActive {
+        // Connection-status updates are iOS 18+; on iOS 17 the selector is missing
+        // and calling it raises an ObjC exception (observed on iPadOS 17.7).
+        if #available(iOS 18.0, *), !motion.isConnectionStatusActive {
             motion.startConnectionStatusUpdates()
         }
         guard motion.isDeviceMotionAvailable else {
@@ -576,7 +578,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         stopSamplePump()
         lastHeadMeasuredAt = nil
         lastHeadSequence = nil
-        if motion.isConnectionStatusActive { motion.stopConnectionStatusUpdates() }
+        if #available(iOS 18.0, *), motion.isConnectionStatusActive {
+            motion.stopConnectionStatusUpdates()
+        }
     }
 
     private func stopMotionUpdates() {
