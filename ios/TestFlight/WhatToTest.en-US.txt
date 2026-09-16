@@ -7,7 +7,7 @@ New and changed
 - Gimbal Mode, Speed and Ramp each have a tab in the wider panel. Motion Control remains experimental, with timed A/B/C moves, smoothing, countdown, Pause, Resume and Stop.
 - Direction Lock holds the camera's pointing direction as its body rotates. Select another mode to release it.
 - Experimental AirPods head tracking follows calibrated head direction. Manual input wins; changing gimbal mode turns tracking off.
-- Fresh scopes, LIGHTS and ND open centered; drag to place and use a corner to resize. AUDIO adds movable vertical/horizontal meters and optional channel dB readings. Saved placements stay yours.
+- Scopes, LIGHTS and ND open centered; drag to place, resize from a corner. AUDIO adds movable meters and channel dB readings. Saved placements stay yours.
 - ND suggests a filter strength in Stops, ND factor or optical density. False color adds CineStop, six-zone IRE and EL Zone reference scales.
 - Multiview asks for network/password each session. Larger 2×2 tiles; WI-FI below FIT/FILL. Experimental.
 - Share this feed lets iPhones and iPads on the camera Wi-Fi watch with local assists, request controls and reconnect. Hold Multiview on Your cameras to browse feeds.
@@ -17,7 +17,8 @@ New and changed
 
 Fixes
 
-- Lock matches Settings/Media; Osmo battery uses %. Portrait feed centers with STBY/timecode/REC SETUP below the cutout. View Assist, FIT/FILL and joystick stay fixed above camera values.
+- iOS 17 no longer crashes when Live View releases AirPods head tracking.
+- Lock matches Settings/Media; battery uses %. Portrait feed centers with STBY/timecode/REC SETUP below the cutout; assists, FIT/FILL and joystick stay above camera values.
 - Blurred panels clear corners; shadows are tighter and audio meters slim. Signal colors match Settings. View Assist previews use the raw picture with scopes off.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
 - Pocket 3 fixes cover live view, reconnects, settings and newly recorded clips on its memory card.
@@ -32,6 +33,6 @@ What to test
 
 - Check the reporting prompt after install/update; decline and relaunch. Rotate drawers; tap versus hold drums. Try FORMAT, View Assist, zoom, Media selection and playback.
 - On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
-- Drag Motion Control, move the joystick with it open, then set points. Check the larger zoom dial covers controls and reaches the screen edge. Try Direction Lock, false-color scales and ND units.
+- Drag Motion Control, use the joystick, then set points. Check the zoom dial reaches the screen edge. Try Direction Lock, false-color scales and ND units.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.
-- Check Multiview, feed sharing, Apple Watch and Convert log. Motion Control, Multiview and AirPods head tracking remain experimental.
+- Check Multiview network setup, WI-FI and FIT/FILL; on iOS 17, enter/exit Live View. Try sharing, Watch and Convert log. Multiview, Motion Control and head tracking remain experimental.
