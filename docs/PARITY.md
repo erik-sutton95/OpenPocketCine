@@ -826,3 +826,21 @@ The active-link status card is visible in both orientations. Supported settings
 retain their existing actions and saved values; Android still uses system Back.
 Sharing and platform-specific hardware/settings remain capability differences.
 iOS is unchanged in this Android visual correction.
+
+### Android crash hardening (2026-09-16)
+
+Play Vitals rollup [#348](https://github.com/erik-sutton95/OpenPocketCine/issues/348)
+had four live Android crash families: ML Kit face detection reading a recycled
+bitmap, photo sharing inserting into the Images collection under `Movies/`, a
+Bluetooth write after the binder died, and disconnect resuming suspended control
+round-trips with an `IllegalStateException`. All four are Android-platform
+specific (ML Kit, MediaStore, `BluetoothGatt`, Kotlin coroutine waiters); iOS
+has no equivalent path, so iOS is unchanged. The Vulkan trio and the
+`DatalinkDriver.open` assertion from the same rollup were already fixed on
+`main` (#186/#187/#190/#189) and now only appear on stale version code 1.
+
+`just android-check` passes (assembleDebug, unit tests, lint, Vulkan host test),
+and a new `MediaStoreInsertPolicyTest` locks the gallery directory rule. Physical
+qualification on a real camera and device — slow-frame face AF under load and a
+forced Bluetooth-binder drop — remains an outstanding exception because no
+Android device was attached.

@@ -199,9 +199,12 @@ Play also emails testers when they are added.
 
 ## Crash reports
 
-Play Console Vitals is the crash source once testers install from Play. There
-is no third-party crash SDK. Native Swift `.so` frames are easier to read if
-you keep a matching AAB from the Actions run.
+Play Console Vitals is the aggregate crash source once testers install from
+Play, and the in-app Sentry Android SDK (opt-in, `docs/sentry-deployment.md`)
+adds native/Java grouping and symbolicated `.so` frames when a tester consents.
+Both are useful: Vitals covers the whole install base, Sentry covers testers who
+opt in. Native Swift `.so` frames are easier to read if you keep a matching AAB
+from the Actions run.
 
 ## Troubleshooting
 

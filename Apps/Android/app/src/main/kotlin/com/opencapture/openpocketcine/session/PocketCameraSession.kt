@@ -534,7 +534,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         frameJob?.cancel()
         resetGimbalControls()
         endGimbalStick()
-        failAllWaiters(IllegalStateException("the camera disconnected"))
+        // Cancel, do not fail, the suspended control round-trips. A waiter
+        // resumed with a runtime exception escapes its fire-and-forget
+        // `scope.launch` and crashes the process (#348). CancellationException
+        // is treated as cancellation by the coroutine machinery.
+        failAllWaiters(kotlinx.coroutines.CancellationException("the camera disconnected"))
         pairingHold.clear()
         inflight.clear()
         inflightPending.clear()

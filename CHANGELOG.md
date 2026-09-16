@@ -272,6 +272,15 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Android crash hardening from the Play Vitals rollup (#348). ML Kit face
+  detection no longer recycles a frame while ML Kit is still reading it (the
+  ~21 `convertToNv21Buffer` freed-bitmap aborts), photo sharing chooses the
+  MediaStore directory from the MIME instead of a fixed `Movies/` path
+  (`ContentResolver.insert` `IllegalArgumentException`), a Bluetooth write that
+  hits a dead binder drops the link instead of killing the process
+  (`DeadObjectException`), and disconnect cancels suspended control round-trips
+  instead of resuming them with an `IllegalStateException`. The Vulkan trio and
+  the `DatalinkDriver.open` assertion were already fixed on `main`.
 - Connection reliability audit on iOS and Android: finite handshakes and recovery
   episodes, canceled-work ownership, camera-network checks on app return, and
   fresh-picture proof before recovery clears. Gimbal input is gated during

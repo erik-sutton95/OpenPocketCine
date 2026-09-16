@@ -298,23 +298,37 @@ class BleLink(context: Context) {
         if (writing || writeQueue.isEmpty()) return
         val characteristic = fff5 ?: return
         val g = gatt ?: return
+        val attempt = activeAttempt ?: return
         writing = true
         val payload = writeQueue.removeFirst()
-        if (Build.VERSION.SDK_INT >= 33) {
-            g.writeCharacteristic(
-                characteristic,
-                payload,
-                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            @Suppress("DEPRECATION")
-            characteristic.value = payload
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(characteristic)
+        val sent =
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    g.writeCharacteristic(
+                        characteristic,
+                        payload,
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    @Suppress("DEPRECATION")
+                    characteristic.value = payload
+                    @Suppress("DEPRECATION")
+                    g.writeCharacteristic(characteristic)
+                }
+            }
+        if (sent.isFailure) {
+            // The Bluetooth binder can die under us (adapter toggle, stack
+            // restart, camera reboot) and writeCharacteristic then throws
+            // DeadObjectException. Uncaught it reaches the uncaught handler on
+            // the "opc.ble" thread and kills the process, and `writing` stays
+            // true forever (#348). Drop the link so recovery can run.
+            Log.w(TAG, "BLE write failed — dropping the link", sent.exceptionOrNull())
+            notifyLinkLostIfSettled(attempt)
+            closeGatt(sent.exceptionOrNull() ?: IllegalStateException("BLE write failed"))
+            return
         }
-        val attempt = activeAttempt ?: return
         handler.postDelayed(
             {
                 operations.runIfCurrent(attempt, g) {
