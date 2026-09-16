@@ -4,7 +4,8 @@
 # XcodeGen; this script must run before xcodebuild. Frameio.local.xcconfig
 # and Reliability.local.xcconfig are gitignored. Empty-safe: missing vars
 # reproduce the default (Frame.io login disabled, Sentry DSN empty, non-fatal)
-# unless SENTRY_UPLOAD_ENABLED=true, which requires a DSN.
+# unless SENTRY_UPLOAD_ENABLED=true, which requires a DSN at clone time.
+# Successful archives always verify the packaged DSN in ci_post_xcodebuild.sh.
 #
 # Xcode Cloud passes -disableAutomaticPackageResolution, so the generated
 # workspace must contain Package.resolved. xcodegen postGenCommand copies

@@ -1,9 +1,10 @@
 # Sentry release symbol upload
 
 Release-time debug-file upload for iOS archives and Android Play bundles, plus
-Xcode Cloud DSN injection for the Cocoa SDK. Upload and DSN-require are **off**
-until `SENTRY_UPLOAD_ENABLED=true`. Absent that flag, Xcode Cloud and Android
-Play CI behave as they do today.
+Xcode Cloud DSN injection for the Cocoa SDK. Every successful Xcode Cloud
+archive requires a valid reporting destination, independently of symbol uploads.
+Symbol uploads and Android Play DSN enforcement remain opt-in through
+`SENTRY_UPLOAD_ENABLED=true`.
 
 The iOS shell pins Sentry Cocoa **9.24.0** in `ios/project.yml` and
 [`ios/Package.resolved`](../ios/Package.resolved). Xcode Cloud requires that
@@ -57,7 +58,7 @@ Never pass `--auth-token`. Never print the token or DSN. Do not set
 
 | Variable | Where | Role |
 | --- | --- | --- |
-| `SENTRY_UPLOAD_ENABLED` | Xcode Cloud env / GitHub Actions variable | Exactly `true` to upload and to require DSNs. Anything else skips. |
+| `SENTRY_UPLOAD_ENABLED` | Xcode Cloud env / GitHub Actions variable | Exactly `true` to upload and require Android DSNs. iOS archives always require a DSN. |
 | `SENTRY_ORG` | same | Defaults to `opencapture`. |
 | `SENTRY_PROJECT` | same | Defaults to `openpocketcine-ios` or `openpocketcine-android`. |
 | `SENTRY_AUTH_TOKEN` | Xcode Cloud secret / `play-closed` secret | Required when upload is enabled. |
@@ -78,14 +79,16 @@ enabled, clone **fails** without a valid https DSN.
 
 `ios/ci_scripts/ci_post_xcodebuild.sh` after a successful **archive**, in order:
 
-1. Install pinned `sentry-cli` into derived data.
-2. **Verify DSN first**: archived app `Info.plist` must contain a substituted
+1. **Verify DSN first**, even when symbol uploads are disabled: archived app `Info.plist` must contain a substituted
    https `SentryDSN` (not empty, not `$(SENTRY_DSN)`, not the xcconfig `/$()/` form).
-3. `debug-files check` on each `.dSYM` (empty bundles are not usable).
-4. `debug-files upload --wait` of files that produced debug IDs. Fail if the
+2. When `SENTRY_UPLOAD_ENABLED=true`, install pinned `sentry-cli` into derived data.
+3. With uploads enabled, `debug-files check` on each `.dSYM` (empty bundles are not usable).
+4. With uploads enabled, `debug-files upload --wait` of files that produced debug IDs. Fail if the
    wait output does not accept those IDs.
 
-Test / build actions do not upload. Missing configuration is a no-op.
+Test / build actions do not upload. Missing DSN configuration fails an archive
+before symbol tooling runs. With uploads disabled, a configured archive passes
+without an upload token or `sentry-cli`.
 
 SDK release naming (app owner): `com.opencapture.openpocketcine@version+build`
 with event `dist` = build number. `sourceRevision` is a separate tag, not the
