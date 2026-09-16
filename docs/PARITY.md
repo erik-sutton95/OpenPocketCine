@@ -839,8 +839,9 @@ has no equivalent path, so iOS is unchanged. The Vulkan trio and the
 `DatalinkDriver.open` assertion from the same rollup were already fixed on
 `main` (#186/#187/#190/#189) and now only appear on stale version code 1.
 
-`just android-check` passes (assembleDebug, unit tests, lint, Vulkan host test),
-and a new `MediaStoreInsertPolicyTest` locks the gallery directory rule. Physical
-qualification on a real camera and device — slow-frame face AF under load and a
-forced Bluetooth-binder drop — remains an outstanding exception because no
-Android device was attached.
+`just android-check` passes (assembleDebug, unit tests, lint, Vulkan host test).
+Unit tests lock the gallery directory rule, dead-binder classification, and Face
+AF watchdog ownership. Physical qualification on a real camera and device —
+slow-frame face AF under load, a hung ML Kit task, JPEG/HEIC/DNG/MP4 share and
+Save to Photos, and a forced Bluetooth-binder drop including during pairing —
+remains an outstanding exception because no Android device was attached.

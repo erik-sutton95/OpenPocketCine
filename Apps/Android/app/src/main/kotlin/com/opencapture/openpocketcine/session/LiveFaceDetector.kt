@@ -23,15 +23,17 @@ import java.util.concurrent.Executors
  * `Task` completes**. ML Kit reads the pixels off-thread on `MlKitThreadPool`
  * inside `ImageConvertUtils.convertToNv21Buffer`, so freeing a bitmap before
  * the task finishes aborts the process with
- * "cannot access an invalid/free'd bitmap here!" (#348). Blocking with a
- * `Tasks.await` timeout cannot make that safe — a timeout does not cancel the
- * task — so we never time out and instead recycle from the completion
- * listener.
+ * "cannot access an invalid/free'd bitmap here!" (#348). A hung Task may
+ * unstick Face AF via a watchdog that posts empty boxes and schedules the
+ * next frame; the watchdog never recycles — only the completion listener
+ * does.
  */
 class LiveFaceDetector {
     private val lock = Any()
     private val main = Handler(Looper.getMainLooper())
     private val exec = Executors.newSingleThreadExecutor { Thread(it, "opc.face-af") }
+    private val flight = FaceDetectFlight()
+    private var finished = false
     private val detectorLazy =
         lazy {
             FaceDetection.getClient(
@@ -66,39 +68,54 @@ class LiveFaceDetector {
     }
 
     fun shutdown() {
+        main.removeCallbacksAndMessages(null)
         val abandoned: Bitmap?
+        val stopNow: Boolean
         synchronized(lock) {
             closed = true
+            flight.invalidate()
             abandoned = pending
             pending = null
             pendingDone = null
+            stopNow = !busy
         }
         abandoned?.recycle()
         // With no task in flight nothing else owns pixels, so tear down now.
         // Otherwise the in-flight completion listener finishes the shutdown,
         // because ML Kit may still be reading that frame.
-        synchronized(lock) {
-            if (!busy) finishShutdown()
-        }
+        if (stopNow) finishShutdown()
     }
 
     private fun pump() {
-        val bmp: Bitmap
-        val done: (List<TrackingBox>) -> Unit
+        data class Job(val bmp: Bitmap, val done: (List<TrackingBox>) -> Unit)
+        val job: Job?
+        val abortClosed: Boolean
         synchronized(lock) {
             val next = pending
             val cb = pendingDone
             pending = null
             pendingDone = null
-            if (closed || next == null || cb == null) {
+            if (closed) {
                 busy = false
-                if (closed) finishShutdown()
-                return
+                next?.recycle()
+                abortClosed = true
+                job = null
+            } else if (next == null || cb == null) {
+                busy = false
+                next?.recycle()
+                abortClosed = false
+                job = null
+            } else {
+                lastRun = SystemClock.elapsedRealtime()
+                abortClosed = false
+                job = Job(next, cb)
             }
-            lastRun = SystemClock.elapsedRealtime()
-            bmp = next
-            done = cb
         }
+        if (abortClosed) {
+            finishShutdown()
+            return
+        }
+        val (bmp, done) = job ?: return
         val width = bmp.width
         val height = bmp.height
         if (width < 16 || height < 16) {
@@ -115,9 +132,42 @@ class LiveFaceDetector {
             scheduleNext()
             return
         }
+        val flightId =
+            synchronized(lock) {
+                if (closed) -1 else flight.begin()
+            }
+        val timeout =
+            Runnable {
+                val timedOut = synchronized(lock) { !closed && flightId >= 0 && flight.take(flightId) }
+                if (!timedOut) return@Runnable
+                // Unstick Face AF only. ML Kit may still be reading [bmp].
+                main.post { done(emptyList()) }
+                scheduleNext()
+            }
+        if (flightId >= 0) main.postDelayed(timeout, DETECT_TIMEOUT_MS)
         task.addOnCompleteListener(exec) { completed ->
-            // ML Kit is done with the pixels on success, failure, or cancel.
+            main.removeCallbacks(timeout)
             bmp.recycle()
+            val deliver: Boolean
+            val stop: Boolean
+            synchronized(lock) {
+                if (closed) {
+                    busy = false
+                    deliver = false
+                    stop = true
+                } else if (flightId < 0 || !flight.take(flightId)) {
+                    deliver = false
+                    stop = false
+                } else {
+                    deliver = true
+                    stop = false
+                }
+            }
+            if (stop) {
+                finishShutdown()
+                return@addOnCompleteListener
+            }
+            if (!deliver) return@addOnCompleteListener
             val hits =
                 if (completed.isSuccessful) {
                     project(completed.result, width, height)
@@ -131,20 +181,27 @@ class LiveFaceDetector {
 
     private fun scheduleNext() {
         val delay = INTERVAL_MS - (SystemClock.elapsedRealtime() - lastRun)
+        val stop: Boolean
         synchronized(lock) {
             if (closed) {
                 busy = false
-                finishShutdown()
-                return
-            }
-            exec.execute {
-                if (delay > 0) runCatching { Thread.sleep(delay) }
-                pump()
+                stop = true
+            } else {
+                stop = false
+                exec.execute {
+                    if (delay > 0) runCatching { Thread.sleep(delay) }
+                    pump()
+                }
             }
         }
+        if (stop) finishShutdown()
     }
 
     private fun finishShutdown() {
+        synchronized(lock) {
+            if (finished) return
+            finished = true
+        }
         if (detectorLazy.isInitialized()) {
             runCatching { detector.close() }
         }
@@ -189,6 +246,7 @@ class LiveFaceDetector {
 
     companion object {
         const val INTERVAL_MS = 40L
+        const val DETECT_TIMEOUT_MS = 2_000L
         const val TAP_WIDTH = 640
         const val TAP_HEIGHT = 360
         const val MIN_FACE_SIZE = 0.10f

@@ -2,13 +2,9 @@ package com.opencapture.openpocketcine.media
 
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -639,8 +635,12 @@ private suspend fun runDelivery(
                     ),
                 )
             }
-            shareFiles(context, ready)
-            "Ready to share ${ready.size} clip${if (ready.size == 1) "" else "s"}"
+            if (!shareFiles(context, ready)) {
+                if (ready.size == 1) "Couldn't share this clip."
+                else "Couldn't share these clips."
+            } else {
+                "Ready to share ${ready.size} clip${if (ready.size == 1) "" else "s"}"
+            }
         }
         MediaDeliveryPostExportAction.SAVE_TO_PHOTOS -> {
             var saved = 0
@@ -666,10 +666,13 @@ private suspend fun runDelivery(
     }
 }
 
-private fun shareFiles(context: Context, files: List<File>) {
+private fun shareFiles(context: Context, files: List<File>): Boolean {
     if (files.size == 1) {
-        MediaShare.shareCachedFile(context, files.first(), MediaHTTP.playbackMIMEType(files.first().name))
-        return
+        return MediaShare.shareCachedFile(
+            context,
+            files.first(),
+            MediaHTTP.playbackMIMEType(files.first().name),
+        )
     }
     val uris = ArrayList<Uri>()
     for (file in files) {
@@ -679,8 +682,8 @@ private fun shareFiles(context: Context, files: List<File>) {
         uris.add(uri)
     }
     if (uris.isEmpty()) {
-        files.firstOrNull()?.let { MediaShare.shareCachedFile(context, it, MediaHTTP.playbackMIMEType(it.name)) }
-        return
+        val first = files.firstOrNull() ?: return false
+        return MediaShare.shareCachedFile(context, first, MediaHTTP.playbackMIMEType(first.name))
     }
     val mime = if (uris.size == 1) MediaHTTP.playbackMIMEType(files.first().name) else "*/*"
     val intent =
@@ -692,44 +695,8 @@ private fun shareFiles(context: Context, files: List<File>) {
     val chooser = Intent.createChooser(intent, null)
     if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(chooser)
+    return true
 }
 
-private fun insertIntoGallery(context: Context, file: File): Uri? {
-    val mime = MediaHTTP.playbackMIMEType(file.name)
-    val collection =
-        if (mime.startsWith("image/")) {
-            if (Build.VERSION.SDK_INT >= 29) {
-                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            }
-        } else {
-            if (Build.VERSION.SDK_INT >= 29) {
-                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            }
-        }
-    val values =
-        ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
-            put(MediaStore.MediaColumns.MIME_TYPE, mime)
-            if (Build.VERSION.SDK_INT >= 29) {
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    if (mime.startsWith("image/")) Environment.DIRECTORY_PICTURES + "/OpenPocketCine"
-                    else Environment.DIRECTORY_MOVIES + "/OpenPocketCine",
-                )
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-        }
-    val uri = context.contentResolver.insert(collection, values) ?: return null
-    context.contentResolver.openOutputStream(uri)?.use { out ->
-        file.inputStream().use { it.copyTo(out) }
-    } ?: return null
-    if (Build.VERSION.SDK_INT >= 29) {
-        val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-        context.contentResolver.update(uri, done, null, null)
-    }
-    return uri
-}
+private fun insertIntoGallery(context: Context, file: File): Uri? =
+    MediaShare.insertIntoGallery(context, file, MediaHTTP.playbackMIMEType(file.name))

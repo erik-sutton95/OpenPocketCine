@@ -12,8 +12,8 @@ import java.io.File
 object MediaShare {
     fun authority(context: Context): String = "${context.packageName}.mediafileprovider"
 
-    fun shareCachedFile(context: Context, file: File, mime: String) {
-        val uri = uriFor(context, file, mime) ?: return
+    fun shareCachedFile(context: Context, file: File, mime: String): Boolean {
+        val uri = uriFor(context, file, mime) ?: return false
         val intent =
             Intent(Intent.ACTION_SEND).apply {
                 type = mime
@@ -25,16 +25,17 @@ object MediaShare {
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)
+        return true
     }
 
     private fun uriFor(context: Context, file: File, mime: String): Uri? {
         runCatching {
             return FileProvider.getUriForFile(context, authority(context), file)
         }
-        return insertMediaStore(context, file, mime)
+        return insertIntoGallery(context, file, mime)
     }
 
-    private fun insertMediaStore(context: Context, file: File, mime: String): Uri? {
+    fun insertIntoGallery(context: Context, file: File, mime: String): Uri? {
         val isImage = MediaStoreInsertPolicy.isImage(mime)
         val collection =
             if (isImage) {
