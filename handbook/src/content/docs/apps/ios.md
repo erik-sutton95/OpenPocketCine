@@ -148,7 +148,8 @@ space after rotation or resizing, including saved positions. Long-press a View A
   advertises them; aspect is the res byte). A tap stays on that pair until
   the body reports it. Pocket 3 normal Video also has a
   [documented fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
-  when the camera supplies no capability table; reported choices take priority.
+  when the camera supplies no capability table (16:9 and 1:1; 9:16 stays
+  body Lock Portrait unless already reported); reported choices take priority.
   Physical iPhone build 99 passed one 2.7K/25 D-Log M record and warm reconnect
   ([survey evidence](https://openpocketcine.app/docs/protocol/pocket3/#openpocketcine-recording-and-warm-reconnect)).
   The full matrix, camera cold boot and other shooting modes remain unqualified.

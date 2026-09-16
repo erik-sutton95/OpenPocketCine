@@ -29,10 +29,33 @@ public enum CamCapShutter {
         return out
     }
 
-    /// Wheel options: camera list only. Until a cap push lands, show the live value.
+    /// Pocket 3 rejects `camcap_shutter`. Until a table lands, offer the
+    /// documented video ladder so Speed/Angle are not stuck on the live 1/N.
+    /// 1/8000, 1/3200, 1/200, 1/100 and 1/50 were accepted or shown in the
+    /// Pocket 3 survey; remaining cine stops use the same `0x02/0x28` form.
+    public static let emptyCapVideoDenoms: [Int] = [
+        8000, 6400, 4000, 3200, 2000, 1600, 1000, 800, 500, 400, 250, 200,
+        125, 120, 100, 60, 50, 48, 40, 30, 25, 24,
+    ]
+
+    /// Wheel options: camera list when published. Empty-cap uses the documented
+    /// video ladder and keeps an unpublished live value visible.
     public static func wheelDenoms(available: [Int], current: Int) -> [Int] {
         if !available.isEmpty { return available }
-        return (1...16_000).contains(current) ? [current] : []
+        return mergeCurrent(current, into: emptyCapVideoDenoms)
+    }
+
+    private static func mergeCurrent(_ current: Int, into ladder: [Int]) -> [Int] {
+        guard (1...16_000).contains(current), !ladder.contains(current) else {
+            return ladder
+        }
+        var out = ladder
+        if let idx = out.firstIndex(where: { $0 < current }) {
+            out.insert(current, at: idx)
+        } else {
+            out.append(current)
+        }
+        return out
     }
 
     public static func nearestDenom(_ current: Int, in denoms: [Int]) -> Int? {
@@ -242,6 +265,8 @@ public enum CamCapVideoFormat {
     /// Pocket 4 / 4 Pro / Nano get no invented tables. TimeLapse / HyperLapse
     /// format menus were UI-only in the Pocket 3 survey — no accepted `0x02/0x18`
     /// pairs — so they stay empty until camcap or a later accepted capture.
+    /// Pocket 3 Video 9:16 is body Lock Portrait; the survey never accepted a
+    /// portrait `0x02/0x18` SET, so the fallback does not offer 9:16.
     public static func pickerFormats(
         available: [VideoFormat], model: CameraModel?, shootingMode: Int
     ) -> [VideoFormat] {
@@ -268,10 +293,11 @@ public enum CamCapVideoFormat {
         return !legal.isEmpty && legal.contains(format)
     }
 
+    /// Accepted Pocket 3 Video `0x02/0x18` pairs: landscape 1080/2.7K/4K and
+    /// square 1080/2160/3K. Catalog 9:16 bytes were not an accepted SET.
     private static let pocket3VideoFormats: [VideoFormat] = [
         VideoResolution.p1080, .p2_7K, .p4K,
         .p1080_1x1, .p2160_1x1, .p3K_1x1,
-        .p1080_9x16, .p2_7K_9x16, .p3K_9x16,
     ].flatMap { resolution in
         VideoFrameRate.labeledVideo.map { VideoFormat(resolution: resolution, frameRate: $0) }
     }

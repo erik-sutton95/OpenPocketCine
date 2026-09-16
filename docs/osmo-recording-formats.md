@@ -23,9 +23,11 @@ reshape the list.
 
 The tested Pocket 3 rejected the capability subscription while current-format
 status still worked. With an empty table and a confirmed mode, both shells use
-the documented Pocket 3 Video matrix or the physically observed Slow Motion and
-Low-Light pairs as a picker fallback. This exception does not apply to
-Timelapse, Hyperlapse, livestream or an unknown shooting mode.
+the documented Pocket 3 Video matrix (16:9 and 1:1) or the physically observed
+Slow Motion and Low-Light pairs as a picker fallback. 9:16 is not invented:
+the survey recorded native portrait only after body Lock Portrait. This
+exception does not apply to Timelapse, Hyperlapse, livestream or an unknown
+shooting mode.
 It is a source-backed choice list, not proof that every pair has passed physical
 recording/reconnect checks. Physical iPhone build 0.1.0 (99) subsequently passed
 one landscape 2.7K/25 D-Log M record and app-relaunch/reconnect sequence, with

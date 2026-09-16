@@ -965,6 +965,10 @@ private struct LiveFeedAssistsPane: View {
                 sceneFaces: showBox ? model.session.dimmedFaces : [],
                 showFocusChrome: showBox,
                 showTapFocusBox: model.session.supportsTapFocus,
+                pictureAspect: CGFloat(
+                    model.session.status.videoFormat?.resolution.ratio
+                        ?? model.session.status.videoResolution?.ratio
+                        ?? model.session.decoder.pictureAspect),
                 pictureMirrored: model.livePictureViewFlip
             )
             .opacity(dimmed ? 0.3 : 1)

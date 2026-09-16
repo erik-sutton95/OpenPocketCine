@@ -453,7 +453,8 @@ final class AppModel {
             allowsControlRequests: controlRequestsAllowed,
             controlOptions: .init(
                 isoIndices: s.availableIsoIndices.map { Int($0.rawValue) },
-                shutterDenominators: s.availableShutterDenoms,
+                shutterDenominators: CamCapShutter.wheelDenoms(
+                    available: s.availableShutterDenoms, current: s.shutterDenom),
                 zoomHundredths: session.zoomStops.map { Int(($0 * 100).rounded()) }),
             cameraModel: session.connectedCamera?.model.name,
             isNano: session.bodyFamily == .nano)

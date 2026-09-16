@@ -33,7 +33,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x02/0x4A` | **photo countdown** | Pocket 4 Pro six-byte `00 01 [seconds u16-LE] [milliseconds u16-LE]`; 0.5s is `00 01 00 00 F4 01` ([tested values](../pocket4-pro/#countdown)) |
 | `0x02/0x8E` | **param GET/SET** | ISO limit `0x000f` (ceiling byte; Rec.709 floor is 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro wide — labels only, same SET), audio channel `0x0020` (`02`/`01`/`03`), **Selfie Flip `0x0038`** (`00` Off / `01` On, Mimo GETs ~1 Hz, body Control Center only — no app SET; replies are datalink pktType `0x03` and need that seq in window-ACK group 1; OPC GET is untracked on the live UDP ACK pump so audio/glamour waiters cannot steal the reply), **Vocal Boost `0x004C`** (`00` Off / `01` On), **App Glamour `0x0039`** (62 B blob, enable `@5`), **AF-C track `0x003B`** (`01 <00 Default / 01 Showcase / 02 Lock / 03 Priority>`). Pid `0x0009` (Osmosis FOV) **never GET/SET** on Pocket 4 Pro zoom or res-fps takes |
 | `0x02/0x1E` | **exposure auto/manual** | SET `04 00` manual / `01 00` auto; no GET — `cam_expo_param` `@7` |
-| `0x02/0x28` | **shutter** | Earlier reciprocal-integer form: `01 <denom\|0x8000 u16-LE> 00 00 00 40`. Pocket 3 Photo also accepted direct 1s and fractional reciprocals; preserve the fractional byte ([survey](../pocket3/#photo)). No GET — expo `@2–4` |
+| `0x02/0x28` | **shutter** | Earlier reciprocal-integer form: `01 <denom\|0x8000 u16-LE> 00 00 00 40`. Pocket 3 Photo also accepted direct 1s and fractional reciprocals; preserve the fractional byte ([survey](../pocket3/#photo)). No GET — expo `@2–4`. Empty `camcap_shutter` (Pocket 3 rejects that subscribe) uses a documented video ladder so Speed/Angle are not stuck on the live 1/N; a published table still wins |
 | `0x02/0x2A` | **ISO index** | `00` Auto, `02`=50, `03`=100 … `0B`=25600; Pocket 3 Low-Light also uses `10`=9600 and `11`=16000 ([physical survey](../pocket3/#white-balance-and-exposure)); no GET — expo `@5` index / `@16` value |
 | `0x02/0x42` | **color mode** | Wheel follows the body. Pocket 4 Pro `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2. Pocket 4 `3F` / `3C` / `17` D-Log (no D-Log2). Pocket 3 `00` Normal / `3C` HDR (HLG) / `3D` D-Log M — `3F` is Pocket 4 Normal and is rejected; `00` is Rec.709, not D-Log M; `17` is not D-Log M. Nano `camcap_color_mode` `00 3F 3D` = Normal 8-bit / Normal 10-bit / D-Log M (same `00`/`3D` as Pocket 3 Rec.709 / D-Log M; `3F` is Nano 10-bit, not Pocket 4 Normal). No GET — `cam_image_effect` `@2` |
 | `0x02/0x18` | **resolution + fps** | 5 B; normal Video `[res][fps_idx] 00 00 00`. Pocket 3 Slow Motion uses trailer `00 04 00` at 100/120fps and `00 08 00` at 240fps ([survey](../pocket3/)). Aspect is the **res byte**, not a second SET (`0A` 1080p 16:9 / `10` 4K 16:9; media catalog also `2D` 2.7K 16:9, `0C`/`5F`/`67` 4:3, `69`/`6A`/`6B` 1:1, `42`/`43`/`6C` 9:16). fps `01`=24 `02`=25 `03`=30 `04`=48 `05`=50 `06`=60; SlowMo `07`=120 `08`=240 `0A`=100 `13`=200 (Pocket 4 Pro Slow Motion). No GET — `cam_video_param_v2` `@0–1`. Legal pairs for the current shooting mode arrive as `camcap_video_format` (`01` + inner u16-LE + count + count×`[res][fps][00]`). Pocket 4 Pro Video (`mimo-live-start-20260828`) is 4K then 1080p, 24–60 only. Qualify SlowMo pairs from that model’s capability take or a physical mode-specific capture; Pocket 3 accepted pairs and trailers are recorded in its [survey](../pocket3/). The [Pocket 4 Pro survey](../pocket4-pro/#format-set-payloads) confirms six Slow Motion pairs, including 4K/200 `10 13 00 04 00` and 4K/240 `10 08 00 08 00`. |
@@ -59,9 +59,14 @@ Commands we know for the connection spine, status, camera control, media, and li
 The tested Pocket 3 returned a nonzero reply to `camcap_video_format`, while
 `cam_video_param_v2` subscription and status reports worked. For normal Video,
 the app uses DJI's [Pocket 3 specification](https://www.dji.com/osmo-pocket-3/specs)
-when the capability table is empty: 1080p/2.7K/4K in 16:9, 1080p/2160p/3K in 1:1,
-and 1080p/2.7K/3K in 9:16, at 24/25/30/48/50/60 fps. Camera-reported tables take
-precedence. Separate mode-specific fallbacks use the Pocket 3 survey's accepted
+and the [physical survey](../pocket3/#shooting-modes-and-formats) when the
+capability table is empty: 1080p/2.7K/4K in 16:9 and 1080p/2160p/3K in 1:1, at
+24/25/30/48/50/60 fps. Those landscape and square `0x02/0x18` writes were
+accepted. 9:16 (1080p/2.7K/3K) is a published recording size, but the survey
+only produced a native portrait original after **body Lock Portrait** — no
+accepted portrait SET — so the picker does not offer 9:16. A body that is
+already 9:16 keeps that reported size. Camera-reported tables take precedence.
+Separate mode-specific fallbacks use the Pocket 3 survey's accepted
 Slow Motion pairs (4K 100/120, 2.7K 120, 1080p 120/240) and Low-Light pairs
 (4K/1080p 24/25/30). Slow Motion requires the mode-specific trailer recorded
 in the [survey](../pocket3/#shooting-modes-and-formats).
@@ -73,8 +78,8 @@ does not establish app behavior.
 When the effective format list is still empty, the picker retains a known current
 size such as **3K 9:16** rather than replacing it with the generic 1080p/4K
 landscape choices. Changing fps retains that resolution. This preserves the
-reported value without inventing additional portrait formats; the full Pocket 3
-list above still requires a confirmed model and normal Video mode. The change
+reported value without inventing additional portrait formats. The 16:9 and 1:1
+Video fallback still requires a confirmed model and normal Video mode. The change
 has automated coverage on both platforms. The operator confirmed the corrected
 vertical 3K picker on an iPhone on 2026-09-11; Android and on-camera fps-change
 verification remain pending.

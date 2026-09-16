@@ -272,6 +272,13 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Pocket 3 FORMAT no longer offers 9:16 from the empty-capability fallback.
+  Landscape 16:9 and square 1:1 remain; 9:16 stays body Lock Portrait unless
+  the camera already reports it ([#345](https://github.com/erik-sutton95/OpenPocketCine/issues/345)).
+- Empty `camcap_shutter` uses a documented video ladder, so Speed is not stuck
+  at 1/60 and the Angle drum can SET ([#343](https://github.com/erik-sutton95/OpenPocketCine/issues/343)).
+- Frame guides, grid and crosshair map to the recorded picture, not letterbox
+  bars beside a 1:1 live frame ([#346](https://github.com/erik-sutton95/OpenPocketCine/issues/346)).
 - iOS 17 no longer crashes at launch when Live View releases AirPods head
   tracking. The connection-status calls introduced in iOS 18 are now
   availability-gated; iOS 17 keeps motion updates without them.

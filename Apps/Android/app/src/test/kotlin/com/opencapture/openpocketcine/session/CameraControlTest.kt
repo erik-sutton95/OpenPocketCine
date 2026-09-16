@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.openpocketcine.ShutterAngle
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.feed.ExtraMirrorHold
 import com.opencapture.openpocketcine.feed.FeedPresentPolicy
@@ -39,8 +40,16 @@ class CameraControlTest {
         val model = CameraModel(name = "Osmo Pocket 3")
         val formats = VideoFormat.pickerFormats(emptyList(), model, CameraCommands.SHOOT_VIDEO)
         assertTrue(VideoFormat.resolutions(formats, VideoResolution.P4K, VideoAspect.SIXTEEN_NINE).contains(VideoResolution.P2_7K))
-        assertTrue(VideoFormat.resolutions(formats, null, VideoAspect.NINE_SIXTEEN).contains(VideoResolution.P3K_9X16))
         assertTrue(VideoFormat.resolutions(formats, null, VideoAspect.ONE_ONE).contains(VideoResolution.P3K_1X1))
+        assertTrue(formats.none { it.resolution.aspect == VideoAspect.NINE_SIXTEEN })
+        assertTrue(
+            !VideoFormat.allowsOperatorSet(
+                VideoFormat(VideoResolution.P3K_9X16, VideoFrameRate.FPS25),
+                emptyList(),
+                model,
+                CameraCommands.SHOOT_VIDEO,
+            ),
+        )
         assertTrue(!VideoFormat.aspects(formats, null).contains(VideoAspect.FOUR_THREE))
         val reported = listOf(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25))
         assertEquals(reported, VideoFormat.pickerFormats(reported, model, 1))
@@ -937,6 +946,20 @@ class CameraControlTest {
         assertEquals(p60, wheel)
         assertTrue(!wheel.contains(48))
         assertTrue(!wheel.contains(13))
+    }
+
+    @Test
+    fun emptyShutterCapUsesDocumentedVideoLadder() {
+        val wheel = CameraCommands.shutterWheelDenoms(emptyList(), 60)
+        assertTrue(wheel.contains(60))
+        assertTrue(wheel.contains(50))
+        assertTrue(wheel.contains(48))
+        assertTrue(wheel.contains(8000))
+        assertEquals(8000, wheel.first())
+        assertEquals(48, ShutterAngle.denom(180.0, 24, wheel))
+        val withOdd = CameraCommands.shutterWheelDenoms(emptyList(), 80)
+        assertTrue(withOdd.contains(80))
+        assertTrue(withOdd.contains(100))
     }
 
     @Test

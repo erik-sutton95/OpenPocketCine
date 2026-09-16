@@ -167,7 +167,8 @@ picture. FORMAT lists `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16
 when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. Pocket 3 normal Video also has a
 [FORMAT fallback](https://openpocketcine.app/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
-when the camera supplies no capability table. Reported choices take priority;
+when the camera supplies no capability table (16:9 and 1:1; 9:16 stays
+body Lock Portrait unless already reported). Reported choices take priority;
 separate Pocket 3 Slow Motion and Low-Light fallbacks use the accepted pairs in
 the survey. Unknown modes have no fallback. The full
 Pocket 3 format/record/reconnect matrix still needs physical Android checks.

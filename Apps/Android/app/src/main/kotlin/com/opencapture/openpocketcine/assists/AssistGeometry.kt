@@ -32,6 +32,19 @@ data class AssistRect(val x: Float, val y: Float, val width: Float, val height: 
         get() = y + height / 2f
 
     fun contains(px: Float, py: Float): Boolean = px in minX..maxX && py in minY..maxY
+
+    /** Aspect-fit a picture of `aspect` (width/height) inside this rect. */
+    fun fittedContent(aspect: Float): AssistRect {
+        val ratio = if (aspect.isFinite() && aspect > 0f) aspect else 16f / 9f
+        if (height <= 0f) return this
+        return if (width / height > ratio) {
+            val w = height * ratio
+            AssistRect(x + (width - w) / 2f, y, w, height)
+        } else {
+            val h = width / ratio
+            AssistRect(x, y + (height - h) / 2f, width, h)
+        }
+    }
 }
 
 data class GridSegment(val from: AssistPoint, val to: AssistPoint)

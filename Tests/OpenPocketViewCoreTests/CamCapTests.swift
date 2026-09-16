@@ -64,9 +64,22 @@ import Testing
         let model = CameraModel.resolve(modelId: 0x20, name: "OsmoPocket3-Test")
         let formats = CamCapVideoFormat.pickerFormats(available: [], model: model, shootingMode: 1)
         #expect(CamCapVideoFormat.resolutions(available: formats, aspect: .sixteenNine, current: .p4K).contains(.p2_7K))
-        #expect(CamCapVideoFormat.resolutions(available: formats, aspect: .nineSixteen, current: nil).contains(.p3K_9x16))
         #expect(CamCapVideoFormat.resolutions(available: formats, aspect: .oneOne, current: nil).contains(.p3K_1x1))
         #expect(!CamCapVideoFormat.aspects(available: formats, current: nil).contains(.fourThree))
+        // Pocket 3 survey accepted 16:9 and 1:1 `0x02/0x18` writes. 9:16 was
+        // body Lock Portrait only — offering 0x42/0x43/0x6C hung the picker.
+        #expect(!formats.contains { $0.resolution.aspect == .nineSixteen })
+        #expect(
+            !CamCapVideoFormat.allowsOperatorSet(
+                VideoFormat(resolution: .p3K_9x16, frameRate: .fps25),
+                available: [], model: model, shootingMode: 1))
+        #expect(
+            CamCapVideoFormat.aspects(available: formats, current: .nineSixteen)
+                .contains(.nineSixteen))
+        #expect(
+            CamCapVideoFormat.allowsOperatorSet(
+                VideoFormat(resolution: .p3K_1x1, frameRate: .fps60),
+                available: [], model: model, shootingMode: 1))
     }
 
     @Test func pocket3PickerNeverOverridesReportedFormatsOrOtherModes() {
@@ -361,9 +374,22 @@ import Testing
                 == [.normal, .normal10, .dLogM])
     }
 
-    @Test func emptyAvailableShowsOnlyCurrent() {
-        #expect(CamCapShutter.wheelDenoms(available: [], current: 80) == [80])
-        #expect(CamCapShutter.wheelDenoms(available: [], current: -1).isEmpty)
+    @Test func emptyAvailableUsesDocumentedVideoLadder() {
+        let wheel = CamCapShutter.wheelDenoms(available: [], current: 60)
+        #expect(wheel.contains(60))
+        #expect(wheel.contains(50))
+        #expect(wheel.contains(48))
+        #expect(wheel.contains(100))
+        #expect(wheel.contains(8000))
+        #expect(wheel.first == 8000)
+        let withOdd = CamCapShutter.wheelDenoms(available: [], current: 80)
+        #expect(withOdd.contains(80))
+        #expect(withOdd.contains(100))
+        let unknown = CamCapShutter.wheelDenoms(available: [], current: -1)
+        #expect(unknown.contains(50))
+        #expect(
+            ShutterAngle.denom(degrees: 180, fps: 24, available: wheel) == 48,
+            "angle apply must not snap every stop to the live 1/60")
     }
 
     @Test func videoFormatTableIsResFpsPairs() {

@@ -21,8 +21,7 @@ Fixes
 - Lock matches Settings/Media; battery uses %. Portrait feed centers with STBY/timecode/REC SETUP below the cutout; assists, FIT/FILL and joystick stay above camera values.
 - Blurred panels clear corners; shadows are tighter and audio meters slim. Signal colors match Settings. View Assist previews use the raw picture with scopes off.
 - Zebra Highlight uses the hottest color channel and defaults to 99 IRE. Numeric options stay above the keyboard, with Done to dismiss it.
-- Pocket 3 fixes cover live view, reconnects, settings and newly recorded clips on its memory card.
-- Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M correctly. FORMAT retains camera-reported choices, including 2.7K and portrait 3K while options load.
+- Pocket 3 COLOR maps Normal, HDR/HLG and D-Log M. FORMAT is 16:9 and 1:1; 9:16 is body Lock Portrait unless already reported. Shutter and 1:1 guides apply.
 - Normal-color Auto ISO starts at 50 on Pocket 3 and Pocket 4, and 100 on Pocket 4 Pro.
 - Nano COLOR matches Normal 8-bit, Normal 10-bit and D-Log M. Live view handles larger Nano frames more reliably.
 - D-Log M scopes use their own scale. Scene-stop values remain estimates; sensor clipping limits are not calibrated.
@@ -32,7 +31,7 @@ Fixes
 What to test
 
 - Check the reporting prompt after install/update; decline and relaunch. Rotate drawers; tap versus hold drums. Try FORMAT, View Assist, zoom, Media selection and playback.
-- On Pocket 3, check Normal/HDR/D-Log M, 2.7K, portrait 3K, recording, playback and reconnecting.
+- On Pocket 3, check color, 2.7K, 1:1, shutter Speed/Angle, 16:9 guides on 1:1, recording and reconnect. 9:16 is body Lock Portrait.
 - Drag Motion Control, use the joystick, then set points. Check the zoom dial reaches the screen edge. Try Direction Lock, false-color scales and ND units.
 - Keep a live session running while changing settings, zooming and reopening clips. Share diagnostics with the time of any freeze or stutter.
 - Check Multiview network setup, WI-FI and FIT/FILL; on iOS 17, enter/exit Live View. Try sharing, Watch and Convert log. Multiview, Motion Control and head tracking remain experimental.

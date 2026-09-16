@@ -6,13 +6,13 @@ New and changed
 
 Fixes
 
+- Pocket 3 FORMAT lists 16:9 and 1:1 without hanging on 9:16. Vertical recording stays on body Lock Portrait unless the camera already reports 9:16.
+- Pocket 3 shutter Speed is not stuck at 1/60; Angle choices change exposure.
+- 16:9 frame guides on 1:1 live stay on the square picture, not the side bars.
 - Crash hardening: sharing a photo no longer closes the app, a Bluetooth drop recovers instead of crashing, and face auto-focus no longer aborts under load.
-- Lock aligns with Settings. Portrait feed centers; STBY/timecode/REC SETUP sit below the cutout. View Assist/FIT/FILL/joystick stay fixed above camera values; motion editor keeps the stick usable.
-- App return checks camera Wi-Fi. Recovery waits for a new picture, shows its current stage and bounds automatic retries; old control requests cannot cross reconnects.
-- Live rendering synchronizes completed frames with presentation. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
 
 What to test
 
-- Check blur over bright/dark footage. Rotate pages; tap versus hold drums; open FORMAT in both orientations. Try assist tabs, audio, zoom, lock, Media swipe-vs-select, playback and TalkBack.
-- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on, especially on Redmi/Samsung. Share diagnostics with the time of any stutter.
-- Drag Motion Control and use the joystick with its editor open. Check Wi-Fi changes, Retry/Cancel, reconnects and Pocket 3 portrait 3K. Motion Control remains experimental.
+- On Pocket 3, switch FORMAT 16:9 and 1:1; confirm 9:16 does not hang. Change shutter Speed and Angle. In 1:1, turn on a 16:9 guide and check it sits on the picture.
+- Check blur over bright/dark footage. Rotate pages; tap versus hold drums. Try assist tabs, audio, zoom, lock, Media and TalkBack.
+- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on. Share diagnostics with the time of any stutter.

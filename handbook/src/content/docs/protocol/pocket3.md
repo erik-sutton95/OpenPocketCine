@@ -1159,7 +1159,9 @@ A later operator report found that vertical 3K appeared as only 1080p/4K in
 OpenPocketCine's FORMAT picker. The reproduced empty-list fallback discarded
 the reported current resolution. Both platforms now retain a reported size
 such as **3K 9:16** when the effective format list is empty, and an fps selection
-keeps that resolution byte. Reported capabilities and the confirmed Pocket 3
+keeps that resolution byte. The empty-table Video fallback offers only the
+accepted 16:9 and 1:1 `0x02/0x18` pairs; catalog 9:16 bytes are not a SET
+without Lock Portrait. Reported capabilities and the confirmed Pocket 3
 normal-Video matrix still take precedence.
 
 After the corrected app was installed on an iPhone 16 Pro Max on 2026-09-11,

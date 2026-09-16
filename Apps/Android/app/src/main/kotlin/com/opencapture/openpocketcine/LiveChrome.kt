@@ -505,6 +505,19 @@ data class ChromeRect(val x: Float, val y: Float, val width: Float, val height: 
         minX < other.maxX && other.minX < maxX && minY < other.maxY && other.minY < maxY
 
     fun contains(px: Float, py: Float): Boolean = px >= minX && px <= maxX && py >= minY && py <= maxY
+
+    /** Aspect-fit a picture of `aspect` (width/height) inside this well. */
+    fun fittedContent(aspect: Float): ChromeRect {
+        val ratio = if (aspect.isFinite() && aspect > 0f) aspect else 16f / 9f
+        if (height <= 0f) return this
+        return if (width / height > ratio) {
+            val w = height * ratio
+            ChromeRect(x + (width - w) / 2f, y, w, height)
+        } else {
+            val h = width / ratio
+            ChromeRect(x, y + (height - h) / 2f, width, h)
+        }
+    }
 }
 
 /** Canvas origin in window pixels — capture / top-picker anchors are relative to this. */

@@ -114,6 +114,7 @@ import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.ControlHud
 import com.opencapture.openpocketcine.session.FocusOverlay
 import com.opencapture.openpocketcine.session.TrackingBox
+import com.opencapture.openpocketcine.session.VideoResolution
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -602,7 +603,8 @@ fun LiveViewScreen(model: AppModel) {
                         model.chromeSectionMounts(PocketDispSection.FOCUS_BOX) &&
                             model.session.supportsTapFocus,
                     locked = uiLocked,
-                    feedFrame = layout.onFeed,
+                    feedFrame = layout.onFeed.fittedContent(
+                        VideoResolution.fromRaw(status.resolutionCode)?.ratio ?: pictureAspect),
                     placementFrame = scopePlacement,
                     audioPlacementFrame = scopePlacement.copy(x = layout.safeLeading,
                         width = maxOf(0f, scopePlacement.maxX - layout.safeLeading)),

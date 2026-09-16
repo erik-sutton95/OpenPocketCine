@@ -1070,6 +1070,18 @@ public struct VideoResolution: Equatable, Hashable, Sendable {
         }
     }
 
+    /// Width / height for the recorded frame. Used to map guides onto the
+    /// active picture instead of letterbox padding in a 16:9 live well.
+    public var ratio: Double? {
+        switch aspect {
+        case .sixteenNine: 16.0 / 9.0
+        case .fourThree: 4.0 / 3.0
+        case .oneOne: 1
+        case .nineSixteen: 9.0 / 16.0
+        case nil: nil
+        }
+    }
+
     public var sizeTitle: String {
         switch rawValue {
         case 0x0A, 0x0C, 0x42, 0x69: "1080"

@@ -1093,9 +1093,23 @@ object CameraCommands {
         return body.copyOfRange(2, 2 + count).map { it.toInt() and 0xFF }.filter { it in ISO_INDEX_BYTES }
     }
 
+    /** Pocket 3 empty-camcap video ladder. Fast-first, matching iOS `CamCapShutter`. */
+    val emptyCapVideoDenoms: List<Int> = listOf(
+        8000, 6400, 4000, 3200, 2000, 1600, 1000, 800, 500, 400, 250, 200,
+        125, 120, 100, 60, 50, 48, 40, 30, 25, 24,
+    )
+
     fun shutterWheelDenoms(available: List<Int>, current: Int): List<Int> {
         if (available.isNotEmpty()) return available
-        return if (current in 1..16_000) listOf(current) else emptyList()
+        return mergeCurrentShutter(current, emptyCapVideoDenoms)
+    }
+
+    private fun mergeCurrentShutter(current: Int, ladder: List<Int>): List<Int> {
+        if (current !in 1..16_000 || current in ladder) return ladder
+        val out = ladder.toMutableList()
+        val idx = out.indexOfFirst { it < current }
+        if (idx >= 0) out.add(idx, current) else out.add(current)
+        return out
     }
 
     /** Next / previous 1/N in camera order (fast-first). nil at the end. */

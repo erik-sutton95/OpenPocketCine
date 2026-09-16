@@ -1,3 +1,4 @@
+import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
@@ -61,6 +62,17 @@ final class GuidesAssistTests: XCTestCase {
         XCTAssertEqual(frame.width, 1080 * 9.0 / 16.0, accuracy: 0.01)
         XCTAssertEqual(frame.midX, feed.midX, accuracy: 0.01)
         XCTAssertEqual(frame.midY, feed.midY, accuracy: 0.01)
+    }
+
+    func testSixteenNineGuideStaysInsideOneOnePicture() {
+        let well = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let picture = PlaybackVideoLayout.aspectFitRect(
+            videoSize: CGSize(width: 1, height: 1), in: well)
+        let frame = GuidesAssist.rectForRatio(picture, 16.0 / 9.0)
+        XCTAssertEqual(frame.width, picture.width, accuracy: 0.01)
+        XCTAssertLessThan(frame.maxX, well.maxX - 1)
+        XCTAssertGreaterThan(frame.minX, well.minX + 1)
+        XCTAssertEqual(frame.midX, picture.midX, accuracy: 0.01)
     }
 
     func testPanelWidthMatchesOpenZCineGuidesPopup() {

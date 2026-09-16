@@ -40,6 +40,17 @@ class FramingAssistsTest {
     }
 
     @Test
+    fun sixteenNineGuideStaysInsideOneOnePicture() {
+        val well = AssistRect(0f, 0f, 1920f, 1080f)
+        val picture = well.fittedContent(1f)
+        val frame = GuidesAssist.rectForRatio(picture, 16f / 9f)
+        assertEquals(picture.width, frame.width, 0.02f)
+        assertTrue(frame.maxX < well.maxX - 1f)
+        assertTrue(frame.minX > well.minX + 1f)
+        assertEquals(picture.midX, frame.midX, 0.02f)
+    }
+
+    @Test
     fun gridThirdsPhiAndDiagonalMatchOpenZcine() {
         assertEquals(1f / 3f, GridAssist.thirdsFractions[0], 1e-6f)
         assertEquals(2f / 3f, GridAssist.thirdsFractions[1], 1e-6f)

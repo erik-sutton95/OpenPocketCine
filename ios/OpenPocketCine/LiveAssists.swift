@@ -1278,6 +1278,8 @@ struct FeedAlignedAssists: View {
     /// When set (letterboxed clip playback), framing overlays align to this rect
     /// instead of the full geometry — OpenZCine `FeedAlignedAssists(feed:)`.
     var feed: CGRect? = nil
+    /// Recorded frame width/height. Live 1:1 sits as a square inside a 16:9 well.
+    var pictureAspect: CGFloat? = nil
     /// Live 180 / MIRROR compose. Nil uses the assist chip only (playback).
     var pictureMirrored: Bool? = nil
     @Environment(AppModel.self) private var model
@@ -1288,7 +1290,10 @@ struct FeedAlignedAssists: View {
             let mirrored = pictureMirrored ?? assist.isVisible(.mirror)
             // Live: framing aids sit on the de-squeezed picture. Playback already
             // letterboxes the raster (`feed`); do not re-apply live desqueeze there.
-            let feed = self.feed ?? overlayFeedRect(CGRect(origin: .zero, size: proxy.size), assist)
+            let feed =
+                self.feed
+                ?? overlayFeedRect(
+                    CGRect(origin: .zero, size: proxy.size), assist, pictureAspect: pictureAspect)
             ZStack {
                 if guides {
                     GuidesAssist.overlay(feed: feed, assist: assist, fallback: guideAspect)
@@ -1367,15 +1372,26 @@ struct FeedAlignedAssists: View {
 }
 
 /// OpenZCine `desqueezedRect` — framing aids sit on the visible (shrunk) picture, not the full frame.
-private func overlayFeedRect(_ full: CGRect, _ assist: LiveAssistState) -> CGRect {
-    guard assist.desqueeze, assist.desqueezeFactor > 1 else { return full }
-    let factor = CGFloat(assist.desqueezeFactor)
-    if assist.desqueezeHorizontal {
-        let width = full.width / factor
-        return CGRect(x: full.midX - width / 2, y: full.minY, width: width, height: full.height)
+private func overlayFeedRect(
+    _ full: CGRect, _ assist: LiveAssistState, pictureAspect: CGFloat?
+) -> CGRect {
+    var feed = full
+    if assist.desqueeze, assist.desqueezeFactor > 1 {
+        let factor = CGFloat(assist.desqueezeFactor)
+        if assist.desqueezeHorizontal {
+            let width = full.width / factor
+            feed = CGRect(
+                x: full.midX - width / 2, y: full.minY, width: width, height: full.height)
+        } else {
+            let height = full.height / factor
+            feed = CGRect(
+                x: full.minX, y: full.midY - height / 2, width: full.width, height: height)
+        }
     }
-    let height = full.height / factor
-    return CGRect(x: full.minX, y: full.midY - height / 2, width: full.width, height: height)
+    let aspect = pictureAspect ?? 0
+    guard aspect > 0 else { return feed }
+    return PlaybackVideoLayout.aspectFitRect(
+        videoSize: CGSize(width: aspect, height: 1), in: feed)
 }
 
 private func mirroredBox(_ box: TrackingBox, _ mirror: Bool) -> TrackingBox {

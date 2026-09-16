@@ -62,6 +62,16 @@ import Testing
         #expect(abs(rect.midY - 160) < 0.01)
     }
 
+    @Test func squareRecordingPillarboxesInsideASixteenNineWell() {
+        let well = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let picture = PlaybackVideoLayout.aspectFitRect(
+            videoSize: CGSize(width: 1, height: 1), in: well)
+        #expect(abs(picture.width - 1080) < 0.01)
+        #expect(abs(picture.height - 1080) < 0.01)
+        #expect(abs(picture.minX - 420) < 0.01)
+        #expect(abs(picture.midY - well.midY) < 0.01)
+    }
+
     @Test func fiftyFpsOffersHalfSpeedAtTwentyFive() {
         let source = ConformPreview.probe(nominalFrameRate: 50)
         let availability = ConformPreview.availability(for: source)
