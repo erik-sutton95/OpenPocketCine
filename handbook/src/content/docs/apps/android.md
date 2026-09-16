@@ -310,6 +310,12 @@ limitation concerns exposure math, not the choice of the official D-Log M
 conversion cube. See the
 [D-Log M investigation](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/pocket3-dlogm-curve.md).
 
+### Saving photos and clips
+
+**Save to Photos** places photos in Pictures/OpenPocketCine and videos in
+Movies/OpenPocketCine. If Android cannot prepare a file for sharing, the app
+shows an error. Camera originals remain unchanged.
+
 ### Upcoming share destinations
 
 Share shows Google Drive, Dropbox, NAS (SMB), LucidLink, Backblaze B2 and

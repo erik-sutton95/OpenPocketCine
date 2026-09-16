@@ -298,23 +298,34 @@ class BleLink(context: Context) {
         if (writing || writeQueue.isEmpty()) return
         val characteristic = fff5 ?: return
         val g = gatt ?: return
+        val attempt = activeAttempt ?: return
         writing = true
         val payload = writeQueue.removeFirst()
-        if (Build.VERSION.SDK_INT >= 33) {
-            g.writeCharacteristic(
-                characteristic,
-                payload,
-                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            @Suppress("DEPRECATION")
-            characteristic.value = payload
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(characteristic)
+        val sent =
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    g.writeCharacteristic(
+                        characteristic,
+                        payload,
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    @Suppress("DEPRECATION")
+                    characteristic.value = payload
+                    @Suppress("DEPRECATION")
+                    g.writeCharacteristic(characteristic)
+                }
+            }
+        if (sent.isFailure) {
+            val error = sent.exceptionOrNull() ?: IllegalStateException("BLE write failed")
+            if (dropLinkIfDeadBinder(error)) return
+            Log.w(TAG, "BLE write failed — dropping this payload", error)
+            writing = false
+            pumpWrites()
+            return
         }
-        val attempt = activeAttempt ?: return
         handler.postDelayed(
             {
                 operations.runIfCurrent(attempt, g) {
@@ -344,6 +355,20 @@ class BleLink(context: Context) {
     private fun notifyLinkLostIfSettled(attempt: CallbackOperationOwner.Token<BluetoothGatt>) {
         if (!connectSettled.getAndSet(false)) return
         main.post { operations.runIfCurrent(attempt) { onLinkLost?.invoke() } }
+    }
+
+    private fun dropLinkIfDeadBinder(error: Throwable): Boolean {
+        if (!BleBinderFailure.isDeadBinder(error)) return false
+        Log.w(TAG, "BLE binder died — dropping the link", error)
+        val attempt = activeAttempt
+        if (attempt != null) notifyLinkLostIfSettled(attempt)
+        closeGatt(error)
+        return true
+    }
+
+    private fun settleNotify(characteristic: BluetoothGattCharacteristic) {
+        if (characteristic.uuid == CHAR_FFF4) fff4NotifySettled = true
+        if (characteristic.uuid == CHAR_FFF5) fff5NotifySettled = true
     }
 
     private fun onGattCallback(
@@ -480,21 +505,42 @@ class BleLink(context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun requestNotify(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        gatt.setCharacteristicNotification(characteristic, true)
-        val cccd = characteristic.getDescriptor(CCCD) ?: run {
-            if (characteristic.uuid == CHAR_FFF4) fff4NotifySettled = true
-            if (characteristic.uuid == CHAR_FFF5) fff5NotifySettled = true
+        val descriptor =
+            runCatching {
+                gatt.setCharacteristicNotification(characteristic, true)
+                characteristic.getDescriptor(CCCD)
+            }
+        if (descriptor.isFailure) {
+            val error = descriptor.exceptionOrNull() ?: IllegalStateException("BLE notify setup failed")
+            if (dropLinkIfDeadBinder(error)) return
+            Log.w(TAG, "BLE notify setup failed", error)
+            settleNotify(characteristic)
+            maybeArmPairing(gatt)
+            return
+        }
+        val cccd = descriptor.getOrNull() ?: run {
+            settleNotify(characteristic)
             maybeArmPairing(gatt)
             return
         }
         val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        if (Build.VERSION.SDK_INT >= 33) {
-            gatt.writeDescriptor(cccd, enable)
-        } else {
-            @Suppress("DEPRECATION")
-            cccd.value = enable
-            @Suppress("DEPRECATION")
-            gatt.writeDescriptor(cccd)
+        val sent =
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    gatt.writeDescriptor(cccd, enable)
+                } else {
+                    @Suppress("DEPRECATION")
+                    cccd.value = enable
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(cccd)
+                }
+            }
+        if (sent.isFailure) {
+            val error = sent.exceptionOrNull() ?: IllegalStateException("BLE notify descriptor write failed")
+            if (dropLinkIfDeadBinder(error)) return
+            Log.w(TAG, "BLE notify descriptor write failed", error)
+            settleNotify(characteristic)
+            maybeArmPairing(gatt)
         }
     }
 
@@ -504,15 +550,24 @@ class BleLink(context: Context) {
         val char = fff4 ?: return
         pairingArmed = true
         val payload = byteArrayOf(0x01, 0x00)
-        if (Build.VERSION.SDK_INT >= 33) {
-            gatt.writeCharacteristic(char, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-        } else {
-            @Suppress("DEPRECATION")
-            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            @Suppress("DEPRECATION")
-            char.value = payload
-            @Suppress("DEPRECATION")
-            gatt.writeCharacteristic(char)
+        val sent =
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    gatt.writeCharacteristic(char, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                } else {
+                    @Suppress("DEPRECATION")
+                    char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    @Suppress("DEPRECATION")
+                    char.value = payload
+                    @Suppress("DEPRECATION")
+                    gatt.writeCharacteristic(char)
+                }
+            }
+        if (sent.isFailure) {
+            val error = sent.exceptionOrNull() ?: IllegalStateException("pairing arm failed")
+            if (dropLinkIfDeadBinder(error)) return
+            Log.w(TAG, "BLE pairing arm write failed", error)
+            closeGatt(IllegalStateException("pairing arm failed"))
         }
     }
 

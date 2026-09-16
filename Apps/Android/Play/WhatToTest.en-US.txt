@@ -6,10 +6,10 @@ New and changed
 
 Fixes
 
+- Crash hardening: sharing a photo no longer closes the app, a Bluetooth drop recovers instead of crashing, and face auto-focus no longer aborts under load.
 - Lock aligns with Settings. Portrait feed centers; STBY/timecode/REC SETUP sit below the cutout. View Assist/FIT/FILL/joystick stay fixed above camera values; motion editor keeps the stick usable.
 - App return checks camera Wi-Fi. Recovery waits for a new picture, shows its current stage and bounds automatic retries; old control requests cannot cross reconnects.
 - Live rendering synchronizes completed frames with presentation. Gimbal input waits for the live picture; stalled rendering cannot count as recovery.
-- Pocket 3 keeps portrait 3K selected while format options load and frame rate changes.
 
 What to test
 
