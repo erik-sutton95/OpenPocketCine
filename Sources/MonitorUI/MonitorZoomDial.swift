@@ -24,6 +24,7 @@
         @GestureState private var pointerActive = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.scenePhase) private var scenePhase
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
         @State private var appeared = false
         @State private var detentTick = 0
 
@@ -73,7 +74,7 @@
 
         private var ink: Color {
             opticalStops.contains { abs($0 - value) < 0.05 }
-                ? MonitorTheme.accent : MonitorTheme.digitalCrop
+                ? MonitorTheme.edrAccent(gain: hdrGain) : MonitorTheme.digitalCrop
         }
 
         private var visible: Bool { appeared && isPresented }
@@ -315,7 +316,7 @@
                 VStack(spacing: 5) {
                     Text(scale.dialLabel(value)).font(
                         MonitorTheme.font(radius * 0.19, weight: .bold))
-                        .monospacedDigit().foregroundStyle(MonitorTheme.text)
+                        .monospacedDigit().foregroundStyle(MonitorTheme.edrText(gain: hdrGain))
                         .lineLimit(1).minimumScaleFactor(0.7)
                     if !caption.isEmpty {
                         Text(caption).font(MonitorTheme.font(10)).tracking(1)

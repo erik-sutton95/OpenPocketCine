@@ -37,7 +37,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import android.os.Build
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -194,6 +196,20 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
+    LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
+        HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
+    }
+    DisposableEffect(activity) {
+        val windowManager = activity?.windowManager
+        if (activity == null || windowManager == null || Build.VERSION.SDK_INT < 35) {
+            return@DisposableEffect onDispose { }
+        }
+        val callback = java.util.function.Consumer<Int> { state ->
+            model.screenCaptured = state == WindowManager.SCREEN_RECORDING_STATE_VISIBLE
+        }
+        windowManager.addScreenRecordingCallback(activity.mainExecutor, callback)
+        onDispose { windowManager.removeScreenRecordingCallback(callback) }
+    }
     val hideNavigation = showLive && model.liveOperatorPanel == null
     LaunchedEffect(activity, hideNavigation) {
         (activity as? MainActivity)?.hideSystemNavigation = hideNavigation

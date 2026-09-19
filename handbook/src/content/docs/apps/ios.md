@@ -70,6 +70,14 @@ sits on the bottom screen edge. Gimbal cameras expose Mode, Speed, Ramp and
 the existing experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
 Ramp each have a tab with their own dial; the Motion Control action stays visible.
 
+Operator Setup → Display includes **HDR display** (off by default). It uses this
+iPhone or iPad's HDR panel so live view, scopes, settings, media, playback and
+on-screen type stay readable in sun. The picture is a brightness aid, not a
+grade: WAVE, HISTO, zebras and false color still read the decoded camera
+signal. Screen recording and AirPlay temporarily use a normal SDR picture.
+It does not change the camera's HDR/HLG color mode or the file on the card.
+Turn it off indoors; extra brightness uses more power.
+
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
 in portrait. Settings and Media place Back outside the full-height sidebar in
 landscape; portrait keeps it beside the brand and title in the header. Back uses

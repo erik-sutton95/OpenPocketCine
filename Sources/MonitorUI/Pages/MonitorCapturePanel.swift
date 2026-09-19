@@ -19,6 +19,7 @@
         @State private var contentHeight: CGFloat = 86
         @State private var revealed = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
 
         public init(
             title: String, subtitle: String, maximumHeight: CGFloat = .infinity,
@@ -55,17 +56,17 @@
             VStack(spacing: stackSpacing) {
                 HStack(alignment: .center, spacing: 9) {
                     Text(title).font(MonitorTheme.font(9, weight: .semibold))
-                        .tracking(1.8).foregroundStyle(MonitorTheme.text)
+                        .tracking(1.8).foregroundStyle(MonitorTheme.edrText(gain: hdrGain))
                         .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     Text(subtitle.uppercased()).font(MonitorTheme.font(8.5))
-                        .tracking(1.19).foregroundStyle(MonitorTheme.faint)
+                        .tracking(1.19).foregroundStyle(MonitorTheme.edrFaint(gain: hdrGain))
                         .lineLimit(1).minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityLabel(subtitle)
                     if kind.showsClose {
                         Button(action: close) {
                             MonitorIcon.x.frame(width: 13, height: 13)
-                                .foregroundStyle(MonitorTheme.muted)
+                                .foregroundStyle(MonitorTheme.edrMuted(gain: hdrGain))
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }

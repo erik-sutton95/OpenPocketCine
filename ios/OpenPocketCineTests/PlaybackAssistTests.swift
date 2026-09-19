@@ -133,6 +133,21 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertTrue(landed.overlay)
     }
 
+    func testHDRIdentityHandoffHidesThePlayerOnceMetalOwnsThePicture() {
+        let waiting = PlaybackFeedHandoff.plan(
+            effects: LiveImageEffects(), overlayOnly: false, unmanagedBake: false,
+            metalHasPresented: false, hdrDisplay: true)
+        XCTAssertTrue(waiting.showPlayer)
+        XCTAssertFalse(waiting.showFeed)
+
+        let landed = PlaybackFeedHandoff.plan(
+            effects: LiveImageEffects(), overlayOnly: false, unmanagedBake: false,
+            metalHasPresented: true, hdrDisplay: true)
+        XCTAssertFalse(landed.showPlayer)
+        XCTAssertTrue(landed.showFeed)
+        XCTAssertFalse(landed.overlay)
+    }
+
     func testLUTHandoffHidesThePlayerOnceMetalOwnsThePicture() {
         let cube = BuiltInLook.mono.cube()
         var fx = LiveImageEffects()

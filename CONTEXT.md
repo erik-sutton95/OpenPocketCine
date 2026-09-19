@@ -87,6 +87,12 @@ ackedData `0x03` (command replies, including Flip GET), extra from `0x01`.
 Stale group 1 stops GET/SET while HEVC continues.
 _Avoid_: ACK (alone) when you mean a DUML command ACK
 
+**HDR display**:
+Operator option (Operator Setup → Display) that uses the phone panel's HDR
+brightness so live view and scopes stay readable in sun. The camera picture
+stays Rec.709 / log; WAVE / HISTO still measure decoded codes.
+_Avoid_: camera COLOR HDR / HLG; treating this as a grade or recording change
+
 **Chrome**:
 Operator HUD around the picture (bars, chips, DISP), not the picture.
 _Avoid_: UI, overlay

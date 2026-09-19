@@ -21,8 +21,14 @@ enum PlaybackFeedHandoff {
         effects: LiveImageEffects,
         overlayOnly: Bool,
         unmanagedBake: Bool,
-        metalHasPresented: Bool
+        metalHasPresented: Bool,
+        hdrDisplay: Bool = false
     ) -> Plan {
+        if hdrDisplay && !effects.needsGPUFeed {
+            return Plan(
+                showPlayer: !metalHasPresented, showFeed: metalHasPresented,
+                overlay: false, unmanaged: false)
+        }
         if !effects.needsGPUFeed {
             return Plan(showPlayer: true, showFeed: false, overlay: false, unmanaged: false)
         }
@@ -277,7 +283,7 @@ final class PlaybackFeedSession: NSObject {
             host?.ciFeed.resetPresentation()
             applyLayerPlan(metalHasPresented: false)
         }
-        if effects.needsSample {
+        if effects.needsSample || LiveHDRDisplay.isEnabled {
             startLink()
             // Same look on a new item: `changed` is false. Force-pull until
             // *this* item presents — not merely until some prior bake did.
@@ -353,7 +359,7 @@ final class PlaybackFeedSession: NSObject {
     /// `prepare` pull often ran before a pixel buffer existed.
     @MainActor
     func noteItemReady() {
-        guard effects.needsSample else { return }
+        guard effects.needsSample || LiveHDRDisplay.isEnabled else { return }
         output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
         schedulePull(force: true)
     }
@@ -366,12 +372,12 @@ final class PlaybackFeedSession: NSObject {
 
     @MainActor
     private func pullIfMetalWaiting() {
-        guard effects.needsSample, !itemHasPresented else { return }
+        guard effects.needsSample || LiveHDRDisplay.isEnabled, !itemHasPresented else { return }
         schedulePull(force: true)
     }
 
     private func pull(force: Bool) {
-        guard effects.needsSample else { return }
+        guard effects.needsSample || LiveHDRDisplay.isEnabled else { return }
         let time = outputTime()
         let timeNs = Self.timeNs(time)
         if time.isNumeric, output.hasNewPixelBuffer(forItemTime: time),
@@ -455,6 +461,12 @@ final class PlaybackFeedSession: NSObject {
             return
         }
         let feed = host.ciFeed
+        if LiveHDRDisplay.isEnabled, !effects.needsGPUFeed {
+            let identity = CIImage(cvPixelBuffer: result.source)
+            if feed.display(identity, unmanaged: false, overlay: false, timeNs: result.timeNs) {
+                return
+            }
+        }
         if !result.needsGPU || !effects.needsGPUFeed {
             applyLayerPlan(metalHasPresented: false)
             return
@@ -521,7 +533,8 @@ final class PlaybackFeedSession: NSObject {
             effects: effects,
             overlayOnly: lastOverlayOnly,
             unmanagedBake: lastUnmanagedBake,
-            metalHasPresented: metalHasPresented)
+            metalHasPresented: metalHasPresented,
+            hdrDisplay: LiveHDRDisplay.isEnabled)
         host.playerLayer.isHidden = !plan.showPlayer
         if plan.showFeed {
             host.ciFeed.isHidden = false
@@ -567,6 +580,8 @@ final class PlaybackFeedHostView: UIView {
         super.layoutSubviews()
         playerLayer.frame = bounds
         ciFeed.frame = bounds
+        ciFeed.syncHDRDisplay()
+        LiveHDRDisplay.configure(playerLayer)
         noteDrawableReady()
     }
 

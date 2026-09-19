@@ -34,6 +34,9 @@ final class FeedPresentScaler {
         private var superResolver: AnyObject?
     #endif
 
+    private var hdrScratch: MTLTexture?
+    private var hdrPipeline: MTLRenderPipelineState?
+
     init(device: MTLDevice) {
         self.device = device
         bilinear = MPSImageBilinearScale(device: device)
@@ -41,6 +44,104 @@ final class FeedPresentScaler {
 
     /// Encodes the present-fit (and Super Res / MetalFX when selected) into `target`.
     func encode(
+        from baked: MTLTexture,
+        to target: MTLTexture,
+        commandBuffer: MTLCommandBuffer,
+        overlay: Bool
+    ) -> Bool {
+        let gain = LiveHDRDisplay.presentGain
+        if LiveHDRDisplay.isEnabled, target.pixelFormat == .rgba16Float {
+            return encodeHDR(
+                from: baked, to: target, commandBuffer: commandBuffer, overlay: overlay, gain: gain)
+        }
+        return encodeFitted(
+            from: baked, to: target, commandBuffer: commandBuffer, overlay: overlay)
+    }
+
+    private func encodeHDR(
+        from baked: MTLTexture, to target: MTLTexture, commandBuffer: MTLCommandBuffer,
+        overlay: Bool, gain: Float
+    ) -> Bool {
+        guard let scratch = sdrScratch(matching: target) else { return false }
+        guard
+            encodeFitted(
+                from: baked, to: scratch, commandBuffer: commandBuffer, overlay: overlay)
+        else { return false }
+        return encodeGain(
+            from: scratch, to: target, commandBuffer: commandBuffer, gain: max(gain, 1))
+    }
+
+    private func sdrScratch(matching target: MTLTexture) -> MTLTexture? {
+        if let existing = hdrScratch, existing.width == target.width,
+            existing.height == target.height, existing.pixelFormat == LiveHDRDisplay.bakePixelFormat
+        {
+            return existing
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: LiveHDRDisplay.bakePixelFormat, width: target.width, height: target.height,
+            mipmapped: false)
+        descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        descriptor.storageMode = .private
+        hdrScratch = device.makeTexture(descriptor: descriptor)
+        return hdrScratch
+    }
+
+    private func encodeGain(
+        from source: MTLTexture, to target: MTLTexture, commandBuffer: MTLCommandBuffer, gain: Float
+    ) -> Bool {
+        guard let pipeline = hdrBlitPipeline(pixelFormat: target.pixelFormat) else { return false }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = target
+        pass.colorAttachments[0].loadAction = .dontCare
+        pass.colorAttachments[0].storeAction = .store
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
+            return false
+        }
+        encoder.setRenderPipelineState(pipeline)
+        encoder.setFragmentTexture(source, index: 0)
+        var gain = gain
+        encoder.setFragmentBytes(&gain, length: MemoryLayout<Float>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        encoder.endEncoding()
+        return true
+    }
+
+    private func hdrBlitPipeline(pixelFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
+        if let hdrPipeline { return hdrPipeline }
+        let source = """
+            #include <metal_stdlib>
+            using namespace metal;
+            struct VOut { float4 position [[position]]; float2 uv; };
+            vertex VOut hdr_v(uint vid [[vertex_id]]) {
+                float2 p = float2((vid << 1) & 2, vid & 2);
+                VOut o;
+                o.position = float4(p * 2.0 - 1.0, 0.0, 1.0);
+                // MPS writes y=0 at the bottom; Metal samples (0,0) at the top.
+                o.uv = float2(p.x, 1.0 - p.y);
+                return o;
+            }
+            fragment float4 hdr_f(VOut in [[stage_in]],
+                                  texture2d<float> src [[texture(0)]],
+                                  constant float &gain [[buffer(0)]]) {
+                constexpr sampler samp(filter::linear, address::clamp_to_edge);
+                float4 c = src.sample(samp, in.uv);
+                float3 linear = pow(max(c.rgb, 0.0), 2.2);
+                return float4(linear * gain, c.a);
+            }
+            """
+        guard let library = try? device.makeLibrary(source: source, options: nil),
+            let vertex = library.makeFunction(name: "hdr_v"),
+            let fragment = library.makeFunction(name: "hdr_f")
+        else { return nil }
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = vertex
+        descriptor.fragmentFunction = fragment
+        descriptor.colorAttachments[0].pixelFormat = pixelFormat
+        hdrPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
+        return hdrPipeline
+    }
+
+    private func encodeFitted(
         from baked: MTLTexture,
         to target: MTLTexture,
         commandBuffer: MTLCommandBuffer,

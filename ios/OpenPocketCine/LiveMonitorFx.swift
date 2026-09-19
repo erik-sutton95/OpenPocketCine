@@ -1175,18 +1175,20 @@ final class CIFeedView: UIView {
         isHidden = true
         backgroundColor = .black
         metalLayer.device = device
-        metalLayer.pixelFormat = .bgra8Unorm
+        metalLayer.pixelFormat = LiveHDRDisplay.bakePixelFormat
         metalLayer.framebufferOnly = false
         metalLayer.contentsScale = UIScreen.main.scale
         // Timeout can still wait one second. Acquisition runs on drawableQueue,
         // with one reservation covering both acquisition and GPU completion.
         metalLayer.allowsNextDrawableTimeout = true
+        LiveHDRDisplay.configure(metalLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        syncHDRDisplay()
         let scale = window?.screen.scale ?? UIScreen.main.scale
         let size = bounds.size
         if size.width > 1, size.height > 1 {
@@ -1203,6 +1205,17 @@ final class CIFeedView: UIView {
         isOpaque = !overlay
         backgroundColor = overlay ? .clear : .black
         metalLayer.isOpaque = !overlay
+    }
+
+    func syncHDRDisplay() {
+        let format = LiveHDRDisplay.drawablePixelFormat()
+        if metalLayer.pixelFormat != format || metalLayer.wantsExtendedDynamicRangeContent
+            != LiveHDRDisplay.isEnabled
+        {
+            invalidatePendingPresents()
+            resetPresentDedup()
+        }
+        LiveHDRDisplay.configure(metalLayer, screen: window?.screen)
     }
 
     func resetPresentDedup() {
@@ -1245,6 +1258,7 @@ final class CIFeedView: UIView {
             skippedDuplicates += 1
             return hasPresentedFrame
         }
+        syncHDRDisplay()
         let size = metalLayer.drawableSize
         let hasDrawable = size.width > 1 && size.height > 1
         guard
@@ -1257,7 +1271,7 @@ final class CIFeedView: UIView {
         let generation = presentGeneration
         if let baker {
             baker.scheduleBake(
-                image: image, drawableSize: size, pixelFormat: metalLayer.pixelFormat,
+                image: image, drawableSize: size, pixelFormat: LiveHDRDisplay.bakePixelFormat,
                 unmanaged: unmanaged, overlay: overlay, generation: generation, timeNs: timeNs
             ) { [weak self] in
                 DispatchQueue.main.async { self?.presentLatestBake(generation: generation) }
@@ -1277,7 +1291,7 @@ final class CIFeedView: UIView {
             return
         }
         let size = metalLayer.drawableSize
-        guard let frame = baker.acquireFrame(for: size, pixelFormat: metalLayer.pixelFormat)
+        guard let frame = baker.acquireFrame(for: size, pixelFormat: LiveHDRDisplay.bakePixelFormat)
         else { return }
         guard frame.generation == generation, frame.id > lastPresentedBakeID,
             !FeedPresentPolicy.isDuplicateFrameTime(

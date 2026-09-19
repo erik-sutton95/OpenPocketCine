@@ -77,6 +77,12 @@ place. Empty samples and
 A 2 s gap with no present is a **freeze** (`FeedPresentPolicy.isFrozen`) —
 UDP still alive means do not send `0x09/0xa8`. Skip duplicate timestamps
 on the GPU path; if a LUT bake is still in flight, drop to the latest sample.
+**HDR display** (Operator Setup → Display, off by default) opts the live
+identity path into VideoToolbox plus Metal present, same class as LUT replace.
+Bake stays 8-bit at `maxWorkingWidth`; only the drawable is `rgba16Float` EDR.
+One present in flight still holds. Android uses window HDR headroom rather than
+a float swapchain. Extra panel nits cost power and heat — leave it off on set.
+
 Metal present is latest-wins with **one drawable in flight**
 (`FeedPresentPolicy.maxInFlightMetalPresents`). Do not block MainActor on
 `nextDrawable` — LUT 50/50 plus PEAK / FALSE / ZEBRA pipelined baker

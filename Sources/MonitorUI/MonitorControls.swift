@@ -45,6 +45,7 @@
         private let label: String
         private let active: Bool
         private let value: Value
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
         public init(_ label: String, active: Bool = false, @ViewBuilder value: () -> Value) {
             self.label = label
             self.active = active
@@ -53,15 +54,17 @@
         public var body: some View {
             let tablet = UIDevice.current.userInterfaceIdiom == .pad
             let valueSize = CGFloat(MonitorReadoutTypography.valueSize(tablet: tablet))
+            let ink = active ? MonitorTheme.edrAccent(gain: hdrGain) : MonitorTheme.edrText(gain: hdrGain)
+            let caption = active ? MonitorTheme.edrAccent(gain: hdrGain) : MonitorTheme.edrMuted(gain: hdrGain)
             VStack(spacing: 4) {
                 value.font(MonitorTheme.font(valueSize, weight: .medium))
                     .monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
-                    .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.text)
+                    .foregroundStyle(ink)
                 Text(label).font(
                     MonitorTheme.font(
                         CGFloat(MonitorReadoutTypography.labelSize), weight: .semibold)
                 ).tracking(CGFloat(MonitorReadoutTypography.labelTracking))
-                    .foregroundStyle(active ? MonitorTheme.accent : MonitorTheme.muted)
+                    .foregroundStyle(caption)
                     .lineLimit(1)
             }
             .monitorReadoutShadow()

@@ -17,6 +17,13 @@ separate iOS and Android lists.
 
 ### Added
 
+- **HDR display** (Operator Setup → Display): optional outdoor boost that uses
+  the phone's HDR panel so live view, scopes, settings, media, playback and HUD
+  type stay readable in sun. Off by default. The picture is a brightness aid,
+  not a grade — WAVE / HISTO / zebras / false color still read decoded camera
+  codes. Screen recording and AirPlay drop back to SDR so the file is not
+  HDR-boosted. This is not the body's HDR/HLG recording mode.
+
 - UI 2.0 for the native iOS and Android shells: reusable camera, pairing,
   settings, media and playback presentation with Sora typography, Lucide icons
   and the custom View Assist glyphs. Phones and tablets adapt across rotation.
