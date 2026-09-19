@@ -6,6 +6,7 @@ New and changed
 Fixes
 
 - Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
+- The app no longer closes on its own the moment it opens on Android 15 and newer phones.
 
 What to test
 
