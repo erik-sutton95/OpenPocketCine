@@ -4,7 +4,7 @@ description: 配對、相機 Wi-Fi、即時畫面，以及會擋住畫面的本�
 ---
 
 :::note
-本頁是英文原文的翻譯，更新可能略晚於英文版。以 [英文版](../../../guides/troubleshooting/) 為準。
+本頁是英文原文的翻譯，更新可能略晚於英文版。以 [英文版](https://openpocketcine.app/docs/guides/troubleshooting/) 為準。
 :::
 
 配對和即時畫面需要**實體**手機和相機。模擬器沒有藍牙，也連不上相機的 Wi-Fi。
