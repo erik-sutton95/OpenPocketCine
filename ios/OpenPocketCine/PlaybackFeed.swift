@@ -157,7 +157,7 @@ final class PlaybackFeedSession: NSObject {
         linkTarget.handler = { [weak self] in
             guard let self else { return }
             let time = self.outputTime()
-            let hasNew = self.output.hasNewPixelBuffer(forItemTime: time)
+            let hasNew = time.isNumeric && self.output.hasNewPixelBuffer(forItemTime: time)
             guard
                 PlaybackDisplayLink.shouldPull(
                     itemHasPresented: self.itemHasPresented, hasNewPixelBuffer: hasNew)
@@ -335,6 +335,7 @@ final class PlaybackFeedSession: NSObject {
         guard boundItem != nil else { return nil }
         if effects.needsSample { return sampleBus?.playbackSourcePixelBuffer }
         let time = outputTime()
+        guard time.isNumeric else { return lastBackdropBuffer }
         if output.hasNewPixelBuffer(forItemTime: time),
             let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil)
         {
@@ -373,7 +374,7 @@ final class PlaybackFeedSession: NSObject {
         guard effects.needsSample else { return }
         let time = outputTime()
         let timeNs = Self.timeNs(time)
-        if output.hasNewPixelBuffer(forItemTime: time),
+        if time.isNumeric, output.hasNewPixelBuffer(forItemTime: time),
             let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil)
         {
             let working = FeedWorkingRaster.prepared(buffer)
@@ -397,8 +398,14 @@ final class PlaybackFeedSession: NSObject {
         // Output added after decode has started (or the item is parked) holds
         // no pixel buffer until a seek. Live never has this — VT already owns the frame.
         if force, lastBuffer == nil, !pendingKick, let player {
-            pendingKick = true
             let seekTime = player.currentTime()
+            // A newly attached or failed remote item can report invalid or
+            // indefinite time. AVPlayer raises an Objective-C exception if
+            // that value is used as a seek target; wait for the ready callback.
+            guard let boundItem, player.currentItem === boundItem,
+                boundItem.status == .readyToPlay, seekTime.isNumeric
+            else { return }
+            pendingKick = true
             player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) {
                 [weak self] _ in
                 self?.pendingKick = false

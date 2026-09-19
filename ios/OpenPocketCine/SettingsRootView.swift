@@ -97,6 +97,17 @@ struct SettingsRootView: View {
     @State private var showLUTPicker = false
     @State private var showWatcherWiFiCode = false
     @State private var confirmClearCache = false
+    @State private var cacheBytes: UInt64?
+    private struct CacheSizeRequest: Equatable {
+        var cameraID: String
+        var revision: UInt64
+    }
+    private var cacheSizeRequest: CacheSizeRequest {
+        CacheSizeRequest(
+            cameraID: model.session.mediaCameraID, revision: model.session.mediaCacheRevision)
+    }
+    @State private var clearingCache = false
+    @State private var cacheClearFailed = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
     @State private var showProblemReport = false
     @State private var showDiagnosticOptions = false
@@ -859,7 +870,7 @@ struct SettingsRootView: View {
                 Button {
                     confirmClearCache = true
                 } label: {
-                    Text("Clear")
+                    Text(clearingCache ? "Clearing…" : "Clear")
                         .font(LiveType.ui(size: 13, weight: .semibold))
                         .foregroundStyle(LiveDesign.rec)
                 }
@@ -872,11 +883,28 @@ struct SettingsRootView: View {
             titleVisibility: .visible
         ) {
             Button("Clear", role: .destructive) {
-                model.session.clearMediaCache()
+                clearingCache = true
+                Task {
+                    do { try await model.session.clearMediaCache() } catch {
+                        cacheClearFailed = true
+                    }
+                    clearingCache = false
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Removes downloaded clip files from this phone. The clip list is kept.")
+        }
+        .disabled(clearingCache)
+        .task(id: cacheSizeRequest) {
+            let request = cacheSizeRequest
+            cacheBytes = nil
+            let bytes = await model.session.cameraMedia.cacheByteCount(cameraID: request.cameraID)
+            guard !Task.isCancelled, cacheSizeRequest == request else { return }
+            cacheBytes = bytes
+        }
+        .alert("Could not clear the cache. Try again.", isPresented: $cacheClearFailed) {
+            Button("OK", role: .cancel) {}
         }
     }
 
@@ -909,7 +937,7 @@ struct SettingsRootView: View {
     }
 
     private var cacheSizeLabel: String {
-        let bytes = model.session.mediaCacheByteCount()
+        guard let bytes = cacheBytes else { return "Checking…" }
         if bytes == 0 { return "Empty" }
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }

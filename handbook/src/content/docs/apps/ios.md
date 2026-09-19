@@ -21,6 +21,7 @@ shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.
+Capture tabs retain their matching labels while camera updates change the available modes.
 Hold Record to open shooting mode.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,
 without recording confirmation. Photo and camera-reported Live Photo hide video color-profile, frame-rate,
@@ -85,7 +86,16 @@ near the top or bottom of the gallery to autoscroll; lift your finger to stop.
 Selection circles appear only while selecting.
 
 Media retains favorites, cache state,
-playback assists and the existing delivery actions.
+playback assists and the existing delivery actions. Cached availability refreshes
+as files finish downloading. In Operator Setup → Storage, **Local Media Cache**
+shows **Checking…** while measuring stored files. **Clear Cache** keeps the clip
+list and recorded color information; **Clearing…** shows while old files are
+removed. A failed deletion stays included in the size so Clear can retry it.
+
+Playback assists wait for a ready clip with a valid playback position before
+requesting its first frame. Upscaler preparation runs separately from interface
+updates. Physical qualification of these build 111 follow-up fixes is still pending;
+report the time and action if playback or the interface freezes.
 
 On iPad, the interface reflows as you resize the app window. System window buttons
 stay clear of the monitor controls. Camera-connected use while resizing is still
@@ -221,7 +231,8 @@ space after rotation or resizing, including saved positions. Long-press a View A
   cached clip, so it still binds when the camera is disconnected. A **Proxy**
   tag means only the 720p sidecar is on the phone — connect to share the
   original. Storage **Full Resolution Caching** (on by default) also caches
-  the original when you open a clip. LUT bake on export can include the
+  the original when you open a clip. Proxies download incrementally to disk
+  to keep the interface responsive. LUT bake on export can include the
   LUT exposure pull (Bake exposure under Bake LUT; on by default).
   Convert log (off by default, exclusive with Bake LUT) offers an **Output
   curve** choice: D-Log or D-Log2 for the whole selection. Clips already on

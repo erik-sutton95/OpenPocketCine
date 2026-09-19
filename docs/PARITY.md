@@ -874,3 +874,22 @@ AF watchdog ownership. Physical qualification on a real camera and device —
 slow-frame face AF under load, a hung ML Kit task, JPEG/HEIC/DNG/MP4 share and
 Save to Photos, and a forced Bluetooth-binder drop including during pairing —
 remains an outstanding exception because no Android device was attached.
+
+### TestFlight 111 Sentry hardening (2026-09-19, in validation)
+
+The portable incident classifier now ignores retired assist clocks in a
+compressed-layer feed and waits for an active assist failure to clear before
+recording recovery. The Android shell has a separate Kotlin classifier; updating that mirror is an
+explicit exception to this iOS TestFlight triage. Android incident accounting
+remains unchanged. No watchdog timing or stream-enable policy changes.
+
+The playback-time guard, Core Image/native upscaler preparation, SwiftUI capture-label snapshots, streaming proxy downloads, media
+cache snapshots and filesystem scheduling fixes address iOS shell paths.
+Android has no AVPlayer, VideoToolbox model session or SwiftUI body evaluation,
+so these implementation changes are an iOS-only exception. Cache permissions,
+original/proxy rules and retained catalog behavior remain shared product policy.
+
+Physical iPhone/iPad camera proof and live-rate/thermal budget measurements are
+outstanding: no device was connected during this task. Simulator tests are not
+physical qualification. Remaining OS crashes and live-camera outages
+are recorded in the [Sentry audit](audits/2026-09-19-testflight-111-sentry.md).

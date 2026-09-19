@@ -11,6 +11,45 @@ import XCTest
 /// identity on `AVPlayerLayer`, assist image on `CIFeedView` only after a bake
 /// lands. `AVVideoComposition` after `replaceCurrentItem` never showed the look.
 final class PlaybackAssistTests: XCTestCase {
+    @MainActor
+    func testReadyPlaybackOutputDoesNotSeekToANonnumericTime() async {
+        for time in [CMTime.invalid, .indefinite, .positiveInfinity, .negativeInfinity] {
+            let player = UnreadyPlaybackPlayer(time: time)
+            let session = PlaybackFeedSession()
+            let item = ReadyPlaybackItem(url: URL(fileURLWithPath: "/tmp/unready-playback.mp4"))
+            session.prepare(item)
+            player.replaceCurrentItem(with: item)
+            let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+            session.attach(host: host, player: player)
+            var effects = LiveImageEffects()
+            effects.zebra = true
+            session.setEffects(effects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
+            try? await Task.sleep(for: .milliseconds(150))
+            session.shutdown()
+            XCTAssertEqual(player.seekCount, 0, "A ready output must still wait for a numeric time")
+        }
+    }
+
+    @MainActor
+    func testReadyParkedPlaybackStillKicksAtNumericTime() async {
+        let player = UnreadyPlaybackPlayer(time: .zero)
+        let item = ReadyPlaybackItem(url: URL(fileURLWithPath: "/tmp/parked-playback.mp4"))
+        let session = PlaybackFeedSession()
+        session.prepare(item)
+        player.replaceCurrentItem(with: item)
+        let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+        session.attach(host: host, player: player)
+        var effects = LiveImageEffects()
+        effects.zebra = true
+        session.setEffects(effects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while player.seekCount == 0, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        session.shutdown()
+        XCTAssertEqual(player.seekCount, 1, "A parked ready item still needs its first frame")
+    }
+
     private let keys = [
         "OpenPocketCine.Assist.v1",
         "OpenPocketCine.PlaybackAssists.v1",
@@ -637,4 +676,30 @@ final class PlaybackAssistTests: XCTestCase {
             format: .RGBA8, colorSpace: nil)
         return (Float(bytes[0]) + Float(bytes[1]) + Float(bytes[2])) / (3 * 255)
     }
+}
+
+private final class UnreadyPlaybackPlayer: AVPlayer {
+    private let reportedTime: CMTime
+    private let seeks = NSLock()
+    private var count = 0
+
+    init(time: CMTime) {
+        reportedTime = time
+        super.init()
+    }
+
+    override func currentTime() -> CMTime { reportedTime }
+
+    var seekCount: Int { seeks.withLock { count } }
+
+    override func seek(
+        to time: CMTime, toleranceBefore: CMTime, toleranceAfter: CMTime,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        seeks.withLock { count += 1 }
+    }
+}
+
+private final class ReadyPlaybackItem: AVPlayerItem {
+    override var status: AVPlayerItem.Status { .readyToPlay }
 }

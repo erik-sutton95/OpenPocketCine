@@ -81,7 +81,10 @@ Metal present is latest-wins with **one drawable in flight**
 (`FeedPresentPolicy.maxInFlightMetalPresents`). Do not block MainActor on
 `nextDrawable` — LUT 50/50 plus PEAK / FALSE / ZEBRA pipelined baker
 completions and froze ingest until force-quit (#218). Acquire on a dedicated
-serial worker; keep one reservation through GPU completion. Skip new acquisitions
+serial worker. Prepare Core Image / native upscaling on that worker too: native
+model session startup can synchronously wait for accelerator services. Keep one
+reservation through preparation and GPU completion, and recheck source generation,
+enabled state and drawable size before submission. Skip new acquisitions
 while busy and adopt the newest coherent bake when the slot becomes available.
 Only successful GPU completion advances the Metal presentation clock; it does
 not measure physical display scanout. Keep source time, bake identity and layer
@@ -216,3 +219,23 @@ rotations still update the physical cutout edges.
 The UI 2.0 joystick uses the reference white/cyan treatment. Its former 150 ms
 image-luminance sampling loop and Core Image readback are removed; movement,
 release and the existing transport cadence are unchanged.
+
+## iOS media cache scheduling
+
+Media rows use an in-memory availability snapshot refreshed off-main when the
+camera, catalog or completed cache writes change. Download progress does not
+trigger filesystem scans. Cancel obsolete scans and reject results from an older
+camera/revision. Local thumbnail decoding and storage-size enumeration also run
+off-main; SwiftUI body evaluation must not enumerate the cache. Playback proxies
+use the same incremental file-transfer delegate as originals: never accumulate
+an entire proxy body for a MainActor write and release. Proxy size comes from its
+own HTTP response, not the original clip's catalog size. Cancelling playback
+cancels the camera request and removes its partial file.
+
+Clear Cache cancels transfers, retires the old directory, preserves the catalog
+and shot-color index, then deletes retired files on a utility task. New writes
+use the current directory and cannot be consumed by that deletion. Failed prepared-tree
+deletions remain counted and retryable. A tree still awaiting metadata preservation
+is protected from deletion, including after a failed rollback. These changes have simulator regressions;
+physical live-rate and thermal qualification remain pending for the
+[build 111 triage](audits/2026-09-19-testflight-111-sentry.md).

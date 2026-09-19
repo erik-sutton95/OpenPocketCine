@@ -1,18 +1,18 @@
 New and changed
 
-- UI 2.0: Sora/Lucide, consistent buttons and signal colors. Media footer controls, pull-refresh, and hold/sideways selection with native vertical scrolling.
-- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the larger lens dial extending to the screen edge above camera controls.
-- New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
+- UI 2.0 adds consistent buttons and signal colors, Media footer controls, pull-refresh and hold/sideways selection with vertical scrolling.
+- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, or hold for the lens dial at the screen edge.
+- Scopes, LIGHTS and ND start centered until placed. AUDIO supports movable vertical/horizontal bars and optional channel dB readings.
 
 Fixes
 
-- Pocket 3 FORMAT lists 16:9 and 1:1 without hanging on 9:16. Vertical recording stays on body Lock Portrait unless the camera already reports 9:16.
-- Pocket 3 shutter Speed is not stuck at 1/60; Angle choices change exposure.
-- 16:9 frame guides on 1:1 live stay on the square picture, not the side bars.
-- Crash hardening: sharing a photo no longer closes the app, a Bluetooth drop recovers instead of crashing, and face auto-focus no longer aborts under load.
+- Pocket 3 FORMAT offers 16:9 and 1:1. Use body Lock Portrait for vertical recording unless the camera already reports 9:16.
+- Pocket 3 shutter Speed and Angle work without a capability table; Speed no longer stays at 1/60.
+- On a 1:1 feed, 16:9 guides stay within the square picture.
+- Photo sharing, Bluetooth drops and face auto-focus under load recover instead of closing the app.
 
 What to test
 
-- On Pocket 3, switch FORMAT 16:9 and 1:1; confirm 9:16 does not hang. Change shutter Speed and Angle. In 1:1, turn on a 16:9 guide and check it sits on the picture.
-- Check blur over bright/dark footage. Rotate pages; tap versus hold drums. Try assist tabs, audio, zoom, lock, Media and TalkBack.
-- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on. Share diagnostics with the time of any stutter.
+- On Pocket 3, switch 16:9/1:1 and shutter Speed/Angle. Check 16:9 guides on a 1:1 picture and confirm unsupported 9:16 does not hang.
+- Rotate pages and try tap versus hold on camera values. Check assist tabs, audio, zoom, lock, Media selection and TalkBack.
+- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on. Report the time and action if the picture stalls.

@@ -1064,6 +1064,7 @@ private struct FeedPresentBox<Value>: @unchecked Sendable {
 /// Injectable Metal boundary: acquisition may block, submission completes asynchronously.
 struct FeedPresentOperations: @unchecked Sendable {
     var acquire: @Sendable (CAMetalLayer) -> CAMetalDrawable? = { $0.nextDrawable() }
+    var encode: (@Sendable (FeedFrameBaker.Frame, MTLTexture, MTLCommandBuffer) -> Bool)?
     var submit:
         @Sendable (
             MTLCommandBuffer, CAMetalDrawable, @escaping @Sendable (Bool) -> Void
@@ -1112,17 +1113,15 @@ struct FeedPresentationMetrics {
     }
 }
 
-/// Metal-backed presenter. Looks bake off-main; this view only scales into the drawable.
+/// Metal-backed presenter. Baking, scaling and model preparation run off-main.
 final class CIFeedView: UIView {
     override class var layerClass: AnyClass { CAMetalLayer.self }
     private var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
     private let device: MTLDevice?
-    private let lutContext: CIContext
-    private let displayContext: CIContext
+    private let renderer: FeedPresentRenderer
     private let baker: FeedFrameBaker?
     /// Presents commit here and complete on the GPU — never a synchronous render on main.
     private let presentQueue: MTLCommandQueue?
-    private let presentScaler: FeedPresentScaler?
     /// First successful present. Until then the VT layer must stay visible —
     /// this view is opaque black and `display` returns before the bake lands.
     private(set) var hasPresentedFrame = false
@@ -1168,17 +1167,9 @@ final class CIFeedView: UIView {
     override init(frame: CGRect) {
         let device = MTLCreateSystemDefaultDevice()
         self.device = device
-        let lutOptions = LiveMonitorWorkingSpace.contextOptions
-        let displayOptions = LiveMonitorWorkingSpace.displayContextOptions
-        self.lutContext =
-            device.map { CIContext(mtlDevice: $0, options: lutOptions) }
-            ?? CIContext(options: lutOptions)
-        self.displayContext =
-            device.map { CIContext(mtlDevice: $0, options: displayOptions) }
-            ?? CIContext(options: displayOptions)
+        self.renderer = FeedPresentRenderer(device: device)
         self.baker = device.map { FeedFrameBaker(device: $0) }
         self.presentQueue = device?.makeCommandQueue()
-        self.presentScaler = device.map { FeedPresentScaler(device: $0) }
         super.init(frame: frame)
         isOpaque = true
         isHidden = true
@@ -1326,8 +1317,7 @@ final class CIFeedView: UIView {
     ) {
         guard frame.generation == presentGeneration, isEnabled,
             frame.drawableSize == metalLayer.drawableSize, let drawable,
-            let commandBuffer = presentQueue?.makeCommandBuffer(),
-            encodePresent(frame, to: drawable.texture, commandBuffer: commandBuffer)
+            let commandBuffer = presentQueue?.makeCommandBuffer()
         else {
             baker.releaseBakedTexture(frame.texture)
             failedPresents += 1
@@ -1338,6 +1328,41 @@ final class CIFeedView: UIView {
             finishPresentFlight()
             return
         }
+        let renderer = self.renderer
+        let resources = FeedPresentBox(value: (drawable, commandBuffer))
+        drawableQueue.async { [weak self] in
+            let (drawable, commandBuffer) = resources.value
+            let encoded =
+                operations.encode?(frame, drawable.texture, commandBuffer)
+                ?? renderer.encode(frame, to: drawable.texture, commandBuffer: commandBuffer)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    baker.releaseBakedTexture(frame.texture)
+                    return
+                }
+                self.submitPreparedFrame(
+                    frame, resources: resources, encoded: encoded,
+                    operations: operations, baker: baker)
+            }
+        }
+    }
+
+    private func submitPreparedFrame(
+        _ frame: FeedFrameBaker.Frame,
+        resources: FeedPresentBox<(CAMetalDrawable, MTLCommandBuffer)>, encoded: Bool,
+        operations: FeedPresentOperations, baker: FeedFrameBaker
+    ) {
+        // Rotation, coverage or recovery can invalidate the frame while a
+        // native upscaler is preparing. Never submit that retired drawable.
+        guard encoded, frame.generation == presentGeneration, isEnabled,
+            frame.drawableSize == metalLayer.drawableSize
+        else {
+            baker.releaseBakedTexture(frame.texture)
+            failedPresents += 1
+            finishPresentFlight()
+            return
+        }
+        let (drawable, commandBuffer) = resources.value
         let submittedAt = ProcessInfo.processInfo.systemUptime
         operations.submit(commandBuffer, drawable) { [weak self] success in
             // GPU has finished reading the pool slot, on success or failure.
@@ -1390,10 +1415,29 @@ final class CIFeedView: UIView {
             isHidden = false
         }
     }
+}
+
+/// Confined to the presenter's serial drawable worker. It owns no UIKit state.
+private final class FeedPresentRenderer: @unchecked Sendable {
+    private let lutContext: CIContext
+    private let displayContext: CIContext
+    private let presentScaler: FeedPresentScaler?
+
+    init(device: MTLDevice?) {
+        let lutOptions = LiveMonitorWorkingSpace.contextOptions
+        let displayOptions = LiveMonitorWorkingSpace.displayContextOptions
+        lutContext =
+            device.map { CIContext(mtlDevice: $0, options: lutOptions) }
+            ?? CIContext(options: lutOptions)
+        displayContext =
+            device.map { CIContext(mtlDevice: $0, options: displayOptions) }
+            ?? CIContext(options: displayOptions)
+        presentScaler = device.map { FeedPresentScaler(device: $0) }
+    }
 
     /// Bake is source-sized (`bakeSize` never enlarges). Off / Fast / Quality / AI enlarge
     /// it to the drawable the same way OpenZCine `MetalLiveView` does.
-    private func encodePresent(
+    func encode(
         _ frame: FeedFrameBaker.Frame, to target: MTLTexture, commandBuffer: MTLCommandBuffer
     ) -> Bool {
         let baked = frame.texture

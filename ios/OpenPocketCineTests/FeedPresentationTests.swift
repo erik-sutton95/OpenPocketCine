@@ -105,6 +105,27 @@ final class FeedPresentationTests: XCTestCase {
         XCTAssertTrue(heartbeatRan.withLock { $0 }, "Drawable wait must leave MainActor runnable")
     }
 
+    func testUpscalerPreparationDoesNotBlockMainActor() async throws {
+        let feed = try makeFeed()
+        let drawable = try TestFeedDrawable(layer: feed.layer as! CAMetalLayer)
+        let encoded = expectation(description: "Upscaler preparation returned")
+        let heartbeatRan = OSAllocatedUnfairLock(initialState: false)
+        feed.presentOperations.acquire = { _ in drawable }
+        feed.presentOperations.encode = { _, _, _ in
+            let heartbeat = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { heartbeat.signal() }
+            let result = heartbeat.wait(timeout: .now() + .milliseconds(400))
+            heartbeatRan.withLock { $0 = result == .success }
+            encoded.fulfill()
+            return true
+        }
+        feed.presentOperations.submit = { _, _, completed in completed(true) }
+        XCTAssertTrue(feed.display(picture, timeNs: 1))
+        await fulfillment(of: [encoded], timeout: 3)
+        XCTAssertTrue(
+            heartbeatRan.withLock { $0 }, "Model preparation must leave MainActor runnable")
+    }
+
     func testSubmissionIsNotSuccessfulPresentation() async throws {
         let feed = try makeFeed()
         let drawable = try TestFeedDrawable(layer: feed.layer as! CAMetalLayer)
@@ -166,6 +187,56 @@ final class FeedPresentationTests: XCTestCase {
             feed.setNeedsLayout()
             feed.layoutIfNeeded()
         }
+    }
+
+    func testInvalidationWhilePreparingRejectsOldFrameAndReleasesFlight() async throws {
+        try await assertInvalidatesPreparation { $0.invalidatePendingPresents() }
+    }
+
+    func testResizeWhilePreparingRejectsOldFrameAndReleasesFlight() async throws {
+        try await assertInvalidatesPreparation { feed in
+            feed.frame.size = CGSize(width: 128, height: 64)
+            feed.setNeedsLayout()
+            feed.layoutIfNeeded()
+        }
+    }
+
+    private func assertInvalidatesPreparation(_ invalidate: (CIFeedView) -> Void) async throws {
+        let feed = try makeFeed()
+        let drawable = try TestFeedDrawable(layer: feed.layer as! CAMetalLayer)
+        let acquiring = expectation(description: "Old preparation is blocked")
+        let release = DispatchSemaphore(value: 0)
+        let attempts = OSAllocatedUnfairLock(initialState: 0)
+        let committed = OSAllocatedUnfairLock(initialState: 0)
+        feed.presentOperations.acquire = { _ in drawable }
+        feed.presentOperations.encode = { _, _, _ in
+            let attempt = attempts.withLock {
+                $0 += 1
+                return $0
+            }
+            if attempt == 1 {
+                acquiring.fulfill()
+                _ = release.wait(timeout: .now() + 2)
+            }
+            return true
+        }
+        feed.presentOperations.submit = { _, _, completed in
+            committed.withLock { $0 += 1 }
+            completed(true)
+        }
+        XCTAssertTrue(feed.display(picture, timeNs: 10))
+        await fulfillment(of: [acquiring], timeout: 3)
+        let generation = feed.debugPresentGeneration
+        invalidate(feed)
+        XCTAssertNotEqual(feed.debugPresentGeneration, generation)
+        XCTAssertTrue(feed.display(picture, timeNs: 20))
+        XCTAssertEqual(attempts.withLock { $0 }, 1)
+        let current = expectation(description: "Replacement source presents")
+        feed.onPresented = { current.fulfill() }
+        release.signal()
+        await fulfillment(of: [current], timeout: 3)
+        XCTAssertEqual(committed.withLock { $0 }, 1, "Old prepared frame must not submit")
+        XCTAssertEqual(feed.lastPresentedTimeNs, 20)
     }
 
     private func assertInvalidatesAcquisition(_ invalidate: (CIFeedView) -> Void) async throws {

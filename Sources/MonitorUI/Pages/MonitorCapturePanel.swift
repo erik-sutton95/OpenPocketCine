@@ -123,28 +123,23 @@
     /// Capture tabs are individual cyan-outlined choices rather than the solid
     /// grouped segments used on an Operator Setup page.
     public struct MonitorCaptureTabs<Value: Hashable>: View {
-        private let options: [Value]
-        private let selection: Value?
-        private let title: (Value) -> String
-        private let select: (Value) -> Void
+        private let snapshot: [MonitorCaptureTabRow]
 
         public init(
-            options: [Value], selection: Value?, title: @escaping (Value) -> String,
+            options: [Value], selection: Value?, title: (Value) -> String,
             select: @escaping (Value) -> Void
         ) {
-            self.options = options
-            self.selection = selection
-            self.title = title
-            self.select = select
-        }
-
-        var rows: ForEach<[MonitorCaptureTabRow], Int, MonitorCaptureTabButton> {
-            let snapshot = options.enumerated().map { index, option in
+            // The child body may run after camera telemetry has changed the
+            // host's labels. Freeze projections alongside their option indices.
+            snapshot = options.enumerated().map { index, option in
                 MonitorCaptureTabRow(
                     id: index, title: title(option), selected: selection == option,
                     action: { select(option) })
             }
-            return Self.renderRows(snapshot)
+        }
+
+        var rows: ForEach<[MonitorCaptureTabRow], Int, MonitorCaptureTabButton> {
+            Self.renderRows(snapshot)
         }
 
         nonisolated static func renderRows(_ rows: [MonitorCaptureTabRow])
