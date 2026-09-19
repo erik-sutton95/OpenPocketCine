@@ -1,15 +1,18 @@
 New and changed
 
+- Pocket 3 zoom now offers only the stops the recording FORMAT allows, and a short note names the new cap when you change FORMAT.
 - HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
 - Screen recording temporarily uses a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
 
 Fixes
 
+- The zoom readout no longer holds a value the camera refused; it settles on the camera's own zoom within a moment.
+- Shutter, ISO, zoom and ND readouts use a fixed number format, so a phone language with decimal commas no longer shows odd values.
 - Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
 - The app no longer closes on its own the moment it opens on Android 15 and newer phones.
 
 What to test
 
+- On Pocket 3, set FORMAT to 1080, 2.7K and 4K, then cycle zoom: 1080 reaches 4×, 2.7K reaches 3× and 4K reaches 2×, landing on 1× after each change.
+- Set the phone language to one that uses a decimal comma, then check shutter, ISO, zoom and ND readouts.
 - Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
-- Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
-- Check TalkBack on Operator Setup → Display. Share diagnostics with the time of any freeze.
