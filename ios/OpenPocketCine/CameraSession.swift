@@ -277,7 +277,7 @@ final class CameraSession {
     var mediaDownloadProgress: [String: Double] = [:]
     var mediaCacheRevision: UInt64 = 0
     var mediaLocalFavorites: Set<String> = []
-    @ObservationIgnored let cameraMedia = CameraMedia()
+    @ObservationIgnored let cameraMedia: CameraMedia
     /// Last tap-to-focus point in feed-normalized 0…1. Always drawn when not tracking.
     var focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5)
     /// Operator-drawn search rect while the camera is still hunting a subject.
@@ -476,7 +476,8 @@ final class CameraSession {
     /// The live-view display layer, for the SwiftUI `VideoView`.
     var videoLayer: AVSampleBufferDisplayLayer { decoder.displayLayer }
 
-    init(borrowing sharedDecoder: HevcDecoder? = nil) {
+    init(borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil) {
+        self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
         syncGimbalPose()

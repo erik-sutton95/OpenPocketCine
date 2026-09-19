@@ -226,7 +226,11 @@ Media rows use an in-memory availability snapshot refreshed off-main when the
 camera, catalog or completed cache writes change. Download progress does not
 trigger filesystem scans. Cancel obsolete scans and reject results from an older
 camera/revision. Local thumbnail decoding and storage-size enumeration also run
-off-main; SwiftUI body evaluation must not enumerate the cache.
+off-main; SwiftUI body evaluation must not enumerate the cache. Playback proxies
+use the same incremental file-transfer delegate as originals: never accumulate
+an entire proxy body for a MainActor write and release. Proxy size comes from its
+own HTTP response, not the original clip's catalog size. Cancelling playback
+cancels the camera request and removes its partial file.
 
 Clear Cache cancels transfers, retires the old directory, preserves the catalog
 and shot-color index, then deletes retired files on a utility task. New writes

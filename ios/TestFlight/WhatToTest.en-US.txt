@@ -17,6 +17,7 @@ New and changed
 
 Fixes
 
+- Capture tabs handle mode changes; proxy clips stream to disk.
 - Playback assists wait for the clip to be ready before requesting its first frame.
 - Upscaler preparation leaves interface controls responsive while it starts.
 - Media cache checks and deletion run in the background. Clear keeps clip/color details; failed deletion can be retried.

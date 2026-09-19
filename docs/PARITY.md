@@ -883,7 +883,7 @@ recording recovery. The Android shell has a separate Kotlin classifier; updating
 explicit exception to this iOS TestFlight triage. Android incident accounting
 remains unchanged. No watchdog timing or stream-enable policy changes.
 
-The playback-time guard, Core Image/native upscaler preparation, SwiftUI media
+The playback-time guard, Core Image/native upscaler preparation, SwiftUI capture-label snapshots, streaming proxy downloads, media
 cache snapshots and filesystem scheduling fixes address iOS shell paths.
 Android has no AVPlayer, VideoToolbox model session or SwiftUI body evaluation,
 so these implementation changes are an iOS-only exception. Cache permissions,
@@ -891,5 +891,5 @@ original/proxy rules and retained catalog behavior remain shared product policy.
 
 Physical iPhone/iPad camera proof and live-rate/thermal budget measurements are
 outstanding: no device was connected during this task. Simulator tests are not
-physical qualification. Remaining unsymbolicated crashes and live-camera outages
+physical qualification. Remaining OS crashes and live-camera outages
 are recorded in the [Sentry audit](audits/2026-09-19-testflight-111-sentry.md).

@@ -21,12 +21,17 @@ enum MediaOperatorCopy {
 @MainActor
 final class CameraMedia {
     private let fileManager: FileManager
+    private let httpConfiguration: URLSessionConfiguration
 
     private lazy var applicationSupport = fileManager.urls(
         for: .applicationSupportDirectory, in: .userDomainMask)[0]
 
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        httpConfiguration: URLSessionConfiguration = .ephemeral
+    ) {
         self.fileManager = fileManager
+        self.httpConfiguration = httpConfiguration
     }
 
     var assembler = MediaChunkAssembler()
@@ -45,7 +50,7 @@ final class CameraMedia {
 
     private let pump = MediaDownloadPump()
     private lazy var http: URLSession = {
-        let cfg = URLSessionConfiguration.ephemeral
+        let cfg = httpConfiguration.copy() as! URLSessionConfiguration
         cfg.allowsCellularAccess = false
         cfg.waitsForConnectivity = false
         cfg.timeoutIntervalForRequest = 20
@@ -53,7 +58,7 @@ final class CameraMedia {
         return URLSession(configuration: cfg)
     }()
     private lazy var downloadHTTP: URLSession = {
-        let cfg = URLSessionConfiguration.ephemeral
+        let cfg = httpConfiguration.copy() as! URLSessionConfiguration
         cfg.allowsCellularAccess = false
         cfg.waitsForConnectivity = false
         cfg.timeoutIntervalForRequest = 30
@@ -488,8 +493,29 @@ struct MediaPlaybackSource: Equatable {
 
 /// Streams `/v2` bodies to disk. A download-task wait-for-EOF hangs at 100% on
 /// Pocket SoftAP (the camera often keeps the socket open after Content-Length).
-private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private final class Cancellation: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cancelled = false
+        private var task: URLSessionDataTask?
+
+        func install(_ task: URLSessionDataTask) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            self.task = task
+            return cancelled
+        }
+
+        func cancel() -> URLSessionDataTask? {
+            lock.lock()
+            defer { lock.unlock() }
+            cancelled = true
+            return task
+        }
+    }
+
     private struct Job {
+        var task: URLSessionDataTask
         var dest: URL
         var tmp: URL
         var handle: FileHandle?
@@ -516,23 +542,49 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
         var request = URLRequest(url: url)
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 30
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            let tmp = dest.deletingLastPathComponent()
-                .appendingPathComponent(UUID().uuidString + ".part")
-            FileManager.default.createFile(atPath: tmp.path, contents: nil)
-            let handle = try? FileHandle(forWritingTo: tmp)
-            let task = session.dataTask(with: request)
-            lock.lock()
-            jobs[task.taskIdentifier] = Job(
-                dest: dest,
-                tmp: tmp,
-                handle: handle,
-                expected: expectedSize,
-                onProgress: onProgress,
-                continuation: cont)
-            lock.unlock()
-            task.resume()
+        let cancellation = Cancellation()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                let tmp = dest.deletingLastPathComponent()
+                    .appendingPathComponent(UUID().uuidString + ".part")
+                FileManager.default.createFile(atPath: tmp.path, contents: nil)
+                let handle = try? FileHandle(forWritingTo: tmp)
+                let task = session.dataTask(with: request)
+                lock.lock()
+                jobs[task.taskIdentifier] = Job(
+                    task: task,
+                    dest: dest,
+                    tmp: tmp,
+                    handle: handle,
+                    expected: expectedSize,
+                    onProgress: onProgress,
+                    continuation: cont)
+                lock.unlock()
+                // Install only after registering the continuation. A cancellation
+                // before installation is remembered; one after it removes the job.
+                if cancellation.install(task) {
+                    cancel(task: task)
+                } else {
+                    task.resume()
+                }
+            }
+        } onCancel: {
+            if let task = cancellation.cancel() { self.cancel(task: task) }
         }
+        try Task.checkCancellation()
+    }
+
+    private func cancel(task: URLSessionDataTask) {
+        lock.lock()
+        let job = jobs[task.taskIdentifier]
+        if job?.finished == false { jobs[task.taskIdentifier] = nil }
+        lock.unlock()
+        task.cancel()
+        guard let job, !job.finished else { return }
+        try? job.handle?.close()
+        try? FileManager.default.removeItem(at: job.tmp)
+        job.continuation.resume(throwing: CancellationError())
     }
 
     func cancelAll() {
@@ -541,6 +593,7 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
         jobs.removeAll()
         lock.unlock()
         for job in pending.values {
+            job.task.cancel()
             try? job.handle?.close()
             try? FileManager.default.removeItem(at: job.tmp)
             if !job.finished {
@@ -584,10 +637,10 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
             let written = job.written
             let expected = job.expected
             let progress = expected > 0 ? min(1, Double(written) / Double(expected)) : 0
-            let onProgress = job.onProgress
+            let taskID = dataTask.taskIdentifier
             let complete = expected > 0 && written >= expected
             lock.unlock()
-            Task { @MainActor in onProgress(progress) }
+            Task { @MainActor [weak self] in self?.publishProgress(progress, taskID: taskID) }
             if complete {
                 dataTask.cancel()
                 finish(task: dataTask, error: nil)
@@ -596,6 +649,16 @@ private final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchec
             lock.unlock()
             finish(task: dataTask, error: error)
         }
+    }
+
+    @MainActor private func publishProgress(_ progress: Double, taskID: Int) {
+        // Cancellation/completion may retire the transfer before this queued
+        // publication runs. Never recreate the cleared progress entry afterward.
+        lock.lock()
+        let job = jobs[taskID]
+        lock.unlock()
+        guard let job, !job.finished else { return }
+        job.onProgress(progress)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?)
@@ -976,14 +1039,9 @@ extension CameraSession {
         guard canReachCameraMedia else { throw MediaTransferError.timeout }
         mediaDownloadProgress[file.path] = 0
         do {
-            if MediaHTTP.isProxyPath(path) {
-                // Same GET as thumbnails — small sidecar, storage 0↔1 retry.
-                let data = try await fetchMediaBytes(file: file, path: path)
-                guard !data.isEmpty else { throw MediaTransferError.badResponse }
-                try cameraMedia.writeAtomically(data, to: dest)
-            } else {
-                try await fetchMediaFile(file: file, path: path, to: dest)
-            }
+            // Proxies can be full-length movies. Stream them like originals,
+            // without retaining and disposing their entire HTTP body on MainActor.
+            try await fetchMediaFile(file: file, path: path, to: dest)
             if path == file.path {
                 finishDownloadProgress(file.path)
             } else {
@@ -1325,9 +1383,11 @@ extension CameraSession {
         let urls = storageURLs(path: path, first: first)
         var lastError: Error = MediaTransferError.badResponse
         for (storage, url) in urls {
+            try Task.checkCancellation()
             do {
                 try await cameraMedia.downloadFile(
-                    from: url, to: dest, path: file.path, expectedSize: file.sizeBytes
+                    from: url, to: dest, path: file.path,
+                    expectedSize: path == file.path ? file.sizeBytes : 0
                 ) { [weak self] progress in
                     self?.mediaDownloadProgress[file.path] = progress
                 }
@@ -1337,7 +1397,13 @@ extension CameraSession {
                 lastError = MediaTransferError.httpStatus(404)
                 continue
             } catch {
+                if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                    throw error
+                }
                 lastError = error
+                // The buffered proxy path also tried the alternate storage on
+                // transport/server errors. Preserve that fallback when streaming.
+                if MediaHTTP.isProxyPath(path) { continue }
                 if case MediaTransferError.httpStatus(let code) = error, (400...499).contains(code)
                 {
                     continue
