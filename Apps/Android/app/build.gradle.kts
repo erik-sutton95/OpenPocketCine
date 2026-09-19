@@ -41,6 +41,26 @@ android {
 
     ndkVersion = "28.2.13676358"
 
+    // Ratchet, not a clean-up mandate: today's warnings are recorded in
+    // `lint-baseline.xml`, and anything new is an error. Burn entries out of
+    // the baseline as they get fixed; regenerate it with
+    // `./gradlew :app:updateLintBaseline` only after a real fix, never to make
+    // a new warning go away.
+    lint {
+        warningsAsErrors = true
+        baseline = file("lint-baseline.xml")
+        // These fire when somebody else publishes a release, not when this
+        // repo changes — Dependabot owns them. A green CI must not depend on
+        // the day's version of the world.
+        informational +=
+            listOf(
+                "GradleDependency",
+                "NewerVersionAvailable",
+                "AndroidGradlePluginVersion",
+                "UseTomlInstead",
+            )
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -72,6 +92,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // The upstream alpha ships from Play under the release key, so a local
+            // debug build can never replace it. A distinct id installs beside it and
+            // keeps both available for side-by-side qualification on one body.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -154,6 +181,15 @@ val sentryDsnAndroidField =
             )
         }
 
+// Windows CPython installs put `python` on PATH and no `python3`, so the POSIX
+// name aborts the build identity exec. `PYTHON` overrides both.
+val pythonExecutable: Provider<String> =
+    providers.environmentVariable("PYTHON").orElse(
+        providers.systemProperty("os.name").map { osName ->
+            if (osName.startsWith("Windows", ignoreCase = true)) "python" else "python3"
+        }
+    )
+
 androidComponents {
     onVariants { variant ->
         variant.buildConfigFields?.put("SOURCE_REVISION", sourceRevisionField)
@@ -163,7 +199,7 @@ androidComponents {
         val identity = providers.exec {
             workingDir = repositoryRoot
             commandLine(
-                "python3", repositoryRoot.resolve("tools/build-identity.py").absolutePath,
+                pythonExecutable.get(), repositoryRoot.resolve("tools/build-identity.py").absolutePath,
                 "--platform", "android", "--configuration",
                 "${variant.name}-$resolvedVersionName-$resolvedVersionCode-${gradle.gradleVersion}",
             )
