@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.lut
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.pow
@@ -29,7 +30,7 @@ internal object LutExposureCompensation {
     fun label(stops: Double): String {
         val value = snap(stops)
         if (value == 0.0) return "0.0"
-        val formatted = "%+.1f".format(value)
+        val formatted = "%+.1f".format(Locale.US, value)
         return formatted.replace("-", "−")
     }
 

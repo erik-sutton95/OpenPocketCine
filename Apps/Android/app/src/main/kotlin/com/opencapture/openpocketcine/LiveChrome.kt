@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -835,7 +836,7 @@ class FrameRateSampler(
             return 1.0 / average
         }
 
-    val formatted: String get() = String.format("%.2f", displayFPS)
+    val formatted: String get() = String.format(Locale.US, "%.2f", displayFPS)
 }
 
 /** 0–4 bars from the 0–100 link-health score, with hysteresis. */

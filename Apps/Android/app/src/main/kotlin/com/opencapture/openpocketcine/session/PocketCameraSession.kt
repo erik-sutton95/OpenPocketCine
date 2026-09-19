@@ -37,6 +37,7 @@ import com.opencapture.openpocketcine.diagnostics.RecoveryEffectLog
 import com.opencapture.openpocketcine.diagnostics.RecoveryReason
 import com.opencapture.openpocketcine.BuildConfig
 import android.os.Build
+import java.util.Locale
 import java.util.UUID
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
@@ -1119,7 +1120,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val keyframe = decoder.lastKeyframeAt
         lastKeyframeAge =
             if (keyframe == null) "none yet"
-            else String.format("%.1fs", (System.currentTimeMillis() - keyframe) / 1000.0)
+            else String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - keyframe) / 1000.0)
     }
 
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */

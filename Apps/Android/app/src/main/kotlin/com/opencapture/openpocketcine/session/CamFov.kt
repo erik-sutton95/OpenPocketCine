@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -96,7 +97,7 @@ object CamFov {
         if (abs(shown - MAX_FACTOR) < 0.05) return "12×"
         val nearest = shown.roundToInt()
         if (abs(shown - nearest) < 0.05 && nearest in 1..12) return "${nearest}×"
-        return String.format("%.1f×", shown)
+        return String.format(Locale.US, "%.1f×", shown)
     }
 
     fun nextJump(from: Double, stops: List<Double> = JUMPS): Double {
