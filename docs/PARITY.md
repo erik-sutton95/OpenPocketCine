@@ -550,11 +550,15 @@ send so the synchronous note clear in `fireKind` / `fireCamera` cannot eat it,
 and only when that clear left the note empty, so a `not live` failure line
 still wins. Silent while the held stop still fits, which is the usual case.
 
-Verification of the note: core and shell unit tests on both sides. The physical
-Android leg is **pending** - the Pocket 3 stopped answering DHCP on its own
-SoftAP mid-session (the phone associates, the camera never offers a lease) and
-the body needs a power cycle. Physical iOS verification of the corrected stops
-and of this note remains pending: no iPhone is available to this project.
+Verification of the note: core and shell unit tests on both sides, and
+**physical Android** on 2026-09-19 (Pocket 3, Galaxy S23 Ultra, debug build,
+live UDP session). 1080 at 4× (`lens=868`) → 2.7K showed `2.7K caps zoom at 3×`;
+2.7K at 3× → 4K showed `4K caps zoom at 2×`; 1080 at 2× → 4K showed no note. The
+body resets the lens to 1× (`lens=217`) on every FORMAT change, so the chip
+lands on 1× under the note rather than on the new ceiling. The chip cycle then
+walked 1×/2×/3× on 2.7K and 1×/2× on 4K, each chip pin released by a matching
+`cam_fov` within ~0.5 s. Physical iOS verification of the corrected stops and
+of this note remains pending: no iPhone is available to this project.
 
 ### Zoom chip pin expiry (2026-09-18)
 
