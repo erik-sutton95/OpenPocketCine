@@ -663,7 +663,9 @@ public enum FeedIncidentClassifier: Sendable {
             }
             return FeedIncidentVerdict(suppression: .none, kind: kind, failingStage: stage)
         }
-        if (outputFresh || !life.outputObservable) && assistStale
+        // A compressed-layer feed can retain timestamps from an earlier
+        // native assist pipeline. Its stopped clock is not an active stall.
+        if outputFresh && assistStale
             && snapshot.ages.assistOutputAge != nil
         {
             return FeedIncidentVerdict(
@@ -689,10 +691,11 @@ public enum FeedIncidentClassifier: Sendable {
         return FeedIncidentVerdict(suppression: .none, kind: nil, failingStage: nil)
     }
 
-    /// Fresh decoded output and presentation when those stages are observable.
+    /// Fresh decoded output and presentation, with no active assist failure.
     /// A generation change or repair request is not recovery.
     public static func isRecovered(_ snapshot: FeedIncidentSnapshot) -> Bool {
         if suppression(of: snapshot) != nil { return false }
+        guard classify(snapshot).kind == nil else { return false }
         let life = snapshot.lifecycle
         let threshold = FeedIncidentBounds.stallThreshold
         // With neither downstream stage observable, receipt of compressed

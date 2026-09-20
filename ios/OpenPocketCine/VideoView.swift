@@ -19,6 +19,8 @@ struct VideoView: View {
     var transfer: MonitorTransfer?
     /// MIRROR assist. Applied on the host view so reconnect cannot skip it.
     var pictureFlip = false
+    /// Outdoor HDR panel. Identity presents through Metal EDR.
+    var hdrDisplay = false
 
     var body: some View {
         VideoDisplayRepresentable(
@@ -28,7 +30,8 @@ struct VideoView: View {
             pictureFlip: pictureFlip,
             sampleBus: sampleBus,
             transfer: transfer,
-            feedUpscaler: FeedUpscaleSwitch.shared.upscaler
+            feedUpscaler: FeedUpscaleSwitch.shared.upscaler,
+            hdrDisplay: hdrDisplay
         )
         .transaction { $0.animation = nil }
     }
@@ -49,11 +52,13 @@ private struct VideoDisplayRepresentable: UIViewRepresentable {
     var sampleBus: LiveFrameSampleBus
     var transfer: MonitorTransfer?
     var feedUpscaler: FeedUpscaler
+    var hdrDisplay: Bool
 
     func makeUIView(context: Context) -> DisplayLayerView {
         let view = DisplayLayerView(decoder.displayLayer)
         view.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = view.ciFeed
+        view.applyHDRDisplay(hdrDisplay)
         bindMirror(decoder, view: view)
         wire(decoder)
         return view
@@ -62,11 +67,13 @@ private struct VideoDisplayRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: DisplayLayerView, context: Context) {
         uiView.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = uiView.ciFeed
+        uiView.applyHDRDisplay(hdrDisplay)
         bindMirror(decoder, view: uiView)
         guard
             decoder.sampleBus !== sampleBus
                 || decoder.effects != effects
                 || decoder.feedUpscaler != feedUpscaler
+                || decoder.hdrDisplayEnabled != hdrDisplay
                 || decoder.assistMirror != assistMirror
                 || (transfer != nil && decoder.incomingTransfer != transfer)
         else { return }
@@ -84,6 +91,7 @@ private struct VideoDisplayRepresentable: UIViewRepresentable {
         decoder.sampleBus = sampleBus
         decoder.effects = effects
         decoder.feedUpscaler = feedUpscaler
+        decoder.hdrDisplayEnabled = hdrDisplay
         decoder.adoptIncomingTransfer(transfer)
         decoder.startSimulatorSampleIfNeeded()
     }
@@ -115,6 +123,12 @@ final class DisplayLayerView: UIView {
     func setPictureMirrored(_ mirrored: Bool) {
         pictureMirrored = mirrored
         applyPictureTransform()
+    }
+
+    func applyHDRDisplay(_ enabled: Bool) {
+        LiveHDRDisplay.setEnabled(enabled, screen: window?.screen)
+        LiveHDRDisplay.configure(displayLayer, screen: window?.screen)
+        ciFeed.syncHDRDisplay()
     }
 
     private func applyPictureTransform() {

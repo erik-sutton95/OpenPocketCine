@@ -1,4 +1,5 @@
 #if os(iOS)
+    import CoreGraphics
     import CoreText
     import MonitorPresentation
     import SwiftUI
@@ -10,22 +11,28 @@
         public static let canvas = color(0x08090A)
         public static let surface = color(0x1A1B1C)
         public static let raised = color(0x222425)
-        public static let accent = color(0x00A3E0)
-        public static let text = Color.white
-        public static let secondary = color(0xCFD4D4)
-        public static let muted = color(0x8D9293)
-        public static let faint = color(0x5E6262)
+        /// Linear headroom for HUD type. 1 is SDR. The shell writes this when
+        /// Operator Setup → Display → HDR display is on.
+        nonisolated(unsafe) public static var hdrGain: CGFloat = 1
+
+        public static var accent: Color { edrAccent(gain: hdrGain) }
+        public static var text: Color { edrText(gain: hdrGain) }
+        public static var secondary: Color { edrSecondary(gain: hdrGain) }
+        public static var muted: Color { edrMuted(gain: hdrGain) }
+        public static var faint: Color { edrFaint(gain: hdrGain) }
         public static let border = Color.white.opacity(0.08)
-        public static let recording = color(0xD13034)
+        public static var recording: Color { edrRecording(gain: hdrGain) }
         /// Digital-crop warning on the zoom chip and disc (same as the dial ticks).
-        public static let digitalCrop = color(0xF0B23C)
+        public static var digitalCrop: Color {
+            edrSRGB(red: 240 / 255, green: 178 / 255, blue: 60 / 255, gain: hdrGain)
+        }
         public static let radius: CGFloat = 12
 
         public static func linkHealthColor(_ band: MonitorLinkHealthBand) -> Color {
             switch band {
             case .poor: recording
-            case .watch: Color(red: 0.96, green: 0.52, blue: 0.12)
-            case .stable: Color(red: 0.18, green: 0.78, blue: 0.42)
+            case .watch: edrSRGB(red: 0.96, green: 0.52, blue: 0.12, gain: hdrGain)
+            case .stable: edrSRGB(red: 0.18, green: 0.78, blue: 0.42, gain: hdrGain)
             }
         }
 
@@ -33,6 +40,45 @@
             Color(
                 red: Double((hex >> 16) & 255) / 255,
                 green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
+        }
+
+        /// Linear-P3 EDR so live chrome can outshine SDR white on an HDR panel.
+        /// `gain` 1 keeps the encoded sRGB color.
+        public static func edrSRGB(
+            red: CGFloat, green: CGFloat, blue: CGFloat, gain: CGFloat, alpha: CGFloat = 1
+        ) -> Color {
+            let headroom = gain.isFinite ? max(gain, 1) : 1
+            if headroom <= 1.001 {
+                return Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+            }
+            func linear(_ channel: CGFloat) -> CGFloat { pow(max(channel, 0), 2.2) * headroom }
+            guard let space = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3),
+                let color = CGColor(
+                    colorSpace: space,
+                    components: [linear(red), linear(green), linear(blue), alpha])
+            else {
+                return Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+            }
+            return Color(cgColor: color)
+        }
+
+        public static func edrText(gain: CGFloat) -> Color {
+            edrSRGB(red: 1, green: 1, blue: 1, gain: gain)
+        }
+        public static func edrAccent(gain: CGFloat) -> Color {
+            edrSRGB(red: 0, green: 163 / 255, blue: 230 / 255, gain: gain)
+        }
+        public static func edrMuted(gain: CGFloat) -> Color {
+            edrSRGB(red: 141 / 255, green: 146 / 255, blue: 147 / 255, gain: gain)
+        }
+        public static func edrFaint(gain: CGFloat) -> Color {
+            edrSRGB(red: 94 / 255, green: 98 / 255, blue: 98 / 255, gain: gain)
+        }
+        public static func edrSecondary(gain: CGFloat) -> Color {
+            edrSRGB(red: 207 / 255, green: 212 / 255, blue: 212 / 255, gain: gain)
+        }
+        public static func edrRecording(gain: CGFloat) -> Color {
+            edrSRGB(red: 209 / 255, green: 48 / 255, blue: 52 / 255, gain: gain)
         }
 
         /// Font resources travel with the engine; a new app does not copy font files
@@ -61,6 +107,18 @@
                 }
             }
         }()
+    }
+
+    private struct MonitorHDRChromeGainKey: EnvironmentKey {
+        static let defaultValue: CGFloat = 1
+    }
+
+    extension EnvironmentValues {
+        /// Linear headroom for live HUD labels. 1 is SDR.
+        public var monitorHDRChromeGain: CGFloat {
+            get { self[MonitorHDRChromeGainKey.self] }
+            set { self[MonitorHDRChromeGainKey.self] = newValue }
+        }
     }
 
     /// The visual label may be small, but the interaction always has a 44pt target.

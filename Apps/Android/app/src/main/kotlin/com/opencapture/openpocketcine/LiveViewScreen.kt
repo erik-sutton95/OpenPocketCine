@@ -467,6 +467,10 @@ fun LiveViewScreen(model: AppModel) {
                 cameraName = model.session.connectedCamera?.name,
             )
         var vulkanSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
+        LaunchedEffect(vulkanSurfaceView, model.hdrDisplayActive) {
+            val surface = vulkanSurfaceView ?: return@LaunchedEffect
+            HdrDisplay.apply(surface, enabled = model.hdrDisplayActive)
+        }
         var glesTextureView by remember { mutableStateOf<TextureView?>(null) }
         val wantsFaceDetect by model.session.wantsFaceDetect.collectAsState()
         var canvasOrigin by remember { mutableStateOf(Offset.Zero) }

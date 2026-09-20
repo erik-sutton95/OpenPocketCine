@@ -28,7 +28,8 @@ struct WatcherLiveView: View {
                 VideoView(
                     decoder: client.decoder, effects: model.assist.effects,
                     sampleBus: client.samples, transfer: client.transfer,
-                    pictureFlip: client.decoder.poseViewFlip
+                    pictureFlip: client.decoder.poseViewFlip,
+                    hdrDisplay: model.hdrDisplayActive
                 )
                 .frame(width: feed.width, height: feed.height)
                 .contentShape(Rectangle())

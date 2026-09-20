@@ -64,6 +64,18 @@ final class AppModel {
     var keepScreenAwake: Bool = OperatorPrefs.keepScreenAwake {
         didSet { OperatorPrefs.keepScreenAwake = keepScreenAwake }
     }
+    var hdrDisplay: Bool = OperatorPrefs.hdrDisplay {
+        didSet {
+            OperatorPrefs.hdrDisplay = hdrDisplay
+            LiveHDRDisplay.setEnabled(hdrDisplay)
+            LiveHDRDisplay.setScreenCaptured(screenCaptured)
+        }
+    }
+    /// Screen recording / AirPlay. HDR present drops to SDR so the file is not boosted.
+    var screenCaptured = false {
+        didSet { LiveHDRDisplay.setScreenCaptured(screenCaptured) }
+    }
+    var hdrDisplayActive: Bool { hdrDisplay && !screenCaptured }
     var cacheFullResolution: Bool = OperatorPrefs.cacheFullResolution {
         didSet { OperatorPrefs.cacheFullResolution = cacheFullResolution }
     }
@@ -344,6 +356,7 @@ final class AppModel {
                 return
             }
         #endif
+        LiveHDRDisplay.setEnabled(hdrDisplay)
         savedCameras = SavedCameraStore.load()
         switch CameraStartupPolicy.launchDestination(savedCameras: savedCameras) {
         case .addCamera:
@@ -759,6 +772,17 @@ struct AppRoot: View {
         }
         .environment(model)
         .environment(\.font, LiveType.text(16))
+        .environment(
+            \.monitorHDRChromeGain,
+            model.hdrDisplayActive ? CGFloat(LiveHDRDisplay.presentGain) : 1)
+        .background {
+            HDRChromeHost(enabled: model.hdrDisplayActive).allowsHitTesting(false)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)
+        ) { _ in
+            model.screenCaptured = UIScreen.main.isCaptured
+        }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showReliabilityPrompt) {
             ReliabilityConsentPrompt { enabled in
@@ -791,6 +815,7 @@ struct AppRoot: View {
             }
             model.prepareStartup()
             model.activateWatchRelay()
+            model.screenCaptured = UIScreen.main.isCaptured
             UIApplication.shared.isIdleTimerDisabled = model.keepScreenAwake
         }
         .onChange(of: model.relayClient.status) { _, status in

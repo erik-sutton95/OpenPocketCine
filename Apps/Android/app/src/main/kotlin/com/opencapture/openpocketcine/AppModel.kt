@@ -49,6 +49,11 @@ class AppModel(context: Context) {
     var liveChromeInteractive by mutableStateOf(true)
     var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
         private set
+    var hdrDisplay by mutableStateOf(OperatorPrefs.hdrDisplay(appContext))
+        private set
+    var screenCaptured by mutableStateOf(false)
+    val hdrDisplayActive: Boolean
+        get() = HdrDisplay.isEffective(hdrDisplay, screenCaptured)
     var cacheFullResolution by mutableStateOf(OperatorPrefs.cacheFullResolution(appContext))
         private set
     var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))
@@ -183,6 +188,11 @@ class AppModel(context: Context) {
     fun updateKeepScreenAwake(value: Boolean) {
         keepScreenAwake = value
         OperatorPrefs.setKeepScreenAwake(appContext, value)
+    }
+
+    fun updateHdrDisplay(value: Boolean) {
+        hdrDisplay = value
+        OperatorPrefs.setHdrDisplay(appContext, value)
     }
 
     fun updateCacheFullResolution(value: Boolean) {

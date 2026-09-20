@@ -1,6 +1,7 @@
 import Foundation
 import Metal
 import Observation
+import os
 
 #if canImport(MetalFX)
     import MetalFX
@@ -102,9 +103,19 @@ final class FeedUpscaleSwitch {
         }
     }
 
-    nonisolated(unsafe) static var rendererReadsUpscaler: FeedUpscaler = .supported(
-        or: storedChoice)
-    nonisolated(unsafe) static var presentsSuperResolutionInput = false
+    private nonisolated static let rendererSelection = OSAllocatedUnfairLock(
+        initialState: FeedUpscaler.supported(or: storedChoice))
+    private nonisolated static let rendererInputPreview = OSAllocatedUnfairLock(initialState: false)
+
+    nonisolated static var rendererReadsUpscaler: FeedUpscaler {
+        get { rendererSelection.withLock { $0 } }
+        set { rendererSelection.withLock { $0 = newValue } }
+    }
+
+    nonisolated static var presentsSuperResolutionInput: Bool {
+        get { rendererInputPreview.withLock { $0 } }
+        set { rendererInputPreview.withLock { $0 = newValue } }
+    }
 
     private nonisolated static var storedChoice: FeedUpscaler? {
         guard let stored = UserDefaults.standard.string(forKey: storageKey) else { return nil }

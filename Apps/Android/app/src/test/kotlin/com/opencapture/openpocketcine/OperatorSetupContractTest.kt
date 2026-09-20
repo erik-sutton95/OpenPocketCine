@@ -251,6 +251,8 @@ class OperatorSetupContractTest {
         assertEquals("Proxy", MediaLibraryCopy.PROXY_TAG)
         assertTrue(SettingsHelpCopy.KEEP_SCREEN_AWAKE.contains("Android may still dim"))
         assertFalse(SettingsHelpCopy.KEEP_SCREEN_AWAKE.contains("iOS may still dim"))
+        assertTrue(SettingsHelpCopy.HDR_DISPLAY.contains("HDR/HLG"))
+        assertTrue(SettingsHelpCopy.HDR_DISPLAY.contains("decoded camera signal"))
         assertTrue(SettingsHelpCopy.GAMEPAD.contains("Cross/A records"))
         assertTrue(SettingsHelpCopy.GAMEPAD.contains("D-pad"))
         assertTrue(SettingsHelpCopy.GIMBAL_JOYSTICK.contains("Left is the default"))

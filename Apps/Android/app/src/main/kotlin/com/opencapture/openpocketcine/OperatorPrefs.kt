@@ -202,6 +202,7 @@ enum class LiveOperatorPanel {
 object OperatorPrefs {
     private const val PREFS = "openpocketcine.operator"
     private const val AWAKE = "OpenPocketCine.KeepScreenAwake"
+    private const val HDR_DISPLAY = "OpenPocketCine.HDRDisplay"
     private const val AWAKE_LEGACY = "keep-screen-awake"
     private const val RECORD_CONFIRM = "OpenPocketCine.RecordConfirmation"
     private const val HAPTICS = "OpenPocketCine.HapticsEnabled"
@@ -250,6 +251,12 @@ object OperatorPrefs {
 
     fun setKeepScreenAwake(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(AWAKE, value).apply()
+    }
+
+    fun hdrDisplay(context: Context): Boolean = prefs(context).getBoolean(HDR_DISPLAY, false)
+
+    fun setHdrDisplay(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(HDR_DISPLAY, value).apply()
     }
 
     fun recordConfirmationEnabled(context: Context): Boolean =

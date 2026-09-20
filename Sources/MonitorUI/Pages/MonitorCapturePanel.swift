@@ -19,6 +19,7 @@
         @State private var contentHeight: CGFloat = 86
         @State private var revealed = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
 
         public init(
             title: String, subtitle: String, maximumHeight: CGFloat = .infinity,
@@ -55,17 +56,17 @@
             VStack(spacing: stackSpacing) {
                 HStack(alignment: .center, spacing: 9) {
                     Text(title).font(MonitorTheme.font(9, weight: .semibold))
-                        .tracking(1.8).foregroundStyle(MonitorTheme.text)
+                        .tracking(1.8).foregroundStyle(MonitorTheme.edrText(gain: hdrGain))
                         .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     Text(subtitle.uppercased()).font(MonitorTheme.font(8.5))
-                        .tracking(1.19).foregroundStyle(MonitorTheme.faint)
+                        .tracking(1.19).foregroundStyle(MonitorTheme.edrFaint(gain: hdrGain))
                         .lineLimit(1).minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityLabel(subtitle)
                     if kind.showsClose {
                         Button(action: close) {
                             MonitorIcon.x.frame(width: 13, height: 13)
-                                .foregroundStyle(MonitorTheme.muted)
+                                .foregroundStyle(MonitorTheme.edrMuted(gain: hdrGain))
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
@@ -123,28 +124,23 @@
     /// Capture tabs are individual cyan-outlined choices rather than the solid
     /// grouped segments used on an Operator Setup page.
     public struct MonitorCaptureTabs<Value: Hashable>: View {
-        private let options: [Value]
-        private let selection: Value?
-        private let title: (Value) -> String
-        private let select: (Value) -> Void
+        private let snapshot: [MonitorCaptureTabRow]
 
         public init(
-            options: [Value], selection: Value?, title: @escaping (Value) -> String,
+            options: [Value], selection: Value?, title: (Value) -> String,
             select: @escaping (Value) -> Void
         ) {
-            self.options = options
-            self.selection = selection
-            self.title = title
-            self.select = select
-        }
-
-        var rows: ForEach<[MonitorCaptureTabRow], Int, MonitorCaptureTabButton> {
-            let snapshot = options.enumerated().map { index, option in
+            // The child body may run after camera telemetry has changed the
+            // host's labels. Freeze projections alongside their option indices.
+            snapshot = options.enumerated().map { index, option in
                 MonitorCaptureTabRow(
                     id: index, title: title(option), selected: selection == option,
                     action: { select(option) })
             }
-            return Self.renderRows(snapshot)
+        }
+
+        var rows: ForEach<[MonitorCaptureTabRow], Int, MonitorCaptureTabButton> {
+            Self.renderRows(snapshot)
         }
 
         nonisolated static func renderRows(_ rows: [MonitorCaptureTabRow])

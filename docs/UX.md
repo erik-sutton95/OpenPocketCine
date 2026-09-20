@@ -121,7 +121,9 @@ separate hold-to-move interaction.
 
 - Long-press View Assist → options + help.
 - Operator Setup: seven tabs (Link, Sharing, View Assist, Controls, Display,
-  Storage, System). iOS Sharing: Share this feed, optional passcode, control
+  Storage, System). Display **HDR display** (off by default) uses the phone
+  panel so live view and scopes stay readable in sun — not camera COLOR HDR.
+  iOS Sharing: Share this feed, optional passcode, control
   requests, broadcast priority, and an explicit Show Wi-Fi code sheet. Watch a
   feed from home prompts joining the same camera Wi-Fi first: scan the host code
   with Camera, accept Join Network, then return and select the shared feed. Only
