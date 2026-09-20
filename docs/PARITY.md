@@ -680,6 +680,14 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   picker on phone/tablet layouts; disabled and unmounted controls retire their input
   exclusions. Actual compact panels measure 128 dp in both orientations.
   Physical hardware and camera-session proof remain an outstanding exception.
+- Android TalkBack: physical SM-S918B / Android 16 pass over the live-view
+  readouts and the assist cells. The REC chip, both battery rows, the timecode
+  and the assist cells each publish one labelled stop, and the assist cell keeps
+  `ACTION_CLICK` and `ACTION_LONG_CLICK` after the label replaces its subtree.
+  `LiveChromeSemanticsTest` pins this against the platform accessibility tree
+  rather than Compose semantics, which reports a merge the platform does not
+  perform. Media, settings and pairing carry the same container leak and are a
+  later pass; this is not a full TalkBack traversal qualification.
 - Lock, battery percentage, and top-readout alignment were launched on a real
   iPhone and are part of the WDA chrome pass above. Matching Android corrections
   pass build, unit tests and lint; physical Android visual review remains an

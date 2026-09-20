@@ -298,6 +298,27 @@ present after that is a skip, not a crash.
 Wi-Fi passwords stay in Keystore, not saved-camera JSON. Pairing and live view
 need a **physical** Android phone.
 
+### TalkBack
+
+The live-view readouts and the assist cells each speak as one labelled stop:
+the REC chip reads state with elapsed time, the battery rows name phone or
+camera and say "level unknown" rather than leaving a dash unvoiced, the
+timecode names itself, and an assist cell reads its tool name, state and hold
+gesture instead of its 9sp abbreviation.
+
+Labelling a container needs `clearAndSetSemantics`. Plain `semantics` does not
+absorb children, and `mergeDescendants = true` does not suppress them either —
+the platform publishes the parent description *and* every child `Text` as
+separate stops, even though Compose reports the merge as having happened. Leaf
+nodes keep plain `semantics`, since a `Text` has nothing to absorb, and
+`MonitorSlider` keeps its `progressBarRangeInfo` and set action, which a clear
+would erase. `LiveChromeSemanticsTest` pins the rule against the platform
+accessibility tree, so a copy of the wrong pattern fails there rather than on a
+tester's phone.
+
+Verified on a physical SM-S918B / Android 16. Media, settings and pairing carry
+the same container leak and are a later pass.
+
 ## What not to copy from OpenZCine Android
 
 Nikon PTP-IP, AccessorySetupKit, OCR SSID scanner, USB-C/HDMI paths.

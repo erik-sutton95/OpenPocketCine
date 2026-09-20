@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
@@ -60,13 +61,13 @@ class AppModel(context: Context) {
         private set
     var hapticsEnabled by mutableStateOf(OperatorPrefs.hapticsEnabled(appContext))
         private set
-    var gimbalStickSensitivity by mutableStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
+    var gimbalStickSensitivity by mutableIntStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
         private set
     var virtualJoystickInvertPan by mutableStateOf(OperatorPrefs.virtualJoystickInvertPan(appContext))
         private set
     var virtualJoystickInvertTilt by mutableStateOf(OperatorPrefs.virtualJoystickInvertTilt(appContext))
         private set
-    var virtualJoystickDeadzonePercent by mutableStateOf(
+    var virtualJoystickDeadzonePercent by mutableIntStateOf(
         OperatorPrefs.virtualJoystickDeadzonePercent(appContext),
     )
         private set
@@ -111,7 +112,7 @@ class AppModel(context: Context) {
     var lutSelection by mutableStateOf(OperatorPrefs.lutSelection(appContext))
         private set
     var assistClean by mutableStateOf(false)
-    var phoneBatteryPercent by mutableStateOf(-1)
+    var phoneBatteryPercent by mutableIntStateOf(-1)
         private set
     var phoneCharging by mutableStateOf(false)
         private set

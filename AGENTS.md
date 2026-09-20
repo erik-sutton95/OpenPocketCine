@@ -67,6 +67,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - `just check` — full repository quality gate.
 - `just native-check` — Swift lint/test plus iOS simulator build and tests.
 - `just android-check` — Gradle assembleDebug, unit tests, lint.
+- `just android-device-test` — instrumentation suite on an attached device. CI has no emulator, so nothing else runs it.
 - **physical:** operator-visible work is proven on a real iPhone or Android device for the platform changed. Simulator has no BLE or camera Wi-Fi. Compile-only is not done.
 
 ## Completion

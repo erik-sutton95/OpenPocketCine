@@ -19,6 +19,7 @@ import com.opencapture.monitorui.MonitorBackdropSource
 import com.opencapture.monitorui.MonitorBlurCapability
 import androidx.compose.ui.platform.LocalView
 import android.view.View
+import androidx.core.graphics.createBitmap
 import java.util.concurrent.Executors
 
 /**
@@ -66,7 +67,7 @@ internal class MonitorBackdropFeed(context: Context) {
                 } else {
                     val bitmap = synchronized(this@MonitorBackdropFeed) {
                         recycled?.takeIf { it.width == frame.width && it.height == frame.height }
-                            ?: Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
+                            ?: createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
                     }
                     bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(frame.rgba))
                     bitmap

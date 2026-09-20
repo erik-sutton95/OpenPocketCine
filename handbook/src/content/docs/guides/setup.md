@@ -38,6 +38,11 @@ just android-core     # cross-compile OpenPocketViewCore → jniLibs
 just android-check    # assembleDebug, unit tests, lint
 ```
 
+With a phone plugged in, `just android-install` builds, installs and launches
+the debug build, and `just android-device-test` runs the instrumentation suite
+on it. Both take an optional serial when several devices are attached
+(`just android-device-test R58R92BL76K`).
+
 The Compose app is **arm64-v8a only**. Join the
 [public beta on Google Play](https://play.google.com/apps/testing/com.opencapture.openpocketcine). Pairing and live view
 need a physical phone. More: [Android app](../apps/android/). Maintainer

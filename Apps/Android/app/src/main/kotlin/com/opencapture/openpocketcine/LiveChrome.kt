@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -1526,6 +1527,10 @@ internal fun RecordButton(
                                     pending = null
                                     if (CaptureShutterPolicy.canCommit(snap, request)) onClick()
                                 })
+                                // Both rows are plain Text, so without a role
+                                // they read as label, not as something to press
+                                // — at the one moment that costs a take.
+                                .semantics { role = Role.Button }
                                 .padding(vertical = 14.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
@@ -1537,6 +1542,7 @@ internal fun RecordButton(
                             Modifier
                                 .fillMaxWidth()
                                 .chromeClickable(onClick = { confirmOpen = false })
+                                .semantics { role = Role.Button }
                                 .padding(vertical = 12.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
@@ -1601,7 +1607,16 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
             else -> LiveDesign.good
         }
     val readout = if (percent < 0) "—" else "$percent"
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Phone and camera are told apart only by the glyph, so both rows speak a
+    // bare number without this. The em dash for "unknown" reads as nothing.
+    val source = if (camera) "Camera battery" else "Phone battery"
+    val level = if (percent < 0) "level unknown" else "$percent percent"
+    val power = if (charging) ", charging" else ""
+    Row(
+        Modifier.clearAndSetSemantics { contentDescription = "$source $level$power" },
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) {
             if (camera) CameraGlyph(LiveDesign.muted, Modifier.size(12.dp, 10.dp))
             else PhoneGlyph(LiveDesign.muted, Modifier.size(7.dp, 11.dp))
@@ -1682,7 +1697,11 @@ private fun BoltGlyph(tint: Color, modifier: Modifier = Modifier) {
 @Composable
 fun CameraBatteryReadout(percent: Int, modifier: Modifier = Modifier) {
     Row(
-        modifier,
+        modifier.clearAndSetSemantics {
+            contentDescription =
+                if (percent in 0..100) "Camera battery $percent percent"
+                else "Camera battery level unknown"
+        },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1709,6 +1728,9 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
     val colon = raw.lastIndexOf(':')
     val head = if (colon >= 0) raw.substring(0, colon + 1) else raw
     val tail = if (colon >= 0) raw.substring(colon + 1) else ""
+    // Nothing on screen says these digits are a timecode, and the placeholder
+    // is punctuation that speech drops entirely.
+    val spoken = if (incoming == null) "Timecode not available" else "Timecode $raw"
     if (portrait) {
         Text(
             raw,
@@ -1716,7 +1738,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             style = LiveType.mono(15f, FontWeight.Normal),
             maxLines = 1,
             softWrap = false,
-            modifier = modifier,
+            modifier = modifier.semantics { contentDescription = spoken },
         )
         return
     }
@@ -1729,8 +1751,24 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
             ,
         maxLines = 1,
         softWrap = false,
-        modifier = modifier.wrapContentWidth(align = Alignment.Start, unbounded = true),
+        modifier =
+            modifier
+                .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                .semantics { contentDescription = spoken },
     )
+}
+
+/** "02:14" reads as digits; speech wants the units named. */
+private fun spokenElapsed(seconds: Int): String {
+    val minutes = seconds / 60
+    val rest = seconds % 60
+    val m = if (minutes == 1) "1 minute" else "$minutes minutes"
+    val s = if (rest == 1) "1 second" else "$rest seconds"
+    return when {
+        minutes == 0 -> s
+        rest == 0 -> m
+        else -> "$m $s"
+    }
 }
 
 /** Elapsed time comes from camera telemetry; this view never starts a timer. */
@@ -1743,7 +1781,20 @@ fun RecChip(recording: Boolean, elapsedSeconds: Int = 0) {
     val duration = "%02d:%02d".format(java.util.Locale.ROOT, elapsed / 60, elapsed % 60)
     Row(Modifier.graphicsLayer { alpha = 1f - .75f * pulse }
         .background(if (recording) LiveDesign.rec.copy(alpha = .9f) else Color(0xFF060708).copy(alpha = .72f), RoundedCornerShape(percent = 50))
-        .padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+        .padding(horizontal = 9.dp, vertical = 4.dp)
+        // "REC" and "02:14" are two nodes and read as fragments. Whether the
+        // chip also *announces* a start or stop is a live-region question the
+        // coverage rules in ARCHITECTURE.md have to settle first; this only
+        // makes the chip legible to someone who reaches it.
+        .clearAndSetSemantics {
+            val spoken = spokenElapsed(elapsed)
+            contentDescription =
+                when {
+                    recording -> "Recording, $spoken"
+                    elapsed > 0 -> "Standby, $spoken"
+                    else -> "Standby"
+                }
+        }, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         if (recording) Box(Modifier.size(6.dp).background(Color.White, CircleShape))
         Text(if (recording) "REC" else "STBY", color = LiveDesign.text,
@@ -1768,7 +1819,11 @@ fun FpsChip(fps: String, bars: Int) {
                 .wrapContentWidth(unbounded = true)
                 .chipGlass(CircleShape)
                 .padding(horizontal = 11.dp, vertical = 7.dp)
-                .semantics {
+                // A plain `semantics` here reads the sentence, then "FPS", then
+                // the number again. Only clearing collapses the row to one
+                // stop; `mergeDescendants` does not (measured on device in
+                // `LiveChromeSemanticsTest`).
+                .clearAndSetSemantics {
                     contentDescription = "Live view $fps frames per second, $bars of 4 signal bars"
                 },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1827,7 +1882,7 @@ fun ReadoutPill(
                 )
                 .then(
                     if (spoken != null) {
-                        Modifier.semantics(mergeDescendants = true) { contentDescription = spoken }
+                        Modifier.clearAndSetSemantics { contentDescription = spoken }
                     } else {
                         Modifier
                     },

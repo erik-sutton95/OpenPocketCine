@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +53,18 @@ internal fun AssistToolCell(
                     onLongClick = onLongClick,
                     onClick = onClick,
                 )
+                .clearAndSetSemantics {
+                    // Same sentence the palette already speaks for these very
+                    // tools (`MonitorAssistPalette`). The hold hint follows the
+                    // zoom readout, which names the gesture it offers rather
+                    // than leaving it to be discovered. Clearing is what stops
+                    // the 9sp "WAVE" abbreviation being read after the name;
+                    // plain `semantics` leaves it behind as a second stop, and
+                    // the tap and hold actions survive the clear.
+                    val options = if (onLongClick != null) ". Hold for options" else ""
+                    contentDescription = "${tool.title}, ${if (isOn) "on" else "off"}$options"
+                    if (!enabled) disabled()
+                }
                 .padding(vertical = 5.dp, horizontal = 8.dp)
                 .widthIn(min = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

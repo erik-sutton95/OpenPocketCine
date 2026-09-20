@@ -11,6 +11,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import android.view.Surface
+import androidx.core.graphics.createBitmap
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -309,7 +310,7 @@ internal class LiveVulkanSession(
     fun takeFaceBitmap(): Bitmap? {
         synchronized(faceLock) {
             if (!faceValid) return null
-            val bmp = Bitmap.createBitmap(FACE_W, FACE_H, Bitmap.Config.ARGB_8888)
+            val bmp = createBitmap(FACE_W, FACE_H, Bitmap.Config.ARGB_8888)
             bmp.copyPixelsFromBuffer(ByteBuffer.wrap(faceBytes))
             return bmp
         }

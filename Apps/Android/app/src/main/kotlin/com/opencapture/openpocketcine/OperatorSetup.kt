@@ -44,7 +44,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.settings.SettingsFalseColorKey
@@ -423,8 +426,8 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     val status by model.session.status.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
     var lastFrames by remember { mutableIntStateOf(0) }
-    var lastTickAt by remember { mutableStateOf(0L) }
-    var measuredFps by remember { mutableStateOf(0.0) }
+    var lastTickAt by remember { mutableLongStateOf(0L) }
+    var measuredFps by remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
@@ -1674,7 +1677,7 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
 }
 
 internal fun openUrl(context: Context, url: String) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
 }
 
 private fun operatorHaptic(view: View, enabled: Boolean) {

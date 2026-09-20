@@ -5,6 +5,7 @@ package com.opencapture.openpocketcine.feed
 import android.content.Context
 import android.graphics.Bitmap
 import android.opengl.GLES20
+import androidx.core.graphics.createBitmap
 import androidx.media3.common.util.GlProgram
 import androidx.media3.common.util.GlUtil
 import java.nio.ByteBuffer
@@ -252,17 +253,17 @@ internal class FeedEffectsGlProgram(
 
     private fun uploadCube(cube: FeedEffectsCube?): UploadedFeedEffectsCube {
         if (cube == null) {
-            val stub = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            val stub = createBitmap(1, 1, Bitmap.Config.ARGB_8888)
             return UploadedFeedEffectsCube(upload(stub), 0)
         }
         val atlas = feedEffectsCubeAtlas(cube)
-        val bitmap = Bitmap.createBitmap(atlas.width, atlas.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(atlas.width, atlas.height, Bitmap.Config.ARGB_8888)
         bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(atlas.rgba))
         return UploadedFeedEffectsCube(upload(bitmap), atlas.cubeSize)
     }
 
     private fun uploadStubTexture(): Int {
-        val stub = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val stub = createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         return upload(stub)
     }
 

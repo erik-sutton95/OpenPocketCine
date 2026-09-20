@@ -1,18 +1,18 @@
 New and changed
 
-- Pocket 3 zoom now offers only the stops the recording FORMAT allows, and a short note names the new cap when you change FORMAT.
-- HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default; screen recording stays a normal SDR picture.
-- Shared diagnostics now time one picture from decoder submit to the moment it is handed to the display, and count pictures never shown, so a late feed and a jumpy one read apart.
+- Shared diagnostics now include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
+- TalkBack reads live view as whole phrases, such as "Camera battery 87 percent" and "Waveform, on. Hold for options".
+- HDR display (Operator Setup → Display) boosts the phone panel, not the camera's HDR/HLG mode. Off by default; WAVE/HISTO still measure the camera signal.
 
 Fixes
 
-- The zoom readout no longer holds a value the camera refused; it settles on the camera's own zoom within a moment.
-- Shutter, ISO, zoom and ND readouts use a fixed number format, so a phone language with decimal commas no longer shows odd values.
-- Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
-- The app no longer closes on its own the moment it opens on Android 15 and newer phones.
+- Pocket 3 zoom follows recording FORMAT limits, names the new cap after FORMAT changes, and settles on the camera's value if a stop is refused.
+- Saved settings, remembered cameras and resized pictures use shared helpers. Nothing should look or behave differently.
+- Shutter, ISO, zoom and ND readouts use a fixed number format, including on phones whose language uses decimal commas.
+- Screen recordings stay normal SDR, including on Android 15 and newer phones.
 
 What to test
 
-- On Pocket 3, set FORMAT to 1080, 2.7K and 4K, then cycle zoom: 1080 reaches 4×, 2.7K reaches 3× and 4K reaches 2×, landing on 1× after each change.
-- Set the phone language to one that uses a decimal comma, then check shutter, ISO, zoom and ND readouts.
-- Turn on HDR display outdoors, check the feed, WAVE and a clip, record the screen, then toggle it off. Share diagnostics with the time of any freeze and whether the picture felt late or jumpy.
+- Share diagnostics with the time of any freeze and whether the picture felt late or jumpy. Toggle HDR display and check the feed, scopes and a screen recording; the recording should stay SDR.
+- With TalkBack on, swipe through REC, timecode, battery, FPS and assists. Each should speak one sentence. Double-tap and hold an assist tool to check both actions.
+- Check Pocket 3 zoom caps: 1080 4×, 2.7K 3×, 4K 2×, resetting to 1× on FORMAT changes. Change Operator Setup options, force-stop and reopen; settings and remembered cameras should persist.

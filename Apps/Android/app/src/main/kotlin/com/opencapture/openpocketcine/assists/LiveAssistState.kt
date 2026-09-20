@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.assists
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.NDFilterNotation
@@ -102,14 +103,14 @@ class LiveAssistState(
     var zebraMidtoneColor by mutableStateOf(ZebraPaint.AMBER)
 
     var waveMode by mutableStateOf(WaveformMode.RGB)
-    var waveBrightness by mutableStateOf(100)
+    var waveBrightness by mutableIntStateOf(100)
     var waveGuides by mutableStateOf(ScopeGuides())
     var waveScale by mutableDoubleStateOf(1.0)
     var waveCenter by mutableStateOf<StoredCenter?>(null)
     var waveCenterPortrait by mutableStateOf<StoredCenter?>(null)
 
     var paradeMode by mutableStateOf(ParadeMode.RGB)
-    var paradeBrightness by mutableStateOf(100)
+    var paradeBrightness by mutableIntStateOf(100)
     var paradeGuides by mutableStateOf(ScopeGuides())
     var paradeScale by mutableDoubleStateOf(1.0)
     var paradeCenter by mutableStateOf<StoredCenter?>(null)
@@ -121,7 +122,7 @@ class LiveAssistState(
     var histoCenterPortrait by mutableStateOf<StoredCenter?>(null)
 
     var vectorZoom by mutableStateOf(VectorscopeZoom.X1)
-    var vectorBrightness by mutableStateOf(100)
+    var vectorBrightness by mutableIntStateOf(100)
     var vectorScale by mutableDoubleStateOf(1.0)
     var vectorCenter by mutableStateOf<StoredCenter?>(null)
     var vectorCenterPortrait by mutableStateOf<StoredCenter?>(null)

@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.media
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import com.opencapture.openpocketcine.OperatorPrefs
 import org.json.JSONArray
 import org.json.JSONObject
@@ -136,13 +137,13 @@ class MediaCache(
     }
 
     fun persistFavorites(cameraId: String, favorites: Set<String>) {
-        prefs.edit().putString(favoritesKey(cameraId), favorites.sorted().joinToString("\u001f")).apply()
+        prefs.edit { putString(favoritesKey(cameraId), favorites.sorted().joinToString("\u001f")) }
     }
 
     fun lastCameraId(): String? = prefs.getString(LAST_CAMERA_KEY, null)
 
     fun rememberCameraId(cameraId: String) {
-        prefs.edit().putString(LAST_CAMERA_KEY, cameraId).apply()
+        prefs.edit { putString(LAST_CAMERA_KEY, cameraId) }
     }
 
     fun writeAtomically(data: ByteArray, dest: File) {
