@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.core.ConnectionPhase
@@ -55,7 +56,7 @@ class MediaLibraryController(
         private set
     var fetchInProgress by mutableStateOf(false)
         private set
-    var listedCount by mutableStateOf(0)
+    var listedCount by mutableIntStateOf(0)
         private set
     var note by mutableStateOf<String?>(null)
     var downloadProgress by mutableStateOf<Map<String, Double>>(emptyMap())

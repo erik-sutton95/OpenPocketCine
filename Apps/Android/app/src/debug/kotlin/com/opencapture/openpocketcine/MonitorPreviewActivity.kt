@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.graphics.scale
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -120,7 +121,7 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
         if (patterned) context.assets.open("monitor_backdrop_reference.png").use { BitmapFactory.decodeStream(it) } else null
     }
     val backdrop = remember(image) { MonitorBackdropSource().apply {
-        this.image = image?.let { Bitmap.createScaledBitmap(it, 180, 120, true) }
+        this.image = image?.let { it.scale(180, 120) }
     } }
     val readoutRegions = remember { com.opencapture.monitorui.MonitorReadoutRegions() }
     CompositionLocalProvider(

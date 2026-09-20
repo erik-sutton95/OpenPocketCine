@@ -39,6 +39,7 @@ import com.opencapture.monitorui.MonitorQuickPreview
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -248,7 +249,7 @@ private fun LiveControlSheetContent(
     }
     var drumSelection by remember(sheet) { mutableStateOf("") }
     var lastApplied by remember(sheet) { mutableStateOf("") }
-    var preferredAngle by remember(sheet) { mutableStateOf(OperatorPrefs.shutterAngleDegrees(context)) }
+    var preferredAngle by remember(sheet) { mutableDoubleStateOf(OperatorPrefs.shutterAngleDegrees(context)) }
     val isIsoAutoTab = sheet == LiveSheet.ISO && offersIsoAuto && selectedMode == 0
     val isAngleSheet = CaptureLists.isAngleSheet(
         sheet, status.expoMode, selectedMode, status.shootingMode,

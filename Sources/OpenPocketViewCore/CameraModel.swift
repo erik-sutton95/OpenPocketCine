@@ -107,9 +107,13 @@ public struct CameraModel: Equatable, Sendable {
     /// Chip cycle for this body, current FORMAT, and shooting mode.
     ///
     /// DJI Video: Pocket 4 Pro 1×/3×/6×/12× (60 mm tele). Pocket 4 1×/2×/4×
-    /// (single 20 mm; 4K still 4×). Pocket 3 1×/2×/4×, but 4K Video max 2×.
-    /// Nano 1×. SlowMo / TimeLapse / SuperNight: digital zoom off — Pro keeps
-    /// 1×/3× optical; everyone else 1×.
+    /// (single 20 mm; 4K still 4×). Nano 1×. SlowMo / TimeLapse / SuperNight:
+    /// digital zoom off — Pro keeps 1×/3× optical; everyone else 1×.
+    ///
+    /// Pocket 3 is per-FORMAT: the ceiling follows the capture size class, so
+    /// 1080 keeps 1×/2×/4× while 2.7K and 2160 1:1 stop at 3× and 4K and 3K 1:1
+    /// stop at 2× — see `VideoResolution.pocket3ZoomMax`. With no FORMAT known
+    /// yet, offer the body's absolute range.
     public func activeZoomStops(resolution: VideoResolution?, shootingMode: Int) -> [Double] {
         let n = name.lowercased().replacingOccurrences(of: " ", with: "")
         let isPro = n.contains("pocket4p") || n.contains("4pro")
@@ -124,7 +128,13 @@ public struct CameraModel: Equatable, Sendable {
         if isPro { return digitalLocked ? [1, 3] : [1, 3, 6, 12] }
         if digitalLocked { return [1] }
         if isPocket4 { return [1, 2, 4] }
-        if isPocket3 { return resolution == .p4K ? [1, 2] : [1, 2, 4] }
+        if isPocket3 {
+            switch resolution?.pocket3ZoomMax {
+            case 2: return [1, 2]
+            case 3: return [1, 2, 3]
+            default: return [1, 2, 4]
+            }
+        }
         switch family {
         case .pocket: return [1, 2, 4]
         case .nano, .other: return [1]

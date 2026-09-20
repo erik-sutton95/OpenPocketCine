@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -39,18 +40,22 @@ class CameraWifiCredentialStore(context: Context) {
 
     fun save(cameraId: String, ssid: String, password: String) {
         val sealed = encrypt(password) ?: return
-        preferences.edit()
-            .putString("$cameraId.ssid", ssid)
-            .putString("$cameraId.password", sealed)
-            .putString(ssidEntry(ssid), sealed)
-            .apply()
+        preferences.edit {
+            putString("$cameraId.ssid", ssid)
+            putString("$cameraId.password", sealed)
+            putString(ssidEntry(ssid), sealed)
+        }
     }
 
     fun remove(cameraId: String) {
         val ssid = preferences.getString("$cameraId.ssid", null)
-        val editor = preferences.edit().remove("$cameraId.ssid").remove("$cameraId.password")
-        if (!ssid.isNullOrEmpty()) editor.remove(ssidEntry(ssid))
-        editor.apply()
+        // `this.` is load-bearing: the store has its own remove(String), and a bare
+        // call here would read as recursion to anyone skimming the block.
+        preferences.edit {
+            this.remove("$cameraId.ssid")
+            this.remove("$cameraId.password")
+            if (!ssid.isNullOrEmpty()) this.remove(ssidEntry(ssid))
+        }
     }
 
     private fun decryptOrMigrate(cameraId: String, stored: String): String? {

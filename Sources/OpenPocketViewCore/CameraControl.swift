@@ -1082,6 +1082,26 @@ public struct VideoResolution: Equatable, Hashable, Sendable {
         }
     }
 
+    /// Pocket 3 digital-zoom ceiling for this FORMAT, or `nil` for a byte the
+    /// catalog does not name.
+    ///
+    /// The limit tracks the capture size class, not the aspect — a bigger frame
+    /// leaves less crop headroom. Measured on a body by asking past the ceiling
+    /// and reading `cam_fov` `zoomLens` back: the camera clamps to its own max
+    /// rather than refusing, so an over-ask reports the true limit. `0x0A`,
+    /// `0x69` (4x), `0x2D`, `0x6A` (3x), `0x10`, `0x6B` (2x) are measured; the
+    /// rest inherit from a measured sibling in the same size class.
+    public var pocket3ZoomMax: Double? {
+        switch rawValue {
+        case 0x0A, 0x0C, 0x42, 0x69: 4  // 1080 — 0x0A, 0x69 measured
+        case 0x2D, 0x43, 0x5F: 3  // 2.7K — 0x2D measured
+        case 0x6A: 3  // 2160 — measured
+        case 0x10, 0x67, 0x7D: 2  // 4K — 0x10 measured
+        case 0x6B, 0x6C: 2  // 3K — 0x6B measured
+        default: nil
+        }
+    }
+
     public var sizeTitle: String {
         switch rawValue {
         case 0x0A, 0x0C, 0x42, 0x69: "1080"
@@ -2308,6 +2328,28 @@ public enum CamFov {
         min(Swift.max(factor, minFactor), max)
     }
 
+    /// The remembered chip stop, kept inside what the current FORMAT allows.
+    ///
+    /// A FORMAT change can drop the ceiling under a stop the operator already
+    /// picked — 2.7K offers 3×, 4K stops at 2×. The stop is only the readout's
+    /// last resort, before any `cam_fov` lands, but even then it must not
+    /// advertise a factor this FORMAT would refuse.
+    public static func stopWithinCycle(_ stop: Double, stops: [Double]) -> Double {
+        clamp(stop, max: stops.last ?? minFactor)
+    }
+
+    /// The line to show when a new FORMAT pulls the zoom ceiling out from
+    /// under the factor the operator is already holding.
+    ///
+    /// The body does not refuse: it walks the lens back to whatever the new
+    /// capture size allows, so without a word the chip just falls to 1x and
+    /// nothing on screen says why. `size` is `VideoResolution.sizeTitle`.
+    /// Nil while the held factor still fits, which is the usual case.
+    public static func ceilingNote(size: String, held: Double, stops: [Double]) -> String? {
+        guard let ceiling = stops.last, displayTenths(held) > ceiling + 0.05 else { return nil }
+        return "\(size) caps zoom at \(displayLabel(factor: ceiling))"
+    }
+
     private static func lerpLens(_ a: UInt16, _ b: UInt16, _ t: Double) -> UInt16 {
         let t = min(max(t, 0), 1)
         return UInt16((Double(a) + t * (Double(b) - Double(a))).rounded())
@@ -2475,6 +2517,9 @@ public enum CamFov {
         return raw == 0 ? nil : factor(raw: raw)
     }
 
+    /// Confirmation test for the chip pin (`CameraValuePin`): the live factor
+    /// comes back off a lens position and lands a hair off what was asked, so
+    /// exact equality would never release the pin.
     public static func matches(_ live: Double, _ target: Double) -> Bool {
         abs(displayTenths(live) - displayTenths(target)) < 0.15
     }

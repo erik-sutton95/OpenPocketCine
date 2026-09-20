@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
 import android.content.Context
+import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -73,7 +74,7 @@ class SharedPreferencesSavedCameraStore(context: Context) {
 
     fun save(records: List<SavedCamera>) {
         val canonical = SavedCameras.canonicalized(records)
-        prefs.edit().putString(RECORDS_KEY, encode(canonical)).apply()
+        prefs.edit { putString(RECORDS_KEY, encode(canonical)) }
     }
 
     companion object {
