@@ -206,6 +206,19 @@ Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
 fallback. GLES `FeedEffectsGlProgram` is the Android decode fallback when
 Vulkan cannot init.
 
+A 25-second physical capture (SM-S918B / Android 16, Vulkan present, live feed
+at 24.5 pictures per second, so 40.9 ms between pictures) measured decoder
+submit-to-output at 5.08 ms mean / 14.7 ms maximum and decoder-output-to-present
+at 3.28 ms mean / 14.7 ms maximum — 8.35 ms mean for the phone's share of one
+picture — with peak compressed-queue wait 2.8 ms and three dropped pictures in
+25 seconds. The phone spends roughly a fifth of one frame interval between
+MediaCodec submit and the presented buffer, which bounds what present-path work
+can return. It does not measure camera exposure, camera-side encode, Wi-Fi
+transport or physical scanout: those stay outside the app's clock, so this is
+not a glass-to-glass figure. Backgrounding the app during the same capture
+showed the counters behaving as designed — decoder output continued while
+presentation fell to zero and every picture counted as a drop.
+
 `WIFI_MODE_FULL_LOW_LATENCY` stays on while live.
 
 ## When this pointer fires
