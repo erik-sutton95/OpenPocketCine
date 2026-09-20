@@ -131,7 +131,7 @@ final class AssistInspectorPreviewTests: XCTestCase {
     }
 
     func testBusyPreviewDropsNewWorkAndCancelledWorkCannotPublish() async throws {
-        let started = expectation(description: "First image work started")
+        let started = InspectorPreviewTestSignal("First image work started")
         let release = DispatchSemaphore(value: 0)
         let invocations = InspectorRenderInvocationCounter()
         let clock = InspectorPreviewTestClock()
@@ -142,8 +142,12 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let renderer = AssistInspectorImageRenderer(
             now: { clock.now },
             operation: { _, _ in
-                if invocations.increment() == 1 { started.fulfill() }
-                _ = release.wait(timeout: .now() + 3)
+                if invocations.increment() == 1 {
+                    started.signal()
+                    XCTAssertEqual(
+                        release.wait(timeout: .now() + 10), .success,
+                        "Test did not release the first worker; a rejected request may have queued")
+                }
                 return reference
             })
         let owner = UUID()
@@ -153,7 +157,11 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let first = Task {
             await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
         }
-        await fulfillment(of: [started], timeout: 2)
+        defer {
+            first.cancel()
+            release.signal()
+        }
+        try await started.wait()
         let dropped = await renderer.render(
             owner: owner, source: buffer, effects: { LiveImageEffects() })
         XCTAssertNil(dropped, "A busy preview must not retain a queued second source")
@@ -171,7 +179,6 @@ final class AssistInspectorPreviewTests: XCTestCase {
         XCTAssertNil(cancelled, "Dismissed inspectors must never adopt completed stale work")
         XCTAssertEqual(invocations.value, 1, "Cancellation must not drain queued work")
 
-        release.signal()
         let resumed = await renderer.render(
             owner: remountedOwner, source: buffer, effects: { LiveImageEffects() })
         XCTAssertNotNil(resumed, "Cancellation must release admission for the next inspector")
@@ -310,11 +317,33 @@ final class AssistInspectorPreviewTests: XCTestCase {
 final class InspectorPreviewTestClock: @unchecked Sendable {
     private let lock = NSLock()
     private var time: UInt64 = 0
+    private var advancesUntilFrozen: Bool
+    private var nextRead: InspectorPreviewTestSignal?
+
+    init(advancesUntilFrozen: Bool = false) {
+        self.advancesUntilFrozen = advancesUntilFrozen
+    }
+
+    /// Freeze at the clock value used for admission, not at delayed worker entry.
+    func freezeAtLastRead() {
+        lock.lock()
+        advancesUntilFrozen = false
+        lock.unlock()
+    }
+
+    func signalNextRead(_ signal: InspectorPreviewTestSignal) {
+        lock.lock()
+        nextRead = signal
+        lock.unlock()
+    }
 
     var now: UInt64 {
         get {
             lock.lock()
             defer { lock.unlock() }
+            if advancesUntilFrozen { time = DispatchTime.now().uptimeNanoseconds }
+            nextRead?.signal()
+            nextRead = nil
             return time
         }
         set {
@@ -341,5 +370,46 @@ private final class InspectorRenderInvocationCounter: @unchecked Sendable {
         defer { lock.unlock() }
         count += 1
         return count
+    }
+}
+
+/// Wait for the worker's event, not a presumed utility-queue scheduling delay.
+/// The finite fallback throws out of the test before cancellation assertions
+/// can manufacture a cascade; each caller releases blocked work in defer.
+final class InspectorPreviewTestSignal: Sendable {
+    private let name: String
+    private let events: AsyncStream<Void>
+    private let continuation: AsyncStream<Void>.Continuation
+
+    init(_ name: String) {
+        self.name = name
+        let pair = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        events = pair.stream
+        continuation = pair.continuation
+    }
+
+    func signal() {
+        continuation.yield(())
+        continuation.finish()
+    }
+
+    func wait() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await _ in self.events { return }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                throw WaitFailure(event: self.name)
+            }
+            defer { group.cancelAll() }
+            try await group.next()
+        }
+    }
+
+    private struct WaitFailure: Error, CustomStringConvertible {
+        let event: String
+        var description: String { "Inspector synchronization event did not arrive: \(event)" }
     }
 }

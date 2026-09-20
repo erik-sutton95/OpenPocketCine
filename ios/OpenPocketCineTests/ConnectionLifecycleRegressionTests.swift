@@ -200,18 +200,32 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
     private func presentRollingPictures(_ model: AppModel) async throws {
         let decoder = model.session.decoder
         let first = Date()
-        // The production warmup gate requires rolling intervals, not one
-        // enqueue. Feed real assist completions into its real session callback.
-        for _ in 0..<12 {
+        let requiredPresentations = LiveFeedWarmup.minimumRollingIntervals + 1
+        var completedPresentations = 0
+        let sessionPresentedFrame = decoder.onPresentedFrame
+        decoder.onPresentedFrame = {
+            // Preserve the real session callback that records rolling FPS and
+            // dismisses warmup. Only sampled source presentations qualify;
+            // raw sourcePresentations also counts identity-layer enqueues.
+            sessionPresentedFrame?()
+            if decoder.lastSourceFrameAt.map({ $0 >= first }) == true {
+                completedPresentations += 1
+            }
+        }
+        defer { decoder.onPresentedFrame = sessionPresentedFrame }
+
+        // Submission is not completion: assist work and display backpressure
+        // can discard early frames while the hosted view starts. Keep feeding
+        // at 25 Hz until the real pipeline produces the required intervals.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while completedPresentations < requiredPresentations, ContinuousClock.now < deadline {
             decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
             try await Task.sleep(for: .milliseconds(40))
         }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while decoder.lastSourceFrameAt.map({ $0 >= first }) != true,
-            ContinuousClock.now < deadline
-        {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        XCTAssertGreaterThanOrEqual(
+            completedPresentations, requiredPresentations,
+            "The real session must receive a rolling run of presented frames before checking warmup"
+        )
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(decoder.lastSourceFrameAt), first)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(decoder.lastPresentedAt), first)
     }

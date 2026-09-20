@@ -101,6 +101,14 @@ in ownership tests do not change production budgets. Regression evidence:
   and both media handoffs found no remaining blocking findings. The Android
   input fence covers AU/reference mutations; existing asynchronous size/parameter
   callbacks are not claimed to have gained the same fence.
+- Hosted native CI exposed test setup races after the initial local pass. The
+  rolling-picture fixture now requires nine actual presentation callbacks, not
+  a fixed number of submissions. Inspector tests synchronize with worker and
+  view lifecycle events, with finite failure bounds, and let their clock advance
+  until initial work is admitted. Deterministic replays reproduce the old
+  timeout/cancellation cascade and frozen-clock retry trap; they do not identify
+  the precise scheduler delay in the hosted run. Production recovery budgets
+  and the behavior assertions are unchanged.
 
 Aggregate validation:
 
@@ -113,8 +121,7 @@ Aggregate validation:
   warnings and hints remain, including two findings on unchanged lines in
   files touched by this correction.
 - `just handbook-build`: 41 pages. Strict Swift formatting lint on changed
-  files and `git diff --check` passed. Final Swift cleanup only reformatted
-  line breaks and test statement separators after the aggregate run.
+  files and `git diff --check` passed.
 
 No reachable physical iPhone/iPad or Android camera setup was available during
 this audit. Simulator and JVM tests cannot prove radio stability, camera GOP
