@@ -290,7 +290,12 @@ class LiveChromeSemanticsTest {
     }
 
     private companion object {
-        const val TEST_PACKAGE = "com.opencapture.openpocketcine"
+        // The app under test, read rather than spelled out: the debug build
+        // carries an `applicationIdSuffix`, so a literal would stop matching
+        // every node and the tree helpers would walk away empty.
+        val TEST_PACKAGE: String by lazy {
+            InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        }
         val CLICK = AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK.id
         val LONG_CLICK = AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK.id
     }
