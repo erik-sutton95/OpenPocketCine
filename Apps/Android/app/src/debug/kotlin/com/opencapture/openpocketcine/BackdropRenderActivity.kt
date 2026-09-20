@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,7 +43,7 @@ import com.opencapture.monitorui.monitorMaterial
 class BackdropRenderActivity : ComponentActivity() {
     val source = MonitorBackdropSource()
     var material by mutableStateOf(MonitorMaterial.Expanded)
-    var fixtureScale by mutableStateOf(1f)
+    var fixtureScale by mutableFloatStateOf(1f)
     var mirror by mutableStateOf(false)
     val secondSource = MonitorBackdropSource()
     var splitSources by mutableStateOf(false)

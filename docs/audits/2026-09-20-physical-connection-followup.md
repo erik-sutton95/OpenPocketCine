@@ -139,6 +139,9 @@ branch.
   allocations, KTX cleanup and TalkBack semantics. The closed
   [#376](https://github.com/erik-sutton95/OpenPocketCine/pull/376) locale changes
   are carried by #373. None replaces the connection corrections in this audit.
+  #377 subsequently merged as `ca6b2c5` and is integrated. Its primitive Compose
+  state changes preserve the transport, decoder and recovery implementation;
+  the combined Android source receives another check and device pass.
 - [#385](https://github.com/erik-sutton95/OpenPocketCine/pull/385) increases
   scheduling waits in iOS inspector tests and exempts test-only changes from
   tester-note requirements. It overlaps the test synchronization work here,

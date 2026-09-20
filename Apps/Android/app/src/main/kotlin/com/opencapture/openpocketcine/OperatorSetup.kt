@@ -44,7 +44,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -423,8 +425,8 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     val status by model.session.status.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
     var lastFrames by remember { mutableIntStateOf(0) }
-    var lastTickAt by remember { mutableStateOf(0L) }
-    var measuredFps by remember { mutableStateOf(0.0) }
+    var lastTickAt by remember { mutableLongStateOf(0L) }
+    var measuredFps by remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
