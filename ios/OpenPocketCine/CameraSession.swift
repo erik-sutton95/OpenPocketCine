@@ -2397,15 +2397,10 @@ final class CameraSession {
                 self.status.fps = previousFps
                 self.formatPin = nil
             })
-        // After the send: `fireCamera` clears the note on its way out, and only
-        // writes one when the SET could not go. Leave that one alone.
-        if controlNote == nil {
-            controlNote = CamFov.ceilingNote(
-                size: format.resolution.sizeTitle,
-                held: zoomCycleFrom,
-                stops: connectedCamera?.model.activeZoomStops(
-                    resolution: format.resolution, shootingMode: status.shootingMode) ?? [])
-        }
+        // `fireCamera` clears the note on its way out and only writes one when
+        // the SET could not go. Hold that failure aside: the shutter rematch
+        // below sends again and would clear it along with anything written here.
+        let formatSendNote = controlNote
         // Angle mode is ours: keep the chosen degrees and rewrite 1/N for the new fps.
         if OperatorPrefs.shutterUsesAngle, previousFps != status.fps, status.expoMode != .auto {
             let denom = ShutterAngle.denom(
@@ -2415,6 +2410,18 @@ final class CameraSession {
             if denom != status.shutterDenom {
                 setShutterDenom(denom)
             }
+        }
+        // Settle the note once both sends are done. A failure from either send
+        // outranks the ceiling note, which is only worth showing when the
+        // format change actually went.
+        if let formatSendNote {
+            controlNote = formatSendNote
+        } else if controlNote == nil {
+            controlNote = CamFov.ceilingNote(
+                size: format.resolution.sizeTitle,
+                held: zoomCycleFrom,
+                stops: connectedCamera?.model.activeZoomStops(
+                    resolution: format.resolution, shootingMode: status.shootingMode) ?? [])
         }
     }
 

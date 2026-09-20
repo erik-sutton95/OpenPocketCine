@@ -3202,9 +3202,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 formatPin = null
             },
         )
-        // After the send: [fireKind] clears the note on its way out, and only
-        // writes one when the SET could not go. Leave that one alone.
-        if (_controlNote.value == null) {
+        // [fireKind] clears the note on its way out and only writes one when the
+        // SET could not go. Hold that failure aside: the shutter rematch below
+        // sends again and would clear it along with anything written here.
+        val formatSendNote = _controlNote.value
+        if (rematch != null) setShutterDenom(rematch)
+        // Settle the note once both sends are done. A failure from either send
+        // outranks the ceiling note, which is only worth showing when the format
+        // change actually went.
+        if (formatSendNote != null) {
+            _controlNote.value = formatSendNote
+        } else if (_controlNote.value == null) {
             _controlNote.value =
                 CamFov.ceilingNote(
                     format.resolution.sizeTitle,
@@ -3215,7 +3223,6 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         .orEmpty(),
                 )
         }
-        if (rematch != null) setShutterDenom(rematch)
         return true
     }
 
