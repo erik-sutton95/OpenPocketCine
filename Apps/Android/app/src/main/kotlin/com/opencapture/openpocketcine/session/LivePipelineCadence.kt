@@ -48,6 +48,15 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
     private var queueDelayNs = 0L
     private var inputMisses = 0
 
+    /** Decoded pictures that have not reached the glass, running across windows. */
+    private var unpresented = 0
+
+    /** [unpresented] as the previous window closed. */
+    private var unpresentedAtLastClose = 0
+
+    /** Drops already reported, so a standing shortfall is not counted again. */
+    private var reportedDrops = 0
+
     @Synchronized fun note(stage: Stage) {
         val now = nowNs()
         val c = counters.getValue(stage)
@@ -84,9 +93,14 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
         val transitMaxMs: Map<Leg, Double>,
         /**
          * Pictures the decoder released that never reached the glass — the
-         * renderer takes the newest buffer and lets older ones go. Counted
-         * across one window, so a frame straddling the boundary can land in
-         * either. Delay and drops feel alike and are fixed differently.
+         * renderer takes the newest buffer and lets older ones go. Delay and
+         * drops feel alike and are fixed differently.
+         *
+         * The shortfall carries across windows and is only called a drop once
+         * it has survived a whole one, so this reports the pictures lost during
+         * the *previous* window. A picture decoded near a boundary is normally
+         * presented a few milliseconds later, and counting per window called
+         * every one of those a drop and then clamped the correction away.
          */
         val dropped: Int,
     )
@@ -115,6 +129,17 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
             transitMaxMs[leg] = t.maxMs()
             t.reset()
         }
+        unpresented =
+            (unpresented + (counts[Stage.OUTPUT] ?: 0) - (counts[Stage.PRESENT] ?: 0))
+                .coerceAtLeast(0)
+        // Only a shortfall that outlived a whole window is a drop; the rest was
+        // a picture in flight across the boundary and has since been shown.
+        // Subtracting what was already reported keeps a standing shortfall from
+        // being re-announced every second.
+        val confirmedDrops = minOf(unpresentedAtLastClose, unpresented)
+        val dropped = (confirmedDrops - reportedDrops).coerceAtLeast(0)
+        reportedDrops = confirmedDrops
+        unpresentedAtLastClose = unpresented
         val window =
             Window(
                 seconds = seconds,
@@ -127,9 +152,7 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
                 inputMiss = inputMisses,
                 transitMeanMs = transitMeanMs,
                 transitMaxMs = transitMaxMs,
-                dropped =
-                    ((counts[Stage.OUTPUT] ?: 0) - (counts[Stage.PRESENT] ?: 0))
-                        .coerceAtLeast(0),
+                dropped = dropped,
             )
         started = now
         queuePeak = queued

@@ -92,7 +92,9 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
         cadence.note(LivePipelineCadence.Stage.PRESENT)
         // releaseOutputBuffer stamps the buffer with System.nanoTime(); every
         // present path (Vulkan ImageReader, GLES OES, raw TextureView) hands
-        // that same stamp back, so this is decoder-out to on-screen.
+        // that same stamp back. This is decoder-out to *submitted for display*:
+        // the call lands as soon as the submit returns, so GPU execution, the
+        // compositor and scanout are all still ahead of it.
         cadence.noteTransit(LivePipelineCadence.Leg.PRESENT, System.nanoTime() - sourceTimestampNs)
         framesPresented.incrementAndGet()
         if (!_hasPicture.value) {

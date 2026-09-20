@@ -208,16 +208,28 @@ Vulkan cannot init.
 
 A 25-second physical capture (SM-S918B / Android 16, Vulkan present, live feed
 at 24.5 pictures per second, so 40.9 ms between pictures) measured decoder
-submit-to-output at 5.08 ms mean / 14.7 ms maximum and decoder-output-to-present
-at 3.28 ms mean / 14.7 ms maximum — 8.35 ms mean for the phone's share of one
-picture — with peak compressed-queue wait 2.8 ms and three dropped pictures in
-25 seconds. The phone spends roughly a fifth of one frame interval between
-MediaCodec submit and the presented buffer, which bounds what present-path work
-can return. It does not measure camera exposure, camera-side encode, Wi-Fi
-transport or physical scanout: those stay outside the app's clock, so this is
-not a glass-to-glass figure. Backgrounding the app during the same capture
-showed the counters behaving as designed — decoder output continued while
-presentation fell to zero and every picture counted as a drop.
+submit-to-output at 5.08 ms mean / 14.7 ms maximum and decoder-output-to-submit
+at 3.28 ms mean / 14.7 ms maximum, with peak compressed-queue wait 2.8 ms.
+
+Read the second leg for what it is. `onFramePresented` fires as soon as
+`OpcVulkan.nativeSubmit` returns, so the 3.28 ms covers handing the image to
+the GPU and nothing after it: GPU execution, the compositor and scanout are all
+still ahead, as are camera exposure, camera-side encode and Wi-Fi transport on
+the other side. The two legs together are the app-side cost of moving one
+picture along, not the phone's share of the delay an operator sees, and they
+bound nothing about what present-path work can afford.
+
+The drop figure from that capture is withdrawn. The counter it came from
+compared decoder outputs against presents inside a single window, so a picture
+decoded just before the boundary and presented just after it was reported as a
+drop every second; the "three dropped pictures in 25 seconds" is that artifact,
+not a measurement. The counter now carries the shortfall across windows and
+only calls it a drop once it has survived a whole one — a real figure needs a
+fresh physical capture.
+
+Backgrounding the app during the same capture showed the counters behaving as
+designed: decoder output continued while presentation fell to zero, and the
+shortfall grew without bound.
 
 `WIFI_MODE_FULL_LOW_LATENCY` stays on while live.
 

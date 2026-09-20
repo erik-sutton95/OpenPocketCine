@@ -118,9 +118,52 @@ class LivePipelineCadenceTest {
         repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
         repeat(19) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
         now = 1_000_000_000
-        // The renderer takes the newest buffer and lets older ones go, so a
-        // smooth-but-late feed and a current-but-stuttering feed differ here.
+        // The six are still in flight as far as this window can tell.
+        assertTrue(cadence.drain()!!.contains("drop=0"))
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 2_000_000_000
+        // A second window went by without them. The renderer takes the newest
+        // buffer and lets older ones go, so a smooth-but-late feed and a
+        // current-but-stuttering feed differ here.
         assertTrue(cadence.drain()!!.contains("drop=6"))
+    }
+
+    @Test fun aStandingShortfallIsReportedOnceRatherThanEveryWindow() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(22) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 1_000_000_000
+        cadence.drain()
+        for (window in 2..4) {
+            repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+            repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+            now = window * 1_000_000_000L
+            // The three never come back, but they were lost once. Re-announcing
+            // them every second would read as a feed that keeps dropping.
+            val expected = if (window == 2) "drop=3" else "drop=0"
+            assertTrue(cadence.drain()!!.contains(expected), "window $window")
+        }
+    }
+
+    @Test fun aPictureStraddlingTheWindowBoundaryIsNotADrop() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(24) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 1_000_000_000
+        // Decoded just before the close, presented just after it. Counting each
+        // window on its own called this a drop every single second.
+        assertTrue(cadence.drain()!!.contains("drop=0"))
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(26) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 2_000_000_000
+        assertTrue(cadence.drain()!!.contains("drop=0"))
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 3_000_000_000
+        assertTrue(cadence.drain()!!.contains("drop=0"))
     }
 
     @Test fun moreShownThanDecodedInAWindowCannotReportNegativeDrops() {
