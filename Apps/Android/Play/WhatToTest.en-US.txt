@@ -2,6 +2,7 @@ New and changed
 
 - HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
 - Screen recording temporarily uses a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
+- Saved settings, remembered cameras and resized pictures now go through one shared path. Nothing should look or behave differently.
 
 Fixes
 
@@ -12,4 +13,4 @@ What to test
 
 - Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
 - Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
-- Check TalkBack on Operator Setup → Display. Share diagnostics with the time of any freeze.
+- Change several Operator Setup options, force-stop the app and reopen it: every option should come back exactly as you left it, and a remembered camera should rejoin without asking again.
