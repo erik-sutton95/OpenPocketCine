@@ -5,6 +5,7 @@ import OpenPocketViewCore
 import SwiftUI
 
 struct MultiviewView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.monitorWindowGeometry) private var windowGeometry
@@ -306,7 +307,7 @@ struct MultiviewView: View {
                     GeometryReader { picture in
                         let fill = session.feedAspect == .fill
                         let ratio = tile.decoder.pictureAspect
-                        MultiviewVideoLayer(tile: tile)
+                        MultiviewVideoLayer(tile: tile, hdrDisplay: model.hdrDisplayActive)
                             .frame(
                                 width: fill
                                     ? max(picture.size.width, picture.size.height * ratio)
@@ -641,6 +642,7 @@ struct MultiviewView: View {
 
 private struct MultiviewVideoLayer: UIViewRepresentable {
     let tile: MultiviewSession.Tile
+    var hdrDisplay = false
     func makeUIView(context: Context) -> DisplayLayerView {
         let view = DisplayLayerView(tile.decoder.displayLayer)
         view.onReady = { [decoder = tile.decoder] in decoder.noteDisplayReady() }
@@ -657,6 +659,8 @@ private struct MultiviewVideoLayer: UIViewRepresentable {
         tile.decoder.poseViewFlip = tile.pose.poseViewFlip
         tile.decoder.processedFeed = view.ciFeed
         tile.decoder.sampleBus = tile.sampleBus
+        tile.decoder.hdrDisplayEnabled = hdrDisplay
+        view.applyHDRDisplay(hdrDisplay)
         if tile.decoder.effects != tile.effects { tile.decoder.effects = tile.effects }
         tile.decoder.adoptIncomingTransfer(tile.settings.monitorTransfer)
     }

@@ -1,18 +1,15 @@
 New and changed
 
-- UI 2.0: Sora/Lucide, consistent buttons and signal colors. Media footer controls, pull-refresh, and hold/sideways selection with native vertical scrolling.
-- Pocket 4 Pro zoom: tap 1×/3×, double tap 6×/12×, hold for the larger lens dial extending to the screen edge above camera controls.
-- New scopes, LIGHTS and ND start centered until placed. AUDIO moves, supports vertical/horizontal bars and optional channel dB readings.
+- HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
+- Screen recording temporarily uses a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
 
 Fixes
 
-- Pocket 3 FORMAT lists 16:9 and 1:1 without hanging on 9:16. Vertical recording stays on body Lock Portrait unless the camera already reports 9:16.
-- Pocket 3 shutter Speed is not stuck at 1/60; Angle choices change exposure.
-- 16:9 frame guides on 1:1 live stay on the square picture, not the side bars.
-- Crash hardening: sharing a photo no longer closes the app, a Bluetooth drop recovers instead of crashing, and face auto-focus no longer aborts under load.
+- Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
+- The app no longer closes on its own the moment it opens on Android 15 and newer phones.
 
 What to test
 
-- On Pocket 3, switch FORMAT 16:9 and 1:1; confirm 9:16 does not hang. Change shutter Speed and Angle. In 1:1, turn on a 16:9 guide and check it sits on the picture.
-- Check blur over bright/dark footage. Rotate pages; tap versus hold drums. Try assist tabs, audio, zoom, lock, Media and TalkBack.
-- On Pocket 4 Pro, compare still shots and slow pans with LUT/scopes off and on. Share diagnostics with the time of any stutter.
+- Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
+- Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
+- Check TalkBack on Operator Setup → Display. Share diagnostics with the time of any freeze.

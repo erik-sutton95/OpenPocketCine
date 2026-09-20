@@ -188,6 +188,38 @@ import Testing
         #expect(job?.bundle.header.kind == .freshInputStaleOutput)
     }
 
+    @Test func compressedLayerDoesNotReportRetiredAssistOutputAsStalled() {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-retired-assist" })
+        _ = recorder.beginSession(Fixture.context())
+        _ = recorder.recordSnapshot(Fixture.healthy(now: 1))
+        var snapshot = Fixture.snap(
+            now: 10, outputHz: 0, outputAge: 8, presentAge: 0.04,
+            outputObservable: false)
+        snapshot.ages.assistOutputAge = 8
+        snapshot.rates.assistOutputHz = 0
+        #expect(FeedIncidentClassifier.isRecovered(snapshot))
+        #expect(recorder.recordSnapshot(snapshot) == nil)
+        #expect(recorder.openHeader == nil)
+    }
+
+    @Test func activeAssistStallDoesNotRecoverUntilAssistOutputReturns() {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-active-assist" })
+        _ = recorder.beginSession(Fixture.context())
+        var snapshot = Fixture.healthy(now: 4)
+        snapshot.ages.assistOutputAge = 8
+        snapshot.rates.assistOutputHz = 0
+        #expect(recorder.recordSnapshot(snapshot)?.bundle.header.kind == .assistStalled)
+        #expect(!FeedIncidentClassifier.isRecovered(snapshot))
+        snapshot.monotonicNow = 5
+        _ = recorder.recordSnapshot(snapshot)
+        #expect(recorder.openHeader?.outcome != .recovered)
+        snapshot.ages.assistOutputAge = 0.04
+        snapshot.rates.assistOutputHz = 25
+        #expect(FeedIncidentClassifier.isRecovered(snapshot))
+        _ = recorder.recordSnapshot(snapshot)
+        #expect(recorder.openHeader?.outcome == .recovered)
+    }
+
     @Test func unexpectedDisconnectStartsDistinctIncident() {
         var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-disc" })
         _ = recorder.beginSession(Fixture.context())

@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -37,7 +38,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import android.os.Build
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -194,6 +197,27 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
+    LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
+        HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
+    }
+    DisposableEffect(activity) {
+        val windowManager = activity?.windowManager
+        if (activity == null || windowManager == null || Build.VERSION.SDK_INT < 35) {
+            return@DisposableEffect onDispose { }
+        }
+        val callback = java.util.function.Consumer<Int> { state ->
+            model.screenCaptured = state == WindowManager.SCREEN_RECORDING_STATE_VISIBLE
+        }
+        // Knowing about screen recording only dims the HDR boost. A ROM that
+        // refuses the callback must cost the boost, never the whole app.
+        try {
+            windowManager.addScreenRecordingCallback(activity.mainExecutor, callback)
+        } catch (denied: SecurityException) {
+            Log.w("OpcHdr", "screen-recording callback denied; the boost stays on while recording", denied)
+            return@DisposableEffect onDispose { }
+        }
+        onDispose { runCatching { windowManager.removeScreenRecordingCallback(callback) } }
+    }
     val hideNavigation = showLive && model.liveOperatorPanel == null
     LaunchedEffect(activity, hideNavigation) {
         (activity as? MainActivity)?.hideSystemNavigation = hideNavigation

@@ -17,6 +17,13 @@ separate iOS and Android lists.
 
 ### Added
 
+- **HDR display** (Operator Setup → Display): optional outdoor boost that uses
+  the phone's HDR panel so live view, scopes, settings, media, playback and HUD
+  type stay readable in sun. Off by default. The picture is a brightness aid,
+  not a grade — WAVE / HISTO / zebras / false color still read decoded camera
+  codes. Screen recording and AirPlay drop back to SDR so the file is not
+  HDR-boosted. This is not the body's HDR/HLG recording mode.
+
 - UI 2.0 for the native iOS and Android shells: reusable camera, pairing,
   settings, media and playback presentation with Sora typography, Lucide icons
   and the custom View Assist glyphs. Phones and tablets adapt across rotation.
@@ -271,6 +278,17 @@ separate iOS and Android lists.
   identification mark on clip upload.
 
 ### Fixed
+
+- iOS playback assists wait for a ready item with a numeric seek position.
+  Native upscaler preparation and media cache scanning/deletion no longer run
+  in interface updates. Clear Cache preserves clip/color metadata and retries
+  failed deletion. Capture tabs retain matching labels when camera modes change
+  before rendering. Playback proxies stream to disk without buffering the whole
+  video on the main thread. Physical qualification is pending.
+- Feed diagnostics ignore retired assist timestamps on compressed-layer feeds
+  and no longer call a continuing active assist stall recovered. The build 111
+  [Sentry audit](docs/audits/2026-09-19-testflight-111-sentry.md) retains unresolved
+  crash and live-outage groups pending device reproduction.
 
 - Pocket 3 FORMAT no longer offers 9:16 from the empty-capability fallback.
   Landscape 16:9 and square 1:1 remain; 9:16 stays body Lock Portrait unless

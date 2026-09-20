@@ -275,8 +275,9 @@ final class CameraSession {
     /// While true, keepalive must not re-enable live view or recover the feed.
     var isBrowsingMedia = false
     var mediaDownloadProgress: [String: Double] = [:]
+    var mediaCacheRevision: UInt64 = 0
     var mediaLocalFavorites: Set<String> = []
-    @ObservationIgnored let cameraMedia = CameraMedia()
+    @ObservationIgnored let cameraMedia: CameraMedia
     /// Last tap-to-focus point in feed-normalized 0…1. Always drawn when not tracking.
     var focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5)
     /// Operator-drawn search rect while the camera is still hunting a subject.
@@ -475,7 +476,8 @@ final class CameraSession {
     /// The live-view display layer, for the SwiftUI `VideoView`.
     var videoLayer: AVSampleBufferDisplayLayer { decoder.displayLayer }
 
-    init(borrowing sharedDecoder: HevcDecoder? = nil) {
+    init(borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil) {
+        self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
         syncGimbalPose()
@@ -5476,14 +5478,11 @@ final class CameraSession {
         loadMediaFavorites()
     }
 
-    func clearMediaCache() {
+    func clearMediaCache() async throws {
         cameraMedia.resetSession()
         mediaDownloadProgress = [:]
-        cameraMedia.clearCache(cameraID: mediaCameraID, preservingCatalog: true)
-    }
-
-    func mediaCacheByteCount() -> UInt64 {
-        cameraMedia.cacheByteCount(cameraID: mediaCameraID)
+        defer { mediaCacheRevision &+= 1 }
+        try await cameraMedia.clearCache(cameraID: mediaCameraID, preservingCatalog: true)
     }
 
     /// Subscribe already matches a timed-out SET — treat as success, do not wait

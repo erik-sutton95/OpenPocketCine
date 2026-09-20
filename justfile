@@ -78,8 +78,8 @@ icons-vendor:
     python3 scripts/vendor-lucide-icons.py
 
 # Run shared Swift core tests.
-swift-test:
-    swift test
+swift-test *args:
+    swift test {{args}}
 
 # Summarize a locally captured iOS/Android live journal without printing identities.
 live-log-summary journal:
@@ -128,7 +128,7 @@ ios-device-build *args: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS' -allowProvisioningUpdates {{args}} build
 
 # Run the iOS shell's XCTest suite on the first available iPhone simulator.
-ios-test: ios-generate
+ios-test *args: ios-generate
     #!/usr/bin/env bash
     set -euo pipefail
     device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
@@ -138,7 +138,7 @@ ios-test: ios-generate
     fi
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
       -destination "platform=iOS Simulator,id=$device_id" \
-      test
+      {{args}} test
 
 # UI 2.0 interaction and screenshot checks, isolated from camera hardware.
 ios-ui-test device *args: ios-generate

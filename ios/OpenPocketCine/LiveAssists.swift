@@ -763,6 +763,7 @@ final class LiveAssistState {
 
 enum OperatorPrefs {
     private static let awakeKey = "OpenPocketCine.KeepScreenAwake"
+    private static let hdrDisplayKey = "OpenPocketCine.HDRDisplay"
     private static let lutKey = "OpenPocketCine.LastLUT"
     private static let customLUTKey = "OpenPocketCine.LastCustomLUT"
     private static let lutWasCustomKey = "OpenPocketCine.LastLUTWasCustom"
@@ -827,6 +828,12 @@ enum OperatorPrefs {
             return UserDefaults.standard.bool(forKey: awakeKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: awakeKey) }
+    }
+
+    /// Outdoor HDR panel boost for live view. Off by default.
+    static var hdrDisplay: Bool {
+        get { UserDefaults.standard.bool(forKey: hdrDisplayKey) }
+        set { UserDefaults.standard.set(newValue, forKey: hdrDisplayKey) }
     }
 
     /// Download the original camera file when a clip is opened. Off keeps the 720p proxy.

@@ -29,15 +29,15 @@ enum LiveDesign {
     static let glassBright = MonitorTheme.raised
     static let hairline = MonitorTheme.border
     static let hairlineStrong = MonitorTheme.faint.opacity(0.5)
-    static let text = MonitorTheme.text
-    static let muted = MonitorTheme.muted
-    static let faint = MonitorTheme.faint
-    static let accent = MonitorTheme.accent
+    static var text: Color { LiveHDRDisplay.chromeColor(red: 1, green: 1, blue: 1) }
+    static var muted: Color { LiveHDRDisplay.chromeColor(hex: 0x8D9293) }
+    static var faint: Color { LiveHDRDisplay.chromeColor(hex: 0x5E6262) }
+    static var accent: Color { LiveHDRDisplay.chromeColor(hex: 0x00A3E0) }
     static let accentDim = MonitorTheme.accent.opacity(0.16)
-    static let amber = Color(red: 0.914, green: 0.674, blue: 0.208)
-    static let good = Color(red: 0.18, green: 0.78, blue: 0.42)
-    static let rec = MonitorTheme.recording
-    static let info = MonitorTheme.accent
+    static var amber: Color { LiveHDRDisplay.chromeColor(red: 0.914, green: 0.674, blue: 0.208) }
+    static var good: Color { LiveHDRDisplay.chromeColor(red: 0.18, green: 0.78, blue: 0.42) }
+    static var rec: Color { LiveHDRDisplay.chromeColor(hex: 0xD13034) }
+    static var info: Color { accent }
     static let cornerRadius = DesignTokens.cornerRadius
     static let controlHeight: CGFloat = 58
 }
