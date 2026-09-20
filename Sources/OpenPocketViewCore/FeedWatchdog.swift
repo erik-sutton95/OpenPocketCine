@@ -74,6 +74,9 @@ public struct FeedWatchdog: Equatable, Sendable {
         public var lastDecoderOutputAge: TimeInterval?
         /// False for compressed display-layer paths without observable output.
         public var decoderOutputExpected: Bool
+        /// Explicit compressed discontinuity after valid references, not an
+        /// ordinary startup/GOP hold or an intentional decoder replacement.
+        public var referenceRecoveryNeeded: Bool
         /// Shell can execute a repair now; blocked requests spend no ladder rung.
         public var repairReady: Bool
         public var live: Bool
@@ -134,6 +137,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             secondsSinceCameraSet: TimeInterval? = nil,
             lastDecoderOutputAge: TimeInterval? = nil,
             decoderOutputExpected: Bool = false,
+            referenceRecoveryNeeded: Bool = false,
             repairReady: Bool = true
         ) {
             self.now = now
@@ -147,6 +151,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.decoderFailed = decoderFailed
             self.lastDecoderOutputAge = lastDecoderOutputAge
             self.decoderOutputExpected = decoderOutputExpected
+            self.referenceRecoveryNeeded = referenceRecoveryNeeded
             self.repairReady = repairReady
             self.live = live
             self.sawPicture = sawPicture
@@ -359,21 +364,29 @@ public struct FeedWatchdog: Equatable, Sendable {
 
         // Native output is measured before assists/presentation. A retained
         // image or arriving compressed AU cannot complete decoder recovery.
+        let outputAge = snap.lastDecoderOutputAge ?? snap.lastDecodedFrameAge
         let decoderSilent =
             snap.decoderOutputExpected && snap.sawPicture
-            && (snap.lastDecoderOutputAge ?? snap.lastDecodedFrameAge ?? 0) >= Self.stallThreshold
+            && (outputAge ?? 0) >= Self.stallThreshold
+        let knownReferenceLoss =
+            snap.decoderOutputExpected && snap.sawPicture && snap.referenceRecoveryNeeded
+        let decoderNeedsRepair = decoderSilent || knownReferenceLoss
         let assemblyStalled =
             snap.sawPicture && Self.udpReceiveAlive(snap)
             && snap.lastAccessUnitAge.map { $0 >= Self.stallThreshold } == true
             && (snap.lastDecodedFrameAge ?? 0) >= Self.stallThreshold
             && (!snap.decoderOutputExpected || decoderSilent)
-        if stage == .rebuildVT, decoderSilent {
+        // An explicit loss can start repair while the old output is still
+        // younger than stallThreshold. Only output newer than this action can
+        // release its budget; IRAP acceptance alone is not output proof.
+        let outputAfterAction = outputAge.map { snap.now - $0 > lastActionAt } ?? false
+        if stage == .rebuildVT, decoderNeedsRepair || !outputAfterAction {
             guard snap.now - lastActionAt >= Self.decoderRepairDeadline else { return .none }
             return fire(.fullSessionRejoin, at: snap.now)
         }
 
         if Self.udpReceiveAlive(snap), !assemblyStalled {
-            if decoderSilent, snap.hasFormat,
+            if decoderNeedsRepair, snap.hasFormat,
                 (snap.lastAccessUnitAge ?? .infinity) < Self.stallThreshold
             {
                 // After the one decoder attempt, ownership passes to the shell
@@ -382,15 +395,9 @@ public struct FeedWatchdog: Equatable, Sendable {
                 if Self.shouldHoldForGOPReset(
                     secondsSinceLastEnable: snap.secondsSinceLastEnable,
                     lastVideoPacketAge: snap.lastVideoPacketAge)
-                    || (snap.secondsSinceCameraSet ?? .infinity) < Self.cameraSetGrace
-                    || FocusTrackMode.shouldHoldWatchdog(
-                        secondsSinceSet: snap.secondsSinceFocusTrackSet)
-                    || CamFov.shouldHoldWatchdog(
-                        secondsSinceSet: snap.secondsSinceZoomSet, pinchActive: snap.zoomPinchActive
+                    || Self.shouldHoldForControlGrace(
+                        snap, stalledStageAge: snap.lastDecoderOutputAge ?? snap.lastDecodedFrameAge
                     )
-                    || GimbalStick.shouldHoldWatchdog(
-                        secondsSinceThrow: snap.secondsSinceGimbalThrow,
-                        stickHeld: snap.gimbalStickHeld)
                 {
                     return .none
                 }
@@ -407,32 +414,9 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if FocusTrackMode.shouldHoldWatchdog(
-            secondsSinceSet: snap.secondsSinceFocusTrackSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
-        {
-            return .none
-        }
-
-        if CamFov.shouldHoldWatchdog(
-            secondsSinceSet: snap.secondsSinceZoomSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge,
-            pinchActive: snap.zoomPinchActive)
-        {
-            return .none
-        }
-
-        if GimbalStick.shouldHoldWatchdog(
-            secondsSinceThrow: snap.secondsSinceGimbalThrow,
-            lastVideoPacketAge: snap.lastVideoPacketAge,
-            stickHeld: snap.gimbalStickHeld)
-        {
-            return .none
-        }
-
-        if Self.shouldHoldForCameraSet(
-            secondsSinceSet: snap.secondsSinceCameraSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
+        if Self.shouldHoldForControlGrace(
+            snap,
+            stalledStageAge: assemblyStalled ? snap.lastAccessUnitAge : snap.lastVideoPacketAge)
         {
             return .none
         }
@@ -548,6 +532,25 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
         lastActionAt = now
         return action
+    }
+
+    /// Bound repeated SET/throw grace by progress at the stage that stopped.
+    /// Fresh fragments cannot renew an AU stall, and fresh compressed AUs
+    /// cannot renew a native-output stall. A held gesture still owns its grace.
+    private static func shouldHoldForControlGrace(
+        _ snap: Snapshot, stalledStageAge: TimeInterval?
+    ) -> Bool {
+        shouldHoldForCameraSet(
+            secondsSinceSet: snap.secondsSinceCameraSet, lastVideoPacketAge: stalledStageAge)
+            || FocusTrackMode.shouldHoldWatchdog(
+                secondsSinceSet: snap.secondsSinceFocusTrackSet,
+                lastVideoPacketAge: stalledStageAge)
+            || CamFov.shouldHoldWatchdog(
+                secondsSinceSet: snap.secondsSinceZoomSet,
+                lastVideoPacketAge: stalledStageAge, pinchActive: snap.zoomPinchActive)
+            || GimbalStick.shouldHoldWatchdog(
+                secondsSinceThrow: snap.secondsSinceGimbalThrow,
+                lastVideoPacketAge: stalledStageAge, stickHeld: snap.gimbalStickHeld)
     }
 
     private mutating func resetIdle() {

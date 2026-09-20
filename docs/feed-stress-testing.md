@@ -80,3 +80,37 @@ names is also accepted. The lifecycle assertion measures counters **after**
 activation, so frames delivered before Home cannot pass recovery. The app's
 numeric recorder gets 60 seconds beyond the scenario deadline for a final
 in-flight operation and teardown; this is not additional test exposure.
+
+## Steady feed and Media catalog return
+
+Two additional scenarios are opt-in; the default seeded sequence is unchanged:
+
+```sh
+SCENARIOS=steadyFeed just ios-feed-stress '<iPhone UDID>' seed=20260921 limit=300 record=0
+SCENARIOS=mediaReturn just ios-feed-stress '<iPhone UDID>' seed=20260922 limit=120 record=0
+```
+
+`steadyFeed` must run alone, without recording or injection, for 60–1560 seconds.
+Its full interval begins after reconnect, setup and the healthy baseline. Every
+sample must advance the same recorder run, delivered access units, native decoder
+output and identity-layer enqueue; source, decoder and enqueue ages must stay
+below two seconds. The recorder reserves four extra minutes for setup and
+teardown, not additional measured exposure. A thermal stop or an interval that
+never completes fails qualification.
+
+`mediaReturn` opens the catalog, waits, then returns to live. It takes its new
+counter baseline only after the catalog disappears, requires fresh output within
+16 seconds, and checks three more advancing windows. It does not play clips,
+download originals or qualify cached-proxy playback.
+
+Both scenarios enable peaking, temporarily turn LUT off and restore its original
+state during teardown. Verify HDR display is off before using this identity
+presentation proof. Other saved assists can remain active, so these are explicit
+assist workloads, not an assists-off baseline. Neither identity enqueue nor a
+screenshot establishes physical scanout. Serious/critical thermal state remains
+a failing stop; never turn that guard off to obtain a pass.
+
+The runner pulls previous runs too. Analyze the named run directory independently;
+the report is descriptive and XCTest's exit status is authoritative. Record any
+optimization overrides separately: an optimized Debug diagnostic run is not a
+shipping Release measurement.

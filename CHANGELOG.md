@@ -279,6 +279,48 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Android Bluetooth setup checks rejected native writes instead of waiting for
+  callbacks that may never arrive. The tolerated notification fallback advances
+  to the next characteristic. Failed required notification registration and
+  rejected pairing-arm writes fail promptly.
+  Stage diagnostics distinguish connection, discovery and notification waits;
+  the deadline stays bounded. The reported Android 13 timeout still needs
+  affected-device confirmation.
+- Android frame-timing diagnostics retire old records during Media browsing,
+  including when playback setup fails and video keeps decoding off screen.
+  Live recovery and reporting remain suppressed while browsing.
+- Both shells wait for the camera's valid initial command window before
+  registration, preventing a short handshake acknowledgment from seeding the
+  wrong command sequence. Explicit compressed reference loss can request the
+  existing bounded watchdog repair sooner, preserving readiness/grace gates and
+  requiring output newer than the repair. These address defects found during
+  [physical Android testing](docs/audits/2026-09-20-physical-connection-followup.md);
+  cross-platform camera qualification remains incomplete.
+- iOS keeps an established live picture visible when FPS statistics age out,
+  instead of returning to startup Waiting for live view. Both shells preserve
+  recovery after compressed-queue loss; retired Android drains cannot discard
+  a replacement connection's keyframe. First-picture recovery is bounded even
+  with fresh packets, and repeated camera controls cannot indefinitely suppress
+  recovery at a stalled decoder or assembly stage. Automated regressions cover
+  these failures; physical qualification remains pending. See the
+  [connection audit](docs/audits/2026-09-20-connection-regressions.md).
+- Returning from Media sends one accepted live start and waits for fresh picture
+  within the existing recovery deadline. Opening Media retires older picture
+  deadlines without interrupting an active connection negotiation. This prevents
+  repeated stream resets on return and false reconnects during playback on both
+  shells; physical qualification remains pending.
+- iOS retiring live-video views cannot resize a replacement's display layer or
+  reclaim its single-camera/Multiview feed bindings. This prevents a reproduced
+  zero-size readiness failure during host replacement. Physical qualification
+  and investigation of the remaining Sentry live outages are pending.
+- Android live view speaks whole phrases to TalkBack instead of fragments: the
+  REC chip reads state and elapsed time as one stop, battery rows name phone or
+  camera and say "level unknown" rather than an unvoiced dash, the timecode says
+  what it is, and assist cells read their tool name, state and hold gesture in
+  place of a 9sp abbreviation. A labelled container needs
+  `clearAndSetSemantics`; plain `semantics` and `mergeDescendants` both leave the
+  child text behind as a second stop. `LiveChromeSemanticsTest` pins that against
+  the platform accessibility tree. Media, settings and pairing are a later pass.
 - iOS playback assists wait for a ready item with a numeric seek position.
   Native upscaler preparation and media cache scanning/deletion no longer run
   in interface updates. Clear Cache preserves clip/color metadata and retries

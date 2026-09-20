@@ -144,6 +144,24 @@ scopes. Panels can reach equally close to the left and right edges. Record,
 media, and settings stay protected. Panels fit the available
 space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
 
+Connection recovery now protects the first picture after replacing a connection
+and detects when arriving traffic cannot produce a usable picture. A dropped
+reference frame keeps recovery active until a new keyframe arrives. These
+changes have automated regressions; sustained phone-and-camera qualification
+is pending. If picture stops, share diagnostics with the action and time.
+
+A Pocket 4 Pro test held 25 fps for five minutes, but later exposed slow startup
+and short freezes after incomplete video data. Startup now waits for the camera's
+command window; known dropped-reference recovery can act sooner while keeping
+the last image visible. Validation of these follow-up fixes is still in progress;
+the earlier clean segment does not establish uninterrupted reliability.
+
+Returning from Media now starts live view once and waits for a fresh picture.
+An older live-picture deadline no longer treats intentional browsing as a failed
+feed. If live view cannot return, bounded connection recovery takes over. Please
+test repeated browsing, playback and return with a connected camera; physical
+qualification of this follow-up is still pending.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine
@@ -297,6 +315,27 @@ present after that is a skip, not a crash.
 
 Wi-Fi passwords stay in Keystore, not saved-camera JSON. Pairing and live view
 need a **physical** Android phone.
+
+### TalkBack
+
+The live-view readouts and the assist cells each speak as one labelled stop:
+the REC chip reads state with elapsed time, the battery rows name phone or
+camera and say "level unknown" rather than leaving a dash unvoiced, the
+timecode names itself, and an assist cell reads its tool name, state and hold
+gesture instead of its 9sp abbreviation.
+
+Labelling a container needs `clearAndSetSemantics`. Plain `semantics` does not
+absorb children, and `mergeDescendants = true` does not suppress them either —
+the platform publishes the parent description *and* every child `Text` as
+separate stops, even though Compose reports the merge as having happened. Leaf
+nodes keep plain `semantics`, since a `Text` has nothing to absorb, and
+`MonitorSlider` keeps its `progressBarRangeInfo` and set action, which a clear
+would erase. `LiveChromeSemanticsTest` pins the rule against the platform
+accessibility tree, so a copy of the wrong pattern fails there rather than on a
+tester's phone.
+
+Verified on a physical SM-S918B / Android 16. Media, settings and pairing carry
+the same container leak and are a later pass.
 
 ## What not to copy from OpenZCine Android
 

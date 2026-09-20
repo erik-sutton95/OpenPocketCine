@@ -24,7 +24,7 @@ interface MediaSessionLink {
 
     fun sendDuml(cmdSet: Int, cmdId: Int, payload: ByteArray)
 
-    fun enableLiveView()
+    fun enableLiveView(): Boolean
 
     fun addFrameListener(listener: (DumlFrame) -> Unit): () -> Unit
 }
@@ -70,9 +70,7 @@ class PocketCameraMediaLink(
         driver()?.sendDuml(cmdSet, cmdId, payload)
     }
 
-    override fun enableLiveView() {
-        session.restartLiveViewAfterMedia()
-    }
+    override fun enableLiveView(): Boolean = session.restartLiveViewAfterMedia()
 
     override fun addFrameListener(listener: (DumlFrame) -> Unit): () -> Unit {
         val dl = driver() ?: return {}

@@ -125,7 +125,16 @@ private final class CaptureTrafficPeer: @unchecked Sendable {
             guard let self, error == nil, let data else { return }
             let bytes = Array(data)
             if DumlTransport.isHandshake(bytes) {
-                connection.send(content: data, completion: .idempotent)
+                // The camera ACK and initial command window are separate datagrams.
+                let reply =
+                    DumlTransport.transportHeader(
+                        pktType: 0, payloadLen: 7, sessionId: 1, seq: 0) + [1, 0, 0, 0, 0, 0, 0]
+                connection.send(content: Data(reply), completion: .idempotent)
+                let payload = DumlTransport.ackPayload(peerCursor: 0x6000, baseSeq: 0x6000)
+                let window =
+                    DumlTransport.transportHeader(
+                        pktType: 1, payloadLen: payload.count, sessionId: 1, seq: 8) + payload
+                connection.send(content: Data(window), completion: .idempotent)
             } else {
                 let poll = Commands.getSelfieFlip()
                 self.commands +=

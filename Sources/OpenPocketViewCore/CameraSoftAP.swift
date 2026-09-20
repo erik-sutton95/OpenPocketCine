@@ -330,6 +330,11 @@ extension CameraSoftAP {
         }
         if videoFresh {
             if enableSends == 1 { return .resendEnable }
+            // A missed initial IRAP leaves fresh P-frames indefinitely. After
+            // the one resend, use the existing picture-repair deadline and
+            // hand ownership to the bounded rejoin instead of waiting forever
+            // or adding a periodic enable loop on this working UDP socket.
+            if secondsSinceLastEnable >= FeedWatchdog.decoderRepairDeadline { return .rejoin }
             return .wait
         }
         // Live status with frozen HEVC is the watchdog's encoder-pause path

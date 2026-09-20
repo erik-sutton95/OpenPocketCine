@@ -26,6 +26,13 @@ The Simulator has no Bluetooth or camera Wi-Fi. Select a physical iPhone, set
 your Team under Signing, and enable **Hotspot Configuration** on the App ID.
 Native gate: `just native-check`.
 
+For camera-connected development checks, the opt-in iPhone
+[feed stress harness](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/feed-stress-testing.md)
+can isolate uninterrupted feed or Media catalog return. It reconnects a saved
+Pocket 4 Pro, checks fresh pipeline counters and stops at serious thermal state.
+Use one phone at a time; these Debug assist workloads do not establish Release
+thermal performance or physical display scanout.
+
 More: [iOS app](../apps/ios/).
 
 ## Android
@@ -42,6 +49,9 @@ With a phone plugged in, `just android-install` builds, installs and launches
 the debug build, and `just android-device-test` runs the instrumentation suite
 on it. Both take an optional serial when several devices are attached
 (`just android-device-test R58R92BL76K`).
+
+The debug app's separate `.debug` application ID lets it coexist with the Play
+beta; saved pairing and preferences belong to the app you opened.
 
 The Compose app is **arm64-v8a only**. Join the
 [public beta on Google Play](https://play.google.com/apps/testing/com.opencapture.openpocketcine). Pairing and live view

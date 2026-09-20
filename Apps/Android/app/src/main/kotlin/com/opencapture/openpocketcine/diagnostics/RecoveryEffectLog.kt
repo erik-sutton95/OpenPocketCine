@@ -18,6 +18,7 @@ internal enum class RecoveryEffect(val wire: String) {
 
 internal enum class RecoveryReason(val wire: String) {
     OUTPUT_SILENCE("outputSilence"),
+    REFERENCE_LOSS("referenceLoss"),
     NOT_READY("notReady"),
     OVERLAP("overlap"),
     PLAYBACK("playback"),

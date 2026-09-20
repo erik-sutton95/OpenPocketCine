@@ -5,6 +5,52 @@ unless a row lists an exception. GPU backends, Bluetooth stacks, and OS APIs may
 diverge. Shipping a one-platform operator-visible change without a row here is
 incomplete.
 
+## Connection regression follow-up
+
+Android's GATT initialization checks native request admission and advances the
+existing tolerated descriptor fallback through both characteristics before
+arming pairing. Failed local registration of required FFF4 notifications or a
+rejected arm write fails promptly; optional FFF5 notification registration may
+fall back. Readiness still requires the successful arm callback. The ten-second
+setup deadline is unchanged. This is an Android adapter correction:
+CoreBluetooth exposes different asynchronous setup
+APIs. Stage diagnostics contain no camera name/address. JVM regression proof is
+separate from physical qualification, which remains pending for this correction.
+
+Android's frame-transit diagnostics retire pending output stamps on each LIVE
+keepalive even during Media browsing. Report publication and live recovery stay
+suppressed while browsing. This bounds Android-specific diagnostic bookkeeping;
+iOS has no equivalent stamp set. Current combined-device qualification remains
+pending.
+
+The [September 20 audit](audits/2026-09-20-connection-regressions.md) covers both
+shells' compressed admission and bounded first-picture/control-grace recovery.
+Android's Kotlin fallback matches the portable policies. Android additionally
+fences admission and scheduled drains by endpoint epoch so retired work cannot
+consume a replacement keyframe. Decoder input also checks source owner/epoch
+inside its existing lock to reject an already-admitted retired callback. Both queues preserve repair demand when an old
+retained IRAP precedes an unresolved loss.
+
+The iOS startup-cover correction needs no Android equivalent: Android already
+shows waiting only while `hasPicture` is false. iOS now keeps warmup completed
+through an established-feed stall and resets it on disconnect; FPS aging and
+RECOV remain independent. Automated regressions are available. Physical
+qualification is partial on both platforms; the
+[physical follow-up](audits/2026-09-20-physical-connection-followup.md) records
+the exact tested source, successful cadence segments and failures.
+
+Both shells require a real initial command window after the handshake before
+registration. Both also carry explicit compressed reference loss to the existing
+watchdog so an established feed can repair on the next eligible tick. Ordinary
+startup/IDR holds do not acquire early repair authority. Readiness, motion,
+command/GOP grace, cooldown and the fresh-picture deadline remain shared.
+
+Both media-return loops use one accepted live start and the existing bounded
+picture deadline. Media generation changes retire old live-picture waits while
+preserving active endpoint negotiation; the return owner uses the serialized
+feed-recovery slot. A genuine negotiation failure still escalates. A retained
+image or a handshake alone cannot complete recovery.
+
 ## Photo LUT View Assist
 
 Photo and Live Photo use Normal / Rec.709 for live LUT selection and image
@@ -680,6 +726,14 @@ this document apply to those earlier builds; they do not qualify the new chrome.
   picker on phone/tablet layouts; disabled and unmounted controls retire their input
   exclusions. Actual compact panels measure 128 dp in both orientations.
   Physical hardware and camera-session proof remain an outstanding exception.
+- Android TalkBack: physical SM-S918B / Android 16 pass over the live-view
+  readouts and the assist cells. The REC chip, both battery rows, the timecode
+  and the assist cells each publish one labelled stop, and the assist cell keeps
+  `ACTION_CLICK` and `ACTION_LONG_CLICK` after the label replaces its subtree.
+  `LiveChromeSemanticsTest` pins this against the platform accessibility tree
+  rather than Compose semantics, which reports a merge the platform does not
+  perform. Media, settings and pairing carry the same container leak and are a
+  later pass; this is not a full TalkBack traversal qualification.
 - Lock, battery percentage, and top-readout alignment were launched on a real
   iPhone and are part of the WDA chrome pass above. Matching Android corrections
   pass build, unit tests and lint; physical Android visual review remains an
@@ -985,3 +1039,15 @@ Physical iPhone/iPad camera proof and live-rate/thermal budget measurements are
 outstanding: no device was connected during this task. Simulator tests are not
 physical qualification. Remaining OS crashes and live-camera outages
 are recorded in the [Sentry audit](audits/2026-09-19-testflight-111-sentry.md).
+
+### iOS live-display ownership follow-up (2026-09-20)
+
+Retired single-camera and Multiview hosts cannot resize a display layer adopted
+by another host or reclaim its decoder/feed bindings. Native regressions exercise
+both handoff directions, late zero-size layout and continued replacement-host
+resizing. This is an iOS-only implementation correction: Android does not use
+`DisplayLayerView`, SwiftUI representables or `AVSampleBufferDisplayLayer`.
+No watchdog thresholds, ACK cadence or live-enable policy change. Physical
+iPhone/iPad camera and live-rate/thermal checks remain pending; no phone was
+reachable during this follow-up. The [current triage](audits/2026-09-20-sentry-current-issues.md)
+keeps the unresolved field failures separate from the reproduced ownership bug.

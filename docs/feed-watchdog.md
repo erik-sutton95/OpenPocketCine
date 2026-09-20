@@ -48,7 +48,7 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 `feed: black lastFrame=…s lastVideo=…s lastStatus=…s flow=… tcp=… path=… format=… stage=… recoverBlack=1`
 
-Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s after the last `datalink.send`): record, FORMAT, COLOR, WB, tracking box `0xA6`, audio. The camera can pause HEVC for a moment on any of them; a long-press track that GOP-cut or rebound the socket was #219. The hold lifts once HEVC has been dead `stall + grace`, so a SET burst cannot block recover.
+Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s after the last `datalink.send`): record, FORMAT, COLOR, WB, tracking box `0xA6`, audio. The camera can pause HEVC for a moment on any of them; a long-press track that GOP-cut or rebound the socket was #219. The hold lifts once the failed stage has been silent for `stall + grace`, so a SET burst cannot block recovery indefinitely. Use packet age for transport silence, complete-AU age for assembly silence, and native-output age for decoder silence. Fresh traffic upstream does not renew the failed stage's grace; actively held zoom/stick still suppresses repair.
 
 If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop.
 
@@ -96,7 +96,15 @@ Watch Console (`com.opencapture.openpocketcine`) and `Documents/control-live.log
 
 The live canvas shows a brief **Reconnecting** chip while UDP rebuilds. The last picture stays under that chip. SoftAP interface binding is unchanged (do not pin only `requiredInterfaceType = .wifi`).
 
+Before the first picture, fresh P-frames alone cannot keep startup waiting
+forever. After the initial enable and its one permitted resend, the existing
+16-second picture deadline transfers to negotiated recovery. Pocket 3's legal
+FORMAT workaround retains its separate ownership; this is not a periodic PLI.
+
 State machine: `Sources/OpenPocketViewCore/FeedWatchdog.swift` (tested). Session hook: `CameraSession.applyFeedWatchdog()`.
+
+The [September 20 regression audit](audits/2026-09-20-connection-regressions.md)
+records reproducible source failures and the remaining physical qualification.
 
 ## Fresh input with silent native output
 
@@ -107,12 +115,33 @@ rebuild and one recovery enable. The owner keeps the last image and waits up to
 16 seconds for fresh source and presentation before transferring to full datalink
 rejoin. Fresh native output with stale presentation does not request a camera PLI.
 
+An explicit compressed discontinuity after valid references can request that
+same repair on the next eligible watchdog tick, while the old output is still
+younger than two seconds. Ordinary startup, a deliberate decoder replacement
+and an IDR hold without known loss do not qualify. Fresh complete AUs, output
+expectation, an established picture and all existing readiness, motion,
+command/GOP grace and cooldown gates still apply. There is no second repair
+owner or additional timer. Clearing the loss flag on IRAP admission alone does
+not finish an early repair: output must be newer than the action, and the shell
+still requires fresh source and presentation within its 16-second deadline.
+Before mutating the decoder, the same owner rechecks explicit loss atomically:
+a fresh IRAP may already have restored references since the watchdog tick. If
+so, it rolls back the unspent action without sending a speculative enable.
+
+The [physical follow-up](audits/2026-09-20-physical-connection-followup.md)
+recorded three 2.3–3.1-second loss holds before this correction. Those traces
+establish avoidable policy delay, not the radio or packet-order cause of loss.
+
 A rebuilt decoder has no valid inter-frame references. Invalid-session errors
 must not rebuild inline and retry the same P-frame. Numeric errors are scoped to
 the decoder generation; IDR hold can expire only while valid references remain.
 Compressed discontinuity invalidates those references until a random-access
-frame arrives. An IRAP/IDR in the same delivery batch still clears that hold
+frame arrives. A current IRAP/IDR suffix in the same delivery batch clears that hold
 (`hasIDR` bypasses `awaitingIDR`; a successful submit restores references).
+If overflow retains an older IRAP while admission still awaits a new random-access
+frame, deliver the discontinuity after that retained batch: the available image
+may paint, but cannot falsely clear the outstanding repair demand. A safe current
+suffix receives the discontinuity before its AUs. Each loss emits one callback.
 The live AU queue keeps at most eight pending units and prefers an independently
 decodable IRAP suffix. Dropping a later incomplete AU cannot reconstruct future
 P-frames from an older GOP; that is discarded pending work, not proof of a

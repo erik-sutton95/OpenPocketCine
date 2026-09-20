@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -370,8 +371,11 @@ private fun ZebraZoneRow(
     Column(Modifier.padding(start = 14.dp).alpha(if (enabled) 1f else .35f)) {
         SettingsInlineRow("Threshold", showTopDivider = false, stacked = true) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // The slider already publishes its range and a set action; only
+                // the name was missing, and it is the row title right above.
                 com.opencapture.monitorui.MonitorSlider(value.toFloat(), 0f..maximum.toFloat(),
-                    Modifier.weight(1f), enabled = enabled) { onValue(it.toInt()) }
+                    Modifier.weight(1f).semantics { contentDescription = "$title threshold" },
+                    enabled = enabled) { onValue(it.toInt()) }
                 Text(value.toString(), style = LiveType.ui(12f, FontWeight.Medium), color = LiveDesign.text,
                     modifier = Modifier.width(34.dp))
             }

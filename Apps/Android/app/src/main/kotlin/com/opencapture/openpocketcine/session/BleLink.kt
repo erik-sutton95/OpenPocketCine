@@ -22,9 +22,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.pairing.FoundCameraIdentity
 import java.util.UUID
 import kotlinx.coroutines.CancellableContinuation
@@ -83,9 +85,7 @@ class BleLink(context: Context) {
     private var gatt: BluetoothGatt? = null
     private var fff4: BluetoothGattCharacteristic? = null
     private var fff5: BluetoothGattCharacteristic? = null
-    private var fff4NotifySettled = false
-    private var fff5NotifySettled = false
-    private var pairingArmed = false
+    private var initialization: BleInitialization? = null
     private val operations = CallbackOperationOwner<BluetoothGatt>()
     private var activeAttempt: CallbackOperationOwner.Token<BluetoothGatt>? = null
     private var connectContinuation: CancellableContinuation<Unit>? = null
@@ -210,9 +210,29 @@ class BleLink(context: Context) {
                     }
                     activeAttempt = attempt
                     connectContinuation = cont
+                    initialization = BleInitialization(
+                        requestNotify = { channel ->
+                            val current = gatt
+                            val characteristic = if (channel == BleInitialization.Channel.FFF4) fff4 else fff5
+                            if (current == null || characteristic == null) BleRequestResult.LinkClosed
+                            else requestNotify(current, characteristic)
+                        },
+                        requestArm = {
+                            val current = gatt
+                            val characteristic = fff4
+                            if (current == null || characteristic == null) BleRequestResult.LinkClosed
+                            else requestPairingArm(current, characteristic)
+                        },
+                        complete = { error ->
+                            if (error == null) finishConnect(null) else closeGatt(error)
+                        },
+                        nowMs = SystemClock::elapsedRealtime,
+                        journal = { DiagnosticCenter.log("info", "ble", "initialization", it) },
+                    )
                     val timeout =
                         Runnable {
                             operations.runIfCurrent(attempt) {
+                                initialization?.timedOut()
                                 closeGatt(IllegalStateException("Bluetooth connect timed out"))
                                 operations.finish(attempt)
                             }
@@ -272,9 +292,8 @@ class BleLink(context: Context) {
         activeAttempt = null
         writeQueue.clear()
         writing = false
-        pairingArmed = false
-        fff4NotifySettled = false
-        fff5NotifySettled = false
+        initialization?.close()
+        initialization = null
         val closing = gatt
         gatt = null
         fff4 = null
@@ -366,11 +385,6 @@ class BleLink(context: Context) {
         return true
     }
 
-    private fun settleNotify(characteristic: BluetoothGattCharacteristic) {
-        if (characteristic.uuid == CHAR_FFF4) fff4NotifySettled = true
-        if (characteristic.uuid == CHAR_FFF5) fff5NotifySettled = true
-    }
-
     private fun onGattCallback(
         attempt: CallbackOperationOwner.Token<BluetoothGatt>,
         source: BluetoothGatt,
@@ -425,10 +439,15 @@ class BleLink(context: Context) {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 onGattCallback(attempt, gatt) {
                     if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
+                        DiagnosticCenter.log(
+                            "warning", "ble", "connectionState",
+                            "ble: connection state status=$status newState=$newState connectSettled=${connectSettled.get()}",
+                        )
                         finishConnect(IllegalStateException("the camera disconnected"))
                         notifyLinkLostIfSettled(attempt)
                         closeGatt(IllegalStateException("the camera disconnected"))
                     } else if (newState == BluetoothProfile.STATE_CONNECTED) {
+                        initialization?.connected()
                         gatt.requestMtu(512)
                         if (!gatt.discoverServices()) closeGatt(IllegalStateException("service discovery failed"))
                     }
@@ -438,6 +457,7 @@ class BleLink(context: Context) {
             @SuppressLint("MissingPermission")
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                 onGattCallback(attempt, gatt) {
+                    initialization?.discoveryStatus(status)
                     val service = gatt.getService(SERVICE_FFF0)
                     if (status != BluetoothGatt.GATT_SUCCESS || service == null) {
                         closeGatt(IllegalStateException("camera has no DUML service"))
@@ -449,7 +469,7 @@ class BleLink(context: Context) {
                         closeGatt(IllegalStateException("camera has no DUML service"))
                         return@onGattCallback
                     }
-                    requestNotify(gatt, fff4!!)
+                    initialization?.servicesDiscovered()
                 }
             }
 
@@ -460,13 +480,12 @@ class BleLink(context: Context) {
                 status: Int,
             ) {
                 onGattCallback(attempt, gatt) {
-                    // Some supported bodies reject fff5's CCCD. Settlement of
-                    // both writes (success or failure) still permits pairing arm.
-                    val uuid = descriptor.characteristic.uuid
-                    if (uuid == CHAR_FFF4) fff4NotifySettled = true
-                    if (uuid == CHAR_FFF5) fff5NotifySettled = true
-                    if (uuid == CHAR_FFF4) fff5?.let { requestNotify(gatt, it) }
-                    maybeArmPairing(gatt)
+                    val channel = when (descriptor.characteristic.uuid) {
+                        CHAR_FFF4 -> BleInitialization.Channel.FFF4
+                        CHAR_FFF5 -> BleInitialization.Channel.FFF5
+                        else -> return@onGattCallback
+                    }
+                    initialization?.notificationWritten(channel, status)
                 }
             }
 
@@ -477,8 +496,7 @@ class BleLink(context: Context) {
             ) {
                 onGattCallback(attempt, gatt) {
                     if (characteristic.uuid == CHAR_FFF4) {
-                        if (status == BluetoothGatt.GATT_SUCCESS) finishConnect(null)
-                        else closeGatt(IllegalStateException("pairing arm failed"))
+                        initialization?.armWritten(status)
                     }
                 }
             }
@@ -504,70 +522,61 @@ class BleLink(context: Context) {
         }
 
     @SuppressLint("MissingPermission")
-    private fun requestNotify(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        val descriptor =
-            runCatching {
-                gatt.setCharacteristicNotification(characteristic, true)
-                characteristic.getDescriptor(CCCD)
-            }
-        if (descriptor.isFailure) {
-            val error = descriptor.exceptionOrNull() ?: IllegalStateException("BLE notify setup failed")
-            if (dropLinkIfDeadBinder(error)) return
-            Log.w(TAG, "BLE notify setup failed", error)
-            settleNotify(characteristic)
-            maybeArmPairing(gatt)
-            return
-        }
-        val cccd = descriptor.getOrNull() ?: run {
-            settleNotify(characteristic)
-            maybeArmPairing(gatt)
-            return
-        }
-        val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        val sent =
-            runCatching {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    gatt.writeDescriptor(cccd, enable)
+    private fun requestNotify(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+    ): BleRequestResult = try {
+        admitBleNotification(
+            enableLocal = { gatt.setCharacteristicNotification(characteristic, true) },
+            closeIfDeadBinder = ::dropLinkIfDeadBinder,
+            writeDescriptor = {
+                val cccd = characteristic.getDescriptor(CCCD)
+                if (cccd == null) {
+                    BleRequestResult.MissingDescriptor
                 } else {
-                    @Suppress("DEPRECATION")
-                    cccd.value = enable
-                    @Suppress("DEPRECATION")
-                    gatt.writeDescriptor(cccd)
+                    val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        BleRequestResult.fromStatus(gatt.writeDescriptor(cccd, enable))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        cccd.value = enable
+                        @Suppress("DEPRECATION")
+                        BleRequestResult.fromBoolean(gatt.writeDescriptor(cccd))
+                    }
                 }
-            }
-        if (sent.isFailure) {
-            val error = sent.exceptionOrNull() ?: IllegalStateException("BLE notify descriptor write failed")
-            if (dropLinkIfDeadBinder(error)) return
-            Log.w(TAG, "BLE notify descriptor write failed", error)
-            settleNotify(characteristic)
-            maybeArmPairing(gatt)
+            },
+        )
+    } catch (error: Throwable) {
+        if (dropLinkIfDeadBinder(error)) BleRequestResult.LinkClosed
+        else {
+            Log.w(TAG, "BLE notify setup failed", error)
+            BleRequestResult.HandledFailure
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun maybeArmPairing(gatt: BluetoothGatt) {
-        if (pairingArmed || !fff4NotifySettled || !fff5NotifySettled) return
-        val char = fff4 ?: return
-        pairingArmed = true
+    private fun requestPairingArm(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+    ): BleRequestResult = try {
         val payload = byteArrayOf(0x01, 0x00)
-        val sent =
-            runCatching {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    gatt.writeCharacteristic(char, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-                } else {
-                    @Suppress("DEPRECATION")
-                    char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                    @Suppress("DEPRECATION")
-                    char.value = payload
-                    @Suppress("DEPRECATION")
-                    gatt.writeCharacteristic(char)
-                }
-            }
-        if (sent.isFailure) {
-            val error = sent.exceptionOrNull() ?: IllegalStateException("pairing arm failed")
-            if (dropLinkIfDeadBinder(error)) return
+        if (Build.VERSION.SDK_INT >= 33) {
+            BleRequestResult.fromStatus(
+                gatt.writeCharacteristic(characteristic, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            @Suppress("DEPRECATION")
+            characteristic.value = payload
+            @Suppress("DEPRECATION")
+            BleRequestResult.fromBoolean(gatt.writeCharacteristic(characteristic))
+        }
+    } catch (error: Throwable) {
+        if (dropLinkIfDeadBinder(error)) BleRequestResult.LinkClosed
+        else {
             Log.w(TAG, "BLE pairing arm write failed", error)
-            closeGatt(IllegalStateException("pairing arm failed"))
+            BleRequestResult.HandledFailure
         }
     }
 

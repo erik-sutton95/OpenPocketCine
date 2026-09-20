@@ -27,6 +27,14 @@ peer migration: the September 12 Pocket 4 Pro RVI capture showed camera traffic
 continuing to the retired port while ACKs left from the replacement port. Only
 the later handshake moved camera traffic to the current endpoint.
 
+Registration needs both the handshake acknowledgment and the initial 34-byte
+`0x01` telemetry command window from the current endpoint. A short `0x00`
+acknowledgment has no command cursor: treating its first payload word as one
+can start the command sequence at 9 and leave the endpoint unable to start
+picture. Both shells wait for protocol evidence within their existing bounded
+negotiation, then seed commands from the window plus 8. Zero and wraparound
+are valid. Late packets from a retired endpoint cannot seed its replacement.
+
 ## ACK pump
 
 Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:
@@ -151,9 +159,36 @@ fallback (that unbound MediaCodec from the ImageReader). Return-from-gallery
 is `MediaLiveResume` (`0x02/0x0c` until the playback bit clears, then the
 captured live-start — `0x02/0x68` `08` then `0x09/0xa8` + IDR hold),
 not a raw enable write. Leftover GOP packets are not a live picture —
-resume is done only when a frame presented after resume started.
+resume is done only when fresh source and presentation follow resume. The return
+owner sends that live-start pair once after accepted playback exit, then waits
+within the existing 16-second picture deadline. It does not resend every 350 ms.
+A blocked local start is not counted as sent. Expired exit/picture budgets hand
+off to bounded full-session recovery.
+
+Opening or closing Media advances the picture-owner generation. An older decoder,
+foreground or endpoint picture wait cannot enable or escalate after that change,
+even if Media opens and closes before the wait finishes. An endpoint negotiation
+already in progress is allowed to finish; return-to-live waits for that owner to
+release the same recovery slot. A real negotiation failure still belongs to
+connection recovery. Settings coverage does not change this media generation.
+
+Once an iOS connection has qualified rolling pictures, stats aging cannot
+return it to startup **Waiting for live view** or hide its retained image.
+Recovery uses its own RECOV/Reconnecting state. Disconnect resets first-picture
+qualification. Android already uses its retained `hasPicture` state for the
+startup cover. Synthetic native/JVM regressions cover these changes; physical
+camera qualification is still pending.
 
 ## Disconnect teardown
+
+On iOS, only the `DisplayLayerView` that currently contains the session's display
+layer may update its geometry or decoder/feed bindings. A retiring single-camera
+or Multiview host can receive late SwiftUI updates and UIKit layout callbacks
+after replacement. Those callbacks must not shrink the adopted layer to zero,
+close decoder readiness, or redirect output to the retired Metal view. Native
+regressions cover both handoff directions and continued resizing of the current
+host. This fixes a reproduced ownership defect; it does not establish the cause
+of every field stall. Physical camera qualification remains pending.
 
 In-app Disconnect must drop the UDP driver (`udpGeneration` / closed flag,
 callbacks, ACK pump) and the platform decoder (VT invalidate + layer flush
@@ -183,7 +218,14 @@ IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 The live pending queue is bounded (eight AUs) and keeps an independently
 decodable suffix when it can. An IRAP in that suffix still releases IDR hold
 on decode. A later incomplete AU cannot be repaired by replaying an older
-complete GOP.
+complete GOP. When a retained older IRAP predates the loss, its delivery must
+leave decoder recovery armed while admission waits for a new random-access
+frame. A current safe IRAP suffix clears the hold normally. Android admission,
+drain consumption and scheduling cleanup all check the endpoint epoch under
+the queue lock; retired work cannot consume a replacement endpoint's first IRAP.
+Decoder callbacks run outside that lock. Their captured driver owner and
+epoch are rechecked inside the decoder's existing state lock, so a callback
+already admitted before retirement cannot alter replacement reference state.
 
 `KEY_LOW_LATENCY` is a demand, not a hint. The framework turns it into
 `setConfig(OMX_IndexConfigLowLatency)` on a legacy OMX component, and `ACodec`
@@ -218,7 +260,12 @@ Android MediaCodec takes in-band SPS itself. Async VT decode errors count
 toward `decoderErrors`; `decoderWedged` on the observe line means an error
 **after** the last presented frame, not any error this session. Native
 callback age (`vtOutput` / decoder-output Hz) is not presentation age
-(`gpuFPS` / display-layer enqueue). Neither is physical scanout.
+(`gpuFPS` / display-layer enqueue). Neither is physical scanout. Android's
+cadence line carries one picture's own timestamp across each hop
+(`decodeMs`, `presentMs`) so transit is read per frame instead of inferred
+from rates; `presentMs` ends where the picture is handed to the display, not
+where it lights up, and `drop` separates a late feed from a stuttering one
+(`docs/diagnostics.md`). Those legs still stop short of scanout.
 
 ## Foreground / SoftAP flap
 

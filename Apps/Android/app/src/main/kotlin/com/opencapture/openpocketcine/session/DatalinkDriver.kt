@@ -232,8 +232,8 @@ class DatalinkDriver internal constructor(
     /** Third ACK group, seeded from 34-byte pktType 0x01 telemetry. */
     private val extraCursor = AtomicInteger(0)
     private val hasExtra = AtomicBoolean(false)
-    private var camChannel = 0
-    @Volatile private var handshakeAcked = false
+    private val handshakeAdmission = DatalinkHandshakeAdmission()
+    private val handshakeAcked: Boolean get() = handshakeAdmission.initialCommandSequence() != null
     @Volatile private var liveViewEnabled = false
     private val closed = AtomicBoolean(false)
     private var depacketizer = 0L
@@ -259,8 +259,9 @@ class DatalinkDriver internal constructor(
     private val lastGimbalStickElapsed = AtomicLong(0)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
-    var onAccessUnit: ((ByteArray) -> Unit)? = null
-    var onReferenceDiscontinuity: (() -> Unit)? = null
+    var onAccessUnit: ((ByteArray, Long) -> Unit)? = null
+    var onReferenceDiscontinuity: ((Long) -> Unit)? = null
+    var onVideoEpochChanged: ((Long) -> Unit)? = null
     private val lastIncompleteDropped = AtomicInteger(0)
     private val admission = CompressedAccessUnitAdmission()
 
@@ -301,7 +302,6 @@ class DatalinkDriver internal constructor(
         rawVideoPackets.set(0)
         leftoverVideoPackets.set(0)
         lastIncompleteDropped.set(0)
-        admission.reset()
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
         lastAccessUnitElapsed.set(0)
@@ -347,7 +347,7 @@ class DatalinkDriver internal constructor(
             }
             if (handshakeAcked) {
                 Log.i(TAG, "datalink: handshake acked session=$sessionId")
-                if (camChannel != 0) udpSeq = (camChannel + 8) and 0xFFFF
+                udpSeq = checkNotNull(handshakeAdmission.initialCommandSequence())
                 sendAck()
                 register()
                 subscribe()
@@ -369,6 +369,8 @@ class DatalinkDriver internal constructor(
                 return@run true
             }
             val inbound = inboundLogs.get()
+            val evidence = handshakeAdmission.evidence()
+            Log.i(TAG, "datalink: negotiation miss ack=${evidence.acknowledged} window=${evidence.windowKnown}")
             when (
                 LiveViewEnablePolicy.handshakeTimeoutStep(
                     pathReady = joiner.isProcessBound(),
@@ -477,26 +479,23 @@ class DatalinkDriver internal constructor(
      */
     private fun scheduleAdmissionDrain(receiveEpoch: Long) {
         if (closed.get() || decodeExecutor.isShutdown) {
-            admission.releaseScheduledHop()
+            admission.releaseScheduledHop(receiveEpoch)
             return
         }
         val enqueuedAt = cadence.queued()
         runCatching {
             decodeExecutor.execute {
                 cadence.dequeued(enqueuedAt)
-                val delivery = admission.takeDelivery()
-                if (delivery.discontinuity && !closed.get()) {
-                    onReferenceDiscontinuity?.invoke()
-                }
-                for (unit in delivery.accessUnits) {
-                    if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
-                        onAccessUnit?.invoke(unit)
-                    }
-                }
+                admission.drain(
+                    receiveEpoch,
+                    isCurrent = { !closed.get() && receiveEpoch == nativeFeedbackEpoch.get() },
+                    onDiscontinuity = { onReferenceDiscontinuity?.invoke(receiveEpoch) },
+                    onAccessUnit = { onAccessUnit?.invoke(it, receiveEpoch) },
+                )
             }
         }.onFailure {
             cadence.dequeued(enqueuedAt)
-            admission.releaseScheduledHop()
+            admission.releaseScheduledHop(receiveEpoch)
         }
     }
 
@@ -621,7 +620,7 @@ class DatalinkDriver internal constructor(
         closed = closed,
         fence = {
             nativeProgramRunner.invalidate()
-            nativeFeedbackEpoch.incrementAndGet()
+            retireVideoEpoch()
             nativeProgramFeedback.set(null)
             nativeProgramProgress.set(null)
             clearNativeCurveTargets()
@@ -637,6 +636,7 @@ class DatalinkDriver internal constructor(
             liveViewEnabled = false
             onAccessUnit = null
             onReferenceDiscontinuity = null
+            onVideoEpochChanged = null
             onStatusFrame = null
         },
         // This is the sole send admitted after closed=true. The executor is shut
@@ -668,7 +668,6 @@ class DatalinkDriver internal constructor(
     private fun resetHandshakeSession() {
         sessionId = Random.nextInt(0x1000, 0xFFFE)
         baseSeq = Random.nextInt(0x1000, 0xF000) and 0xFFF8
-        camChannel = baseSeq
         udpSeq = 0
         dumlSeq = 0xA000
         cmdCounter = 0
@@ -678,7 +677,7 @@ class DatalinkDriver internal constructor(
         hasAckedData.set(false)
         extraCursor.set(0)
         hasExtra.set(false)
-        handshakeAcked = false
+        handshakeAdmission.reset(nativeFeedbackEpoch.get())
     }
 
     private fun startUdpReceiver() {
@@ -741,7 +740,7 @@ class DatalinkDriver internal constructor(
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
-        nativeFeedbackEpoch.incrementAndGet()
+        retireVideoEpoch()
         ackDispatch.invalidate()
         nativeProgramFeedback.set(null)
         nativeCurveDispatch.clear()
@@ -768,6 +767,15 @@ class DatalinkDriver internal constructor(
             runCatching { pokeSocket?.close() }
             pokeSocket = null
         }
+    }
+
+    private fun retireVideoEpoch() {
+        val epoch = nativeFeedbackEpoch.incrementAndGet()
+        handshakeAdmission.reset(epoch)
+        // Fence decoder mutation independently of queue ownership. Never hold
+        // admission's lock while waiting for the decoder's existing lock.
+        onVideoEpochChanged?.invoke(epoch)
+        admission.reset(epoch)
     }
 
     private fun ensurePoke(lifetime: DatalinkOpenLoop) {
@@ -1048,11 +1056,7 @@ class DatalinkDriver internal constructor(
                 "datalink: inbound #$nIn bytes=${datagram.size} pktType=0x${pktType.toString(16)} hex=$head",
             )
         }
-        if (datagram.size >= 10) {
-            val ch = (datagram[8].toInt() and 0xFF) or ((datagram[9].toInt() and 0xFF) shl 8)
-            if (ch != 0) camChannel = ch
-        }
-        if (datagram.size >= 8 && datagram[6] == 0x00.toByte()) handshakeAcked = true
+        handshakeAdmission.receive(datagram, receiveEpoch)
         noteAckWindows(datagram)
         if (datagram.size == 34 && datagram[6] == 0x01.toByte()) {
             if (!hasVideoSeq.get()) {
@@ -1091,12 +1095,12 @@ class DatalinkDriver internal constructor(
                 val previous = lastIncompleteDropped.getAndSet(dropped)
                 var hop = false
                 if (AccessUnitDiscontinuity.shouldNote(previous, dropped)) {
-                    hop = admission.noteIncompleteLoss() || hop
+                    hop = admission.noteIncompleteLoss(receiveEpoch) || hop
                 }
                 if (au != null) {
                     lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
                     cadence.note(LivePipelineCadence.Stage.AU)
-                    hop = admission.offer(au) || hop
+                    hop = admission.offer(au, receiveEpoch) || hop
                 }
                 if (hop) scheduleAdmissionDrain(receiveEpoch)
             }

@@ -296,12 +296,18 @@ class LiveViewEnablePolicyTest {
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
-                lastVideoAt = now - 8_000,
+                lastVideoAt = now - 3_000,
                 lastStatusAt = now - 8_000,
                 lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
             ).copy(lastFocusTrackAt = now - 2_200)
         assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(
+            LiveViewEnablePolicy.Action.REBUILD_UDP,
+            LiveViewEnablePolicy.tick(state,
+                snap.copy(lastVideoPacketAt = now - 8_000, lastAccessUnitAt = now - 8_000)),
+            "A recent control cannot renew grace after the failed stage exceeds stall + grace",
+        )
     }
 
     @Test
@@ -312,12 +318,18 @@ class LiveViewEnablePolicyTest {
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
-                lastVideoAt = now - 8_000,
+                lastVideoAt = now - 3_000,
                 lastStatusAt = now - 8_000,
                 lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
             ).copy(lastZoomAt = now - 1_000)
         assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
+        assertEquals(
+            LiveViewEnablePolicy.Action.REBUILD_UDP,
+            LiveViewEnablePolicy.tick(state,
+                snap.copy(lastVideoPacketAt = now - 8_000, lastAccessUnitAt = now - 8_000)),
+            "A recent control cannot renew grace after the failed stage exceeds stall + grace",
+        )
     }
 
     @Test

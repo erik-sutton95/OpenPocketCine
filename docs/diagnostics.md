@@ -78,6 +78,19 @@ Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
 Android has no TestFlight screenshot hook — PARITY exception.
 
+Android BLE connection failures journal `status`, `newState` and `connectSettled`
+before cleanup. These are numeric platform values and a boolean, with no device
+name or address. They distinguish an initial GATT failure from a settled link
+drop; a generic status such as 133 does not identify its underlying radio cause.
+The Android setup journal also records typed initialization stages, elapsed time,
+native request admission and callback status. Its ten-second `connecting_gatt`
+deadline covers connection, service discovery, notification setup and pairing
+arm, so that phase alone does not identify a radio-connect failure. Rejected
+writes, failed local notification registration and missing notification
+descriptors must be distinguishable from an accepted request whose callback
+never arrived. These breadcrumbs contain no camera identifiers or credentials
+and do not add retry traffic.
+
 ## Typed feed incidents
 
 A 1 Hz allowlisted spool records packet, AU, decode-submit/accept/output,
@@ -122,6 +135,21 @@ timing and counters only; no picture, audio, camera credentials or device identi
 - Android `feed: cadence`: separate ACK, video, assembled-frame, decoder-submit,
   decoder-output and presentation rates, maximum gaps and ages; compressed queue
   depth, peak and wait; input-buffer misses, incomplete frames and decoder errors.
+  `decodeMs` is submit-to-decoder-output and `presentMs` is decoder-output to the
+  moment the picture is *submitted for display*: that call lands as soon as the
+  submit returns, so GPU execution, the compositor and scanout are all still ahead
+  of it. Each is `mean/max` over the window — the mean alone hides a hiccup, the
+  maximum alone claims every picture took that long. `-1.0` means the leg took no
+  sample, which is not zero transit. A negative or multi-second sample is a clock
+  disagreement or a stall the gap counters already report, and is excluded. `drop`
+  counts pictures the decoder released that a whole window later had still not been
+  submitted; each is tracked by the stamp it was released with, so a backlog that
+  keeps moving is not a drop and a picture lost once is reported once, one window
+  late. These legs follow one picture across one hop; they do not add up to a
+  glass-to-glass figure and do not reach physical scanout.
+  While the session is live, cadence windows still close during Media browsing
+  even though their reports and live recovery remain suppressed. This retires
+  unmatched frame stamps if decoding continues without presentation.
 - `session: foreground` / foreground recovery rows record network readiness and
   picture freshness. Recovery stage, failure, completion and exhausted-budget
   rows remain in the journal shared by the operator.
@@ -130,6 +158,11 @@ ACK rate measures local submissions, not confirmed camera receipt. Decoder outpu
 is separate from presentation. A repeated redraw of the same source must not
 count as new video. Averages alone cannot establish smooth motion: compare the
 maximum gaps and queue waits in the same time window.
+
+A late picture and a dropped one feel alike to the operator and are fixed
+differently. The Android renderer takes the newest buffer and lets older ones go,
+so a stage that blocks shows up as `drop`, not as a growing `decodeMs` /
+`presentMs`. Read the two together before calling a feed slow.
 
 Keep a baseline, then change one trigger at a time: 30 seconds static, slow pan,
 joystick, LUT/scopes, head tracking, and app return. Note the trigger time; keep
@@ -239,6 +272,10 @@ until that failure clears; fresh decoded/presented frames alone are insufficient
 This corrects incident accounting, not the underlying transport/decoder outages.
 The [build 111 audit](audits/2026-09-19-testflight-111-sentry.md) records reviewed
 Sentry groups, recovered build 111 symbols, reproduced fixes and outstanding device evidence.
+The [September 20 follow-up](audits/2026-09-20-sentry-current-issues.md) records
+resolved prior fixes, feedback moved to Discussions, remaining failures and the
+reproduced iOS display-host ownership defect. Resolved implementation issues
+still require their recorded physical qualification; live-outage groups remain open.
 
 Feed grouping includes incident kind as well as stage and error class, separating
 transport stalls from fresh-input/stale-output incidents at the same stage. New

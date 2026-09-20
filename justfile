@@ -235,7 +235,7 @@ android-device-test serial="":
     cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" {{ if serial == "" { "" } else { "ANDROID_SERIAL=" + serial } }} ./gradlew connectedDebugAndroidTest
 
 # Build and install the debug APK on a connected device/emulator, then launch it.
-# The debug build carries an `applicationIdSuffix`, so it launches as `.debug`.
+# The debug build's application ID has a suffix; the activity class does not.
 # With several devices attached, pass the serial: `just android-install R58R92BL76K`.
 android-install serial="":
     just android-build

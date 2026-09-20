@@ -39,7 +39,6 @@ final class DatalinkDriver {
             ? WiFiJoiner.isCameraPathReady()
             : SharedWiFiPath.address(hotspot: stationHotspot) != nil
     }
-    nonisolated private let initialStationWindow = OSAllocatedUnfairLock(initialState: UInt16?.none)
     private let port: UInt16
     private let tcpPoke: Bool
     private let pairingToken: String
@@ -70,10 +69,10 @@ final class DatalinkDriver {
     private var dumlSeq: UInt16 = 0xA000
     private var cmdCounter: UInt8 = 0
     private var peerCursor: UInt16 = 0
-    private var camChannel: UInt16 = 0
-    /// Set on the UDP queue the instant pktType 0x00 lands. MainActor ingest
-    /// used to see the ACK after SwiftUI had already burned the wait loop.
-    nonisolated private let handshakeFlag = OSAllocatedUnfairLock(initialState: false)
+    /// Collect the ACK and initial command window on the UDP queue. Registration
+    /// needs both; the short ACK payload is not a command sequence.
+    nonisolated private let handshakeAdmission = OSAllocatedUnfairLock(
+        initialState: DatalinkHandshakeAdmission())
     /// Inbound datagrams seen before the ACK. Zero on a miss means the reader
     /// is dead or the camera never heard us.
     nonisolated private let handshakeInbound = OSAllocatedUnfairLock(initialState: 0)
@@ -220,11 +219,7 @@ final class DatalinkDriver {
     }
 
     private var handshakeAcked: Bool {
-        get {
-            handshakeFlag.withLock { $0 }
-                && (stationHost == nil || initialStationWindow.withLock { $0 != nil })
-        }
-        set { handshakeFlag.withLock { $0 = newValue } }
+        handshakeAdmission.withLock { $0.initialCommandSequence != nil }
     }
 
     /// Bring the datalink up: poke, handshake, register, subscribe. Throws if the socket never opens
@@ -289,11 +284,11 @@ final class DatalinkDriver {
                 // Protocol: register + subscribe, then 0x09/0xa8. Enable before
                 // subscribe is ignored; first-boot then piled mid-GOP P-frames
                 // and first-picture tore UDP during the IDR gap.
-                if let initial = initialStationWindow.withLock({ $0 }), stationHost != nil {
-                    udpSeq = initial
-                } else if camChannel != 0 {
-                    udpSeq = camChannel &+ 8
+                guard let initial = handshakeAdmission.withLock({ $0.initialCommandSequence })
+                else {
+                    throw DatalinkError.noHandshake
                 }
+                udpSeq = initial
                 primeWireSeqs()
                 sendAck()
                 if !identityOnly { completeRegistration() }
@@ -312,6 +307,10 @@ final class DatalinkDriver {
             }
 
             let inbound = handshakeInbound.withLock { $0 }
+            let evidence = handshakeAdmission.withLock { ($0.acknowledged, $0.hasInitialWindow) }
+            log.info(
+                "datalink: negotiation miss ack=\(evidence.0, privacy: .public) window=\(evidence.1, privacy: .public)"
+            )
             let pathReady = self.pathReady
             sendRounds += 1
             switch CameraSoftAP.handshakeTimeoutStep(
@@ -361,12 +360,11 @@ final class DatalinkDriver {
     private func resetHandshakeSession() {
         sessionId = UInt16.random(in: 0x1000...0xFFFE)
         baseSeq = UInt16.random(in: 0x1000...0xF000) & 0xFFF8  // 8-aligned; fresh per connect
-        camChannel = baseSeq
         udpSeq = 0
         dumlSeq = 0xA000
         cmdCounter = 0
-        handshakeAcked = false
-        initialStationWindow.withLock { $0 = nil }
+        let handshakeEpoch = udpGeneration
+        handshakeAdmission.withLock { $0.reset(epoch: handshakeEpoch) }
         handshakeInbound.withLock { $0 = 0 }
         videoGate.withLock { $0 = VideoGate() }
         videoAssembler.reset()
@@ -852,6 +850,8 @@ final class DatalinkDriver {
     /// Drop the live UDP socket only. TCP 7001 stays up for the session.
     private func discardUDP() {
         udpGeneration += 1
+        let handshakeEpoch = udpGeneration
+        handshakeAdmission.withLock { $0.reset(epoch: handshakeEpoch) }
         let generation = udpGeneration
         liveGeneration.withLock { $0 = generation }
         onUDPQueueSync {
@@ -1334,8 +1334,7 @@ final class DatalinkDriver {
         // is scheduled on `q` immediately. `startReceiveLoop()` is MainActor-isolated — calling
         // it from the UDP callback hopped to main and froze the feed when the UI was busy.
         let assembler = videoAssembler
-        let handshake = handshakeFlag
-        let stationWindow = initialStationWindow
+        let handshake = handshakeAdmission
         let inbound = handshakeInbound
         let gate = videoGate
         let flipReplyAt = lastSelfieFlipReply
@@ -1349,7 +1348,7 @@ final class DatalinkDriver {
             conn, queue: q,
             onError: { [weak self] message in
                 let canceled = CameraSoftAP.isCanceledReceive(message)
-                let awaitingAck = !handshake.withLock { $0 }
+                let awaitingAck = !handshake.withLock { $0.acknowledged }
                 Task { @MainActor in
                     guard let self else { return }
                     let live = self.udpGeneration == generation && self.conn === socket
@@ -1370,7 +1369,7 @@ final class DatalinkDriver {
             },
             ingest: { [weak self] bytes in
                 guard genLock.withLock({ $0 }) == generation else { return }
-                let awaitingAck = !handshake.withLock { $0 }
+                let awaitingAck = !handshake.withLock { $0.acknowledged }
                 if awaitingAck {
                     inbound.withLock { $0 += 1 }
                     let count = bytes.count
@@ -1382,14 +1381,11 @@ final class DatalinkDriver {
                     }
                 }
                 if DumlTransport.isHandshake(bytes) {
-                    handshake.withLock { $0 = true }
                     Task { @MainActor in
                         self?.log.info("datalink: handshake reply pktType=0x00")
                     }
                 }
-                if let initial = MulticamCommands.controlSequence(fromInitialWindow: bytes) {
-                    stationWindow.withLock { if $0 == nil { $0 = initial } }
-                }
+                handshake.withLock { $0.receive(bytes, epoch: generation) }
                 self?.noteAckWindows(bytes)
                 let video = bytes.count > 6 && bytes[6] == 0x02
                 if video {
@@ -1511,13 +1507,6 @@ final class DatalinkDriver {
     }
 
     private func ingest(_ datagram: [UInt8]) {
-        // Learn the peer's sequence channel (bytes 8-9) and the window cursor.
-        if datagram.count >= 10 {
-            let ch = UInt16(datagram[8]) | (UInt16(datagram[9]) << 8)
-            if ch != 0 { camChannel = ch }
-        }
-        if DumlTransport.isHandshake(datagram) { handshakeAcked = true }
-
         // 0x01 telemetry carries a cursor at [10:12]. Video (0x02) has no such field — Mimo echoes
         // the video packet's own transport seq (bytes 4-5) instead, 96% of ACKs in the capture.
         if datagram.count == 34, datagram[6] == 0x01 {
@@ -1562,13 +1551,14 @@ final class DatalinkDriver {
         guard !closed, udpGeneration == generation else { return }
         noteInboundTraffic()
         let batch = videoAssembler.takeDelivery()
-        if batch.discontinuity { onVideoDiscontinuity?() }
-        for accessUnit in batch.accessUnits {
-            #if DEBUG
-                FeedStressAutomation.noteSourceDelivered(videoPackets: 0, accessUnits: 1)
-            #endif
-            onAccessUnit?(accessUnit)
-        }
+        batch.deliver(
+            onDiscontinuity: { self.onVideoDiscontinuity?() },
+            onAccessUnit: { accessUnit in
+                #if DEBUG
+                    FeedStressAutomation.noteSourceDelivered(videoPackets: 0, accessUnits: 1)
+                #endif
+                self.onAccessUnit?(accessUnit)
+            })
         if videoAssembler.hasPending {
             Task(priority: .utility) { @MainActor [weak self] in
                 self?.flushPendingAccessUnits(generation: generation)
@@ -1827,6 +1817,25 @@ final class DatalinkDriver {
 /// HEVC reassembly on the UDP queue. Main hops only complete access units (~25 Hz),
 /// not every SoftAP datagram.
 final class SoftAPVideoAssembler: @unchecked Sendable {
+    struct Delivery {
+        let accessUnits: [[UInt8]]
+        let discontinuity: Bool
+        let awaitingRandomAccess: Bool
+
+        /// A retained old IRAP can paint, but cannot repair missing references
+        /// after it. A current IRAP suffix, conversely, restores those references.
+        /// Keep the same ordering for production and decoder integration tests.
+        @MainActor
+        func deliver(
+            onDiscontinuity: () -> Void,
+            onAccessUnit: ([UInt8]) -> Void
+        ) {
+            if discontinuity, !awaitingRandomAccess { onDiscontinuity() }
+            for accessUnit in accessUnits { onAccessUnit(accessUnit) }
+            if discontinuity, awaitingRandomAccess { onDiscontinuity() }
+        }
+    }
+
     struct Snapshot {
         var packets = 0
         var dropped = 0
@@ -1955,7 +1964,7 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
 
     func takePending() -> [[UInt8]] { takeDelivery().accessUnits }
 
-    func takeDelivery() -> (accessUnits: [[UInt8]], discontinuity: Bool) {
+    func takeDelivery() -> Delivery {
         lock.withLock { state in
             if let pendingSince = state.pendingSince {
                 state.maximumDeliveryWait = max(
@@ -1968,7 +1977,9 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             state.discontinuity = false
             state.pending.removeAll(keepingCapacity: true)
             state.hopScheduled = false
-            return (aus, discontinuity)
+            return Delivery(
+                accessUnits: aus, discontinuity: discontinuity,
+                awaitingRandomAccess: state.awaitingRandomAccess)
         }
     }
 

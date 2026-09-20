@@ -19,9 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
  * depacketizer (Annex-B, DJI marker already stripped). Pocket is HEVC; Nano is AVC.
  * SwiftCore.hevcCsd / hevcNalTypes already classify both.
  */
-class HevcDecoder internal constructor(private val cadence: LivePipelineCadence = LivePipelineCadence()) {
+class HevcDecoder internal constructor(
+    private val cadence: LivePipelineCadence = LivePipelineCadence(),
+    private val lock: Any = Any(),
+) {
     internal enum class LiveCodec { HEVC, AVC }
-    private val lock = Any()
+    private val inputOwnership = DecoderInputOwnership(lock)
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
     private var configured = false
@@ -38,6 +41,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     internal val randomAccess = DecoderRandomAccessHold()
     val awaitingIdr: Boolean get() = randomAccess.awaitingIdr
     val hasDecodableReferences: Boolean get() = randomAccess.hasDecodableReferences
+    val referenceRecoveryNeeded: Boolean get() = synchronized(lock) { randomAccess.referenceRecoveryNeeded }
     var nalTypesSeen = ""
         private set
     var lastKeyframeAt: Long? = null
@@ -89,7 +93,13 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
 
     fun notePresented(sourceTimestampNs: Long) {
         if (!presentedClock.note(sourceTimestampNs, SystemClock.elapsedRealtime())) return
-        cadence.note(LivePipelineCadence.Stage.PRESENT)
+        cadence.notePresented(sourceTimestampNs)
+        // releaseOutputBuffer stamps the buffer with System.nanoTime(); every
+        // present path (Vulkan ImageReader, GLES OES, raw TextureView) hands
+        // that same stamp back. This is decoder-out to *submitted for display*:
+        // the call lands as soon as the submit returns, so GPU execution, the
+        // compositor and scanout are all still ahead of it.
+        cadence.noteTransit(LivePipelineCadence.Leg.PRESENT, System.nanoTime() - sourceTimestampNs)
         framesPresented.incrementAndGet()
         if (!_hasPicture.value) {
             _hasPicture.value = true
@@ -140,19 +150,31 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
         }
     }
 
-    fun decode(accessUnit: ByteArray): Boolean {
+    fun claimInputOwner(): Long = inputOwnership.claim()
+
+    fun advanceInputEpoch(inputOwner: Long, epoch: Long) = inputOwnership.advance(inputOwner, epoch)
+
+    internal fun captureInputOwnership(): DecoderInputOwnership.Token = inputOwnership.capture()
+
+    fun decode(accessUnit: ByteArray): Boolean = decodeInput(accessUnit, null, 0)
+
+    fun decode(accessUnit: ByteArray, inputOwner: Long, epoch: Long): Boolean =
+        decodeInput(accessUnit, inputOwner, epoch)
+
+    private fun decodeInput(accessUnit: ByteArray, inputOwner: Long?, epoch: Long): Boolean {
         if (!SwiftCore.isAvailable) return false
         var size: Pair<Int, Int>? = null
         var requestEnable = false
-        val ok =
-            synchronized(lock) {
-                val result = decodeLocked(accessUnit)
-                size = lastSizeCallback
-                lastSizeCallback = null
-                requestEnable = lastEnableCallback
-                lastEnableCallback = false
-                result
-            }
+        val mutation = {
+            val result = decodeLocked(accessUnit)
+            size = lastSizeCallback
+            lastSizeCallback = null
+            requestEnable = lastEnableCallback
+            lastEnableCallback = false
+            result
+        }
+        val ok = if (inputOwner == null) synchronized(lock, mutation)
+        else inputOwnership.withCurrent(inputOwner, epoch, false, mutation)
         size?.let { onOutputSizeChanged?.invoke(it.first, it.second) }
         if (requestEnable) onParameterSetsChanged?.invoke()
         return ok
@@ -309,6 +331,10 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
         synchronized(lock) { randomAccess.noteBrokenReferences() }
     }
 
+    fun noteReferenceDiscontinuity(inputOwner: Long, epoch: Long) {
+        inputOwnership.withCurrent(inputOwner, epoch, Unit) { randomAccess.noteBrokenReferences() }
+    }
+
     /**
      * Watchdog decoder repair. Keeps the last picture. Requires an IRAP on the
      * replacement codec. Does not send enable.
@@ -322,6 +348,18 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
             errorLifetime.resetLifetime()
             decoderErrors.set(0)
             surface?.isValid == true
+        }
+
+    /** Recheck a queued loss repair atomically with codec mutation: a delivered
+     * IRAP may already have restored references since the watchdog snapshot. */
+    internal fun rebuildPresentationIfNeeded(
+        referenceLossOnly: Boolean,
+        input: DecoderInputOwnership.Token,
+    ): Boolean =
+        inputOwnership.withCurrent(input.owner, input.epoch, false) {
+            if (referenceLossOnly && !randomAccess.referenceRecoveryNeeded) return@withCurrent false
+            rebuildPresentation()
+            true
         }
 
     /**
@@ -351,6 +389,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     }
 
     private fun resetLocked() {
+        inputOwnership.invalidate()
         running = false
         val out = outputThread
         outputThread = null
@@ -473,10 +512,15 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
                                 }
                             when {
                                 index >= 0 -> {
-                                    cadence.note(LivePipelineCadence.Stage.OUTPUT)
+                                    // One stamp for both ends: it goes on the buffer and
+                                    // comes back through notePresented, so the cadence can
+                                    // tell a picture that is still waiting from a new one.
+                                    val stamp = System.nanoTime()
+                                    cadence.noteOutput(stamp)
+                                    noteDecodeTransit(info)
                                     noteNativeOutput()
                                     runCatching {
-                                        started.releaseOutputBuffer(index, System.nanoTime())
+                                        started.releaseOutputBuffer(index, stamp)
                                     }.onFailure { error ->
                                         noteError(DecoderErrorOrigin.OUTPUT_RELEASE, error)
                                     }
@@ -530,6 +574,19 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
             noteError(DecoderErrorOrigin.QUEUE, e, inputIsIrap = keyframe)
             false
         }
+    }
+
+    /**
+     * [LiveViewPresentTiming.ptsUs] stamps the submit wall clock onto the access
+     * unit, so the same clock read against the PTS coming back out is how long
+     * MediaCodec held this picture. A codec-config buffer carries no picture.
+     */
+    private fun noteDecodeTransit(info: MediaCodec.BufferInfo) {
+        if (info.presentationTimeUs <= 0L) return
+        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) return
+        val submittedUs = info.presentationTimeUs
+        val nowUs = SystemClock.elapsedRealtimeNanos() / 1_000L
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, (nowUs - submittedUs) * 1_000L)
     }
 
     private fun noteNativeOutput() {

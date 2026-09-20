@@ -61,6 +61,8 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -548,7 +550,8 @@ internal fun LUTExposureCompensationBar(stops: Double, onChange: (Double) -> Uni
             Text(LutExposureCompensation.label(stops) + " EV", style = LiveType.ui(11f, FontWeight.Medium),
                 color = LiveDesign.muted)
         }
-        com.opencapture.monitorui.MonitorSlider(stops.toFloat(), -3f..3f) {
+        com.opencapture.monitorui.MonitorSlider(stops.toFloat(), -3f..3f,
+            Modifier.semantics { contentDescription = "Exposure compensation in stops" }) {
             val next = LutExposureCompensation.snap(it.toDouble())
             if (next != stops) onChange(next)
         }

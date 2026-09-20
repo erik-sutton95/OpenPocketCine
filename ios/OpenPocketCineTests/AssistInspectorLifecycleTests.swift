@@ -9,10 +9,16 @@ import XCTest
 final class AssistInspectorLifecycleTests: XCTestCase {
     func testBlockedRenderKeepsItsSlotAcrossActualInspectorDismissalAndRemount() async throws {
         let model = AppModel()
-        let clock = InspectorPreviewTestClock()
+        let clock = InspectorPreviewTestClock(advancesUntilFrozen: true)
         let work = InspectorLifecycleWorkProbe()
-        let started = expectation(description: "First mounted inspector started image work")
-        let resumed = expectation(description: "Remounted inspector received a fresh work slot")
+        let started = InspectorPreviewTestSignal("First mounted inspector started image work")
+        let resumed = InspectorPreviewTestSignal("Remounted inspector received a fresh work slot")
+        let finished = InspectorPreviewTestSignal("Blocked image work finished")
+        let dismissed = InspectorPreviewTestSignal("Original inspector disappeared")
+        let remounted = InspectorPreviewTestSignal("Replacement inspector appeared")
+        let remountRequested = InspectorPreviewTestSignal("Replacement inspector requested work")
+        let nextRequest = InspectorPreviewTestSignal(
+            "Replacement inspector completed its prior request")
         let release = DispatchSemaphore(value: 0)
         let reference = try XCTUnwrap(
             CIContext().createCGImage(
@@ -22,12 +28,20 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             now: { clock.now },
             operation: { _, _ in
                 let invocation = work.begin()
-                defer { work.end() }
+                defer {
+                    work.end()
+                    if invocation == 1 { finished.signal() }
+                }
                 if invocation == 1 {
-                    started.fulfill()
-                    _ = release.wait(timeout: .now() + 5)
+                    // Initial SwiftUI configuration invalidation can discard a
+                    // queued render. Let retries advance until real work enters.
+                    clock.freezeAtLastRead()
+                    started.signal()
+                    XCTAssertEqual(
+                        release.wait(timeout: .now() + 10), .success,
+                        "Test did not release the mounted inspector's first worker")
                 } else if invocation == 2 {
-                    resumed.fulfill()
+                    resumed.signal()
                 }
                 return reference
             })
@@ -59,18 +73,23 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         model.assist.configureTool = .peaking
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
-        await fulfillment(of: [started], timeout: 2)
+        try await started.wait()
+        let admittedAt = clock.now
+        probe.onDisappear = { dismissed.signal() }
+        probe.onAppear = { remounted.signal() }
 
         model.assist.configureTool = nil
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(20))
+        try await dismissed.wait()
         XCTAssertNil(probe.selected)
-        clock.now = 100_000_000
+        clock.now = admittedAt + 100_000_000
+        clock.signalNextRead(remountRequested)
         model.assist.configureTool = .zebra
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(20))
+        try await remounted.wait()
+        try await remountRequested.wait()
         XCTAssertEqual(probe.mounts, 2, "Exercise real removal/reinsertion, not just tab mutation")
         XCTAssertEqual(probe.selected, .zebra)
         XCTAssertTrue(model.inspectorPreview === renderer)
@@ -79,10 +98,16 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         // Stay below the original admission deadline when releasing CI: rejected
         // requests cannot queue to run automatically behind the canceled work.
         release.signal()
-        try await Task.sleep(for: .milliseconds(50))
+        try await finished.wait()
+        // The real remounted updateImage loop awaits render before asking for
+        // another admission. Its next clock read therefore follows completion
+        // of any incorrectly queued remount work, which must fail count == 1.
+        // Keep time below the deadline until that caller-loop barrier arrives.
+        clock.signalNextRead(nextRequest)
+        try await nextRequest.wait()
         XCTAssertEqual(work.count, 1, "Rejected requests must not queue behind the worker")
-        clock.now = 200_000_000
-        await fulfillment(of: [resumed], timeout: 2)
+        clock.now = admittedAt + 200_000_000
+        try await resumed.wait()
         XCTAssertEqual(work.count, 2)
         XCTAssertEqual(work.maximumConcurrent, 1)
         XCTAssertFalse(model.session.holdsMonitor)
@@ -192,6 +217,8 @@ private final class InspectorLifecycleWorkProbe: @unchecked Sendable {
 private final class InspectorLifecycleProbe {
     var selected: LiveAssistTool?
     var mounts = 0
+    var onAppear: (() -> Void)?
+    var onDisappear: (() -> Void)?
 }
 
 private struct InspectorLifecycleHost: View {
@@ -209,9 +236,13 @@ private struct InspectorLifecycleHost: View {
                 .onAppear {
                     probe.mounts += 1
                     probe.selected = tool
+                    probe.onAppear?()
                 }
                 .onChange(of: tool) { _, selected in probe.selected = selected }
-                .onDisappear { probe.selected = nil }
+                .onDisappear {
+                    probe.selected = nil
+                    probe.onDisappear?()
+                }
             }
         }
         .environment(model)

@@ -28,6 +28,21 @@ The phone cannot punch a hole through that VPN. Exclude the app or pause the fil
 
 Power the Pocket on, stay close, and allow Bluetooth. Pocket and Nano both appear — tap the one you want. If you previously paired with another install, remove the old pairing on the camera and try again.
 
+## Camera appears, but Bluetooth setup times out
+
+Finding the camera confirms discovery; Bluetooth setup can still fail before
+camera Wi-Fi or live video starts. Keep the camera awake and nearby, close DJI
+Mimo and other camera apps, and use one phone at a time. Check that OpenPocketCine
+has **Nearby devices** permission on Android. Restart the camera and retry once.
+Pair inside OpenPocketCine; the camera uses app-level pairing rather than an
+Android Settings Bluetooth bond.
+
+If it still fails, save **Share Diagnostics** immediately. Include whether DJI
+Mimo connects on the same phone with OpenPocketCine closed. A report containing
+`connecting_gatt` alone cannot distinguish connection, service discovery and
+notification setup; an empty feed-incident file is expected when no live session
+has started. These checks help locate the failure and are not a guaranteed fix.
+
 ## Wi-Fi join never finishes
 
 Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the camera AP can take about a minute to beacon; the app keeps trying. A wrong cached passphrase after a camera Wi-Fi reset is dropped so the next tap re-reads credentials over Bluetooth.
@@ -81,6 +96,10 @@ Capture **Share Diagnostics** soon after the hitch. State the phone, app build,
 camera, enabled assists, and which action triggered it. A useful comparison is
 30 seconds static followed by a slow pan, then joystick and LUT/scopes separately.
 For AirPods head tracking, test it separately from manual joystick movement.
+
+Android reports include picture timings and drop estimates. Say whether movement
+looked smooth but delayed, or skipped forward. These measurements cover stages
+inside the app; they do not measure the full delay from camera to screen.
 
 If recovery becomes stuck, keep the app open for about 15 seconds before tapping
 Retry so the report includes the failed stage. Recent builds record separate

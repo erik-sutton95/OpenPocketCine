@@ -1,18 +1,18 @@
 New and changed
 
-- Dials, sliders and readouts carry their numbers with less work, leaving more room for live view to stay smooth.
-- Pocket 3 zoom offers only the stops the recording FORMAT allows, with a short note naming the new cap.
-- HDR display (Operator Setup → Display) boosts the phone panel, not the camera's HDR/HLG mode. Off by default; WAVE/HISTO still measure the camera signal.
+- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
+- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
+- Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
 
 Fixes
 
-- Live view no longer stays black on phones whose video decoder turns down the low-latency setting; it now starts without that setting.
-- The zoom readout settles on the camera's own value when a requested zoom is refused.
-- Shutter, ISO, zoom and ND readouts use a fixed number format, including on phones whose language uses decimal commas.
-- Screen recordings stay normal SDR, including on Android 15 and newer phones.
+- Live view no longer stays black on phones whose video decoder turns down the low-latency setting; it starts again without that setting.
+- Connection setup waits for the camera's command window and keeps the last picture; first-picture recovery is bounded so repeated controls cannot stall the decoder or frame assembly.
+- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
+- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
 
 What to test
 
-- If live view has ever stayed black on your phone while Wi-Fi, settings and camera controls worked, connect again and say whether a picture arrives.
-- Drag the zoom dial and scopes' brightness sliders. Check for stutters and unchanged readouts, including TalkBack on Operator Setup → Display.
-- On Pocket 3, cycle zoom at 1080, 2.7K and 4K: caps are 4×, 3× and 2×. FORMAT changes return to 1×. Check shutter, ISO, zoom and ND on a decimal-comma phone language.
+- Connect three times; if live view ever stayed black on your phone, say whether a picture now arrives. If Bluetooth fails, retry once and share diagnostics.
+- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
+- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Report any freeze and whether the picture felt late or jumpy.

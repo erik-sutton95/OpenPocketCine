@@ -35,6 +35,14 @@ Request MTU 517. Enable notifications (write `01 00` to each CCCD `0x2902`), the
 
 All writes to `fff5` are **without response and must be paced** (~100–500 ms apart) or they drop.
 
+Android checks whether each native notification or arm-write request was
+accepted before waiting for its callback. Local registration of required FFF4
+notifications must succeed; a failure ends setup before pairing is armed.
+Optional FFF5 local notification setup and the existing tolerated descriptor
+fallbacks advance the sequence. Pairing becomes ready only after the arm write
+succeeds. The same bounded setup deadline remains in place;
+this handling is not a general Bluetooth retry or a guarantee for every phone.
+
 ## App-level pairing
 
 This replaces Bluetooth bonding.
@@ -86,6 +94,14 @@ recording → stopped while RTMP remained connected. Wait for the initial
 34-byte telemetry window before stamping command sequences; the 15-byte
 handshake reply alone does not supply that window. Preserve the standard ACK
 pump. These observations are specific to the tested Pocket 4 Pro firmware.
+
+A September 20 Pocket 4 Pro SoftAP test found the same distinction: committing
+the command sequence from the short acknowledgment before telemetry arrived
+correlated with two slow starts; three endpoints that received telemetry first
+started picture. Both app drivers now require the valid initial telemetry window
+within their existing connection deadline. This does not establish startup
+compatibility for every other camera model; see the
+[physical follow-up](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/audits/2026-09-20-physical-connection-followup.md).
 
 ## Experimental station Wi-Fi without livestream mode
 

@@ -13,6 +13,50 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 
 class DatalinkEndpointRepairTest {
+    @Test fun mediaRoundTripDuringNegotiationRetiresOnlyItsPictureOwner() = runBlocking {
+        var mediaGeneration = 0
+        val owner = mediaGeneration
+        var negotiations = 0
+        var enables = 0
+        var waits = 0
+        repairDatalinkEndpoint(Any(), { true }, {
+            mediaGeneration += 2 // Media entry and return; browsing is false again.
+            negotiations += 1
+        }, ownsPicture = { owner == mediaGeneration },
+            waitForPicture = { waits += 1 }, enable = { enables += 1 })
+        assertEquals(1, negotiations, "media entry must not cancel endpoint negotiation")
+        assertEquals(0, enables)
+        assertEquals(0, waits)
+    }
+
+    @Test fun expiredPictureOwnerCannotEscalateAfterMediaRoundTrip() = runBlocking {
+        var mediaGeneration = 0
+        val owner = mediaGeneration
+        var handoffs = 0
+        repairDatalinkEndpoint(Any(), { true }, {}, pictureTimeoutMs = 20,
+            ownsPicture = { owner == mediaGeneration },
+            waitForPicture = { mediaGeneration += 2; awaitCancellation() },
+            recoverSession = { handoffs += 1 }, enable = {})
+        assertEquals(0, handoffs)
+    }
+
+    @Test fun actualNegotiationFailureStillRecoversWhileMediaOwnsPicture() = runBlocking {
+        var handoffs = 0
+        repairDatalinkEndpoint(Any(), { true }, { throw DatalinkDriver.DatalinkError.NoHandshake() },
+            ownsPicture = { false }, recoverSession = { handoffs += 1 }, enable = {})
+        assertEquals(1, handoffs)
+    }
+
+    @Test fun obsoletePictureFailureCannotMasqueradeAsNegotiationFailure() = runBlocking {
+        var ownsPicture = true
+        var handoffs = 0
+        repairDatalinkEndpoint(Any(), { true }, {},
+            ownsPicture = { ownsPicture },
+            waitForPicture = { ownsPicture = false; throw IllegalStateException("obsolete picture") },
+            recoverSession = { handoffs += 1 }, enable = {})
+        assertEquals(0, handoffs)
+    }
+
     @Test fun newAudioRequestsAreRejectedBeforeNegotiationReachesIo() = runBlocking {
         val admission = EndpointCommandAdmission()
         var epoch = 0L

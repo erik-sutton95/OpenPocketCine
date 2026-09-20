@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import io.sentry.SentryEvent
 import io.sentry.protocol.Message
 import io.sentry.protocol.SentryId
@@ -40,7 +41,7 @@ internal object ReliabilityReportingConsent {
         restorePersistedChoice(
             hasChoice = prefs.contains(KEY),
             optedIn = prefs.getBoolean(KEY, false),
-            persist = { value -> prefs.edit().putBoolean(KEY, value).apply() },
+            persist = { value -> prefs.edit { putBoolean(KEY, value) } },
         )
     }
 

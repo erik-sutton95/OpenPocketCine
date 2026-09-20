@@ -8,6 +8,32 @@ import os
 
 @MainActor
 final class HandshakeBindTests: XCTestCase {
+    func testShortHandshakeAckCannotRegisterUntilTheInitialCommandWindowArrives() async throws {
+        let peer = try EndpointPinnedCamera(holdInitialWindow: true)
+        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let opening = Task { try await driver.open() }
+        defer {
+            opening.cancel()
+            driver.close()
+            peer.stop()
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while peer.snapshot.handshakes == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertGreaterThan(peer.snapshot.handshakes, 0)
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(
+            peer.snapshot.registrations, 0, "A short ACK cannot seed registration at sequence 9")
+        peer.releaseInitialWindow()
+        try await opening.value
+        let registeredDeadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while peer.snapshot.registrations == 0, ContinuousClock.now < registeredDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(peer.snapshot.registrationSequences, [0x6008])
+    }
+
     func testRepairRetiresAnActiveAudioChainEvenWhenAnotherWorkItemOwnsItsTail() async throws {
         let peer = try EndpointPinnedCamera()
         let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
@@ -231,6 +257,7 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
     struct Snapshot {
         var handshakes = 0
         var registrations = 0
+        var registrationSequences: [UInt16] = []
         var enables = 0
         var cameraSettings = 0
         var unnegotiatedCommands = 0
@@ -243,8 +270,27 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
     private var subscribed = false
     private var counts = Snapshot()
     private var rejectingHandshakes = false
+    private var holdInitialWindow: Bool
 
-    init() throws { listener = try NWListener(using: .udp) }
+    init(holdInitialWindow: Bool = false) throws {
+        self.holdInitialWindow = holdInitialWindow
+        listener = try NWListener(using: .udp)
+    }
+
+    func releaseInitialWindow() {
+        queue.sync {
+            holdInitialWindow = false
+            if let peer { sendInitialWindow(to: peer) }
+        }
+    }
+
+    private func sendInitialWindow(to connection: NWConnection) {
+        let payload = DumlTransport.ackPayload(peerCursor: 0x6000, baseSeq: 0x6000)
+        let packet =
+            DumlTransport.transportHeader(
+                pktType: 1, payloadLen: payload.count, sessionId: 1, seq: 8) + payload
+        connection.send(content: Data(packet), completion: .idempotent)
+    }
     var snapshot: Snapshot { queue.sync { counts } }
     func rejectNewHandshakes() { queue.sync { rejectingHandshakes = true } }
 
@@ -294,7 +340,12 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
             peer = connection
             registered = false
             subscribed = false
-            connection.send(content: Data(bytes), completion: .idempotent)
+            // Real Pocket ACK is 15 bytes; it does not contain command window.
+            let reply =
+                DumlTransport.transportHeader(
+                    pktType: 0, payloadLen: 7, sessionId: 1, seq: 0) + [1, 0, 0, 0, 0, 0, 0]
+            connection.send(content: Data(reply), completion: .idempotent)
+            if !holdInitialWindow { sendInitialWindow(to: connection) }
             return
         }
         if peer === connection {
@@ -303,6 +354,9 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
                 if frame.cmdSet == 0, frame.cmdId == 0x81 {
                     registered = true
                     counts.registrations += 1
+                    if let seq = DumlTransport.transportSeq(bytes) {
+                        counts.registrationSequences.append(seq)
+                    }
                 }
                 if frame.cmdSet == 0, frame.cmdId == 0x99 { subscribed = true }
                 if frame.cmdSet == 9, frame.cmdId == 0xa8, registered, subscribed {
