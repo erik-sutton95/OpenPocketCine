@@ -2,11 +2,46 @@ package com.opencapture.openpocketcine.session
 
 import java.util.Locale
 
+/** Beyond this a transit sample is a stall, not transit. */
+private const val TRANSIT_SANITY_LIMIT_NS = 2_000_000_000L
+
 /** Low-rate measurements of separate live stages. No camera content or identity. */
 internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoTime) {
     enum class Stage { ACK, VIDEO, AU, SUBMIT, OUTPUT, PRESENT }
+
+    /**
+     * How long one picture took between two stages. The [Stage] counters give
+     * rates and gaps, which say whether the pipeline flows — not how far behind
+     * the glass it runs. A leg follows a single frame.
+     */
+    enum class Leg { DECODE, PRESENT }
+
     private class Counter(var count: Int = 0, var last: Long? = null, var maxGap: Long = 0)
+
+    /** Mean and max together: max alone is one hiccup, mean alone hides it. */
+    private class Transit(var count: Int = 0, var totalNs: Long = 0, var maxNs: Long = 0) {
+        fun note(ns: Long) {
+            // A negative sample means the clocks disagree and a multi-second one
+            // is a stall, which the gap counters already report. Neither is transit.
+            if (ns < 0 || ns > TRANSIT_SANITY_LIMIT_NS) return
+            count += 1
+            totalNs += ns
+            maxNs = maxOf(maxNs, ns)
+        }
+
+        fun meanMs(): Double = if (count == 0) -1.0 else totalNs.toDouble() / count / 1e6
+
+        fun maxMs(): Double = if (count == 0) -1.0 else maxNs / 1e6
+
+        fun reset() {
+            count = 0
+            totalNs = 0
+            maxNs = 0
+        }
+    }
+
     private val counters = Stage.entries.associateWith { Counter() }
+    private val transits = Leg.entries.associateWith { Transit() }
     private var started = nowNs()
     private var queued = 0
     private var queuePeak = 0
@@ -34,6 +69,8 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
 
     @Synchronized fun inputMiss() { inputMisses += 1 }
 
+    @Synchronized fun noteTransit(leg: Leg, ns: Long) { transits.getValue(leg).note(ns) }
+
     data class Window(
         val seconds: Double,
         val hz: Map<Stage, Double>,
@@ -43,6 +80,15 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
         val peak: Int,
         val waitMs: Double,
         val inputMiss: Int,
+        val transitMeanMs: Map<Leg, Double>,
+        val transitMaxMs: Map<Leg, Double>,
+        /**
+         * Pictures the decoder released that never reached the glass — the
+         * renderer takes the newest buffer and lets older ones go. Counted
+         * across one window, so a frame straddling the boundary can land in
+         * either. Delay and drops feel alike and are fixed differently.
+         */
+        val dropped: Int,
     )
 
     @Synchronized fun takeWindow(): Window? {
@@ -52,13 +98,22 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
         val hz = linkedMapOf<Stage, Double>()
         val ageMs = linkedMapOf<Stage, Double>()
         val gapMs = linkedMapOf<Stage, Double>()
+        val counts = linkedMapOf<Stage, Int>()
         for ((stage, c) in counters) {
             hz[stage] = c.count / seconds
             ageMs[stage] = c.last?.let { (now - it).coerceAtLeast(0) / 1e6 } ?: -1.0
             val gap = maxOf(c.maxGap, (now - (c.last ?: started)).coerceAtLeast(0))
             gapMs[stage] = gap / 1e6
+            counts[stage] = c.count
             c.count = 0
             c.maxGap = 0
+        }
+        val transitMeanMs = linkedMapOf<Leg, Double>()
+        val transitMaxMs = linkedMapOf<Leg, Double>()
+        for ((leg, t) in transits) {
+            transitMeanMs[leg] = t.meanMs()
+            transitMaxMs[leg] = t.maxMs()
+            t.reset()
         }
         val window =
             Window(
@@ -70,6 +125,11 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
                 peak = queuePeak,
                 waitMs = queueDelayNs / 1e6,
                 inputMiss = inputMisses,
+                transitMeanMs = transitMeanMs,
+                transitMaxMs = transitMaxMs,
+                dropped =
+                    ((counts[Stage.OUTPUT] ?: 0) - (counts[Stage.PRESENT] ?: 0))
+                        .coerceAtLeast(0),
             )
         started = now
         queuePeak = queued
@@ -110,6 +170,19 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
                 window.inputMiss,
             ),
         )
+        // mean/max per leg; -1 means the leg took no sample this window.
+        for (leg in Leg.entries) {
+            append(
+                String.format(
+                    Locale.US,
+                    " %sMs=%.1f/%.1f",
+                    leg.name.lowercase(Locale.US),
+                    window.transitMeanMs[leg] ?: -1.0,
+                    window.transitMaxMs[leg] ?: -1.0,
+                ),
+            )
+        }
+        append(String.format(Locale.US, " drop=%d", window.dropped))
     }
 }
 

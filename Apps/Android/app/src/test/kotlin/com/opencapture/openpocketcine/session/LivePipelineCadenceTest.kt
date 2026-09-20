@@ -67,6 +67,72 @@ class LivePipelineCadenceTest {
         assertTrue(cadence.drain()!!.contains("queue=0 peak=1"))
     }
 
+    @Test fun reportsMeanAndMaxTransitSeparatelyPerLeg() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 10_000_000)
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 30_000_000)
+        cadence.noteTransit(LivePipelineCadence.Leg.PRESENT, 16_000_000)
+        now = 1_000_000_000
+        // Mean alone would hide the 30 ms picture; max alone would claim every
+        // picture took 30 ms.
+        val report = cadence.drain()!!
+        assertTrue(report.contains("decodeMs=20.0/30.0"), report)
+        assertTrue(report.contains("presentMs=16.0/16.0"), report)
+    }
+
+    @Test fun aLegWithNoSampleReadsAsAbsentRatherThanZero() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        now = 1_000_000_000
+        // Zero would read as "instant"; the pipeline simply produced no picture.
+        assertTrue(cadence.drain()!!.contains("decodeMs=-1.0/-1.0"))
+    }
+
+    @Test fun aStalledOrBackwardsSampleIsNotCountedAsTransit() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, -5_000_000)
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 9_000_000_000)
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 20_000_000)
+        now = 1_000_000_000
+        // A 9 s gap is a stall the gap counters already report; folding it into
+        // the mean would put transit at seconds and hide every real reading.
+        assertTrue(cadence.drain()!!.contains("decodeMs=20.0/20.0"))
+    }
+
+    @Test fun transitResetsBetweenWindowsInsteadOfAccumulating() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 80_000_000)
+        now = 1_000_000_000
+        assertTrue(cadence.drain()!!.contains("decodeMs=80.0/80.0"))
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, 10_000_000)
+        now = 2_000_000_000
+        assertTrue(cadence.drain()!!.contains("decodeMs=10.0/10.0"))
+    }
+
+    @Test fun picturesDecodedButNeverShownCountAsDropsNotDelay() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
+        repeat(19) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 1_000_000_000
+        // The renderer takes the newest buffer and lets older ones go, so a
+        // smooth-but-late feed and a current-but-stuttering feed differ here.
+        assertTrue(cadence.drain()!!.contains("drop=6"))
+    }
+
+    @Test fun moreShownThanDecodedInAWindowCannotReportNegativeDrops() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.note(LivePipelineCadence.Stage.OUTPUT)
+        repeat(3) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        now = 1_000_000_000
+        // A picture decoded in the previous window can be presented in this one.
+        assertTrue(cadence.drain()!!.contains("drop=0"))
+    }
+
     @Test fun repaintingAHeldImageCannotEstablishFreshPicture() {
         val clock = PresentedFrameClock()
         assertTrue(clock.note(sourceNs = 12, nowMs = 100))

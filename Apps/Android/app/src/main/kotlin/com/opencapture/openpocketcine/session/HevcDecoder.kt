@@ -90,6 +90,10 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     fun notePresented(sourceTimestampNs: Long) {
         if (!presentedClock.note(sourceTimestampNs, SystemClock.elapsedRealtime())) return
         cadence.note(LivePipelineCadence.Stage.PRESENT)
+        // releaseOutputBuffer stamps the buffer with System.nanoTime(); every
+        // present path (Vulkan ImageReader, GLES OES, raw TextureView) hands
+        // that same stamp back, so this is decoder-out to on-screen.
+        cadence.noteTransit(LivePipelineCadence.Leg.PRESENT, System.nanoTime() - sourceTimestampNs)
         framesPresented.incrementAndGet()
         if (!_hasPicture.value) {
             _hasPicture.value = true
@@ -455,6 +459,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
                             when {
                                 index >= 0 -> {
                                     cadence.note(LivePipelineCadence.Stage.OUTPUT)
+                                    noteDecodeTransit(info)
                                     noteNativeOutput()
                                     runCatching {
                                         started.releaseOutputBuffer(index, System.nanoTime())
@@ -511,6 +516,19 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
             noteError(DecoderErrorOrigin.QUEUE, e, inputIsIrap = keyframe)
             false
         }
+    }
+
+    /**
+     * [LiveViewPresentTiming.ptsUs] stamps the submit wall clock onto the access
+     * unit, so the same clock read against the PTS coming back out is how long
+     * MediaCodec held this picture. A codec-config buffer carries no picture.
+     */
+    private fun noteDecodeTransit(info: MediaCodec.BufferInfo) {
+        if (info.presentationTimeUs <= 0L) return
+        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) return
+        val submittedUs = info.presentationTimeUs
+        val nowUs = SystemClock.elapsedRealtimeNanos() / 1_000L
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, (nowUs - submittedUs) * 1_000L)
     }
 
     private fun noteNativeOutput() {
