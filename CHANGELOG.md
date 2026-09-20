@@ -279,6 +279,14 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Android live view speaks whole phrases to TalkBack instead of fragments: the
+  REC chip reads state and elapsed time as one stop, battery rows name phone or
+  camera and say "level unknown" rather than an unvoiced dash, the timecode says
+  what it is, and assist cells read their tool name, state and hold gesture in
+  place of a 9sp abbreviation. A labelled container needs
+  `clearAndSetSemantics`; plain `semantics` and `mergeDescendants` both leave the
+  child text behind as a second stop. `LiveChromeSemanticsTest` pins that against
+  the platform accessibility tree. Media, settings and pairing are a later pass.
 - iOS playback assists wait for a ready item with a numeric seek position.
   Native upscaler preparation and media cache scanning/deletion no longer run
   in interface updates. Clear Cache preserves clip/color metadata and retries
