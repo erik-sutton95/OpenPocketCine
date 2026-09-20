@@ -571,13 +571,17 @@ the operator working the camera directly. Each left the chip showing a zoom the
 camera was not at for the rest of the session — observed as `4×` on the chip
 with the lens at 3×, and again as `3×` with the camera back at 1.0×.
 
-`CamFov.keepsOptimistic(pin:live:age:)` is now the one rule, and both shells
-call it: the pin outranks `cam_fov` until the body confirms it, or until
-`optimisticGrace` (1.5 s) passes — whichever comes first. Chip taps write a
-lens position outright rather than ramping, so an honoured ask returns well
-inside that window. The check runs ahead of the unchanged-bytes guard in
-`noteZoomIfChanged`, because a clamped or self-reset body reports identical
-bytes every push and would otherwise never be looked at.
+`CameraValuePin` is now the one rule, and both shells call its `reconcile`:
+the pin outranks the reported value until the body confirms the ask, or until
+the 2-second settle passes — whichever comes first. Chip taps write a lens
+position outright rather than ramping, so an honoured ask returns well inside
+that window. Zoom hands `CamFov.matches` in as the confirmation test, because
+its live factor is derived from a lens position and lands a hair off the number
+that was asked for; exact equality would never release the pin. The check runs
+ahead of the unchanged-bytes guard in `noteZoomIfChanged`, because a clamped or
+self-reset body reports identical bytes every push and would otherwise never be
+looked at. The same pin carries the gimbal mode and speed dials, which confirm
+on exact equality.
 
 Android also had the chip one frame behind: the status merge published
 `_status` *after* calling `noteZoomIfChanged`, so `refreshZoomHud` read the
