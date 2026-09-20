@@ -65,6 +65,7 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.math.abs
 import kotlin.math.hypot
+import java.util.Locale
 
 /** Main-thread admission closes before negotiation is dispatched to the IO worker. */
 internal class EndpointCommandAdmission {
@@ -362,8 +363,17 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var zoomStopTouched = false
     var zoomPinchPreview: Double? = null
         private set
-    var zoomOptimistic: Double? = null
-        private set
+    /**
+     * Chip-tap target until `cam_fov` catches up, on the same settle window as every other
+     * control. It has to expire on its own: the body answers an ask it cannot honour by clamping
+     * to its own ceiling, and it moves the lens without being asked (a FORMAT change resets to 1×,
+     * so does the operator working the camera directly). None of those ever report the asked-for
+     * factor, so a pin that only cleared on a match would sit on the chip showing a zoom the
+     * camera is not at for the rest of the session.
+     */
+    private var zoomPin: CameraValuePin<Double>? = null
+    val zoomOptimistic: Double?
+        get() = zoomPin?.expected
     private var zoomPinchAnchor = 1.0
     private var lastPinchLens: Int? = null
     private var lastPinchLogTenths: Double? = null
@@ -1119,7 +1129,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val keyframe = decoder.lastKeyframeAt
         lastKeyframeAge =
             if (keyframe == null) "none yet"
-            else String.format("%.1fs", (System.currentTimeMillis() - keyframe) / 1000.0)
+            else String.format(Locale.US, "%.1fs", (System.currentTimeMillis() - keyframe) / 1000.0)
     }
 
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
@@ -2412,7 +2422,10 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** Unsnapped live / preview so 2.89× (shown 2.9×) still cycles to 3×. */
     fun zoomCycleFrom(): Double =
-        zoomPinchPreview ?: zoomOptimistic ?: _status.value.zoomFactor ?: zoomStop
+        zoomPinchPreview ?: zoomOptimistic ?: _status.value.zoomFactor ?: fallbackZoomStop()
+
+    /** [zoomStop] can outlive the FORMAT that allowed it — see [CamFov.stopWithinCycle]. */
+    private fun fallbackZoomStop(): Double = CamFov.stopWithinCycle(zoomStop, zoomStops())
 
     fun zoomStops(): List<Double> {
         val model = connectedCamera?.model ?: CameraModel.default
@@ -2444,7 +2457,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             pendingZoomAfterHop = factor
             return
         }
-        zoomOptimistic = factor
+        zoomPin =
+            CameraValuePin(factor, SystemClock.elapsedRealtime() + CameraValuePin.SETTLE_MS)
         markZoomStop(factor)
         val name = "Zoom $to"
         _controlNote.value = name
@@ -2484,7 +2498,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun updateZoomPinch(magnification: Double) {
         if (zoomPinchPreview == null) {
             zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
-            zoomOptimistic = null
+            zoomPin = null
             lastPinchLens = null
             lastPinchLogTenths = null
         }
@@ -3188,7 +3202,27 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 formatPin = null
             },
         )
+        // [fireKind] clears the note on its way out and only writes one when the
+        // SET could not go. Hold that failure aside: the shutter rematch below
+        // sends again and would clear it along with anything written here.
+        val formatSendNote = _controlNote.value
         if (rematch != null) setShutterDenom(rematch)
+        // Settle the note once both sends are done. A failure from either send
+        // outranks the ceiling note, which is only worth showing when the format
+        // change actually went.
+        if (formatSendNote != null) {
+            _controlNote.value = formatSendNote
+        } else if (_controlNote.value == null) {
+            _controlNote.value =
+                CamFov.ceilingNote(
+                    format.resolution.sizeTitle,
+                    zoomCycleFrom(),
+                    connectedCamera
+                        ?.model
+                        ?.activeZoomStops(format.resolution.rawValue, modeAtSet)
+                        .orEmpty(),
+                )
+        }
         return true
     }
 
@@ -3504,19 +3538,25 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         zoomStopTouched = true
     }
 
-    private fun refreshZoomHud() {
+    /**
+     * [live] is a parameter so a status merge can hand over the frame it is folding in: the merge
+     * publishes `_status` after this runs, and reading the old value there left the chip a frame
+     * behind the camera.
+     */
+    private fun refreshZoomHud(live: Double? = _status.value.zoomFactor) {
+        val fallback = fallbackZoomStop()
         _zoomDialReadout.value =
             CamFov.continuousReadout(
-                live = _status.value.zoomFactor,
+                live = live,
                 preview = zoomPinchPreview,
-                fallback = zoomStop,
+                fallback = fallback,
                 optimistic = zoomOptimistic,
             )
         _zoomReadout.value =
             CamFov.readout(
-                live = _status.value.zoomFactor,
+                live = live,
                 preview = if (zoomColorHopPending) null else zoomPinchPreview,
-                fallback = zoomStop,
+                fallback = fallback,
                 optimistic = if (zoomColorHopPending) null else zoomOptimistic,
             )
         _zoomPinching.value = zoomPinchPreview != null
@@ -3526,22 +3566,38 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         zoomStop = 1.0
         zoomStopTouched = false
         zoomPinchPreview = null
-        zoomOptimistic = null
+        zoomPin = null
         zoomPinchAnchor = 1.0
         lastPinchLens = null
         lastPinchLogTenths = null
         refreshZoomHud()
     }
 
+    /**
+     * Drops a chip pin the camera never confirmed, so the HUD falls back to `cam_fov`. Returns true
+     * when the pin went away and the HUD owes a redraw. [CamFov.matches] is the confirmation test
+     * because the live factor comes back off a lens position, a hair off what was asked.
+     */
+    private fun reconcileZoomPin(live: Double?): Boolean {
+        if (zoomPin == null) return false
+        val (_, remaining) =
+            CameraValuePin.reconcile(
+                zoomPin, live, SystemClock.elapsedRealtime(), CamFov::matches,
+            )
+        zoomPin = remaining
+        return remaining == null
+    }
+
     private fun noteZoomIfChanged(prev: CameraStatus, incoming: CameraStatus) {
+        // Before the early return: a body that clamps the ask, or that resets the
+        // lens on its own, reports the same bytes every push and would never get
+        // the pin cleared.
+        val expired = reconcileZoomPin(incoming.zoomFactor)
         if (incoming.zoomFactorRaw == prev.zoomFactorRaw && incoming.zoomLens == prev.zoomLens) {
+            if (expired) refreshZoomHud(incoming.zoomFactor)
             return
         }
         val factor = incoming.zoomFactor
-        val optimistic = zoomOptimistic
-        if (factor != null && optimistic != null && CamFov.matches(factor, optimistic)) {
-            zoomOptimistic = null
-        }
         if (!zoomStopTouched && factor != null) {
             zoomStop =
                 when {
@@ -3552,7 +3608,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     else -> zoomStop
                 }
         }
-        refreshZoomHud()
+        refreshZoomHud(incoming.zoomFactor)
     }
 
     fun setAudioChannel(value: Int) {
