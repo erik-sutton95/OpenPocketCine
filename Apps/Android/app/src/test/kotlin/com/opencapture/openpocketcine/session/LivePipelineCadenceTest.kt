@@ -6,6 +6,34 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 
+/**
+ * Decodes and presents that name the same picture, the way the decoder pairs
+ * them: one stamp goes on the released buffer and comes back from the renderer.
+ */
+private class Pictures(private val cadence: LivePipelineCadence) {
+    private var nextStamp = 1L
+    private val waiting = ArrayDeque<Long>()
+
+    /** Decode [count] pictures. Each is now waiting for a present. */
+    fun decode(count: Int = 1) {
+        repeat(count) {
+            cadence.noteOutput(nextStamp)
+            waiting.addLast(nextStamp)
+            nextStamp += 1
+        }
+    }
+
+    /** Present the [count] oldest waiting pictures. */
+    fun present(count: Int = 1) {
+        repeat(count) { cadence.notePresented(waiting.removeFirst()) }
+    }
+
+    /** The renderer let the [count] oldest go for a newer buffer: never shown. */
+    fun abandon(count: Int = 1) {
+        repeat(count) { waiting.removeFirst() }
+    }
+}
+
 class LivePipelineCadenceTest {
     @Test fun maximumGapIncludesInitialSilenceAndTrailingSilence() {
         var now = 0L
@@ -37,7 +65,7 @@ class LivePipelineCadenceTest {
         val cadence = LivePipelineCadence { now }
         for (i in 0 until 40) {
             cadence.note(LivePipelineCadence.Stage.ACK)
-            if (i % 2 == 0) cadence.note(LivePipelineCadence.Stage.PRESENT)
+            if (i % 2 == 0) cadence.notePresented(stampNs = i.toLong())
             now += 25_000_000
             if (i < 39) assertNull(cadence.drain())
         }
@@ -115,13 +143,15 @@ class LivePipelineCadenceTest {
     @Test fun picturesDecodedButNeverShownCountAsDropsNotDelay() {
         var now = 0L
         val cadence = LivePipelineCadence { now }
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(19) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        val pictures = Pictures(cadence)
+        pictures.decode(25)
+        pictures.present(19)
+        pictures.abandon(6)
         now = 1_000_000_000
         // The six are still in flight as far as this window can tell.
         assertTrue(cadence.drain()!!.contains("drop=0"))
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        pictures.decode(25)
+        pictures.present(25)
         now = 2_000_000_000
         // A second window went by without them. The renderer takes the newest
         // buffer and lets older ones go, so a smooth-but-late feed and a
@@ -132,13 +162,15 @@ class LivePipelineCadenceTest {
     @Test fun aStandingShortfallIsReportedOnceRatherThanEveryWindow() {
         var now = 0L
         val cadence = LivePipelineCadence { now }
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(22) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        val pictures = Pictures(cadence)
+        pictures.decode(25)
+        pictures.present(22)
+        pictures.abandon(3)
         now = 1_000_000_000
         cadence.drain()
         for (window in 2..4) {
-            repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-            repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+            pictures.decode(25)
+            pictures.present(25)
             now = window * 1_000_000_000L
             // The three never come back, but they were lost once. Re-announcing
             // them every second would read as a feed that keeps dropping.
@@ -150,29 +182,61 @@ class LivePipelineCadenceTest {
     @Test fun aPictureStraddlingTheWindowBoundaryIsNotADrop() {
         var now = 0L
         val cadence = LivePipelineCadence { now }
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(24) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        val pictures = Pictures(cadence)
+        pictures.decode(25)
+        pictures.present(24)
         now = 1_000_000_000
         // Decoded just before the close, presented just after it. Counting each
         // window on its own called this a drop every single second.
         assertTrue(cadence.drain()!!.contains("drop=0"))
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(26) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        pictures.present(1)
+        pictures.decode(25)
+        pictures.present(25)
         now = 2_000_000_000
         assertTrue(cadence.drain()!!.contains("drop=0"))
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.OUTPUT) }
-        repeat(25) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        pictures.decode(25)
+        pictures.present(25)
         now = 3_000_000_000
         assertTrue(cadence.drain()!!.contains("drop=0"))
     }
 
-    @Test fun moreShownThanDecodedInAWindowCannotReportNegativeDrops() {
+    @Test fun aPictureAlwaysInFlightAtTheBoundaryIsNotADrop() {
         var now = 0L
         val cadence = LivePipelineCadence { now }
-        cadence.note(LivePipelineCadence.Stage.OUTPUT)
-        repeat(3) { cadence.note(LivePipelineCadence.Stage.PRESENT) }
+        val pictures = Pictures(cadence)
+        // 25 fps, every picture on the glass 2 ms after it leaves the decoder,
+        // and the one decoded 1 ms before each close lands 1 ms after it. The
+        // backlog reads one at every boundary, but it is a different picture
+        // each time — counting the backlog called that steady one a drop.
+        for (window in 0 until 3) {
+            val opened = window * 1_000_000_000L
+            repeat(25) { i ->
+                now = opened + i * 40_000_000L + 39_000_000L
+                pictures.decode()
+                if (i < 24) {
+                    now += 2_000_000L
+                    pictures.present()
+                }
+            }
+            now = opened + 1_000_000_000L
+            assertTrue(cadence.drain()!!.contains("drop=0"), "window ${window + 1}")
+            now += 1_000_000L
+            pictures.present()
+        }
+        now = 4_000_000_000
+        // All 75 were shown, the last of them 1 ms into this window.
+        assertTrue(cadence.drain()!!.contains("drop=0"), "after the last picture")
+    }
+
+    @Test fun aPresentForAPictureThisCadenceNeverSawIsIgnored() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.noteOutput(stampNs = 7)
+        // Stamps from before a decoder restart, or repaints of a buffer this
+        // cadence never released. Neither says anything about picture 7.
+        cadence.notePresented(stampNs = 3)
+        cadence.notePresented(stampNs = 4)
         now = 1_000_000_000
-        // A picture decoded in the previous window can be presented in this one.
         assertTrue(cadence.drain()!!.contains("drop=0"))
     }
 

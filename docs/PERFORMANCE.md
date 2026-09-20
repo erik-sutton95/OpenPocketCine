@@ -223,13 +223,15 @@ The drop figure from that capture is withdrawn. The counter it came from
 compared decoder outputs against presents inside a single window, so a picture
 decoded just before the boundary and presented just after it was reported as a
 drop every second; the "three dropped pictures in 25 seconds" is that artifact,
-not a measurement. The counter now carries the shortfall across windows and
-only calls it a drop once it has survived a whole one — a real figure needs a
-fresh physical capture.
+not a measurement. The counter now follows each picture by the stamp it was
+released with and only calls one dropped once that same picture has gone a
+whole window unshown, so a backlog that keeps moving no longer reads as a loss
+— a real figure needs a fresh physical capture.
 
 Backgrounding the app during the same capture showed the counters behaving as
 designed: decoder output continued while presentation fell to zero, and the
-shortfall grew without bound.
+shortfall grew without bound. The current counter reports those pictures as
+drops a window after each is lost rather than as a standing shortfall.
 
 `WIFI_MODE_FULL_LOW_LATENCY` stays on while live.
 

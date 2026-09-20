@@ -89,7 +89,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
 
     fun notePresented(sourceTimestampNs: Long) {
         if (!presentedClock.note(sourceTimestampNs, SystemClock.elapsedRealtime())) return
-        cadence.note(LivePipelineCadence.Stage.PRESENT)
+        cadence.notePresented(sourceTimestampNs)
         // releaseOutputBuffer stamps the buffer with System.nanoTime(); every
         // present path (Vulkan ImageReader, GLES OES, raw TextureView) hands
         // that same stamp back. This is decoder-out to *submitted for display*:
@@ -460,11 +460,15 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
                                 }
                             when {
                                 index >= 0 -> {
-                                    cadence.note(LivePipelineCadence.Stage.OUTPUT)
+                                    // One stamp for both ends: it goes on the buffer and
+                                    // comes back through notePresented, so the cadence can
+                                    // tell a picture that is still waiting from a new one.
+                                    val stamp = System.nanoTime()
+                                    cadence.noteOutput(stamp)
                                     noteDecodeTransit(info)
                                     noteNativeOutput()
                                     runCatching {
-                                        started.releaseOutputBuffer(index, System.nanoTime())
+                                        started.releaseOutputBuffer(index, stamp)
                                     }.onFailure { error ->
                                         noteError(DecoderErrorOrigin.OUTPUT_RELEASE, error)
                                     }

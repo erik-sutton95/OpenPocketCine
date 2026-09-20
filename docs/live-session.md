@@ -198,7 +198,8 @@ callback age (`vtOutput` / decoder-output Hz) is not presentation age
 (`gpuFPS` / display-layer enqueue). Neither is physical scanout. Android's
 cadence line carries one picture's own timestamp across each hop
 (`decodeMs`, `presentMs`) so transit is read per frame instead of inferred
-from rates; `drop` separates a late feed from a stuttering one
+from rates; `presentMs` ends where the picture is handed to the display, not
+where it lights up, and `drop` separates a late feed from a stuttering one
 (`docs/diagnostics.md`). Those legs still stop short of scanout.
 
 ## Foreground / SoftAP flap

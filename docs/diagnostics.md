@@ -122,13 +122,18 @@ timing and counters only; no picture, audio, camera credentials or device identi
 - Android `feed: cadence`: separate ACK, video, assembled-frame, decoder-submit,
   decoder-output and presentation rates, maximum gaps and ages; compressed queue
   depth, peak and wait; input-buffer misses, incomplete frames and decoder errors.
-  `decodeMs` is submit-to-decoder-output and `presentMs` decoder-output-to-present,
-  each `mean/max` over the window — the mean alone hides a hiccup, the maximum alone
-  claims every picture took that long. `-1.0` means the leg took no sample, which is
-  not zero transit. A negative or multi-second sample is a clock disagreement or a
-  stall the gap counters already report, and is excluded. `drop` is decoder outputs
-  the window never presented. These legs follow one picture across one hop; they do
-  not add up to a glass-to-glass figure and do not reach physical scanout.
+  `decodeMs` is submit-to-decoder-output and `presentMs` is decoder-output to the
+  moment the picture is *submitted for display*: that call lands as soon as the
+  submit returns, so GPU execution, the compositor and scanout are all still ahead
+  of it. Each is `mean/max` over the window — the mean alone hides a hiccup, the
+  maximum alone claims every picture took that long. `-1.0` means the leg took no
+  sample, which is not zero transit. A negative or multi-second sample is a clock
+  disagreement or a stall the gap counters already report, and is excluded. `drop`
+  counts pictures the decoder released that a whole window later had still not been
+  submitted; each is tracked by the stamp it was released with, so a backlog that
+  keeps moving is not a drop and a picture lost once is reported once, one window
+  late. These legs follow one picture across one hop; they do not add up to a
+  glass-to-glass figure and do not reach physical scanout.
 - `session: foreground` / foreground recovery rows record network readiness and
   picture freshness. Recovery stage, failure, completion and exhausted-budget
   rows remain in the journal shared by the operator.

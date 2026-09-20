@@ -48,21 +48,51 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
     private var queueDelayNs = 0L
     private var inputMisses = 0
 
-    /** Decoded pictures that have not reached the glass, running across windows. */
-    private var unpresented = 0
+    /**
+     * Stamps of decoded pictures not yet reported presented, oldest first.
+     *
+     * A count cannot answer this. With one picture in flight at every boundary
+     * the count reads one window after window, while the picture behind it is a
+     * different one each time — a healthy pipeline that a count calls stalled.
+     * The stamp says which picture is waiting, so "still that one" and "a new
+     * one" stop looking alike.
+     */
+    private val pendingStamps = LinkedHashSet<Long>()
 
-    /** [unpresented] as the previous window closed. */
-    private var unpresentedAtLastClose = 0
+    /** [pendingStamps] as the previous window closed. */
+    private var pendingAtLastClose = emptySet<Long>()
 
-    /** Drops already reported, so a standing shortfall is not counted again. */
-    private var reportedDrops = 0
-
+    /**
+     * Counts a stage with no picture to name.
+     *
+     * OUTPUT and PRESENT do not come through here: they carry the decoder's
+     * stamp, via [noteOutput] and [notePresented], because the drop count needs
+     * to know *which* picture is waiting.
+     */
     @Synchronized fun note(stage: Stage) {
         val now = nowNs()
         val c = counters.getValue(stage)
         c.maxGap = maxOf(c.maxGap, (now - (c.last ?: started)).coerceAtLeast(0))
         c.last = now
         c.count += 1
+    }
+
+    /**
+     * A decoded picture left the codec, stamped as it was released for display.
+     *
+     * [stampNs] is the value handed to `releaseOutputBuffer`; every present path
+     * gives that same stamp back to [notePresented], which is what lets a drop
+     * name a picture rather than a shortfall.
+     */
+    @Synchronized fun noteOutput(stampNs: Long) {
+        note(Stage.OUTPUT)
+        pendingStamps.add(stampNs)
+    }
+
+    /** The picture released with [stampNs] reached a present. */
+    @Synchronized fun notePresented(stampNs: Long) {
+        note(Stage.PRESENT)
+        pendingStamps.remove(stampNs)
     }
 
     @Synchronized fun queued(): Long {
@@ -96,11 +126,14 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
          * renderer takes the newest buffer and lets older ones go. Delay and
          * drops feel alike and are fixed differently.
          *
-         * The shortfall carries across windows and is only called a drop once
-         * it has survived a whole one, so this reports the pictures lost during
-         * the *previous* window. A picture decoded near a boundary is normally
-         * presented a few milliseconds later, and counting per window called
-         * every one of those a drop and then clamped the correction away.
+         * Pictures are tracked by the stamp they were released with, and one is
+         * only called dropped once that stamp has survived a whole window — so
+         * this reports the pictures lost during the *previous* window. A picture
+         * decoded near a boundary is normally presented a few milliseconds
+         * later; counting per window called every one of those a drop, and
+         * counting the backlog instead called a pipeline with one picture always
+         * in flight a drop too, since the tally never noticed the picture
+         * waiting had changed.
          */
         val dropped: Int,
     )
@@ -129,17 +162,15 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
             transitMaxMs[leg] = t.maxMs()
             t.reset()
         }
-        unpresented =
-            (unpresented + (counts[Stage.OUTPUT] ?: 0) - (counts[Stage.PRESENT] ?: 0))
-                .coerceAtLeast(0)
-        // Only a shortfall that outlived a whole window is a drop; the rest was
-        // a picture in flight across the boundary and has since been shown.
-        // Subtracting what was already reported keeps a standing shortfall from
-        // being re-announced every second.
-        val confirmedDrops = minOf(unpresentedAtLastClose, unpresented)
-        val dropped = (confirmedDrops - reportedDrops).coerceAtLeast(0)
-        reportedDrops = confirmedDrops
-        unpresentedAtLastClose = unpresented
+        // A picture counts as dropped once it has outlived a whole window: the
+        // same stamp was waiting at the previous close and is waiting still. One
+        // in flight across the boundary is not that, however steady the backlog
+        // looks, because the stamp waiting now is not the stamp from before.
+        // Reporting forgets it, so a picture is announced once and a standing
+        // shortfall does not repeat every second.
+        val dropped = pendingStamps.count { it in pendingAtLastClose }
+        pendingStamps.removeAll(pendingAtLastClose)
+        pendingAtLastClose = pendingStamps.toSet()
         val window =
             Window(
                 seconds = seconds,
