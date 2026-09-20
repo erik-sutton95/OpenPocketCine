@@ -93,7 +93,13 @@ class HevcDecoder internal constructor(
 
     fun notePresented(sourceTimestampNs: Long) {
         if (!presentedClock.note(sourceTimestampNs, SystemClock.elapsedRealtime())) return
-        cadence.note(LivePipelineCadence.Stage.PRESENT)
+        cadence.notePresented(sourceTimestampNs)
+        // releaseOutputBuffer stamps the buffer with System.nanoTime(); every
+        // present path (Vulkan ImageReader, GLES OES, raw TextureView) hands
+        // that same stamp back. This is decoder-out to *submitted for display*:
+        // the call lands as soon as the submit returns, so GPU execution, the
+        // compositor and scanout are all still ahead of it.
+        cadence.noteTransit(LivePipelineCadence.Leg.PRESENT, System.nanoTime() - sourceTimestampNs)
         framesPresented.incrementAndGet()
         if (!_hasPicture.value) {
             _hasPicture.value = true
@@ -487,10 +493,15 @@ class HevcDecoder internal constructor(
                                 }
                             when {
                                 index >= 0 -> {
-                                    cadence.note(LivePipelineCadence.Stage.OUTPUT)
+                                    // One stamp for both ends: it goes on the buffer and
+                                    // comes back through notePresented, so the cadence can
+                                    // tell a picture that is still waiting from a new one.
+                                    val stamp = System.nanoTime()
+                                    cadence.noteOutput(stamp)
+                                    noteDecodeTransit(info)
                                     noteNativeOutput()
                                     runCatching {
-                                        started.releaseOutputBuffer(index, System.nanoTime())
+                                        started.releaseOutputBuffer(index, stamp)
                                     }.onFailure { error ->
                                         noteError(DecoderErrorOrigin.OUTPUT_RELEASE, error)
                                     }
@@ -544,6 +555,19 @@ class HevcDecoder internal constructor(
             noteError(DecoderErrorOrigin.QUEUE, e, inputIsIrap = keyframe)
             false
         }
+    }
+
+    /**
+     * [LiveViewPresentTiming.ptsUs] stamps the submit wall clock onto the access
+     * unit, so the same clock read against the PTS coming back out is how long
+     * MediaCodec held this picture. A codec-config buffer carries no picture.
+     */
+    private fun noteDecodeTransit(info: MediaCodec.BufferInfo) {
+        if (info.presentationTimeUs <= 0L) return
+        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) return
+        val submittedUs = info.presentationTimeUs
+        val nowUs = SystemClock.elapsedRealtimeNanos() / 1_000L
+        cadence.noteTransit(LivePipelineCadence.Leg.DECODE, (nowUs - submittedUs) * 1_000L)
     }
 
     private fun noteNativeOutput() {

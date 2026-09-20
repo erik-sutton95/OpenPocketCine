@@ -1,7 +1,7 @@
 New and changed
 
+- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Dials, sliders and readouts use less memory while preserving their values.
 - Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
 
 Fixes
@@ -13,6 +13,6 @@ Fixes
 
 What to test
 
-- Connect three times. If Bluetooth setup fails, retry once and share diagnostics immediately. Then test five minutes of live view with controls.
+- Connect three times. If Bluetooth fails, retry once and share diagnostics. Test five minutes of live view; report the time of any freeze and whether the picture felt late or jumpy.
 - Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
 - With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.
