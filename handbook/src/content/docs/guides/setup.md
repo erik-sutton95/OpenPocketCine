@@ -26,6 +26,13 @@ The Simulator has no Bluetooth or camera Wi-Fi. Select a physical iPhone, set
 your Team under Signing, and enable **Hotspot Configuration** on the App ID.
 Native gate: `just native-check`.
 
+For camera-connected development checks, the opt-in iPhone
+[feed stress harness](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/feed-stress-testing.md)
+can isolate uninterrupted feed or Media catalog return. It reconnects a saved
+Pocket 4 Pro, checks fresh pipeline counters and stops at serious thermal state.
+Use one phone at a time; these Debug assist workloads do not establish Release
+thermal performance or physical display scanout.
+
 More: [iOS app](../apps/ios/).
 
 ## Android

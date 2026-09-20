@@ -19,7 +19,7 @@ The iOS startup-cover correction needs no Android equivalent: Android already
 shows waiting only while `hasPicture` is false. iOS now keeps warmup completed
 through an established-feed stall and resets it on disconnect; FPS aging and
 RECOV remain independent. Automated regressions are available. Physical
-qualification is partial on Android and pending on iOS; the
+qualification is partial on both platforms; the
 [physical follow-up](audits/2026-09-20-physical-connection-followup.md) records
 the exact tested source, successful cadence segments and failures.
 

@@ -17,6 +17,7 @@ final class FeedStressTests: XCTestCase {
     private var failures: [String] = []
     private var rng = FeedStressSeed(state: 20_260_914)
     private var finished = false
+    private var identityProofOriginalLUT: Bool?
     private var selectedScenarios = FeedStressScenario.core
 
     override func setUp() {
@@ -50,9 +51,16 @@ final class FeedStressTests: XCTestCase {
         injectOptIn = !(env["OPV_FEED_STRESS_INJECT"] ?? "").isEmpty
         if let filter = env["OPV_FEED_STRESS_SCENARIOS"], !filter.isEmpty {
             let names = filter.split(separator: ",").map(String.init)
-            selectedScenarios = FeedStressScenario.core.filter { names.contains($0.rawValue) }
+            selectedScenarios = FeedStressScenario.selectable.filter { names.contains($0.rawValue) }
             guard selectedScenarios.count == names.count else {
                 throw FeedStressError.halted("Unknown or duplicate scenario filter")
+            }
+        }
+        let steadyOnly = selectedScenarios == [.steadyFeed]
+        if selectedScenarios.contains(.steadyFeed) {
+            guard steadyOnly, !recordOptIn, !injectOptIn, limitS <= 1_560 else {
+                throw FeedStressError.halted(
+                    "steadyFeed must run alone, without recording/injection, for at most 1560s")
             }
         }
         rng = FeedStressSeed(state: seed == 0 ? 1 : seed)
@@ -62,7 +70,8 @@ final class FeedStressTests: XCTestCase {
         app.launchEnvironment["OPV_FEED_STRESS"] = "1"
         app.launchEnvironment["OPV_FEED_STRESS_SEED"] = "\(seed)"
         // Keep counters alive through a final in-flight scenario and teardown.
-        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] = "\(Int(limitS) + 60)"
+        app.launchEnvironment["OPV_FEED_STRESS_LIMIT_S"] =
+            "\(Int(limitS) + (steadyOnly ? 240 : 60))"
         if recordOptIn { app.launchEnvironment["OPV_FEED_STRESS_RECORD"] = "1" }
         if let inject = env["OPV_FEED_STRESS_INJECT"], !inject.isEmpty {
             app.launchEnvironment["OPV_FEED_STRESS_INJECT"] = inject
@@ -78,15 +87,22 @@ final class FeedStressTests: XCTestCase {
 
         try waitForLiveMonitor()
         try enablePeakingForDecodeProof()
+        if selectedScenarios.contains(where: {
+            [FeedStressScenario.mediaReturn, .steadyFeed].contains($0)
+        }) {
+            try establishIdentityProofMode()
+        }
         isoOriginal = captureValue("monitor.capture.iso")
         try waitForHealthyBaseline(minimum: injectOptIn ? 30 : 8)
 
+        // The uninterrupted interval starts after cold launch, setup and the
+        // healthy baseline. Preserve historical timing for the default mix.
+        if steadyOnly { deadline = Date().addingTimeInterval(limitS) }
         var cycle = 0
+        var completedScenarios = 0
         while Date() < deadline {
             if thermalHalt() {
-                if cycle == 0 {
-                    failures.append("thermal halt before any scenario cycle")
-                }
+                failures.append("thermal halt before completing the requested run")
                 break
             }
             cycle += 1
@@ -96,9 +112,13 @@ final class FeedStressTests: XCTestCase {
             scenarios.shuffle(using: &rng)
             for scenario in scenarios {
                 if Date() > deadline { break }
-                if thermalHalt() { break }
+                if thermalHalt() {
+                    failures.append("thermal halt before completing the requested run")
+                    break
+                }
                 do {
                     try run(scenario)
+                    completedScenarios += 1
                     record(scenario, "pass", extra: "cycle=\(cycle)")
                 } catch {
                     record(scenario, "fail", extra: "cycle=\(cycle) \(error)")
@@ -106,9 +126,10 @@ final class FeedStressTests: XCTestCase {
                 }
                 dismissChrome()
             }
+            if steadyOnly { break }
         }
-        if cycle == 0 {
-            failures.append("deadline elapsed before any scenario cycle")
+        if completedScenarios == 0 {
+            failures.append("no scenario completed successfully")
         }
 
         finishSafely()
@@ -129,6 +150,8 @@ final class FeedStressTests: XCTestCase {
         case .lifecycleInterrupt: try lifecycleInterrupt()
         case .briefRecord: try briefRecord()
         case .injectFault: try injectFault()
+        case .mediaReturn: try mediaReturn()
+        case .steadyFeed: try steadyFeed()
         }
     }
 
@@ -230,6 +253,202 @@ final class FeedStressTests: XCTestCase {
         _ = try waitProgress(
             from: returned, source: true, decode: true, present: true, timeout: 16,
             why: "lifecycle recover deadline")
+    }
+
+    /// Catalog-only return is useful even with an empty camera/card/cache.
+    /// Playback is intentionally outside this catalog-return qualification.
+    private func mediaReturn() throws {
+        let media = app.buttons["monitor.system.media"]
+        guard media.waitForExistence(timeout: 4), media.isHittable else {
+            throw FeedStressError.missingControl("Open Media")
+        }
+        let gallery = app.descendants(matching: .any)["monitor.media.gallery"].firstMatch
+        media.tap()
+        guard gallery.waitForExistence(timeout: 8) else {
+            throw FeedStressError.missingControl("Media catalog")
+        }
+        defer { dismissMediaIfVisible() }
+        attachEvidence("media-catalog-entered")
+        // Exercise playback entry/listing; an empty catalog remains valid.
+        sleepStep(2)
+        guard app.buttons["Back"].firstMatch.isHittable else {
+            throw FeedStressError.missingControl("Media Back")
+        }
+        app.buttons["Back"].firstMatch.tap()
+        let closed = NSPredicate(format: "exists == false")
+        let gone = XCTNSPredicateExpectation(predicate: closed, object: gallery)
+        guard XCTWaiter.wait(for: [gone], timeout: 6) == .completed,
+            app.buttons["monitor.system.media"].isHittable
+        else { throw FeedStressError.missingControl("live monitor after Media") }
+
+        // Take the baseline AFTER leaving both playback and the catalog. A
+        // cached redraw, or packets received while browsing, cannot pass this.
+        // No assist/chrome mutation between catalog dismissal and proof.
+        // Fresh identity enqueues themselves verify the established live path.
+        let returned = try requireActiveSnapshot()
+        let recovered = try waitIdentityProgress(from: returned, timeout: 16)
+        var previous = recovered
+        for _ in 0..<3 {
+            let current = try nextActiveSnapshot(after: previous)
+            guard identityProgressed(from: previous, to: current) else {
+                throw FeedStressError.noProgress(
+                    "Media returned only a transient picture: \(current)")
+            }
+            previous = current
+        }
+        attachEvidence("media-live-return", detail: "returned=\(returned) restored=\(previous)")
+    }
+
+    private func dismissMediaIfVisible() {
+        let playerBack = app.buttons["Back to media"]
+        if playerBack.exists, playerBack.isHittable { playerBack.tap() }
+        let gallery = app.descendants(matching: .any)["monitor.media.gallery"].firstMatch
+        let back = app.buttons["Back"].firstMatch
+        if gallery.exists, back.exists, back.isHittable { back.tap() }
+    }
+
+    private func steadyFeed() throws {
+        try assertIdentityProofMode()
+        let started = ContinuousClock.now
+        let end = started.advanced(by: .seconds(limitS))
+        let first = try requireActiveSnapshot()
+        var previous = first
+        // No camera commands, chrome changes, orientation changes or recording
+        // during this interval. Every window needs fresh source/decode/enqueue.
+        while ContinuousClock.now < end {
+            if thermalHalt() { throw FeedStressError.halted("thermal during uninterrupted feed") }
+            let current = try nextActiveSnapshot(after: previous)
+            guard identityProgressed(from: previous, to: current) else {
+                throw FeedStressError.noProgress("Uninterrupted feed stalled: \(current)")
+            }
+            previous = current
+        }
+        attachEvidence(
+            "steady-feed-complete",
+            detail:
+                "duration=\(started.duration(to: ContinuousClock.now)) start=\(first) end=\(previous)"
+        )
+    }
+
+    private func waitIdentityProgress(from start: [String: String], timeout: TimeInterval)
+        throws -> [String: String]
+    {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end {
+            if thermalHalt() { throw FeedStressError.halted("thermal during live return") }
+            sleepStep(0.5)
+            let current = try requireActiveSnapshot()
+            if identityProgressed(from: start, to: current) { return current }
+        }
+        throw FeedStressError.noProgress("No fresh source/decode/identity enqueue after Media")
+    }
+
+    private func identityProgressed(from start: [String: String], to end: [String: String]) -> Bool
+    {
+        guard end["halt"] == "0", end["run"] == start["run"],
+            let oldTime = Double(start["t"] ?? ""), let newTime = Double(end["t"] ?? ""),
+            newTime > oldTime,
+            int(end, "srcDelAU") > int(start, "srcDelAU"),
+            int(end, "decOut") > int(start, "decOut"),
+            int(end, "presEnqueue") > int(start, "presEnqueue")
+        else { return false }
+        return ["srcAgeMs", "decAgeMs", "enqueueAgeMs"].allSatisfy {
+            guard let age = Int(end[$0] ?? "") else { return false }
+            return (0..<2_000).contains(age)
+        }
+    }
+
+    private func attachEvidence(_ name: String, detail: String = "") {
+        let counters = XCTAttachment(string: "\(name) \(detail) snapshot=\(snapshot())")
+        counters.name = name + "-counters"
+        counters.lifetime = .keepAlways
+        add(counters)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = name + "-screen"
+        image.lifetime = .keepAlways
+        add(image)
+    }
+
+    /// PEAK supplies VT output. Disabling only the LUT leaves the identity
+    /// pixel-buffer sink active; false color is an overlay, and this app clears
+    /// omitted desqueeze at cold launch. Cached playback Metal cannot pass an
+    /// identity-enqueue assertion. This qualifies this explicit output mode.
+    private func establishIdentityProofMode() throws {
+        try expandAssists()
+        defer { collapseAssists() }
+        let lut = app.buttons["monitor.assist.LUT"]
+        guard lut.waitForExistence(timeout: 4), let value = lut.value as? String,
+            value == "On" || value == "Off"
+        else { throw FeedStressError.missingControl("LUT state for identity proof") }
+        if identityProofOriginalLUT == nil { identityProofOriginalLUT = value == "On" }
+        if value == "On" { lut.tap() }
+        let off = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'Off'"), object: lut)
+        guard XCTWaiter.wait(for: [off], timeout: 3) == .completed else {
+            throw FeedStressError.halted("Cannot establish identity output mode")
+        }
+    }
+
+    private func assertIdentityProofMode() throws {
+        // Only used before the uninterrupted interval starts. Media return
+        // deliberately performs no assist/chrome action before picture proof.
+        try expandAssists()
+        defer { collapseAssists() }
+        guard app.buttons["monitor.assist.LUT"].value as? String == "Off" else {
+            throw FeedStressError.halted("Identity proof mode changed during scenario")
+        }
+    }
+
+    private func restoreIdentityProofMode() {
+        guard let wanted = identityProofOriginalLUT else { return }
+        do {
+            try expandAssists()
+            defer { collapseAssists() }
+            let lut = app.buttons["monitor.assist.LUT"]
+            guard lut.waitForExistence(timeout: 4), let value = lut.value as? String,
+                value == "On" || value == "Off"
+            else { throw FeedStressError.missingControl("LUT restore") }
+            if (value == "On") != wanted { lut.tap() }
+            let restored = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value == %@", wanted ? "On" : "Off"), object: lut)
+            guard XCTWaiter.wait(for: [restored], timeout: 3) == .completed else {
+                throw FeedStressError.halted("LUT state did not restore")
+            }
+        } catch {
+            let message = "restore identity proof mode: \(error)"
+            failures.append(message)
+            XCTFail(message)
+        }
+    }
+
+    /// HUD publishes at 1 Hz. Poll for its next generation instead of assuming
+    /// a one-second sleep crossed a tick. No interval may hide a two-second gap.
+    private func nextActiveSnapshot(after previous: [String: String]) throws -> [String: String] {
+        guard let oldTime = Double(previous["t"] ?? "") else {
+            throw FeedStressError.noSnapshot
+        }
+        let expires = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < expires {
+            sleepStep(0.1)
+            let current = snapshot()
+            if current.isEmpty { continue }
+            guard current["halt"] == "0", current["run"] == previous["run"] else {
+                throw FeedStressError.halted(
+                    "Recorder changed/stopped during qualification: \(current)")
+            }
+            guard ContinuousClock.now < expires else { break }
+            if let time = Double(current["t"] ?? ""), time > oldTime { return current }
+        }
+        throw FeedStressError.noProgress(
+            "Recorder did not advance within the continuous two-second gap limit")
+    }
+
+    private func requireActiveSnapshot() throws -> [String: String] {
+        let current = try requireSnapshot()
+        guard current["halt"] == "0", current["run"] != nil else {
+            throw FeedStressError.halted("Recorder stopped during qualification: \(current)")
+        }
+        return current
     }
 
     private func briefRecord() throws {
@@ -460,6 +679,9 @@ final class FeedStressTests: XCTestCase {
         restoreISOViaUI()
         postFeedStress("com.opencapture.opc.feed-stress.teardown")
         sleepStep(1.0)
+        // Run after the existing runtime restore: its baseline is captured on
+        // the HUD timer and may race the first UI setup toggle.
+        restoreIdentityProofMode()
         XCUIDevice.shared.orientation = .portrait
     }
 
@@ -617,6 +839,13 @@ private enum FeedStressScenario: String {
     case lifecycleInterrupt
     case briefRecord
     case injectFault
+    case mediaReturn
+    case steadyFeed
+
+    // Keep the historical default list/order and seed behavior unchanged.
+    static var selectable: [FeedStressScenario] {
+        core + [.mediaReturn, .steadyFeed]
+    }
 
     static let core: [FeedStressScenario] = [
         .settingsOpenClose, .assistToggles, .rotation, .cameraSettingChanges,

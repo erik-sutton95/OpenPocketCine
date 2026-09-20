@@ -1,7 +1,7 @@
 # Physical connection follow-up — 2026-09-20
 
 Follow-up to the [source regression audit](2026-09-20-connection-regressions.md).
-This is a bounded Android camera test, with defects found during qualification.
+These are bounded Android and iPhone camera tests, with defects found during qualification.
 It is not a clean reliability pass or a comparison against build 63.
 
 ## Build and setup
@@ -193,10 +193,111 @@ this Android/camera pair. The GATT failure did not recur in its three starts,
 but this sample does not establish its elimination. Loss recovery still needs
 hardware timing evidence; retain the first failure's trace.
 
-iPhone physical testing remains pending: the paired device's wireless developer
-tunnel is disconnected. A USB link is needed to retain automation while the
-phone joins the camera network. Pocket 3 and other bodies, HDR, rotation,
+The iPhone was subsequently connected over USB; the results below replace the
+earlier unavailable-device status. Pocket 3 and other bodies, HDR,
 Multiview, deliberate network interruption, sustained movement, recording and
 Media return during an active repair also remain unqualified. Unresolved field
 groups stay open; no zero-dropout or release failure-rate claim follows from
 these tests.
+
+## Latest combined Android source
+
+Source `0550031` includes upstream #377. The installed debug APK matched the
+built APK. A fresh start established picture 299 ms after handshake, with one
+enable. Its five-minute interval had 297 cadence samples averaging 24.99 fps;
+maximum presentation gap was 67.4 ms, ACK gap 31.6 ms and queue wait 2.1 ms.
+There were no incomplete AUs, decoder input misses/errors, extra enables,
+endpoint rebuilds, session rejoins or crashes. Zoom and waveform controls were
+exercised and their preferences restored. Temperature rose from 36.9°C to
+39.2°C. No natural reference loss occurred, so early-repair latency remains
+unqualified on hardware.
+
+The #377 combined instrumentation run passed 24 of 25 tests. The portrait
+assist-drawer hold/reverse assertion measured 230 px where it expected 240 px;
+an unchanged isolated retry failed the same way. The same test APK against saved
+source `6560c27` passed once. Two diagnostic runs of `0550031` also passed, with
+intermediate samples occasionally one or two 10 px steps behind before catching
+up. The cause remains unproven. Temporary instrumentation was removed; the
+assertion and tolerance were not weakened. Both Android apps were then stopped
+and the camera released before iPhone testing.
+
+## iPhone Debug qualification
+
+An iPhone 16 Pro Max running iOS 27.0 connected over USB to test the same Pocket
+4 Pro, one phone at a time. The device build passed. The first run used source
+unmodified `0550031`, with recording, motion and fault injection disabled. Its existing
+stress harness forces peaking to observe native VideoToolbox output.
+
+The mixed run established first picture about 14.4 seconds after recorder start
+(including Bluetooth/Wi-Fi setup). It passed one foreground-return, rotation,
+Settings and assist-toggle scenario. An intentional Home/foreground transition
+produced VideoToolbox error `-12903`; one watchdog decoder rebuild and a second
+enable restored fresh output. There was no UDP rebuild. This is a repaired
+scripted interruption, not an unprompted steady-feed dropout. The journal does
+not retain the initial wire ACK/window exchange, so it cannot independently
+prove handshake latency or command-seed ordering.
+
+Both the mixed run and the subsequent steady-only run failed the unchanged
+thermal guard:
+
+| Debug workload | Thermal observation | Feed at stop |
+| --- | --- | --- |
+| Mixed scenarios | Nominal initially, fair at 40.4 s, serious at 90.4 s | Native output still approximately 25 fps; no stall at thermal stop |
+| Steady-only, peaking on / LUT off | Nominal initially, fair at 42.4 s, serious at 82.4 s | Delivered AUs, native output and identity enqueue advancing at approximately 25/s; maximum sampled steady decoder age 58 ms |
+
+The two steady builds were `0550031-dirty`: the same product source plus working
+opt-in test scenarios and DEBUG scenario registration. The first steady run used
+the initial proposal. Before compiling the optimized run, review corrections
+required a successfully completed scenario, made both pre-scenario thermal
+checks fail, removed the unqualified proxy-playback proposal and made LUT
+restoration failures fail XCTest directly. That third run contains the final
+harness changes in this PR. Connection and rendering behavior were unchanged.
+The steady test starts its requested five-minute interval only after setup and
+healthy output. The failed run supplied less than 49 seconds of that interval,
+not five minutes. LUT-off identity output and peaking's Metal overlay
+both progressed; their summed counter must not be interpreted as 50 fps. HDR
+display was verified off. Other saved assists and accessibility polling remain
+part of this Debug workload. These failures do not establish a shipping thermal
+regression or qualify sustained iOS operation. No guard or recovery threshold
+was relaxed.
+
+A third run kept the same Debug hooks and assist workload while overriding only
+`SWIFT_OPTIMIZATION_LEVEL=-O`; the app and core compiler commands confirmed the
+optimization and retained `DEBUG`. It began nominal, reached fair at 25.4 s
+(before the steady interval), and stopped serious at 60.4 s. Less than 22 seconds
+of the requested steady interval was available. Output stayed approximately
+25/s, with sampled decoder age at most 42 ms in that interval. The current-run
+journal recorded one initial enable and no subsequent repair or endpoint rebuild.
+A GPU-completion gap reached 243 ms despite fresh one-second samples; this is a
+sub-second hitch, not evidence of perfectly smooth presentation or scanout.
+Optimization alone did not remove the thermal stop. Starting thermal reserve,
+charging and ambient conditions were not controlled, so this is not evidence
+that optimization worsened heat or a Release comparison.
+
+After three thermal failures, further physical stress was stopped under the
+repository's bounded-loop rule. The new catalog-return scenario compiled but
+was not run on this phone; iOS Media return, sustained thermal performance and
+five-minute uninterrupted operation remain unqualified. No production thermal
+or rendering change was selected from these observations.
+
+## Thermal follow-up candidates
+
+A read-only comparison of pre-UI2 `9b30b93`, UI2 `8d51f0e` and product source
+`0550031` found added backdrop work, not a proven thermal defect. Each fresh
+assist buffer can produce a second displayed-look bake at up to 320 px and four
+blur/saturation images for the glass backgrounds. Existing single-flight,
+deduplication and cadence tests bound scheduling but do not measure energy.
+The changing background is isolated from foreground HUD labels; no per-frame
+whole-screen observation regression was established.
+
+Peaking's native decode, MainActor adoption, identity enqueue and Metal overlay
+predate UI2. Scope-off does not secretly calculate scopes. Later HDR plumbing
+also configures layer properties and queries headroom each Metal display, even
+with HDR off; its cost is unmeasured, and HDR-off still uses the eight-bit path.
+Neither finding justifies a speculative rendering or recovery change.
+
+The next controlled experiment should hold hardware, camera, assists, HDR-off,
+brightness, charging, build and harness constant while changing only Reduce
+Transparency. Its existing gate stops passive backdrop generation and blurred
+glass presentation. That would isolate the total glass workload, not distinguish
+backdrop baking from compositing. It was not run after the three thermal stops.

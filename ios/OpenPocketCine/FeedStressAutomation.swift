@@ -128,6 +128,7 @@ enum FeedStressAutomation {
     private let feedStressScenarios = [
         "settingsOpenClose", "assistToggles", "rotation", "cameraSettingChanges",
         "boundedJoystick", "lifecycleInterrupt", "briefRecord", "injectFault",
+        "mediaReturn", "steadyFeed",
     ]
 
     private let feedStressDarwinCallback: CFNotificationCallback = { _, observer, name, _, _ in
